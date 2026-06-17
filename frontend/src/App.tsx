@@ -107,6 +107,7 @@ const AgentBlueprintsPage = lazy(() =>
 const Header = lazy(() => import("./components/Header"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicPartnershipOfferPage = lazy(() => import("./pages/PublicPartnershipOfferPage"));
+const PublicSalesRoomPage = lazy(() => import("./pages/PublicSalesRoomPage"));
 const CheckoutReturn = lazy(() => import("./pages/CheckoutReturn"));
 const IndustryPatternsE2EPage = import.meta.env.DEV
   ? lazy(() => import("./pages/dev/IndustryPatternsE2EPage"))
@@ -195,6 +196,7 @@ const AppShell = () => {
           {IndustryPatternsE2EPage ? (
             <Route path="/__e2e__/industry-patterns" element={<IndustryPatternsE2EPage />} />
           ) : null}
+          <Route path="/room/:roomSlug" element={<PublicSalesRoomPage />} />
           <Route path="/:offerSlug" element={<PublicPartnershipOfferPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

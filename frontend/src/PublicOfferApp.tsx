@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { LanguageProvider, useLanguage } from "./i18n/LanguageContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
 import PublicPartnershipOfferPage from "./pages/PublicPartnershipOfferPage";
+import PublicSalesRoomPage from "./pages/PublicSalesRoomPage";
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center px-4 py-12">
@@ -23,6 +24,7 @@ const PublicOfferContent = () => {
     <BrowserRouter>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
+          <Route path="/room/:roomSlug" element={<PublicSalesRoomPage />} />
           <Route path="/:offerSlug" element={<PublicPartnershipOfferPage />} />
           <Route path="*" element={<PublicPartnershipOfferPage />} />
         </Routes>

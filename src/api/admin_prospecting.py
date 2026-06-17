@@ -57,6 +57,7 @@ except ImportError:
     from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
 from services.gigachat_client import analyze_text_with_gigachat
+from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
 
 
@@ -102,6 +103,27 @@ PIPELINE_SECOND_MESSAGE_SENT = "second_message_sent"
 PIPELINE_REPLIED = "replied"
 PIPELINE_CONVERTED = "converted"
 PIPELINE_CLOSED_LOST = "closed_lost"
+PARTNER_KIND_BUSINESS = "business"
+PARTNER_KIND_RESIDENTIAL_COMPLEX = "residential_complex"
+PARTNER_KIND_OTHER = "other"
+PARTNER_MATCH_NOT_STARTED = "not_started"
+PARTNER_MATCH_FOUND = "found"
+PARTNER_MATCH_AMBIGUOUS = "ambiguous"
+PARTNER_MATCH_NOT_FOUND = "not_found"
+PARTNER_MATCH_MANUAL_CONFIRMED = "manual_confirmed"
+PARTNER_MATCH_SKIPPED_RESIDENTIAL = "skipped_residential_complex"
+PARTNER_AUDIT_NOT_STARTED = "not_started"
+PARTNER_AUDIT_GENERATED = "generated"
+PARTNER_AUDIT_FAILED = "failed"
+PARTNER_LEAD_NOT_SYNCED = "not_synced"
+PARTNER_LEAD_SYNCED = "synced"
+PARTNER_LEAD_SKIPPED = "skipped_residential_complex"
+PARTNER_LEAD_FAILED = "failed"
+SALES_ROOM_MODE_PARTNER = "partner_search"
+SALES_ROOM_MODE_CLIENT = "client_search"
+SALES_ROOM_DATA_AUDITED = "audited"
+SALES_ROOM_DATA_TEMPLATE = "template"
+SALES_ROOM_AUDITED_CREDITS = 1
 ACTIVE_PARTNERSHIP_LEAD_SQL = """
   AND COALESCE(l.pipeline_status, '') NOT IN ('not_relevant', 'disqualified', 'closed_lost')
   AND COALESCE(l.status, '') NOT IN ('not_relevant', 'disqualified', 'rejected', 'shortlist_rejected')
@@ -399,6 +421,9 @@ def _ensure_partnership_columns(conn) -> None:
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS deferred_until DATE")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS preferred_language TEXT")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS enabled_languages JSONB")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS partner_source_company_id TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS partner_source_company_name TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS partner_source_partner_id TEXT")
     cur.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_prospectingleads_intent_stage
@@ -415,6 +440,12 @@ def _ensure_partnership_columns(conn) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_prospectingleads_intent_phone
         ON prospectingleads (business_id, intent, phone)
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_prospectingleads_partner_source
+        ON prospectingleads (business_id, intent, partner_source_company_name)
         """
     )
     # DDL в PostgreSQL транзакционный; без commit изменения могут откатиться при закрытии conn.
@@ -514,6 +545,624 @@ def _ensure_manual_crm_tables(conn) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_lead_group_items_lead_id ON lead_group_items(lead_id, added_at DESC)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_lead_timeline_events_lead_created ON lead_timeline_events(lead_id, created_at DESC)")
     conn.commit()
+
+
+def _ensure_partnership_partner_cards_table(conn) -> None:
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS partnership_partner_cards (
+            id UUID PRIMARY KEY,
+            business_id UUID NOT NULL,
+            source_company_id TEXT,
+            source_company_name TEXT NOT NULL,
+            partner_name TEXT NOT NULL,
+            partner_address TEXT,
+            partner_city TEXT,
+            partner_category TEXT,
+            partner_kind TEXT NOT NULL DEFAULT 'business',
+            yandex_maps_url TEXT,
+            yandex_maps_match_status TEXT NOT NULL DEFAULT 'not_started',
+            yandex_maps_match_confidence DOUBLE PRECISION,
+            yandex_maps_candidates_json JSONB,
+            parse_business_id UUID,
+            audit_public_url TEXT,
+            audit_slug TEXT,
+            audit_status TEXT NOT NULL DEFAULT 'not_started',
+            audit_generated_at TIMESTAMPTZ,
+            audit_error TEXT,
+            lead_id TEXT REFERENCES prospectingleads(id) ON DELETE SET NULL,
+            lead_sync_status TEXT NOT NULL DEFAULT 'not_synced',
+            lead_sync_error TEXT,
+            raw_payload_json JSONB,
+            created_by UUID,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_partnership_partner_cards_business_updated
+        ON partnership_partner_cards (business_id, updated_at DESC)
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_partnership_partner_cards_source_company
+        ON partnership_partner_cards (business_id, source_company_name)
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_partnership_partner_cards_match_status
+        ON partnership_partner_cards (business_id, yandex_maps_match_status)
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_partnership_partner_cards_lead_id
+        ON partnership_partner_cards (lead_id)
+        """
+    )
+    conn.commit()
+
+
+def _ensure_sales_room_tables(conn) -> None:
+    _ensure_partnership_partner_cards_table(conn)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sales_rooms (
+            id UUID PRIMARY KEY,
+            slug TEXT NOT NULL UNIQUE,
+            business_id UUID NOT NULL,
+            mode TEXT NOT NULL,
+            lead_id TEXT REFERENCES prospectingleads(id) ON DELETE SET NULL,
+            partner_card_id UUID REFERENCES partnership_partner_cards(id) ON DELETE SET NULL,
+            data_mode TEXT NOT NULL DEFAULT 'template',
+            audit_public_url TEXT,
+            match_json JSONB,
+            proposal_json JSONB,
+            room_json JSONB NOT NULL,
+            invitation_draft_id TEXT REFERENCES outreachmessagedrafts(id) ON DELETE SET NULL,
+            status TEXT NOT NULL DEFAULT 'draft',
+            created_by UUID,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_sales_rooms_business_updated
+        ON sales_rooms (business_id, updated_at DESC)
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_sales_rooms_lead
+        ON sales_rooms (lead_id)
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_sales_rooms_partner_card
+        ON sales_rooms (partner_card_id)
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sales_room_events (
+            id UUID PRIMARY KEY,
+            room_id UUID NOT NULL REFERENCES sales_rooms(id) ON DELETE CASCADE,
+            event_type TEXT NOT NULL,
+            metadata_json JSONB,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_sales_room_events_room_created
+        ON sales_room_events (room_id, created_at DESC)
+        """
+    )
+
+
+def _row_to_dict(row: Any) -> dict[str, Any]:
+    if not row:
+        return {}
+    if hasattr(row, "keys"):
+        return dict(row)
+    return {}
+
+
+def _normalize_partner_kind(value: Any, *text_parts: Any) -> str:
+    raw = str(value or "").strip().lower()
+    text = " ".join(str(part or "") for part in text_parts).lower()
+    combined = f"{raw} {text}".strip()
+    residential_tokens = (
+        "residential_complex",
+        "residential",
+        "жк",
+        "жилой комплекс",
+        "жилкомплекс",
+        "новострой",
+    )
+    if raw in {PARTNER_KIND_BUSINESS, PARTNER_KIND_RESIDENTIAL_COMPLEX, PARTNER_KIND_OTHER}:
+        return raw
+    if any(token in combined for token in residential_tokens):
+        return PARTNER_KIND_RESIDENTIAL_COMPLEX
+    if raw in {"other", "другое"}:
+        return PARTNER_KIND_OTHER
+    return PARTNER_KIND_BUSINESS
+
+
+def _is_residential_partner_card(card: dict[str, Any]) -> bool:
+    return _normalize_partner_kind(
+        card.get("partner_kind"),
+        card.get("partner_name"),
+        card.get("partner_category"),
+        card.get("raw_payload_json"),
+    ) == PARTNER_KIND_RESIDENTIAL_COMPLEX
+
+
+def _build_partner_source_label(card: dict[str, Any]) -> str:
+    source_company_name = str(card.get("source_company_name") or "").strip()
+    if source_company_name:
+        return f"Партнёр {source_company_name}"
+    return "Партнёр компании"
+
+
+def _build_partner_search_query(card: dict[str, Any]) -> str:
+    parts = [
+        str(card.get("partner_name") or "").strip(),
+        str(card.get("partner_city") or "").strip(),
+        str(card.get("partner_address") or "").strip(),
+    ]
+    return " ".join(part for part in parts if part).strip()
+
+
+def _extract_candidate_source_url(candidate: dict[str, Any]) -> str:
+    for key in ("source_url", "url", "maps_url", "yandex_maps_url"):
+        value = str(candidate.get(key) or "").strip()
+        if value:
+            return normalize_map_url(value)
+    return ""
+
+
+def _score_partner_candidate(card: dict[str, Any], candidate: dict[str, Any]) -> tuple[float, str]:
+    partner_name = str(card.get("partner_name") or "").strip().lower()
+    partner_address = str(card.get("partner_address") or "").strip().lower()
+    candidate_name = str(candidate.get("name") or candidate.get("title") or "").strip().lower()
+    candidate_address = str(candidate.get("address") or candidate.get("location") or "").strip().lower()
+    if not partner_name:
+        return 0.0, "missing_partner_name"
+
+    name_score = SequenceMatcher(None, partner_name, candidate_name).ratio() if candidate_name else 0.0
+    address_score = 0.0
+    if partner_address and candidate_address:
+        address_score = SequenceMatcher(None, partner_address, candidate_address).ratio()
+    elif partner_address:
+        address_score = 0.15
+
+    source_url = _extract_candidate_source_url(candidate)
+    url_bonus = 0.1 if source_url and "yandex." in source_url else 0.0
+    score = min(1.0, round((name_score * 0.72) + (address_score * 0.18) + url_bonus, 4))
+    reason = f"name={round(name_score, 3)} address={round(address_score, 3)} yandex_url={bool(url_bonus)}"
+    return score, reason
+
+
+def _normalize_partner_candidate(card: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+    confidence, reason = _score_partner_candidate(card, candidate)
+    source_url = _extract_candidate_source_url(candidate)
+    reviews_count = candidate.get("reviews_count")
+    if reviews_count is None and isinstance(candidate.get("reviews"), list):
+        reviews_count = len(candidate.get("reviews") or [])
+    return {
+        "name": str(candidate.get("name") or candidate.get("title") or "").strip() or None,
+        "address": str(candidate.get("address") or candidate.get("location") or "").strip() or None,
+        "category": str(candidate.get("category") or candidate.get("categoryName") or "").strip() or None,
+        "rating": candidate.get("rating") or candidate.get("totalScore"),
+        "reviews_count": reviews_count,
+        "yandex_maps_url": source_url or None,
+        "external_source_id": str(candidate.get("source_external_id") or candidate.get("businessId") or candidate.get("source_id") or "").strip() or None,
+        "confidence": confidence,
+        "reason": reason,
+        "raw": candidate,
+    }
+
+
+def _find_yandex_candidates_for_partner_card(card: dict[str, Any], limit: int = 5) -> tuple[list[dict[str, Any]], str | None]:
+    query = _build_partner_search_query(card)
+    if not query:
+        return [], "missing_search_query"
+    service = ProspectingService(source="apify_yandex")
+    if not service.client:
+        return [], "yandex_provider_unavailable"
+    try:
+        result = service.run_search(
+            query,
+            str(card.get("partner_city") or "").strip(),
+            limit=max(1, min(limit, 10)),
+            timeout_sec=SEARCH_JOB_TIMEOUT_SEC,
+        )
+    except Exception:
+        return [], str(sys.exc_info()[1])
+    raw_items = result.get("items") if isinstance(result, dict) else []
+    if not isinstance(raw_items, list):
+        raw_items = []
+    candidates = [_normalize_partner_candidate(card, item) for item in raw_items if isinstance(item, dict)]
+    candidates = [item for item in candidates if str(item.get("yandex_maps_url") or "").strip()]
+    candidates.sort(key=lambda item: float(item.get("confidence") or 0), reverse=True)
+    return candidates[:limit], None
+
+
+def _load_partner_card(cur, *, partner_id: str, business_id: str) -> dict[str, Any] | None:
+    cur.execute(
+        """
+        SELECT *
+        FROM partnership_partner_cards
+        WHERE id = NULLIF(%s, '')::uuid
+          AND business_id = NULLIF(%s, '')::uuid
+        LIMIT 1
+        """,
+        (partner_id, business_id),
+    )
+    row = cur.fetchone()
+    payload = _row_to_dict(row)
+    return payload or None
+
+
+def _normalize_partner_card_for_response(card: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(card or {})
+    payload["source_label"] = _build_partner_source_label(payload)
+    payload["is_residential_complex"] = _is_residential_partner_card(payload)
+    if str(payload.get("audit_slug") or "").strip() and not str(payload.get("audit_public_url") or "").strip():
+        payload["audit_public_url"] = _make_public_offer_url(str(payload.get("audit_slug") or "").strip())
+    return _to_json_compatible(payload)
+
+
+def _upsert_partner_card_lead_link(
+    cur,
+    *,
+    card: dict[str, Any],
+    lead_id: str,
+    lead_sync_status: str,
+    lead_sync_error: str | None = None,
+) -> None:
+    cur.execute(
+        """
+        UPDATE partnership_partner_cards
+        SET lead_id = %s,
+            lead_sync_status = %s,
+            lead_sync_error = %s,
+            updated_at = NOW()
+        WHERE id = %s
+        """,
+        (lead_id or None, lead_sync_status, lead_sync_error, card.get("id")),
+    )
+
+
+def _sync_partner_card_to_lead(cur, *, card: dict[str, Any], user_id: str) -> tuple[str | None, bool, str | None]:
+    if _is_residential_partner_card(card):
+        cur.execute(
+            """
+            UPDATE partnership_partner_cards
+            SET yandex_maps_match_status = %s,
+                lead_sync_status = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (PARTNER_MATCH_SKIPPED_RESIDENTIAL, PARTNER_LEAD_SKIPPED, card.get("id")),
+        )
+        return None, False, "skipped_residential_complex"
+
+    source_url = normalize_map_url(str(card.get("yandex_maps_url") or "").strip())
+    if not source_url:
+        return None, False, "missing_yandex_maps_url"
+
+    source_label = _build_partner_source_label(card)
+    search_payload = {
+        "source": "partnership_partner_card",
+        "partner_source_company_id": str(card.get("source_company_id") or "").strip() or None,
+        "partner_source_company_name": str(card.get("source_company_name") or "").strip() or None,
+        "partner_source_partner_id": str(card.get("id") or "").strip() or None,
+        "partner_source_label": source_label,
+        "partner_card": {
+            "id": str(card.get("id") or ""),
+            "name": str(card.get("partner_name") or "").strip(),
+            "address": str(card.get("partner_address") or "").strip(),
+            "city": str(card.get("partner_city") or "").strip(),
+            "category": str(card.get("partner_category") or "").strip(),
+        },
+    }
+    lead_id, created = _insert_partnership_lead_if_new(
+        cur,
+        business_id=str(card.get("business_id") or ""),
+        created_by=user_id,
+        source_url=source_url,
+        name=str(card.get("partner_name") or "").strip() or "Новый партнёр",
+        address=str(card.get("partner_address") or "").strip() or None,
+        city=str(card.get("partner_city") or "").strip() or None,
+        category=str(card.get("partner_category") or "").strip() or None,
+        source="partnership_partner_card",
+        source_kind="partner_card",
+        source_provider="localos_partner_card",
+        external_source_id=_extract_yandex_org_id_from_url(source_url) or None,
+        search_payload=search_payload,
+    )
+    if not lead_id:
+        return None, False, "lead_insert_failed"
+
+    cur.execute(
+        """
+        UPDATE prospectingleads
+        SET partner_source_company_id = %s,
+            partner_source_company_name = %s,
+            partner_source_partner_id = %s,
+            source = COALESCE(NULLIF(source, ''), 'partnership_partner_card'),
+            status = COALESCE(NULLIF(status, ''), 'new'),
+            pipeline_status = COALESCE(NULLIF(pipeline_status, ''), %s),
+            partnership_stage = COALESCE(NULLIF(partnership_stage, ''), 'imported'),
+            updated_at = NOW()
+        WHERE id = %s
+        """,
+        (
+            str(card.get("source_company_id") or "").strip() or None,
+            str(card.get("source_company_name") or "").strip() or None,
+            str(card.get("id") or "").strip() or None,
+            PIPELINE_UNPROCESSED,
+            lead_id,
+        ),
+    )
+    _upsert_partner_card_lead_link(
+        cur,
+        card=card,
+        lead_id=lead_id,
+        lead_sync_status=PARTNER_LEAD_SYNCED,
+    )
+    try:
+        _record_lead_timeline_event(
+            cur,
+            lead_id=lead_id,
+            event_type="partner_card_synced",
+            actor_id=user_id,
+            comment=source_label,
+            payload={
+                "partner_card_id": str(card.get("id") or ""),
+                "source_company_name": str(card.get("source_company_name") or ""),
+            },
+        )
+    except Exception:
+        pass
+    return lead_id, created, None
+
+
+def _create_admin_public_audit_for_lead(
+    cur,
+    *,
+    lead: dict[str, Any],
+    user_id: str,
+    source_type: str,
+    primary_language: str = "ru",
+) -> tuple[str, str, dict[str, Any]]:
+    preview = build_lead_card_preview_snapshot(lead)
+    page_json = _to_json_compatible(
+        _build_admin_lead_offer_payload(
+            lead=lead,
+            preview=preview,
+            preferred_language=primary_language,
+            enabled_languages=[primary_language],
+        )
+    )
+    page_json["source"] = source_type
+    page_json["signup_context"] = {
+        "source": "partnership_partner",
+        "lead_id": str(lead.get("id") or ""),
+        "partner_id": str(lead.get("partner_source_partner_id") or ""),
+        "source_company_name": str(lead.get("partner_source_company_name") or ""),
+        "maps_url": str(lead.get("source_url") or ""),
+    }
+    page_json = normalize_public_audit_page_json(page_json)
+
+    base_slug = _build_offer_slug(
+        str(lead.get("name") or "partner"),
+        str(lead.get("city") or ""),
+        str(lead.get("address") or ""),
+    )
+    slug = base_slug
+    suffix = 1
+    while True:
+        cur.execute(
+            """
+            SELECT lead_id
+            FROM adminprospectingleadpublicoffers
+            WHERE slug = %s
+            LIMIT 1
+            """,
+            (slug,),
+        )
+        row = cur.fetchone()
+        if not row:
+            break
+        existing_lead_id = row.get("lead_id") if hasattr(row, "get") else (row[0] if row else None)
+        if str(existing_lead_id or "") == str(lead.get("id") or ""):
+            break
+        suffix += 1
+        slug = f"{base_slug}-{suffix}"
+
+    cur.execute(
+        """
+        INSERT INTO adminprospectingleadpublicoffers (
+            lead_id, business_id, business_profile, source_type,
+            slug, page_json, generated_json, edited_json, published_json,
+            edit_status, is_active, created_by, published_by, published_at, created_at, updated_at
+        ) VALUES (%s, NULLIF(%s, '')::uuid, %s, %s, %s, %s, %s, NULL, %s, %s, TRUE, NULLIF(%s, '')::uuid, NULLIF(%s, '')::uuid, NOW(), NOW(), NOW())
+        ON CONFLICT (lead_id) DO UPDATE
+        SET slug = EXCLUDED.slug,
+            page_json = EXCLUDED.page_json,
+            business_id = EXCLUDED.business_id,
+            business_profile = EXCLUDED.business_profile,
+            source_type = EXCLUDED.source_type,
+            generated_json = EXCLUDED.generated_json,
+            published_json = EXCLUDED.published_json,
+            edit_status = EXCLUDED.edit_status,
+            is_active = TRUE,
+            published_by = EXCLUDED.published_by,
+            published_at = NOW(),
+            updated_at = NOW()
+        """,
+        (
+            str(lead.get("id") or ""),
+            str(lead.get("business_id") or ""),
+            str(page_json.get("audit", {}).get("audit_profile") or "").strip() or None,
+            source_type,
+            slug,
+            Json(page_json),
+            Json(page_json),
+            Json(page_json),
+            "published",
+            user_id,
+            user_id,
+        ),
+    )
+    return slug, _make_public_offer_url(slug), page_json
+
+
+def _process_partner_card_parse(*, partner_id: str, business_id: str, user_id: str) -> dict[str, Any]:
+    conn = get_db_connection()
+    try:
+        _ensure_partnership_columns(conn)
+        _ensure_manual_crm_tables(conn)
+        _ensure_partnership_partner_cards_table(conn)
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        card = _load_partner_card(cur, partner_id=partner_id, business_id=business_id)
+        if not card:
+            return {"success": False, "error": "Partner card not found", "status_code": 404}
+        lead_id = str(card.get("lead_id") or "").strip()
+        if not lead_id:
+            lead_id, _, sync_error = _sync_partner_card_to_lead(cur, card=card, user_id=user_id)
+            if sync_error:
+                conn.commit()
+                return {"success": False, "error": sync_error, "status_code": 400}
+        conn.commit()
+        cur.execute("SELECT * FROM prospectingleads WHERE id = %s", (lead_id,))
+        lead = _row_to_dict(cur.fetchone())
+    finally:
+        conn.close()
+
+    if not lead:
+        return {"success": False, "error": "Lead not found after sync", "status_code": 404}
+    display_lead = _sync_partnership_lead_from_parsed_data(lead)
+    parse_business_id = str(display_lead.get("parse_business_id") or "").strip()
+    if not parse_business_id:
+        business, _business_created = _ensure_parse_business_for_partnership_lead(display_lead, user_id)
+        parse_business_id = str(business.get("id") or "").strip()
+    source_url = str(display_lead.get("source_url") or "").strip()
+    if not source_url:
+        return {"success": False, "error": "missing_source_url", "status_code": 400}
+    task = _enqueue_parse_task_for_business(parse_business_id, user_id, source_url)
+
+    conn = get_db_connection()
+    try:
+        _ensure_partnership_partner_cards_table(conn)
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            """
+            UPDATE partnership_partner_cards
+            SET parse_business_id = NULLIF(%s, '')::uuid,
+                updated_at = NOW()
+            WHERE id = NULLIF(%s, '')::uuid
+            RETURNING *
+            """,
+            (parse_business_id, partner_id),
+        )
+        updated = _normalize_partner_card_for_response(_row_to_dict(cur.fetchone()))
+        conn.commit()
+    finally:
+        conn.close()
+    return {
+        "success": True,
+        "task": _to_json_compatible(task),
+        "parse_business_id": parse_business_id,
+        "card": updated,
+        "status_code": 200,
+    }
+
+
+def _process_partner_card_audit(
+    *,
+    partner_id: str,
+    business_id: str,
+    user_id: str,
+    primary_language: str = "ru",
+) -> dict[str, Any]:
+    conn = get_db_connection()
+    try:
+        _ensure_partnership_columns(conn)
+        _ensure_manual_crm_tables(conn)
+        _ensure_partnership_partner_cards_table(conn)
+        _ensure_admin_prospecting_public_offers_table(conn)
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        card = _load_partner_card(cur, partner_id=partner_id, business_id=business_id)
+        if not card:
+            return {"success": False, "error": "Partner card not found", "status_code": 404}
+        lead_id = str(card.get("lead_id") or "").strip()
+        if not lead_id:
+            lead_id, _, sync_error = _sync_partner_card_to_lead(cur, card=card, user_id=user_id)
+            if sync_error:
+                cur.execute(
+                    """
+                    UPDATE partnership_partner_cards
+                    SET audit_status = %s,
+                        audit_error = %s,
+                        updated_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (PARTNER_AUDIT_FAILED, sync_error, card.get("id")),
+                )
+                conn.commit()
+                return {"success": False, "error": sync_error, "status_code": 400}
+        cur.execute("SELECT * FROM prospectingleads WHERE id = %s", (lead_id,))
+        lead = _row_to_dict(cur.fetchone())
+        if not lead:
+            return {"success": False, "error": "Lead not found after sync", "status_code": 404}
+        lead = _sync_partnership_lead_from_parsed_data(lead)
+        slug, public_url, page_json = _create_admin_public_audit_for_lead(
+            cur,
+            lead=lead,
+            user_id=user_id,
+            source_type="partnership_partner_public_audit",
+            primary_language=primary_language,
+        )
+        cur.execute(
+            """
+            UPDATE partnership_partner_cards
+            SET audit_public_url = %s,
+                audit_slug = %s,
+                audit_status = %s,
+                audit_generated_at = NOW(),
+                audit_error = NULL,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (public_url, slug, PARTNER_AUDIT_GENERATED, card.get("id")),
+        )
+        updated = _normalize_partner_card_for_response(_row_to_dict(cur.fetchone()))
+        conn.commit()
+    finally:
+        conn.close()
+    return {
+        "success": True,
+        "slug": slug,
+        "public_url": public_url,
+        "page": page_json,
+        "card": updated,
+        "status_code": 200,
+    }
 
 
 def _derive_pipeline_status_from_lead(lead: dict[str, Any] | None) -> str:
@@ -6546,6 +7195,7 @@ def partnership_import_links():
         conn = get_db_connection()
         try:
             _ensure_partnership_columns(conn)
+            _ensure_sales_room_tables(conn)
             cur = conn.cursor()
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
@@ -6592,6 +7242,667 @@ def partnership_import_links():
     except Exception as e:
         print(f"Error importing partnership links: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/partners/import", methods=["POST"])
+def partnership_import_partner_cards():
+    """Import source-company partner cards before maps enrichment."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        source_company_id = str(data.get("source_company_id") or "").strip() or None
+        source_company_name = str(data.get("source_company_name") or "").strip()
+        items = data.get("items") or data.get("partners") or []
+        if not source_company_name:
+            return jsonify({"error": "source_company_name is required"}), 400
+        if not isinstance(items, list) or not items:
+            return jsonify({"error": "items must be a non-empty list"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_manual_crm_tables(conn)
+            _ensure_partnership_partner_cards_table(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            imported: list[dict[str, Any]] = []
+            updated_count = 0
+            skipped_count = 0
+            for raw_item in items:
+                if not isinstance(raw_item, dict):
+                    skipped_count += 1
+                    continue
+                partner_name = str(raw_item.get("partner_name") or raw_item.get("name") or "").strip()
+                if not partner_name:
+                    skipped_count += 1
+                    continue
+                partner_address = str(raw_item.get("partner_address") or raw_item.get("address") or "").strip() or None
+                partner_city = str(raw_item.get("partner_city") or raw_item.get("city") or data.get("default_city") or "").strip() or None
+                partner_category = str(raw_item.get("partner_category") or raw_item.get("category") or "").strip() or None
+                partner_kind = _normalize_partner_kind(
+                    raw_item.get("partner_kind") or raw_item.get("kind"),
+                    partner_name,
+                    partner_category,
+                    raw_item,
+                )
+                yandex_maps_url = normalize_map_url(str(raw_item.get("yandex_maps_url") or raw_item.get("maps_url") or raw_item.get("source_url") or "").strip())
+                match_status = PARTNER_MATCH_MANUAL_CONFIRMED if yandex_maps_url else PARTNER_MATCH_NOT_STARTED
+                if partner_kind == PARTNER_KIND_RESIDENTIAL_COMPLEX:
+                    match_status = PARTNER_MATCH_SKIPPED_RESIDENTIAL
+
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM partnership_partner_cards
+                    WHERE business_id = NULLIF(%s, '')::uuid
+                      AND LOWER(source_company_name) = LOWER(%s)
+                      AND LOWER(partner_name) = LOWER(%s)
+                      AND COALESCE(LOWER(partner_address), '') = COALESCE(LOWER(%s), '')
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                    """,
+                    (business_id, source_company_name, partner_name, partner_address or ""),
+                )
+                existing = _row_to_dict(cur.fetchone())
+                if existing:
+                    cur.execute(
+                        """
+                        UPDATE partnership_partner_cards
+                        SET source_company_id = COALESCE(%s, source_company_id),
+                            partner_city = COALESCE(%s, partner_city),
+                            partner_category = COALESCE(%s, partner_category),
+                            partner_kind = %s,
+                            yandex_maps_url = COALESCE(NULLIF(%s, ''), yandex_maps_url),
+                            yandex_maps_match_status = CASE
+                                WHEN %s <> '' THEN %s
+                                WHEN %s = %s THEN %s
+                                ELSE yandex_maps_match_status
+                            END,
+                            lead_sync_status = CASE
+                                WHEN %s = %s THEN %s
+                                ELSE lead_sync_status
+                            END,
+                            raw_payload_json = %s,
+                            updated_at = NOW()
+                        WHERE id = %s
+                        RETURNING *
+                        """,
+                        (
+                            source_company_id,
+                            partner_city,
+                            partner_category,
+                            partner_kind,
+                            yandex_maps_url,
+                            yandex_maps_url,
+                            PARTNER_MATCH_MANUAL_CONFIRMED,
+                            partner_kind,
+                            PARTNER_KIND_RESIDENTIAL_COMPLEX,
+                            PARTNER_MATCH_SKIPPED_RESIDENTIAL,
+                            partner_kind,
+                            PARTNER_KIND_RESIDENTIAL_COMPLEX,
+                            PARTNER_LEAD_SKIPPED,
+                            Json(_to_json_compatible(raw_item)),
+                            existing.get("id"),
+                        ),
+                    )
+                    updated = _row_to_dict(cur.fetchone())
+                    imported.append(_normalize_partner_card_for_response(updated))
+                    updated_count += 1
+                    continue
+
+                partner_id = str(uuid.uuid4())
+                cur.execute(
+                    """
+                    INSERT INTO partnership_partner_cards (
+                        id, business_id, source_company_id, source_company_name,
+                        partner_name, partner_address, partner_city, partner_category, partner_kind,
+                        yandex_maps_url, yandex_maps_match_status, yandex_maps_match_confidence,
+                        lead_sync_status,
+                        raw_payload_json, created_by, created_at, updated_at
+                    ) VALUES (
+                        %s, NULLIF(%s, '')::uuid, %s, %s,
+                        %s, %s, %s, %s, %s,
+                        NULLIF(%s, ''), %s, %s,
+                        %s,
+                        %s, NULLIF(%s, '')::uuid, NOW(), NOW()
+                    )
+                    RETURNING *
+                    """,
+                    (
+                        partner_id,
+                        business_id,
+                        source_company_id,
+                        source_company_name,
+                        partner_name,
+                        partner_address,
+                        partner_city,
+                        partner_category,
+                        partner_kind,
+                        yandex_maps_url,
+                        match_status,
+                        1.0 if yandex_maps_url else None,
+                        PARTNER_LEAD_SKIPPED if partner_kind == PARTNER_KIND_RESIDENTIAL_COMPLEX else PARTNER_LEAD_NOT_SYNCED,
+                        Json(_to_json_compatible(raw_item)),
+                        str(user_data.get("user_id") or ""),
+                    ),
+                )
+                imported.append(_normalize_partner_card_for_response(_row_to_dict(cur.fetchone())))
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify(
+            {
+                "success": True,
+                "count": len(imported),
+                "updated_count": updated_count,
+                "skipped_count": skipped_count,
+                "items": imported,
+            }
+        )
+    except Exception:
+        err = sys.exc_info()[1]
+        print(f"Error importing partner cards: {err}")
+        return jsonify({"error": str(err)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/partners", methods=["GET"])
+def partnership_list_partner_cards():
+    """List source-company partner cards with enrichment state."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        source_company_name = str(request.args.get("source_company_name") or "").strip()
+        match_status = str(request.args.get("match_status") or "").strip()
+        limit = max(1, min(int(request.args.get("limit") or 200), 500))
+        offset = max(0, int(request.args.get("offset") or 0))
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_partnership_partner_cards_table(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            where_sql = ["p.business_id = NULLIF(%s, '')::uuid"]
+            params: list[Any] = [business_id]
+            if source_company_name:
+                where_sql.append("LOWER(p.source_company_name) = LOWER(%s)")
+                params.append(source_company_name)
+            if match_status:
+                where_sql.append("p.yandex_maps_match_status = %s")
+                params.append(match_status)
+            cur.execute(
+                f"""
+                SELECT
+                    p.*,
+                    l.name AS lead_name,
+                    l.status AS lead_status,
+                    l.pipeline_status AS lead_pipeline_status,
+                    l.partnership_stage AS lead_partnership_stage
+                FROM partnership_partner_cards p
+                LEFT JOIN prospectingleads l ON l.id = p.lead_id
+                WHERE {' AND '.join(where_sql)}
+                ORDER BY p.updated_at DESC, p.created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (*params, limit, offset),
+            )
+            rows = [_normalize_partner_card_for_response(_row_to_dict(row)) for row in cur.fetchall() or []]
+        finally:
+            conn.close()
+        return jsonify({"success": True, "count": len(rows), "items": rows})
+    except Exception:
+        err = sys.exc_info()[1]
+        print(f"Error listing partner cards: {err}")
+        return jsonify({"error": str(err)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/partners/<string:partner_id>/find-yandex", methods=["POST"])
+def partnership_find_partner_yandex(partner_id):
+    """Find and optionally auto-select a Yandex Maps URL for a partner card."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        force = bool(data.get("force"))
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_partner_cards_table(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            card = _load_partner_card(cur, partner_id=partner_id, business_id=business_id)
+            if not card:
+                return jsonify({"error": "Partner card not found"}), 404
+            if _is_residential_partner_card(card):
+                cur.execute(
+                    """
+                    UPDATE partnership_partner_cards
+                    SET yandex_maps_match_status = %s,
+                        lead_sync_status = %s,
+                        updated_at = NOW()
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (PARTNER_MATCH_SKIPPED_RESIDENTIAL, PARTNER_LEAD_SKIPPED, card.get("id")),
+                )
+                updated = _normalize_partner_card_for_response(_row_to_dict(cur.fetchone()))
+                conn.commit()
+                return jsonify({"success": True, "status": PARTNER_MATCH_SKIPPED_RESIDENTIAL, "card": updated, "candidates": []})
+            if str(card.get("yandex_maps_url") or "").strip() and str(card.get("yandex_maps_match_status") or "") == PARTNER_MATCH_MANUAL_CONFIRMED and not force:
+                return jsonify({"success": True, "status": PARTNER_MATCH_MANUAL_CONFIRMED, "card": _normalize_partner_card_for_response(card), "candidates": []})
+
+            candidates, search_error = _find_yandex_candidates_for_partner_card(card)
+            status = PARTNER_MATCH_NOT_FOUND
+            selected_url = None
+            selected_confidence = None
+            if candidates:
+                top = candidates[0]
+                top_confidence = float(top.get("confidence") or 0)
+                second_confidence = float(candidates[1].get("confidence") or 0) if len(candidates) > 1 else 0.0
+                if top_confidence >= 0.83 and (top_confidence - second_confidence) >= 0.08:
+                    status = PARTNER_MATCH_FOUND
+                    selected_url = str(top.get("yandex_maps_url") or "").strip() or None
+                    selected_confidence = top_confidence
+                else:
+                    status = PARTNER_MATCH_AMBIGUOUS
+                    selected_confidence = top_confidence
+            elif search_error:
+                status = PARTNER_MATCH_NOT_FOUND
+
+            cur.execute(
+                """
+                UPDATE partnership_partner_cards
+                SET yandex_maps_url = COALESCE(%s, yandex_maps_url),
+                    yandex_maps_match_status = %s,
+                    yandex_maps_match_confidence = %s,
+                    yandex_maps_candidates_json = %s,
+                    lead_sync_error = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING *
+                """,
+                (
+                    selected_url,
+                    status,
+                    selected_confidence,
+                    Json(_to_json_compatible(candidates)),
+                    search_error,
+                    card.get("id"),
+                ),
+            )
+            updated = _normalize_partner_card_for_response(_row_to_dict(cur.fetchone()))
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({"success": True, "status": status, "card": updated, "candidates": candidates, "error": search_error})
+    except Exception:
+        err = sys.exc_info()[1]
+        print(f"Error finding partner yandex link: {err}")
+        return jsonify({"error": str(err)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/partners/<string:partner_id>/confirm-yandex-link", methods=["POST"])
+def partnership_confirm_partner_yandex(partner_id):
+    """Manually confirm or replace the Yandex Maps URL for a partner card."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        yandex_maps_url = normalize_map_url(str(data.get("yandex_maps_url") or data.get("source_url") or "").strip())
+        if not yandex_maps_url:
+            return jsonify({"error": "yandex_maps_url is required"}), 400
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_partner_cards_table(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            card = _load_partner_card(cur, partner_id=partner_id, business_id=business_id)
+            if not card:
+                return jsonify({"error": "Partner card not found"}), 404
+            cur.execute(
+                """
+                UPDATE partnership_partner_cards
+                SET yandex_maps_url = %s,
+                    yandex_maps_match_status = %s,
+                    yandex_maps_match_confidence = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING *
+                """,
+                (yandex_maps_url, PARTNER_MATCH_MANUAL_CONFIRMED, 1.0, card.get("id")),
+            )
+            updated = _normalize_partner_card_for_response(_row_to_dict(cur.fetchone()))
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({"success": True, "card": updated})
+    except Exception:
+        err = sys.exc_info()[1]
+        print(f"Error confirming partner yandex link: {err}")
+        return jsonify({"error": str(err)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/partners/<string:partner_id>/sync-lead", methods=["POST"])
+def partnership_sync_partner_lead(partner_id):
+    """Sync a partner card into prospectingleads candidate stage."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_manual_crm_tables(conn)
+            _ensure_partnership_partner_cards_table(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            card = _load_partner_card(cur, partner_id=partner_id, business_id=business_id)
+            if not card:
+                return jsonify({"error": "Partner card not found"}), 404
+            lead_id, created, sync_error = _sync_partner_card_to_lead(cur, card=card, user_id=str(user_data.get("user_id") or ""))
+            if sync_error and sync_error != "skipped_residential_complex":
+                cur.execute(
+                    """
+                    UPDATE partnership_partner_cards
+                    SET lead_sync_status = %s,
+                        lead_sync_error = %s,
+                        updated_at = NOW()
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (PARTNER_LEAD_FAILED, sync_error, card.get("id")),
+                )
+                updated = _normalize_partner_card_for_response(_row_to_dict(cur.fetchone()))
+                conn.commit()
+                return jsonify({"success": False, "error": sync_error, "card": updated}), 400
+            cur.execute("SELECT * FROM partnership_partner_cards WHERE id = %s", (card.get("id"),))
+            updated = _normalize_partner_card_for_response(_row_to_dict(cur.fetchone()))
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({"success": True, "lead_id": lead_id, "created": created, "card": updated})
+    except Exception:
+        err = sys.exc_info()[1]
+        print(f"Error syncing partner card to lead: {err}")
+        return jsonify({"error": str(err)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/partners/<string:partner_id>/parse", methods=["POST"])
+def partnership_parse_partner_card(partner_id):
+    """Create or reuse a parse task for a partner card's map URL."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+        finally:
+            conn.close()
+        result = _process_partner_card_parse(
+            partner_id=partner_id,
+            business_id=business_id,
+            user_id=str(user_data.get("user_id") or ""),
+        )
+        status_code = int(result.pop("status_code", 200) or 200)
+        return jsonify(result), status_code
+    except Exception:
+        err = sys.exc_info()[1]
+        print(f"Error parsing partner card: {err}")
+        return jsonify({"error": str(err)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/partners/<string:partner_id>/audit", methods=["POST"])
+def partnership_audit_partner_card(partner_id):
+    """Create a public audit for a partner card and store the URL on the card."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        requested_language = str(data.get("primary_language") or data.get("language") or "ru").strip().lower() or "ru"
+        primary_language, _enabled_languages = _normalize_public_audit_languages(requested_language, [requested_language])
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+        finally:
+            conn.close()
+        result = _process_partner_card_audit(
+            partner_id=partner_id,
+            business_id=business_id,
+            user_id=str(user_data.get("user_id") or ""),
+            primary_language=primary_language,
+        )
+        status_code = int(result.pop("status_code", 200) or 200)
+        return jsonify(result), status_code
+    except Exception:
+        err = sys.exc_info()[1]
+        print(f"Error auditing partner card: {err}")
+        return jsonify({"error": str(err)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/partners/bulk-process", methods=["POST"])
+def partnership_bulk_process_partner_cards():
+    """Run selected enrichment steps for partner cards."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        raw_steps = data.get("steps") or ["find_yandex", "sync_lead", "parse", "audit"]
+        steps = [str(step or "").strip().lower() for step in raw_steps if str(step or "").strip()]
+        allowed_steps = {"find_yandex", "sync_lead", "parse", "audit"}
+        steps = [step for step in steps if step in allowed_steps]
+        if not steps:
+            return jsonify({"error": "steps must include at least one supported step"}), 400
+        partner_ids = [str(item or "").strip() for item in (data.get("partner_ids") or []) if str(item or "").strip()]
+        source_company_names = [str(item or "").strip() for item in (data.get("source_company_names") or []) if str(item or "").strip()]
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_manual_crm_tables(conn)
+            _ensure_partnership_partner_cards_table(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            where_sql = ["business_id = NULLIF(%s, '')::uuid"]
+            params: list[Any] = [business_id]
+            if partner_ids:
+                where_sql.append("id = ANY(%s::uuid[])")
+                params.append(partner_ids)
+            if source_company_names:
+                where_sql.append("source_company_name = ANY(%s)")
+                params.append(source_company_names)
+            cur.execute(
+                f"""
+                SELECT *
+                FROM partnership_partner_cards
+                WHERE {' AND '.join(where_sql)}
+                ORDER BY updated_at DESC
+                LIMIT 500
+                """,
+                tuple(params),
+            )
+            cards = [_row_to_dict(row) for row in cur.fetchall() or []]
+        finally:
+            conn.close()
+
+        results: list[dict[str, Any]] = []
+        summary = {
+            "total": len(cards),
+            "skipped_residential_complex": 0,
+            "found": 0,
+            "ambiguous": 0,
+            "not_found": 0,
+            "leads_synced": 0,
+            "parse_tasks": 0,
+            "audits_created": 0,
+            "failed": 0,
+        }
+
+        for card in cards:
+            card_id = str(card.get("id") or "")
+            item_result: dict[str, Any] = {"partner_id": card_id, "steps": {}}
+            if _is_residential_partner_card(card):
+                summary["skipped_residential_complex"] += 1
+                conn = get_db_connection()
+                try:
+                    _ensure_partnership_partner_cards_table(conn)
+                    cur = conn.cursor()
+                    cur.execute(
+                        """
+                        UPDATE partnership_partner_cards
+                        SET yandex_maps_match_status = %s,
+                            lead_sync_status = %s,
+                            updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (PARTNER_MATCH_SKIPPED_RESIDENTIAL, PARTNER_LEAD_SKIPPED, card.get("id")),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+                item_result["steps"]["skip"] = "residential_complex"
+                results.append(item_result)
+                continue
+
+            if "find_yandex" in steps:
+                candidates, search_error = _find_yandex_candidates_for_partner_card(card)
+                status = PARTNER_MATCH_NOT_FOUND
+                selected_url = None
+                selected_confidence = None
+                if candidates:
+                    top = candidates[0]
+                    top_confidence = float(top.get("confidence") or 0)
+                    second_confidence = float(candidates[1].get("confidence") or 0) if len(candidates) > 1 else 0.0
+                    if top_confidence >= 0.83 and (top_confidence - second_confidence) >= 0.08:
+                        status = PARTNER_MATCH_FOUND
+                        selected_url = str(top.get("yandex_maps_url") or "").strip() or None
+                        selected_confidence = top_confidence
+                        card["yandex_maps_url"] = selected_url
+                    else:
+                        status = PARTNER_MATCH_AMBIGUOUS
+                        selected_confidence = top_confidence
+                conn = get_db_connection()
+                try:
+                    _ensure_partnership_partner_cards_table(conn)
+                    cur = conn.cursor()
+                    cur.execute(
+                        """
+                        UPDATE partnership_partner_cards
+                        SET yandex_maps_url = COALESCE(%s, yandex_maps_url),
+                            yandex_maps_match_status = %s,
+                            yandex_maps_match_confidence = %s,
+                            yandex_maps_candidates_json = %s,
+                            lead_sync_error = %s,
+                            updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (selected_url, status, selected_confidence, Json(_to_json_compatible(candidates)), search_error, card.get("id")),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+                if status == PARTNER_MATCH_FOUND:
+                    summary["found"] += 1
+                elif status == PARTNER_MATCH_AMBIGUOUS:
+                    summary["ambiguous"] += 1
+                else:
+                    summary["not_found"] += 1
+                item_result["steps"]["find_yandex"] = {"status": status, "error": search_error}
+
+            if "sync_lead" in steps:
+                conn = get_db_connection()
+                try:
+                    _ensure_partnership_columns(conn)
+                    _ensure_manual_crm_tables(conn)
+                    _ensure_partnership_partner_cards_table(conn)
+                    cur = conn.cursor(cursor_factory=RealDictCursor)
+                    refreshed = _load_partner_card(cur, partner_id=card_id, business_id=str(card.get("business_id") or ""))
+                    if refreshed:
+                        card = refreshed
+                    lead_id, created, sync_error = _sync_partner_card_to_lead(cur, card=card, user_id=str(user_data.get("user_id") or ""))
+                    if sync_error:
+                        summary["failed"] += 1
+                        item_result["steps"]["sync_lead"] = {"error": sync_error}
+                    else:
+                        summary["leads_synced"] += 1
+                        item_result["steps"]["sync_lead"] = {"lead_id": lead_id, "created": created}
+                    conn.commit()
+                finally:
+                    conn.close()
+
+            if "parse" in steps:
+                parse_result = _process_partner_card_parse(
+                    partner_id=card_id,
+                    business_id=str(card.get("business_id") or ""),
+                    user_id=str(user_data.get("user_id") or ""),
+                )
+                if parse_result.get("success"):
+                    summary["parse_tasks"] += 1
+                    item_result["steps"]["parse"] = {
+                        "task": parse_result.get("task"),
+                        "parse_business_id": parse_result.get("parse_business_id"),
+                    }
+                else:
+                    summary["failed"] += 1
+                    item_result["steps"]["parse"] = {"error": parse_result.get("error")}
+
+            if "audit" in steps:
+                audit_result = _process_partner_card_audit(
+                    partner_id=card_id,
+                    business_id=str(card.get("business_id") or ""),
+                    user_id=str(user_data.get("user_id") or ""),
+                    primary_language="ru",
+                )
+                if audit_result.get("success"):
+                    summary["audits_created"] += 1
+                    item_result["steps"]["audit"] = {"public_url": audit_result.get("public_url")}
+                else:
+                    summary["failed"] += 1
+                    item_result["steps"]["audit"] = {"error": audit_result.get("error")}
+
+            results.append(item_result)
+
+        return jsonify({"success": True, "summary": summary, "results": results})
+    except Exception:
+        err = sys.exc_info()[1]
+        print(f"Error bulk processing partner cards: {err}")
+        return jsonify({"error": str(err)}), 500
 
 
 @admin_prospecting_bp.route("/api/partnership/leads/import-file", methods=["POST"])
@@ -6961,6 +8272,7 @@ def partnership_list_leads():
         conn = get_db_connection()
         try:
             _ensure_partnership_columns(conn)
+            _ensure_sales_room_tables(conn)
             cur = conn.cursor()
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
@@ -7039,7 +8351,11 @@ def partnership_list_leads():
                        pq_last.status AS parse_status,
                        COALESCE(pq_last.updated_at, pq_last.created_at) AS parse_updated_at,
                        pq_last.retry_after AS parse_retry_after,
-                       pq_last.error_message AS parse_error
+                       pq_last.error_message AS parse_error,
+                       sr_last.status AS sales_room_status,
+                       sr_last.data_mode AS sales_room_data_mode,
+                       sr_last.slug AS sales_room_slug,
+                       sr_last.updated_at AS sales_room_updated_at
                 FROM prospectingleads
                 LEFT JOIN LATERAL (
                     SELECT
@@ -7058,6 +8374,14 @@ def partnership_list_leads():
                     ORDER BY COALESCE(pq.updated_at, pq.created_at) DESC
                     LIMIT 1
                 ) pq_last ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT status, data_mode, slug, updated_at
+                    FROM sales_rooms sr
+                    WHERE sr.lead_id = prospectingleads.id
+                      AND sr.business_id = prospectingleads.business_id
+                    ORDER BY sr.updated_at DESC
+                    LIMIT 1
+                ) sr_last ON TRUE
                 WHERE {' AND '.join(where_sql)}
                 ORDER BY prospectingleads.updated_at DESC NULLS LAST, prospectingleads.created_at DESC
                 LIMIT %s OFFSET %s
@@ -7074,6 +8398,9 @@ def partnership_list_leads():
             parse_status = str(payload.get("parse_status") or "").strip().lower()
             if parse_status in {"completed", "done"}:
                 payload = _sync_partnership_lead_from_parsed_data(payload)
+            sales_room_slug = str(payload.get("sales_room_slug") or "").strip()
+            if sales_room_slug:
+                payload["sales_room_url"] = _make_sales_room_url(sales_room_slug)
             payload["next_best_action"] = _partnership_next_best_action(payload)
             items.append(payload)
         return jsonify({"success": True, "count": len(items), "items": items})
@@ -9613,6 +10940,300 @@ def _make_public_offer_url(slug: str) -> str:
     return f"{frontend_base}/{slug}"
 
 
+def _make_sales_room_url(slug: str) -> str:
+    frontend_base = str(os.environ.get("FRONTEND_BASE_URL") or "").strip().rstrip("/")
+    if not frontend_base:
+        frontend_base = "https://localos.pro"
+    return f"{frontend_base}/room/{slug}"
+
+
+def _normalize_sales_room_data_mode(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized == SALES_ROOM_DATA_AUDITED:
+        return SALES_ROOM_DATA_AUDITED
+    return SALES_ROOM_DATA_TEMPLATE
+
+
+def _sales_room_slug_base(*parts: Any) -> str:
+    base = _build_offer_slug(
+        str(parts[0] if len(parts) > 0 else "room"),
+        str(parts[1] if len(parts) > 1 else ""),
+        str(parts[2] if len(parts) > 2 else ""),
+    )
+    return f"room-{base}" if not base.startswith("room-") else base
+
+
+def _unique_sales_room_slug(cur, base_slug: str, room_id: str | None = None) -> str:
+    slug = _slugify_company_name(base_slug)
+    suffix = 1
+    while True:
+        cur.execute("SELECT id FROM sales_rooms WHERE slug = %s LIMIT 1", (slug,))
+        row = cur.fetchone()
+        existing_id = ""
+        if row and hasattr(row, "get"):
+            existing_id = str(row.get("id") or "")
+        if not row or (room_id and existing_id == room_id):
+            return slug
+        suffix += 1
+        slug = f"{base_slug}-{suffix}"
+
+
+def _short_list(items: Any, limit: int = 3) -> list[str]:
+    if not isinstance(items, list):
+        return []
+    result: list[str] = []
+    for item in items:
+        text = ""
+        if isinstance(item, dict):
+            text = str(item.get("title") or item.get("description") or item.get("body") or "").strip()
+        else:
+            text = str(item or "").strip()
+        if text:
+            result.append(text)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _build_sales_room_proposal(
+    *,
+    mode: str,
+    data_mode: str,
+    lead: dict[str, Any],
+    business_name: str,
+    audit_json: dict[str, Any] | None = None,
+    match_json: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    lead_name = str(lead.get("name") or "компания").strip() or "компания"
+    clean_audit = audit_json if isinstance(audit_json, dict) else {}
+    clean_match = match_json if isinstance(match_json, dict) else {}
+    if mode == SALES_ROOM_MODE_PARTNER:
+        angles = _short_list(clean_match.get("offer_angles"), 3)
+        if not angles:
+            angles = [
+                f"У {business_name} и {lead_name} может быть пересекающаяся аудитория.",
+                "Можно начать с простого обмена рекомендациями.",
+                "Первый шаг — проверить интерес без сложной механики.",
+            ]
+        title = f"Предложение по партнёрству для {lead_name}"
+        summary = (
+            f"LocalOS подготовил идею сотрудничества между {business_name} и {lead_name}."
+            if data_mode == SALES_ROOM_DATA_TEMPLATE
+            else f"LocalOS сопоставил услуги {business_name} и {lead_name} и подготовил предложение."
+        )
+        next_step = "Если идея подходит, обсудите короткий тест партнёрства."
+        return {
+            "title": title,
+            "summary": summary,
+            "bullets": angles,
+            "next_step": next_step,
+            "data_mode": data_mode,
+        }
+
+    findings = _short_list(clean_audit.get("findings"), 3)
+    if not findings:
+        findings = [
+            "Карточку можно сделать понятнее для клиента до первого обращения.",
+            "Спрос с карт зависит от услуг, отзывов и контента.",
+            "Первый шаг — показать клиенту конкретные точки роста.",
+        ]
+    title = f"Разбор роста для {lead_name}"
+    summary = (
+        f"LocalOS подготовил предложение по росту для {lead_name}."
+        if data_mode == SALES_ROOM_DATA_TEMPLATE
+        else f"LocalOS подготовил короткий разбор, где {lead_name} может терять обращения."
+    )
+    return {
+        "title": title,
+        "summary": summary,
+        "bullets": findings,
+        "next_step": "Откройте разбор и выберите, какие правки стоит внедрить первыми.",
+        "data_mode": data_mode,
+    }
+
+
+def _build_sales_room_payload(
+    *,
+    mode: str,
+    data_mode: str,
+    lead: dict[str, Any],
+    business_profile: dict[str, Any],
+    audit_public_url: str,
+    audit_json: dict[str, Any] | None,
+    match_json: dict[str, Any] | None,
+    proposal_json: dict[str, Any],
+    slug: str,
+) -> dict[str, Any]:
+    business_name = _pick_business_display_name(business_profile)
+    lead_name = str(lead.get("name") or "Компания").strip() or "Компания"
+    safe_audit = audit_json if data_mode == SALES_ROOM_DATA_AUDITED and isinstance(audit_json, dict) else {}
+    safe_match = match_json if data_mode == SALES_ROOM_DATA_AUDITED and isinstance(match_json, dict) else {}
+    safe_audit_public_url = audit_public_url if data_mode == SALES_ROOM_DATA_AUDITED else ""
+    return _to_json_compatible(
+        {
+            "type": "sales_room",
+            "slug": slug,
+            "public_url": _make_sales_room_url(slug),
+            "mode": mode,
+            "data_mode": data_mode,
+            "business": {
+                "name": business_name,
+            },
+            "recipient": {
+                "name": lead_name,
+                "category": lead.get("category"),
+                "city": lead.get("city"),
+                "address": lead.get("address"),
+                "source_url": lead.get("source_url"),
+            },
+            "proposal": proposal_json,
+            "audit": {
+                "available": bool(safe_audit),
+                "public_url": safe_audit_public_url or None,
+                "summary_score": safe_audit.get("summary_score"),
+                "health_label": safe_audit.get("health_label"),
+                "summary_text": safe_audit.get("summary_text"),
+                "findings": safe_audit.get("findings") if isinstance(safe_audit.get("findings"), list) else [],
+                "recommended_actions": safe_audit.get("recommended_actions") if isinstance(safe_audit.get("recommended_actions"), list) else [],
+            },
+            "match": {
+                "available": bool(safe_match),
+                "match_score": safe_match.get("match_score"),
+                "score_explanation": safe_match.get("score_explanation"),
+                "offer_angles": safe_match.get("offer_angles") if isinstance(safe_match.get("offer_angles"), list) else [],
+                "reason_codes": safe_match.get("reason_codes") if isinstance(safe_match.get("reason_codes"), list) else [],
+            },
+            "cta": {
+                "primary_label": "Обсудить предложение" if mode == SALES_ROOM_MODE_PARTNER else "Обсудить рост",
+                "secondary_label": "Посмотреть аудит" if safe_audit_public_url else "Проверить свою компанию в LocalOS",
+                "secondary_url": safe_audit_public_url or "https://localos.pro",
+            },
+            "localos": {
+                "badge": "Сделано в LocalOS",
+                "description": "LocalOS помогает локальному бизнесу превращать спрос в клиентов и выручку.",
+            },
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+
+def _build_sales_room_invitation_text(
+    *,
+    mode: str,
+    data_mode: str,
+    business_name: str,
+    lead_name: str,
+    room_url: str,
+) -> str:
+    if mode == SALES_ROOM_MODE_PARTNER:
+        if data_mode == SALES_ROOM_DATA_AUDITED:
+            return (
+                f"Здравствуйте. Подготовили короткое предложение по партнёрству между {business_name} и {lead_name}.\n\n"
+                f"Собрали его в отдельной странице, чтобы было удобно посмотреть идею, аудит и следующий шаг:\n{room_url}"
+            )
+        return (
+            f"Здравствуйте. Подготовили короткую идею сотрудничества между {business_name} и {lead_name}.\n\n"
+            f"Собрали предложение на одной странице:\n{room_url}"
+        )
+    if data_mode == SALES_ROOM_DATA_AUDITED:
+        return (
+            f"Здравствуйте. Подготовили короткий разбор, где у {lead_name} могут теряться обращения и что можно улучшить.\n\n"
+            f"Собрали всё на одной странице:\n{room_url}"
+        )
+    return (
+        f"Здравствуйте. Подготовили короткое предложение по росту для {lead_name}.\n\n"
+        f"Собрали его на одной странице:\n{room_url}"
+    )
+
+
+def _create_sales_room_invitation_draft(
+    cur,
+    *,
+    lead_id: str,
+    room_id: str,
+    mode: str,
+    data_mode: str,
+    channel: str,
+    text: str,
+    user_id: str,
+) -> dict[str, Any]:
+    draft_id = str(uuid.uuid4())
+    cur.execute(
+        """
+        INSERT INTO outreachmessagedrafts (
+            id, lead_id, channel, angle_type, tone, status,
+            generated_text, edited_text, learning_note_json, created_by, created_at, updated_at
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, NOW(), NOW()
+        )
+        RETURNING id, lead_id, channel, angle_type, tone, status,
+                  generated_text, edited_text, approved_text,
+                  learning_note_json, created_at, updated_at
+        """,
+        (
+            draft_id,
+            lead_id,
+            channel,
+            "sales_room_invitation",
+            "professional",
+            DRAFT_GENERATED,
+            text,
+            text,
+            Json(
+                {
+                    "intent": "partnership_outreach" if mode == SALES_ROOM_MODE_PARTNER else "client_outreach",
+                    "room_id": room_id,
+                    "data_mode": data_mode,
+                    "prompt_key": "sales_room.invitation",
+                    "prompt_version": "v1",
+                    "prompt_source": "local_template",
+                }
+            ),
+            user_id,
+        ),
+    )
+    draft = _row_to_dict(cur.fetchone())
+    cur.execute(
+        """
+        UPDATE sales_rooms
+        SET invitation_draft_id = %s,
+            status = 'invitation_ready',
+            updated_at = NOW()
+        WHERE id = %s
+        """,
+        (draft_id, room_id),
+    )
+    return draft
+
+
+def _record_sales_room_event(conn, *, slug: str, event_type: str, metadata: dict[str, Any] | None = None) -> None:
+    _ensure_sales_room_tables(conn)
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM sales_rooms WHERE slug = %s LIMIT 1", (slug,))
+    row = cur.fetchone()
+    if not row:
+        return
+    room_id = row.get("id") if hasattr(row, "get") else row[0]
+    cur.execute(
+        """
+        INSERT INTO sales_room_events (id, room_id, event_type, metadata_json, created_at)
+        VALUES (%s, %s, %s, %s, NOW())
+        """,
+        (str(uuid.uuid4()), room_id, event_type, Json(metadata or {})),
+    )
+    if event_type == "view":
+        cur.execute(
+            """
+            UPDATE sales_rooms
+            SET status = CASE WHEN status IN ('ready', 'invitation_ready', 'approved', 'sent') THEN 'viewed' ELSE status END,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (room_id,),
+        )
+
+
 def _resolve_outreach_language(lead: dict[str, Any]) -> str:
     language = str(lead.get("preferred_language") or "").strip().lower()
     text_candidates = [
@@ -9873,6 +11494,349 @@ def _pick_business_display_name(profile: dict[str, Any]) -> str:
         if value:
             return value
     return "наша компания"
+
+
+def _reserve_sales_room_credit(cur, *, business_id: str, user_id: str, lead_id: str, mode: str) -> dict[str, Any]:
+    return reserve_paid_action_credits(
+        cur,
+        business_id=business_id,
+        user_id=user_id,
+        action_key="sales_room.prepare_audited",
+        estimated_credits=SALES_ROOM_AUDITED_CREDITS,
+        idempotency_key=f"{mode}:{business_id}:{lead_id}:audited",
+        metadata={
+            "mode": mode,
+            "lead_id": lead_id,
+            "estimated_credits": SALES_ROOM_AUDITED_CREDITS,
+        },
+    )
+
+
+def _finalize_sales_room_credit(
+    cur,
+    *,
+    reservation: dict[str, Any],
+    business_id: str,
+    user_id: str,
+    room_id: str,
+) -> dict[str, Any]:
+    reservation_id = str(reservation.get("reservation_id") or "").strip()
+    if not reservation_id:
+        return {
+            "status": "not_required",
+            "credit_charged": False,
+            "charged_credits": 0,
+        }
+    finalization = finalize_reserved_action_credits(
+        cur,
+        reservation_id=reservation_id,
+        business_id=business_id,
+        user_id=user_id,
+        actual_credits=SALES_ROOM_AUDITED_CREDITS,
+        finalization_mode="charge",
+        external_id=f"sales_room:{room_id}",
+    )
+    return {
+        "status": finalization.get("status"),
+        "reservation_id": reservation_id,
+        "credit_charged": bool((finalization.get("side_effects") or {}).get("credit_charged")),
+        "charged_credits": int(finalization.get("charge_credits") or 0),
+        "blocked_reasons": finalization.get("blocked_reasons") or [],
+    }
+
+
+def _load_partnership_artifact(cur, lead_id: str) -> dict[str, Any]:
+    _ensure_partnership_artifacts_table_from_cursor(cur)
+    cur.execute(
+        """
+        SELECT audit_json, match_json, offer_draft_json
+        FROM partnershipleadartifacts
+        WHERE lead_id = %s
+        LIMIT 1
+        """,
+        (lead_id,),
+    )
+    row = cur.fetchone()
+    return _row_to_dict(row)
+
+
+def _ensure_partnership_artifacts_table_from_cursor(cur) -> None:
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS partnershipleadartifacts (
+            lead_id TEXT PRIMARY KEY REFERENCES prospectingleads(id) ON DELETE CASCADE,
+            audit_json JSONB,
+            match_json JSONB,
+            offer_draft_json JSONB,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+
+
+def _create_or_update_sales_room(
+    cur,
+    *,
+    business_id: str,
+    user_id: str,
+    mode: str,
+    data_mode: str,
+    lead: dict[str, Any],
+    business_profile: dict[str, Any],
+    audit_public_url: str,
+    audit_json: dict[str, Any] | None,
+    match_json: dict[str, Any] | None,
+    partner_card_id: str | None = None,
+    channel: str = "manual",
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    lead_id = str(lead.get("id") or "").strip()
+    lead_name = str(lead.get("name") or "company").strip() or "company"
+    business_name = _pick_business_display_name(business_profile)
+    room_id = str(uuid.uuid4())
+    slug = _unique_sales_room_slug(
+        cur,
+        _sales_room_slug_base(lead_name, lead.get("city"), lead.get("address")),
+    )
+    proposal_json = _build_sales_room_proposal(
+        mode=mode,
+        data_mode=data_mode,
+        lead=lead,
+        business_name=business_name,
+        audit_json=audit_json,
+        match_json=match_json,
+    )
+    room_json = _build_sales_room_payload(
+        mode=mode,
+        data_mode=data_mode,
+        lead=lead,
+        business_profile=business_profile,
+        audit_public_url=audit_public_url,
+        audit_json=audit_json,
+        match_json=match_json,
+        proposal_json=proposal_json,
+        slug=slug,
+    )
+    cur.execute(
+        """
+        INSERT INTO sales_rooms (
+            id, slug, business_id, mode, lead_id, partner_card_id,
+            data_mode, audit_public_url, match_json, proposal_json, room_json,
+            status, created_by, created_at, updated_at
+        ) VALUES (
+            %s, %s, %s, %s, %s, NULLIF(%s, '')::uuid,
+            %s, %s, %s, %s, %s,
+            'ready', NULLIF(%s, '')::uuid, NOW(), NOW()
+        )
+        RETURNING *
+        """,
+        (
+            room_id,
+            slug,
+            business_id,
+            mode,
+            lead_id or None,
+            str(partner_card_id or ""),
+            data_mode,
+            audit_public_url or None,
+            Json(match_json or {}),
+            Json(proposal_json),
+            Json(room_json),
+            user_id,
+        ),
+    )
+    room = _row_to_dict(cur.fetchone())
+    invitation_text = _build_sales_room_invitation_text(
+        mode=mode,
+        data_mode=data_mode,
+        business_name=business_name,
+        lead_name=lead_name,
+        room_url=_make_sales_room_url(slug),
+    )
+    draft = _create_sales_room_invitation_draft(
+        cur,
+        lead_id=lead_id,
+        room_id=room_id,
+        mode=mode,
+        data_mode=data_mode,
+        channel=channel,
+        text=invitation_text,
+        user_id=user_id,
+    )
+    room["invitation_draft_id"] = draft.get("id")
+    room["public_url"] = _make_sales_room_url(slug)
+    room["room_json"] = room_json
+    return room, draft
+
+
+def _prepare_partnership_sales_room(
+    *,
+    lead_id: str,
+    business_id: str,
+    user_id: str,
+    data_mode: str,
+    channel: str,
+) -> dict[str, Any]:
+    conn = get_db_connection()
+    try:
+        _ensure_partnership_columns(conn)
+        _ensure_partnership_artifacts_table(conn)
+        _ensure_sales_room_tables(conn)
+        cur = conn.cursor()
+        lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
+        if not lead:
+            return {"error": "Lead not found", "status_code": 404}
+        business_profile = _load_business_profile(cur, business_id)
+        reservation: dict[str, Any] = {}
+        if data_mode == SALES_ROOM_DATA_AUDITED:
+            reservation = _reserve_sales_room_credit(cur, business_id=business_id, user_id=user_id, lead_id=lead_id, mode=SALES_ROOM_MODE_PARTNER)
+            if str(reservation.get("status") or "") != "reserved":
+                conn.rollback()
+                return {
+                    "error": "insufficient_credits",
+                    "status_code": 402,
+                    "billing": reservation,
+                }
+
+        artifact = _load_partnership_artifact(cur, lead_id)
+        audit_json = artifact.get("audit_json") if isinstance(artifact.get("audit_json"), dict) else {}
+        if data_mode == SALES_ROOM_DATA_AUDITED and not audit_json:
+            audit_json = _to_json_compatible(build_lead_card_preview_snapshot(lead))
+        match_json = artifact.get("match_json") if isinstance(artifact.get("match_json"), dict) else {}
+        if data_mode == SALES_ROOM_DATA_AUDITED and not match_json:
+            match_json = _compute_partnership_match_result(
+                cur,
+                business_id=business_id,
+                lead_id=lead_id,
+                audit_json=audit_json,
+            )
+        if data_mode == SALES_ROOM_DATA_AUDITED:
+            cur.execute(
+                """
+                INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (lead_id) DO UPDATE
+                SET audit_json = EXCLUDED.audit_json,
+                    match_json = EXCLUDED.match_json,
+                    updated_at = NOW()
+                """,
+                (lead_id, Json(audit_json), Json(match_json)),
+            )
+        room, draft = _create_or_update_sales_room(
+            cur,
+            business_id=business_id,
+            user_id=user_id,
+            mode=SALES_ROOM_MODE_PARTNER,
+            data_mode=data_mode,
+            lead=lead,
+            business_profile=business_profile,
+            audit_public_url=str(lead.get("public_audit_url") or ""),
+            audit_json=audit_json,
+            match_json=match_json,
+            channel=channel,
+        )
+        billing = {"status": "not_required", "credit_charged": False, "charged_credits": 0}
+        if data_mode == SALES_ROOM_DATA_AUDITED:
+            billing = _finalize_sales_room_credit(
+                cur,
+                reservation=reservation,
+                business_id=business_id,
+                user_id=user_id,
+                room_id=str(room.get("id") or ""),
+            )
+        cur.execute(
+            """
+            UPDATE prospectingleads
+            SET partnership_stage = %s,
+                status = %s,
+                selected_channel = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            ("proposal_draft_ready", "proposal_draft_ready", channel, lead_id),
+        )
+        conn.commit()
+        return {"success": True, "room": room, "draft": _serialize_draft(draft), "billing": billing}
+    finally:
+        conn.close()
+
+
+def _prepare_client_sales_room(
+    *,
+    lead_id: str,
+    user_id: str,
+    data_mode: str,
+    channel: str,
+) -> dict[str, Any]:
+    conn = get_db_connection()
+    try:
+        _ensure_sales_room_tables(conn)
+        _ensure_admin_prospecting_public_offers_table(conn)
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM prospectingleads WHERE id = %s LIMIT 1", (lead_id,))
+        lead = _row_to_dict(cur.fetchone())
+        if not lead:
+            return {"error": "Lead not found", "status_code": 404}
+        display_lead = _normalize_lead_for_display(dict(lead))
+        if not display_lead:
+            return {"error": "Lead is not available for room", "status_code": 400}
+        business_id = str(display_lead.get("business_id") or "").strip()
+        if not business_id:
+            business, _business_created = _ensure_parse_business_for_lead(display_lead, user_id)
+            business_id = str(business.get("id") or "").strip()
+            _update_lead_business_link(lead_id, business_id)
+            display_lead["business_id"] = business_id
+        if not business_id:
+            return {"error": "Business not found for lead", "status_code": 400}
+        business_profile = _load_business_profile(cur, business_id)
+        reservation: dict[str, Any] = {}
+        if data_mode == SALES_ROOM_DATA_AUDITED:
+            reservation = _reserve_sales_room_credit(cur, business_id=business_id, user_id=user_id, lead_id=lead_id, mode=SALES_ROOM_MODE_CLIENT)
+            if str(reservation.get("status") or "") != "reserved":
+                conn.rollback()
+                return {
+                    "error": "insufficient_credits",
+                    "status_code": 402,
+                    "billing": reservation,
+                }
+        display_lead = _attach_admin_prospecting_public_offer_metadata(conn, display_lead)
+        preview = build_lead_card_preview_snapshot(display_lead) if data_mode == SALES_ROOM_DATA_AUDITED else {}
+        audit_public_url = str(display_lead.get("public_audit_url") or "")
+        room, draft = _create_or_update_sales_room(
+            cur,
+            business_id=business_id,
+            user_id=user_id,
+            mode=SALES_ROOM_MODE_CLIENT,
+            data_mode=data_mode,
+            lead=display_lead,
+            business_profile=business_profile,
+            audit_public_url=audit_public_url,
+            audit_json=preview,
+            match_json={},
+            channel=channel,
+        )
+        billing = {"status": "not_required", "credit_charged": False, "charged_credits": 0}
+        if data_mode == SALES_ROOM_DATA_AUDITED:
+            billing = _finalize_sales_room_credit(
+                cur,
+                reservation=reservation,
+                business_id=business_id,
+                user_id=user_id,
+                room_id=str(room.get("id") or ""),
+            )
+        cur.execute(
+            """
+            UPDATE prospectingleads
+            SET status = %s,
+                selected_channel = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (CHANNEL_SELECTED, channel, lead_id),
+        )
+        conn.commit()
+        return {"success": True, "room": room, "draft": _serialize_draft(draft), "billing": billing}
+    finally:
+        conn.close()
 
 
 def _classify_partnership_business_type(*parts: Any) -> str:
@@ -11000,6 +12964,60 @@ def partnership_public_offer_page(slug):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/sales-rooms/public/<string:slug>", methods=["GET"])
+def public_sales_room(slug):
+    try:
+        normalized_slug = _slugify_company_name(slug)
+        conn = get_db_connection()
+        try:
+            _ensure_sales_room_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(
+                """
+                SELECT id, slug, room_json, status, updated_at
+                FROM sales_rooms
+                WHERE slug = %s
+                LIMIT 1
+                """,
+                (normalized_slug,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Sales room not found"}), 404
+            _record_sales_room_event(conn, slug=normalized_slug, event_type="view", metadata={"source": "public_page"})
+            conn.commit()
+            room_json = row.get("room_json") if isinstance(row.get("room_json"), dict) else {}
+            room_json["slug"] = normalized_slug
+            room_json["public_url"] = _make_sales_room_url(normalized_slug)
+            return jsonify({"success": True, "room": _to_json_compatible(room_json)})
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error loading public sales room: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/sales-rooms/public/<string:slug>/events", methods=["POST"])
+def public_sales_room_event(slug):
+    try:
+        normalized_slug = _slugify_company_name(slug)
+        data = request.get_json(silent=True) or {}
+        event_type = str(data.get("event_type") or "").strip().lower()
+        if event_type not in {"cta_click", "audit_open", "copy_link", "view"}:
+            return jsonify({"error": "Unsupported event_type"}), 400
+        metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+        conn = get_db_connection()
+        try:
+            _record_sales_room_event(conn, slug=normalized_slug, event_type=event_type, metadata=metadata)
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"Error recording public sales room event: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/enrich-contacts", methods=["POST"])
 def partnership_enrich_lead_contacts(lead_id):
     user_data, error = _require_auth()
@@ -11477,6 +13495,41 @@ def partnership_draft_offer(lead_id):
         return jsonify({"success": True, "draft_id": draft_id, "text": draft_text, "channel": channel})
     except Exception as e:
         print(f"Error partnership draft offer: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/prepare-room", methods=["POST"])
+def partnership_prepare_sales_room(lead_id):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        data_mode = _normalize_sales_room_data_mode(data.get("data_mode"))
+        channel = str(data.get("channel") or "manual").strip().lower()
+        if channel not in ALLOWED_OUTREACH_CHANNELS:
+            channel = "manual"
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+        finally:
+            conn.close()
+        if not business_id:
+            return jsonify({"error": "Business not found or access denied"}), 403
+        result = _prepare_partnership_sales_room(
+            lead_id=lead_id,
+            business_id=business_id,
+            user_id=str(user_data.get("user_id") or ""),
+            data_mode=data_mode,
+            channel=channel,
+        )
+        if result.get("error"):
+            return jsonify(result), int(result.get("status_code") or 400)
+        return jsonify(_to_json_compatible(result))
+    except Exception as e:
+        print(f"Error partnership prepare sales room: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -13336,6 +15389,31 @@ def generate_outreach_draft_from_audit(lead_id):
         )
     except Exception as e:
         print(f"Error generating outreach draft from audit: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/prepare-room", methods=["POST"])
+def prepare_client_sales_room(lead_id):
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        data_mode = _normalize_sales_room_data_mode(data.get("data_mode"))
+        channel = str(data.get("channel") or "manual").strip().lower()
+        if channel not in ALLOWED_OUTREACH_CHANNELS:
+            channel = "manual"
+        result = _prepare_client_sales_room(
+            lead_id=lead_id,
+            user_id=str(user_data.get("user_id") or ""),
+            data_mode=data_mode,
+            channel=channel,
+        )
+        if result.get("error"):
+            return jsonify(result), int(result.get("status_code") or 400)
+        return jsonify(_to_json_compatible(result))
+    except Exception as e:
+        print(f"Error preparing client sales room: {e}")
         return jsonify({"error": str(e)}), 500
 
 

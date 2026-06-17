@@ -219,6 +219,21 @@ export const runPartnershipLeadAction = (
     }),
   });
 
+export const preparePartnershipSalesRoom = (
+  businessId: string,
+  leadId: string,
+  dataMode: 'audited' | 'template',
+  channel = 'manual',
+) =>
+  request(`/partnership/leads/${leadId}/prepare-room`, {
+    method: 'POST',
+    body: JSON.stringify({
+      business_id: businessId,
+      data_mode: dataMode,
+      channel,
+    }),
+  });
+
 export const approvePartnershipDraft = (businessId: string, draftId: string, approvedText: string) =>
   request(`/partnership/drafts/${draftId}/approve`, {
     method: 'POST',

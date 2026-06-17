@@ -149,10 +149,12 @@ interface LeadCardPreviewPanelProps {
   error?: string | null;
   generateAuditPageBusy?: boolean;
   generatedAuditPageUrl?: string | null;
+  prepareSalesRoomBusy?: boolean;
   contactsBusy?: boolean;
   parseBusy?: boolean;
   parseAutoRefreshing?: boolean;
   onGenerateAuditPage?: () => void;
+  onPrepareSalesRoom?: (dataMode: 'audited' | 'template') => void;
   onAuditEditorPublished?: () => void;
   onSaveContacts?: (payload: { telegram_url: string; whatsapp_url: string; email: string }) => void;
   onRunLiveParse?: () => void;
@@ -219,10 +221,12 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
   error,
   generateAuditPageBusy = false,
   generatedAuditPageUrl = null,
+  prepareSalesRoomBusy = false,
   contactsBusy = false,
   parseBusy = false,
   parseAutoRefreshing = false,
   onGenerateAuditPage,
+  onPrepareSalesRoom,
   onAuditEditorPublished,
   onSaveContacts,
   onRunLiveParse,
@@ -292,6 +296,19 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
       icon: generateAuditPageBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : undefined,
     });
   }
+  if (onPrepareSalesRoom) {
+    topActions.push({
+      label: 'Комната с аудитом',
+      onClick: () => onPrepareSalesRoom('audited'),
+      disabled: Boolean(loading || prepareSalesRoomBusy),
+      icon: prepareSalesRoomBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : undefined,
+    });
+    topActions.push({
+      label: 'Комната по шаблону',
+      onClick: () => onPrepareSalesRoom('template'),
+      disabled: Boolean(loading || prepareSalesRoomBusy),
+    });
+  }
   if (onRunLiveParse) {
     topActions.push({
       label: 'Запустить парсинг карточки',
@@ -318,7 +335,8 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
           <div className="min-w-0 flex-1">
             <CardTitle>Карточка лида</CardTitle>
             <CardDescription className="mt-1 max-w-3xl text-sm leading-6">
-              Управление лидом: статус, контакты, запуск парсинга и генерация публичной страницы аудита.
+              Управление лидом: статус, контакты, парсинг, аудит и цифровая комната. Комната с аудитом расходует кредиты;
+              по шаблону создаётся без списания.
             </CardDescription>
           </div>
           <div className="w-full xl:w-auto xl:max-w-[70%]">

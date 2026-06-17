@@ -1731,6 +1731,7 @@ export const ProspectingManagement: React.FC = () => {
     const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [previewAuditPageBusy, setPreviewAuditPageBusy] = useState(false);
+    const [previewSalesRoomBusy, setPreviewSalesRoomBusy] = useState(false);
     const [previewAuditPageUrl, setPreviewAuditPageUrl] = useState<string | null>(null);
     const [previewAuditPageLanguage, setPreviewAuditPageLanguage] = useState('en');
     const [previewAuditPageEnabledLanguages, setPreviewAuditPageEnabledLanguages] = useState<string[]>(['en']);
@@ -3904,6 +3905,35 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
+    const prepareSalesRoomFromLeadPreview = async (dataMode: 'audited' | 'template') => {
+        if (!previewLead?.id) {
+            return;
+        }
+        setPreviewSalesRoomBusy(true);
+        setPreviewError(null);
+        try {
+            const response = await api.post(`/admin/prospecting/lead/${previewLead.id}/prepare-room`, {
+                data_mode: dataMode,
+                channel: previewLead.selected_channel || bestAvailableOutreachChannel(previewLead) || 'manual',
+            });
+            const roomUrl = String(response.data?.room?.public_url || '');
+            const chargedCredits = Number(response.data?.billing?.charged_credits || 0);
+            await refreshSavedLeadsAndPreview(previewLead.id, { silentPreview: true });
+            if (roomUrl) {
+                window.open(roomUrl, '_blank', 'noopener,noreferrer');
+            }
+            setImportResult(
+                dataMode === 'audited'
+                    ? `Цифровая комната готова. Списано кредитов: ${chargedCredits}.`
+                    : 'Цифровая комната готова по шаблону без списания кредитов.',
+            );
+        } catch (error: unknown) {
+            setPreviewError(getRequestErrorMessage(error, 'Не удалось подготовить цифровую комнату'));
+        } finally {
+            setPreviewSalesRoomBusy(false);
+        }
+    };
+
     const saveLeadContactsFromPreview = async (payload: { telegram_url: string; whatsapp_url: string; email: string }) => {
         if (!previewLead?.id) {
             return;
@@ -5238,10 +5268,12 @@ export const ProspectingManagement: React.FC = () => {
                                     error={previewError}
                                     generateAuditPageBusy={previewAuditPageBusy}
                                     generatedAuditPageUrl={previewAuditPageUrl}
+                                    prepareSalesRoomBusy={previewSalesRoomBusy}
                                     contactsBusy={previewContactsBusy}
                                     parseBusy={previewParseBusy}
                                     parseAutoRefreshing={previewAutoRefreshing}
                                     onGenerateAuditPage={generateAuditPageFromLeadPreview}
+                                    onPrepareSalesRoom={prepareSalesRoomFromLeadPreview}
                                     onAuditEditorPublished={previewLead.id ? () => refreshSavedLeadsAndPreview(previewLead.id, { silentPreview: true }) : undefined}
                                     onSaveContacts={saveLeadContactsFromPreview}
                                     onRunLiveParse={runLiveParseFromPreview}

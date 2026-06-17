@@ -57,6 +57,7 @@ import {
   loadPartnershipSourceQuality,
   normalizePartnershipLeads,
   patchPartnershipLead,
+  preparePartnershipSalesRoom,
   recordPartnershipReaction,
   runPartnershipGeoSearch,
   runPartnershipLeadAction,
@@ -1304,6 +1305,26 @@ export const PartnershipSearchPage: React.FC = () => {
       setDraftText(data.text || '');
       setSelectedLeadId(leadId);
       await refreshAllPartnershipData();
+    });
+  };
+
+  const prepareSalesRoom = async (leadId: string, dataMode: 'audited' | 'template') => {
+    if (!currentBusinessId) return;
+    await runPartnershipAction('Не удалось подготовить цифровую комнату', async () => {
+      const data = await preparePartnershipSalesRoom(currentBusinessId, leadId, dataMode, 'manual');
+      const roomUrl = String(data?.room?.public_url || '');
+      const chargedCredits = Number(data?.billing?.charged_credits || 0);
+      setDraftText(String(data?.draft?.generated_text || data?.draft?.edited_text || ''));
+      setSelectedLeadId(leadId);
+      setMessage(
+        dataMode === 'audited'
+          ? `Цифровая комната готова. Списано кредитов: ${chargedCredits}.`
+          : 'Цифровая комната готова по шаблону без списания кредитов.',
+      );
+      await refreshAllPartnershipData();
+      if (roomUrl) {
+        window.open(roomUrl, '_blank', 'noopener,noreferrer');
+      }
     });
   };
 
@@ -2573,6 +2594,7 @@ export const PartnershipSearchPage: React.FC = () => {
                 setLeadEdit={setLeadEdit}
                 loading={loading}
                 onSaveLeadContacts={() => void saveLeadContacts()}
+                onPrepareSalesRoom={(dataMode) => void prepareSalesRoom(selectedLead.id, dataMode)}
                 currentBusinessId={currentBusinessId}
                 pilotCohortOptions={PILOT_COHORT_OPTIONS.filter((option) => option.value !== 'all')}
                 onPilotCohortChange={async (value) => {

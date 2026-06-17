@@ -36,6 +36,9 @@ type PartnershipLead = {
     found_fields?: string[];
     confidence?: Record<string, number>;
   } | null;
+  sales_room_status?: string;
+  sales_room_data_mode?: string;
+  sales_room_url?: string;
 };
 
 type LeadEditState = {
@@ -106,6 +109,7 @@ type PartnershipLeadDetailDrawerProps = {
   setLeadEdit: (updater: (previous: LeadEditState) => LeadEditState) => void;
   loading?: boolean;
   onSaveLeadContacts: () => void;
+  onPrepareSalesRoom?: (dataMode: 'audited' | 'template') => void | Promise<void>;
   currentBusinessId?: string | null;
   pilotCohortOptions: CohortOption[];
   onPilotCohortChange: (value: string) => void | Promise<void>;
@@ -152,6 +156,7 @@ export default function PartnershipLeadDetailDrawer({
   setLeadEdit,
   loading,
   onSaveLeadContacts,
+  onPrepareSalesRoom,
   currentBusinessId,
   pilotCohortOptions,
   onPilotCohortChange,
@@ -235,6 +240,41 @@ export default function PartnershipLeadDetailDrawer({
               whatsappUrl={selectedLead.whatsapp_url}
               hasMessenger={Boolean(selectedLead.telegram_url || selectedLead.whatsapp_url)}
             />
+          </LeadDetailSection>
+
+          <LeadDetailSection title="Цифровая комната">
+            <div className="rounded-2xl border border-orange-200 bg-orange-50/70 p-4">
+              <div className="text-sm font-semibold text-orange-900">Подготовить предложение перед первым письмом</div>
+              <p className="mt-1 text-sm leading-6 text-orange-800">
+                Парсинг и аудит расходуют кредиты, но помогают точнее сметчить услуги и собрать персональное предложение.
+                Без аудита комната и письмо-приглашение создаются по шаблону.
+              </p>
+              {selectedLead.sales_room_url ? (
+                <div className="mt-3 rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm text-orange-900">
+                  Комната: {selectedLead.sales_room_status || 'готова'} · {selectedLead.sales_room_data_mode === 'audited' ? 'с аудитом' : 'по шаблону'} ·{' '}
+                  <a className="font-semibold underline" href={selectedLead.sales_room_url} target="_blank" rel="noreferrer">
+                    открыть
+                  </a>
+                </div>
+              ) : null}
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <Button
+                  size="sm"
+                  onClick={() => void onPrepareSalesRoom?.('audited')}
+                  disabled={loading || !onPrepareSalesRoom}
+                >
+                  С аудитом и match услуг
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void onPrepareSalesRoom?.('template')}
+                  disabled={loading || !onPrepareSalesRoom}
+                >
+                  По шаблону без аудита
+                </Button>
+              </div>
+            </div>
           </LeadDetailSection>
 
           <LeadDetailSection title="Дополнительные данные" tone="muted">
