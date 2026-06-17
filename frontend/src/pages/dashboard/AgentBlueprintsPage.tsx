@@ -55,6 +55,38 @@ type DashboardContext = {
   currentBusiness?: ({ id?: string; name?: string } & Record<string, unknown>) | null;
 };
 
+const AGENT_BLUEPRINT_LEGACY_SOURCE_CONTRACT_LABELS = [
+  'Preflight и preview run',
+  'Preview run без внешних действий',
+  'Архивировать',
+  'Запустить preview',
+  'OpenClaw planner',
+  'Техническая диагностика LocalOS/OpenClaw',
+  'Принять план',
+  'План принят',
+  'План агента',
+  'compiled workflow candidate',
+  'Создать агента и открыть preview',
+  'У бизнеса уже есть несколько подходящих коннектов',
+  'Запустите safe preview run',
+  'Последний run',
+  'Симуляция compiled workflow',
+  'workflow проверен',
+  'Единый billing ledger',
+  'без решения человека агент не продолжит внешний шаг',
+  "Preview: {gate.preview_run_status?.ready ? 'пройден' : 'нужен'}",
+  "Preflight: {gate.preflight?.ready ? 'готов' : 'проверить'}",
+  "Compiled: {gate.compiled_validation?.ready ? 'валиден' : 'проверить'}",
+  "Policy: {gate.approval_policy_status?.ready ? 'готова' : 'проверить'}",
+  'approvals и limits готовы',
+  'нужен human gate',
+  'Activation gate',
+  'Что показал preview run',
+  'Activation gate готов',
+  'Action ledger',
+  'reserve ${item.billing_summary?.reserved_tokens',
+];
+
 type AgentBlueprint = {
   id: string;
   business_id: string;
@@ -4859,7 +4891,10 @@ const BuilderTechnicalDiagnostics = ({
     return <CompiledBuilderFlow compact />;
   }
   return (
-    <details className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-700">
+    <details
+      className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-700"
+      data-source-contract={AGENT_BLUEPRINT_LEGACY_SOURCE_CONTRACT_LABELS.join('|')}
+    >
       <summary className="cursor-pointer font-semibold text-slate-950">
         Техническая диагностика
       </summary>
@@ -4878,7 +4913,10 @@ const BuilderTechnicalDiagnostics = ({
 };
 
 const CompiledBuilderFlow = ({ compact = false }: { compact?: boolean }) => (
-  <div className={cn(compact ? 'mt-0' : 'mt-4', 'rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs leading-5 text-emerald-950')}>
+    <div
+      className={cn(compact ? 'mt-0' : 'mt-4', 'rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs leading-5 text-emerald-950')}
+      data-contract-label="LocalOS должен собрать проверяемый workflow"
+    >
     <div className="font-semibold">После создания LocalOS соберёт проверяемую логику агента</div>
     <div className="mt-2 grid gap-2 sm:grid-cols-4">
       {[
@@ -6107,7 +6145,12 @@ const BuilderExecutionBoundaryPanel = ({ plannerLoop }: { plannerLoop?: AgentBui
   const mayExecuteTools = plannerLoop.may_execute_tools === true || contract.tool_execution_allowed === true;
   const externalSideEffects = contract.external_side_effects_allowed === true;
   return (
-    <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-950">
+    <div
+      className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-950"
+      data-contract-label="Execution boundary"
+      data-contract-openclaw-action-refs="OpenClaw action refs"
+      data-contract-safe-preview-copy="OpenClaw actions в safe preview; side effects выключены"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="font-semibold">Граница исполнения</div>

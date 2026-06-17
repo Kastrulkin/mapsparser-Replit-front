@@ -2072,7 +2072,26 @@ def _has_extraction_hint(text: str) -> bool:
 
 
 def _has_output_hint(text: str) -> bool:
-    return any(marker in text for marker in ["результ", "отчет", "отчёт", "письм", "таблиц", "summary", "список", "черновик", "shortlist", "сообщ", "пост", "публикац"])
+    return any(
+        marker in text
+        for marker in [
+            "результ",
+            "отчет",
+            "отчёт",
+            "письм",
+            "таблиц",
+            "summary",
+            "список",
+            "черновик",
+            "чероновик",
+            "ответ",
+            "shortlist",
+            "сообщ",
+            "оповещ",
+            "пост",
+            "публикац",
+        ]
+    )
 
 
 def _has_control_hint(text: str) -> bool:

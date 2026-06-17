@@ -1546,6 +1546,34 @@ def test_agent_builder_session_reduces_questions_after_clarification():
     assert clarified["preview"]["output_format"]
 
 
+def test_agent_builder_session_does_not_repeat_review_draft_question_after_answer():
+    from services.agent_builder_session import append_user_message, build_agent_builder_state
+
+    messages = [
+        {
+            "role": "user",
+            "content": (
+                "Агент должен парсить отзывы каждую среду в 9 утра. Все отображать в аккаунте ЛокалОС. "
+                "Если появляются новые, то генерировать ответ и оповещать меня в телеграмме + присылать отзыв и ответ"
+            ),
+        }
+    ]
+    initial = build_agent_builder_state(messages)
+    clarified_messages = append_user_message(
+        initial["messages"],
+        "Отдельные чероновики человек проверяет в телегираме - по оповещению",
+    )
+    clarified = build_agent_builder_state(clarified_messages)
+
+    repeated_questions = [
+        item["question"]
+        for item in clarified["missing_questions"]
+        if "отдельные черновики ответов или общий план реакции" in item["question"].lower()
+    ]
+    assert repeated_questions == []
+    assert all(item["key"] != "output" for item in clarified["missing_questions"])
+
+
 def test_agent_builder_session_preview_includes_feasibility_for_required_connectors():
     from services.agent_builder_session import build_agent_builder_state
 
