@@ -6766,11 +6766,17 @@ const AgentDetailPanel = ({
     onModeChange('overview');
   };
   return (
-  <DashboardSection
-    title={blueprint.name}
-    description={`${humanizeCategory(blueprint.category)} · ${latestVersionNumber ? `активная версия v${latestVersionNumber}` : 'нет активной версии'}${voiceName ? ` · голос: ${voiceName}` : ''}`}
-    actions={(
-      <div className="flex max-w-full gap-2 overflow-x-auto pb-1">
+  <DashboardSection contentClassName="px-0 py-0">
+    <div className="border-b border-slate-100 px-6 py-5">
+      <div className="min-w-0">
+        <h2 className="max-w-5xl text-lg font-semibold leading-7 text-slate-950 sm:text-xl">
+          {blueprint.name}
+        </h2>
+        <p className="mt-1 text-sm leading-6 text-slate-600">
+          {humanizeCategory(blueprint.category)} · {latestVersionNumber ? `активная версия v${latestVersionNumber}` : 'нет активной версии'}{voiceName ? ` · голос: ${voiceName}` : ''}
+        </p>
+      </div>
+      <div className="mt-4 flex max-w-full flex-wrap gap-2">
         <Button type="button" size="sm" className="shrink-0" variant={mode === 'overview' ? 'default' : 'outline'} onClick={() => onModeChange('overview')}>Обзор</Button>
         <Button type="button" size="sm" className="shrink-0" variant={mode === 'settings' ? 'default' : 'outline'} onClick={() => onModeChange('settings')}>Логика</Button>
         <Button type="button" size="sm" className="shrink-0" variant={mode === 'run' ? 'default' : 'outline'} onClick={() => onModeChange('run')}>Запуски</Button>
@@ -6785,8 +6791,8 @@ const AgentDetailPanel = ({
           Убрать из списка
         </Button>
       </div>
-    )}
-  >
+    </div>
+    <div className="px-6 py-5">
     {mode === 'overview' ? (
       <AgentOverviewPanel
         blueprint={blueprint}
@@ -7007,6 +7013,7 @@ const AgentDetailPanel = ({
         onApplyFinanceRequests={applyFinanceRequests}
       />
     ) : null}
+    </div>
   </DashboardSection>
   );
 };
