@@ -187,7 +187,7 @@ export default function PublicSalesRoomPage() {
                 <p className="text-base leading-7 text-slate-600">{room.audit.summary_text}</p>
               ) : (
                 <p className="text-base leading-7 text-slate-600">
-                  Комната создана по шаблону. Аудит можно добавить позже, чтобы точнее связать услуги, спрос и предложение.
+                  Здесь собраны предложение, следующий шаг и материалы для обсуждения.
                 </p>
               )}
               {auditFindings.length > 0 ? (

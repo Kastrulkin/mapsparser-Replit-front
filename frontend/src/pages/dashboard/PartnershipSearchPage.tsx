@@ -1318,8 +1318,8 @@ export const PartnershipSearchPage: React.FC = () => {
       setSelectedLeadId(leadId);
       setMessage(
         dataMode === 'audited'
-          ? `Цифровая комната готова. Списано кредитов: ${chargedCredits}.`
-          : 'Цифровая комната готова по шаблону без списания кредитов.',
+          ? `Цифровая комната готова. Данные подготовлены, списано кредитов: ${chargedCredits}.`
+          : 'Цифровая комната готова без подготовки данных.',
       );
       await refreshAllPartnershipData();
       if (roomUrl) {
@@ -2457,6 +2457,7 @@ export const PartnershipSearchPage: React.FC = () => {
               onEnrichContacts={(leadId) => void enrichContacts(leadId)}
               onRunAudit={(leadId) => void runAudit(leadId)}
               onRunMatch={(leadId) => void runMatch(leadId)}
+              onPrepareSalesRoom={(leadId, dataMode) => void prepareSalesRoom(leadId, dataMode)}
               onUpdateLeadStage={(leadId, stageValue, successMessage, deferred) => void updateLeadStage(leadId, stageValue, successMessage, deferred)}
               onDeleteLead={(leadId) => void deleteLead(leadId)}
               onClearLastGeoSearch={() => {

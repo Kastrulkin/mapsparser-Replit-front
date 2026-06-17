@@ -3928,8 +3928,8 @@ export const ProspectingManagement: React.FC = () => {
             }
             setImportResult(
                 dataMode === 'audited'
-                    ? `Цифровая комната готова. Списано кредитов: ${chargedCredits}.`
-                    : 'Цифровая комната готова по шаблону без списания кредитов.',
+                    ? `Цифровая комната готова. Данные подготовлены, списано кредитов: ${chargedCredits}.`
+                    : 'Цифровая комната готова без подготовки данных.',
             );
         } catch (error: unknown) {
             setPreviewError(getRequestErrorMessage(error, 'Не удалось подготовить цифровую комнату'));
@@ -3957,8 +3957,8 @@ export const ProspectingManagement: React.FC = () => {
             }
             toast.success(
                 dataMode === 'audited'
-                    ? `Цифровая комната готова. Списано кредитов: ${chargedCredits}.`
-                    : 'Цифровая комната готова по шаблону без списания кредитов.',
+                    ? `Цифровая комната готова. Данные подготовлены, списано кредитов: ${chargedCredits}.`
+                    : 'Цифровая комната готова без подготовки данных.',
             );
         } catch (error: unknown) {
             toast.error(getRequestErrorMessage(error, 'Не удалось подготовить цифровую комнату'));
@@ -4180,7 +4180,7 @@ export const ProspectingManagement: React.FC = () => {
                             <div>
                                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Цифровая комната</div>
                                 <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                                    Перед первым письмом: страница с предложением, аудитом или шаблонной идеей.
+                                    Перед первым письмом: комната с предложением, чатом и файлами. Подготовка данных помогает сметчить услуги.
                                 </div>
                             </div>
                             <div className="flex flex-wrap gap-2 sm:justify-end">
@@ -4211,7 +4211,7 @@ export const ProspectingManagement: React.FC = () => {
                                     }}
                                 >
                                     {roomBusyState === 'audited' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                                    С аудитом
+                                    Создать комнату
                                 </Button>
                                 <Button
                                     type="button"
@@ -4225,7 +4225,7 @@ export const ProspectingManagement: React.FC = () => {
                                     }}
                                 >
                                     {roomBusyState === 'template' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                                    По шаблону
+                                    Без подготовки данных
                                 </Button>
                             </div>
                         </div>

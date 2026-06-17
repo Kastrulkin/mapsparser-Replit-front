@@ -38,6 +38,9 @@ type PipelineLead = {
   parse_error?: string;
   deferred_reason?: string;
   deferred_until?: string;
+  sales_room_status?: string;
+  sales_room_data_mode?: string;
+  sales_room_url?: string;
   next_best_action?: {
     label?: string;
     hint?: string;
@@ -390,6 +393,7 @@ type PartnershipPipelineListProps = {
   onEnrichContacts: (leadId: string) => void;
   onRunAudit: (leadId: string) => void;
   onRunMatch: (leadId: string) => void;
+  onPrepareSalesRoom: (leadId: string, dataMode: 'audited' | 'template') => void;
   onUpdateLeadStage: (leadId: string, stage: string, message: string, deferred: DeferredPayload) => void;
   onDeleteLead: (leadId: string) => void;
   onClearLastGeoSearch: () => void;
@@ -452,6 +456,7 @@ export const PartnershipPipelineList = ({
   onEnrichContacts,
   onRunAudit,
   onRunMatch,
+  onPrepareSalesRoom,
   onUpdateLeadStage,
   onDeleteLead,
   onClearLastGeoSearch,
@@ -628,6 +633,32 @@ export const PartnershipPipelineList = ({
                         <div className="mt-0.5 text-[11px] text-sky-800">{lead.next_best_action.hint || '—'}</div>
                       </div>
                     ) : null}
+                    <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-3 py-3">
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Цифровая комната</div>
+                          <div className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                            Комната для предложения, чата и файлов. Подготовка данных помогает сметчить услуги и сделать оффер предметным.
+                          </div>
+                          {lead.sales_room_status ? (
+                            <div className="mt-1 text-[11px] font-medium text-emerald-700">Комната готова</div>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap gap-2 xl:justify-end">
+                          {lead.sales_room_url ? (
+                            <Button size="sm" variant="outline" onClick={() => window.open(lead.sales_room_url, '_blank', 'noopener,noreferrer')} disabled={loading}>
+                              Открыть комнату
+                            </Button>
+                          ) : null}
+                          <Button size="sm" variant="outline" onClick={() => onPrepareSalesRoom(lead.id, 'audited')} disabled={loading}>
+                            Создать комнату
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => onPrepareSalesRoom(lead.id, 'template')} disabled={loading}>
+                            Без подготовки данных
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                     <details className="mt-3 text-xs text-slate-500">
                       <summary className="cursor-pointer font-medium text-slate-500">Технические детали</summary>
                       <div className="mt-2 space-y-1 rounded-xl bg-slate-50 p-3">

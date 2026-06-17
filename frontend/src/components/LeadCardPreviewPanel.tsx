@@ -298,13 +298,13 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
   }
   if (onPrepareSalesRoom) {
     topActions.push({
-      label: 'Комната с аудитом',
+      label: 'Создать комнату',
       onClick: () => onPrepareSalesRoom('audited'),
       disabled: Boolean(loading || prepareSalesRoomBusy),
       icon: prepareSalesRoomBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : undefined,
     });
     topActions.push({
-      label: 'Комната по шаблону',
+      label: 'Без подготовки данных',
       onClick: () => onPrepareSalesRoom('template'),
       disabled: Boolean(loading || prepareSalesRoomBusy),
     });
@@ -335,8 +335,8 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
           <div className="min-w-0 flex-1">
             <CardTitle>Карточка лида</CardTitle>
             <CardDescription className="mt-1 max-w-3xl text-sm leading-6">
-              Управление лидом: статус, контакты, парсинг, аудит и цифровая комната. Комната с аудитом расходует кредиты;
-              по шаблону создаётся без списания.
+              Управление лидом: статус, контакты, парсинг, аудит и цифровая комната. Подготовка данных расходует кредиты
+              и нужна для предметного предложения.
             </CardDescription>
           </div>
           <div className="w-full xl:w-auto xl:max-w-[70%]">

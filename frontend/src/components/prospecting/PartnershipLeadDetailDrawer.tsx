@@ -246,12 +246,12 @@ export default function PartnershipLeadDetailDrawer({
             <div className="rounded-2xl border border-orange-200 bg-orange-50/70 p-4">
               <div className="text-sm font-semibold text-orange-900">Подготовить предложение перед первым письмом</div>
               <p className="mt-1 text-sm leading-6 text-orange-800">
-                Парсинг и аудит расходуют кредиты, но помогают точнее сметчить услуги и собрать персональное предложение.
-                Без аудита комната и письмо-приглашение создаются по шаблону.
+                Комната нужна для предложения, чата и файлов. Подготовка данных расходует кредиты и помогает сметчить услуги,
+                чтобы предложение было предметным.
               </p>
               {selectedLead.sales_room_url ? (
                 <div className="mt-3 rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm text-orange-900">
-                  Комната: {selectedLead.sales_room_status || 'готова'} · {selectedLead.sales_room_data_mode === 'audited' ? 'с аудитом' : 'по шаблону'} ·{' '}
+                  Комната готова ·{' '}
                   <a className="font-semibold underline" href={selectedLead.sales_room_url} target="_blank" rel="noreferrer">
                     открыть
                   </a>
@@ -263,7 +263,7 @@ export default function PartnershipLeadDetailDrawer({
                   onClick={() => void onPrepareSalesRoom?.('audited')}
                   disabled={loading || !onPrepareSalesRoom}
                 >
-                  С аудитом и match услуг
+                  Создать комнату
                 </Button>
                 <Button
                   size="sm"
@@ -271,7 +271,7 @@ export default function PartnershipLeadDetailDrawer({
                   onClick={() => void onPrepareSalesRoom?.('template')}
                   disabled={loading || !onPrepareSalesRoom}
                 >
-                  По шаблону без аудита
+                  Без подготовки данных
                 </Button>
               </div>
             </div>
