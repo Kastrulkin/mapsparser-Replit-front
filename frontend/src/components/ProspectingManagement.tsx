@@ -4095,15 +4095,16 @@ export const ProspectingManagement: React.FC = () => {
                 ? 'Письмо готово'
                 : 'Комната готова'
             : 'Нет комнаты';
+        const selectedChannelLabel = formatLeadChannel(lead.selected_channel || bestAvailableOutreachChannel(lead));
 
         return (
-            <Card
+            <div
                 key={leadId || lead.name}
                 draggable={Boolean(leadId)}
                 onDragStart={leadId ? handleLeadDragStart(leadId) : undefined}
                 onDragEnd={handleLeadDragEnd}
                 onClick={() => openLeadPreview(lead)}
-                className={`cursor-pointer border border-border bg-background shadow-sm transition hover:border-primary/40 hover:shadow-md ${isDragging ? 'opacity-60' : ''}`}
+                className={`cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${isDragging ? 'opacity-60' : ''}`}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(event) => {
@@ -4113,125 +4114,117 @@ export const ProspectingManagement: React.FC = () => {
                     }
                 }}
             >
-                <CardHeader className="space-y-2 pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start gap-3">
-                            {leadId ? (
-                                <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onClick={(event) => event.stopPropagation()}
-                                    onChange={(event) =>
-                                        setSelectedPipelineLeadIds((prev) =>
-                                            event.target.checked
-                                                ? Array.from(new Set([...prev, leadId]))
-                                                : prev.filter((id) => id !== leadId)
-                                        )
-                                    }
-                                    className="mt-1 h-4 w-4 rounded border border-input"
-                                />
-                            ) : null}
-                            <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold">{lead.name}</div>
-                                <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                                    {lead.category || 'Без категории'}
-                                </div>
+                <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                        {leadId ? (
+                            <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) =>
+                                    setSelectedPipelineLeadIds((prev) =>
+                                        event.target.checked
+                                            ? Array.from(new Set([...prev, leadId]))
+                                            : prev.filter((id) => id !== leadId)
+                                    )
+                                }
+                                className="mt-1 h-4 w-4 rounded border border-input"
+                            />
+                        ) : null}
+                        <div className="min-w-0 flex-1">
+                            <div className="break-words text-base font-semibold leading-snug text-foreground">
+                                {lead.name || 'Без названия'}
+                            </div>
+                            <div className="mt-1 line-clamp-2 text-sm text-slate-500">
+                                {lead.category || 'Без категории'} · {lead.city || '—'}
+                            </div>
+                            <div className="mt-1 line-clamp-1 text-sm text-slate-400">
+                                {lead.address || 'Адрес не указан'}
                             </div>
                         </div>
-                        <Badge variant="outline" className="text-[11px] font-normal">
+                    </div>
+                    <div className="flex max-w-[45%] shrink-0 flex-wrap justify-end gap-1">
+                        <Badge variant="outline" className="max-w-full truncate">
                             {sourceLabel(lead.source)}
                         </Badge>
+                        <Badge variant="secondary">
+                            ★ {lead.rating ?? '-'}{lead.reviews_count ? ` (${lead.reviews_count})` : ''}
+                        </Badge>
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                        <Badge variant={columnId === 'not_relevant' ? 'destructive' : columnId === 'contacted' || columnId === 'replied' || columnId === 'converted' ? 'secondary' : 'outline'} className="text-[11px] font-normal">
-                            {pipelineLabel}
-                        </Badge>
-                        <Badge variant={contactReady ? 'secondary' : 'outline'} className="text-[11px] font-normal">
-                            {contactReady ? 'Контакт есть' : 'Контакт нужен'}
-                        </Badge>
-                        <Badge variant={auditReady ? 'secondary' : 'outline'} className="text-[11px] font-normal">
+                </div>
+                <ContactPresenceBadges
+                    website={lead.website}
+                    phone={lead.phone}
+                    email={lead.email}
+                    telegramUrl={lead.telegram_url}
+                    whatsappUrl={lead.whatsapp_url}
+                    hasMessenger={extractHasMessengers(lead)}
+                    className="mt-3"
+                />
+                <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium uppercase text-slate-400">Статус</span>
+                            <Badge variant={columnId === 'not_relevant' ? 'destructive' : columnId === 'contacted' || columnId === 'replied' || columnId === 'converted' ? 'secondary' : 'outline'} className="max-w-[55%] truncate">
+                                {pipelineLabel}
+                            </Badge>
+                        </div>
+                        <div className="mt-1 line-clamp-2 font-medium text-slate-900">
+                            {contactReady ? 'Контакт можно обработать' : 'Нужно найти контакт'}
+                        </div>
+                        <div className="mt-1 truncate text-[11px] text-slate-400">
+                            Канал: {selectedChannelLabel}
+                        </div>
+                    </div>
+                    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium uppercase text-slate-400">Комната</span>
+                            <Badge variant={roomReady ? 'secondary' : 'outline'} className="max-w-[55%] truncate">
+                                {roomLabel}
+                            </Badge>
+                        </div>
+                        <div className="mt-1 line-clamp-2 font-medium text-slate-900">
+                            {auditReady ? 'Данные готовы для предметного оффера' : 'Можно подготовить данные'}
+                        </div>
+                        <div className="mt-1 truncate text-[11px] text-slate-400">
                             {auditReady ? 'Аудит готов' : 'Без аудита'}
-                        </Badge>
-                        <Badge variant={roomReady ? 'secondary' : 'outline'} className="text-[11px] font-normal">
-                            {roomLabel}
-                        </Badge>
-                        <Badge variant="outline" className="text-[11px] font-normal">
-                            {formatLeadChannel(lead.selected_channel || bestAvailableOutreachChannel(lead))}
-                        </Badge>
-                    </div>
-                    <div className="grid gap-1 text-xs text-muted-foreground">
-                        <div className="flex min-w-0 items-center gap-1">
-                            <MapPin className="h-3.5 w-3.5 shrink-0" />
-                            <span className="truncate">{lead.address || lead.city || 'Адрес не указан'}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                            <span>{lead.rating ?? '-'}</span>
-                            {lead.reviews_count ? <span>({lead.reviews_count})</span> : null}
                         </div>
                     </div>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-0">
-                    <div
-                        className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-3"
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Цифровая комната</div>
-                                <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                                    Перед первым письмом: комната с предложением, чатом и файлами. Подготовка данных помогает сметчить услуги.
-                                </div>
-                            </div>
-                            <div className="flex flex-wrap gap-2 sm:justify-end">
-                                {roomUrl ? (
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-8 text-xs"
-                                        onClick={(event) => {
-                                            event.stopPropagation();
-                                            window.open(roomUrl, '_blank', 'noopener,noreferrer');
-                                        }}
-                                    >
-                                        <ExternalLink className="mr-1 h-3 w-3" />
-                                        Открыть комнату
-                                    </Button>
-                                ) : null}
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 text-xs"
-                                    disabled={!leadId || Boolean(roomBusyState)}
-                                    onClick={(event) => {
-                                        event.stopPropagation();
-                                        void prepareSalesRoomForLead(lead, 'audited');
-                                    }}
-                                >
-                                    {roomBusyState === 'audited' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                                    Создать комнату
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-8 text-xs"
-                                    disabled={!leadId || Boolean(roomBusyState)}
-                                    onClick={(event) => {
-                                        event.stopPropagation();
-                                        void prepareSalesRoomForLead(lead, 'template');
-                                    }}
-                                >
-                                    {roomBusyState === 'template' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                                    Без подготовки данных
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                </div>
+                <div onClick={(event) => event.stopPropagation()}>
+                    <WorkflowActionRow
+                        className="mt-3"
+                        primary={{ label: 'Карточка', variant: 'outline', onClick: () => openLeadPreview(lead) }}
+                        secondary={[
+                            ...(roomUrl ? [{ label: 'Открыть комнату', href: roomUrl, icon: <ExternalLink className="h-3 w-3" /> }] : []),
+                            {
+                                label: roomBusyState === 'audited' ? 'Готовим...' : 'Создать комнату',
+                                onClick: () => prepareSalesRoomForLead(lead, 'audited'),
+                                disabled: !leadId || Boolean(roomBusyState),
+                                icon: roomBusyState === 'audited' ? <Loader2 className="h-3 w-3 animate-spin" /> : undefined,
+                            },
+                            {
+                                label: roomBusyState === 'template' ? 'Создаём...' : 'Без подготовки данных',
+                                variant: 'ghost',
+                                onClick: () => prepareSalesRoomForLead(lead, 'template'),
+                                disabled: !leadId || Boolean(roomBusyState),
+                                icon: roomBusyState === 'template' ? <Loader2 className="h-3 w-3 animate-spin" /> : undefined,
+                            },
+                        ]}
+                    />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
+                        {contactReady ? 'контакты есть' : 'контактов мало'}
+                    </span>
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
+                        {auditReady ? 'аудит готов' : 'без аудита'}
+                    </span>
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
+                        {roomLabel.toLowerCase()}
+                    </span>
+                </div>
+            </div>
         );
     };
 
@@ -5329,15 +5322,6 @@ export const ProspectingManagement: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Поиск клиентов</h2>
-                    <p className="text-muted-foreground">
-                        Единый рабочий экран: сначала добавляем лиды, затем ведём их по воронке до контакта и follow-up.
-                    </p>
-                </div>
-            </div>
-
             <LeadStageDecisionModal
                 state={stageDecision}
                 reason={stageDecisionReason}
@@ -5616,35 +5600,35 @@ export const ProspectingManagement: React.FC = () => {
                                 </div>
                             </CardHeader>
                             <CardContent>
-                                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                                     {[
                                         {
                                             key: 'raw',
-                                            title: '1. Кандидаты',
+                                            title: 'Кандидаты',
                                             count: unprocessedLeads.length + unresolvedSearchResults.length,
                                             text: 'Найти, импортировать и сохранить новых кандидатов.',
                                         },
                                         {
                                             key: 'pipeline',
-                                            title: '2. Лиды',
+                                            title: 'Лиды',
                                             count: sourceFilteredLeads.length,
                                             text: 'Отобрать, отложить или убрать неактуальных.',
                                         },
                                         {
                                             key: 'groups',
-                                            title: '3. Группы',
+                                            title: 'Группы',
                                             count: leadGroups.length,
                                             text: 'Собрать аудитории для ручной обработки.',
                                         },
                                         {
                                             key: 'outreach',
-                                            title: '4. Письма',
+                                            title: 'Письма',
                                             count: drafts.length + visibleQueueItems.length,
                                             text: 'Проверить тексты и подготовить очередь.',
                                         },
                                         {
                                             key: 'analytics',
-                                            title: '5. Отчёт',
+                                            title: 'Отчёт',
                                             count: sentDetailRows.length,
                                             text: 'Посмотреть отправки, ответы и конверсию.',
                                         },
@@ -5653,13 +5637,13 @@ export const ProspectingManagement: React.FC = () => {
                                             key={step.key}
                                             type="button"
                                             onClick={() => setActiveWorkspace(toWorkspaceTab(step.key))}
-                                            className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-left transition hover:border-primary/30 hover:bg-white hover:shadow-sm"
+                                            className="min-h-[120px] rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-left transition hover:border-primary/30 hover:bg-white hover:shadow-sm"
                                         >
-                                            <div className="flex items-center justify-between gap-2">
-                                                <div className="text-sm font-semibold text-slate-950">{step.title}</div>
-                                                <Badge variant="secondary">{step.count}</Badge>
+                                            <div className="flex min-w-0 items-start justify-between gap-3">
+                                                <div className="min-w-0 text-base font-semibold leading-snug text-slate-950">{step.title}</div>
+                                                <Badge variant="secondary" className="shrink-0">{step.count}</Badge>
                                             </div>
-                                            <div className="mt-2 text-xs leading-relaxed text-slate-500">{step.text}</div>
+                                            <div className="mt-3 text-sm leading-relaxed text-slate-500">{step.text}</div>
                                         </button>
                                     ))}
                                 </div>
@@ -5763,19 +5747,19 @@ export const ProspectingManagement: React.FC = () => {
                     </div>
 
                     {pipelineView === 'kanban' ? (
-                        <div className="flex gap-4 overflow-x-auto pb-6">
+                        <div className="flex gap-3 overflow-x-auto pb-6 xl:gap-4">
                             {pipelineBoardColumns.map((column) => (
                                 <div
                                     key={column.id}
                                     onDragOver={handleColumnDragOver(column.id)}
                                     onDragLeave={() => setDropColumnId(null)}
                                     onDrop={handleColumnDrop(column.id)}
-                                    className={`min-w-[280px] flex-1 rounded-xl border border-border bg-muted/30 p-3 transition ${dropColumnId === column.id ? 'ring-2 ring-primary/40' : ''}`}
+                                    className={`min-w-[252px] flex-1 rounded-2xl border border-slate-200/80 bg-white/70 p-3 shadow-sm transition xl:min-w-[264px] ${dropColumnId === column.id ? 'ring-2 ring-primary/40' : ''}`}
                                 >
                                     <div className="flex items-start justify-between gap-2 border-b border-border pb-2">
-                                        <div>
-                                            <div className="text-sm font-semibold">{column.label}</div>
-                                            <div className="text-xs text-muted-foreground">{column.description}</div>
+                                        <div className="min-w-0">
+                                            <div className="line-clamp-2 text-sm font-semibold leading-snug text-slate-950">{column.label}</div>
+                                            <div className="mt-1 line-clamp-3 text-xs leading-relaxed text-muted-foreground">{column.description}</div>
                                         </div>
                                         <div className="flex flex-col items-end gap-2">
                                             <Badge variant="secondary">{column.leads.length}</Badge>
