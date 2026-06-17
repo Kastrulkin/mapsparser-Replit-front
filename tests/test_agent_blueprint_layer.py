@@ -1342,6 +1342,25 @@ def test_openclaw_planner_loop_understands_review_schedule_and_localos_telegram_
     assert "post_format" not in questions
 
 
+def test_agent_builder_does_not_treat_scheduled_telegram_message_as_outreach():
+    from services.agent_builder_session import build_agent_builder_state
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint, infer_blueprint_category
+
+    prompt = 'Сощздай агента, который каждое утро в 9 утра шлёт мне сообщение "Привет" в телеграм'
+
+    draft = compile_agent_blueprint(prompt)
+    state = build_agent_builder_state([{"role": "user", "content": prompt}])
+    questions_text = " ".join(str(item.get("question") or "") for item in state["missing_questions"]).lower()
+
+    assert infer_blueprint_category(prompt) == "custom"
+    assert draft["category"] == "custom"
+    assert draft["version_payload"]["trigger"] == "schedule.daily"
+    assert draft["version_payload"]["schedule"]["time"] == "09:00"
+    assert state["category"] == "custom"
+    assert "лид" not in questions_text
+    assert "prospectingleads" not in questions_text
+
+
 def test_agent_feasibility_resolver_reports_ready_missing_choice_and_forbidden():
     from services.agent_feasibility_resolver import resolve_agent_feasibility
 

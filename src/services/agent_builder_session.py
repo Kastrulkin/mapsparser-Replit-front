@@ -242,6 +242,8 @@ def _build_preview(
 
 def _missing_questions(description: str, category: str) -> List[Dict[str, str]]:
     text = description.lower()
+    if _is_self_contained_telegram_delivery(text):
+        return []
     library = QUESTION_LIBRARY.get(category) or QUESTION_LIBRARY["custom"]
     questions = []
     if len(description.strip()) < 24:
@@ -255,6 +257,16 @@ def _missing_questions(description: str, category: str) -> List[Dict[str, str]]:
     if not _has_control_hint(text):
         questions.append({"key": "control", "question": "Где человек должен проверить результат перед действием?"})
     return questions[:3]
+
+
+def _is_self_contained_telegram_delivery(text: str) -> bool:
+    if not ("телеграм" in text or "telegram" in text):
+        return False
+    if not any(marker in text for marker in ["шл", "отправ", "присыла", "сообщен", "напиши"]):
+        return False
+    if not any(marker in text for marker in ["каждый", "каждое", "каждую", "ежеднев", "утро", "день", "вечер"]):
+        return False
+    return any(marker in text for marker in ["сообщ", "текст", "привет", "напомин"])
 
 
 def _compiler_questions(draft: Dict[str, Any]) -> List[Dict[str, str]]:

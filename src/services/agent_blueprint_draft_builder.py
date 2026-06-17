@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List
 
 from services.agent_blueprint_runner import default_supervised_outreach_version_payload
@@ -52,7 +53,7 @@ def infer_blueprint_category(description: str) -> str:
         return "email"
     if _contains_any(text, ["таблиц", "xlsx", "excel", "csv", "строк"]):
         return "tables"
-    if _contains_any(text, ["лид", "lead", "shortlist", "сообщени", "найди клиентов", "поиск клиентов", "outreach"]):
+    if _contains_any(text, ["лид", "lead", "shortlist", "найди клиентов", "поиск клиентов", "outreach"]):
         return "outreach"
     if _contains_any(text, ["отзыв", "review", "ответ"]):
         return "reviews"
@@ -404,6 +405,9 @@ def _intent_from_llm_result(ai_result: Dict[str, Any]) -> Dict[str, Any]:
 
 def _infer_integration_intent(description: str) -> Dict[str, Any]:
     lowered = description.lower()
+    direct_telegram_delivery = _direct_telegram_delivery_intent(lowered)
+    if direct_telegram_delivery:
+        return direct_telegram_delivery
     if (
         _contains_any(lowered, ["google sheets", "google таблиц", "таблиц", "sheet", "sheets", "spreadsheet"])
         and _contains_any(lowered, ["telegram", "телеграм"])
@@ -447,6 +451,44 @@ def _infer_integration_intent(description: str) -> Dict[str, Any]:
     }
 
 
+def _direct_telegram_delivery_intent(lowered: str) -> Dict[str, Any]:
+    if not _contains_any(lowered, ["telegram", "телеграм"]):
+        return {}
+    if not _contains_any(lowered, ["шл", "отправ", "присыла", "сообщен", "напиши"]):
+        return {}
+    if not _contains_any(lowered, ["каждый", "каждое", "каждую", "ежеднев", "утро", "день", "вечер", "schedule", "daily"]):
+        return {}
+    source = {
+        "key": "manual_context",
+        "binding_key": "business_profile_context",
+        "provider": "business_profile",
+        "direction": "local_context",
+        "default_capability": "",
+        "default_config": {},
+        "required_config": [],
+    }
+    destination = _spec_by_key("telegram", DESTINATION_SPECS)
+    return {
+        "source": source,
+        "destination": destination,
+        "trigger": "schedule.daily",
+        "schedule": _schedule_from_text(lowered),
+        "compiled_template_key": "scheduled_telegram_message",
+    }
+
+
+def _schedule_from_text(lowered: str) -> Dict[str, str]:
+    hour = ""
+    match = re.search(r"(?:в\s*)?(\d{1,2})(?::(\d{2}))?\s*(?:утра|вечера|дня)?", lowered)
+    if match:
+        raw_hour = int(match.group(1))
+        minutes = match.group(2) or "00"
+        if "вечера" in lowered and 1 <= raw_hour <= 11:
+            raw_hour += 12
+        hour = f"{raw_hour:02d}:{minutes}"
+    return {"time": hour or "09:00", "timezone": "business_timezone"}
+
+
 def _source_binding(source: Dict[str, Any], trigger: str) -> Dict[str, Any]:
     binding = {
         "key": str(source.get("binding_key") or source.get("key") or "source"),
@@ -481,6 +523,19 @@ def _destination_binding(destination: Dict[str, Any]) -> Dict[str, Any]:
 
 def _source_step(source: Dict[str, Any], trigger: str) -> Dict[str, Any]:
     source_key = str(source.get("key") or "source")
+    if source_key == "manual_context":
+        return {
+            "key": "collect_manual_context",
+            "type": "artifact",
+            "title": "Собрать контекст задачи",
+            "artifact_type": "agent_input_plan",
+            "payload": {
+                "trigger": trigger,
+                "source": "manual_context",
+                "status": "ready",
+                "external_dispatch_performed": False,
+            },
+        }
     if source_key == "telegram":
         return {
             "key": "capture_telegram_trigger",

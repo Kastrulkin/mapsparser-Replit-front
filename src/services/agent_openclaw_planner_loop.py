@@ -257,6 +257,8 @@ def _uses_default_localos_telegram(lowered: str) -> bool:
         "в мой телеграм",
         "в мой telegram",
     ]
+    if "мне" in lowered and ("телеграм" in lowered or "telegram" in lowered) and any(marker in lowered for marker in ["шл", "отправ", "присыла", "сообщен"]):
+        return True
     return any(marker in lowered for marker in bot_markers) or any(marker in lowered for marker in direct_markers)
 
 
@@ -316,6 +318,8 @@ def _has_post_format(lowered: str) -> bool:
     if "отзыв" in lowered and "ответ" in lowered:
         return True
     if "присыла" in lowered and "ответ" in lowered:
+        return True
+    if "сообщ" in lowered:
         return True
     markers = [
         "в стиле",
