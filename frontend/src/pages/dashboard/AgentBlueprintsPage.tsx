@@ -4541,6 +4541,7 @@ const DialogAgentBuilder = ({
   const missingProviderRouteKeys = requiredProviderRouteKeys.filter((key) => !selectedProviderRoutes[key]);
   const providerRoutesRequireConfirmation = requiredProviderRouteKeys.length > 0;
   const missingProviderRouteConfirmation = providerRoutesRequireConfirmation && (!acceptedProviderRoutes || missingProviderRouteKeys.length > 0);
+  const blockingQuestions = builderBlockingQuestions(questions);
   const showInlineConnectionSetup = Boolean(missingConnectionChoices.length || missingProviderRouteKeys.length || missingProviderRouteConfirmation);
   const canCreateDraft = preview?.setup_flow?.can_create_draft !== false
     && !missingConnectionChoices.length
@@ -4556,7 +4557,7 @@ const DialogAgentBuilder = ({
     }
     createBlockers.push({ key: cleanKey, label: cleanLabel });
   };
-  questions.slice(0, 4).forEach((question) => {
+  blockingQuestions.slice(0, 4).forEach((question) => {
     addCreateBlocker(`question:${question.key || question.question}`, question.question || 'Ответьте на уточнение.');
   });
   missingConnectionChoices.slice(0, 4).forEach((item) => {
@@ -4599,8 +4600,8 @@ const DialogAgentBuilder = ({
     canCreateDraft,
     createDraftLabel,
   });
-  const firstQuestion = questions[0] || null;
-  const extraQuestions = questions.slice(1);
+  const firstQuestion = blockingQuestions[0] || null;
+  const extraQuestions = blockingQuestions.slice(1);
   const previewTaskText = preview?.understood_task || input;
   const previewDataText = builderPreviewDataText(preview, previewTaskText);
   const previewResultText = userFacingAgentTechText(preview?.output_format || 'результат уточним после подключения данных');

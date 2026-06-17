@@ -19,7 +19,7 @@ def build_openclaw_planner_loop(
     questions = []
     questions.extend(_questions_for_connection_state(connection_state))
     questions.extend(_questions_for_workflow_details(context, required_bindings))
-    questions.extend(_questions_for_required_bindings(required_bindings, connection_state))
+    questions.extend(_questions_for_required_bindings(required_bindings, connection_state, context))
     questions = _dedupe_questions(questions)[:8]
 
     capability_plan = [_capability_plan_item(capability, catalog) for capability in allowed_capabilities]
@@ -231,10 +231,33 @@ def _has_telegram_target(task: str, required_bindings: List[Any], answer_binding
         return True
     if "@" in task and any(part.startswith("@") and len(part) >= 4 for part in task.replace(",", " ").split()):
         return True
+    if _uses_default_localos_telegram(lowered):
+        return True
     for config in _binding_answer_configs(required_bindings, answer_bindings, "telegram"):
         if str(config.get("telegram_target") or config.get("chat_id") or config.get("channel") or "").strip():
             return True
     return False
+
+
+def _uses_default_localos_telegram(lowered: str) -> bool:
+    bot_markers = [
+        "через бота",
+        "через бот",
+        "бот localos",
+        "бот локалос",
+        "бота localos",
+        "бота локалос",
+        "localospro_bot",
+        "localos pro bot",
+        "локалос бот",
+    ]
+    direct_markers = [
+        "мне в телеграм",
+        "мне в telegram",
+        "в мой телеграм",
+        "в мой telegram",
+    ]
+    return any(marker in lowered for marker in bot_markers) or any(marker in lowered for marker in direct_markers)
 
 
 def _binding_answer_configs(required_bindings: List[Any], answer_bindings: Dict[str, Any], provider: str) -> List[Dict[str, Any]]:
@@ -257,10 +280,18 @@ def _binding_answer_configs(required_bindings: List[Any], answer_bindings: Dict[
 def _has_schedule_or_trigger(lowered: str) -> bool:
     markers = [
         "каждый",
+        "каждю",
         "ежеднев",
         "еженед",
         "каждую",
         "каждое",
+        "понедельник",
+        "вторник",
+        "сред",
+        "четверг",
+        "пятниц",
+        "суббот",
+        "воскрес",
         "раз в",
         "по распис",
         "schedule",
@@ -282,6 +313,10 @@ def _looks_like_post_workflow(lowered: str) -> bool:
 
 
 def _has_post_format(lowered: str) -> bool:
+    if "отзыв" in lowered and "ответ" in lowered:
+        return True
+    if "присыла" in lowered and "ответ" in lowered:
+        return True
     markers = [
         "в стиле",
         "стиль",
@@ -297,9 +332,11 @@ def _has_post_format(lowered: str) -> bool:
     return any(marker in lowered for marker in markers)
 
 
-def _questions_for_required_bindings(required_bindings: List[Any], connection_state: Dict[str, Any]) -> List[Dict[str, str]]:
+def _questions_for_required_bindings(required_bindings: List[Any], connection_state: Dict[str, Any], context: Dict[str, Any]) -> List[Dict[str, str]]:
     ready_providers = set()
     ready_bindings = connection_state.get("ready_bindings") if isinstance(connection_state.get("ready_bindings"), list) else []
+    task = str(context.get("task") or "").strip()
+    answer_bindings = context.get("connection_answer_bindings") if isinstance(context.get("connection_answer_bindings"), dict) else {}
     for ready_binding in ready_bindings:
         if not isinstance(ready_binding, dict):
             continue
@@ -323,6 +360,8 @@ def _questions_for_required_bindings(required_bindings: List[Any], connection_st
                 }
             )
         elif provider == "telegram" and "bot_mode" in required_config:
+            if _has_telegram_target(task, required_bindings, answer_bindings):
+                continue
             questions.append(
                 {
                     "key": "telegram_target",

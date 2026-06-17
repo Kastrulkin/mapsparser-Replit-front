@@ -347,7 +347,7 @@ def _connection_resolver_question_text(item: Dict[str, Any]) -> str:
     if provider == "google_sheets":
         return "Какую Google таблицу и вкладку использовать как источник данных?"
     if provider == "telegram":
-        return "В какой Telegram-канал, чат или бот готовить результат?"
+        return "Подключите Telegram к стандартному боту LocalOS. Если он уже подключён, LocalOS отправит уведомления в этот подключённый чат."
     if provider == "localos_finance":
         return "В какой раздел финансов LocalOS записывать результат и какие поля обязательны?"
     if recommended:

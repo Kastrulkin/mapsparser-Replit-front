@@ -1300,6 +1300,48 @@ def test_openclaw_planner_loop_requires_workflow_details_before_draft():
     assert "blocking_workflow_details_before_draft" in result["planner_contract"]["must_return"]
 
 
+def test_openclaw_planner_loop_understands_review_schedule_and_localos_telegram_bot():
+    from services.agent_openclaw_planner_loop import build_openclaw_planner_loop
+
+    result = build_openclaw_planner_loop(
+        {
+            "schema": "localos_openclaw_planner_context_v1",
+            "task": (
+                "Создай агента, который каждю среду в 9 утра проверяет наличие новых отзывов - "
+                "запускает парсер. Если они есть, то генерирует ответ. Оба - отзыв и ответ "
+                "присылает мне в телеграм через бота"
+            ),
+            "allowed_capabilities": ["reviews.fetch", "communications.draft"],
+            "required_bindings": [
+                {
+                    "key": "reviews_source",
+                    "provider": "localos_reviews",
+                    "capability": "reviews.fetch",
+                    "required_config": [],
+                },
+                {
+                    "key": "telegram_delivery",
+                    "provider": "telegram",
+                    "capability": "communications.draft",
+                    "required_config": ["bot_mode"],
+                },
+            ],
+            "connection_state": {},
+            "connection_answer_bindings": {},
+            "output_contract": {
+                "format": "json_only",
+                "compiled_workflow_owner": "localos",
+            },
+        }
+    )
+
+    questions = {item["key"]: item for item in result["clarifying_questions"]}
+
+    assert "telegram_target" not in questions
+    assert "schedule_frequency" not in questions
+    assert "post_format" not in questions
+
+
 def test_agent_feasibility_resolver_reports_ready_missing_choice_and_forbidden():
     from services.agent_feasibility_resolver import resolve_agent_feasibility
 
