@@ -8378,7 +8378,6 @@ def partnership_list_leads():
                     SELECT status, data_mode, slug, updated_at
                     FROM sales_rooms sr
                     WHERE sr.lead_id = prospectingleads.id
-                      AND sr.business_id = prospectingleads.business_id
                     ORDER BY sr.updated_at DESC
                     LIMIT 1
                 ) sr_last ON TRUE
