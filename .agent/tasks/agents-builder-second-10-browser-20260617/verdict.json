@@ -1,0 +1,35 @@
+{
+  "task_id": "agents-builder-second-10-browser-20260617",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "All requested scenarios were initially exercised with browser-use; failed cases were retested after deploy."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Wrong-domain questions and misclassification are covered by regression tests and browser retests."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "New source labels are user-facing in the deployed UI."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Tests, build, deploy, server checks, and browser checks completed."
+    }
+  ],
+  "commands_run": [
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
+    "npm --prefix frontend run build",
+    "docker compose ps",
+    "curl -I http://localhost:8000"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-builder-second-10-browser-20260617/evidence.md"
+  ]
+}

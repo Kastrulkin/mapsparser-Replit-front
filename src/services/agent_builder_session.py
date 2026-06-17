@@ -2096,7 +2096,20 @@ def _has_data_hint(text: str) -> bool:
             "загруз",
             "запис",
             "заказ",
+            "счёт",
+            "счет",
+            "счета",
+            "счёта",
+            "оплат",
             "расход",
+            "трат",
+            "финанс",
+            "клиент",
+            "телефон",
+            "email",
+            "e-mail",
+            "филиал",
+            "точк",
             "пакет",
             "сезон",
         ]
@@ -2104,7 +2117,7 @@ def _has_data_hint(text: str) -> bool:
 
 
 def _has_extraction_hint(text: str) -> bool:
-    return any(marker in text for marker in ["извлеч", "найд", "наход", "новые строк", "продаж", "реакц", "комментар", "вывод", "бер", "возьми", "риск", "сумм", "срок", "пол", "исключ", "ответ", "подготов", "проверь", "напом", "клиент", "нормализ", "категор", "пуст", "описан", "назван", "цен", "тем", "партн", "статус", "ответствен"])
+    return any(marker in text for marker in ["извлеч", "найд", "наход", "собира", "новые строк", "продаж", "реакц", "комментар", "вывод", "бер", "возьми", "риск", "сумм", "срок", "пол", "исключ", "ответ", "подготов", "проверь", "напом", "клиент", "нормализ", "категор", "пуст", "описан", "назван", "цен", "тем", "партн", "статус", "ответствен"])
 
 
 def _has_output_hint(text: str) -> bool:
@@ -2130,6 +2143,11 @@ def _has_output_hint(text: str) -> bool:
             "напомин",
             "пост",
             "публикац",
+            "дайджест",
+            "разбор",
+            "категор",
+            "подтверд",
+            "идеи",
         ]
     )
 
@@ -2166,7 +2184,7 @@ def _question_is_answered(description: str, question: str) -> bool:
         if ("telegram" in text or "телеграм" in text) and any(marker in text for marker in ["присыла", "отправ", "шл", "уведом"]):
             return True
     if "формат" in q or "шаблон" in q or "тон" in q:
-        if any(marker in text for marker in ["кратк", "аккурат", "без обещ", "3 тем", "три тем", "отзыв + ответ", "сообщение", "отчёт", "отчет"]):
+        if any(marker in text for marker in ["кратк", "аккурат", "без обещ", "3 тем", "три тем", "отзыв + ответ", "сообщение", "отчёт", "отчет", "список", "дайджест", "разбор"]):
             return True
         if ("пост" in q or "публикац" in q) and any(marker in text for marker in ["после публикац", "после пост", "реакц", "комментар"]):
             return True
@@ -2188,6 +2206,21 @@ def _is_telegram_content_analytics_request(text: str) -> bool:
 
 
 def _default_extraction_rules(category: str, description: str) -> str:
+    lowered = description.lower()
+    if _is_problem_digest_request(lowered):
+        return "Собрать новые негативные отзывы, отменённые записи, просроченные задачи и необычные расходы в один список проблем."
+    if _is_localos_finance_monitoring_request(lowered):
+        if any(marker in lowered for marker in ["счёт", "счет", "счета", "счёта", "неоплачен", "просрочен"]):
+            return "Найти неоплаченные счета, срок просрочки, сумму, клиента и причину попадания в список."
+        return "Найти новые расходы, крупные или необычные траты, текущую категорию и причину проверки."
+    if _is_customer_data_quality_request(lowered):
+        return "Найти клиентов с незаполненными контактами, источником прихода или датой последней записи."
+    if _is_partner_replies_request(lowered):
+        return "Разобрать ответы партнёров по статусам: интересно, отказ, нужен ручной ответ."
+    if _is_review_location_analysis_request(lowered):
+        return "Сравнить отзывы по точкам сети, найти падение рейтинга и причины в новых отзывах."
+    if category == "custom" and any(marker in lowered for marker in ["положительные отзывы", "идеи постов", "3 идеи", "три идеи"]):
+        return "Выбрать новые положительные отзывы, темы, формулировки клиентов и поводы для постов."
     if category == "communications":
         return "Выбрать клиентов с ближайшей записью, проверить услугу, пакетное предложение и допустимость контакта."
     if category == "documents":
@@ -2213,6 +2246,22 @@ def _default_processing_rules(category: str) -> str:
 
 def _default_output_format(category: str, description: str = "") -> str:
     lowered = description.lower()
+    if _is_problem_digest_request(lowered):
+        return "Короткий ежедневный дайджест проблем: отзывы, отменённые записи, просроченные задачи и необычные расходы."
+    if _is_localos_finance_monitoring_request(lowered):
+        if any(marker in lowered for marker in ["счёт", "счет", "счета", "счёта", "неоплачен", "просрочен"]):
+            return "Список просроченных неоплаченных счетов с суммой, клиентом, просрочкой и следующим шагом."
+        return "Список подозрительных расходов с предлагаемой категорией и запросом на подтверждение."
+    if _is_customer_data_quality_request(lowered):
+        if any(marker in lowered for marker in ["не записывал", "не записывались", "старых клиентов", "больше 60"]):
+            return "Список клиентов для реактивации и мягкие черновики сообщений, без отправки до подтверждения."
+        return "Список клиентов с пустыми полями: телефон, email, источник прихода и кому исправить."
+    if _is_partner_replies_request(lowered):
+        return "Список ответов партнёров по статусам: интересно, отказ, нужен ручной ответ, плюс следующий шаг."
+    if _is_review_location_analysis_request(lowered):
+        return "Короткий разбор по филиалам: где упал рейтинг, какие отзывы повлияли и что сделать."
+    if category == "custom" and any(marker in lowered for marker in ["положительные отзывы", "идеи постов", "3 идеи", "три идеи"]):
+        return "3 идеи постов на основе положительных отзывов с цитатой/поводом и рекомендацией."
     if category == "custom" and any(marker in lowered for marker in ["контент-план", "темы постов", "темы публикац", "постов для карточ"]):
         return "3 темы постов для карточек на картах с причиной и рекомендацией."
     if category == "custom" and any(marker in lowered for marker in ["еженедельный отч", "отчёт владельцу", "отчет владельцу", "каждую пятниц"]):
@@ -2246,6 +2295,34 @@ def _category_label(category: str) -> str:
         "custom": "Кастомный агент",
     }
     return labels.get(category, "Кастомный агент")
+
+
+def _is_customer_data_quality_request(text: str) -> bool:
+    if "клиент" not in text:
+        return False
+    return any(marker in text for marker in ["без телефона", "без email", "без e-mail", "источник прихода", "не записывал", "не записывались", "старых клиентов", "больше 60"])
+
+
+def _is_localos_finance_monitoring_request(text: str) -> bool:
+    if any(marker in text for marker in ["счёт", "счет", "счета", "счёта", "неоплачен", "просрочен"]):
+        return True
+    if "предоплат" in text and not any(marker in text for marker in ["запис", "клиент"]):
+        return True
+    return any(marker in text for marker in ["расход", "траты", "трата", "трату", "финанс"])
+
+
+def _is_partner_replies_request(text: str) -> bool:
+    return "партн" in text and any(marker in text for marker in ["ответ", "отказ", "интерес", "ручной ответ"])
+
+
+def _is_review_location_analysis_request(text: str) -> bool:
+    if not any(marker in text for marker in ["отзыв", "review"]):
+        return False
+    return any(marker in text for marker in ["филиал", "точк", "сети", "рейтинг", "паден"])
+
+
+def _is_problem_digest_request(text: str) -> bool:
+    return any(marker in text for marker in ["дайджест", "негативные отзывы", "отменённые записи", "отмененные записи", "просроченные задачи", "необычные расходы"])
 
 
 def _clean_text(value: Any) -> str:

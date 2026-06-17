@@ -27,8 +27,18 @@ def infer_blueprint_category(description: str) -> str:
     text = description.lower()
     if _infer_integration_intent(text):
         return "custom"
+    if _is_client_reactivation_request(text):
+        return "communications"
+    if _is_customer_data_quality_request(text):
+        return "custom"
+    if _is_localos_finance_monitoring_request(text):
+        return "custom"
+    if _is_review_based_content_request(text):
+        return "custom"
     if _contains_any(text, ["контент-план", "темы постов", "тема пост", "постов для карточ", "посты для карточ"]):
         return "custom"
+    if _contains_any(text, ["партн", "коллаб"]):
+        return "partnerships"
     if _contains_any(
         text,
         [
@@ -49,16 +59,14 @@ def infer_blueprint_category(description: str) -> str:
         ],
     ):
         return "communications"
-    if _contains_any(text, ["документ", "договор", "pdf", "docx", "акт", "счёт", "счет"]):
+    if _contains_any(text, ["документ", "договор", "pdf", "docx", "акт"]):
         return "documents"
-    if _contains_any(text, ["письм", "email", "почт", "рассыл"]):
+    if _is_email_authoring_request(text):
         return "email"
     if _contains_any(text, ["таблиц", "xlsx", "excel", "csv", "строк"]):
         return "tables"
-    if _contains_any(text, ["отзыв", "review", "ответ"]):
+    if _contains_any(text, ["отзыв", "review"]):
         return "reviews"
-    if _contains_any(text, ["партн", "предложен", "коллаб"]):
-        return "partnerships"
     if _contains_any(text, ["услуг", "сервис", "пустые описан", "названия", "отсутствующие цены"]):
         return "services"
     if _contains_any(text, ["лид", "lead", "shortlist", "найди клиентов", "поиск клиентов", "outreach"]):
@@ -112,7 +120,7 @@ def compile_agent_blueprint(
             planner_context=planner_context,
         )
         ai_intent = _intent_from_llm_result(ai_result)
-        if ai_intent:
+        if ai_intent and _intent_is_supported_by_text(request_text, ai_intent):
             draft = _source_destination_compilation(request_text, ai_intent)
             metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
             metadata["compiler_source"] = "gigachat_intent_extractor"
@@ -258,6 +266,19 @@ def _sources_for_category(category: str) -> List[str]:
 def _sources_for_request(category: str, request_text: str) -> List[str]:
     sources = _sources_for_category(category)
     lowered = request_text.lower()
+    if _is_customer_data_quality_request(lowered):
+        return ["clients", "business_profile"]
+    if _is_localos_finance_monitoring_request(lowered):
+        result = ["localos_finance", "business_profile"]
+        if _contains_any(lowered, ["telegram", "телеграм", "присыла", "отправ", "шл", "уведом"]):
+            result.append("telegram")
+        return result
+    if _is_partner_replies_request(lowered):
+        return ["prospectingleads", "outreach_drafts", "business_profile"]
+    if _is_review_location_analysis_request(lowered):
+        return ["external_reviews", "locations", "business_profile"]
+    if _is_review_based_content_request(lowered):
+        return ["external_reviews", "services", "business_profile", "manual_context"]
     if category == "custom" and _is_telegram_content_analytics_request(request_text):
         return ["telegram", "business_profile", "services", "external_reviews", "manual_context"]
     if category == "custom" and _contains_any(lowered, ["контент-план", "темы постов", "темы публикац", "постов для карточ", "карточек на картах"]):
@@ -429,8 +450,28 @@ def _intent_from_llm_result(ai_result: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _intent_is_supported_by_text(description: str, intent: Dict[str, Any]) -> bool:
+    lowered = description.lower()
+    source = intent.get("source") if isinstance(intent.get("source"), dict) else {}
+    destination = intent.get("destination") if isinstance(intent.get("destination"), dict) else {}
+    source_key = str(source.get("key") or "")
+    destination_key = str(destination.get("key") or "")
+    if source_key == "google_sheets" and not _contains_any(lowered, ["google sheets", "google таблиц", "таблиц", "sheet", "sheets", "spreadsheet", "xlsx", "csv"]):
+        return False
+    if destination_key == "telegram" and not _contains_any(lowered, ["telegram", "телеграм", "бот"]):
+        return False
+    if destination_key == "google_sheets" and not _contains_any(lowered, ["google sheets", "google таблиц", "таблиц", "sheet", "sheets", "spreadsheet", "xlsx", "csv"]):
+        return False
+    if destination_key == "localos_finance" and not _is_localos_finance_monitoring_request(lowered):
+        return False
+    return True
+
+
 def _infer_integration_intent(description: str) -> Dict[str, Any]:
     lowered = description.lower()
+    localos_digest_delivery = _localos_context_to_telegram_intent(lowered)
+    if localos_digest_delivery:
+        return localos_digest_delivery
     review_telegram_delivery = _review_telegram_delivery_intent(lowered)
     if review_telegram_delivery:
         return review_telegram_delivery
@@ -459,6 +500,8 @@ def _infer_integration_intent(description: str) -> Dict[str, Any]:
     source = _matching_spec(lowered, SOURCE_SPECS)
     destination = _matching_spec(lowered, DESTINATION_SPECS)
     if not source or not destination:
+        return {}
+    if (source.get("key") == "telegram" or destination.get("key") == "telegram") and not _contains_any(lowered, ["telegram", "телеграм", "бот", "webhook"]):
         return {}
     if source.get("key") == destination.get("key") and source.get("key") != "telegram":
         return {}
@@ -511,6 +554,50 @@ def _review_telegram_delivery_intent(lowered: str) -> Dict[str, Any]:
     }
 
 
+def _localos_context_to_telegram_intent(lowered: str) -> Dict[str, Any]:
+    if not _contains_any(lowered, ["telegram", "телеграм"]):
+        return {}
+    if not _contains_any(lowered, ["уведом", "присыла", "отправ", "шл", "сообщен", "дайджест"]):
+        return {}
+    source_key = ""
+    provider = "business_profile"
+    if _contains_any(lowered, ["дайджест", "проблем", "просроченные задачи", "необычные расходы"]):
+        source_key = "localos_digest"
+    elif _is_localos_finance_monitoring_request(lowered):
+        source_key = "localos_finance"
+        provider = "localos_finance"
+    elif _contains_any(lowered, ["запис", "предоплат", "отмен"]):
+        source_key = "appointments"
+    elif _is_customer_data_quality_request(lowered):
+        source_key = "clients"
+    elif _is_partner_replies_request(lowered):
+        source_key = "partnership_replies"
+    if not source_key:
+        return {}
+    source = {
+        "key": source_key,
+        "binding_key": f"{source_key}_context",
+        "provider": provider,
+        "direction": "local_context",
+        "default_capability": "",
+        "default_config": {},
+        "required_config": [],
+    }
+    destination = _spec_by_key("telegram", DESTINATION_SPECS)
+    trigger = "manual.run"
+    schedule = {}
+    if _contains_any(lowered, ["каждый", "каждое", "каждую", "ежеднев", "еженед", "утро", "вечер", "день", "понедельник", "вторник", "сред", "четверг", "пятниц"]):
+        trigger = "schedule.daily"
+        schedule = _schedule_from_text(lowered)
+    return {
+        "source": source,
+        "destination": destination,
+        "trigger": trigger,
+        "schedule": schedule,
+        "compiled_template_key": f"{source_key}_to_telegram",
+    }
+
+
 def _direct_telegram_delivery_intent(lowered: str) -> Dict[str, Any]:
     if not _contains_any(lowered, ["telegram", "телеграм"]):
         return {}
@@ -547,6 +634,52 @@ def _schedule_from_text(lowered: str) -> Dict[str, str]:
             raw_hour += 12
         hour = f"{raw_hour:02d}:{minutes}"
     return {"time": hour or "09:00", "timezone": "business_timezone"}
+
+
+def _is_email_authoring_request(text: str) -> bool:
+    if _contains_any(text, ["письм", "почт", "рассыл"]):
+        return True
+    if "email" not in text:
+        return False
+    return _contains_any(text, ["напис", "подготов", "отправ", "черновик", "тема письма", "body"])
+
+
+def _is_customer_data_quality_request(text: str) -> bool:
+    if not _contains_any(text, ["клиент"]):
+        return False
+    return _contains_any(text, ["без телефона", "без email", "без e-mail", "источник прихода"])
+
+
+def _is_client_reactivation_request(text: str) -> bool:
+    if not _contains_any(text, ["клиент"]):
+        return False
+    return _contains_any(text, ["не записывал", "не записывались", "старых клиентов", "больше 60", "возврат"])
+
+
+def _is_localos_finance_monitoring_request(text: str) -> bool:
+    if _contains_any(text, ["счёт", "счет", "счета", "счёта", "неоплачен", "просрочен"]):
+        return True
+    if "предоплат" in text and not _contains_any(text, ["запис", "клиент"]):
+        return True
+    if _contains_any(text, ["расход", "траты", "трата", "трату", "финанс"]):
+        return True
+    return False
+
+
+def _is_partner_replies_request(text: str) -> bool:
+    return _contains_any(text, ["партн"]) and _contains_any(text, ["ответ", "отказ", "интерес", "ручной ответ"])
+
+
+def _is_review_location_analysis_request(text: str) -> bool:
+    if not _contains_any(text, ["отзыв", "review"]):
+        return False
+    return _contains_any(text, ["филиал", "точк", "сети", "рейтинг", "паден"])
+
+
+def _is_review_based_content_request(text: str) -> bool:
+    if not _contains_any(text, ["отзыв", "review"]):
+        return False
+    return _contains_any(text, ["идеи пост", "идея пост", "3 идеи", "три идеи", "постов", "контент"])
 
 
 def _source_binding(source: Dict[str, Any], trigger: str) -> Dict[str, Any]:

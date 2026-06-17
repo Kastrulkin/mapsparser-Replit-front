@@ -331,13 +331,17 @@ def _has_schedule_or_trigger(lowered: str) -> bool:
 
 
 def _looks_like_post_workflow(lowered: str) -> bool:
-    return any(marker in lowered for marker in ["пост", "сообщен", "telegram", "телеграм"])
+    if any(marker in lowered for marker in ["список", "дайджест", "разбор", "отчёт", "отчет", "счёт", "счет", "расход", "траты", "уведом"]):
+        return False
+    return "пост" in lowered or ("сообщен" in lowered and any(marker in lowered for marker in ["канал", "публикац", "контент"]))
 
 
 def _has_post_format(lowered: str) -> bool:
     if "отзыв" in lowered and "ответ" in lowered:
         return True
     if "присыла" in lowered and "ответ" in lowered:
+        return True
+    if any(marker in lowered for marker in ["список", "дайджест", "разбор", "отчёт", "отчет", "3 идеи", "три идеи"]):
         return True
     if "сообщ" in lowered:
         return True

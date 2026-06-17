@@ -1400,6 +1400,10 @@ const userFacingAgentTechText = (value?: string) => String(value || '')
   .replace(/needs_source_upload/gi, 'нужно добавить источник')
   .replace(/external_reviews/gi, 'отзывы')
   .replace(/business_profile/gi, 'профиль бизнеса')
+  .replace(/localos_digest/gi, 'дайджест LocalOS')
+  .replace(/outreach_drafts/gi, 'черновики сообщений партнёрам')
+  .replace(/\bclients\b/gi, 'клиенты')
+  .replace(/\blocations\b/gi, 'точки сети')
   .replace(/\bservices\b/gi, 'услуги')
   .replace(/collect inputs/gi, 'собрать входные данные')
   .replace(/extract context/gi, 'понять данные')
@@ -2140,8 +2144,11 @@ const metaLabels: Record<string, string> = {
   services: 'услуги',
   reviews: 'отзывы',
   external_reviews: 'отзывы',
+  clients: 'клиенты',
+  locations: 'точки сети',
+  localos_digest: 'дайджест LocalOS',
   prospectingleads: 'кандидаты',
-  outreach_drafts: 'черновики outreach',
+  outreach_drafts: 'черновики сообщений партнёрам',
   uploaded_documents: 'документы',
   uploaded_tables: 'таблицы',
   manual_context: 'ручной контекст',

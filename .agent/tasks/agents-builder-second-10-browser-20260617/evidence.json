@@ -1,0 +1,29 @@
+{
+  "task_id": "agents-builder-second-10-browser-20260617",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Browser-use exercises 10 new user scenarios and fixes confusing agent-builder behavior.",
+      "status": "PASS",
+      "proof": [],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/agent_blueprint_draft_builder.py",
+    "src/services/agent_builder_session.py",
+    "src/services/agent_openclaw_planner_loop.py",
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "tests/test_agent_blueprint_layer.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
+    "npm --prefix frontend run build",
+    "scripts/proof_loop.sh validate agents-builder-second-10-browser-20260617"
+  ],
+  "known_gaps": [
+    "No production data mutation was performed.",
+    "Two scenarios that were already correct in the first browser pass were covered by tests rather than repeated after deploy."
+  ]
+}
