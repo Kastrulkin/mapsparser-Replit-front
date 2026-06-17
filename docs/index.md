@@ -1,8 +1,12 @@
 # LocalOS Documentation
 
-LocalOS is an operating layer for local businesses: map presence, reviews, content, services, finance, locations, partnerships, and supervised automation.
+LocalOS is an operating layer for local businesses: map presence, reviews, content, services, finance, locations, partnerships, external integrations, and supervised automation.
 
 The product goal is profit growth: more customers, higher average ticket, repeat sales, cleaner financial tracking, better occupancy, and a clear path from diagnostics to action.
+
+Current implementation areas include card audits, parser reliability, Google Business Profile OAuth/sync/publishing endpoints, Yandex and 2GIS admin sync, Telegram/WhatsApp entrypoints, finance onboarding, content plans, supervised outreach, compiled AI-agent workflows, OpenClaw execution boundaries, approval queues, billing ledgers, and audit/recovery flows.
+
+External publishing, customer sends, payments, destructive changes, and actions made on behalf of a business in third-party systems require explicit human approval.
 
 This documentation has two layers:
 

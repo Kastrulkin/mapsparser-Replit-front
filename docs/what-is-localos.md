@@ -14,14 +14,18 @@ It is not only a map SEO tool. In the current codebase LocalOS includes:
 
 - public card audits and map diagnostics;
 - services and SEO wording optimization;
-- review reply drafts;
-- news and content-plan generation;
+- review reply drafts, manual publish workflows, and review history sync;
+- news, social post drafts, and network-aware content-plan operations;
 - finance onboarding, KPI tracking, imports, and CRM adapter scaffolding;
 - Telegram control surface and notifications;
-- Google Business Profile publishing endpoints;
+- Google Business Profile OAuth, location binding, sync, and publishing endpoints;
 - external account storage for map integrations;
-- partnership prospecting and supervised outreach;
+- partnership prospecting, shortlist management, supervised outreach, and delivery/reaction tracking;
 - AI agent webhooks for Telegram and WhatsApp;
+- Agent cockpit, compiled workflows, provider routes, run journals, billing ledgers, and approval queues;
+- OpenClaw / Action Orchestrator integration with LocalOS policy, audit, recovery, and human-in-the-loop boundaries;
+- Apify-backed Google/Apple/Yandex/2GIS parsing paths and parser reliability controls;
+- network dashboards, network-wide reviews, and multi-location content planning;
 - admin-managed industry patterns and prompts.
 
 ## Who It Helps
@@ -46,12 +50,15 @@ LocalOS turns scattered local-business work into supervised workflows:
 Confirmed areas:
 
 - map/card audits;
-- services, reviews, news and content workflows;
+- services, reviews, news, public materials, and content-plan workflows;
 - finance dashboard and import pipeline;
 - partnerships and prospecting workspace;
 - Telegram and WhatsApp AI-agent entrypoints;
-- Google Business Profile OAuth and publish endpoints;
+- Google Business Profile OAuth, sync, location binding, and publish endpoints;
 - Yandex and 2GIS sync/admin endpoints.
+- AI-agent builder/cockpit, compiled workflow runtime, connector route selection, run observability, approval queues, and billing ledgers.
+- supervised outreach through shortlist selection, draft approval, capped send batches, manual delivery status, and inbound reaction tracking.
+- parser reliability controls including proxy health gating, captcha retry caps, TTL/DLQ handling, and failure taxonomy.
 
 Not confirmed as a public contract:
 
@@ -59,5 +66,18 @@ Not confirmed as a public contract:
 - complete public OpenAPI spec for all endpoints;
 - automatic external publishing without approval;
 - payments initiated by agents.
+
+## Recent Product Additions
+
+The last three months of development shifted LocalOS from a card-audit tool toward a supervised operating system for local businesses:
+
+- agent workflows now use a compiled plan model with explicit capabilities, provider routes, connection preflight, versioning, preview runs, run journals, and approval queues;
+- OpenClaw is treated as the execution boundary, while LocalOS owns policy, human approval, billing, audit, support export, and recovery flows;
+- Google Business Profile support now covers OAuth, status, location selection, sync, review-reply publishing, and post publishing; the integration remains `beta / Google approval pending`;
+- outreach now includes lead sourcing/import, shortlist decisions, message drafts, approval, capped send batches, delivery tracking, and reaction/outcome classification;
+- content planning gained network modes, weekly/location filters, bulk actions, learning metrics, and quality signal prioritization;
+- finance gained onboarding analytics, KPI history, partial-data handling, CRM adapter scaffolding, average-ticket/upsell views, and approved apply flows for agents;
+- Telegram gained guest/client control flows, production proxy routing, refresh/retry commands, approvals, and agent binding guardrails;
+- parsing gained Apify-backed sources, proxy/captcha controls, retry caps, task TTL/DLQ, queue monitoring, and clearer failure classes.
 
 See [Documentation Gaps](DOCUMENTATION_GAPS.md).

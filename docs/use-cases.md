@@ -46,7 +46,7 @@ Status: `beta`
 
 Use when a business wants LocalOS to read or publish through external map systems.
 
-Confirmed code includes external account storage, Google Business OAuth, Google publish endpoints, Yandex sync/admin endpoints, and 2GIS sync/admin endpoints. Contract stability varies by provider.
+Confirmed code includes external account storage, Google Business Profile OAuth, location binding, sync, Google publish endpoints, Yandex sync/admin endpoints, and 2GIS sync/admin endpoints. Contract stability varies by provider. Google Business Profile remains `beta / Google approval pending`.
 
 ## 7. Manage Multiple Locations
 
@@ -79,3 +79,19 @@ Status: `available/internal`
 Use when LocalOS learns from successful businesses and proposes new service/news/review patterns.
 
 Pattern proposals require superadmin human-in-the-loop approval before activation.
+
+## 11. Build Supervised AI Agents
+
+Status: `beta`
+
+Use when a business or operator wants repeatable automation with approvals, connection checks, billing, and audit.
+
+LocalOS supports agent creation, compiled workflow previews, provider route selection, datahub sources, connector activation gates, run journals, approval queues, billing ledgers, and controlled execution through LocalOS/OpenClaw boundaries. Agents must not bypass approval for external sends, publications, payments, destructive changes, or third-party actions on behalf of a business.
+
+## 12. Monitor Parser Reliability
+
+Status: `available/internal`
+
+Use when map data refreshes fail, hit captcha, return partial payloads, or need safe retry decisions.
+
+LocalOS tracks parse queue state, failure taxonomy, captcha and retry signals, TTL/DLQ handling, proxy health, provider cost settlement boundaries, and refresh recovery actions. Recovery flows are explicit and do not silently mutate external providers.

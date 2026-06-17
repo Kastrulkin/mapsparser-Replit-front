@@ -1,5 +1,9 @@
 # Чеклист для публикации BeautyBot в ChatGPT App Store
 
+> Legacy draft, 2025-12-26. This checklist belongs to the older BeautyBot ChatGPT App Store concept for salon search/booking. It is not the current LocalOS launch checklist or project description.
+>
+> Current LocalOS docs must not imply unsupported autonomous booking, external publishing, payments, or third-party writes. Use [`README.md`](../README.md), [`PRODUCT.md`](../PRODUCT.md), [`docs/what-is-localos.md`](./what-is-localos.md), [`docs/index.md`](./index.md), and [`docs/integrations.md`](./integrations.md) as current sources.
+
 ## ✅ Технические требования
 
 ### API Endpoints
@@ -169,5 +173,4 @@
 **Статус**: Готово к тестированию  
 **Дата**: 26 декабря 2025  
 **Версия**: 1.0.0
-
 

@@ -1,5 +1,15 @@
 # BeautyBot - Поиск и бронирование салонов красоты через ChatGPT
 
+> Legacy draft, 2025-12-26. This file describes an older ChatGPT App Store concept for BeautyBot as a salon search/booking assistant. It is not the current LocalOS product description.
+>
+> Current source of truth:
+> - [`README.md`](../README.md)
+> - [`PRODUCT.md`](../PRODUCT.md)
+> - [`docs/what-is-localos.md`](./what-is-localos.md)
+> - [`docs/index.md`](./index.md)
+>
+> Current LocalOS scope is broader: map presence, reviews, services, posts, finance, locations, partnerships, Google Business Profile, Telegram/WhatsApp, supervised AI agents, OpenClaw execution boundaries, approvals, billing, audit, and recovery. Do not use this legacy draft for current external positioning without rewriting it.
+
 ## Описание для ChatGPT App Store
 
 **BeautyBot** — это интеллектуальный помощник для поиска и бронирования салонов красоты, парикмахерских и косметологических центров. Приложение использует AI для персонализированного поиска салонов на основе ваших предпочтений, местоположения и бюджета.
@@ -103,5 +113,4 @@ ChatGPT: Отлично! Бронирование создано:
 **Версия**: 1.0.0  
 **Дата публикации**: 26 декабря 2025  
 **Категория**: Красота и здоровье, Бронирование
-
 

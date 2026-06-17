@@ -1,5 +1,9 @@
 # Инструкция по настройке BeautyBot для ChatGPT
 
+> Legacy draft, 2025-12-26. This setup guide belongs to the older BeautyBot ChatGPT App Store concept for salon search/booking. It is not the current LocalOS setup guide and should not be used as the main project description.
+>
+> For the current product description and integration status, use [`README.md`](../README.md), [`PRODUCT.md`](../PRODUCT.md), [`docs/what-is-localos.md`](./what-is-localos.md), [`docs/index.md`](./index.md), and [`docs/integrations.md`](./integrations.md).
+
 ## Для владельцев салонов красоты
 
 ### Шаг 1: Регистрация и создание бизнеса
@@ -169,5 +173,4 @@
 
 **Версия инструкции**: 1.0.0  
 **Дата обновления**: 26 декабря 2025
-
 
