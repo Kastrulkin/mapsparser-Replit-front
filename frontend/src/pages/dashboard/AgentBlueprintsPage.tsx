@@ -2222,6 +2222,82 @@ const explainApproval = (approval?: AgentApproval | null) => {
   return 'Агент остановился на безопасной границе и ждёт решение человека.';
 };
 
+const approvalActionLabels = (approval?: AgentApproval | null) => {
+  const approvalType = approval?.approval_type || '';
+  if (approvalType === 'external_delivery' || approvalType === 'send_batch') {
+    return {
+      approve: 'Разрешить отправку подготовленных сообщений.',
+      reject: 'Не отправлять сообщения и вернуть агенту задачу на правку.',
+    };
+  }
+  if (approvalType === 'final_output') {
+    return {
+      approve: 'Разрешить использовать подготовленный результат в следующем шаге агента.',
+      reject: 'Не использовать этот результат и оставить агент остановленным.',
+    };
+  }
+  if (approvalType === 'shortlist') {
+    return {
+      approve: 'Передать выбранный список в следующий шаг работы.',
+      reject: 'Остановить работу с этим списком и уточнить отбор.',
+    };
+  }
+  if (approvalType === 'drafts') {
+    return {
+      approve: 'Принять черновики для следующего шага.',
+      reject: 'Не использовать черновики и отправить их на правку.',
+    };
+  }
+  return {
+    approve: 'Разрешить агенту использовать текущий результат и перейти только к следующему безопасному шагу.',
+    reject: 'Не использовать текущий результат и оставить агента остановленным.',
+  };
+};
+
+const getApprovalPreviewItems = (approval?: AgentApproval | null) => {
+  const payload = approval?.payload_json || {};
+  const items: Array<{ label: string; value: string }> = [];
+  const addValue = (label: string, value: unknown) => {
+    const text = userFacingAgentTechText(formatPayloadValue(value)).trim();
+    if (text && !items.some((item) => item.label === label && item.value === text)) {
+      items.push({ label, value: text });
+    }
+  };
+  addValue('Что подготовил агент', payload.summary || payload.result_summary || payload.output_summary || payload.message_summary || payload.title);
+  addValue('Черновик / результат', payload.draft_text || payload.reply || payload.message || payload.text || payload.output || payload.result);
+  addValue('Что будет дальше', payload.next_step || payload.action || payload.delivery_state || payload.publish_state);
+  if (Array.isArray(payload.reply_drafts) && payload.reply_drafts.length) {
+    addValue('Черновики ответов', payload.reply_drafts);
+  }
+  if (Array.isArray(payload.drafts) && payload.drafts.length) {
+    addValue('Черновики', payload.drafts);
+  }
+  if (Array.isArray(payload.items) && payload.items.length) {
+    addValue('Элементы', payload.items);
+  }
+  if (Array.isArray(payload.manual_review_reasons) && payload.manual_review_reasons.length) {
+    addValue('Почему нужна проверка', payload.manual_review_reasons);
+  }
+  return items.slice(0, 4);
+};
+
+const approvalDecisionTitle = (approval?: AgentApproval | null) => {
+  const approvalType = approval?.approval_type || '';
+  if (approvalType === 'external_delivery' || approvalType === 'send_batch') {
+    return 'Разрешить внешнюю отправку?';
+  }
+  if (approvalType === 'final_output') {
+    return 'Можно использовать подготовленный результат?';
+  }
+  if (approvalType === 'shortlist') {
+    return 'Утвердить список для дальнейшей работы?';
+  }
+  if (approvalType === 'drafts') {
+    return 'Утвердить черновики?';
+  }
+  return 'Можно использовать текущий результат агента?';
+};
+
 const getAgentListStatus = (blueprint: AgentBlueprint) => {
   if (Number(blueprint.pending_approvals_count || 0) > 0 || blueprint.last_run_status === 'waiting_approval') {
     return 'needs_approval';
@@ -6777,12 +6853,11 @@ const AgentDetailPanel = ({
         </p>
       </div>
       <div className="mt-4 flex max-w-full flex-wrap gap-2">
-        <Button type="button" size="sm" className="shrink-0" variant={mode === 'overview' ? 'default' : 'outline'} onClick={() => onModeChange('overview')}>Обзор</Button>
+        <Button type="button" size="sm" className="shrink-0" variant={mode === 'overview' ? 'default' : 'outline'} onClick={() => onModeChange('overview')}>Сейчас</Button>
         <Button type="button" size="sm" className="shrink-0" variant={mode === 'settings' ? 'default' : 'outline'} onClick={() => onModeChange('settings')}>Логика</Button>
-        <Button type="button" size="sm" className="shrink-0" variant={mode === 'run' ? 'default' : 'outline'} onClick={() => onModeChange('run')}>Запуски</Button>
-        <Button type="button" size="sm" className="shrink-0" variant={mode === 'results' ? 'default' : 'outline'} onClick={() => onModeChange('results')}>Обучение</Button>
-        <Button type="button" size="sm" className="shrink-0" variant={mode === 'connections' ? 'default' : 'outline'} onClick={() => onModeChange('connections')}>Подключения</Button>
-        <Button type="button" size="sm" className="shrink-0" variant={mode === 'voice' ? 'default' : 'outline'} onClick={() => onModeChange('voice')}>Голос и стиль</Button>
+        <Button type="button" size="sm" className="shrink-0" variant={mode === 'connections' ? 'default' : 'outline'} onClick={() => onModeChange('connections')}>Данные</Button>
+        <Button type="button" size="sm" className="shrink-0" variant={mode === 'run' ? 'default' : 'outline'} onClick={() => onModeChange('run')}>Запуск</Button>
+        <Button type="button" size="sm" className="shrink-0" variant={mode === 'results' ? 'default' : 'outline'} onClick={() => onModeChange('results')}>Результат</Button>
         {showAdvancedTools ? (
           <Button type="button" size="sm" className="shrink-0" variant={mode === 'advanced' ? 'default' : 'outline'} onClick={() => onModeChange('advanced')}>Техническое</Button>
         ) : null}
@@ -6941,16 +7016,14 @@ const AgentDetailPanel = ({
             onActivateVersion={onActivateVersion}
           />
         ) : null}
-        {blueprint.category === 'outreach' ? (
-          <OutreachRunProgress review={agentReview} activeRun={activeRun} />
-        ) : (
-          <GenericRunProgress
-            category={blueprint.category}
-            review={agentReview}
-            activeRun={activeRun}
-            pendingApproval={pendingApproval}
+        {pendingApproval ? (
+          <AgentApprovalDecisionPanel
+            approval={pendingApproval}
+            actionLoading={actionLoading}
+            onApprove={onApprove}
+            onReject={onReject}
           />
-        )}
+        ) : null}
         {queuedButNotDispatched ? (
           <DashboardActionPanel
             title="Поставлено в очередь, но не отправлено"
@@ -6958,19 +7031,23 @@ const AgentDetailPanel = ({
             tone="amber"
           />
         ) : null}
-        {pendingApproval ? (
-          <DashboardActionPanel
-            title="Ждёт решения"
-            description={`${pendingApproval.title}. ${explainApproval(pendingApproval)}`}
-            tone="amber"
-            actions={(
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" onClick={onApprove} disabled={actionLoading}>Принять</Button>
-                <Button type="button" variant="outline" onClick={onReject} disabled={actionLoading}>Отклонить</Button>
-              </div>
+        <details className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+            Как агент дошёл до результата
+          </summary>
+          <div className="mt-4">
+            {blueprint.category === 'outreach' ? (
+              <OutreachRunProgress review={agentReview} activeRun={activeRun} />
+            ) : (
+              <GenericRunProgress
+                category={blueprint.category}
+                review={agentReview}
+                activeRun={activeRun}
+                pendingApproval={pendingApproval}
+              />
             )}
-          />
-        ) : null}
+          </div>
+        </details>
         <details className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
           <summary className="cursor-pointer text-sm font-semibold text-slate-700">
             Журнал и подробности
@@ -7015,6 +7092,75 @@ const AgentDetailPanel = ({
     ) : null}
     </div>
   </DashboardSection>
+  );
+};
+
+const AgentApprovalDecisionPanel = ({
+  approval,
+  actionLoading,
+  onApprove,
+  onReject,
+  compact = false,
+}: {
+  approval: AgentApproval;
+  actionLoading: boolean;
+  onApprove?: () => void;
+  onReject?: () => void;
+  compact?: boolean;
+}) => {
+  const labels = approvalActionLabels(approval);
+  const previewItems = getApprovalPreviewItems(approval);
+  return (
+    <div className={cn(
+      'rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-amber-950',
+      compact ? 'text-sm' : '',
+    )}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold uppercase tracking-wide text-amber-700">Нужно решение человека</div>
+          <h3 className="mt-1 text-lg font-semibold leading-7 text-slate-950">
+            {approvalDecisionTitle(approval)}
+          </h3>
+          <div className="mt-2 text-sm leading-6 text-amber-900">
+            {approval.title}. {explainApproval(approval)}
+          </div>
+        </div>
+        {onApprove && onReject ? (
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button type="button" onClick={onApprove} disabled={actionLoading}>
+              Принять
+            </Button>
+            <Button type="button" variant="outline" onClick={onReject} disabled={actionLoading}>
+              Отклонить
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      {previewItems.length ? (
+        <div className="mt-4 grid gap-2 lg:grid-cols-2">
+          {previewItems.map((item) => (
+            <div key={`${item.label}-${item.value}`} className="rounded-xl bg-white/85 px-3 py-2 text-sm leading-6 text-slate-800 ring-1 ring-amber-100">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</div>
+              <div className="mt-1 line-clamp-4">{item.value}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl bg-white/85 px-3 py-2 text-sm leading-6 text-slate-800 ring-1 ring-amber-100">
+          <span className="font-semibold text-slate-950">Что просит агент: </span>{approval.title}. Агент не использует этот результат дальше, пока человек явно не примет решение.
+        </div>
+      )}
+
+      <div className="mt-4 grid gap-2 md:grid-cols-2">
+        <div className="rounded-xl bg-white/85 px-3 py-2 text-sm leading-6 text-slate-800 ring-1 ring-amber-100">
+          <span className="font-semibold text-slate-950">Если нажать “Принять”: </span>{labels.approve}
+        </div>
+        <div className="rounded-xl bg-white/85 px-3 py-2 text-sm leading-6 text-slate-800 ring-1 ring-amber-100">
+          <span className="font-semibold text-slate-950">Если нажать “Отклонить”: </span>{labels.reject}
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -7096,13 +7242,24 @@ const AgentOverviewPanel = ({
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-slate-950">Ждёт решения человека</div>
+            <div className="text-sm font-semibold text-slate-950">
+              {pendingApproval ? approvalDecisionTitle(pendingApproval) : 'Ждёт решения человека'}
+            </div>
             <div className="mt-1 text-sm leading-6 text-amber-900">
-              Проверьте ручное решение: без него агент не продолжит внешний шаг.
+              {pendingApproval
+                ? explainApproval(pendingApproval)
+                : 'Проверьте ручное решение: без него агент не продолжит внешний шаг.'}
             </div>
             {pendingApproval ? (
-              <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
-                {pendingApproval.title}: {explainApproval(pendingApproval)}
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                {getApprovalPreviewItems(pendingApproval).slice(0, 2).map((item) => (
+                  <div key={`${item.label}-${item.value}`} className="rounded-xl bg-white/80 px-3 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
+                    <span className="font-semibold text-slate-800">{item.label}: </span>{item.value}
+                  </div>
+                ))}
+                <div className="rounded-xl bg-white/80 px-3 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
+                  <span className="font-semibold text-slate-800">При “Принять”: </span>{approvalActionLabels(pendingApproval).approve}
+                </div>
               </div>
             ) : null}
           </div>

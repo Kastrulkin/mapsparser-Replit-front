@@ -1,0 +1,29 @@
+{
+  "task_id": "agents-ui-simplification-20260617",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Simplify /dashboard/agents around one next step, concrete approvals, hidden details, simplified tabs, and a calmer creation first layer.",
+      "status": "PASS",
+      "proof": [
+        "Pending approval panel asks a concrete decision question and explains accept/reject consequences.",
+        "Result tab is renamed from training-style copy and hidden details are placed under disclosure sections.",
+        "Production build and deploy succeeded; browser verification found the expected decision copy and no console errors."
+      ],
+      "gaps": [
+        "Full route-level wizard split remains a larger follow-up; current dialog first layer is simplified without backend contract changes."
+      ]
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx"
+  ],
+  "commands_for_fresh_verifier": [
+    "cd frontend && npm run build",
+    "open https://localos.pro/dashboard/agents, select an agent with pending approval, open Result, verify the concrete decision panel and collapsed details"
+  ],
+  "known_gaps": [
+    "No backend or database changes were needed for this UI simplification."
+  ]
+}

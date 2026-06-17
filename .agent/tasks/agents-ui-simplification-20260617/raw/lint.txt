@@ -1,0 +1,1 @@
+not run: project has no dedicated lint gate for this frontend-only check
