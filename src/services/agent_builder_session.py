@@ -2156,8 +2156,12 @@ def _default_output_format(category: str) -> str:
         "tables": "Отчёт по таблице: summary, exceptions, rows_to_review.",
         "reviews": "Черновики ответов и причины ручной проверки.",
         "outreach": "Shortlist, черновики сообщений и approval gates.",
+        "partnerships": "Shortlist партнёров, черновики сообщений и ручные подтверждения.",
+        "booking": "Список записей, напоминания и решения для проверки человеком.",
+        "services": "Проверка услуг: пустые описания, слабые названия, цены и рекомендации.",
+        "custom": "Готовый результат по задаче: сообщение, список действий или черновик для проверки.",
     }
-    return formats.get(category, "Структурированный результат для review.")
+    return formats.get(category, "Готовый результат по задаче: сообщение, список действий или черновик для проверки.")
 
 
 def _category_label(category: str) -> str:
@@ -2169,8 +2173,9 @@ def _category_label(category: str) -> str:
         "reviews": "Агент отзывов",
         "outreach": "Агент поиска клиентов",
         "partnerships": "Агент партнёрств",
-        "booking": "Агент бронирования",
+        "booking": "Агент записей",
         "services": "Агент услуг",
+        "custom": "Кастомный агент",
     }
     return labels.get(category, "Кастомный агент")
 

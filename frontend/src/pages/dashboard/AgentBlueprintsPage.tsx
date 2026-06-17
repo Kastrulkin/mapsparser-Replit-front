@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
   Activity,
@@ -1447,8 +1447,23 @@ const autoSelectBuilderConnectionBindings = (preview?: AgentBuilderPreview | nul
   return selected;
 };
 
-const autoSelectBuilderProviderRoutes = (_preview?: AgentBuilderPreview | null): Record<string, string> => {
-  return {};
+const autoSelectBuilderProviderRoutes = (preview?: AgentBuilderPreview | null): Record<string, string> => {
+  const selected: Record<string, string> = {};
+  const select = (key?: string, route?: AgentProviderRoute | null) => {
+    const bindingKey = String(key || '').trim();
+    const provider = String(route?.provider || '').trim();
+    if (!bindingKey || !provider || !builderRouteIsUsable(route)) {
+      return;
+    }
+    selected[bindingKey] = provider;
+  };
+  (preview?.connection_readiness?.services || []).forEach((service) => {
+    select(service.key, service.recommended_route || null);
+  });
+  (preview?.connection_plan?.items || []).forEach((item) => {
+    select(item.key, item.recommended_route || null);
+  });
+  return selected;
 };
 
 const builderRouteIsUsable = (route?: AgentProviderRoute | null): boolean => {
@@ -1679,8 +1694,8 @@ const buildBuilderCreationDecision = ({
   if (missingProviderRouteKeys.length) {
     return {
       tone: 'choice',
-      title: 'Выберите способы подключения',
-      description: `Выберите способ подключения для шагов: ${missingProviderRouteKeys.join(', ')}.`,
+      title: 'Выберите способ доставки',
+      description: `LocalOS нашёл безопасный вариант, но нужно выбрать способ для: ${missingProviderRouteKeys.map((item) => userFacingAgentTechText(humanizeMeta(item))).join(', ')}.`,
       action: 'choose',
       cta: 'Выбрать ниже',
       bindingKey: missingProviderRouteKeys[0] || '',
@@ -2942,29 +2957,30 @@ export const AgentBlueprintsPage = () => {
         message: dialogBuilderInput.trim(),
         use_ai_compiler: true,
       });
+      const preview = response.data?.session?.preview || null;
+      const autoProviderRoutes = autoSelectBuilderProviderRoutes(preview);
       setDialogBuilderSession(response.data?.session || null);
-      setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(response.data?.session?.preview || null));
-      setSelectedBuilderProviderRoutes(autoSelectBuilderProviderRoutes(response.data?.session?.preview || null));
+      setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(preview));
+      setSelectedBuilderProviderRoutes(autoProviderRoutes);
       setAcceptedBuilderCompilerPlan(false);
-      setAcceptedBuilderProviderRoutes(false);
+      setAcceptedBuilderProviderRoutes(Object.keys(autoProviderRoutes).length > 0);
       setAgentPrompt(dialogBuilderInput.trim());
-      const preview = response.data?.session?.preview || {};
-      if (typeof preview.category === 'string') {
+      if (preview && typeof preview.category === 'string') {
         setBuilderCategory(preview.category);
       }
-      if (Array.isArray(preview.data_sources)) {
+      if (preview && Array.isArray(preview.data_sources)) {
         setBuilderDataSources(preview.data_sources.join(', '));
       }
-      if (typeof preview.extraction_rules === 'string') {
+      if (preview && typeof preview.extraction_rules === 'string') {
         setBuilderExtractionRules(preview.extraction_rules);
       }
-      if (typeof preview.processing_rules === 'string') {
+      if (preview && typeof preview.processing_rules === 'string') {
         setBuilderProcessingRules(preview.processing_rules);
       }
-      if (typeof preview.output_format === 'string') {
+      if (preview && typeof preview.output_format === 'string') {
         setBuilderOutputFormat(preview.output_format);
       }
-      if (typeof preview.manual_control === 'string') {
+      if (preview && typeof preview.manual_control === 'string') {
         setBuilderManualControl(preview.manual_control);
       }
     } catch (requestError) {
@@ -2986,11 +3002,13 @@ export const AgentBlueprintsPage = () => {
         message: dialogBuilderReply.trim(),
         use_ai_compiler: true,
       });
+      const preview = response.data?.session?.preview || null;
+      const autoProviderRoutes = autoSelectBuilderProviderRoutes(preview);
       setDialogBuilderSession(response.data?.session || null);
-      setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(response.data?.session?.preview || null));
-      setSelectedBuilderProviderRoutes(autoSelectBuilderProviderRoutes(response.data?.session?.preview || null));
+      setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(preview));
+      setSelectedBuilderProviderRoutes(autoProviderRoutes);
       setAcceptedBuilderCompilerPlan(false);
-      setAcceptedBuilderProviderRoutes(false);
+      setAcceptedBuilderProviderRoutes(Object.keys(autoProviderRoutes).length > 0);
       setDialogBuilderReply('');
     } catch (requestError) {
       console.error(requestError);
@@ -3724,7 +3742,30 @@ export const AgentBlueprintsPage = () => {
         )}
       />
 
-      <Dialog open={createWizardOpen} onOpenChange={setCreateWizardOpen}>
+      <Dialog open={createWizardOpen} onOpenChange={(open) => {
+        setCreateWizardOpen(open);
+        if (!open && !actionLoading) {
+          setDialogBuilderInput('');
+          setDialogBuilderReply('');
+          setDialogBuilderSession(null);
+          setSelectedBuilderConnectionBindings({});
+          setSelectedBuilderProviderRoutes({});
+          setAcceptedBuilderCompilerPlan(false);
+          setAcceptedBuilderProviderRoutes(false);
+          setAgentPrompt('');
+          setCreateWizardStep(0);
+          setBuilderCategory('documents');
+          setBuilderDataSources('файл документа, ручной контекст, профиль бизнеса');
+          setBuilderExtractionRules('ключевые условия, сроки, суммы, ответственность, спорные места');
+          setBuilderProcessingRules('не придумывать факты, ссылаться только на добавленные данные, отдельно показывать риски');
+          setBuilderOutputFormat('краткий отчёт: summary, риски, что уточнить, черновик письма при необходимости');
+          setBuilderManualControl('перед использованием результата и перед любым внешним действием');
+          setBuilderSourceName('');
+          setBuilderSourceText('');
+          setBuilderFileSource(null);
+          setBuilderInternalSource('business_profile');
+        }
+      }}>
         <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>Создать агента</DialogTitle>
@@ -4529,6 +4570,8 @@ const DialogAgentBuilder = ({
   onSelectProviderRoute: (bindingKey: string, routeProvider: string) => void;
 }) => {
   const preview = session?.preview || null;
+  const nextStepRef = useRef<HTMLDivElement | null>(null);
+  const previousMessageCountRef = useRef(0);
   const questions = session?.missing_questions || [];
   const messages = session?.messages || [];
   const estimatedCredits = Number(preview?.cost_preview?.estimated_credits || 0);
@@ -4567,7 +4610,7 @@ const DialogAgentBuilder = ({
     addCreateBlocker('compiler_plan_confirmation', 'Подтвердите план перед созданием агента.');
   }
   if (missingProviderRouteKeys.length) {
-    addCreateBlocker('provider_route_selection', `Выберите способ подключения для шагов: ${missingProviderRouteKeys.join(', ')}.`);
+    addCreateBlocker('provider_route_selection', `Выберите способ доставки для: ${missingProviderRouteKeys.map((item) => userFacingAgentTechText(humanizeMeta(item))).join(', ')}.`);
   } else if (missingProviderRouteConfirmation) {
     addCreateBlocker('provider_route_confirmation', 'Подтвердите выбранные способы подключения.');
   }
@@ -4585,7 +4628,7 @@ const DialogAgentBuilder = ({
     : missingConnectionChoices.length
       ? 'Сначала выберите подключение'
       : missingProviderRouteKeys.length
-        ? 'Сначала выберите способы'
+        ? 'Сначала выберите способ'
         : missingProviderRouteConfirmation
           ? 'Подтвердите способы'
           : preview?.setup_flow?.post_create_status === 'needs_connection' || preview?.setup_flow?.post_create_status === 'needs_connection_choice'
@@ -4620,6 +4663,16 @@ const DialogAgentBuilder = ({
     : canCreateDraft
       ? createDraftLabel
       : builderDecision.cta || 'Продолжить настройку';
+  useEffect(() => {
+    const messageCount = messages.length;
+    if (!session || messageCount === previousMessageCountRef.current) {
+      return;
+    }
+    previousMessageCountRef.current = messageCount;
+    window.setTimeout(() => {
+      nextStepRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }, 50);
+  }, [messages.length, session]);
   return (
     <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
@@ -4631,7 +4684,7 @@ const DialogAgentBuilder = ({
         />
         <Button type="button" onClick={onStart} disabled={actionLoading || !input.trim()}>
           {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-          Начать диалог
+          {session ? 'Обновить понимание' : 'Начать диалог'}
         </Button>
       </div>
 
@@ -4640,7 +4693,7 @@ const DialogAgentBuilder = ({
           <div className={cn(
             'rounded-2xl border px-4 py-4',
             canCreateDraft ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50',
-          )}>
+          )} ref={nextStepRef}>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <div className={cn('text-xs font-semibold uppercase', canCreateDraft ? 'text-emerald-700' : 'text-amber-700')}>
@@ -4699,7 +4752,7 @@ const DialogAgentBuilder = ({
               <div className="px-1 pb-1">
                 <div className="text-sm font-semibold text-slate-950">Выберите способ работы агента</div>
                 <div className="mt-1 text-xs leading-5 text-slate-600">
-                  Это обязательный шаг перед созданием: LocalOS должен явно знать, через какой безопасный канал читать данные или доставлять результат.
+                  Это обязательный шаг перед созданием: LocalOS должен явно знать, через какой безопасный канал читать данные или доставлять результат. Рекомендованный способ уже выбран, если подходит только один вариант.
                 </div>
               </div>
               <BuilderRequiredConnectionsPanel
@@ -5183,7 +5236,7 @@ const builderConnectionCardHint = (action: string, provider: string) => {
     return 'У бизнеса есть несколько подходящих подключений. Выберите одно для этого агента.';
   }
   if (action === 'choose_route') {
-    return 'Выберите способ подключения: существующий доступ, защищенный способ LocalOS, Maton.ai или ручной режим.';
+    return 'Выберите, как агенту безопасно доставлять результат или получать данные. Обычно подходит рекомендованный способ LocalOS.';
   }
   if (action === 'connect_required') {
     return `${connectorLabel(provider)} нужен агенту, но доступ ещё не выбран.`;
