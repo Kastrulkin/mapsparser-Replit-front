@@ -256,8 +256,12 @@ def _uses_default_localos_telegram(lowered: str) -> bool:
         "мне в telegram",
         "в мой телеграм",
         "в мой telegram",
+        "владельцу в telegram",
+        "владельцу в телеграм",
+        "менеджеру в telegram",
+        "менеджеру в телеграм",
     ]
-    if "мне" in lowered and ("телеграм" in lowered or "telegram" in lowered) and any(marker in lowered for marker in ["шл", "отправ", "присыла", "сообщен"]):
+    if any(owner in lowered for owner in ["мне", "владельцу", "менеджеру"]) and ("телеграм" in lowered or "telegram" in lowered) and any(marker in lowered for marker in ["шл", "отправ", "присыла", "сообщен", "уведом"]):
         return True
     return any(marker in lowered for marker in bot_markers) or any(marker in lowered for marker in direct_markers)
 

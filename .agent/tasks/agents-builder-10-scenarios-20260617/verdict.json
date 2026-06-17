@@ -1,0 +1,43 @@
+{
+  "task_id": "agents-builder-10-scenarios-20260617",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "All 10 scenarios have a regression test and manual builder output inspection."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Cross-domain lead/prospectingleads questions are blocked for non-outreach scenarios."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Telegram scheduled scenarios use Telegram delivery connection flow."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Google Sheets and finance scenarios preserve required source questions."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Agent tests and frontend build passed."
+    }
+  ],
+  "commands_run": [
+    "PYTHONPATH=src venv/bin/python - <<'PY' ... build_agent_builder_state for 10 prompts ... PY",
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py::test_agent_builder_understands_core_user_scenarios_without_cross_domain_questions -q",
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
+    "cd frontend && npm run build"
+  ],
+  "artifacts_used": [
+    "tests/test_agent_blueprint_layer.py",
+    "src/services/agent_blueprint_draft_builder.py",
+    "src/services/agent_builder_session.py",
+    "src/services/agent_openclaw_planner_loop.py"
+  ]
+}

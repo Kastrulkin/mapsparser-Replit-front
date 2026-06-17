@@ -1361,6 +1361,109 @@ def test_agent_builder_does_not_treat_scheduled_telegram_message_as_outreach():
     assert "prospectingleads" not in questions_text
 
 
+def test_agent_builder_understands_core_user_scenarios_without_cross_domain_questions():
+    from services.agent_builder_session import build_agent_builder_state
+
+    scenarios = [
+        (
+            "reviews_to_telegram",
+            "Проверять новые отзывы каждый день, готовить черновик ответа и присылать отзыв + ответ владельцу в Telegram.",
+            "custom",
+            ["external_reviews", "telegram"],
+            ["telegram_destination"],
+            ["лид", "prospectingleads", "где искать клиентов"],
+        ),
+        (
+            "daily_reminder",
+            "Каждое утро в 9:00 отправлять владельцу короткое сообщение или чеклист дня в Telegram.",
+            "custom",
+            ["manual_context", "telegram"],
+            ["telegram_destination"],
+            ["лид", "prospectingleads", "где искать клиентов"],
+        ),
+        (
+            "sheets_to_telegram",
+            "Раз в день брать новую строку из Google Sheets и отправлять по ней краткое сообщение в Telegram.",
+            "custom",
+            ["google_sheets", "telegram"],
+            ["google_sheets_target"],
+            ["лид", "prospectingleads", "где искать клиентов"],
+        ),
+        (
+            "orders_without_status",
+            "Проверять таблицу заказов, находить заказы без статуса или ответственного и присылать список менеджеру.",
+            "tables",
+            ["uploaded_tables"],
+            [],
+            ["лид", "prospectingleads"],
+        ),
+        (
+            "negative_reviews",
+            "Отслеживать отзывы с оценкой 1-3, срочно уведомлять владельца и готовить аккуратный черновик ответа без обещаний скидок.",
+            "reviews",
+            ["external_reviews"],
+            [],
+            ["агент услуг", "prospectingleads", "где искать клиентов"],
+        ),
+        (
+            "map_content_plan",
+            "Раз в неделю предлагать 3 темы постов для карточек на картах на основе услуг, сезона и отзывов.",
+            "custom",
+            ["manual_context", "business_profile"],
+            [],
+            ["где искать клиентов", "какие лиды"],
+        ),
+        (
+            "services_check",
+            "Раз в неделю смотреть услуги в карточке бизнеса и находить пустые описания, плохие названия или отсутствующие цены.",
+            "services",
+            ["services"],
+            [],
+            ["где искать клиентов", "какие лиды"],
+        ),
+        (
+            "finance_import",
+            "Читать таблицу расходов, находить новые строки, нормализовать категории и готовить их к добавлению в финансы LocalOS после подтверждения.",
+            "custom",
+            ["google_sheets", "localos_finance"],
+            ["google_sheets_target"],
+            ["где искать клиентов", "какие лиды"],
+        ),
+        (
+            "partner_search",
+            "Найти потенциальных партнёров в городе, собрать shortlist, подготовить первое сообщение и ждать ручного подтверждения перед отправкой.",
+            "partnerships",
+            ["prospectingleads", "services"],
+            [],
+            ["где искать клиентов", "какие лиды"],
+        ),
+        (
+            "booking_control",
+            "Каждый день проверять ближайшие записи клиентов и готовить напоминания, но отправлять только после подтверждения человека.",
+            "communications",
+            ["appointments"],
+            [],
+            ["где искать клиентов", "prospectingleads"],
+        ),
+    ]
+
+    for key, prompt, expected_category, expected_sources, expected_question_keys, forbidden_question_terms in scenarios:
+        state = build_agent_builder_state([{"role": "user", "content": prompt}])
+        preview = state["preview"]
+        questions = state["missing_questions"]
+        question_keys = {str(item.get("key") or "") for item in questions}
+        questions_text = " ".join(str(item.get("question") or "") for item in questions).lower()
+        sources = set(preview["data_sources"])
+
+        assert state["category"] == expected_category, key
+        for source in expected_sources:
+            assert source in sources, key
+        for question_key in expected_question_keys:
+            assert question_key in question_keys, key
+        for term in forbidden_question_terms:
+            assert term not in questions_text, key
+
+
 def test_agent_feasibility_resolver_reports_ready_missing_choice_and_forbidden():
     from services.agent_feasibility_resolver import resolve_agent_feasibility
 

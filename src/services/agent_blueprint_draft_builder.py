@@ -27,6 +27,8 @@ def infer_blueprint_category(description: str) -> str:
     text = description.lower()
     if _infer_integration_intent(text):
         return "custom"
+    if _contains_any(text, ["контент-план", "темы постов", "тема пост", "постов для карточ", "посты для карточ"]):
+        return "custom"
     if _contains_any(
         text,
         [
@@ -53,12 +55,14 @@ def infer_blueprint_category(description: str) -> str:
         return "email"
     if _contains_any(text, ["таблиц", "xlsx", "excel", "csv", "строк"]):
         return "tables"
-    if _contains_any(text, ["лид", "lead", "shortlist", "найди клиентов", "поиск клиентов", "outreach"]):
-        return "outreach"
     if _contains_any(text, ["отзыв", "review", "ответ"]):
         return "reviews"
     if _contains_any(text, ["партн", "предложен", "коллаб"]):
         return "partnerships"
+    if _contains_any(text, ["услуг", "сервис", "пустые описан", "названия", "отсутствующие цены"]):
+        return "services"
+    if _contains_any(text, ["лид", "lead", "shortlist", "найди клиентов", "поиск клиентов", "outreach"]):
+        return "outreach"
     return "custom"
 
 
@@ -405,13 +409,13 @@ def _intent_from_llm_result(ai_result: Dict[str, Any]) -> Dict[str, Any]:
 
 def _infer_integration_intent(description: str) -> Dict[str, Any]:
     lowered = description.lower()
-    direct_telegram_delivery = _direct_telegram_delivery_intent(lowered)
-    if direct_telegram_delivery:
-        return direct_telegram_delivery
+    review_telegram_delivery = _review_telegram_delivery_intent(lowered)
+    if review_telegram_delivery:
+        return review_telegram_delivery
     if (
         _contains_any(lowered, ["google sheets", "google таблиц", "таблиц", "sheet", "sheets", "spreadsheet"])
         and _contains_any(lowered, ["telegram", "телеграм"])
-        and _contains_any(lowered, ["пост", "канал", "опублику", "публикац"])
+        and _contains_any(lowered, ["пост", "канал", "опублику", "публикац", "сообщен", "отправ", "шл", "присыла"])
     ):
         source = _spec_by_key("google_sheets", SOURCE_SPECS)
         destination = _spec_by_key("telegram", DESTINATION_SPECS)
@@ -427,6 +431,9 @@ def _infer_integration_intent(description: str) -> Dict[str, Any]:
             "schedule": schedule,
             "compiled_template_key": "google_sheets_to_telegram_post",
         }
+    direct_telegram_delivery = _direct_telegram_delivery_intent(lowered)
+    if direct_telegram_delivery:
+        return direct_telegram_delivery
     source = _matching_spec(lowered, SOURCE_SPECS)
     destination = _matching_spec(lowered, DESTINATION_SPECS)
     if not source or not destination:
@@ -448,6 +455,37 @@ def _infer_integration_intent(description: str) -> Dict[str, Any]:
         "destination": destination,
         "trigger": trigger,
         "schedule": schedule,
+    }
+
+
+def _review_telegram_delivery_intent(lowered: str) -> Dict[str, Any]:
+    if not _contains_any(lowered, ["отзыв", "review"]):
+        return {}
+    if not _contains_any(lowered, ["telegram", "телеграм"]):
+        return {}
+    if not _contains_any(lowered, ["уведом", "присыла", "отправ", "шл", "сообщен"]):
+        return {}
+    source = {
+        "key": "external_reviews",
+        "binding_key": "business_reviews_context",
+        "provider": "business_profile",
+        "direction": "local_context",
+        "default_capability": "",
+        "default_config": {},
+        "required_config": [],
+    }
+    destination = _spec_by_key("telegram", DESTINATION_SPECS)
+    trigger = "manual.run"
+    schedule = {}
+    if _contains_any(lowered, ["каждый", "каждое", "каждую", "ежеднев", "день", "утро", "вечер", "schedule", "daily"]):
+        trigger = "schedule.daily"
+        schedule = _schedule_from_text(lowered)
+    return {
+        "source": source,
+        "destination": destination,
+        "trigger": trigger,
+        "schedule": schedule,
+        "compiled_template_key": "reviews_to_telegram",
     }
 
 

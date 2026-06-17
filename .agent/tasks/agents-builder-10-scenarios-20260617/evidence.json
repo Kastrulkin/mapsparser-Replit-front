@@ -1,0 +1,66 @@
+{
+  "task_id": "agents-builder-10-scenarios-20260617",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "All 10 user-request scenarios are classified into a plausible LocalOS agent category or custom integration workflow.",
+      "status": "PASS",
+      "proof": [
+        "Added test_agent_builder_understands_core_user_scenarios_without_cross_domain_questions.",
+        "Manual builder-state pass inspected all 10 prompts."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "The builder must not ask cross-domain questions for non-outreach scenarios.",
+      "status": "PASS",
+      "proof": [
+        "Scenario test checks forbidden lead/prospectingleads question terms."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Scheduled Telegram scenarios use Telegram delivery connection flow.",
+      "status": "PASS",
+      "proof": [
+        "Daily reminder and reviews-to-Telegram scenarios return telegram_destination connection resolver."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Google Sheets and finance scenarios preserve required source questions.",
+      "status": "PASS",
+      "proof": [
+        "Google Sheets -> Telegram and finance import scenarios keep google_sheets_target when no sheet is provided."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Regression tests and frontend build pass.",
+      "status": "PASS",
+      "proof": [
+        "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q passed with 160 tests.",
+        "npm run build passed."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/agent_blueprint_draft_builder.py",
+    "src/services/agent_builder_session.py",
+    "src/services/agent_openclaw_planner_loop.py",
+    "tests/test_agent_blueprint_layer.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
+    "cd frontend && npm run build"
+  ],
+  "known_gaps": [
+    "Google Sheets scenarios still need concrete sheet/table details from the user when not provided."
+  ]
+}
