@@ -3219,7 +3219,9 @@ const PublicPartnershipOfferPage: React.FC = () => {
         </section>
 
         <section className="rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">{text.servicesTitle}</h2>
+          <h2 className="text-lg font-semibold text-slate-900">
+            {isNetworkAudit && lang === 'ru' ? 'Меню и товары в карточках' : text.servicesTitle}
+          </h2>
           {hasServicesPreviewOnly ? (
             <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
               {lang === 'en'
@@ -3263,6 +3265,12 @@ const PublicPartnershipOfferPage: React.FC = () => {
                   {item.source ? <div className="text-xs text-slate-500 mt-2">{text.source}: {item.source}</div> : null}
                 </div>
               ))}
+            </div>
+          ) : isNetworkAudit && confirmedServicesCount > 0 && lang === 'ru' ? (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">
+              По сети найдено {formatValue(confirmedServicesCount)} позиций меню с ценами
+              {locationsCount > 0 ? ` по ${formatValue(locationsCount)} точкам` : ''}.
+              Детальные карточки позиций в этом публичном отчёте не приложены, но агрегированные данные учтены в аудите.
             </div>
           ) : (
             <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
