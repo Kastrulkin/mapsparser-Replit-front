@@ -89,7 +89,10 @@ OUTREACH_RETRY_DELAY_DAYS = (1, 2)  # D1, D3 относительно D0
 OUTREACH_SEND_DELAY_MIN_SEC = max(0.0, float(os.environ.get("OUTREACH_SEND_DELAY_MIN_SEC", "12")))
 OUTREACH_SEND_DELAY_MAX_SEC = max(OUTREACH_SEND_DELAY_MIN_SEC, float(os.environ.get("OUTREACH_SEND_DELAY_MAX_SEC", "28")))
 SALES_ROOM_UPLOAD_MAX_BYTES = int(os.environ.get("SALES_ROOM_UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))
-SALES_ROOM_UPLOAD_DIR = os.environ.get("SALES_ROOM_UPLOAD_DIR", "uploads/sales_rooms")
+SALES_ROOM_UPLOAD_DIR = os.environ.get(
+    "SALES_ROOM_UPLOAD_DIR",
+    os.path.join(os.environ.get("DEBUG_DIR", "debug_data"), "sales_room_uploads"),
+)
 SALES_ROOM_ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "xls", "xlsx", "csv", "txt", "png", "jpg", "jpeg", "webp"}
 TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS", "14")))
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
