@@ -1676,6 +1676,7 @@ const buildBuilderCreationDecision = ({
   missingProviderRouteConfirmation,
   canCreateDraft,
   createDraftLabel,
+  previewIsStale,
 }: {
   preview: AgentBuilderPreview | null;
   questions: AgentBuilderQuestion[];
@@ -1684,9 +1685,19 @@ const buildBuilderCreationDecision = ({
   missingProviderRouteConfirmation: boolean;
   canCreateDraft: boolean;
   createDraftLabel: string;
+  previewIsStale?: boolean;
 }): AgentConnectionDecision => {
   const forbidden = preview?.connection_summary?.forbidden || [];
   const unsupported = preview?.connection_summary?.unsupported || [];
+  if (previewIsStale) {
+    return {
+      tone: 'needs_action',
+      title: 'Обновите понимание',
+      description: 'Вы изменили запрос. Нажмите «Обновить понимание», чтобы LocalOS пересобрал сводку именно по этому тексту.',
+      action: 'none',
+      cta: 'Обновить понимание',
+    };
+  }
   if (forbidden.length || unsupported.length) {
     const reason = forbidden[0]?.reason || unsupported[0]?.reason || 'Такой способ подключения не разрешён правилами безопасности LocalOS.';
     return {
@@ -4636,12 +4647,21 @@ const DialogAgentBuilder = ({
   const providerRoutesRequireConfirmation = requiredProviderRouteKeys.length > 0;
   const missingProviderRouteConfirmation = providerRoutesRequireConfirmation && (!acceptedProviderRoutes || missingProviderRouteKeys.length > 0);
   const blockingQuestions = builderBlockingQuestions(questions);
+  const currentInputFingerprint = input.trim().toLowerCase().slice(0, 60);
+  const previewUnderstoodTask = String(preview?.understood_task || '').trim().toLowerCase();
+  const previewIsStale = Boolean(
+    session
+    && currentInputFingerprint
+    && previewUnderstoodTask
+    && !previewUnderstoodTask.includes(currentInputFingerprint),
+  );
   const showInlineConnectionSetup = Boolean(missingConnectionChoices.length || missingProviderRouteKeys.length || missingProviderRouteConfirmation);
   const canCreateDraft = preview?.setup_flow?.can_create_draft !== false
     && !missingConnectionChoices.length
     && !missingCompilerPlanConfirmation
     && !missingProviderRouteKeys.length
-    && !missingProviderRouteConfirmation;
+    && !missingProviderRouteConfirmation
+    && !previewIsStale;
   const createBlockers: Array<{ key: string; label: string }> = [];
   const addCreateBlocker = (key: string, label: string) => {
     const cleanKey = key.trim();
@@ -4693,6 +4713,7 @@ const DialogAgentBuilder = ({
     missingProviderRouteConfirmation,
     canCreateDraft,
     createDraftLabel,
+    previewIsStale,
   });
   const firstQuestion = blockingQuestions[0] || null;
   const extraQuestions = blockingQuestions.slice(1);
@@ -4700,10 +4721,12 @@ const DialogAgentBuilder = ({
   const previewDataText = builderPreviewDataText(preview, previewTaskText);
   const previewResultText = userFacingAgentTechText(preview?.output_format || 'результат уточним после подключения данных');
   const previewControlText = userFacingAgentTechText(preview?.manual_control || 'перед внешним действием');
-  const setupBlockerText = userFacingAgentTechText(firstQuestion?.question
-    || missingConnectionChoices[0]?.title
-    || preview?.setup_flow?.next_step_description
-    || builderDecision.description);
+  const setupBlockerText = userFacingAgentTechText(previewIsStale
+    ? builderDecision.description
+    : firstQuestion?.question
+      || missingConnectionChoices[0]?.title
+      || preview?.setup_flow?.next_step_description
+      || builderDecision.description);
   const canUsePrimaryAction = builderDecision.action === 'answer'
     ? Boolean(reply.trim())
     : builderDecision.action === 'create'
@@ -4767,7 +4790,7 @@ const DialogAgentBuilder = ({
                   </details>
                 ) : null}
               </div>
-              {builderDecision.action === 'answer' ? null : (
+              {builderDecision.action === 'answer' || builderDecision.action === 'none' ? null : (
                 <Button
                   type="button"
                   onClick={() => {

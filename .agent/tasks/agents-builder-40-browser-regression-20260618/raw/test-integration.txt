@@ -1,0 +1,15 @@
+Browser-use integration check:
+- Opened production /dashboard/agents.
+- Clicked "Создать агента".
+- Typed each of the 40 recovered prompts.
+- Clicked "Начать диалог" or "Обновить понимание".
+- Waited until the visible dialog summary contained the new prompt.
+- Read "Что понял LocalOS" and issue markers.
+
+Final result:
+- count: 40
+- issueCount: 0
+- stale-preview guard verified after deploy
+- duplicate disabled "Обновить понимание" button removed
+
+See raw/browser-40-final-summary.json.

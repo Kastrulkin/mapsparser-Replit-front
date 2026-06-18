@@ -1,0 +1,44 @@
+{
+  "task_id": "agents-builder-40-browser-regression-20260618",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "All 40 recovered scenarios were exercised through the live browser create-agent flow."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Final run reported zero semantic domain issues."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Stale preview state is now explicit and duplicate disabled update button is removed."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Focused backend tests and frontend production build passed."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Frontend dist deployed and production returned HTTP 200."
+    }
+  ],
+  "commands_run": [
+    "browser-use live 40-scenario run",
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
+    "npm --prefix frontend run build",
+    "frontend-only production deploy",
+    "browser-use final live 40-scenario run"
+  ],
+  "artifacts_used": [
+    "raw/browser-40-final-summary.json",
+    "raw/test-unit.txt",
+    "raw/build.txt",
+    "raw/deploy.txt"
+  ]
+}

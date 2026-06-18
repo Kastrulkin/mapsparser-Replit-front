@@ -1,0 +1,71 @@
+{
+  "task_id": "agents-builder-40-browser-regression-20260618",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Recover the previous 40 agent-builder scenarios and run them through the browser create-agent flow.",
+      "status": "PASS",
+      "proof": [
+        "Final browser-use live run completed with count 40.",
+        "raw/browser-40-final-summary.json contains per-scenario visible summaries."
+      ],
+      "gaps": [
+        "No real agents were created by design."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "No scenario maps to an obviously wrong domain.",
+      "status": "PASS",
+      "proof": [
+        "All final browser results have an empty issues array."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Edited request does not leave old preview looking current or duplicate disabled primary buttons.",
+      "status": "PASS",
+      "proof": [
+        "Stale-preview guard added and verified in browser after deploy.",
+        "Only one visible 'Обновить понимание' button remains in stale state."
+      ],
+      "gaps": [
+        "Old preview cards remain visible as context below the stale guard."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Automated checks pass.",
+      "status": "PASS",
+      "proof": [
+        "164 tests passed.",
+        "Frontend build succeeded."
+      ],
+      "gaps": [
+        "Existing build warnings remain."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Production is updated and responds successfully after deploy.",
+      "status": "PASS",
+      "proof": [
+        "Frontend dist deployed to app container.",
+        "curl -I http://localhost:8000 returned HTTP 200."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    ".agent/tasks/agents-builder-40-browser-regression-20260618"
+  ],
+  "commands_for_fresh_verifier": [
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
+    "npm --prefix frontend run build",
+    "ssh -i ~/.ssh/localos_prod root@80.78.242.105 'cd /opt/seo-app && docker compose ps && curl -I --max-time 15 http://localhost:8000'"
+  ],
+  "known_gaps": []
+}
