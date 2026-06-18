@@ -1,0 +1,1 @@
+Production write endpoints were not exercised against real rooms to avoid mutating customer-facing proposal data without explicit approval. Safe verification covered backend syntax, frontend build, and diff whitespace. Public GET will be checked after deploy.

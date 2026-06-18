@@ -1,0 +1,54 @@
+{
+  "task_id": "sales-room-document-review-20260618",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Public sales room shows the current proposal as an editable document-like block.",
+      "status": "PASS",
+      "proof": ["PublicSalesRoomPage renders versioned selectable proposal text."],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Visitors can submit replacement suggestions or comments for selected proposal text.",
+      "status": "PASS",
+      "proof": ["Frontend posts suggestions; backend validates and stores pending suggestions."],
+      "gaps": ["Production write flow not executed against real room data."]
+    },
+    {
+      "id": "AC3",
+      "text": "Pending suggestions can be accepted or rejected and accepted replacements create a new version.",
+      "status": "PASS",
+      "proof": ["Resolve endpoint updates suggestion status and creates a proposal version on accepted replacement."],
+      "gaps": ["Production write flow not executed against real room data."]
+    },
+    {
+      "id": "AC4",
+      "text": "Review data is persisted in PostgreSQL and exposed from the public room API.",
+      "status": "PASS",
+      "proof": ["Alembic migration and runtime ensure helper create proposal version/suggestion tables."],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Chat and file upload remain below the proposal.",
+      "status": "PASS",
+      "proof": ["Existing composer, upload, and message history remain in the public room page."],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/api/admin_prospecting.py",
+    "frontend/src/pages/PublicSalesRoomPage.tsx",
+    "alembic_migrations/versions/20260618_add_sales_room_proposal_review.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/api/admin_prospecting.py",
+    "npm --prefix frontend run build",
+    "git diff --check -- src/api/admin_prospecting.py frontend/src/pages/PublicSalesRoomPage.tsx alembic_migrations/versions/20260618_add_sales_room_proposal_review.py"
+  ],
+  "known_gaps": [
+    "Do not exercise accept/reject against production room data without approval because it changes the visible proposal."
+  ]
+}

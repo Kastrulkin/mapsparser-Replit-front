@@ -712,6 +712,56 @@ def _ensure_sales_room_tables(conn) -> None:
         ON sales_room_files (room_id, created_at DESC)
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sales_room_proposal_versions (
+            id UUID PRIMARY KEY,
+            room_id UUID NOT NULL REFERENCES sales_rooms(id) ON DELETE CASCADE,
+            version_no INTEGER NOT NULL,
+            body_text TEXT NOT NULL,
+            created_by_name TEXT,
+            created_by_contact TEXT,
+            metadata_json JSONB NOT NULL DEFAULT '{}',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (room_id, version_no)
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_sales_room_proposal_versions_room
+        ON sales_room_proposal_versions (room_id, version_no DESC)
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sales_room_proposal_suggestions (
+            id UUID PRIMARY KEY,
+            room_id UUID NOT NULL REFERENCES sales_rooms(id) ON DELETE CASCADE,
+            version_id UUID REFERENCES sales_room_proposal_versions(id) ON DELETE SET NULL,
+            suggestion_type TEXT NOT NULL DEFAULT 'replace',
+            selection_text TEXT NOT NULL,
+            selection_start INTEGER,
+            selection_end INTEGER,
+            replacement_text TEXT,
+            comment_text TEXT,
+            author_name TEXT,
+            author_contact TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            resolved_by_name TEXT,
+            resolved_by_contact TEXT,
+            resolved_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_sales_room_proposal_suggestions_room_status
+        ON sales_room_proposal_suggestions (room_id, status, created_at DESC)
+        """
+    )
 
 
 def _row_to_dict(row: Any) -> dict[str, Any]:
@@ -11422,6 +11472,42 @@ def _serialize_sales_room_message(row: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _serialize_sales_room_version(row: dict[str, Any]) -> dict[str, Any]:
+    return _to_json_compatible(
+        {
+            "id": row.get("id"),
+            "version_no": int(row.get("version_no") or 0),
+            "body_text": row.get("body_text") or "",
+            "created_by_name": row.get("created_by_name") or "",
+            "created_by_contact": row.get("created_by_contact") or "",
+            "created_at": row.get("created_at"),
+        }
+    )
+
+
+def _serialize_sales_room_suggestion(row: dict[str, Any]) -> dict[str, Any]:
+    return _to_json_compatible(
+        {
+            "id": row.get("id"),
+            "version_id": row.get("version_id"),
+            "suggestion_type": row.get("suggestion_type") or "replace",
+            "selection_text": row.get("selection_text") or "",
+            "selection_start": row.get("selection_start"),
+            "selection_end": row.get("selection_end"),
+            "replacement_text": row.get("replacement_text") or "",
+            "comment_text": row.get("comment_text") or "",
+            "author_name": row.get("author_name") or "Гость",
+            "author_contact": row.get("author_contact") or "",
+            "status": row.get("status") or "pending",
+            "resolved_by_name": row.get("resolved_by_name") or "",
+            "resolved_by_contact": row.get("resolved_by_contact") or "",
+            "resolved_at": row.get("resolved_at"),
+            "created_at": row.get("created_at"),
+            "updated_at": row.get("updated_at"),
+        }
+    )
+
+
 def _load_sales_room_messages(cur, room_id: str, limit: int = 50) -> list[dict[str, Any]]:
     cur.execute(
         """
@@ -11435,6 +11521,138 @@ def _load_sales_room_messages(cur, room_id: str, limit: int = 50) -> list[dict[s
     )
     rows = cur.fetchall() or []
     return [_serialize_sales_room_message(dict(row)) for row in rows]
+
+
+def _load_sales_room_latest_version(cur, room_id: str) -> dict[str, Any]:
+    cur.execute(
+        """
+        SELECT id, version_no, body_text, created_by_name, created_by_contact, metadata_json, created_at
+        FROM sales_room_proposal_versions
+        WHERE room_id = %s
+        ORDER BY version_no DESC
+        LIMIT 1
+        """,
+        (room_id,),
+    )
+    row = cur.fetchone()
+    return dict(row) if row and hasattr(row, "keys") else {}
+
+
+def _load_sales_room_review(cur, room_id: str) -> dict[str, Any]:
+    latest = _load_sales_room_latest_version(cur, room_id)
+    cur.execute(
+        """
+        SELECT id, version_id, suggestion_type, selection_text, selection_start, selection_end,
+               replacement_text, comment_text, author_name, author_contact, status,
+               resolved_by_name, resolved_by_contact, resolved_at, created_at, updated_at
+        FROM sales_room_proposal_suggestions
+        WHERE room_id = %s
+        ORDER BY
+          CASE WHEN status = 'pending' THEN 0 ELSE 1 END,
+          created_at DESC
+        LIMIT 100
+        """,
+        (room_id,),
+    )
+    suggestions = [_serialize_sales_room_suggestion(dict(row)) for row in (cur.fetchall() or [])]
+    return {
+        "latest_version": _serialize_sales_room_version(latest) if latest else None,
+        "suggestions": suggestions,
+    }
+
+
+def _ensure_sales_room_proposal_version(
+    cur,
+    *,
+    room_id: str,
+    body_text: str,
+    author_name: str = "",
+    author_contact: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    current = _load_sales_room_latest_version(cur, room_id)
+    if current:
+        return current
+    version_id = str(uuid.uuid4())
+    cur.execute(
+        """
+        INSERT INTO sales_room_proposal_versions (
+            id, room_id, version_no, body_text, created_by_name, created_by_contact, metadata_json, created_at
+        ) VALUES (
+            %s, %s, 1, %s, %s, %s, %s, NOW()
+        )
+        RETURNING id, version_no, body_text, created_by_name, created_by_contact, metadata_json, created_at
+        """,
+        (version_id, room_id, body_text, author_name, author_contact, Json(metadata or {"source": "initial_room_proposal"})),
+    )
+    return dict(cur.fetchone())
+
+
+def _create_sales_room_proposal_version(
+    cur,
+    *,
+    room_id: str,
+    body_text: str,
+    author_name: str,
+    author_contact: str,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    latest = _load_sales_room_latest_version(cur, room_id)
+    next_version_no = int(latest.get("version_no") or 0) + 1 if latest else 1
+    version_id = str(uuid.uuid4())
+    cur.execute(
+        """
+        INSERT INTO sales_room_proposal_versions (
+            id, room_id, version_no, body_text, created_by_name, created_by_contact, metadata_json, created_at
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s, %s, NOW()
+        )
+        RETURNING id, version_no, body_text, created_by_name, created_by_contact, metadata_json, created_at
+        """,
+        (version_id, room_id, next_version_no, body_text, author_name, author_contact, Json(metadata or {})),
+    )
+    return dict(cur.fetchone())
+
+
+def _replace_text_for_sales_room_suggestion(current_text: str, suggestion: dict[str, Any]) -> tuple[str, bool, str]:
+    selection_text = str(suggestion.get("selection_text") or "")
+    replacement_text = str(suggestion.get("replacement_text") or "")
+    start_value = suggestion.get("selection_start")
+    end_value = suggestion.get("selection_end")
+    try:
+        start = int(start_value) if start_value is not None else -1
+        end = int(end_value) if end_value is not None else -1
+    except (TypeError, ValueError):
+        start = -1
+        end = -1
+    if start >= 0 and end > start and current_text[start:end] == selection_text:
+        return f"{current_text[:start]}{replacement_text}{current_text[end:]}", True, "range"
+    if selection_text and selection_text in current_text:
+        return current_text.replace(selection_text, replacement_text, 1), True, "text"
+    return current_text, False, "selection_not_found"
+
+
+def _update_sales_room_proposal_body(cur, *, room_id: str, body_text: str) -> None:
+    cur.execute(
+        """
+        UPDATE sales_rooms
+        SET room_json = jsonb_set(
+                COALESCE(room_json, '{}'),
+                '{proposal,body_text}',
+                to_jsonb(%s),
+                TRUE
+            ),
+            proposal_json = jsonb_set(
+                COALESCE(proposal_json, '{}'),
+                '{body_text}',
+                to_jsonb(%s),
+                TRUE
+            ),
+            updated_at = NOW()
+        WHERE id = %s
+        """,
+        (body_text, body_text, room_id),
+    )
 
 
 def _load_sales_room_by_slug(cur, slug: str) -> dict[str, Any]:
@@ -13267,12 +13485,212 @@ def public_sales_room(slug):
             room_json = _normalize_public_sales_room_proposal(cur, row, room_json)
             room_json["slug"] = normalized_slug
             room_json["public_url"] = _make_sales_room_url(normalized_slug)
+            room_id = str(row.get("id") or "")
+            proposal = room_json.get("proposal") if isinstance(room_json.get("proposal"), dict) else {}
+            body_text = str(proposal.get("body_text") or "").strip()
+            if body_text:
+                latest_version = _ensure_sales_room_proposal_version(cur, room_id=room_id, body_text=body_text)
+                if latest_version:
+                    proposal["body_text"] = str(latest_version.get("body_text") or body_text)
+                    room_json["proposal"] = proposal
             room_json["messages"] = _load_sales_room_messages(cur, str(row.get("id") or ""))
+            room_json["proposal_review"] = _load_sales_room_review(cur, room_id)
+            conn.commit()
             return jsonify({"success": True, "room": _to_json_compatible(room_json)})
         finally:
             conn.close()
     except Exception as e:
         print(f"Error loading public sales room: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/sales-rooms/public/<string:slug>/proposal/suggestions", methods=["POST"])
+def public_sales_room_proposal_suggestion(slug):
+    try:
+        normalized_slug = _slugify_company_name(slug)
+        data = request.get_json(silent=True) or {}
+        author_name = str(data.get("author_name") or "").strip()
+        author_contact = str(data.get("author_contact") or "").strip()
+        suggestion_type = str(data.get("suggestion_type") or "replace").strip().lower()
+        selection_text = str(data.get("selection_text") or "").strip()
+        replacement_text = str(data.get("replacement_text") or "").strip()
+        comment_text = str(data.get("comment_text") or "").strip()
+        if suggestion_type not in {"replace", "comment"}:
+            return jsonify({"error": "suggestion_type must be replace or comment"}), 400
+        if not author_name:
+            return jsonify({"error": "author_name is required"}), 400
+        if not author_contact:
+            return jsonify({"error": "author_contact is required"}), 400
+        if not selection_text:
+            return jsonify({"error": "selection_text is required"}), 400
+        if suggestion_type == "replace" and not replacement_text:
+            return jsonify({"error": "replacement_text is required"}), 400
+        if suggestion_type == "comment" and not comment_text:
+            return jsonify({"error": "comment_text is required"}), 400
+        if len(selection_text) > 2000 or len(replacement_text) > 4000 or len(comment_text) > 2000:
+            return jsonify({"error": "suggestion is too long"}), 400
+        selection_start = data.get("selection_start")
+        selection_end = data.get("selection_end")
+        try:
+            normalized_start = int(selection_start) if selection_start is not None else None
+            normalized_end = int(selection_end) if selection_end is not None else None
+        except (TypeError, ValueError):
+            normalized_start = None
+            normalized_end = None
+        conn = get_db_connection()
+        try:
+            _ensure_sales_room_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _load_sales_room_by_slug(cur, normalized_slug)
+            if not row:
+                return jsonify({"error": "Sales room not found"}), 404
+            room_json = row.get("room_json") if isinstance(row.get("room_json"), dict) else {}
+            room_json = _normalize_public_sales_room_proposal(cur, row, room_json)
+            proposal = room_json.get("proposal") if isinstance(room_json.get("proposal"), dict) else {}
+            body_text = str(proposal.get("body_text") or "").strip()
+            room_id = str(row.get("id") or "")
+            version = _ensure_sales_room_proposal_version(cur, room_id=room_id, body_text=body_text)
+            suggestion_id = str(uuid.uuid4())
+            cur.execute(
+                """
+                INSERT INTO sales_room_proposal_suggestions (
+                    id, room_id, version_id, suggestion_type, selection_text, selection_start, selection_end,
+                    replacement_text, comment_text, author_name, author_contact, status, created_at, updated_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, 'pending', NOW(), NOW()
+                )
+                RETURNING id, version_id, suggestion_type, selection_text, selection_start, selection_end,
+                          replacement_text, comment_text, author_name, author_contact, status,
+                          resolved_by_name, resolved_by_contact, resolved_at, created_at, updated_at
+                """,
+                (
+                    suggestion_id,
+                    room_id,
+                    version.get("id"),
+                    suggestion_type,
+                    selection_text,
+                    normalized_start,
+                    normalized_end,
+                    replacement_text,
+                    comment_text,
+                    author_name,
+                    author_contact,
+                ),
+            )
+            suggestion = _serialize_sales_room_suggestion(dict(cur.fetchone()))
+            _record_sales_room_event(
+                conn,
+                slug=normalized_slug,
+                event_type="proposal_suggestion_created",
+                metadata={"suggestion_id": suggestion_id, "suggestion_type": suggestion_type},
+            )
+            conn.commit()
+            return jsonify({"success": True, "suggestion": suggestion})
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error creating public sales room proposal suggestion: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/sales-rooms/public/<string:slug>/proposal/suggestions/<string:suggestion_id>/resolve", methods=["POST"])
+def public_sales_room_proposal_suggestion_resolve(slug, suggestion_id):
+    try:
+        normalized_slug = _slugify_company_name(slug)
+        normalized_suggestion_id = str(suggestion_id or "").strip()
+        if not _is_uuid_string(normalized_suggestion_id):
+            return jsonify({"error": "Suggestion not found"}), 404
+        data = request.get_json(silent=True) or {}
+        action = str(data.get("action") or "").strip().lower()
+        author_name = str(data.get("author_name") or "").strip()
+        author_contact = str(data.get("author_contact") or "").strip()
+        if action not in {"accept", "reject"}:
+            return jsonify({"error": "action must be accept or reject"}), 400
+        if not author_name:
+            return jsonify({"error": "author_name is required"}), 400
+        if not author_contact:
+            return jsonify({"error": "author_contact is required"}), 400
+        conn = get_db_connection()
+        try:
+            _ensure_sales_room_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _load_sales_room_by_slug(cur, normalized_slug)
+            if not row:
+                return jsonify({"error": "Sales room not found"}), 404
+            room_id = str(row.get("id") or "")
+            cur.execute(
+                """
+                SELECT id, version_id, suggestion_type, selection_text, selection_start, selection_end,
+                       replacement_text, comment_text, author_name, author_contact, status,
+                       resolved_by_name, resolved_by_contact, resolved_at, created_at, updated_at
+                FROM sales_room_proposal_suggestions
+                WHERE id = %s
+                  AND room_id = %s
+                LIMIT 1
+                """,
+                (normalized_suggestion_id, room_id),
+            )
+            suggestion = dict(cur.fetchone() or {})
+            if not suggestion:
+                return jsonify({"error": "Suggestion not found"}), 404
+            if str(suggestion.get("status") or "") != "pending":
+                return jsonify({"error": "Suggestion already resolved"}), 409
+            latest = _load_sales_room_latest_version(cur, room_id)
+            current_text = str(latest.get("body_text") or "")
+            next_text = current_text
+            applied_by = ""
+            if action == "accept" and str(suggestion.get("suggestion_type") or "replace") == "replace":
+                next_text, applied, applied_by = _replace_text_for_sales_room_suggestion(current_text, suggestion)
+                if not applied:
+                    return jsonify({"error": "selection_not_found", "reason": applied_by}), 409
+                version = _create_sales_room_proposal_version(
+                    cur,
+                    room_id=room_id,
+                    body_text=next_text,
+                    author_name=author_name,
+                    author_contact=author_contact,
+                    metadata={"accepted_suggestion_id": normalized_suggestion_id, "applied_by": applied_by},
+                )
+                _update_sales_room_proposal_body(cur, room_id=room_id, body_text=next_text)
+            else:
+                version = latest
+            next_status = "accepted" if action == "accept" else "rejected"
+            cur.execute(
+                """
+                UPDATE sales_room_proposal_suggestions
+                SET status = %s,
+                    resolved_by_name = %s,
+                    resolved_by_contact = %s,
+                    resolved_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING id, version_id, suggestion_type, selection_text, selection_start, selection_end,
+                          replacement_text, comment_text, author_name, author_contact, status,
+                          resolved_by_name, resolved_by_contact, resolved_at, created_at, updated_at
+                """,
+                (next_status, author_name, author_contact, normalized_suggestion_id),
+            )
+            resolved = _serialize_sales_room_suggestion(dict(cur.fetchone()))
+            _record_sales_room_event(
+                conn,
+                slug=normalized_slug,
+                event_type="proposal_suggestion_resolved",
+                metadata={"suggestion_id": normalized_suggestion_id, "action": action},
+            )
+            conn.commit()
+            return jsonify(
+                {
+                    "success": True,
+                    "suggestion": resolved,
+                    "latest_version": _serialize_sales_room_version(version) if version else None,
+                    "body_text": next_text,
+                }
+            )
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error resolving public sales room proposal suggestion: {e}")
         return jsonify({"error": str(e)}), 500
 
 

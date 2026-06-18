@@ -1,6 +1,6 @@
-import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ArrowRight, ExternalLink, FileText, MessageSquare, Paperclip, Send } from 'lucide-react';
+import { ArrowRight, Check, ExternalLink, FileText, MessageSquare, Paperclip, Send, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -22,6 +22,36 @@ type SalesRoomMessage = {
   body_text?: string;
   attachments?: SalesRoomAttachment[];
   created_at?: string;
+};
+
+type SalesRoomProposalSuggestion = {
+  id?: string;
+  version_id?: string;
+  suggestion_type?: 'replace' | 'comment' | string;
+  selection_text?: string;
+  selection_start?: number | null;
+  selection_end?: number | null;
+  replacement_text?: string;
+  comment_text?: string;
+  author_name?: string;
+  author_contact?: string;
+  status?: string;
+  resolved_by_name?: string;
+  resolved_by_contact?: string;
+  resolved_at?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type SalesRoomProposalReview = {
+  latest_version?: {
+    id?: string;
+    version_no?: number;
+    body_text?: string;
+    created_by_name?: string;
+    created_at?: string;
+  } | null;
+  suggestions?: SalesRoomProposalSuggestion[];
 };
 
 type SalesRoomPayload = {
@@ -72,6 +102,7 @@ type SalesRoomPayload = {
     description?: string;
   };
   messages?: SalesRoomMessage[];
+  proposal_review?: SalesRoomProposalReview;
 };
 
 const roomModeLabel = (mode?: string) => {
@@ -102,8 +133,24 @@ const formatDateTime = (value?: string) => {
 const roomAuthorNameKey = 'localos_sales_room_author_name';
 const roomAuthorContactKey = 'localos_sales_room_author_contact';
 
+const textOffsetInElement = (root: HTMLElement, targetNode: Node, targetOffset: number) => {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let offset = 0;
+  let node = walker.nextNode();
+  while (node) {
+    const nodeText = node.textContent || '';
+    if (node === targetNode) {
+      return offset + targetOffset;
+    }
+    offset += nodeText.length;
+    node = walker.nextNode();
+  }
+  return null;
+};
+
 export default function PublicSalesRoomPage() {
   const { roomSlug } = useParams<{ roomSlug: string }>();
+  const proposalRef = useRef<HTMLDivElement | null>(null);
   const [room, setRoom] = useState<SalesRoomPayload | null>(null);
   const [messages, setMessages] = useState<SalesRoomMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,6 +162,15 @@ export default function PublicSalesRoomPage() {
   const [authorContact, setAuthorContact] = useState(() => localStorage.getItem(roomAuthorContactKey) || '');
   const [messageText, setMessageText] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<SalesRoomAttachment[]>([]);
+  const [selectedText, setSelectedText] = useState('');
+  const [selectedStart, setSelectedStart] = useState<number | null>(null);
+  const [selectedEnd, setSelectedEnd] = useState<number | null>(null);
+  const [reviewMode, setReviewMode] = useState<'replace' | 'comment'>('replace');
+  const [replacementText, setReplacementText] = useState('');
+  const [commentText, setCommentText] = useState('');
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [submittingSuggestion, setSubmittingSuggestion] = useState(false);
+  const [resolvingSuggestionId, setResolvingSuggestionId] = useState<string | null>(null);
 
   const loadRoom = async () => {
     if (!roomSlug) return;
@@ -163,6 +219,112 @@ export default function PublicSalesRoomPage() {
     if (!url) return;
     void recordEvent('audit_open', { target: url });
     window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const captureProposalSelection = () => {
+    const root = proposalRef.current;
+    const selection = window.getSelection();
+    if (!root || !selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (range.collapsed || !root.contains(range.commonAncestorContainer)) return;
+    const text = selection.toString().trim();
+    if (!text) return;
+    const start = textOffsetInElement(root, range.startContainer, range.startOffset);
+    const end = textOffsetInElement(root, range.endContainer, range.endOffset);
+    setSelectedText(text);
+    setSelectedStart(start);
+    setSelectedEnd(end);
+    setReplacementText(text);
+    setReviewError(null);
+  };
+
+  const clearProposalSelection = () => {
+    setSelectedText('');
+    setSelectedStart(null);
+    setSelectedEnd(null);
+    setReplacementText('');
+    setCommentText('');
+    setReviewError(null);
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const submitProposalSuggestion = async () => {
+    if (!roomSlug || submittingSuggestion) return;
+    const cleanName = authorName.trim();
+    const cleanContact = authorContact.trim();
+    const cleanSelection = selectedText.trim();
+    const cleanReplacement = replacementText.trim();
+    const cleanComment = commentText.trim();
+    if (!cleanName || !cleanContact) {
+      setReviewError('Укажите имя и контакт ниже в форме обсуждения, чтобы было понятно, кто предложил правку.');
+      return;
+    }
+    if (!cleanSelection) {
+      setReviewError('Сначала выделите фрагмент предложения.');
+      return;
+    }
+    if (reviewMode === 'replace' && !cleanReplacement) {
+      setReviewError('Напишите вариант замены.');
+      return;
+    }
+    if (reviewMode === 'comment' && !cleanComment) {
+      setReviewError('Напишите комментарий.');
+      return;
+    }
+    setSubmittingSuggestion(true);
+    setReviewError(null);
+    try {
+      localStorage.setItem(roomAuthorNameKey, cleanName);
+      localStorage.setItem(roomAuthorContactKey, cleanContact);
+      await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/proposal/suggestions`, {
+        method: 'POST',
+        body: JSON.stringify({
+          author_name: cleanName,
+          author_contact: cleanContact,
+          suggestion_type: reviewMode,
+          selection_text: cleanSelection,
+          selection_start: selectedStart,
+          selection_end: selectedEnd,
+          replacement_text: reviewMode === 'replace' ? cleanReplacement : '',
+          comment_text: reviewMode === 'comment' ? cleanComment : '',
+        }),
+      });
+      clearProposalSelection();
+      await loadRoom();
+    } catch (suggestionError) {
+      const message = suggestionError instanceof Error ? suggestionError.message : 'Не удалось сохранить правку';
+      setReviewError(message);
+    } finally {
+      setSubmittingSuggestion(false);
+    }
+  };
+
+  const resolveProposalSuggestion = async (suggestion: SalesRoomProposalSuggestion, action: 'accept' | 'reject') => {
+    if (!roomSlug || !suggestion.id || resolvingSuggestionId) return;
+    const cleanName = authorName.trim();
+    const cleanContact = authorContact.trim();
+    if (!cleanName || !cleanContact) {
+      setReviewError('Укажите имя и контакт ниже в форме обсуждения, чтобы принять или отклонить правку.');
+      return;
+    }
+    setResolvingSuggestionId(suggestion.id);
+    setReviewError(null);
+    try {
+      await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/proposal/suggestions/${encodeURIComponent(suggestion.id)}/resolve`, {
+        method: 'POST',
+        body: JSON.stringify({
+          action,
+          author_name: cleanName,
+          author_contact: cleanContact,
+        }),
+      });
+      await loadRoom();
+    } catch (resolveError) {
+      const message = resolveError instanceof Error ? resolveError.message : 'Не удалось обновить правку';
+      setReviewError(message);
+    } finally {
+      setResolvingSuggestionId(null);
+    }
   };
 
   const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -270,6 +432,10 @@ export default function PublicSalesRoomPage() {
     room.proposal?.body_text?.trim() ||
     room.proposal?.next_step?.trim() ||
     `Предлагаем обсудить формат сотрудничества между ${businessName} и ${recipientName} и согласовать следующий шаг.`;
+  const suggestions = Array.isArray(room.proposal_review?.suggestions) ? room.proposal_review.suggestions : [];
+  const pendingSuggestions = suggestions.filter((suggestion) => suggestion.status === 'pending');
+  const resolvedSuggestions = suggestions.filter((suggestion) => suggestion.status !== 'pending').slice(0, 6);
+  const latestVersionNo = room.proposal_review?.latest_version?.version_no || 1;
 
   return (
     <main className="min-h-screen bg-[#f5f7fb] text-slate-950">
@@ -305,8 +471,139 @@ export default function PublicSalesRoomPage() {
           </div>
 
           <div className="mt-7 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-5 sm:px-6 sm:py-6">
-            <div className="whitespace-pre-wrap text-base leading-8 text-slate-800">{proposalText}</div>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Версия {latestVersionNo}</div>
+              <div className="text-xs text-slate-500">Выделите текст, чтобы предложить правку или оставить комментарий.</div>
+            </div>
+            <div
+              ref={proposalRef}
+              onMouseUp={captureProposalSelection}
+              onKeyUp={captureProposalSelection}
+              className="whitespace-pre-wrap text-base leading-8 text-slate-800 selection:bg-orange-100"
+            >
+              {proposalText}
+            </div>
           </div>
+
+          {selectedText ? (
+            <div className="mt-4 rounded-2xl border border-orange-100 bg-orange-50/60 p-4">
+              <div className="text-xs font-bold uppercase tracking-[0.16em] text-orange-500">Выбранный фрагмент</div>
+              <div className="mt-2 rounded-xl bg-white px-3 py-2 text-sm leading-6 text-slate-700">{selectedText}</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant={reviewMode === 'replace' ? 'default' : 'outline'} onClick={() => setReviewMode('replace')}>
+                  Предложить правку
+                </Button>
+                <Button type="button" size="sm" variant={reviewMode === 'comment' ? 'default' : 'outline'} onClick={() => setReviewMode('comment')}>
+                  Комментарий
+                </Button>
+              </div>
+              {reviewMode === 'replace' ? (
+                <Textarea
+                  value={replacementText}
+                  onChange={(event) => setReplacementText(event.currentTarget.value)}
+                  className="mt-3 min-h-24 bg-white"
+                  placeholder="Напишите новый вариант этого фрагмента"
+                />
+              ) : (
+                <Textarea
+                  value={commentText}
+                  onChange={(event) => setCommentText(event.currentTarget.value)}
+                  className="mt-3 min-h-24 bg-white"
+                  placeholder="Напишите комментарий к выбранному фрагменту"
+                />
+              )}
+              {reviewError ? <div className="mt-3 text-sm font-medium text-red-600">{reviewError}</div> : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button type="button" size="sm" onClick={submitProposalSuggestion} disabled={submittingSuggestion}>
+                  {submittingSuggestion ? 'Сохраняем...' : 'Сохранить'}
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={clearProposalSelection}>
+                  Отмена
+                </Button>
+              </div>
+            </div>
+          ) : reviewError ? (
+            <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">{reviewError}</div>
+          ) : null}
+
+          {suggestions.length > 0 ? (
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-bold text-slate-950">Ожидают решения</div>
+                  <div className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-600">{pendingSuggestions.length}</div>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {pendingSuggestions.length > 0 ? (
+                    pendingSuggestions.map((suggestion) => (
+                      <article key={suggestion.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                          {suggestion.suggestion_type === 'comment' ? 'Комментарий' : 'Правка'} от {suggestion.author_name || 'Гость'}
+                        </div>
+                        <div className="mt-2 rounded-lg bg-white px-3 py-2 text-sm leading-6 text-slate-600">{suggestion.selection_text}</div>
+                        {suggestion.suggestion_type === 'replace' ? (
+                          <div className="mt-2 rounded-lg border border-orange-100 bg-orange-50 px-3 py-2 text-sm leading-6 text-slate-800">
+                            {suggestion.replacement_text}
+                          </div>
+                        ) : (
+                          <div className="mt-2 text-sm leading-6 text-slate-700">{suggestion.comment_text}</div>
+                        )}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => void resolveProposalSuggestion(suggestion, 'accept')}
+                            disabled={resolvingSuggestionId === suggestion.id}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            Принять
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="gap-1"
+                            onClick={() => void resolveProposalSuggestion(suggestion, 'reject')}
+                            disabled={resolvingSuggestionId === suggestion.id}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                            Отклонить
+                          </Button>
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-500">
+                      Нет правок на согласовании.
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                <div className="text-sm font-bold text-slate-950">История правок</div>
+                <div className="mt-4 space-y-3">
+                  {resolvedSuggestions.length > 0 ? (
+                    resolvedSuggestions.map((suggestion) => (
+                      <article key={suggestion.id} className="rounded-xl bg-slate-50 px-3 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                            {suggestion.status === 'accepted' ? 'Принято' : 'Отклонено'}
+                          </div>
+                          <div className="text-xs text-slate-400">{formatDateTime(suggestion.resolved_at || suggestion.updated_at)}</div>
+                        </div>
+                        <div className="mt-2 text-sm leading-6 text-slate-600">{suggestion.selection_text}</div>
+                      </article>
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-500">
+                      История появится после принятия или отклонения правок.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <form onSubmit={sendMessage} className="mt-6 rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
