@@ -446,6 +446,8 @@ export default function PublicSalesRoomPage() {
 
   const recipientName = room.recipient?.name || 'получатель';
   const businessName = room.business?.name || 'Компания';
+  const managerName = 'Aleksandr Demianov';
+  const managerInitial = managerName.trim().charAt(0).toUpperCase();
   const hasAudit = Boolean(room.audit?.available && room.audit?.public_url);
   const proposalText =
     room.proposal?.body_text?.trim() ||
@@ -520,6 +522,31 @@ export default function PublicSalesRoomPage() {
             Подготовлено в LocalOS
           </div>
         </header>
+
+        <section className="mt-8 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+          <div className="grid lg:grid-cols-[280px_1fr]">
+            <aside className="flex flex-col items-center justify-center border-b border-slate-100 bg-slate-50/60 px-6 py-8 text-center lg:border-b-0 lg:border-r">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-slate-900 text-4xl font-semibold text-white">
+                {managerInitial}
+              </div>
+              <div className="mt-5 text-xl font-black tracking-tight text-slate-950">{managerName}</div>
+              <div className="mt-1 text-sm font-semibold text-slate-500">Founder, LocalOS</div>
+            </aside>
+            <div className="px-5 py-7 sm:px-8 lg:px-10">
+              <div className="text-2xl font-black tracking-tight text-slate-950">Здравствуйте.</div>
+              <div className="mt-5 max-w-2xl space-y-4 text-base leading-8 text-slate-700">
+                <p>
+                  Рад знакомству. Я подготовил эту цифровую комнату, чтобы у нас было одно место для предложения,
+                  материалов и обсуждения.
+                </p>
+                <p>
+                  Ниже лежит актуальный документ. Можно оставить комментарий, предложить правку или приложить файл.
+                </p>
+                <p>Если будут вопросы, напишите здесь — всё сохраним в одном диалоге.</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <section className="mt-8 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-7 lg:p-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
