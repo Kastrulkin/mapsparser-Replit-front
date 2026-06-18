@@ -1,8 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ArrowUpRight, CheckCircle2, ExternalLink, Sparkles } from 'lucide-react';
+import { ArrowRight, ExternalLink, FileText, MessageSquare, Paperclip, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { newAuth } from '@/lib/auth_new';
+
+type SalesRoomAttachment = {
+  id?: string;
+  original_name?: string;
+  mime_type?: string;
+  size_bytes?: number;
+  public_url?: string;
+};
+
+type SalesRoomMessage = {
+  id?: string;
+  author_type?: string;
+  author_name?: string;
+  author_contact?: string;
+  body_text?: string;
+  attachments?: SalesRoomAttachment[];
+  created_at?: string;
+};
 
 type SalesRoomPayload = {
   slug?: string;
@@ -22,6 +42,7 @@ type SalesRoomPayload = {
   proposal?: {
     title?: string;
     summary?: string;
+    body_text?: string;
     bullets?: string[];
     next_step?: string;
   };
@@ -50,57 +71,80 @@ type SalesRoomPayload = {
     badge?: string;
     description?: string;
   };
-};
-
-const textFromItem = (item: { title?: string; description?: string } | string) => {
-  if (typeof item === 'string') return item;
-  return item.title || item.description || '';
+  messages?: SalesRoomMessage[];
 };
 
 const roomModeLabel = (mode?: string) => {
   if (mode === 'partner_search') return 'Партнёрское предложение';
-  if (mode === 'client_search') return 'Разбор роста';
-  return 'Предложение LocalOS';
+  if (mode === 'client_search') return 'Предложение по росту';
+  return 'Предложение';
 };
+
+const formatFileSize = (size?: number) => {
+  const normalized = Number(size || 0);
+  if (!normalized) return '';
+  if (normalized < 1024 * 1024) return `${Math.max(1, Math.round(normalized / 1024))} КБ`;
+  return `${(normalized / 1024 / 1024).toFixed(1)} МБ`;
+};
+
+const formatDateTime = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+};
+
+const roomAuthorNameKey = 'localos_sales_room_author_name';
+const roomAuthorContactKey = 'localos_sales_room_author_contact';
 
 export default function PublicSalesRoomPage() {
   const { roomSlug } = useParams<{ roomSlug: string }>();
   const [room, setRoom] = useState<SalesRoomPayload | null>(null);
+  const [messages, setMessages] = useState<SalesRoomMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [composerError, setComposerError] = useState<string | null>(null);
+  const [authorName, setAuthorName] = useState(() => localStorage.getItem(roomAuthorNameKey) || '');
+  const [authorContact, setAuthorContact] = useState(() => localStorage.getItem(roomAuthorContactKey) || '');
+  const [messageText, setMessageText] = useState('');
+  const [pendingAttachments, setPendingAttachments] = useState<SalesRoomAttachment[]>([]);
+
+  const loadRoom = async () => {
+    if (!roomSlug) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}`, {
+        method: 'GET',
+      });
+      const nextRoom = response?.room || null;
+      setRoom(nextRoom);
+      setMessages(Array.isArray(nextRoom?.messages) ? nextRoom.messages : []);
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : 'Не удалось загрузить комнату';
+      setError(message);
+      setRoom(null);
+      setMessages([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const run = async () => {
-      if (!roomSlug) return;
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}`, {
-          method: 'GET',
-        });
-        setRoom(response?.room || null);
-      } catch (loadError) {
-        const message = loadError instanceof Error ? loadError.message : 'Не удалось загрузить комнату';
-        setError(message);
-        setRoom(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-    void run();
+    void loadRoom();
   }, [roomSlug]);
 
-  const bullets = useMemo(() => {
-    const source = room?.proposal?.bullets;
-    if (Array.isArray(source) && source.length > 0) return source.slice(0, 3);
-    return [];
-  }, [room?.proposal?.bullets]);
-
-  const auditFindings = useMemo(() => {
-    const source = room?.audit?.findings;
-    if (!Array.isArray(source)) return [];
-    return source.map(textFromItem).filter(Boolean).slice(0, 3);
-  }, [room?.audit?.findings]);
+  useEffect(() => {
+    if (!roomSlug || !room) return;
+    void recordEvent('proposal_viewed', { source: 'public_page' });
+  }, [roomSlug, room?.slug]);
 
   const recordEvent = async (eventType: string, metadata?: Record<string, unknown>) => {
     if (!roomSlug) return;
@@ -114,17 +158,94 @@ export default function PublicSalesRoomPage() {
     }
   };
 
-  const openSecondary = () => {
-    const url = room?.cta?.secondary_url || room?.audit?.public_url || '';
+  const openAudit = () => {
+    const url = room?.audit?.public_url || '';
     if (!url) return;
-    void recordEvent(room?.audit?.public_url ? 'audit_open' : 'cta_click', { target: url });
+    void recordEvent('audit_open', { target: url });
     window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.currentTarget.files || []);
+    event.currentTarget.value = '';
+    if (!roomSlug || selectedFiles.length === 0) return;
+    setComposerError(null);
+    setUploading(true);
+    try {
+      const uploaded: SalesRoomAttachment[] = [];
+      for (const file of selectedFiles.slice(0, 5)) {
+        const form = new FormData();
+        form.append('file', file);
+        const response = await fetch(`/api/sales-rooms/public/${encodeURIComponent(roomSlug)}/files`, {
+          method: 'POST',
+          body: form,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || 'Не удалось загрузить файл');
+        }
+        if (data?.file) uploaded.push(data.file);
+      }
+      setPendingAttachments((current) => [...current, ...uploaded].slice(0, 5));
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : 'Не удалось загрузить файл';
+      setComposerError(message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!roomSlug || sending) return;
+    const cleanName = authorName.trim();
+    const cleanContact = authorContact.trim();
+    const cleanMessage = messageText.trim();
+    if (!cleanName) {
+      setComposerError('Укажите имя, чтобы было понятно, кто пишет.');
+      return;
+    }
+    if (!cleanContact) {
+      setComposerError('Оставьте контакт для ответа.');
+      return;
+    }
+    if (!cleanMessage && pendingAttachments.length === 0) {
+      setComposerError('Напишите сообщение или приложите файл.');
+      return;
+    }
+    setSending(true);
+    setComposerError(null);
+    try {
+      localStorage.setItem(roomAuthorNameKey, cleanName);
+      localStorage.setItem(roomAuthorContactKey, cleanContact);
+      const response = await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({
+          author_name: cleanName,
+          author_contact: cleanContact,
+          body_text: cleanMessage,
+          attachments: pendingAttachments,
+        }),
+      });
+      if (response?.message) {
+        setMessages((current) => [...current, response.message]);
+      } else {
+        await loadRoom();
+      }
+      setMessageText('');
+      setPendingAttachments([]);
+    } catch (sendError) {
+      const message = sendError instanceof Error ? sendError.message : 'Не удалось отправить сообщение';
+      setComposerError(message);
+    } finally {
+      setSending(false);
+    }
   };
 
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-500 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-500 shadow-sm">
           Загружаем предложение...
         </div>
       </main>
@@ -142,100 +263,164 @@ export default function PublicSalesRoomPage() {
     );
   }
 
-  const recipientName = room.recipient?.name || 'компания';
-  const businessName = room.business?.name || 'LocalOS';
-  const hasAudit = Boolean(room.audit?.available);
-  const hasMatch = Boolean(room.match?.available);
+  const recipientName = room.recipient?.name || 'получатель';
+  const businessName = room.business?.name || 'Компания';
+  const hasAudit = Boolean(room.audit?.available && room.audit?.public_url);
+  const proposalText =
+    room.proposal?.body_text?.trim() ||
+    room.proposal?.next_step?.trim() ||
+    `Предлагаем обсудить формат сотрудничества между ${businessName} и ${recipientName} и согласовать следующий шаг.`;
 
   return (
-    <main className="min-h-screen bg-[#f6f7fb] text-slate-950">
-      <section className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-10 md:px-10 md:py-14">
-        <div className="flex items-center justify-between gap-4">
-          <div className="text-xs font-bold uppercase tracking-[0.28em] text-orange-500">LocalOS</div>
-          <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500">
-            {room.localos?.badge || 'Сделано в LocalOS'}
+    <main className="min-h-screen bg-[#f5f7fb] text-slate-950">
+      <section className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+        <header className="flex flex-col gap-3 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-600">
+              <span>{businessName}</span>
+              <ArrowRight className="h-4 w-4 text-slate-400" />
+              <span className="text-slate-950">{recipientName}</span>
+            </div>
+            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{roomModeLabel(room.mode)}</div>
           </div>
-        </div>
+          <div className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 shadow-sm">
+            Подготовлено в LocalOS
+          </div>
+        </header>
 
-        <div className="mt-14 max-w-4xl">
-          <div className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">{roomModeLabel(room.mode)}</div>
-          <h1 className="mt-5 text-4xl font-black tracking-tight text-slate-950 md:text-6xl">
-            {room.proposal?.title || `Предложение для ${recipientName}`}
-          </h1>
-          <p className="mt-6 max-w-3xl text-xl leading-8 text-slate-600">
-            {room.proposal?.summary || `${businessName} подготовил короткое предложение для ${recipientName}.`}
-          </p>
-        </div>
-
-        <div className="mt-14 grid gap-5 md:grid-cols-3">
-          {bullets.map((item) => (
-            <div key={item} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <CheckCircle2 className="h-5 w-5 text-orange-500" />
-              <p className="mt-4 text-base font-semibold leading-6 text-slate-900">{item}</p>
+        <section className="mt-8 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-7 lg:p-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-[0.2em] text-orange-500">Предложение</div>
+              <h1 className="mt-3 text-2xl font-black leading-tight tracking-tight text-slate-950 sm:text-3xl">
+                {room.proposal?.title || 'Предложение'}
+              </h1>
             </div>
-          ))}
-        </div>
-
-        <div className="mt-8 grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
-              <Sparkles className="h-4 w-4 text-orange-500" />
-              {hasAudit ? 'Что нашёл LocalOS' : 'Основа предложения'}
-            </div>
-            <div className="mt-5 space-y-3">
-              {hasAudit && room.audit?.summary_text ? (
-                <p className="text-base leading-7 text-slate-600">{room.audit.summary_text}</p>
-              ) : (
-                <p className="text-base leading-7 text-slate-600">
-                  Здесь собраны предложение, следующий шаг и материалы для обсуждения.
-                </p>
-              )}
-              {auditFindings.length > 0 ? (
-                <div className="grid gap-2 pt-2">
-                  {auditFindings.map((item) => (
-                    <div key={item} className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
-              {hasMatch ? 'Match услуг' : 'Следующий шаг'}
-            </div>
-            {hasMatch ? (
-              <div className="mt-5">
-                <div className="text-5xl font-black text-orange-500">{room.match?.match_score ?? 0}%</div>
-                <p className="mt-4 text-sm leading-6 text-slate-600">
-                  {room.match?.score_explanation || 'LocalOS сопоставил услуги и нашёл основу для предложения.'}
-                </p>
-              </div>
-            ) : (
-              <p className="mt-5 text-base leading-7 text-slate-600">
-                {room.proposal?.next_step || 'Откройте предложение и выберите удобный следующий шаг.'}
-              </p>
-            )}
-            <div className="mt-6 flex flex-col gap-3">
-              <Button className="justify-between bg-slate-950 text-white hover:bg-slate-800" onClick={() => void recordEvent('cta_click', { target: 'primary' })}>
-                {room.cta?.primary_label || 'Обсудить предложение'}
-                <ArrowUpRight className="h-4 w-4" />
+            {hasAudit ? (
+              <Button variant="outline" className="shrink-0 gap-2" onClick={openAudit}>
+                Открыть аудит
+                <ExternalLink className="h-4 w-4" />
               </Button>
-              {(room.cta?.secondary_url || room.audit?.public_url) ? (
-                <Button variant="outline" className="justify-between" onClick={openSecondary}>
-                  {room.cta?.secondary_label || 'Посмотреть аудит'}
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
-              ) : null}
-            </div>
-          </section>
-        </div>
+            ) : null}
+          </div>
 
-        <div className="mt-auto pt-12 text-sm leading-6 text-slate-500">
-          {room.localos?.description || 'LocalOS помогает локальному бизнесу превращать спрос в клиентов и выручку.'}
-        </div>
+          <div className="mt-7 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-5 sm:px-6 sm:py-6">
+            <div className="whitespace-pre-wrap text-base leading-8 text-slate-800">{proposalText}</div>
+          </div>
+        </section>
+
+        <form onSubmit={sendMessage} className="mt-6 rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex items-center gap-2 text-sm font-bold text-slate-950">
+            <MessageSquare className="h-4 w-4 text-orange-500" />
+            Обсудить следующий шаг
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <Input
+              value={authorName}
+              onChange={(event) => setAuthorName(event.currentTarget.value)}
+              placeholder="Ваше имя"
+              autoComplete="name"
+            />
+            <Input
+              value={authorContact}
+              onChange={(event) => setAuthorContact(event.currentTarget.value)}
+              placeholder="Email, телефон или Telegram"
+              autoComplete="email"
+            />
+          </div>
+          <Textarea
+            value={messageText}
+            onChange={(event) => setMessageText(event.currentTarget.value)}
+            placeholder="Напишите, что уточнить, изменить или обсудить..."
+            className="mt-3 min-h-28 resize-none"
+          />
+
+          {pendingAttachments.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {pendingAttachments.map((attachment) => (
+                <button
+                  key={attachment.id}
+                  type="button"
+                  onClick={() => setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  {attachment.original_name}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {composerError ? <div className="mt-3 text-sm font-medium text-red-600">{composerError}</div> : null}
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950">
+              <Paperclip className="h-4 w-4" />
+              {uploading ? 'Загружаем файл...' : 'Приложить файл'}
+              <input
+                type="file"
+                className="hidden"
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp"
+                onChange={handleUpload}
+                disabled={uploading || sending}
+              />
+            </label>
+            <Button type="submit" className="gap-2 bg-slate-950 text-white hover:bg-slate-800" disabled={sending || uploading}>
+              {sending ? 'Отправляем...' : 'Отправить'}
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </form>
+
+        <section className="mt-6 rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-bold text-slate-950">История обсуждения</div>
+              <p className="mt-1 text-sm text-slate-500">Сообщения и файлы по этому предложению.</p>
+            </div>
+            <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">{messages.length}</div>
+          </div>
+
+          {messages.length > 0 ? (
+            <div className="mt-5 space-y-3">
+              {messages.map((message) => (
+                <article key={message.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-semibold text-slate-950">{message.author_name || 'Гость'}</div>
+                    <div className="text-xs font-medium text-slate-400">{formatDateTime(message.created_at)}</div>
+                  </div>
+                  {message.body_text ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">{message.body_text}</p> : null}
+                  {Array.isArray(message.attachments) && message.attachments.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {message.attachments.map((attachment) => (
+                        <a
+                          key={attachment.id}
+                          href={attachment.public_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-orange-200 hover:text-orange-600"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          {attachment.original_name}
+                          {formatFileSize(attachment.size_bytes) ? <span className="text-slate-400">{formatFileSize(attachment.size_bytes)}</span> : null}
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+              Пока нет сообщений. Начните обсуждение с вопроса, файла или правки к предложению.
+            </div>
+          )}
+        </section>
+
+        <footer className="px-2 py-8 text-sm leading-6 text-slate-500">
+          LocalOS помогает подготовить предложение, чат и материалы в одном месте.
+        </footer>
       </section>
     </main>
   );

@@ -128,6 +128,10 @@ const shouldRenderHeader = (pathname: string) => {
     return false;
   }
 
+  if (pathname.startsWith("/room/")) {
+    return false;
+  }
+
   if (pathname === "/bazich") {
     return false;
   }

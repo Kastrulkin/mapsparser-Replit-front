@@ -13,12 +13,12 @@ import re
 import time
 import random
 from difflib import SequenceMatcher
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import requests
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_from_directory
 from psycopg2.extras import Json, RealDictCursor
 
 from auth_system import verify_session
@@ -88,6 +88,9 @@ OUTREACH_SEND_MAX_ATTEMPTS = int(os.environ.get("OUTREACH_SEND_MAX_ATTEMPTS", "3
 OUTREACH_RETRY_DELAY_DAYS = (1, 2)  # D1, D3 относительно D0
 OUTREACH_SEND_DELAY_MIN_SEC = max(0.0, float(os.environ.get("OUTREACH_SEND_DELAY_MIN_SEC", "12")))
 OUTREACH_SEND_DELAY_MAX_SEC = max(OUTREACH_SEND_DELAY_MIN_SEC, float(os.environ.get("OUTREACH_SEND_DELAY_MAX_SEC", "28")))
+SALES_ROOM_UPLOAD_MAX_BYTES = int(os.environ.get("SALES_ROOM_UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))
+SALES_ROOM_UPLOAD_DIR = os.environ.get("SALES_ROOM_UPLOAD_DIR", "uploads/sales_rooms")
+SALES_ROOM_ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "xls", "xlsx", "csv", "txt", "png", "jpg", "jpeg", "webp"}
 TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS", "14")))
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
@@ -666,6 +669,47 @@ def _ensure_sales_room_tables(conn) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_sales_room_events_room_created
         ON sales_room_events (room_id, created_at DESC)
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sales_room_messages (
+            id UUID PRIMARY KEY,
+            room_id UUID NOT NULL REFERENCES sales_rooms(id) ON DELETE CASCADE,
+            author_type TEXT NOT NULL DEFAULT 'visitor',
+            author_name TEXT,
+            author_contact TEXT,
+            body_text TEXT,
+            attachments_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_sales_room_messages_room_created
+        ON sales_room_messages (room_id, created_at ASC)
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sales_room_files (
+            id UUID PRIMARY KEY,
+            room_id UUID NOT NULL REFERENCES sales_rooms(id) ON DELETE CASCADE,
+            message_id UUID REFERENCES sales_room_messages(id) ON DELETE SET NULL,
+            original_name TEXT NOT NULL,
+            mime_type TEXT,
+            size_bytes INTEGER NOT NULL DEFAULT 0,
+            storage_path TEXT NOT NULL,
+            public_url TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_sales_room_files_room_created
+        ON sales_room_files (room_id, created_at DESC)
         """
     )
 
@@ -4120,6 +4164,11 @@ def _contains_quality_red_flags(text: Any, language: str) -> bool:
         "обладает высоким",
         "имеет хороший рейтинг",
         "имеет хорошие отзывы",
+        "отзывы дают доверие",
+        "слабее влияют на запись",
+        "категории и профиль",
+        "профиль клиники можно усилить",
+        "не хватает регулярных экспертных обновлений",
         "already has a strong base",
         "solid base",
         "high level of customer satisfaction",
@@ -4548,6 +4597,9 @@ def _generate_lead_audit_enrichment(
         "Начинай summary_text с конкретного недостатка карточки, а не с похвалы бизнесу.\n"
         "Не начинай с фраз вроде 'у вас хороший рейтинг', 'высокий потенциал', 'сильная база'.\n"
         "Не используй пустые формулировки вроде 'высокий потенциал', 'стратегическое улучшение', 'онлайн-присутствие' без привязки к фактам.\n"
+        "Не называй точкой роста абстрактную область вроде 'категории и профиль можно усилить', 'отзывы дают доверие', 'не хватает экспертных обновлений'.\n"
+        "Каждая точка роста должна быть действием + механизмом: что сделать, где именно и зачем это влияет на поиск, запись или выбор.\n"
+        "Хороший формат: 'переписать услуги с SEO-ключами, чтобы попасть в поиск пользователей', 'начать вести новости для лучшей видимости', 'отвечать на отзывы с упоминанием смежных услуг'.\n"
         "recommended_actions максимум 3.\n"
         "summary_text 2-3 предложения, максимум 420 символов.\n"
         "why_now одно короткое предложение, максимум 180 символов.\n"
@@ -10817,7 +10869,7 @@ def _build_admin_lead_offer_payload(
         "preferred_language": primary_language,
         "primary_language": primary_language,
         "enabled_languages": selected_languages,
-        "available_languages": list(PUBLIC_AUDIT_LANGUAGES),
+        "available_languages": selected_languages,
         "category": lead.get("category"),
         "city": resolved_city or None,
         "address": lead.get("address"),
@@ -10915,7 +10967,7 @@ def _build_partnership_offer_payload(
         "preferred_language": primary_language,
         "primary_language": primary_language,
         "enabled_languages": selected_languages,
-        "available_languages": list(PUBLIC_AUDIT_LANGUAGES),
+        "available_languages": selected_languages,
         "category": lead.get("category"),
         "city": lead.get("city"),
         "address": lead.get("address"),
@@ -11024,6 +11076,95 @@ def _short_list(items: Any, limit: int = 3) -> list[str]:
     return result
 
 
+def _clean_sales_room_offer_text(text: str) -> str:
+    lines = [line.rstrip() for line in str(text or "").replace("\r\n", "\n").split("\n")]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if lines:
+        first_line_raw = lines[0].strip()
+        first_line = first_line_raw.lower()
+        greeting_prefixes = (
+            "здравствуйте",
+            "добрый день",
+            "добрый вечер",
+            "привет",
+        )
+        if first_line.rstrip("!. ,") in greeting_prefixes or any(first_line.startswith(f"{prefix},") for prefix in greeting_prefixes):
+            lines.pop(0)
+        else:
+            for prefix in greeting_prefixes:
+                pattern = re.compile(rf"^{re.escape(prefix)}[.!?,\s]+", re.IGNORECASE)
+                if pattern.match(first_line_raw):
+                    lines[0] = pattern.sub("", first_line_raw, count=1).strip()
+                    break
+    cleaned_lines: list[str] = []
+    for line in lines:
+        normalized = line.strip()
+        if "/room/" in normalized or "localos.pro/room/" in normalized:
+            continue
+        cleaned_lines.append(line)
+    while cleaned_lines and not cleaned_lines[-1].strip():
+        cleaned_lines.pop()
+    signature_starts = {"с уважением", "с уважением,", "спасибо", "спасибо,"}
+    for index, line in enumerate(cleaned_lines):
+        if line.strip().lower() in signature_starts:
+            cleaned_lines = cleaned_lines[:index]
+            break
+    cleaned = "\n".join(cleaned_lines).strip()
+    return re.sub(r"\n{3,}", "\n\n", cleaned)
+
+
+def _extract_sales_room_offer_text(offer_draft_json: dict[str, Any] | None) -> str:
+    if not isinstance(offer_draft_json, dict):
+        return ""
+    candidates: list[Any] = [
+        offer_draft_json.get("approved_text"),
+        offer_draft_json.get("edited_text"),
+        offer_draft_json.get("generated_text"),
+        offer_draft_json.get("text"),
+        offer_draft_json.get("draft_text"),
+        offer_draft_json.get("body_text"),
+        offer_draft_json.get("message"),
+    ]
+    for key in ("draft", "offer", "payload"):
+        nested = offer_draft_json.get(key)
+        if isinstance(nested, dict):
+            candidates.extend(
+                [
+                    nested.get("approved_text"),
+                    nested.get("edited_text"),
+                    nested.get("generated_text"),
+                    nested.get("text"),
+                    nested.get("draft_text"),
+                    nested.get("body_text"),
+                    nested.get("message"),
+                ]
+            )
+    for candidate in candidates:
+        cleaned = _clean_sales_room_offer_text(str(candidate or ""))
+        if cleaned:
+            return cleaned
+    return ""
+
+
+def _fallback_sales_room_offer_text(*, mode: str, business_name: str, lead_name: str) -> str:
+    if mode == SALES_ROOM_MODE_PARTNER:
+        return (
+            f"Предлагаем обсудить партнёрство между {business_name} и {lead_name}.\n\n"
+            "Возможный формат:\n"
+            "— кросс-рекомендации клиентам, которым актуальны смежные услуги;\n"
+            "— простой тест на 1–2 недели без сложной интеграции;\n"
+            "— понятный следующий шаг после обсуждения деталей."
+        )
+    return (
+        f"Предлагаем обсудить, как {lead_name} может получать больше обращений из локального спроса.\n\n"
+        "Возможный формат:\n"
+        "— посмотреть, где теряются обращения;\n"
+        "— выбрать первые точки роста;\n"
+        "— согласовать следующий шаг без лишней подготовки."
+    )
+
+
 def _build_sales_room_proposal(
     *,
     mode: str,
@@ -11032,51 +11173,28 @@ def _build_sales_room_proposal(
     business_name: str,
     audit_json: dict[str, Any] | None = None,
     match_json: dict[str, Any] | None = None,
+    offer_draft_json: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     lead_name = str(lead.get("name") or "компания").strip() or "компания"
-    clean_audit = audit_json if isinstance(audit_json, dict) else {}
-    clean_match = match_json if isinstance(match_json, dict) else {}
+    body_text = _extract_sales_room_offer_text(offer_draft_json)
+    if not body_text:
+        body_text = _fallback_sales_room_offer_text(mode=mode, business_name=business_name, lead_name=lead_name)
     if mode == SALES_ROOM_MODE_PARTNER:
-        angles = _short_list(clean_match.get("offer_angles"), 3)
-        if not angles:
-            angles = [
-                f"У {business_name} и {lead_name} может быть пересекающаяся аудитория.",
-                "Можно начать с простого обмена рекомендациями.",
-                "Первый шаг — проверить интерес без сложной механики.",
-            ]
-        title = f"Предложение по партнёрству для {lead_name}"
-        summary = (
-            f"LocalOS подготовил идею сотрудничества между {business_name} и {lead_name}."
-            if data_mode == SALES_ROOM_DATA_TEMPLATE
-            else f"LocalOS сопоставил услуги {business_name} и {lead_name} и подготовил предложение."
-        )
-        next_step = "Если идея подходит, обсудите короткий тест партнёрства."
         return {
-            "title": title,
-            "summary": summary,
-            "bullets": angles,
-            "next_step": next_step,
+            "title": "Предложение",
+            "summary": "",
+            "body_text": body_text,
+            "bullets": [],
+            "next_step": "Обсудить детали и согласовать первый тест.",
             "data_mode": data_mode,
         }
 
-    findings = _short_list(clean_audit.get("findings"), 3)
-    if not findings:
-        findings = [
-            "Карточку можно сделать понятнее для клиента до первого обращения.",
-            "Спрос с карт зависит от услуг, отзывов и контента.",
-            "Первый шаг — показать клиенту конкретные точки роста.",
-        ]
-    title = f"Разбор роста для {lead_name}"
-    summary = (
-        f"LocalOS подготовил предложение по росту для {lead_name}."
-        if data_mode == SALES_ROOM_DATA_TEMPLATE
-        else f"LocalOS подготовил короткий разбор, где {lead_name} может терять обращения."
-    )
     return {
-        "title": title,
-        "summary": summary,
-        "bullets": findings,
-        "next_step": "Откройте разбор и выберите, какие правки стоит внедрить первыми.",
+        "title": "Предложение",
+        "summary": "",
+        "body_text": body_text,
+        "bullets": [],
+        "next_step": "Обсудить детали и выбрать первый шаг.",
         "data_mode": data_mode,
     }
 
@@ -11261,6 +11379,137 @@ def _record_sales_room_event(conn, *, slug: str, event_type: str, metadata: dict
             """,
             (room_id,),
         )
+
+
+def _sales_room_upload_root() -> str:
+    return os.path.abspath(SALES_ROOM_UPLOAD_DIR)
+
+
+def _clean_sales_room_filename(filename: str) -> str:
+    raw = str(filename or "file").strip().replace("\\", "/").split("/")[-1]
+    cleaned = re.sub(r"[^A-Za-z0-9А-Яа-яЁё._ -]+", "-", raw).strip(" .-")
+    return cleaned or "file"
+
+
+def _sales_room_file_extension(filename: str) -> str:
+    if "." not in filename:
+        return ""
+    return filename.rsplit(".", 1)[-1].strip().lower()
+
+
+def _is_uuid_string(value: str) -> bool:
+    try:
+        uuid.UUID(str(value or "").strip())
+        return True
+    except ValueError:
+        return False
+
+
+def _serialize_sales_room_message(row: dict[str, Any]) -> dict[str, Any]:
+    attachments = row.get("attachments_json")
+    if not isinstance(attachments, list):
+        attachments = []
+    return _to_json_compatible(
+        {
+            "id": row.get("id"),
+            "author_type": row.get("author_type") or "visitor",
+            "author_name": row.get("author_name") or "Гость",
+            "author_contact": row.get("author_contact") or "",
+            "body_text": row.get("body_text") or "",
+            "attachments": attachments,
+            "created_at": row.get("created_at"),
+        }
+    )
+
+
+def _load_sales_room_messages(cur, room_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    cur.execute(
+        """
+        SELECT id, author_type, author_name, author_contact, body_text, attachments_json, created_at
+        FROM sales_room_messages
+        WHERE room_id = %s
+        ORDER BY created_at ASC
+        LIMIT %s
+        """,
+        (room_id, limit),
+    )
+    rows = cur.fetchall() or []
+    return [_serialize_sales_room_message(dict(row)) for row in rows]
+
+
+def _load_sales_room_by_slug(cur, slug: str) -> dict[str, Any]:
+    cur.execute(
+        """
+        SELECT id, slug, mode, lead_id, room_json, status, updated_at
+        FROM sales_rooms
+        WHERE slug = %s
+        LIMIT 1
+        """,
+        (slug,),
+    )
+    row = cur.fetchone()
+    return dict(row) if row and hasattr(row, "keys") else {}
+
+
+def _load_sales_room_offer_text_from_drafts(cur, lead_id: str) -> str:
+    clean_lead_id = str(lead_id or "").strip()
+    if not clean_lead_id:
+        return ""
+    cur.execute(
+        """
+        SELECT approved_text, edited_text, generated_text
+        FROM outreachmessagedrafts
+        WHERE lead_id = %s
+          AND angle_type IN ('partnership_offer', 'partnership_commercial_offer')
+        ORDER BY
+          CASE WHEN status = 'approved' THEN 0 ELSE 1 END,
+          updated_at DESC NULLS LAST,
+          created_at DESC NULLS LAST
+        LIMIT 1
+        """,
+        (clean_lead_id,),
+    )
+    row = cur.fetchone()
+    draft = dict(row) if row and hasattr(row, "keys") else {}
+    return _clean_sales_room_offer_text(
+        str(draft.get("approved_text") or draft.get("edited_text") or draft.get("generated_text") or "")
+    )
+
+
+def _normalize_public_sales_room_proposal(cur, row: dict[str, Any], room_json: dict[str, Any]) -> dict[str, Any]:
+    proposal = room_json.get("proposal") if isinstance(room_json.get("proposal"), dict) else {}
+    body_text = str(proposal.get("body_text") or "").strip()
+    mode = str(row.get("mode") or room_json.get("mode") or "").strip()
+    lead_id = str(row.get("lead_id") or "").strip()
+    if not body_text and mode == SALES_ROOM_MODE_PARTNER and lead_id:
+        try:
+            artifact = _load_partnership_artifact(cur, lead_id)
+            offer_draft_json = artifact.get("offer_draft_json") if isinstance(artifact.get("offer_draft_json"), dict) else {}
+            body_text = _extract_sales_room_offer_text(offer_draft_json)
+        except Exception:
+            print("Sales room offer artifact fallback skipped")
+    if not body_text and mode == SALES_ROOM_MODE_PARTNER and lead_id:
+        try:
+            body_text = _load_sales_room_offer_text_from_drafts(cur, lead_id)
+        except Exception:
+            print("Sales room outreach draft fallback skipped")
+    business = room_json.get("business") if isinstance(room_json.get("business"), dict) else {}
+    recipient = room_json.get("recipient") if isinstance(room_json.get("recipient"), dict) else {}
+    if not body_text:
+        body_text = _fallback_sales_room_offer_text(
+            mode=mode,
+            business_name=str(business.get("name") or "наша компания"),
+            lead_name=str(recipient.get("name") or "компания"),
+        )
+    room_json["proposal"] = {
+        "title": "Предложение",
+        "summary": "",
+        "body_text": body_text,
+        "bullets": [],
+        "next_step": str(proposal.get("next_step") or "Обсудить детали и выбрать первый шаг.").strip(),
+        "data_mode": str(proposal.get("data_mode") or room_json.get("data_mode") or ""),
+    }
+    return room_json
 
 
 def _resolve_outreach_language(lead: dict[str, Any]) -> str:
@@ -11615,6 +11864,7 @@ def _create_or_update_sales_room(
     audit_public_url: str,
     audit_json: dict[str, Any] | None,
     match_json: dict[str, Any] | None,
+    offer_draft_json: dict[str, Any] | None = None,
     partner_card_id: str | None = None,
     channel: str = "manual",
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -11633,6 +11883,7 @@ def _create_or_update_sales_room(
         business_name=business_name,
         audit_json=audit_json,
         match_json=match_json,
+        offer_draft_json=offer_draft_json,
     )
     room_json = _build_sales_room_payload(
         mode=mode,
@@ -11728,6 +11979,11 @@ def _prepare_partnership_sales_room(
 
         artifact = _load_partnership_artifact(cur, lead_id)
         audit_json = artifact.get("audit_json") if isinstance(artifact.get("audit_json"), dict) else {}
+        offer_draft_json = artifact.get("offer_draft_json") if isinstance(artifact.get("offer_draft_json"), dict) else {}
+        if not offer_draft_json:
+            draft_text = _load_sales_room_offer_text_from_drafts(cur, lead_id)
+            if draft_text:
+                offer_draft_json = {"text": draft_text}
         if data_mode == SALES_ROOM_DATA_AUDITED and not audit_json:
             audit_json = _to_json_compatible(build_lead_card_preview_snapshot(lead))
         match_json = artifact.get("match_json") if isinstance(artifact.get("match_json"), dict) else {}
@@ -11761,6 +12017,7 @@ def _prepare_partnership_sales_room(
             audit_public_url=str(lead.get("public_audit_url") or ""),
             audit_json=audit_json,
             match_json=match_json,
+            offer_draft_json=offer_draft_json,
             channel=channel,
         )
         billing = {"status": "not_required", "credit_charged": False, "charged_credits": 0}
@@ -13001,28 +13258,217 @@ def public_sales_room(slug):
         try:
             _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
-            cur.execute(
-                """
-                SELECT id, slug, room_json, status, updated_at
-                FROM sales_rooms
-                WHERE slug = %s
-                LIMIT 1
-                """,
-                (normalized_slug,),
-            )
-            row = cur.fetchone()
+            row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
                 return jsonify({"error": "Sales room not found"}), 404
             _record_sales_room_event(conn, slug=normalized_slug, event_type="view", metadata={"source": "public_page"})
             conn.commit()
             room_json = row.get("room_json") if isinstance(row.get("room_json"), dict) else {}
+            room_json = _normalize_public_sales_room_proposal(cur, row, room_json)
             room_json["slug"] = normalized_slug
             room_json["public_url"] = _make_sales_room_url(normalized_slug)
+            room_json["messages"] = _load_sales_room_messages(cur, str(row.get("id") or ""))
             return jsonify({"success": True, "room": _to_json_compatible(room_json)})
         finally:
             conn.close()
     except Exception as e:
         print(f"Error loading public sales room: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/sales-rooms/public/<string:slug>/messages", methods=["POST"])
+def public_sales_room_message(slug):
+    try:
+        normalized_slug = _slugify_company_name(slug)
+        data = request.get_json(silent=True) or {}
+        author_name = str(data.get("author_name") or "").strip()
+        author_contact = str(data.get("author_contact") or "").strip()
+        body_text = str(data.get("body_text") or "").strip()
+        attachments = data.get("attachments") if isinstance(data.get("attachments"), list) else []
+        clean_attachments: list[dict[str, Any]] = []
+        for attachment in attachments[:5]:
+            if not isinstance(attachment, dict):
+                continue
+            file_id = str(attachment.get("id") or "").strip()
+            original_name = str(attachment.get("original_name") or attachment.get("name") or "").strip()
+            public_url = str(attachment.get("public_url") or "").strip()
+            if file_id and _is_uuid_string(file_id) and original_name and public_url:
+                clean_attachments.append(
+                    {
+                        "id": file_id,
+                        "original_name": original_name,
+                        "mime_type": str(attachment.get("mime_type") or "").strip(),
+                        "size_bytes": int(attachment.get("size_bytes") or 0),
+                        "public_url": public_url,
+                    }
+                )
+        if not author_name:
+            return jsonify({"error": "author_name is required"}), 400
+        if not author_contact:
+            return jsonify({"error": "author_contact is required"}), 400
+        if not body_text and not clean_attachments:
+            return jsonify({"error": "message or attachment is required"}), 400
+        if len(body_text) > 4000:
+            return jsonify({"error": "message is too long"}), 400
+        conn = get_db_connection()
+        try:
+            _ensure_sales_room_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _load_sales_room_by_slug(cur, normalized_slug)
+            if not row:
+                return jsonify({"error": "Sales room not found"}), 404
+            message_id = str(uuid.uuid4())
+            room_id = str(row.get("id") or "")
+            cur.execute(
+                """
+                INSERT INTO sales_room_messages (
+                    id, room_id, author_type, author_name, author_contact, body_text, attachments_json, created_at
+                ) VALUES (
+                    %s, %s, 'visitor', %s, %s, %s, %s, NOW()
+                )
+                RETURNING id, author_type, author_name, author_contact, body_text, attachments_json, created_at
+                """,
+                (message_id, room_id, author_name, author_contact, body_text, Json(clean_attachments)),
+            )
+            message = _serialize_sales_room_message(dict(cur.fetchone()))
+            if clean_attachments:
+                file_ids = [str(item.get("id") or "") for item in clean_attachments if str(item.get("id") or "").strip()]
+                cur.execute(
+                    """
+                    UPDATE sales_room_files
+                    SET message_id = %s
+                    WHERE room_id = %s
+                      AND id = ANY(%s::uuid[])
+                    """,
+                    (message_id, room_id, file_ids),
+                )
+            _record_sales_room_event(
+                conn,
+                slug=normalized_slug,
+                event_type="message_sent",
+                metadata={"has_attachments": bool(clean_attachments)},
+            )
+            conn.commit()
+            return jsonify({"success": True, "message": message})
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error creating public sales room message: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/sales-rooms/public/<string:slug>/files", methods=["POST"])
+def public_sales_room_file_upload(slug):
+    try:
+        normalized_slug = _slugify_company_name(slug)
+        uploaded_file = request.files.get("file")
+        if not uploaded_file:
+            return jsonify({"error": "file is required"}), 400
+        original_name = _clean_sales_room_filename(uploaded_file.filename or "file")
+        extension = _sales_room_file_extension(original_name)
+        if extension not in SALES_ROOM_ALLOWED_EXTENSIONS:
+            return jsonify({"error": "Unsupported file type"}), 400
+        content = uploaded_file.read()
+        if not content:
+            return jsonify({"error": "file is empty"}), 400
+        if len(content) > SALES_ROOM_UPLOAD_MAX_BYTES:
+            return jsonify({"error": "file is too large"}), 400
+        conn = get_db_connection()
+        try:
+            _ensure_sales_room_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _load_sales_room_by_slug(cur, normalized_slug)
+            if not row:
+                return jsonify({"error": "Sales room not found"}), 404
+            room_id = str(row.get("id") or "")
+            file_id = str(uuid.uuid4())
+            storage_dir = os.path.join(_sales_room_upload_root(), room_id)
+            os.makedirs(storage_dir, exist_ok=True)
+            stored_name = f"{file_id}.{extension}"
+            storage_path = os.path.join(storage_dir, stored_name)
+            with open(storage_path, "wb") as fh:
+                fh.write(content)
+            public_url = f"/api/sales-rooms/public/{quote(normalized_slug)}/files/{file_id}"
+            attachment = {
+                "id": file_id,
+                "original_name": original_name,
+                "mime_type": uploaded_file.mimetype or "",
+                "size_bytes": len(content),
+                "public_url": public_url,
+            }
+            cur.execute(
+                """
+                INSERT INTO sales_room_files (
+                    id, room_id, original_name, mime_type, size_bytes, storage_path, public_url, created_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, NOW()
+                )
+                """,
+                (
+                    file_id,
+                    room_id,
+                    original_name,
+                    uploaded_file.mimetype or "",
+                    len(content),
+                    storage_path,
+                    public_url,
+                ),
+            )
+            _record_sales_room_event(
+                conn,
+                slug=normalized_slug,
+                event_type="file_uploaded",
+                metadata={"file_id": file_id, "size_bytes": len(content), "mime_type": uploaded_file.mimetype or ""},
+            )
+            conn.commit()
+            return jsonify({"success": True, "file": attachment})
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error uploading public sales room file: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/sales-rooms/public/<string:slug>/files/<string:file_id>", methods=["GET"])
+def public_sales_room_file(slug, file_id):
+    try:
+        normalized_slug = _slugify_company_name(slug)
+        normalized_file_id = str(file_id or "").strip()
+        if not _is_uuid_string(normalized_file_id):
+            return jsonify({"error": "File not found"}), 404
+        conn = get_db_connection()
+        try:
+            _ensure_sales_room_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(
+                """
+                SELECT f.storage_path, f.original_name, f.mime_type
+                FROM sales_room_files f
+                JOIN sales_rooms sr ON sr.id = f.room_id
+                WHERE sr.slug = %s
+                  AND f.id = %s
+                LIMIT 1
+                """,
+                (normalized_slug, normalized_file_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "File not found"}), 404
+            storage_path = os.path.abspath(str(row.get("storage_path") or ""))
+            upload_root = _sales_room_upload_root()
+            if os.path.commonpath([upload_root, storage_path]) != upload_root or not os.path.exists(storage_path):
+                return jsonify({"error": "File not found"}), 404
+            return send_from_directory(
+                os.path.dirname(storage_path),
+                os.path.basename(storage_path),
+                mimetype=row.get("mime_type") or None,
+                download_name=str(row.get("original_name") or "file"),
+                as_attachment=False,
+            )
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error loading public sales room file: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -13032,7 +13478,7 @@ def public_sales_room_event(slug):
         normalized_slug = _slugify_company_name(slug)
         data = request.get_json(silent=True) or {}
         event_type = str(data.get("event_type") or "").strip().lower()
-        if event_type not in {"cta_click", "audit_open", "copy_link", "view"}:
+        if event_type not in {"cta_click", "audit_open", "copy_link", "view", "proposal_viewed", "message_sent", "file_uploaded"}:
             return jsonify({"error": "Unsupported event_type"}), 400
         metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
         conn = get_db_connection()
