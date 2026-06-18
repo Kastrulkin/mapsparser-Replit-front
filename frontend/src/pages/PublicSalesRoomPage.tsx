@@ -131,7 +131,7 @@ const formatDateTime = (value?: string) => {
 };
 
 const roomAuthorNameKey = 'localos_sales_room_author_name';
-const roomAuthorContactKey = 'localos_sales_room_author_contact';
+const roomAuthorCompanyKey = 'localos_sales_room_author_company';
 
 const textOffsetInElement = (root: HTMLElement, targetNode: Node, targetOffset: number) => {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -148,6 +148,25 @@ const textOffsetInElement = (root: HTMLElement, targetNode: Node, targetOffset: 
   return null;
 };
 
+const getSuggestionRange = (bodyText: string, suggestion: SalesRoomProposalSuggestion) => {
+  if (suggestion.suggestion_type !== 'replace' || suggestion.status !== 'pending') return null;
+  const selectionText = (suggestion.selection_text || '').trim();
+  const replacementText = (suggestion.replacement_text || '').trim();
+  if (!selectionText || !replacementText || !suggestion.id) return null;
+
+  const start = typeof suggestion.selection_start === 'number' ? suggestion.selection_start : -1;
+  const end = typeof suggestion.selection_end === 'number' ? suggestion.selection_end : -1;
+  if (start >= 0 && end > start && bodyText.slice(start, end) === selectionText) {
+    return { start, end, suggestion };
+  }
+
+  const fallbackStart = bodyText.indexOf(selectionText);
+  if (fallbackStart >= 0) {
+    return { start: fallbackStart, end: fallbackStart + selectionText.length, suggestion };
+  }
+  return null;
+};
+
 export default function PublicSalesRoomPage() {
   const { roomSlug } = useParams<{ roomSlug: string }>();
   const proposalRef = useRef<HTMLDivElement | null>(null);
@@ -159,7 +178,7 @@ export default function PublicSalesRoomPage() {
   const [error, setError] = useState<string | null>(null);
   const [composerError, setComposerError] = useState<string | null>(null);
   const [authorName, setAuthorName] = useState(() => localStorage.getItem(roomAuthorNameKey) || '');
-  const [authorContact, setAuthorContact] = useState(() => localStorage.getItem(roomAuthorContactKey) || '');
+  const [authorCompany, setAuthorCompany] = useState(() => localStorage.getItem(roomAuthorCompanyKey) || '');
   const [messageText, setMessageText] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<SalesRoomAttachment[]>([]);
   const [selectedText, setSelectedText] = useState('');
@@ -251,12 +270,12 @@ export default function PublicSalesRoomPage() {
   const submitProposalSuggestion = async () => {
     if (!roomSlug || submittingSuggestion) return;
     const cleanName = authorName.trim();
-    const cleanContact = authorContact.trim();
+    const cleanCompany = authorCompany.trim();
     const cleanSelection = selectedText.trim();
     const cleanReplacement = replacementText.trim();
     const cleanComment = commentText.trim();
-    if (!cleanName || !cleanContact) {
-      setReviewError('Укажите имя и контакт ниже в форме обсуждения, чтобы было понятно, кто предложил правку.');
+    if (!cleanName || !cleanCompany) {
+      setReviewError('Укажите имя и компанию ниже в форме обсуждения, чтобы было понятно, кто предложил правку.');
       return;
     }
     if (!cleanSelection) {
@@ -275,12 +294,12 @@ export default function PublicSalesRoomPage() {
     setReviewError(null);
     try {
       localStorage.setItem(roomAuthorNameKey, cleanName);
-      localStorage.setItem(roomAuthorContactKey, cleanContact);
+      localStorage.setItem(roomAuthorCompanyKey, cleanCompany);
       await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/proposal/suggestions`, {
         method: 'POST',
         body: JSON.stringify({
           author_name: cleanName,
-          author_contact: cleanContact,
+          author_contact: cleanCompany,
           suggestion_type: reviewMode,
           selection_text: cleanSelection,
           selection_start: selectedStart,
@@ -302,9 +321,9 @@ export default function PublicSalesRoomPage() {
   const resolveProposalSuggestion = async (suggestion: SalesRoomProposalSuggestion, action: 'accept' | 'reject') => {
     if (!roomSlug || !suggestion.id || resolvingSuggestionId) return;
     const cleanName = authorName.trim();
-    const cleanContact = authorContact.trim();
-    if (!cleanName || !cleanContact) {
-      setReviewError('Укажите имя и контакт ниже в форме обсуждения, чтобы принять или отклонить правку.');
+    const cleanCompany = authorCompany.trim();
+    if (!cleanName || !cleanCompany) {
+      setReviewError('Укажите имя и компанию ниже в форме обсуждения, чтобы принять или отклонить правку.');
       return;
     }
     setResolvingSuggestionId(suggestion.id);
@@ -315,7 +334,7 @@ export default function PublicSalesRoomPage() {
         body: JSON.stringify({
           action,
           author_name: cleanName,
-          author_contact: cleanContact,
+          author_contact: cleanCompany,
         }),
       });
       await loadRoom();
@@ -361,14 +380,14 @@ export default function PublicSalesRoomPage() {
     event.preventDefault();
     if (!roomSlug || sending) return;
     const cleanName = authorName.trim();
-    const cleanContact = authorContact.trim();
+    const cleanCompany = authorCompany.trim();
     const cleanMessage = messageText.trim();
     if (!cleanName) {
       setComposerError('Укажите имя, чтобы было понятно, кто пишет.');
       return;
     }
-    if (!cleanContact) {
-      setComposerError('Оставьте контакт для ответа.');
+    if (!cleanCompany) {
+      setComposerError('Укажите компанию.');
       return;
     }
     if (!cleanMessage && pendingAttachments.length === 0) {
@@ -379,12 +398,12 @@ export default function PublicSalesRoomPage() {
     setComposerError(null);
     try {
       localStorage.setItem(roomAuthorNameKey, cleanName);
-      localStorage.setItem(roomAuthorContactKey, cleanContact);
+      localStorage.setItem(roomAuthorCompanyKey, cleanCompany);
       const response = await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/messages`, {
         method: 'POST',
         body: JSON.stringify({
           author_name: cleanName,
-          author_contact: cleanContact,
+          author_contact: cleanCompany,
           body_text: cleanMessage,
           attachments: pendingAttachments,
         }),
@@ -436,6 +455,54 @@ export default function PublicSalesRoomPage() {
   const pendingSuggestions = suggestions.filter((suggestion) => suggestion.status === 'pending');
   const resolvedSuggestions = suggestions.filter((suggestion) => suggestion.status !== 'pending').slice(0, 6);
   const latestVersionNo = room.proposal_review?.latest_version?.version_no || 1;
+  const inlineReplacementRanges = pendingSuggestions
+    .map((suggestion) => getSuggestionRange(proposalText, suggestion))
+    .filter((range): range is { start: number; end: number; suggestion: SalesRoomProposalSuggestion } => Boolean(range))
+    .sort((left, right) => left.start - right.start)
+    .filter((range, index, ranges) => index === 0 || range.start >= ranges[index - 1].end);
+
+  const renderProposalWithInlineSuggestions = () => {
+    if (inlineReplacementRanges.length === 0) return proposalText;
+    const fragments: Array<string | JSX.Element> = [];
+    let cursor = 0;
+    inlineReplacementRanges.forEach((range) => {
+      if (range.start > cursor) {
+        fragments.push(proposalText.slice(cursor, range.start));
+      }
+      const originalText = proposalText.slice(range.start, range.end);
+      fragments.push(
+        <span key={range.suggestion.id} className="mx-0.5 inline-flex max-w-full flex-col align-baseline">
+          <span className="rounded-lg border border-orange-200 bg-orange-50 px-2 py-1 text-sm font-semibold leading-6 text-orange-700">
+            {range.suggestion.replacement_text}
+          </span>
+          <span className="mt-0.5 text-slate-400 line-through decoration-orange-500 decoration-2">{originalText}</span>
+          <span className="mt-1 inline-flex flex-wrap gap-1">
+            <button
+              type="button"
+              className="rounded-full bg-orange-500 px-2 py-0.5 text-xs font-semibold leading-5 text-white hover:bg-orange-600 disabled:opacity-60"
+              onClick={() => void resolveProposalSuggestion(range.suggestion, 'accept')}
+              disabled={resolvingSuggestionId === range.suggestion.id}
+            >
+              Принять
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold leading-5 text-slate-600 hover:border-slate-300 hover:text-slate-900 disabled:opacity-60"
+              onClick={() => void resolveProposalSuggestion(range.suggestion, 'reject')}
+              disabled={resolvingSuggestionId === range.suggestion.id}
+            >
+              Отклонить
+            </button>
+          </span>
+        </span>,
+      );
+      cursor = range.end;
+    });
+    if (cursor < proposalText.length) {
+      fragments.push(proposalText.slice(cursor));
+    }
+    return fragments;
+  };
 
   return (
     <main className="min-h-screen bg-[#f5f7fb] text-slate-950">
@@ -481,7 +548,7 @@ export default function PublicSalesRoomPage() {
               onKeyUp={captureProposalSelection}
               className="whitespace-pre-wrap text-base leading-8 text-slate-800 selection:bg-orange-100"
             >
-              {proposalText}
+              {renderProposalWithInlineSuggestions()}
             </div>
           </div>
 
@@ -539,10 +606,13 @@ export default function PublicSalesRoomPage() {
                       <article key={suggestion.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                         <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
                           {suggestion.suggestion_type === 'comment' ? 'Комментарий' : 'Правка'} от {suggestion.author_name || 'Гость'}
+                          {suggestion.author_contact ? ` · ${suggestion.author_contact}` : ''}
                         </div>
-                        <div className="mt-2 rounded-lg bg-white px-3 py-2 text-sm leading-6 text-slate-600">{suggestion.selection_text}</div>
+                        <div className="mt-2 rounded-lg bg-white px-3 py-2 text-sm leading-6 text-slate-500 line-through decoration-orange-500 decoration-2">
+                          {suggestion.selection_text}
+                        </div>
                         {suggestion.suggestion_type === 'replace' ? (
-                          <div className="mt-2 rounded-lg border border-orange-100 bg-orange-50 px-3 py-2 text-sm leading-6 text-slate-800">
+                          <div className="mt-2 rounded-lg border border-orange-100 bg-orange-50 px-3 py-2 text-sm font-semibold leading-6 text-orange-700">
                             {suggestion.replacement_text}
                           </div>
                         ) : (
@@ -619,10 +689,10 @@ export default function PublicSalesRoomPage() {
               autoComplete="name"
             />
             <Input
-              value={authorContact}
-              onChange={(event) => setAuthorContact(event.currentTarget.value)}
-              placeholder="Email, телефон или Telegram"
-              autoComplete="email"
+              value={authorCompany}
+              onChange={(event) => setAuthorCompany(event.currentTarget.value)}
+              placeholder="Компания"
+              autoComplete="organization"
             />
           </div>
           <Textarea
@@ -687,6 +757,7 @@ export default function PublicSalesRoomPage() {
                     <div className="font-semibold text-slate-950">{message.author_name || 'Гость'}</div>
                     <div className="text-xs font-medium text-slate-400">{formatDateTime(message.created_at)}</div>
                   </div>
+                  {message.author_contact ? <div className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">{message.author_contact}</div> : null}
                   {message.body_text ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">{message.body_text}</p> : null}
                   {Array.isArray(message.attachments) && message.attachments.length > 0 ? (
                     <div className="mt-3 flex flex-wrap gap-2">
