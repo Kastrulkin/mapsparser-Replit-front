@@ -3000,7 +3000,9 @@ const PublicPartnershipOfferPage: React.FC = () => {
             {
               title: lang === 'ru' ? 'Что важно для бизнеса' : 'Why it matters',
               description: lang === 'ru'
-                ? 'Смотрим не только на цифры, а на то, где клиенту сложнее выбрать вас и где теряется доверие.'
+                ? isNetworkAudit && auditProfileForWhy.includes('food')
+                  ? 'Смотрим, что в карточке мешает клиенту быстро понять меню, выбрать ближайшую точку и перейти к заказу или визиту.'
+                  : 'Смотрим не только на цифры, а на то, где клиенту сложнее выбрать вас и где теряется доверие.'
                 : 'The focus is not only on numbers, but on where customers lose trust or struggle to choose you.',
             },
           ]}
