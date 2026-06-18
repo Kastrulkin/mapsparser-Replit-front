@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import requests
-from flask import Blueprint, jsonify, request, send_from_directory
+from flask import Blueprint, jsonify, request, send_file
 from psycopg2.extras import Json, RealDictCursor
 
 from auth_system import verify_session
@@ -59,6 +59,7 @@ from pg_db_utils import get_db_connection
 from services.gigachat_client import analyze_text_with_gigachat
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
+from services.sales_room_file_storage import load_sales_room_file, sales_room_upload_root, store_sales_room_file
 
 
 admin_prospecting_bp = Blueprint("admin_prospecting", __name__)
@@ -382,6 +383,15 @@ def _require_auth():
     if not user_data:
         return None, _auth_error("Invalid token", 401)
     return user_data, None
+
+
+def _optional_auth() -> dict[str, Any] | None:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header.split(" ", 1)[1]
+    user_data = verify_session(token)
+    return user_data if isinstance(user_data, dict) else None
 
 
 def _resolve_business_for_user(cur, user_data: dict, requested_business_id: str | None) -> str | None:
@@ -11435,7 +11445,7 @@ def _record_sales_room_event(conn, *, slug: str, event_type: str, metadata: dict
 
 
 def _sales_room_upload_root() -> str:
-    return os.path.abspath(SALES_ROOM_UPLOAD_DIR)
+    return sales_room_upload_root()
 
 
 def _clean_sales_room_filename(filename: str) -> str:
@@ -11642,13 +11652,13 @@ def _update_sales_room_proposal_body(cur, *, room_id: str, body_text: str) -> No
         SET room_json = jsonb_set(
                 COALESCE(room_json, '{}'),
                 '{proposal,body_text}',
-                to_jsonb(%s),
+                to_jsonb(%s::text),
                 TRUE
             ),
             proposal_json = jsonb_set(
                 COALESCE(proposal_json, '{}'),
                 '{body_text}',
-                to_jsonb(%s),
+                to_jsonb(%s::text),
                 TRUE
             ),
             updated_at = NOW()
@@ -11661,7 +11671,7 @@ def _update_sales_room_proposal_body(cur, *, room_id: str, body_text: str) -> No
 def _load_sales_room_by_slug(cur, slug: str) -> dict[str, Any]:
     cur.execute(
         """
-        SELECT id, slug, mode, lead_id, room_json, status, updated_at
+        SELECT id, slug, business_id, mode, lead_id, room_json, status, updated_at
         FROM sales_rooms
         WHERE slug = %s
         LIMIT 1
@@ -11670,6 +11680,28 @@ def _load_sales_room_by_slug(cur, slug: str) -> dict[str, Any]:
     )
     row = cur.fetchone()
     return dict(row) if row and hasattr(row, "keys") else {}
+
+
+def _can_edit_sales_room(cur, room: dict[str, Any], user_data: dict[str, Any] | None) -> bool:
+    if not user_data:
+        return False
+    if bool(user_data.get("is_superadmin")):
+        return True
+    user_id = str(user_data.get("user_id") or user_data.get("id") or "").strip()
+    business_id = str(room.get("business_id") or "").strip()
+    if not user_id or not business_id:
+        return False
+    cur.execute(
+        """
+        SELECT id
+        FROM businesses
+        WHERE id = %s
+          AND owner_id = %s
+        LIMIT 1
+        """,
+        (business_id, user_id),
+    )
+    return bool(cur.fetchone())
 
 
 def _load_sales_room_offer_text_from_drafts(cur, lead_id: str) -> str:
@@ -13475,6 +13507,7 @@ def partnership_public_offer_page(slug):
 def public_sales_room(slug):
     try:
         normalized_slug = _slugify_company_name(slug)
+        user_data = _optional_auth()
         conn = get_db_connection()
         try:
             _ensure_sales_room_tables(conn)
@@ -13488,6 +13521,9 @@ def public_sales_room(slug):
             room_json = _normalize_public_sales_room_proposal(cur, row, room_json)
             room_json["slug"] = normalized_slug
             room_json["public_url"] = _make_sales_room_url(normalized_slug)
+            room_json["permissions"] = {
+                "can_edit_welcome": _can_edit_sales_room(cur, row, user_data),
+            }
             room_id = str(row.get("id") or "")
             proposal = room_json.get("proposal") if isinstance(room_json.get("proposal"), dict) else {}
             body_text = str(proposal.get("body_text") or "").strip()
@@ -13504,6 +13540,61 @@ def public_sales_room(slug):
             conn.close()
     except Exception as e:
         print(f"Error loading public sales room: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/sales-rooms/public/<string:slug>/welcome", methods=["PATCH"])
+def public_sales_room_welcome(slug):
+    user_data, auth_error = _require_auth()
+    if auth_error:
+        return auth_error
+    try:
+        normalized_slug = _slugify_company_name(slug)
+        data = request.get_json(silent=True) or {}
+        body_text = str(data.get("body_text") or "").strip()
+        if not body_text:
+            return jsonify({"error": "body_text is required"}), 400
+        if len(body_text) > 1200:
+            return jsonify({"error": "body_text is too long"}), 400
+        conn = get_db_connection()
+        try:
+            _ensure_sales_room_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _load_sales_room_by_slug(cur, normalized_slug)
+            if not row:
+                return jsonify({"error": "Sales room not found"}), 404
+            if not _can_edit_sales_room(cur, row, user_data):
+                return jsonify({"error": "Forbidden"}), 403
+            cur.execute(
+                """
+                UPDATE sales_rooms
+                SET room_json = jsonb_set(
+                        COALESCE(room_json, '{}'),
+                        '{welcome,body_text}',
+                        to_jsonb(%s::text),
+                        TRUE
+                    ),
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING room_json
+                """,
+                (body_text, str(row.get("id") or "")),
+            )
+            updated = cur.fetchone() or {}
+            _record_sales_room_event(
+                conn,
+                slug=normalized_slug,
+                event_type="welcome_updated",
+                metadata={"updated_by": user_data.get("user_id") or user_data.get("id")},
+            )
+            conn.commit()
+            room_json = updated.get("room_json") if isinstance(updated.get("room_json"), dict) else {}
+            welcome = room_json.get("welcome") if isinstance(room_json.get("welcome"), dict) else {}
+            return jsonify({"success": True, "welcome": {"body_text": str(welcome.get("body_text") or body_text)}})
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error updating public sales room welcome: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -13803,13 +13894,16 @@ def public_sales_room_file_upload(slug):
                 return jsonify({"error": "Sales room not found"}), 404
             room_id = str(row.get("id") or "")
             file_id = str(uuid.uuid4())
-            storage_dir = os.path.join(_sales_room_upload_root(), room_id)
-            os.makedirs(storage_dir, exist_ok=True)
-            stored_name = f"{file_id}.{extension}"
-            storage_path = os.path.join(storage_dir, stored_name)
-            with open(storage_path, "wb") as fh:
-                fh.write(content)
             public_url = f"/api/sales-rooms/public/{quote(normalized_slug)}/files/{file_id}"
+            stored_file = store_sales_room_file(
+                room_id=room_id,
+                file_id=file_id,
+                extension=extension,
+                content=content,
+                original_name=original_name,
+                mime_type=uploaded_file.mimetype or "",
+            )
+            storage_path = str(stored_file.get("storage_path") or "")
             attachment = {
                 "id": file_id,
                 "original_name": original_name,
@@ -13875,13 +13969,11 @@ def public_sales_room_file(slug, file_id):
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "File not found"}), 404
-            storage_path = os.path.abspath(str(row.get("storage_path") or ""))
-            upload_root = _sales_room_upload_root()
-            if os.path.commonpath([upload_root, storage_path]) != upload_root or not os.path.exists(storage_path):
+            content = load_sales_room_file(str(row.get("storage_path") or ""))
+            if content is None:
                 return jsonify({"error": "File not found"}), 404
-            return send_from_directory(
-                os.path.dirname(storage_path),
-                os.path.basename(storage_path),
+            return send_file(
+                io.BytesIO(content),
                 mimetype=row.get("mime_type") or None,
                 download_name=str(row.get("original_name") or "file"),
                 as_attachment=False,

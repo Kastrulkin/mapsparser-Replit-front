@@ -34,9 +34,23 @@ TELEGRAM_REVIEWS_BOT_TOKEN=your-reviews-bot-token
 API_BASE_URL=http://localhost:8000
 ```
 
+### Файлы цифровых комнат: Yandex Object Storage
+```bash
+SALES_ROOM_STORAGE_BACKEND=s3
+SALES_ROOM_S3_ENDPOINT_URL=https://storage.yandexcloud.net
+SALES_ROOM_S3_REGION=ru-central1
+SALES_ROOM_S3_BUCKET=localos-sales-room-files
+SALES_ROOM_S3_PREFIX=sales-room-files
+SALES_ROOM_S3_ACCESS_KEY_ID=your-static-access-key-id
+SALES_ROOM_S3_SECRET_ACCESS_KEY=your-static-secret-access-key
+SALES_ROOM_UPLOAD_MAX_BYTES=10485760
+```
+**Назначение:** хранение файлов, загруженных в публичных цифровых комнатах, во внешнем S3-compatible Object Storage вместо диска сервера.
+
+Если `SALES_ROOM_STORAGE_BACKEND` не задан или равен `local`, файлы продолжают сохраняться в `SALES_ROOM_UPLOAD_DIR` / `DEBUG_DIR/sales_room_uploads`.
+
 ## 🔒 Безопасность
 
 - **Никогда не коммитьте .env файл в git**
 - Все ключи должны быть в .env на сервере
 - Используйте разные ключи для dev и production
-

@@ -1,6 +1,6 @@
 import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ArrowRight, Check, ExternalLink, FileText, MessageSquare, Paperclip, Send, X } from 'lucide-react';
+import { ArrowRight, Check, ExternalLink, FileText, MessageSquare, Paperclip, Pencil, Send, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -101,6 +101,12 @@ type SalesRoomPayload = {
     badge?: string;
     description?: string;
   };
+  welcome?: {
+    body_text?: string;
+  };
+  permissions?: {
+    can_edit_welcome?: boolean;
+  };
   messages?: SalesRoomMessage[];
   proposal_review?: SalesRoomProposalReview;
 };
@@ -132,6 +138,11 @@ const formatDateTime = (value?: string) => {
 
 const roomAuthorNameKey = 'localos_sales_room_author_name';
 const roomAuthorCompanyKey = 'localos_sales_room_author_company';
+const fileUploadsVisible = false;
+const defaultWelcomeText =
+  'Рад знакомству. Я подготовил эту цифровую комнату, чтобы было проще обсуждать детали, подключать коллег и видеть всё в одном месте.\n\n' +
+  'Ниже - актуальный документ. Можно оставить комментарий и предложить правку.\n\n' +
+  'Если будут вопросы, напишите — всё сохраним в одном диалоге.';
 
 const textOffsetInElement = (root: HTMLElement, targetNode: Node, targetOffset: number) => {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -190,6 +201,10 @@ export default function PublicSalesRoomPage() {
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [submittingSuggestion, setSubmittingSuggestion] = useState(false);
   const [resolvingSuggestionId, setResolvingSuggestionId] = useState<string | null>(null);
+  const [editingWelcome, setEditingWelcome] = useState(false);
+  const [welcomeDraft, setWelcomeDraft] = useState('');
+  const [savingWelcome, setSavingWelcome] = useState(false);
+  const [welcomeError, setWelcomeError] = useState<string | null>(null);
 
   const loadRoom = async () => {
     if (!roomSlug) return;
@@ -202,6 +217,7 @@ export default function PublicSalesRoomPage() {
       const nextRoom = response?.room || null;
       setRoom(nextRoom);
       setMessages(Array.isArray(nextRoom?.messages) ? nextRoom.messages : []);
+      setWelcomeDraft(String(nextRoom?.welcome?.body_text || defaultWelcomeText));
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : 'Не удалось загрузить комнату';
       setError(message);
@@ -238,6 +254,41 @@ export default function PublicSalesRoomPage() {
     if (!url) return;
     void recordEvent('audit_open', { target: url });
     window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const saveWelcome = async () => {
+    if (!roomSlug || savingWelcome) return;
+    const cleanText = welcomeDraft.trim();
+    if (!cleanText) {
+      setWelcomeError('Напишите приветствие.');
+      return;
+    }
+    setSavingWelcome(true);
+    setWelcomeError(null);
+    try {
+      const response = await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/welcome`, {
+        method: 'PATCH',
+        body: JSON.stringify({ body_text: cleanText }),
+      });
+      const nextWelcome = response?.welcome || { body_text: cleanText };
+      setRoom((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          welcome: {
+            ...(current.welcome || {}),
+            body_text: String(nextWelcome.body_text || cleanText),
+          },
+        };
+      });
+      setWelcomeDraft(String(nextWelcome.body_text || cleanText));
+      setEditingWelcome(false);
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : 'Не удалось сохранить приветствие';
+      setWelcomeError(message);
+    } finally {
+      setSavingWelcome(false);
+    }
   };
 
   const captureProposalSelection = () => {
@@ -390,8 +441,8 @@ export default function PublicSalesRoomPage() {
       setComposerError('Укажите компанию.');
       return;
     }
-    if (!cleanMessage && pendingAttachments.length === 0) {
-      setComposerError('Напишите сообщение или приложите файл.');
+    if (!cleanMessage && (!fileUploadsVisible || pendingAttachments.length === 0)) {
+      setComposerError('Напишите сообщение.');
       return;
     }
     setSending(true);
@@ -448,6 +499,8 @@ export default function PublicSalesRoomPage() {
   const businessName = room.business?.name || 'Компания';
   const managerName = 'Aleksandr Demianov';
   const managerInitial = managerName.trim().charAt(0).toUpperCase();
+  const welcomeText = String(room.welcome?.body_text || defaultWelcomeText);
+  const canEditWelcome = Boolean(room.permissions?.can_edit_welcome);
   const hasAudit = Boolean(room.audit?.available && room.audit?.public_url);
   const proposalText =
     room.proposal?.body_text?.trim() ||
@@ -509,7 +562,7 @@ export default function PublicSalesRoomPage() {
   return (
     <main className="min-h-screen bg-[#f5f7fb] text-slate-950">
       <section className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
-        <header className="flex flex-col gap-3 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
+        <header className="border-b border-slate-200 pb-5">
           <div>
             <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-600">
               <span>{businessName}</span>
@@ -517,9 +570,6 @@ export default function PublicSalesRoomPage() {
               <span className="text-slate-950">{recipientName}</span>
             </div>
             <div className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{roomModeLabel(room.mode)}</div>
-          </div>
-          <div className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 shadow-sm">
-            Подготовлено в LocalOS
           </div>
         </header>
 
@@ -533,17 +583,59 @@ export default function PublicSalesRoomPage() {
               <div className="mt-1 text-sm font-semibold text-slate-500">Founder, LocalOS</div>
             </aside>
             <div className="px-5 py-7 sm:px-8 lg:px-10">
-              <div className="text-2xl font-black tracking-tight text-slate-950">Здравствуйте.</div>
-              <div className="mt-5 max-w-2xl space-y-4 text-base leading-8 text-slate-700">
-                <p>
-                  Рад знакомству. Я подготовил эту цифровую комнату, чтобы у нас было одно место для предложения,
-                  материалов и обсуждения.
-                </p>
-                <p>
-                  Ниже лежит актуальный документ. Можно оставить комментарий, предложить правку или приложить файл.
-                </p>
-                <p>Если будут вопросы, напишите здесь — всё сохраним в одном диалоге.</p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-2xl font-black tracking-tight text-slate-950">Здравствуйте.</div>
+                {canEditWelcome ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => {
+                      setWelcomeDraft(welcomeText);
+                      setWelcomeError(null);
+                      setEditingWelcome((current) => !current);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    {editingWelcome ? 'Закрыть' : 'Править'}
+                  </Button>
+                ) : null}
               </div>
+              {editingWelcome && canEditWelcome ? (
+                <div className="mt-5 max-w-2xl">
+                  <Textarea
+                    value={welcomeDraft}
+                    onChange={(event) => setWelcomeDraft(event.currentTarget.value)}
+                    className="min-h-44 resize-y bg-white text-base leading-7"
+                    maxLength={1200}
+                  />
+                  {welcomeError ? <div className="mt-3 text-sm font-medium text-red-600">{welcomeError}</div> : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button type="button" size="sm" onClick={saveWelcome} disabled={savingWelcome}>
+                      {savingWelcome ? 'Сохраняем...' : 'Сохранить'}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setWelcomeDraft(welcomeText);
+                        setWelcomeError(null);
+                        setEditingWelcome(false);
+                      }}
+                    >
+                      Отмена
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-5 max-w-2xl space-y-4 text-base leading-8 text-slate-700">
+                  {welcomeText.split(/\n{2,}/).map((paragraph, index) => (
+                    <p key={`${index}-${paragraph.slice(0, 12)}`}>{paragraph}</p>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -748,19 +840,23 @@ export default function PublicSalesRoomPage() {
           {composerError ? <div className="mt-3 text-sm font-medium text-red-600">{composerError}</div> : null}
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950">
-              <Paperclip className="h-4 w-4" />
-              {uploading ? 'Загружаем файл...' : 'Приложить файл'}
-              <input
-                type="file"
-                className="hidden"
-                multiple
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp"
-                onChange={handleUpload}
-                disabled={uploading || sending}
-              />
-            </label>
-            <Button type="submit" className="gap-2 bg-slate-950 text-white hover:bg-slate-800" disabled={sending || uploading}>
+            {fileUploadsVisible ? (
+              <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950">
+                <Paperclip className="h-4 w-4" />
+                {uploading ? 'Загружаем файл...' : 'Приложить файл'}
+                <input
+                  type="file"
+                  className="hidden"
+                  multiple
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp"
+                  onChange={handleUpload}
+                  disabled={uploading || sending}
+                />
+              </label>
+            ) : (
+              <span />
+            )}
+            <Button type="submit" className="gap-2 bg-slate-950 text-white hover:bg-slate-800" disabled={sending || (fileUploadsVisible && uploading)}>
               {sending ? 'Отправляем...' : 'Отправить'}
               <Send className="h-4 w-4" />
             </Button>
@@ -771,7 +867,7 @@ export default function PublicSalesRoomPage() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-bold text-slate-950">История обсуждения</div>
-              <p className="mt-1 text-sm text-slate-500">Сообщения и файлы по этому предложению.</p>
+              <p className="mt-1 text-sm text-slate-500">Сообщения по этому предложению.</p>
             </div>
             <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">{messages.length}</div>
           </div>
@@ -808,7 +904,7 @@ export default function PublicSalesRoomPage() {
             </div>
           ) : (
             <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-              Пока нет сообщений. Начните обсуждение с вопроса, файла или правки к предложению.
+              Пока нет сообщений. Начните обсуждение с вопроса или правки к предложению.
             </div>
           )}
         </section>
@@ -817,6 +913,9 @@ export default function PublicSalesRoomPage() {
           Цифровая комната LocalOS. Подготовьте предложение и обсудите в одном месте.
         </footer>
       </section>
+      <div className="fixed bottom-4 right-4 z-30 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-500 shadow-sm backdrop-blur sm:bottom-6 sm:right-6">
+        Подготовлено в LocalOS
+      </div>
     </main>
   );
 }
