@@ -262,7 +262,16 @@ const buildSelfHelpMaterials = (
 ) => {
   const serviceFocus = dedupeShortList(strongDemand, 3);
   const focusText = serviceFocus.length > 0 ? serviceFocus.join(', ') : (lang === 'ru' ? 'основные услуги' : 'main services');
+  const mapTextFocus = lang === 'ru' && serviceFocus.length > 0 ? `${focusText} и прочие` : focusText;
   const businessType = String(category || '').trim() || (lang === 'ru' ? 'ваш бизнес' : 'your business');
+  const visitBusinessType = (() => {
+    if (lang !== 'ru') return businessType;
+    const normalized = businessType.toLowerCase().replaceAll('ё', 'е');
+    if (normalized === 'ветеринарная клиника') return 'Ветеринарной клиники';
+    if (normalized === 'медицинский центр') return 'Медицинского центра';
+    if (normalized === 'салон красоты') return 'Салона красоты';
+    return businessType;
+  })();
   const photoList = photoShots.length > 0
     ? photoShots.slice(0, 5)
     : lang === 'ru'
@@ -270,8 +279,8 @@ const buildSelfHelpMaterials = (
       : ['Entrance and sign', 'Room or workspace', 'Specialists at work', 'Equipment or workplace', 'Examples of results'];
   const postIdeas = lang === 'ru'
     ? [
-        `Как проходит посещение ${businessType}: этапы, длительность и как записаться.`,
-        `Что выбрать при первом посещении: подготовить новости под популярные услуги и запросы (${focusText}).`,
+        `Как проходит посещение ${visitBusinessType}: этапы, длительность и как записаться.`,
+        'Что выбрать при первом посещении: подготовить новости под популярные услуги и запросы.',
         news.length > 0 ? 'Рассказать актуальные новости: что изменилось, какие услуги доступны сейчас.' : 'Рассказать актуальные новости: услуга недели, новый специалист или сезонный спрос.',
       ]
     : [
@@ -280,14 +289,19 @@ const buildSelfHelpMaterials = (
         news.length > 0 ? 'Share current updates: what changed and which services are available now.' : 'Share current updates: service of the week, new specialist, or seasonal demand.',
       ];
   const reviewTemplates = lang === 'ru'
-    ? [
-        `Спасибо за отзыв. Рады, что вам понравилась услуга «${serviceFocus[0] || 'основная услуга'}». Будем ждать вас снова.`,
-        serviceFocus.length > 1
-          ? `Спасибо за отзыв. Рады, что вы остались довольны услугой «${serviceFocus[0]}». В следующий раз можем также предложить «${serviceFocus[1]}», если это будет вам актуально.`
-          : reviewSignals.length > 0
-            ? 'Спасибо за ваш отзыв. Рады, что вам понравились сервис и результат. Будем ждать вас снова.'
-            : 'Спасибо за обратную связь. Учтём ваш комментарий и постараемся сделать следующий визит удобнее.',
-      ]
+    ? businessType.toLowerCase().replaceAll('ё', 'е') === 'ветеринарная клиника'
+      ? [
+          'Спасибо за отзыв. Рады, что вы остались довольны первичной консультацией терапевта. Будем ждать вас снова.',
+          'Спасибо за отзыв. Рады, что вы остались довольны посещением. У нас скоро будет акция на чипирование, если это будет вам актуально.',
+        ]
+      : [
+          `Спасибо за отзыв. Рады, что вам понравилась услуга «${serviceFocus[0] || 'основная услуга'}». Будем ждать вас снова.`,
+          serviceFocus.length > 1
+            ? `Спасибо за отзыв. Рады, что вы остались довольны услугой «${serviceFocus[0]}». В следующий раз можем также предложить «${serviceFocus[1]}», если это будет вам актуально.`
+            : reviewSignals.length > 0
+              ? 'Спасибо за ваш отзыв. Рады, что вам понравились сервис и результат. Будем ждать вас снова.'
+              : 'Спасибо за обратную связь. Учтём ваш комментарий и постараемся сделать следующий визит удобнее.',
+        ]
     : [
         `Thank you for the review. We are glad you liked “${serviceFocus[0] || 'the main service'}”. We will be happy to see you again.`,
         serviceFocus.length > 1
@@ -300,7 +314,7 @@ const buildSelfHelpMaterials = (
       ? 'Это можно сделать без LocalOS. Ниже — короткие заготовки, чтобы карточка стала понятнее уже после первых правок.'
       : 'You can do this without LocalOS. These templates help make the listing clearer after the first edits.',
     descriptionTemplate: lang === 'ru'
-      ? `Для «${displayName}» стоит добавить понятные описания к ключевым услугам, с учётом популярных поисковых запросов: ${focusText}. В публикациях можно объяснить, когда обращаться, как проходит приём и как записаться.`
+      ? `Для «${displayName}» стоит добавить понятные описания к ключевым услугам, с учётом популярных поисковых запросов: ${mapTextFocus}. В публикациях можно объяснить, когда обращаться, как проходит приём и как записаться.`
       : `For “${displayName}”, add clear texts for key services based on popular search queries: ${focusText}. In posts, explain when to visit, what the appointment looks like, and how to book.`,
     photoList,
     postIdeas,
@@ -332,7 +346,7 @@ const UI_TEXT_BASE = {
     rating: 'Рейтинг',
     reviews: 'Отзывы',
     services: 'Услуги',
-    monthlyPotential: 'Ориентир потерь',
+    monthlyPotential: 'Ориентир потерь с карт',
     estimateUnavailable: 'Оценка недоступна',
     currentStateTitle: 'Текущее состояние карточки',
     currentStateText: 'Это срез по ключевым зонам. Ниже сразу видно, что уже в порядке, а что теряет заявки.',
@@ -2006,24 +2020,30 @@ const localizeIssueBlock = (
   issue: OfferPagePayload['audit']['issue_blocks'][number],
   state: NonNullable<OfferPagePayload['audit']>['current_state'],
 ) => {
-  if (lang === 'ru') return issue;
+  const normalizedIssue = {
+    ...issue,
+    problem: issue?.problem || issue?.description || '',
+    impact: issue?.impact || issue?.meaning || '',
+    fix: issue?.fix || (Array.isArray(issue?.actions) ? issue.actions.filter(Boolean).join(' ') : ''),
+  };
+  if (lang === 'ru') return normalizedIssue;
   const issueId = String(issue?.id || '').trim();
   const translated = ISSUE_TRANSLATIONS[lang as keyof typeof ISSUE_TRANSLATIONS]?.[issueId];
   if (!translated) {
     return {
-      ...issue,
-      title: translateAuditText(lang, issue?.title),
-      problem: translateAuditText(lang, issue?.problem),
-      evidence: translateAuditText(lang, issue?.evidence),
-      impact: translateAuditText(lang, issue?.impact),
-      fix: translateAuditText(lang, issue?.fix),
+      ...normalizedIssue,
+      title: translateAuditText(lang, normalizedIssue?.title),
+      problem: translateAuditText(lang, normalizedIssue?.problem),
+      evidence: translateAuditText(lang, normalizedIssue?.evidence),
+      impact: translateAuditText(lang, normalizedIssue?.impact),
+      fix: translateAuditText(lang, normalizedIssue?.fix),
     };
   }
   return {
-    ...issue,
+    ...normalizedIssue,
     title: translated.title,
     problem: translated.problem,
-    evidence: buildLocalizedEvidence(lang, issueId, issue, state),
+    evidence: buildLocalizedEvidence(lang, issueId, normalizedIssue, state),
     impact: translated.impact,
     fix: translated.fix,
   };
@@ -2269,10 +2289,10 @@ const PublicPartnershipOfferPage: React.FC = () => {
   }, [offerSlug]);
 
   const requestedLang = String(searchParams.get('lang') || '').trim().toLowerCase();
+  const explicitlyEnabledLanguages = normalizePageLanguages(page?.enabled_languages);
   const enabledLanguages = (() => {
-    const explicitlyEnabled = normalizePageLanguages(page?.enabled_languages);
-    if (explicitlyEnabled.length > 0) {
-      return explicitlyEnabled;
+    if (explicitlyEnabledLanguages.length > 0) {
+      return explicitlyEnabledLanguages;
     }
     const availableLanguages = normalizePageLanguages(page?.available_languages);
     if (availableLanguages.length > 0) {
@@ -2299,7 +2319,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
     pushUnique(supportedPublicAuditLanguages);
     return merged.length > 0 ? merged : supportedPublicAuditLanguages;
   })();
-  const switchableLanguages = availableLanguages;
+  const switchableLanguages = explicitlyEnabledLanguages.length > 0 ? explicitlyEnabledLanguages : availableLanguages;
   const preferredLang = String(page?.primary_language || page?.preferred_language || '').trim().toLowerCase();
   const autoLang: PageLang = (() => {
     const context = `${page?.city || ''} ${page?.address || ''}`.toLowerCase();
@@ -2445,7 +2465,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
   const photos = (Array.isArray(page.photo_urls) ? page.photo_urls || [] : [])
     .map((item) => normalizeMediaUrl(item))
     .filter(Boolean);
-  const logoUrl = normalizeMediaUrl(page.logo_url || '');
+  const logoUrl = normalizeMediaUrl(page.logo_url || '') || photos[0] || '';
   const isNetworkAudit = String(page.audit?.audit_profile || '').trim().toLowerCase().startsWith('network_')
     || String(parse.scope || '').trim().toLowerCase() === 'network';
   const confirmedServicesCount = Number(state.services_count || 0);
@@ -2490,6 +2510,12 @@ const PublicPartnershipOfferPage: React.FC = () => {
     page.display_name,
     [page.name, resolvedCity, resolvedStreet].filter(Boolean).join(', '),
     page.name,
+    lang === 'en' ? 'Company' : lang === 'el' ? 'Εταιρεία' : lang === 'tr' ? 'İşletme' : lang === 'ar' ? 'الشركة' : 'Компания',
+  );
+  const compactDisplayName = pickFirstNonEmpty(
+    page.name,
+    page.display_name,
+    displayName.split(',')[0],
     lang === 'en' ? 'Company' : lang === 'el' ? 'Εταιρεία' : lang === 'tr' ? 'İşletme' : lang === 'ar' ? 'الشركة' : 'Компания',
   );
   const mapsAnalysis = Array.isArray(page.maps_analysis) ? page.maps_analysis || [] : [];
@@ -2607,17 +2633,30 @@ const PublicPartnershipOfferPage: React.FC = () => {
   const servicesCountForWhy = Number(state.services_count || 0);
   const pricedServicesCountForWhy = Number(state.services_with_price_count || 0);
   const auditProfileForWhy = String(page.audit?.audit_profile || '').trim().toLowerCase();
+  const serviceListWhy = (() => {
+    if (servicesCountForWhy <= 0) return '';
+    if (!pricedServicesCountForWhy) {
+      return `В карточке найдено ${formatValue(servicesCountForWhy)} услуг, но без ценовых ориентиров сложнее сравнить варианты и решиться на следующий шаг.`;
+    }
+    if (auditProfileForWhy.includes('food')) {
+      return isNetworkAudit
+        ? `По ${formatValue(locationsCount || 1)} точкам сети найдено ${formatValue(servicesCountForWhy)} позиций меню с ценами, чтобы гостю быстро понять, что выбрать стоит разбить по категориям.`
+        : `В карточке найдено ${formatValue(servicesCountForWhy)} позиций меню с ценами, но гостю всё равно нужно быстро понять, что выбрать и какая точка ближе.`;
+    }
+    if (auditProfileForWhy.includes('medical')) {
+      return `В карточке найдено ${formatValue(servicesCountForWhy)} услуг с ценами, но пациенту всё равно нужно быстро понять, к какому врачу или направлению идти.`;
+    }
+    return `В карточке найдено ${formatValue(servicesCountForWhy)} услуг с ценами, но клиенту всё равно нужно быстро понять, что выбрать и как сделать следующий шаг.`;
+  })();
   const fallbackPositioningWhy = [
-    servicesCountForWhy > 0
-      ? pricedServicesCountForWhy > 0
-        ? `В карточке найдено ${formatValue(servicesCountForWhy)} услуг с ценами, но пациенту всё равно нужно быстро понять, к какому врачу или направлению идти.`
-        : `В карточке найдено ${formatValue(servicesCountForWhy)} услуг, но без ценовых ориентиров сложнее сравнить варианты и решиться на запись.`
-      : '',
+    serviceListWhy,
     auditProfileForWhy === 'medical'
       ? 'Для медицинской карточки важны не только услуги, но и понятные сценарии выбора: первичный приём, повторный приём, конкретный специалист, диагностика.'
       : '',
     !state.has_recent_activity
-      ? 'Свежей активности в карточке не видно: новости и обновления не поддерживают ключевые направления поиска.'
+      ? auditProfileForWhy.includes('food')
+        ? 'Свежей активности в карточке не видно: новости и обновления не поддерживают блюда, акции и локальный спрос по адресам.'
+        : 'Свежей активности в карточке не видно: новости и обновления не поддерживают ключевые направления поиска.'
       : '',
   ].filter((item) => item.trim());
   const isCapriAudit = String(offerSlug || '').trim().toLowerCase() === 'dom-krasoty-capri-oblastnaya-ulitsa';
@@ -2684,7 +2723,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
       .concat(issueBlocks.map((item) => item.title || item.problem || '')),
     3,
   );
-  const selfHelp = buildSelfHelpMaterials(lang, displayName, page.category, strongDemand, photoShots, reviewSignals, news);
+  const selfHelp = buildSelfHelpMaterials(lang, compactDisplayName, page.category, strongDemand, photoShots, reviewSignals, news);
 
   const quickState = [
     {

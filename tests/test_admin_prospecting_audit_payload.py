@@ -31,11 +31,13 @@ from src.core.card_audit import (
     _build_wellness_issue_blocks,
     _build_news_activity,
     _detect_audit_profile_details,
+    _estimate_average_check_from_services,
     _extract_lead_import_payload,
     _format_ru_location_prepositional,
     _merge_action_plan,
     _merge_issue_blocks,
     _normalize_generated_location_phrases,
+    estimate_card_revenue_gap,
 )
 
 
@@ -52,6 +54,37 @@ def test_audit_profile_detection_keeps_beauty_laser_out_of_medical_without_medic
     assert details["profile"] == "beauty"
     assert details["confidence"] >= 0.58
     assert details["conflicts"]
+
+
+def test_veterinary_revenue_uses_service_average_check_before_medical_baseline() -> None:
+    average_check = _estimate_average_check_from_services(
+        [
+            {"current_name": "Первичная консультация терапевта", "price": "1 500 ₽"},
+            {"current_name": "Чипирование", "price": "2 000-3 000 ₽"},
+            {"current_name": "Вакцинация", "note": "Цена: 2500 • Источник: yandex_maps"},
+        ]
+    )
+
+    assert average_check == 2166.67
+
+    revenue = estimate_card_revenue_gap(
+        rating=5.0,
+        services_count=12,
+        priced_services_count=12,
+        unanswered_reviews_count=0,
+        reviews_count=330,
+        photos_count=20,
+        news_count=0,
+        average_check=average_check,
+        current_revenue=None,
+        business_type="Ветеринарная клиника",
+    )
+
+    assert revenue["baseline_monthly_revenue"]["source"] == "estimated_from_average_check"
+    assert revenue["baseline_monthly_revenue"]["value"] == 208000
+    assert revenue["total_min"] == 2080
+    assert revenue["total_max"] == 6240
+    assert revenue["rating_gap"] == {"min": 0, "max": 0}
 
 
 def test_audit_profile_detection_prefers_medical_when_services_are_medical() -> None:

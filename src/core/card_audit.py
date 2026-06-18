@@ -43,6 +43,10 @@ CATEGORY_BASELINE_REVENUE = {
     "gym": {"min": 300000.0, "max": 1500000.0},
     "фитнес": {"min": 300000.0, "max": 1500000.0},
     "зал": {"min": 300000.0, "max": 1500000.0},
+    "veterinary": {"min": 250000.0, "max": 1200000.0},
+    "vet clinic": {"min": 250000.0, "max": 1200000.0},
+    "ветеринар": {"min": 250000.0, "max": 1200000.0},
+    "ветклиника": {"min": 250000.0, "max": 1200000.0},
     "medical": {"min": 400000.0, "max": 2000000.0},
     "clinic": {"min": 400000.0, "max": 2000000.0},
     "клиника": {"min": 400000.0, "max": 2000000.0},
@@ -1403,10 +1407,10 @@ def _build_reasoning_fields(
                 f"клиника {location}",
             ]
         photo_shots = [
-            "Вход, ресепшен и навигация по клинике",
-            "Кабинеты, оборудование и рабочие зоны без визуального шума",
-            "Врачи и специалисты в рабочей среде",
-            "Фото, которые помогают понять уровень сервиса и доверия",
+            "Не менее 5 фото входа: вывеска, дверь, ресепшен или стойка администратора, навигация к клинике",
+            "Не менее 5 фото снаружи: фасад, здание, двор, ориентиры и путь от улицы или парковки",
+            "Не менее 5 фото внутри: кабинеты, оборудование, рабочие зоны и зона ожидания без визуального шума",
+            "Фото врачей и специалистов в рабочей среде, если это уместно и не нарушает приватность клиентов",
         ]
         positioning_focus = [
             f"Сделать акцент на направлениях: {focus_text}",
@@ -2349,6 +2353,43 @@ def _infer_baseline_revenue(*, business_type: Any, average_check: Optional[float
     return {"value": exact_value, "min": exact_value, "max": exact_value, "source": baseline_source}
 
 
+def _extract_service_price_amounts(value: Any) -> List[float]:
+    raw = str(value or "").strip()
+    if not raw:
+        return []
+    amounts: List[float] = []
+    for match in re.findall(r"\d[\d\s\u00a0]*(?:[,.]\d+)?", raw):
+        normalized = match.replace("\u00a0", " ").replace(" ", "").replace(",", ".")
+        try:
+            amount = float(normalized)
+        except ValueError:
+            continue
+        if 50 <= amount <= 300000:
+            amounts.append(amount)
+    return amounts
+
+
+def _estimate_average_check_from_services(services_preview: Any) -> Optional[float]:
+    if not isinstance(services_preview, list):
+        return None
+    values: List[float] = []
+    for item in services_preview:
+        if not isinstance(item, dict):
+            continue
+        price_amounts = _extract_service_price_amounts(item.get("price"))
+        if not price_amounts:
+            price_amounts = _extract_service_price_amounts(item.get("note"))
+        if not price_amounts:
+            continue
+        if len(price_amounts) >= 2:
+            values.append((price_amounts[0] + price_amounts[1]) / 2)
+        else:
+            values.append(price_amounts[0])
+    if not values:
+        return None
+    return round(sum(values) / len(values), 2)
+
+
 def estimate_card_revenue_gap(
     *,
     rating: Optional[float],
@@ -2379,6 +2420,8 @@ def estimate_card_revenue_gap(
             rating_penalty_min, rating_penalty_max = 0.06, 0.15
         elif rating < 4.7:
             rating_penalty_min, rating_penalty_max = 0.02, 0.06
+        elif rating >= 4.9 and reviews_count >= 30:
+            rating_penalty_min, rating_penalty_max = 0.0, 0.0
         else:
             rating_penalty_min, rating_penalty_max = 0.0, 0.02
         if unanswered_reviews_count >= 5:
@@ -4146,6 +4189,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             continue
         services_preview.append(item)
     has_real_services = bool(services_preview)
+    service_average_check = _estimate_average_check_from_services(services_preview)
 
     issue_blocks: List[Dict[str, Any]] = []
     review_signal_rows: List[Dict[str, Any]] = []
@@ -4389,7 +4433,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         reviews_count=reviews_count,
         photos_count=photos_count,
         news_count=news_count,
-        average_check=None,
+        average_check=service_average_check,
         current_revenue=None,
         business_type=business_type,
     )
