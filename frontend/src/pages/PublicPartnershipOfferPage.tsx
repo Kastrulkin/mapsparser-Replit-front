@@ -2491,6 +2491,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
   const servicesMetricLabel = isNetworkAudit
     ? (lang === 'ru' ? 'Точки с меню/товарами' : text.services)
     : text.services;
+  const ratingMetricLabel = isNetworkAudit && lang === 'ru' ? 'Средний рейтинг' : text.rating;
   const servicesMetricHint =
     isNetworkAudit && lang === 'ru'
       ? `${formatValue(confirmedServicesCount)} из ${formatValue(locationsCount)} точек: в карточках найдено меню или товары.`
@@ -2710,7 +2711,9 @@ const PublicPartnershipOfferPage: React.FC = () => {
     [
       state.rating && Number(state.rating) >= 4.5
         ? lang === 'ru'
-          ? `Высокий рейтинг: ${Number(state.rating).toFixed(1)}. Это уже хорошая база доверия.`
+          ? isNetworkAudit
+            ? `Средний рейтинг сети: ${Number(state.rating).toFixed(1)}. Это уже хорошая база доверия.`
+            : `Высокий рейтинг: ${Number(state.rating).toFixed(1)}. Это уже хорошая база доверия.`
           : `Strong rating: ${Number(state.rating).toFixed(1)}. This is already a trust base.`
         : '',
       Number(state.reviews_count || 0) > 0
@@ -2843,7 +2846,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
           </div>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xs text-slate-500">{text.rating}</div>
+              <div className="text-xs text-slate-500">{ratingMetricLabel}</div>
               <div className="mt-1 text-xl font-semibold text-slate-900 flex items-center gap-2">
                 <Star className="w-4 h-4 text-amber-500" />
                 {state.rating ? Number(state.rating).toFixed(1) : '—'}
