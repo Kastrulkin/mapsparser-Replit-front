@@ -264,12 +264,25 @@ const buildSelfHelpMaterials = (
   const focusText = serviceFocus.length > 0 ? serviceFocus.join(', ') : (lang === 'ru' ? 'основные услуги' : 'main services');
   const mapTextFocus = lang === 'ru' && serviceFocus.length > 0 ? `${focusText} и прочие` : focusText;
   const businessType = String(category || '').trim() || (lang === 'ru' ? 'ваш бизнес' : 'your business');
+  const normalizedBusinessType = businessType.toLowerCase().replaceAll('ё', 'е');
+  const isFoodBusiness = [
+    'кафе',
+    'ресторан',
+    'быстрое питание',
+    'шаверма',
+    'шаурма',
+    'кофейня',
+    'пекарня',
+    'бар',
+    'food',
+    'restaurant',
+    'cafe',
+  ].some((token) => normalizedBusinessType.includes(token));
   const visitBusinessType = (() => {
     if (lang !== 'ru') return businessType;
-    const normalized = businessType.toLowerCase().replaceAll('ё', 'е');
-    if (normalized === 'ветеринарная клиника') return 'Ветеринарной клиники';
-    if (normalized === 'медицинский центр') return 'Медицинского центра';
-    if (normalized === 'салон красоты') return 'Салона красоты';
+    if (normalizedBusinessType === 'ветеринарная клиника') return 'Ветеринарной клиники';
+    if (normalizedBusinessType === 'медицинский центр') return 'Медицинского центра';
+    if (normalizedBusinessType === 'салон красоты') return 'Салона красоты';
     return businessType;
   })();
   const photoList = photoShots.length > 0
@@ -314,7 +327,9 @@ const buildSelfHelpMaterials = (
       ? 'Это можно сделать без LocalOS. Ниже — короткие заготовки, чтобы карточка стала понятнее уже после первых правок.'
       : 'You can do this without LocalOS. These templates help make the listing clearer after the first edits.',
     descriptionTemplate: lang === 'ru'
-      ? `Для «${displayName}» стоит добавить понятные описания к ключевым услугам, с учётом популярных поисковых запросов: ${mapTextFocus}. В публикациях можно объяснить, когда обращаться, как проходит приём и как записаться.`
+      ? isFoodBusiness
+        ? `Для «${displayName}» стоит добавить понятные описания к ключевым услугам, с учётом популярных поисковых запросов. В публикациях можно объяснить, что есть в меню, что популярно, какие есть акции.`
+        : `Для «${displayName}» стоит добавить понятные описания к ключевым услугам, с учётом популярных поисковых запросов: ${mapTextFocus}. В публикациях можно объяснить, когда обращаться, как проходит приём и как записаться.`
       : `For “${displayName}”, add clear texts for key services based on popular search queries: ${focusText}. In posts, explain when to visit, what the appointment looks like, and how to book.`,
     photoList,
     postIdeas,
