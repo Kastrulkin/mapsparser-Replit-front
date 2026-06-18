@@ -308,7 +308,12 @@ const buildSelfHelpMaterials = (
         news.length > 0 ? 'Share current updates: what changed and which services are available now.' : 'Share current updates: service of the week, new specialist, or seasonal demand.',
       ];
   const reviewTemplates = lang === 'ru'
-    ? businessType.toLowerCase().replaceAll('ё', 'е') === 'ветеринарная клиника'
+    ? isFoodBusiness
+      ? [
+          'Спасибо за отзыв. Рады, что вам понравился плов. Будем ждать вас снова.',
+          'Спасибо за обратную связь. Учтём ваш комментарий и постараемся сделать следующий визит более приятным.',
+        ]
+      : businessType.toLowerCase().replaceAll('ё', 'е') === 'ветеринарная клиника'
       ? [
           'Спасибо за отзыв. Рады, что вы остались довольны первичной консультацией терапевта. Будем ждать вас снова.',
           'Спасибо за отзыв. Рады, что вы остались довольны посещением. У нас скоро будет акция на чипирование, если это будет вам актуально.',
