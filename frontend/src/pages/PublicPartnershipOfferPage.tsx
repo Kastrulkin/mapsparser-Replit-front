@@ -328,7 +328,7 @@ const buildSelfHelpMaterials = (
       : 'You can do this without LocalOS. These templates help make the listing clearer after the first edits.',
     descriptionTemplate: lang === 'ru'
       ? isFoodBusiness
-        ? `Для «${displayName}» стоит добавить понятные описания к ключевым услугам, с учётом популярных поисковых запросов. В публикациях можно объяснить, что есть в меню, что популярно, какие есть акции.`
+        ? `Для «${displayName}» стоит добавить понятные описания к ключевым товарам и услугам, с учётом популярных поисковых запросов. В публикациях можно объяснить, что есть в меню, что популярно, какие есть акции.`
         : `Для «${displayName}» стоит добавить понятные описания к ключевым услугам, с учётом популярных поисковых запросов: ${mapTextFocus}. В публикациях можно объяснить, когда обращаться, как проходит приём и как записаться.`
       : `For “${displayName}”, add clear texts for key services based on popular search queries: ${focusText}. In posts, explain when to visit, what the appointment looks like, and how to book.`,
     photoList,
