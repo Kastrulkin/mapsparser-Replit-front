@@ -419,7 +419,7 @@ export default function PublicSalesRoomPage() {
         </section>
 
         <footer className="px-2 py-8 text-sm leading-6 text-slate-500">
-          LocalOS помогает подготовить предложение, чат и материалы в одном месте.
+          Цифровая комната LocalOS. Подготовьте предложение и обсудите в одном месте.
         </footer>
       </section>
     </main>
