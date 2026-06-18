@@ -2662,7 +2662,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
     }
     if (auditProfileForWhy.includes('food')) {
       return isNetworkAudit
-        ? `По ${formatValue(locationsCount || 1)} точкам сети найдено ${formatValue(servicesCountForWhy)} позиций меню с ценами, чтобы гостю быстро понять, что выбрать стоит разбить по категориям.`
+        ? `По ${formatValue(locationsCount || 1)} точкам сети найдено ${formatValue(servicesCountForWhy)} позиций меню с ценами. Чтобы гостю быстро понять, что выбрать, стоит разбить по категориям.`
         : `В карточке найдено ${formatValue(servicesCountForWhy)} позиций меню с ценами, но гостю всё равно нужно быстро понять, что выбрать и какая точка ближе.`;
     }
     if (auditProfileForWhy.includes('medical')) {
@@ -2677,7 +2677,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
       : '',
     !state.has_recent_activity
       ? auditProfileForWhy.includes('food')
-        ? 'Свежей активности в карточке не видно: новости и обновления не поддерживают блюда, акции и локальный спрос по адресам.'
+        ? 'Свежей активности в карточке не видно: новости и обновления не поддерживают продвижение в поиске.'
         : 'Свежей активности в карточке не видно: новости и обновления не поддерживают ключевые направления поиска.'
       : '',
   ].filter((item) => item.trim());
