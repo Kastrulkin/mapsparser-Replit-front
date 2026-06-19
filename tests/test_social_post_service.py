@@ -8,6 +8,7 @@ from services.social_post_service import (
     _meta_publish_status,
     _publish_external_account_post,
     _build_social_learning_insights,
+    _queue_preflight_block,
     _status_after_social_text_edit,
     _vk_publish_binding,
     _build_next_plan_changes,
@@ -134,6 +135,47 @@ def test_build_social_queue_groups_matches_daily_workflow():
     assert by_key["needs_supervised_publish"]["post_ids"] == ["p3"]
     assert by_key["published"]["count"] == 1
     assert by_key["failed"]["count"] == 1
+
+
+def test_queue_preflight_blocks_api_channel_when_readiness_is_missing(monkeypatch):
+    monkeypatch.setattr(
+        social_post_service,
+        "_build_channel_readiness",
+        lambda cursor, business_id: [
+            {
+                "platform": "telegram",
+                "ready": False,
+                "status": "missing_keys",
+            }
+        ],
+    )
+
+    block = _queue_preflight_block(object(), {"business_id": "biz-1", "platform": "telegram"})
+
+    assert block["status"] == "needs_manual_publish"
+    assert block["metadata_json"]["queue_preflight_status"] == "missing_keys"
+    assert "Telegram" in block["last_error"]
+
+
+def test_queue_preflight_allows_ready_api_channel(monkeypatch):
+    monkeypatch.setattr(
+        social_post_service,
+        "_build_channel_readiness",
+        lambda cursor, business_id: [
+            {
+                "platform": "telegram",
+                "ready": True,
+                "status": "ready",
+            }
+        ],
+    )
+
+    assert _queue_preflight_block(object(), {"business_id": "biz-1", "platform": "telegram"}) == {}
+
+
+def test_queue_preflight_does_not_block_supervised_maps():
+    assert _queue_preflight_block(object(), {"business_id": "biz-1", "platform": "yandex_maps"}) == {}
+    assert _queue_preflight_block(object(), {"business_id": "biz-1", "platform": "two_gis"}) == {}
 
 
 def test_vk_post_url_uses_owner_and_post_id():

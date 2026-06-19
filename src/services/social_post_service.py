@@ -319,6 +319,29 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             raise ValueError("Публикация уже опубликована")
         if status not in {"approved", "queued"} or not post.get("approved_at"):
             raise PermissionError("Перед постановкой в расписание нужно подтверждение человека")
+        queue_block = _queue_preflight_block(cursor, post)
+        if queue_block:
+            metadata = _json_dict(post.get("metadata_json"))
+            metadata.update(_json_dict(queue_block.get("metadata_json")))
+            cursor.execute(
+                """
+                UPDATE social_posts
+                SET status = 'needs_manual_publish',
+                    metadata_json = %s,
+                    last_error = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING *
+                """,
+                (
+                    _json_dumps(metadata),
+                    str(queue_block.get("last_error") or "").strip(),
+                    post_id,
+                ),
+            )
+            updated = _serialize_social_post(cursor, cursor.fetchone())
+            db.conn.commit()
+            return updated
         cursor.execute(
             """
             UPDATE social_posts
@@ -1943,6 +1966,46 @@ def _summary_for_posts(posts: list[dict[str, Any]]) -> dict[str, Any]:
         "published": by_status.get("published", 0),
         "failed": by_status.get("failed", 0),
     }
+
+
+def _queue_preflight_block(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    platform = str(post.get("platform") or "").strip()
+    if platform not in API_PLATFORMS:
+        return {}
+    business_id = str(post.get("business_id") or "").strip()
+    readiness_items = _build_channel_readiness(cursor, business_id)
+    channel = next(
+        (item for item in readiness_items if str(item.get("platform") or "").strip() == platform),
+        {},
+    )
+    if bool(channel.get("ready")):
+        return {}
+    status = str(channel.get("status") or "missing_connection").strip()
+    return {
+        "status": "needs_manual_publish",
+        "last_error": _queue_preflight_error(platform, status),
+        "metadata_json": {
+            "queue_preflight_status": status,
+            "provider_status": status,
+            "queue_preflight_ready": False,
+            "queue_preflight_message_ru": _channel_readiness_message(platform, status, True),
+            "queue_preflight_message_en": _channel_readiness_message(platform, status, False),
+        },
+    }
+
+
+def _queue_preflight_error(platform: str, status: str) -> str:
+    label = platform_label(platform)
+    normalized = str(status or "").strip()
+    if normalized == "adapter_pending":
+        return f"{label}: API-публикация ещё не включена; используйте ручное размещение."
+    if normalized == "missing_permissions":
+        return f"{label}: не хватает прав/permissions для публикации."
+    if normalized == "missing_binding":
+        return f"{label}: не выбрана группа, страница или бизнес-аккаунт для публикации."
+    if normalized == "missing_connection":
+        return f"{label}: аккаунт не подключен."
+    return f"{label}: нужны ключи или настройки канала перед постановкой в расписание."
 
 
 def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, Any]]:
