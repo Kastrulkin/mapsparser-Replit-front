@@ -690,7 +690,7 @@ def upsert_external_account(business_id):
     Создать или обновить внешний аккаунт источника для бизнеса.
 
     Body:
-      - source: 'yandex_business' | 'google_business' | '2gis' | 'telegram_app'
+      - source: 'yandex_business' | 'google_business' | '2gis' | 'telegram_app' | 'vk' | 'vk_group' | 'vk_business' | 'meta' | 'facebook' | 'instagram'
       - external_id: string (опционально)
       - display_name: string (опционально)
       - auth_data: string (cookie / refresh_token / token) - будет зашифрован позже
@@ -733,7 +733,18 @@ def upsert_external_account(business_id):
             else:
                 return jsonify({"error": "auth_data должен быть строкой или объектом", "field": "auth_data"}), 400
 
-        if source not in ("yandex_business", "google_business", "2gis", "telegram_app"):
+        if source not in (
+            "yandex_business",
+            "google_business",
+            "2gis",
+            "telegram_app",
+            "vk",
+            "vk_group",
+            "vk_business",
+            "meta",
+            "facebook",
+            "instagram",
+        ):
             return jsonify({"error": "Некорректный source"}), 400
 
         db = DatabaseManager()

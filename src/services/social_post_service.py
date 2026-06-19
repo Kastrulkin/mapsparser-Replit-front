@@ -5,6 +5,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+import urllib.parse
 import uuid
 from datetime import date, datetime, timezone
 from typing import Any
@@ -452,6 +453,7 @@ def record_social_post_attribution_event(
         for key, item in list(event.items()):
             if isinstance(item, (datetime, date)):
                 event[key] = item.isoformat()
+        _upsert_manual_attribution_metrics(cursor, str(post.get("id") or ""))
         db.conn.commit()
         return {
             "event": event,
@@ -492,16 +494,34 @@ def collect_social_post_metrics(user_id: str, business_id: str = "", post_id: st
         posts = [_serialize_social_post(cursor, row) for row in cursor.fetchall() or []]
         today = date.today()
         for post in posts:
+            attribution_metrics = _attribution_metrics_for_post(cursor, str(post.get("id") or ""))
             cursor.execute(
                 """
                 INSERT INTO social_post_metrics (
                     id, social_post_id, metric_date, views, impressions, reach, likes, comments, shares, clicks, inquiries, leads, raw_json, captured_at
                 )
-                VALUES (%s, %s, %s, 0, 0, 0, 0, 0, 0, 0, 0, 0, %s, NOW())
+                VALUES (%s, %s, %s, 0, 0, 0, 0, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (social_post_id, metric_date)
-                DO UPDATE SET captured_at = NOW()
+                DO UPDATE SET
+                    comments = GREATEST(social_post_metrics.comments, EXCLUDED.comments),
+                    shares = GREATEST(social_post_metrics.shares, EXCLUDED.shares),
+                    clicks = GREATEST(social_post_metrics.clicks, EXCLUDED.clicks),
+                    inquiries = GREATEST(social_post_metrics.inquiries, EXCLUDED.inquiries),
+                    leads = GREATEST(social_post_metrics.leads, EXCLUDED.leads),
+                    raw_json = EXCLUDED.raw_json,
+                    captured_at = NOW()
                 """,
-                (_new_id(), post.get("id"), today, _json_dumps({"collector": "manual_or_adapter_pending"})),
+                (
+                    _new_id(),
+                    post.get("id"),
+                    today,
+                    attribution_metrics.get("comments", 0),
+                    attribution_metrics.get("shares", 0),
+                    attribution_metrics.get("clicks", 0),
+                    attribution_metrics.get("inquiries", 0),
+                    attribution_metrics.get("leads", 0),
+                    _json_dumps({"collector": "manual_attribution_v1", "attribution": attribution_metrics}),
+                ),
             )
         db.conn.commit()
         return {
@@ -746,21 +766,9 @@ def _publish_api_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     if platform == "telegram":
         return _publish_telegram_post(cursor, post)
     if platform == "vk":
-        return _publish_external_account_post(
-            cursor,
-            post,
-            ("vk", "vk_group", "vk_business"),
-            "VK аккаунт/группа не подключены или не выданы права wall.post.",
-            "vk_adapter_waiting_for_native_wall_post",
-        )
+        return _publish_vk_post(cursor, post)
     if platform == "google_business":
-        return _publish_external_account_post(
-            cursor,
-            post,
-            ("google_business",),
-            "Google Business Profile не подключен или не готов к публикации.",
-            "google_business_publish_boundary_ready",
-        )
+        return _publish_google_business_post(cursor, post)
     if platform in {"instagram", "facebook"}:
         return _publish_external_account_post(
             cursor,
@@ -854,6 +862,175 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "last_error": str(error),
             "metadata_json": {"provider_status": "telegram_unexpected_error"},
         }
+
+
+def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    account = _find_active_external_account(cursor, str(post.get("business_id") or ""), ("vk", "vk_group", "vk_business"))
+    if not account:
+        return {
+            "status": "needs_manual_publish",
+            "last_error": "VK аккаунт/группа не подключены или не выданы права wall.post.",
+            "metadata_json": {"provider_status": "vk_connection_missing"},
+        }
+    auth_data = _external_account_auth_data(account)
+    token = str(auth_data.get("access_token") or auth_data.get("token") or "").strip()
+    group_id = str(auth_data.get("group_id") or auth_data.get("community_id") or account.get("external_id") or "").strip()
+    owner_id = str(auth_data.get("owner_id") or "").strip()
+    if not owner_id and group_id:
+        clean_group_id = group_id[1:] if group_id.startswith("-") else group_id
+        owner_id = f"-{clean_group_id}"
+    if not token or not owner_id:
+        return {
+            "status": "needs_manual_publish",
+            "last_error": "Для VK нужны access_token и group_id/owner_id с правом wall.post.",
+            "metadata_json": {
+                "provider_status": "vk_credentials_missing",
+                "external_account_id": account.get("id"),
+            },
+        }
+    text = str(post.get("platform_text") or post.get("base_text") or "").strip()
+    if not text:
+        return {
+            "status": "failed",
+            "last_error": "Пустой текст нельзя отправить во VK.",
+            "metadata_json": {"provider_status": "vk_empty_text"},
+        }
+    payload = urllib.parse.urlencode(
+        {
+            "access_token": token,
+            "owner_id": owner_id,
+            "message": text,
+            "from_group": "1",
+            "v": str(auth_data.get("api_version") or "5.199"),
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.vk.com/method/wall.post",
+        data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=15)
+        try:
+            body = resp.read().decode("utf-8", errors="ignore")
+            parsed = _json_dict(body)
+        finally:
+            resp.close()
+    except urllib.error.HTTPError:
+        error = sys.exc_info()[1]
+        body = ""
+        try:
+            body = error.read().decode("utf-8", errors="ignore")
+        except Exception:
+            body = str(error)
+        return {
+            "status": "failed",
+            "last_error": body or str(error),
+            "metadata_json": {"provider_status": "vk_http_error", "external_account_id": account.get("id")},
+        }
+    except (urllib.error.URLError, TimeoutError):
+        error = sys.exc_info()[1]
+        return {
+            "status": "failed",
+            "last_error": str(error),
+            "metadata_json": {"provider_status": "vk_network_error", "external_account_id": account.get("id")},
+        }
+    except Exception:
+        error = sys.exc_info()[1]
+        return {
+            "status": "failed",
+            "last_error": str(error),
+            "metadata_json": {"provider_status": "vk_unexpected_error", "external_account_id": account.get("id")},
+        }
+    if isinstance(parsed.get("error"), dict):
+        vk_error = parsed.get("error") or {}
+        return {
+            "status": "needs_manual_publish" if int(vk_error.get("error_code") or 0) in {5, 7, 15, 27} else "failed",
+            "last_error": str(vk_error.get("error_msg") or "VK API error"),
+            "metadata_json": {
+                "provider_status": "vk_api_error",
+                "external_account_id": account.get("id"),
+                "vk_error": vk_error,
+            },
+        }
+    response = parsed.get("response") if isinstance(parsed.get("response"), dict) else {}
+    post_id = str(response.get("post_id") or "").strip()
+    provider_url = _vk_post_url(owner_id, post_id)
+    if not post_id:
+        return {
+            "status": "failed",
+            "last_error": "VK не вернул post_id.",
+            "metadata_json": {"provider_status": "vk_missing_post_id", "external_account_id": account.get("id"), "vk_response": parsed},
+        }
+    return {
+        "status": "published",
+        "provider_post_id": post_id,
+        "provider_post_url": provider_url,
+        "metadata_json": {
+            "provider_status": "vk_published",
+            "external_account_id": account.get("id"),
+            "vk_response": parsed,
+        },
+    }
+
+
+def _publish_google_business_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    account = _find_active_external_account(cursor, str(post.get("business_id") or ""), ("google_business",))
+    if not account:
+        return {
+            "status": "needs_manual_publish",
+            "last_error": "Google Business Profile не подключен или не готов к публикации.",
+            "metadata_json": {"provider_status": "google_business_connection_missing"},
+        }
+    summary = str(post.get("platform_text") or post.get("base_text") or "").strip()
+    if not summary:
+        return {
+            "status": "failed",
+            "last_error": "Пустой текст нельзя отправить в Google Business Profile.",
+            "metadata_json": {"provider_status": "google_business_empty_text", "external_account_id": account.get("id")},
+        }
+    post_data = {
+        "topicType": "STANDARD",
+        "summary": summary[:1500],
+        "callToAction": {
+            "actionType": "CALL",
+            "url": "",
+        },
+    }
+    try:
+        from google_business_sync_worker import GoogleBusinessSyncWorker
+        worker = GoogleBusinessSyncWorker()
+        provider_post_id = worker._publish_post(account, post_data)
+    except ImportError:
+        error = sys.exc_info()[1]
+        return {
+            "status": "needs_manual_publish",
+            "last_error": f"Google Business adapter dependency is unavailable: {error}",
+            "metadata_json": {"provider_status": "google_business_dependency_missing", "external_account_id": account.get("id")},
+        }
+    except Exception:
+        error = sys.exc_info()[1]
+        return {
+            "status": "failed",
+            "last_error": str(error),
+            "metadata_json": {"provider_status": "google_business_exception", "external_account_id": account.get("id")},
+        }
+    if not provider_post_id:
+        return {
+            "status": "needs_manual_publish",
+            "last_error": "Google Business Profile не принял публикацию. Проверьте OAuth, location и разрешения.",
+            "metadata_json": {"provider_status": "google_business_publish_failed", "external_account_id": account.get("id")},
+        }
+    return {
+        "status": "published",
+        "provider_post_id": str(provider_post_id),
+        "provider_post_url": "",
+        "metadata_json": {
+            "provider_status": "google_business_published",
+            "external_account_id": account.get("id"),
+        },
+    }
 
 
 def _publish_external_account_post(
@@ -968,6 +1145,75 @@ def _telegram_post_url(chat_id: str, message_id: str) -> str:
     if normalized:
         return f"https://t.me/c/{normalized}/{message}"
     return ""
+
+
+def _vk_post_url(owner_id: str, post_id: str) -> str:
+    owner = str(owner_id or "").strip()
+    post = str(post_id or "").strip()
+    if not owner or not post:
+        return ""
+    return f"https://vk.com/wall{owner}_{post}"
+
+
+def _upsert_manual_attribution_metrics(cursor: Any, post_id: str) -> None:
+    metrics = _attribution_metrics_for_post(cursor, post_id)
+    cursor.execute(
+        """
+        INSERT INTO social_post_metrics (
+            id, social_post_id, metric_date, views, impressions, reach, likes, comments, shares, clicks, inquiries, leads, raw_json, captured_at
+        )
+        VALUES (%s, %s, %s, 0, 0, 0, 0, %s, %s, %s, %s, %s, %s, NOW())
+        ON CONFLICT (social_post_id, metric_date)
+        DO UPDATE SET
+            comments = GREATEST(social_post_metrics.comments, EXCLUDED.comments),
+            shares = GREATEST(social_post_metrics.shares, EXCLUDED.shares),
+            clicks = GREATEST(social_post_metrics.clicks, EXCLUDED.clicks),
+            inquiries = GREATEST(social_post_metrics.inquiries, EXCLUDED.inquiries),
+            leads = GREATEST(social_post_metrics.leads, EXCLUDED.leads),
+            raw_json = EXCLUDED.raw_json,
+            captured_at = NOW()
+        """,
+        (
+            _new_id(),
+            post_id,
+            date.today(),
+            metrics.get("comments", 0),
+            metrics.get("shares", 0),
+            metrics.get("clicks", 0),
+            metrics.get("inquiries", 0),
+            metrics.get("leads", 0),
+            _json_dumps({"collector": "manual_attribution_v1", "attribution": metrics}),
+        ),
+    )
+
+
+def _attribution_metrics_for_post(cursor: Any, post_id: str) -> dict[str, int]:
+    if not post_id:
+        return {"comments": 0, "shares": 0, "clicks": 0, "inquiries": 0, "leads": 0}
+    cursor.execute(
+        """
+        SELECT event_type, COALESCE(SUM(value), 0) AS total
+        FROM social_post_attribution_events
+        WHERE social_post_id = %s
+        GROUP BY event_type
+        """,
+        (post_id,),
+    )
+    result = {"comments": 0, "shares": 0, "clicks": 0, "inquiries": 0, "leads": 0}
+    for row in cursor.fetchall() or []:
+        event_type = str(_row_get(row, "event_type", 0) or "").strip()
+        total = int(_row_get(row, "total", 1, 0) or 0)
+        if event_type == "lead":
+            result["leads"] += total
+        elif event_type == "inquiry":
+            result["inquiries"] += total
+        elif event_type == "comment":
+            result["comments"] += total
+        elif event_type == "share":
+            result["shares"] += total
+        elif event_type == "click":
+            result["clicks"] += total
+    return result
 
 
 def _base_text_from_item(item: dict[str, Any]) -> str:

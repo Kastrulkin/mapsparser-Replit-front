@@ -6,6 +6,7 @@ from services.social_post_service import (
     ensure_social_post_tables,
     next_action_for_social_post,
     openclaw_browser_available,
+    _vk_post_url,
 )
 
 
@@ -113,3 +114,9 @@ def test_build_social_queue_groups_matches_daily_workflow():
     assert by_key["needs_supervised_publish"]["post_ids"] == ["p3"]
     assert by_key["published"]["count"] == 1
     assert by_key["failed"]["count"] == 1
+
+
+def test_vk_post_url_uses_owner_and_post_id():
+    assert _vk_post_url("-12345", "678") == "https://vk.com/wall-12345_678"
+    assert _vk_post_url("", "678") == ""
+    assert _vk_post_url("-12345", "") == ""

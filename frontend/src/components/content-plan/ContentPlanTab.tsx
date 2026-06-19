@@ -119,7 +119,7 @@ type SocialPost = {
   automation_task_id?: string;
   last_error?: string;
   next_action?: string;
-  metadata_json?: Record<string, unknown>;
+  metadata_json?: SocialPostMetadata;
   views?: number;
   reach?: number;
   likes?: number;
@@ -127,6 +127,17 @@ type SocialPost = {
   shares?: number;
   inquiries?: number;
   leads?: number;
+};
+
+type SocialPostMetadata = {
+  supervised_publish?: {
+    instruction_ru?: string;
+    instruction_en?: string;
+    platform_label?: string;
+    mode?: string;
+  };
+  provider_status?: string;
+  provider_note?: string;
 };
 
 type SocialPostsSummary = {
@@ -356,6 +367,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [selectedPlanTargetKey, setSelectedPlanTargetKey] = useState('all');
   const [selectedItemLocationKey, setSelectedItemLocationKey] = useState('all');
   const [selectedWeekKey, setSelectedWeekKey] = useState('all');
+  const [selectedChannelFilter, setSelectedChannelFilter] = useState<'all' | 'social' | 'maps'>('all');
   const [dateFromFilter, setDateFromFilter] = useState('');
   const [dateToFilter, setDateToFilter] = useState('');
   const [sortMode, setSortMode] = useState<'priority' | 'date'>('date');
@@ -470,6 +482,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const visibleItems = useMemo(() => (
     filteredItems
       .filter((item) => selectedWeekKey === 'all' || _weekBucketKey(item.scheduled_for) === selectedWeekKey)
+      .filter((item) => _matchesChannelFilter(item, socialPostsByItem, selectedChannelFilter))
       .filter((item) => _matchesDateRange(item.scheduled_for, dateFromFilter, dateToFilter))
       .filter((item) => {
         const query = queueSearch.trim().toLowerCase();
@@ -497,7 +510,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         if (dateDiff !== 0) return dateDiff;
         return String(left.theme || '').localeCompare(String(right.theme || ''));
       })
-  ), [dateFromFilter, dateToFilter, filteredItems, queueSearch, recentGeneratedItemId, selectedWeekKey, sortMode]);
+  ), [dateFromFilter, dateToFilter, filteredItems, queueSearch, recentGeneratedItemId, selectedChannelFilter, selectedWeekKey, socialPostsByItem, sortMode]);
   const selectedQueueItem = useMemo(() => (
     visibleItems.find((item) => item.id === selectedQueueItemId) || visibleItems[0] || null
   ), [selectedQueueItemId, visibleItems]);
@@ -1511,6 +1524,41 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
     } catch (manualError) {
       const message = manualError instanceof Error ? manualError.message : (isRu ? 'Не удалось отметить публикацию' : 'Could not mark post as published');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
+  const recordSocialPostAttribution = async (post: SocialPost, eventType: 'lead' | 'inquiry') => {
+    setSocialBusyAction(`attribute:${eventType}:${post.id}`);
+    setError('');
+    setActionSummary(null);
+    try {
+      await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/attribution-events`, {
+        method: 'POST',
+        body: JSON.stringify({
+          event_type: eventType,
+          value: 1,
+          event_source: 'manual_content_plan',
+          metadata: {
+            platform: post.platform,
+            content_plan_item_id: post.content_plan_item_id,
+          },
+        }),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setActionSummary({
+        tone: 'success',
+        text_ru: eventType === 'lead'
+          ? 'Заявка привязана к публикации. Следующий план будет учитывать её выше охватов.'
+          : 'Обращение привязано к публикации. Следующий план будет учитывать его выше лайков и охватов.',
+        text_en: eventType === 'lead'
+          ? 'Lead recorded for this post. Next plan will rank it above reach.'
+          : 'Inquiry recorded for this post. Next plan will rank it above likes and reach.',
+      });
+    } catch (attributeError) {
+      const message = attributeError instanceof Error ? attributeError.message : (isRu ? 'Не удалось отметить результат публикации' : 'Could not record post result');
       setError(message);
     } finally {
       setSocialBusyAction('');
@@ -3933,6 +3981,23 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       : 'Prepare channels for plan items to see the publishing workload.'}
                   </div>
                 )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {['all', 'social', 'maps'].map((filterKey) => (
+                    <button
+                      key={filterKey}
+                      type="button"
+                      onClick={() => setSelectedChannelFilter(_normalizeSocialChannelFilter(filterKey))}
+                      className={[
+                        'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                        selectedChannelFilter === filterKey
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                      ].join(' ')}
+                    >
+                      {_socialChannelFilterLabel(filterKey, isRu)}
+                    </button>
+                  ))}
+                </div>
               </div>
               {selectedItems.length > 0 ? (
                 <div className="flex w-full flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3">
@@ -4225,6 +4290,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const needsReview = post.status === 'draft' || post.status === 'needs_review';
                               const canPublish = post.status === 'approved' || post.status === 'queued';
                               const canMarkPublished = post.status === 'needs_supervised_publish' || post.status === 'needs_manual_publish';
+                              const canRecordResult = post.status === 'published';
+                              const supervisedPayload = _socialSupervisedPayload(post);
                               return (
                                 <div key={post.id} className="rounded-2xl border border-slate-200 bg-white p-3">
                                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -4248,6 +4315,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       {isRu
                                         ? 'Для этого канала LocalOS показывает контролируемое размещение или ручной fallback, а не стабильный API publish.'
                                         : 'For this channel LocalOS shows supervised placement or manual fallback, not stable API publishing.'}
+                                      {supervisedPayload?.instruction_ru || supervisedPayload?.instruction_en ? (
+                                        <div className="mt-2 text-amber-900">
+                                          {isRu
+                                            ? String(supervisedPayload.instruction_ru || '')
+                                            : String(supervisedPayload.instruction_en || '')}
+                                        </div>
+                                      ) : null}
+                                      {post.automation_task_id ? (
+                                        <div className="mt-2 font-mono text-[11px] text-amber-900">
+                                          task: {post.automation_task_id}
+                                        </div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                   {post.last_error ? (
@@ -4289,6 +4368,28 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       >
                                         {isRu ? 'Отметить размещённым' : 'Mark published'}
                                       </Button>
+                                    ) : null}
+                                    {canRecordResult ? (
+                                      <>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => { void recordSocialPostAttribution(post, 'lead'); }}
+                                          disabled={postBusy}
+                                        >
+                                          {isRu ? 'Была заявка' : 'Record lead'}
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => { void recordSocialPostAttribution(post, 'inquiry'); }}
+                                          disabled={postBusy}
+                                        >
+                                          {isRu ? 'Было обращение' : 'Record inquiry'}
+                                        </Button>
+                                      </>
                                     ) : null}
                                   </div>
                                   <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
@@ -4530,6 +4631,34 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
 function _isSupervisedPlatform(platform: string): boolean {
   return platform === 'yandex_maps' || platform === 'two_gis';
+}
+
+function _socialSupervisedPayload(post: SocialPost) {
+  return post.metadata_json?.supervised_publish || null;
+}
+
+function _normalizeSocialChannelFilter(value: string): 'all' | 'social' | 'maps' {
+  if (value === 'social') return 'social';
+  if (value === 'maps') return 'maps';
+  return 'all';
+}
+
+function _socialChannelFilterLabel(value: string, isRu: boolean): string {
+  if (value === 'social') return isRu ? 'Только соцсети' : 'Social only';
+  if (value === 'maps') return isRu ? 'Только карты' : 'Maps only';
+  return isRu ? 'Все каналы' : 'All channels';
+}
+
+function _matchesChannelFilter(
+  item: PlanItem,
+  postsByItem: Record<string, SocialPost[]>,
+  filterKey: 'all' | 'social' | 'maps',
+): boolean {
+  if (filterKey === 'all') return true;
+  const posts = postsByItem[item.id] || [];
+  if (!posts.length) return true;
+  if (filterKey === 'maps') return posts.some((post) => _isSupervisedPlatform(post.platform) || post.platform === 'google_business');
+  return posts.some((post) => !_isSupervisedPlatform(post.platform) && post.platform !== 'google_business');
 }
 
 function _socialPlatformLabel(platform: string, isRu: boolean): string {

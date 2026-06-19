@@ -1,0 +1,39 @@
+{
+  "task_id": "social-posting-loop-20260619",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "VK native publish path is implemented with recoverable missing-credential states."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Google Business publish uses existing worker boundary with lazy import and recoverable failures."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Manual attribution events are folded into daily social post metrics."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Content plan UI has channel filter, attribution CTAs, and supervised task instructions."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Publish approval guard remains enforced by service path."
+    }
+  ],
+  "commands_run": [
+    "./venv/bin/python -m py_compile src/services/social_post_service.py src/api/social_posts_api.py src/api/external_accounts_api.py",
+    "./venv/bin/python -m pytest -q tests/test_social_post_service.py tests/test_social_posts_api.py tests/test_external_accounts_routes_contract.py",
+    "npm run build"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/social-posting-loop-20260619/evidence.md"
+  ]
+}

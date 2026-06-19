@@ -1,0 +1,84 @@
+{
+  "task_id": "social-posting-loop-20260619",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "VK native publish path and recoverable missing-credential states",
+      "status": "PASS",
+      "proof": [
+        "src/services/social_post_service.py::_publish_vk_post",
+        "tests/test_social_post_service.py::test_vk_post_url_uses_owner_and_post_id"
+      ],
+      "gaps": [
+        "Requires real encrypted VK account binding with wall.post permission for live publish."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Google Business publish worker boundary with recoverable dependency/account failures",
+      "status": "PASS",
+      "proof": [
+        "src/services/social_post_service.py::_publish_google_business_post"
+      ],
+      "gaps": [
+        "Live Google publish depends on OAuth/API approval and connected account."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Manual attribution events update social post metrics",
+      "status": "PASS",
+      "proof": [
+        "src/services/social_post_service.py::record_social_post_attribution_event",
+        "src/services/social_post_service.py::_upsert_manual_attribution_metrics"
+      ],
+      "gaps": [
+        "Provider metric snapshots beyond manual attribution remain future work."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Content plan UI channel filter, attribution CTAs, and supervised task detail",
+      "status": "PASS",
+      "proof": [
+        "frontend/src/components/content-plan/ContentPlanTab.tsx"
+      ],
+      "gaps": [
+        "Full browser automation launch remains intentionally deferred behind OpenClaw capability verification."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Approval invariant preserved",
+      "status": "PASS",
+      "proof": [
+        "src/services/social_post_service.py::publish_social_post",
+        "tests/test_social_posts_api.py::test_social_post_routes_include_bulk_and_attribution_endpoints"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/components/content-plan/ContentPlanTab.tsx",
+    "src/api/external_accounts_api.py",
+    "src/services/social_post_service.py",
+    "tests/test_social_post_service.py",
+    "tests/test_social_posts_api.py",
+    ".agent/tasks/social-posting-loop-20260619/spec.md",
+    ".agent/tasks/social-posting-loop-20260619/evidence.md",
+    ".agent/tasks/social-posting-loop-20260619/evidence.json",
+    ".agent/tasks/social-posting-loop-20260619/verdict.json"
+  ],
+  "commands_for_fresh_verifier": [
+    "./venv/bin/python -m py_compile src/services/social_post_service.py src/api/social_posts_api.py src/api/external_accounts_api.py",
+    "./venv/bin/python -m pytest -q tests/test_social_post_service.py tests/test_social_posts_api.py tests/test_external_accounts_routes_contract.py",
+    "cd frontend && npm run build",
+    "scripts/proof_loop.sh validate social-posting-loop-20260619"
+  ],
+  "known_gaps": [
+    "Meta Graph real publish remains blocked until permissions/account binding are verified.",
+    "Yandex/2GIS browser automation remains supervised/manual; no final external publish click is automated.",
+    "Live VK/Google publish requires real connected credentials and provider permissions."
+  ]
+}

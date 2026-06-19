@@ -23,3 +23,18 @@ def test_social_post_write_rate_limit_blocks_repeated_action(monkeypatch):
 
     assert error_response is not None
     assert error_response[1] == 429
+
+
+def test_social_post_routes_include_bulk_and_attribution_endpoints():
+    app = Flask(__name__)
+    app.register_blueprint(social_posts_api.social_posts_bp)
+    routes = {
+        (str(rule), frozenset(rule.methods - {"HEAD", "OPTIONS"}))
+        for rule in app.url_map.iter_rules()
+    }
+
+    assert ("/api/content-plans/social-posts/bulk-prepare", frozenset({"POST"})) in routes
+    assert ("/api/social-posts/bulk-approve", frozenset({"POST"})) in routes
+    assert ("/api/social-posts/bulk-publish", frozenset({"POST"})) in routes
+    assert ("/api/social-posts/bulk-mark-manual-published", frozenset({"POST"})) in routes
+    assert ("/api/social-posts/<post_id>/attribution-events", frozenset({"POST"})) in routes
