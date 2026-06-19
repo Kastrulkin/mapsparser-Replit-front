@@ -1,4 +1,5 @@
 import sys
+from datetime import date, timedelta
 
 import services.social_post_service as social_post_service
 from services.social_post_service import (
@@ -12,6 +13,7 @@ from services.social_post_service import (
     _queue_preflight_block,
     _status_after_social_text_edit,
     _vk_publish_binding,
+    apply_social_post_recommendation,
     _build_next_plan_changes,
     build_social_queue_groups,
     default_publish_mode,
@@ -36,6 +38,109 @@ class FakeTableCursor:
         if self.current_table in self.existing_tables:
             return (self.current_table,)
         return (None,)
+
+
+class FakeRecommendationConn:
+    def __init__(self):
+        today = date.today()
+        self.items = {
+            "future-draft": {
+                "id": "future-draft",
+                "plan_id": "plan-1",
+                "theme": "Будущая тема",
+                "goal": "Старый goal",
+                "scheduled_for": today + timedelta(days=2),
+                "status": "draft",
+                "usernews_id": "",
+            },
+            "past-draft": {
+                "id": "past-draft",
+                "plan_id": "plan-1",
+                "theme": "Прошлая тема",
+                "goal": "Старый goal",
+                "scheduled_for": today - timedelta(days=2),
+                "status": "draft",
+                "usernews_id": "",
+            },
+            "future-published": {
+                "id": "future-published",
+                "plan_id": "plan-1",
+                "theme": "Опубликованная тема",
+                "goal": "Старый goal",
+                "scheduled_for": today + timedelta(days=3),
+                "status": "published",
+                "usernews_id": "",
+            },
+            "future-news": {
+                "id": "future-news",
+                "plan_id": "plan-1",
+                "theme": "Тема с новостью",
+                "goal": "Старый goal",
+                "scheduled_for": today + timedelta(days=4),
+                "status": "draft",
+                "usernews_id": "news-1",
+            },
+        }
+        self.committed = False
+        self.rolled_back = False
+        self.edited_plan_json = ""
+
+    def cursor(self):
+        return FakeRecommendationCursor(self)
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+
+class FakeRecommendationCursor:
+    def __init__(self, conn):
+        self.conn = conn
+        self.next_row = None
+        self.description = []
+
+    def execute(self, query, params=None):
+        normalized = " ".join(str(query).split()).lower()
+        if "update contentplanitems" in normalized:
+            assert "scheduled_for >= current_date" in normalized
+            proposed_goal, item_id, plan_id = params
+            item = self.conn.items.get(str(item_id))
+            today = date.today()
+            eligible = (
+                item
+                and item["plan_id"] == plan_id
+                and not str(item.get("usernews_id") or "")
+                and str(item.get("status") or "") not in ("skipped", "published")
+                and item.get("scheduled_for") >= today
+            )
+            if eligible:
+                item["goal"] = proposed_goal
+                self.description = [("id",), ("theme",), ("goal",)]
+                self.next_row = (item["id"], item["theme"], item["goal"])
+            else:
+                self.next_row = None
+            return
+        if "update contentplans" in normalized:
+            self.conn.edited_plan_json = str(params[0])
+            self.next_row = None
+            return
+        raise AssertionError(f"unexpected SQL in recommendation fake: {query}")
+
+    def fetchone(self):
+        return self.next_row
+
+
+class FakeRecommendationDB:
+    last_conn = None
+
+    def __init__(self):
+        self.conn = FakeRecommendationConn()
+        FakeRecommendationDB.last_conn = self.conn
+
+    def close(self):
+        pass
 
 
 def test_default_publish_mode_uses_api_for_connected_social_channels(monkeypatch):
@@ -441,3 +546,50 @@ def test_social_learning_insights_explain_winners_weak_channels_and_no_result_to
     assert insights["weak_channels"][0]["platform"] == "vk"
     assert insights["cta_suggestions"][0]["ru"]
     assert insights["frequency_suggestions"][0]["ru"]
+
+
+def test_apply_social_post_recommendation_requires_explicit_approval(monkeypatch):
+    def fail_if_db_opens():
+        raise AssertionError("database must not open before approval")
+
+    monkeypatch.setattr(social_post_service, "DatabaseManager", fail_if_db_opens)
+
+    error = None
+    try:
+        apply_social_post_recommendation("user-1", "plan-1", approved=False)
+    except PermissionError:
+        error = sys.exc_info()[1]
+
+    assert error is not None
+    assert "явное подтверждение" in str(error)
+
+
+def test_apply_social_post_recommendation_changes_only_future_unpublished_items(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeRecommendationDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(social_post_service, "_load_plan_for_user", lambda cursor, user_id, plan_id: {"id": plan_id})
+    monkeypatch.setattr(
+        social_post_service,
+        "recommend_next_plan_from_social_posts",
+        lambda user_id, plan_id: {
+            "recommendation": {"primary_metric": "leads"},
+            "proposed_changes": [
+                {"item_id": "future-draft", "proposed_goal": "Новый goal для будущего"},
+                {"item_id": "past-draft", "proposed_goal": "Нельзя менять прошлое"},
+                {"item_id": "future-published", "proposed_goal": "Нельзя менять опубликованное"},
+                {"item_id": "future-news", "proposed_goal": "Нельзя менять созданную новость"},
+            ],
+        },
+    )
+
+    result = apply_social_post_recommendation("user-1", "plan-1", approved=True)
+    conn = FakeRecommendationDB.last_conn
+
+    assert result["applied_count"] == 1
+    assert result["applied_items"][0]["id"] == "future-draft"
+    assert conn.items["future-draft"]["goal"] == "Новый goal для будущего"
+    assert conn.items["past-draft"]["goal"] == "Старый goal"
+    assert conn.items["future-published"]["goal"] == "Старый goal"
+    assert conn.items["future-news"]["goal"] == "Старый goal"
+    assert conn.committed is True
+    assert "approved_by" in conn.edited_plan_json

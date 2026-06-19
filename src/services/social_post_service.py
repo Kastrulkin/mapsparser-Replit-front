@@ -882,6 +882,7 @@ def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool 
                   AND plan_id = %s
                   AND COALESCE(usernews_id, '') = ''
                   AND COALESCE(status, '') NOT IN ('skipped', 'published')
+                  AND scheduled_for >= CURRENT_DATE
                 RETURNING id, theme, goal
                 """,
                 (
