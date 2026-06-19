@@ -4512,6 +4512,34 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           <div className="text-[11px] text-slate-300">
                             {isRu ? 'Внешняя публикация не запускалась.' : 'No external publishing was started.'}
                           </div>
+                          {Number(socialDispatchPreview.items?.length || 0) > 0 ? (
+                            <div className="mt-2 space-y-1">
+                              {(socialDispatchPreview.items || []).slice(0, 5).map((item) => (
+                                <div key={String(item.id || `${item.platform}-${item.dispatch_action}`)} className="rounded-lg bg-white/10 px-2 py-1.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="truncate font-medium text-white">
+                                      {String(item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu))}
+                                    </span>
+                                    <span className="shrink-0 text-[11px] text-slate-200">
+                                      {_socialDispatchActionLabel(String(item.dispatch_action || ''), isRu)}
+                                    </span>
+                                  </div>
+                                  {item.reason ? (
+                                    <div className="mt-0.5 line-clamp-2 text-[11px] text-slate-300">
+                                      {_socialDispatchReasonLabel(String(item.reason || ''), isRu)}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ))}
+                              {Number(socialDispatchPreview.items?.length || 0) > 5 ? (
+                                <div className="text-[11px] text-slate-300">
+                                  {isRu
+                                    ? `Ещё ${Number(socialDispatchPreview.items?.length || 0) - 5} в этом dry-run.`
+                                    : `${Number(socialDispatchPreview.items?.length || 0) - 5} more in this dry-run.`}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
@@ -5609,6 +5637,23 @@ function _socialNextActionLabel(action: string, isRu: boolean): string {
   if (normalized === 'retry_or_manual') return isRu ? 'следующий шаг: повторить или вручную' : 'next: retry or manual';
   if (normalized === 'collect_metrics') return isRu ? 'следующий шаг: собрать реакции' : 'next: collect reactions';
   return isRu ? 'следующий шаг не требуется' : 'no next action';
+}
+
+function _socialDispatchActionLabel(action: string, isRu: boolean): string {
+  const normalized = String(action || '').trim();
+  if (normalized === 'publish_api') return isRu ? 'API publish' : 'API publish';
+  if (normalized === 'create_supervised_task') return isRu ? 'controlled task' : 'controlled task';
+  if (normalized === 'manual_handoff') return isRu ? 'ручной шаг' : 'manual step';
+  return isRu ? 'проверить' : 'check';
+}
+
+function _socialDispatchReasonLabel(reason: string, isRu: boolean): string {
+  const normalized = String(reason || '').trim();
+  if (normalized === 'channel_ready') return isRu ? 'Канал готов, после approval worker сможет выполнить API-публикацию.' : 'Channel is ready; after approval the worker can publish via API.';
+  if (normalized === 'openclaw_browser_ready') return isRu ? 'OpenClaw browser-use готов, финальная кнопка публикации не нажимается без подтверждения.' : 'OpenClaw browser-use is ready; final publish is not clicked without approval.';
+  if (normalized === 'openclaw_browser_unavailable') return isRu ? 'Browser-use недоступен, нужен ручной/контролируемый fallback.' : 'Browser-use is unavailable, manual/supervised fallback is needed.';
+  if (normalized === 'publish_mode_not_api') return isRu ? 'Для канала нет API-режима, нужен ручной шаг.' : 'This channel has no API mode, manual step is needed.';
+  return normalized;
 }
 
 function _socialInsightMetricLine(
