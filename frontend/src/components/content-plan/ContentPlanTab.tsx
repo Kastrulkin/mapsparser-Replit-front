@@ -806,6 +806,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const visibleSocialNeedsManual = useMemo(() => (
     visibleSocialPosts.filter((post) => post.status === 'needs_manual_publish')
   ), [visibleSocialPosts]);
+  const socialDispatchEnabled = Boolean(socialRuntimeStatus?.dispatch?.enabled);
+  const socialQueueExecutionNotice = useMemo(() => {
+    if (socialDispatchEnabled) {
+      return {
+        tone: 'ok',
+        titleRu: 'Worker публикаций включён',
+        titleEn: 'Publishing worker is enabled',
+        textRu: 'Посты в расписании будут обработаны по дате: API-каналы уйдут через adapters, карты перейдут в controlled/manual state.',
+        textEn: 'Scheduled posts will be processed by date: API channels use adapters, maps move to controlled/manual state.',
+      };
+    }
+    return {
+      tone: 'warning',
+      titleRu: 'Worker публикаций сейчас выключен',
+      titleEn: 'Publishing worker is currently disabled',
+      textRu: 'Можно готовить, проверять и ставить посты в расписание, но автоматическое исполнение не начнётся до включения dispatch. Для Яндекс/2ГИС останется controlled/manual handoff.',
+      textEn: 'You can prepare, review, and queue posts, but automatic execution will not start until dispatch is enabled. Yandex/2GIS remain controlled/manual handoff.',
+    };
+  }, [socialDispatchEnabled]);
   const socialPlanNextStep = useMemo<SocialPlanNextStep>(() => {
     if (!currentPlan?.items?.length) {
       return {
@@ -848,10 +867,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (visibleSocialCanQueue.length > 0) {
       return {
         action: 'queue',
-        titleRu: 'Поставьте утверждённое в расписание',
-        titleEn: 'Queue approved posts',
-        descriptionRu: 'Только после этого worker сможет исполнить API-каналы по дате, а карты перевести в контролируемое размещение.',
-        descriptionEn: 'Only then can the worker publish API channels on schedule and move maps to supervised placement.',
+        titleRu: socialDispatchEnabled ? 'Поставьте утверждённое в расписание' : 'Поставьте в расписание, затем включите dispatch',
+        titleEn: socialDispatchEnabled ? 'Queue approved posts' : 'Queue posts, then enable dispatch',
+        descriptionRu: socialDispatchEnabled
+          ? 'Worker сможет исполнить API-каналы по дате, а карты перевести в контролируемое размещение.'
+          : 'Queue зафиксирует approval и даты, но внешнее исполнение не стартует, пока worker dispatch выключен.',
+        descriptionEn: socialDispatchEnabled
+          ? 'The worker can publish API channels on schedule and move maps to supervised placement.'
+          : 'Queueing records approval and dates, but external execution will not start while worker dispatch is disabled.',
         ctaRu: 'Поставить в расписание',
         ctaEn: 'Queue on schedule',
         count: visibleSocialCanQueue.length,
@@ -918,6 +941,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   }, [
     currentPlan?.items?.length,
     selectedItems.length,
+    socialDispatchEnabled,
     socialSummary?.published,
     socialSummary?.scheduled,
     socialSummary?.total,
@@ -1845,8 +1869,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
       setActionSummary({
         tone: 'success',
-        text_ru: 'Публикация поставлена в расписание. Worker выполнит её, когда наступит дата.',
-        text_en: 'Post queued. The worker will execute it when the scheduled time arrives.',
+        text_ru: socialDispatchEnabled
+          ? 'Публикация поставлена в расписание. Worker выполнит её, когда наступит дата.'
+          : 'Публикация поставлена в расписание. Dispatch сейчас выключен, поэтому автоматическое исполнение не начнётся до включения worker.',
+        text_en: socialDispatchEnabled
+          ? 'Post queued. The worker will execute it when the scheduled time arrives.'
+          : 'Post queued. Dispatch is currently disabled, so automatic execution will not start until the worker is enabled.',
       });
     } catch (queueError) {
       const message = queueError instanceof Error ? queueError.message : (isRu ? 'Не удалось поставить публикацию в расписание' : 'Could not queue post');
@@ -2043,8 +2071,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
       setActionSummary({
         tone: 'success',
-        text_ru: 'Утверждённые публикации поставлены в расписание. API-каналы пойдут через worker, Яндекс/2ГИС - в контролируемое размещение.',
-        text_en: 'Approved posts are queued. API channels go through the worker, Yandex/2GIS go to supervised placement.',
+        text_ru: socialDispatchEnabled
+          ? 'Утверждённые публикации поставлены в расписание. API-каналы пойдут через worker, Яндекс/2ГИС - в контролируемое размещение.'
+          : 'Утверждённые публикации поставлены в расписание. Dispatch выключен: очередь сохранена, но внешний запуск начнётся только после включения worker.',
+        text_en: socialDispatchEnabled
+          ? 'Approved posts are queued. API channels go through the worker, Yandex/2GIS go to supervised placement.'
+          : 'Approved posts are queued. Dispatch is disabled: the queue is saved, but external execution starts only after the worker is enabled.',
       });
     } catch (bulkError) {
       const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось поставить публикации в расписание' : 'Could not queue posts');
@@ -2067,8 +2099,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
       setActionSummary({
         tone: 'success',
-        text_ru: 'Выбранные публикации поставлены в расписание. Исполнение начнётся по дате после approval.',
-        text_en: 'Selected posts queued. Execution starts on schedule after approval.',
+        text_ru: socialDispatchEnabled
+          ? 'Выбранные публикации поставлены в расписание. Исполнение начнётся по дате после approval.'
+          : 'Выбранные публикации поставлены в расписание. Dispatch выключен, поэтому это пока сохранённая очередь без автоматического внешнего запуска.',
+        text_en: socialDispatchEnabled
+          ? 'Selected posts queued. Execution starts on schedule after approval.'
+          : 'Selected posts queued. Dispatch is disabled, so this is a saved queue without automatic external execution for now.',
       });
     } catch (bulkError) {
       const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось поставить выбранные публикации в расписание' : 'Could not queue selected posts');
@@ -4621,6 +4657,23 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             {isRu
                               ? 'Внешние публикации всё равно требуют approval; Яндекс/2ГИС не нажимают финальную кнопку без человека.'
                               : 'External posts still require approval; Yandex/2GIS do not click final publish without a human.'}
+                          </div>
+                        </div>
+                      ) : null}
+                      {socialRuntimeStatus && (visibleSocialCanQueue.length > 0 || Number(socialSummary?.scheduled || 0) > 0) ? (
+                        <div
+                          className={[
+                            'rounded-xl border px-3 py-2 text-xs leading-5',
+                            socialQueueExecutionNotice.tone === 'ok'
+                              ? 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100'
+                              : 'border-amber-300/30 bg-amber-400/10 text-amber-100',
+                          ].join(' ')}
+                        >
+                          <div className="font-semibold">
+                            {isRu ? socialQueueExecutionNotice.titleRu : socialQueueExecutionNotice.titleEn}
+                          </div>
+                          <div className="mt-1">
+                            {isRu ? socialQueueExecutionNotice.textRu : socialQueueExecutionNotice.textEn}
                           </div>
                         </div>
                       ) : null}
