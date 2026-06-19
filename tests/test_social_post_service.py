@@ -16,6 +16,7 @@ from services.social_post_service import (
     _build_social_learning_insights,
     _preview_dispatch_decision,
     _queue_preflight_block,
+    _record_social_supervised_handoff_ledger,
     _status_after_social_text_edit,
     _supervised_publish_state,
     _vk_publish_binding,
@@ -26,6 +27,7 @@ from services.social_post_service import (
     ensure_social_post_tables,
     next_action_for_social_post,
     openclaw_browser_available,
+    queue_social_post,
     _vk_post_url,
 )
 
@@ -173,6 +175,79 @@ class FakeMetricTotalsCursor:
                 "leads": 2,
             }
         ]
+
+
+class FakeSocialLedgerCursor:
+    def __init__(self, table_exists=True):
+        self.table_exists = table_exists
+        self.inserted = []
+        self.last_query = ""
+
+    def execute(self, query, params=None):
+        self.last_query = " ".join(str(query).split()).lower()
+        if "to_regclass" in self.last_query:
+            self.next_row = ("agent_action_ledger",) if self.table_exists else (None,)
+            return
+        if "insert into agent_action_ledger" in self.last_query:
+            self.inserted.append(params)
+            self.next_row = None
+            return
+        raise AssertionError(f"unexpected SQL: {query}")
+
+    def fetchone(self):
+        return getattr(self, "next_row", None)
+
+
+class FakeQueueFallbackConn:
+    def __init__(self):
+        self.committed = False
+        self.rolled_back = False
+        self.updated_row = {}
+
+    def cursor(self):
+        return FakeQueueFallbackCursor(self)
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+
+class FakeQueueFallbackCursor:
+    def __init__(self, conn):
+        self.conn = conn
+        self.next_row = None
+
+    def execute(self, query, params=None):
+        normalized = " ".join(str(query).split()).lower()
+        if "update social_posts" in normalized and "needs_manual_publish" in normalized:
+            self.conn.updated_row = {
+                "id": "post-api",
+                "business_id": "biz-1",
+                "platform": "telegram",
+                "publish_mode": "api",
+                "status": "needs_manual_publish",
+                "metadata_json": params[0],
+                "last_error": params[1],
+            }
+            self.next_row = self.conn.updated_row
+            return
+        raise AssertionError(f"unexpected SQL: {query}")
+
+    def fetchone(self):
+        return self.next_row
+
+
+class FakeQueueFallbackDB:
+    last_conn = None
+
+    def __init__(self):
+        self.conn = FakeQueueFallbackConn()
+        FakeQueueFallbackDB.last_conn = self.conn
+
+    def close(self):
+        pass
 
 
 def test_default_publish_mode_uses_api_for_connected_social_channels(monkeypatch):
@@ -409,6 +484,44 @@ def test_queue_preflight_allows_ready_api_channel(monkeypatch):
     )
 
     assert _queue_preflight_block(object(), {"business_id": "biz-1", "platform": "telegram"}) == {}
+
+
+def test_queue_social_post_api_preflight_fallback_does_not_create_supervised_ledger(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeQueueFallbackDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "telegram",
+            "publish_mode": "api",
+            "status": "approved",
+            "approved_at": "2026-06-19T10:00:00+00:00",
+        },
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_queue_preflight_block",
+        lambda cursor, post: {
+            "status": "needs_manual_publish",
+            "last_error": "Для Telegram нужны telegram_bot_token и telegram_chat_id бизнеса.",
+            "metadata_json": {"queue_preflight_status": "missing_keys"},
+        },
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_record_social_supervised_handoff_ledger",
+        lambda cursor, original, updated, automation_task_id: (_ for _ in ()).throw(AssertionError("map ledger only")),
+    )
+
+    post = queue_social_post("user-1", "post-api")
+
+    assert post["status"] == "needs_manual_publish"
+    assert post["last_error"] == "Для Telegram нужны telegram_bot_token и telegram_chat_id бизнеса."
+    assert post["metadata_json"]["queue_preflight_status"] == "missing_keys"
+    assert FakeQueueFallbackDB.last_conn.committed is True
 
 
 def test_queue_preflight_does_not_block_supervised_maps():
@@ -675,6 +788,57 @@ def test_dispatch_preview_readiness_marks_no_due_posts_as_safe_noop():
     assert readiness["due_count"] == 0
     assert readiness["external_publish_count"] == 0
     assert readiness["message_ru"]
+
+
+def test_supervised_handoff_writes_agent_action_ledger_when_available():
+    cursor = FakeSocialLedgerCursor(table_exists=True)
+    original = {
+        "id": "post-1",
+        "business_id": "biz-1",
+        "content_plan_id": "plan-1",
+        "content_plan_item_id": "item-1",
+        "platform": "yandex_maps",
+        "publish_mode": "openclaw_browser",
+        "approval_id": "approval-1",
+    }
+    updated = {
+        **original,
+        "status": "needs_supervised_publish",
+        "metadata_json": {
+            "openclaw_task": {"task_id": "task-1", "target": {"url": "https://yandex.ru/maps/org/1"}},
+            "supervised_publish": {"target_url": "https://yandex.ru/maps/org/1", "stop_before_final_publish": True},
+        },
+    }
+
+    ledger_id = _record_social_supervised_handoff_ledger(cursor, original, updated, "task-1")
+
+    assert ledger_id
+    assert len(cursor.inserted) == 1
+    params = cursor.inserted[0]
+    assert params[1] == "biz-1"
+    assert params[2] == "social_post_supervised_handoff"
+    assert params[3] == "social.post.publish_supervised_browser"
+    assert params[5] == "high"
+    assert params[8] == "approval-1"
+    assert params[9] == "queued_for_supervised_handoff"
+    metadata = json.loads(params[11])
+    assert metadata["provider_write_performed"] is False
+    assert metadata["human_final_approval_required"] is True
+    assert metadata["browser_final_click_allowed"] is False
+
+
+def test_supervised_handoff_ledger_is_optional_when_table_missing():
+    cursor = FakeSocialLedgerCursor(table_exists=False)
+
+    ledger_id = _record_social_supervised_handoff_ledger(
+        cursor,
+        {"id": "post-1", "business_id": "biz-1"},
+        {"id": "post-1", "business_id": "biz-1", "status": "needs_manual_publish"},
+        "task-1",
+    )
+
+    assert ledger_id == ""
+    assert cursor.inserted == []
 
 
 def test_apply_social_post_recommendation_requires_explicit_approval(monkeypatch):

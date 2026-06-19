@@ -376,6 +376,21 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
                 ),
             )
             updated = _serialize_social_post(cursor, cursor.fetchone())
+            ledger_id = _record_social_supervised_handoff_ledger(cursor, post, updated, automation_task_id)
+            if ledger_id:
+                metadata = _json_dict(updated.get("metadata_json"))
+                metadata["agent_action_ledger_id"] = ledger_id
+                cursor.execute(
+                    """
+                    UPDATE social_posts
+                    SET metadata_json = %s,
+                        updated_at = NOW()
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (_json_dumps(metadata), post_id),
+                )
+                updated = _serialize_social_post(cursor, cursor.fetchone())
             db.conn.commit()
             return updated
         queue_block = _queue_preflight_block(cursor, post)
@@ -473,6 +488,21 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
                 ),
             )
             updated = _serialize_social_post(cursor, cursor.fetchone())
+            ledger_id = _record_social_supervised_handoff_ledger(cursor, post, updated, automation_task_id)
+            if ledger_id:
+                metadata = _json_dict(updated.get("metadata_json"))
+                metadata["agent_action_ledger_id"] = ledger_id
+                cursor.execute(
+                    """
+                    UPDATE social_posts
+                    SET metadata_json = %s,
+                        updated_at = NOW()
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (_json_dumps(metadata), post_id),
+                )
+                updated = _serialize_social_post(cursor, cursor.fetchone())
             db.conn.commit()
             return updated
         if publish_mode != "api":
@@ -1548,6 +1578,77 @@ def _build_openclaw_supervised_task_payload(
             "manual_instruction_en": "Copy the text from LocalOS, publish it manually on the platform, and mark the post as published.",
         },
     }
+
+
+def _record_social_supervised_handoff_ledger(
+    cursor: Any,
+    original_post: dict[str, Any],
+    updated_post: dict[str, Any],
+    automation_task_id: str,
+) -> str:
+    try:
+        if not _table_exists(cursor, "agent_action_ledger"):
+            return ""
+        metadata = _json_dict(updated_post.get("metadata_json"))
+        task_payload = _json_dict(metadata.get("openclaw_task"))
+        supervised_payload = _json_dict(metadata.get("supervised_publish"))
+        status = str(updated_post.get("status") or "").strip()
+        ledger_id = _new_id()
+        cursor.execute(
+            """
+            INSERT INTO agent_action_ledger (
+                id, agent_client_id, business_id, action_type, capability, required_scope,
+                risk_level, input_summary, output_summary, approval_id, status,
+                reason_code, ip, user_agent, metadata_json
+            )
+            VALUES (%s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL, NULL, %s)
+            """,
+            (
+                ledger_id,
+                str(updated_post.get("business_id") or original_post.get("business_id") or "").strip(),
+                "social_post_supervised_handoff",
+                "social.post.publish_supervised_browser",
+                "external_publish",
+                "high",
+                _json_dumps(
+                    {
+                        "social_post_id": str(updated_post.get("id") or original_post.get("id") or "").strip(),
+                        "platform": str(updated_post.get("platform") or original_post.get("platform") or "").strip(),
+                        "publish_mode": str(updated_post.get("publish_mode") or original_post.get("publish_mode") or "").strip(),
+                        "automation_task_id": str(automation_task_id or "").strip(),
+                    }
+                ),
+                _json_dumps(
+                    {
+                        "status": status,
+                        "next_action": next_action_for_social_post(updated_post),
+                        "stop_before_final_publish": bool(supervised_payload.get("stop_before_final_publish", True)),
+                        "target_url": str(supervised_payload.get("target_url") or task_payload.get("target", {}).get("url") or "").strip()
+                        if isinstance(task_payload.get("target"), dict)
+                        else str(supervised_payload.get("target_url") or "").strip(),
+                    }
+                ),
+                str(updated_post.get("approval_id") or original_post.get("approval_id") or "").strip() or None,
+                "queued_for_supervised_handoff" if status == "needs_supervised_publish" else "manual_handoff_required",
+                "OPENCLAW_SUPERVISED_READY" if status == "needs_supervised_publish" else "MANUAL_FALLBACK_REQUIRED",
+                _json_dumps(
+                    {
+                        "schema": "localos_social_supervised_handoff_ledger_v1",
+                        "automation_task_id": str(automation_task_id or "").strip(),
+                        "content_plan_id": str(updated_post.get("content_plan_id") or original_post.get("content_plan_id") or "").strip(),
+                        "content_plan_item_id": str(updated_post.get("content_plan_item_id") or original_post.get("content_plan_item_id") or "").strip(),
+                        "provider_write_performed": False,
+                        "external_publish_performed": False,
+                        "human_final_approval_required": True,
+                        "browser_final_click_allowed": False,
+                        "openclaw_task": task_payload,
+                    }
+                ),
+            ),
+        )
+        return ledger_id
+    except Exception:
+        return ""
 
 
 def _publish_api_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
