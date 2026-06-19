@@ -1,0 +1,47 @@
+{
+  "task_id": "architecture-security-simplify-20260619",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Security leftovers, approval-boundary audit, social-post simplification, quality gate, and legacy cleanup are implemented and verified locally.",
+      "status": "PASS",
+      "proof": [
+        "Wordstat runtime config and legacy docs no longer contain hardcoded client credentials.",
+        "Approval-boundary audit passes in focused pytest.",
+        "Social-posts runtime schema creation was replaced with an Alembic migration presence guard.",
+        "Social-post write actions have per-user/action rate limiting.",
+        "Premature agent social.post capability/provider registry entries were removed.",
+        "local_quality_gate.sh completed successfully with pytest, pip-audit, npm audit, build, lint, changed-file lint, and typecheck.",
+        "Legacy debug/repro/fix/reset artifacts were moved under archive/legacy-runbooks."
+      ],
+      "gaps": [
+        "Wordstat key rotation must happen outside the repository.",
+        "Production deploy was not performed in this proof bundle."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/wordstat_config.py",
+    "docs/legacy/WORDSTAT_SETUP.md",
+    "scripts/audit_approval_boundaries.py",
+    "scripts/local_quality_gate.sh",
+    "src/api/social_posts_api.py",
+    "src/services/social_post_service.py",
+    "src/services/agent_capability_handlers.py",
+    "src/services/agent_provider_registry.py",
+    "tests/test_social_post_service.py",
+    "tests/test_social_posts_api.py",
+    "archive/legacy-runbooks/README.md",
+    "docs/DOCKER_DEPLOY.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "scripts/local_quality_gate.sh",
+    "venv/bin/python -m pytest -q tests/test_approval_boundaries_audit.py tests/test_security_runtime_config.py tests/test_social_post_service.py tests/test_social_posts_api.py",
+    "rg -n \"623b9605|8ec666a|verify=False|social\\\\.post\\\\.draft|social\\\\.post\\\\.publish_api|social_channels|CREATE TABLE IF NOT EXISTS social_posts|ALTER TABLE social_posts\" src tests scripts docs --glob '!frontend/dist/**'"
+  ],
+  "known_gaps": [
+    "External Wordstat secret rotation is still required.",
+    "Existing broad frontend lint warnings remain as baseline debt; changed frontend files now fail on warnings."
+  ]
+}

@@ -45,41 +45,6 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "side_effects": "none",
         "approval_required": False,
     },
-    "social.post.draft": {
-        "risk": "draft",
-        "side_effects": "none",
-        "approval_required": False,
-    },
-    "social.post.prepare_variants": {
-        "risk": "draft",
-        "side_effects": "creates platform-specific LocalOS drafts only",
-        "approval_required": False,
-    },
-    "social.post.publish_request": {
-        "risk": "external_publish_request",
-        "side_effects": "creates a LocalOS approval or publish request only",
-        "approval_required": True,
-    },
-    "social.post.publish_api": {
-        "risk": "external_publish",
-        "side_effects": "publishes through a connected channel adapter only after human approval",
-        "approval_required": True,
-    },
-    "social.post.publish_supervised_browser": {
-        "risk": "supervised_external_publish",
-        "side_effects": "opens or prepares a supervised browser/manual handoff and stops before final publish unless explicitly approved",
-        "approval_required": True,
-    },
-    "social.metrics.collect": {
-        "risk": "external_read_or_manual_snapshot",
-        "side_effects": "stores metrics snapshots",
-        "approval_required": False,
-    },
-    "social.plan.recalibrate": {
-        "risk": "recommendation",
-        "side_effects": "none unless a later plan creation flow is approved",
-        "approval_required": False,
-    },
     "appointments.read": {
         "risk": "read",
         "side_effects": "none",
@@ -192,13 +157,6 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "communications.draft": _handle_communications_draft,
         "communications.send_reminder": _handle_communications_send_reminder,
         "communications.send_offer": _handle_communications_send_offer,
-        "social.post.draft": _handle_social_post_draft,
-        "social.post.prepare_variants": _handle_social_post_prepare_variants,
-        "social.post.publish_request": _handle_social_post_publish_request,
-        "social.post.publish_api": _handle_social_post_publish_api,
-        "social.post.publish_supervised_browser": _handle_social_post_publish_supervised_browser,
-        "social.metrics.collect": _handle_social_metrics_collect,
-        "social.plan.recalibrate": _handle_social_plan_recalibrate,
         "support.export": _handle_support_export,
         "sheets.append_row_request": _handle_sheets_append_row_request,
         "google_sheets.read_rows": _handle_google_sheets_read_rows,
@@ -974,94 +932,6 @@ def _handle_communications_send_reminder(envelope: Dict[str, Any], user_data: Di
 
 def _handle_communications_send_offer(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
     return _create_communication_request(envelope, user_data, message_type="package_offer")
-
-
-def _handle_social_post_draft(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
-    payload = _payload(envelope)
-    return _result(
-        "draft_created",
-        content_plan_item_id=str(payload.get("content_plan_item_id") or ""),
-        base_text=str(payload.get("base_text") or payload.get("text") or "").strip(),
-        approval_required=False,
-    )
-
-
-def _handle_social_post_prepare_variants(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
-    payload = _payload(envelope)
-    platforms = payload.get("platforms") if isinstance(payload.get("platforms"), list) else []
-    text = str(payload.get("base_text") or payload.get("text") or "").strip()
-    variants = [
-        {
-            "platform": str(platform or "").strip(),
-            "text": text,
-            "status": "needs_review",
-        }
-        for platform in platforms
-        if str(platform or "").strip()
-    ]
-    return _result(
-        "variants_prepared",
-        content_plan_item_id=str(payload.get("content_plan_item_id") or ""),
-        variants=variants,
-        approval_required=True,
-    )
-
-
-def _handle_social_post_publish_request(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
-    payload = _payload(envelope)
-    return _result(
-        "publish_request_created",
-        social_post_id=str(payload.get("social_post_id") or ""),
-        status="pending_human",
-        approval_required=True,
-        external_dispatch_performed=False,
-    )
-
-
-def _handle_social_post_publish_api(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
-    payload = _payload(envelope)
-    approval = envelope.get("approval") if isinstance(envelope.get("approval"), dict) else {}
-    approved = bool(approval.get("approved") or payload.get("approved"))
-    return _result(
-        "api_publish_queued" if approved else "approval_required",
-        social_post_id=str(payload.get("social_post_id") or ""),
-        platform=str(payload.get("platform") or ""),
-        approved=approved,
-        external_dispatch_performed=False,
-        note="Native adapter execution is handled by LocalOS publish worker after approval.",
-    )
-
-
-def _handle_social_post_publish_supervised_browser(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
-    payload = _payload(envelope)
-    return _result(
-        "supervised_publish_task_prepared",
-        social_post_id=str(payload.get("social_post_id") or ""),
-        platform=str(payload.get("platform") or ""),
-        stops_before_final_publish=True,
-        approval_required=True,
-        external_dispatch_performed=False,
-    )
-
-
-def _handle_social_metrics_collect(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
-    payload = _payload(envelope)
-    return _result(
-        "metrics_collection_requested",
-        social_post_id=str(payload.get("social_post_id") or ""),
-        business_id=str(envelope.get("tenant_id") or payload.get("business_id") or ""),
-        metrics_priority=["leads", "inquiries", "comments", "reach"],
-    )
-
-
-def _handle_social_plan_recalibrate(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
-    payload = _payload(envelope)
-    return _result(
-        "recalibration_recommendation_ready",
-        content_plan_id=str(payload.get("content_plan_id") or ""),
-        primary_metric="leads_and_inquiries",
-        secondary_metrics=["comments", "shares", "reach", "views"],
-    )
 
 
 def _handle_support_export(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:

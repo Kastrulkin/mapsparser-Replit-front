@@ -108,9 +108,8 @@ def audit_blueprint_boundaries(findings):
         findings,
     )
     require_markers(
-        "src/services/agent_blueprint_orchestrator.py",
+        "src/services/agent_capability_handlers.py",
         [
-            "ActionOrchestrator(",
             "OUTREACH_SEND_BATCH_CAPABILITY: handle_outreach_send_batch",
         ],
         findings,

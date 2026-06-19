@@ -37,78 +37,27 @@ SOCIAL_POST_STATUSES = {
     "needs_supervised_publish",
 }
 
+SOCIAL_POST_TABLES = (
+    "social_posts",
+    "social_post_metrics",
+    "social_post_attribution_events",
+)
+
 
 def ensure_social_post_tables(cursor: Any) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS social_posts (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-            content_plan_id TEXT NOT NULL REFERENCES contentplans(id) ON DELETE CASCADE,
-            content_plan_item_id TEXT NOT NULL REFERENCES contentplanitems(id) ON DELETE CASCADE,
-            platform TEXT NOT NULL,
-            publish_mode TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'draft',
-            scheduled_for TIMESTAMPTZ,
-            approved_at TIMESTAMPTZ,
-            published_at TIMESTAMPTZ,
-            base_text TEXT,
-            platform_text TEXT,
-            media_json JSONB NOT NULL DEFAULT '[]',
-            external_account_id TEXT,
-            provider_post_id TEXT,
-            provider_post_url TEXT,
-            approval_id TEXT,
-            automation_task_id TEXT,
-            last_error TEXT,
-            metadata_json JSONB NOT NULL DEFAULT '{}',
-            created_by TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    missing_tables = []
+    for table_name in SOCIAL_POST_TABLES:
+        cursor.execute("SELECT to_regclass(%s)", (f"public.{table_name}",))
+        row = cursor.fetchone()
+        exists = bool(_row_get(row, "to_regclass", 0))
+        if not exists:
+            missing_tables.append(table_name)
+    if missing_tables:
+        raise RuntimeError(
+            "social post tables are not migrated: "
+            + ", ".join(missing_tables)
+            + ". Run Alembic migration 20260619_001 before using social post endpoints."
         )
-        """
-    )
-    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_social_posts_item_platform ON social_posts(content_plan_item_id, platform)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_social_posts_plan_status ON social_posts(content_plan_id, status, scheduled_for)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_social_posts_business_platform ON social_posts(business_id, platform, status)")
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS social_post_metrics (
-            id TEXT PRIMARY KEY,
-            social_post_id TEXT NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
-            metric_date DATE NOT NULL,
-            views INTEGER NOT NULL DEFAULT 0,
-            impressions INTEGER NOT NULL DEFAULT 0,
-            reach INTEGER NOT NULL DEFAULT 0,
-            likes INTEGER NOT NULL DEFAULT 0,
-            comments INTEGER NOT NULL DEFAULT 0,
-            shares INTEGER NOT NULL DEFAULT 0,
-            clicks INTEGER NOT NULL DEFAULT 0,
-            inquiries INTEGER NOT NULL DEFAULT 0,
-            leads INTEGER NOT NULL DEFAULT 0,
-            raw_json JSONB NOT NULL DEFAULT '{}',
-            captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE (social_post_id, metric_date)
-        )
-        """
-    )
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_social_post_metrics_post_date ON social_post_metrics(social_post_id, metric_date DESC)")
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS social_post_attribution_events (
-            id TEXT PRIMARY KEY,
-            social_post_id TEXT NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
-            business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-            event_type TEXT NOT NULL,
-            event_source TEXT,
-            event_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            value INTEGER NOT NULL DEFAULT 1,
-            metadata_json JSONB NOT NULL DEFAULT '{}'
-        )
-        """
-    )
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_social_post_attribution_post ON social_post_attribution_events(social_post_id, event_at DESC)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_social_post_attribution_business ON social_post_attribution_events(business_id, event_type, event_at DESC)")
 
 
 def prepare_social_posts_for_item(user_id: str, item_id: str, platforms: list[str] | None = None) -> dict[str, Any]:

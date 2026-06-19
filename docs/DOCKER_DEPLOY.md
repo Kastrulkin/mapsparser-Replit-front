@@ -1,6 +1,12 @@
-# Запуск проекта в Docker на сервере
+# Canonical Docker/Postgres Runbook
 
-Краткая инструкция: как перенести и запустить один и тот же docker-compose локально и на VPS.
+Каноничная инструкция для LocalOS runtime: Docker Compose + PostgreSQL. Старые systemd/SQLite/debug/fix инструкции лежат в `archive/legacy-runbooks/` только для истории.
+
+На production-сервере все команды выполнять из `/opt/seo-app`:
+
+```bash
+cd /opt/seo-app
+```
 
 ## Порты и сервисы
 
@@ -17,7 +23,7 @@ cd frontend && npm run dev     # фронтенд на http://localhost:3000
 ```
 Фронтенд на 3000 проксирует `/api` на бэкенд (8000).
 
-**Продакшен:** фронтенд собирается в образ и раздаётся Flask с 8000, либо через Nginx (80/443).
+**Продакшен:** фронтенд собирается в `frontend/dist` и раздаётся Flask/Nginx; backend runtime source of truth находится в `/opt/seo-app/src`.
 
 > 📖 Подробнее: [PORTS_AND_SERVICES.md](../PORTS_AND_SERVICES.md), [ALGORITHM_UPDATE.md](../ALGORITHM_UPDATE.md)
 
@@ -43,8 +49,8 @@ sudo usermod -aG docker $USER
 
 1. На сервере создайте каталог и склонируйте репозиторий (или загрузите архив):
    ```bash
-   git clone <url-репозитория> /opt/local
-   cd /opt/local
+   git clone <url-репозитория> /opt/seo-app
+   cd /opt/seo-app
    ```
 
 2. Опционально создайте `.env` в корне проекта:
@@ -76,9 +82,20 @@ sudo usermod -aG docker $USER
 - **Сборка без BuildKit:** по умолчанию проект собирается с `DOCKER_BUILDKIT=0`, чтобы избежать ошибки gRPC на Docker Desktop. Используйте скрипт или переменную окружения при каждой сборке.
 - Обновление кода: пересоберите образ и перезапустите:
   ```bash
+  cd /opt/seo-app
   git pull   # или загрузите новые файлы
   ./scripts/docker-compose-build.sh up -d --build
   ```
+
+Для production hotfix предпочтительнее partial deploy:
+
+```bash
+cd /opt/seo-app
+./scripts/deploy_backend_src.sh                 # backend-only: sync src, restart app/worker
+./scripts/deploy_frontend_dist.sh --build       # frontend-only: build/sync dist
+```
+
+Перед schema migration на production обязательно сделать backup БД. Данные production вручную не менять без отдельного approval.
 
 ## Освобождение места на диске
 

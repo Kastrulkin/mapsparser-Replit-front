@@ -47,11 +47,13 @@ curl -X POST http://localhost:8000/api/wordstat/update \
 
 | Переменная | Описание | По умолчанию |
 |------------|----------|--------------|
-| `YANDEX_WORDSTAT_CLIENT_ID` | ID приложения | `623b9605a95c4a57965cc4ccff1a7130` |
-| `YANDEX_WORDSTAT_CLIENT_SECRET` | Секрет приложения | `8ec666a7306b49e78c895bfbbba63ad4` |
+| `YANDEX_WORDSTAT_CLIENT_ID` | ID приложения | задается только через env |
+| `YANDEX_WORDSTAT_CLIENT_SECRET` | Секрет приложения | задается только через env |
 | `YANDEX_WORDSTAT_OAUTH_TOKEN` | OAuth токен | - |
 | `WORDSTAT_UPDATE_INTERVAL` | Интервал обновления (сек) | `604800` (7 дней) |
 | `WORDSTAT_DEFAULT_REGION` | ID региона | `225` (Россия) |
+
+Если старые значения client id/secret уже попадали в репозиторий или логи, ротируйте OAuth-приложение в Яндексе и обновите production env.
 
 ### Регионы
 

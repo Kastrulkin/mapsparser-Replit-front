@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
 import sys
+import time
+from collections import defaultdict, deque
+from typing import Deque
 
 from flask import Blueprint, jsonify, request
 
@@ -16,6 +20,40 @@ from services.social_post_service import (
 
 
 social_posts_bp = Blueprint("social_posts", __name__)
+_WRITE_RATE_BUCKETS: dict[str, Deque[float]] = defaultdict(deque)
+
+
+def _int_env(name: str, default: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _check_write_rate_limit(user_id: str, action: str):
+    limit = max(_int_env("SOCIAL_POST_WRITE_RATE_LIMIT", 40), 1)
+    window_sec = max(_int_env("SOCIAL_POST_WRITE_RATE_WINDOW_SEC", 3600), 60)
+    now = time.time()
+    bucket_key = f"{user_id}:{action}"
+    bucket = _WRITE_RATE_BUCKETS[bucket_key]
+    while bucket and now - bucket[0] >= window_sec:
+        bucket.popleft()
+    if len(bucket) >= limit:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "rate_limited",
+                    "message": "Слишком много действий с публикациями. Повторите позже.",
+                }
+            ),
+            429,
+        )
+    bucket.append(now)
+    return None
 
 
 def _require_auth():
@@ -33,6 +71,9 @@ def social_posts_prepare(item_id: str):
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "prepare")
+    if rate_error:
+        return rate_error
     data = request.get_json(silent=True) or {}
     platforms = data.get("platforms") if isinstance(data.get("platforms"), list) else None
     try:
@@ -67,6 +108,9 @@ def social_posts_approve(post_id: str):
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "approve")
+    if rate_error:
+        return rate_error
     try:
         post = approve_social_post(str(user_data.get("user_id") or ""), post_id)
         return jsonify({"success": True, "post": post})
@@ -83,6 +127,9 @@ def social_posts_publish(post_id: str):
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "publish")
+    if rate_error:
+        return rate_error
     try:
         post = publish_social_post(str(user_data.get("user_id") or ""), post_id)
         return jsonify({"success": True, "post": post})
@@ -99,6 +146,9 @@ def social_posts_mark_manual_published(post_id: str):
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "manual-published")
+    if rate_error:
+        return rate_error
     data = request.get_json(silent=True) or {}
     try:
         post = mark_manual_published(
@@ -121,6 +171,9 @@ def social_posts_metrics_collect():
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "metrics")
+    if rate_error:
+        return rate_error
     data = request.get_json(silent=True) or {}
     try:
         payload = collect_social_post_metrics(
