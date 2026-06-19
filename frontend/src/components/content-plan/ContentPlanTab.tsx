@@ -115,6 +115,7 @@ type SocialPost = {
   approved_at?: string;
   published_at?: string;
   platform_text?: string;
+  provider_post_id?: string;
   provider_post_url?: string;
   automation_task_id?: string;
   last_error?: string;
@@ -491,6 +492,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialChannelReadiness, setSocialChannelReadiness] = useState<SocialChannelReadiness[]>([]);
   const [socialRecommendation, setSocialRecommendation] = useState<SocialRecommendationPayload | null>(null);
   const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
+  const [manualPublishRefs, setManualPublishRefs] = useState<Record<string, { url: string; id: string }>>({});
   const [socialBusyAction, setSocialBusyAction] = useState('');
   const [activeZone, setActiveZone] = useState<ContentPlanZone>('overview');
   const [contentMode, setContentMode] = useState<ContentPlanMode>('point');
@@ -1799,16 +1801,29 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setSocialBusyAction(`manual:${post.id}`);
     setError('');
     setActionSummary(null);
+    const refs = manualPublishRefs[post.id] || { url: '', id: '' };
     try {
       await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/mark-manual-published`, {
         method: 'POST',
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          provider_post_url: String(refs.url || '').trim(),
+          provider_post_id: String(refs.id || '').trim(),
+        }),
       });
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setManualPublishRefs((prev) => {
+        const next = { ...prev };
+        delete next[post.id];
+        return next;
+      });
       setActionSummary({
         tone: 'success',
-        text_ru: 'Публикация отмечена как размещённая.',
-        text_en: 'Post marked as published.',
+        text_ru: refs.url || refs.id
+          ? 'Публикация отмечена как размещённая, ссылка/ID сохранены.'
+          : 'Публикация отмечена как размещённая.',
+        text_en: refs.url || refs.id
+          ? 'Post marked as published and URL/ID saved.'
+          : 'Post marked as published.',
       });
     } catch (manualError) {
       const message = manualError instanceof Error ? manualError.message : (isRu ? 'Не удалось отметить публикацию' : 'Could not mark post as published');
@@ -4939,6 +4954,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const canMarkPublished = post.status === 'needs_supervised_publish' || post.status === 'needs_manual_publish';
                               const canRecordResult = post.status === 'published';
                               const supervisedPayload = _socialSupervisedPayload(post);
+                              const manualRefs = manualPublishRefs[post.id] || {
+                                url: String(post.provider_post_url || ''),
+                                id: String(post.provider_post_id || ''),
+                              };
                               const postTextFallback = String(currentDraft || '').trim();
                               const postTextValue = String(socialTextEdits[post.id] ?? post.platform_text ?? postTextFallback);
                               const postTextLocked = _isSocialPostTextLocked(post.status);
@@ -5019,6 +5038,61 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   {post.last_error ? (
                                     <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
                                       {post.last_error}
+                                    </div>
+                                  ) : null}
+                                  {canMarkPublished ? (
+                                    <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-2">
+                                      <div className="md:col-span-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                        {isRu ? 'Факт размещения' : 'Placement proof'}
+                                      </div>
+                                      <Input
+                                        value={manualRefs.url}
+                                        onChange={(event) => setManualPublishRefs((prev) => ({
+                                          ...prev,
+                                          [post.id]: {
+                                            url: event.target.value,
+                                            id: prev[post.id]?.id ?? String(post.provider_post_id || ''),
+                                          },
+                                        }))}
+                                        placeholder={isRu ? 'Ссылка на пост, если есть' : 'Post URL, if available'}
+                                        disabled={postBusy}
+                                      />
+                                      <Input
+                                        value={manualRefs.id}
+                                        onChange={(event) => setManualPublishRefs((prev) => ({
+                                          ...prev,
+                                          [post.id]: {
+                                            url: prev[post.id]?.url ?? String(post.provider_post_url || ''),
+                                            id: event.target.value,
+                                          },
+                                        }))}
+                                        placeholder={isRu ? 'ID поста, если есть' : 'Post ID, if available'}
+                                        disabled={postBusy}
+                                      />
+                                      <div className="md:col-span-2 text-xs leading-5 text-slate-500">
+                                        {isRu
+                                          ? 'Можно оставить пустым, но ссылка помогает потом связать реакции и заявки с конкретной публикацией.'
+                                          : 'Optional, but a URL helps connect reactions and leads to the exact publication later.'}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {post.provider_post_url || post.provider_post_id ? (
+                                    <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
+                                      {post.provider_post_url ? (
+                                        <a
+                                          href={post.provider_post_url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="font-medium underline underline-offset-2"
+                                        >
+                                          {isRu ? 'Открыть опубликованный пост' : 'Open published post'}
+                                        </a>
+                                      ) : null}
+                                      {post.provider_post_id ? (
+                                        <div className="font-mono text-[11px] text-emerald-900">
+                                          id: {post.provider_post_id}
+                                        </div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                   <div className="mt-3 flex flex-wrap gap-2">
