@@ -7,6 +7,7 @@ from services.social_post_service import (
     _build_openclaw_supervised_task_payload,
     _channel_readiness_message,
     _dispatch_action_for_status,
+    _dispatch_preview_readiness,
     _merge_metric_totals_into_posts,
     _meta_channel_readiness,
     _meta_publish_status,
@@ -638,6 +639,42 @@ def test_metric_totals_are_merged_back_into_collected_posts():
     assert enriched[0]["reach"] == 10
     assert enriched[1]["id"] == "post-empty"
     assert "leads" not in enriched[1]
+
+
+def test_dispatch_preview_readiness_explains_external_controlled_and_manual_work():
+    readiness = _dispatch_preview_readiness(
+        [
+            {"id": "api-post", "dispatch_action": "publish_api"},
+            {"id": "map-post", "dispatch_action": "create_supervised_task"},
+            {"id": "manual-post", "dispatch_action": "manual_handoff"},
+        ],
+        {
+            "publish_api": 1,
+            "create_supervised_task": 1,
+            "manual_handoff": 1,
+        },
+        skipped_no_access=2,
+    )
+
+    assert readiness["status"] == "external_publish_ready"
+    assert readiness["due_count"] == 3
+    assert readiness["external_publish_count"] == 1
+    assert readiness["controlled_count"] == 1
+    assert readiness["manual_count"] == 1
+    assert readiness["skipped_no_access"] == 2
+    assert readiness["safe_dry_run"] is True
+    assert readiness["external_publish_requires_approval"] is True
+    assert readiness["browser_final_click_allowed"] is False
+    assert "approved" in readiness["message_en"]
+
+
+def test_dispatch_preview_readiness_marks_no_due_posts_as_safe_noop():
+    readiness = _dispatch_preview_readiness([], {}, skipped_no_access=0)
+
+    assert readiness["status"] == "no_due_posts"
+    assert readiness["due_count"] == 0
+    assert readiness["external_publish_count"] == 0
+    assert readiness["message_ru"]
 
 
 def test_apply_social_post_recommendation_requires_explicit_approval(monkeypatch):

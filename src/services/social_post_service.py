@@ -868,12 +868,14 @@ def preview_due_social_post_dispatch(user_id: str, batch_size: int = 20) -> dict
         for item in preview_items:
             action = str(item.get("dispatch_action") or "unknown")
             counts[action] = counts.get(action, 0) + 1
+        readiness = _dispatch_preview_readiness(preview_items, counts, skipped)
         return {
             "dry_run": True,
             "picked": len(preview_items),
             "skipped_no_access": skipped,
             "batch_size": max(1, min(int(batch_size or 20), 200)),
             "by_action": counts,
+            "readiness": readiness,
             "items": preview_items,
         }
     finally:
@@ -893,6 +895,76 @@ def _dispatch_action_for_status(status: str) -> str:
     if clean_status == "publishing":
         return "publishing"
     return "other"
+
+
+def _dispatch_preview_readiness(
+    preview_items: list[dict[str, Any]],
+    counts: dict[str, int],
+    skipped_no_access: int = 0,
+) -> dict[str, Any]:
+    external_publish_count = int(counts.get("publish_api") or 0)
+    controlled_count = int(counts.get("create_supervised_task") or 0)
+    manual_count = int(counts.get("manual_handoff") or 0)
+    due_count = len(preview_items)
+    has_due_work = due_count > 0
+    has_only_manual_work = has_due_work and external_publish_count == 0 and controlled_count == 0 and manual_count > 0
+    status = "no_due_posts"
+    if external_publish_count > 0:
+        status = "external_publish_ready"
+    elif controlled_count > 0:
+        status = "controlled_tasks_ready"
+    elif has_only_manual_work:
+        status = "manual_only"
+    elif skipped_no_access > 0:
+        status = "access_limited"
+    return {
+        "status": status,
+        "due_count": due_count,
+        "external_publish_count": external_publish_count,
+        "controlled_count": controlled_count,
+        "manual_count": manual_count,
+        "skipped_no_access": int(skipped_no_access or 0),
+        "has_external_publish": external_publish_count > 0,
+        "has_controlled_tasks": controlled_count > 0,
+        "has_manual_fallback": manual_count > 0,
+        "safe_dry_run": True,
+        "external_publish_requires_approval": True,
+        "browser_final_click_allowed": False,
+        "message_ru": _dispatch_preview_readiness_message(status, True),
+        "message_en": _dispatch_preview_readiness_message(status, False),
+    }
+
+
+def _dispatch_preview_readiness_message(status: str, is_ru: bool) -> str:
+    if status == "external_publish_ready":
+        return (
+            "Есть due API-посты: после включения dispatch они смогут уйти наружу только потому, что уже approved."
+            if is_ru
+            else "Due API posts exist: after dispatch is enabled they can publish externally only because they are already approved."
+        )
+    if status == "controlled_tasks_ready":
+        return (
+            "Есть due карты: worker создаст controlled/manual задачи, финальная публикация остаётся за человеком."
+            if is_ru
+            else "Due map posts exist: the worker will create controlled/manual tasks, while final publishing stays human-controlled."
+        )
+    if status == "manual_only":
+        return (
+            "Все due-посты сейчас требуют ручного fallback или подключения канала; автопубликации не будет."
+            if is_ru
+            else "All due posts currently require manual fallback or channel connection; no autopublish will happen."
+        )
+    if status == "access_limited":
+        return (
+            "Есть due-посты вне доступа текущего пользователя; dry-run их пропустил."
+            if is_ru
+            else "Some due posts are outside the current user's access; the dry-run skipped them."
+        )
+    return (
+        "Due-постов нет: включение dispatch сейчас ничего не отправит."
+        if is_ru
+        else "There are no due posts: enabling dispatch now would not send anything."
+    )
 
 
 def collect_due_social_post_metrics(batch_size: int = 50) -> dict[str, Any]:

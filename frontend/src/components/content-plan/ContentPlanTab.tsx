@@ -242,6 +242,22 @@ type SocialDispatchPreview = {
   skipped_no_access?: number;
   batch_size?: number;
   by_action?: Record<string, number>;
+  readiness?: {
+    status?: string;
+    due_count?: number;
+    external_publish_count?: number;
+    controlled_count?: number;
+    manual_count?: number;
+    skipped_no_access?: number;
+    has_external_publish?: boolean;
+    has_controlled_tasks?: boolean;
+    has_manual_fallback?: boolean;
+    safe_dry_run?: boolean;
+    external_publish_requires_approval?: boolean;
+    browser_final_click_allowed?: boolean;
+    message_ru?: string;
+    message_en?: string;
+  };
   items?: Array<{
     id?: string;
     platform?: string;
@@ -2178,16 +2194,21 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         skipped_no_access: Number(response.skipped_no_access || 0),
         batch_size: Number(response.batch_size || 10),
         by_action: response.by_action && typeof response.by_action === 'object' ? response.by_action : {},
+        readiness: response.readiness && typeof response.readiness === 'object' ? response.readiness : {},
         items: Array.isArray(response.items) ? response.items : [],
       };
       setSocialDispatchPreview(preview);
-      const apiCount = Number(preview.by_action?.publish_api || 0);
-      const supervisedCount = Number(preview.by_action?.create_supervised_task || 0);
-      const manualCount = Number(preview.by_action?.manual_handoff || 0);
+      const apiCount = Number(preview.readiness?.external_publish_count ?? preview.by_action?.publish_api ?? 0);
+      const supervisedCount = Number(preview.readiness?.controlled_count ?? preview.by_action?.create_supervised_task ?? 0);
+      const manualCount = Number(preview.readiness?.manual_count ?? preview.by_action?.manual_handoff ?? 0);
+      const dryRunMessageRu = String(preview.readiness?.message_ru || '');
+      const dryRunMessageEn = String(preview.readiness?.message_en || '');
       setActionSummary({
-        tone: manualCount > 0 ? 'warning' : 'success',
+        tone: manualCount > 0 || Number(preview.skipped_no_access || 0) > 0 ? 'warning' : 'success',
         text_ru: `Dry-run расписания: due-постов ${preview.picked || 0}, API ${apiCount}, controlled ${supervisedCount}, вручную ${manualCount}. Наружу ничего не отправлено.`,
         text_en: `Schedule dry-run: due posts ${preview.picked || 0}, API ${apiCount}, controlled ${supervisedCount}, manual ${manualCount}. Nothing was sent externally.`,
+        details_ru: dryRunMessageRu ? [dryRunMessageRu] : [],
+        details_en: dryRunMessageEn ? [dryRunMessageEn] : [],
       });
     } catch (previewError) {
       const message = previewError instanceof Error ? previewError.message : (isRu ? 'Не удалось проверить расписание' : 'Could not preview schedule');
@@ -4690,6 +4711,32 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           <div className="text-[11px] text-slate-300">
                             {isRu ? 'Внешняя публикация не запускалась.' : 'No external publishing was started.'}
                           </div>
+                          {socialDispatchPreview.readiness?.message_ru || socialDispatchPreview.readiness?.message_en ? (
+                            <div
+                              className={[
+                                'mt-2 rounded-lg border px-2 py-1.5 text-[11px] leading-5',
+                                socialDispatchPreview.readiness?.has_external_publish
+                                  ? 'border-emerald-300/20 bg-emerald-400/10 text-emerald-100'
+                                  : socialDispatchPreview.readiness?.has_manual_fallback
+                                    ? 'border-amber-300/20 bg-amber-400/10 text-amber-100'
+                                    : 'border-slate-300/20 bg-white/10 text-slate-200',
+                              ].join(' ')}
+                            >
+                              <div className="font-semibold">
+                                {isRu ? 'Вывод перед dispatch' : 'Dispatch readiness'}
+                              </div>
+                              <div>
+                                {isRu
+                                  ? String(socialDispatchPreview.readiness?.message_ru || '')
+                                  : String(socialDispatchPreview.readiness?.message_en || '')}
+                              </div>
+                              <div className="mt-1 text-slate-300">
+                                {isRu
+                                  ? `external ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · controlled ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · manual ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`
+                                  : `external ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · controlled ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · manual ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`}
+                              </div>
+                            </div>
+                          ) : null}
                           {Number(socialDispatchPreview.items?.length || 0) > 0 ? (
                             <div className="mt-2 space-y-1">
                               {(socialDispatchPreview.items || []).slice(0, 5).map((item) => (
