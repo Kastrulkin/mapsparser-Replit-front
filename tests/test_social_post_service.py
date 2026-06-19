@@ -125,6 +125,7 @@ def test_build_social_queue_groups_matches_daily_workflow():
             {"id": "p4", "content_plan_item_id": "i3", "platform": "telegram", "status": "published"},
             {"id": "p5", "content_plan_item_id": "i4", "platform": "facebook", "status": "failed"},
             {"id": "p6", "content_plan_item_id": "i5", "platform": "telegram", "status": "queued"},
+            {"id": "p7", "content_plan_item_id": "i6", "platform": "telegram", "status": "needs_manual_publish"},
         ]
     )
     by_key = {group["key"]: group for group in groups}
@@ -133,6 +134,7 @@ def test_build_social_queue_groups_matches_daily_workflow():
     assert by_key["api_ready"]["post_ids"] == ["p2"]
     assert by_key["scheduled"]["post_ids"] == ["p6"]
     assert by_key["needs_supervised_publish"]["post_ids"] == ["p3"]
+    assert by_key["needs_manual_publish"]["post_ids"] == ["p7"]
     assert by_key["published"]["count"] == 1
     assert by_key["failed"]["count"] == 1
 

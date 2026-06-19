@@ -150,6 +150,7 @@ type SocialPostsSummary = {
   needs_review?: number;
   scheduled?: number;
   needs_supervised_publish?: number;
+  needs_manual_publish?: number;
   published?: number;
   failed?: number;
   by_status?: Record<string, number>;
@@ -244,7 +245,7 @@ type SocialChannelReadiness = {
   message_en?: string;
 };
 
-type SocialPlanNextAction = 'prepare' | 'review' | 'queue' | 'supervised' | 'recommend' | 'wait' | 'none';
+type SocialPlanNextAction = 'prepare' | 'review' | 'queue' | 'supervised' | 'manual' | 'recommend' | 'wait' | 'none';
 
 type SocialPlanNextStep = {
   action: SocialPlanNextAction;
@@ -762,7 +763,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     visibleSocialPosts.filter((post) => post.status === 'approved')
   ), [visibleSocialPosts]);
   const visibleSocialNeedsSupervised = useMemo(() => (
-    visibleSocialPosts.filter((post) => post.status === 'needs_supervised_publish' || post.status === 'needs_manual_publish')
+    visibleSocialPosts.filter((post) => post.status === 'needs_supervised_publish')
+  ), [visibleSocialPosts]);
+  const visibleSocialNeedsManual = useMemo(() => (
+    visibleSocialPosts.filter((post) => post.status === 'needs_manual_publish')
   ), [visibleSocialPosts]);
   const socialPlanNextStep = useMemo<SocialPlanNextStep>(() => {
     if (!currentPlan?.items?.length) {
@@ -827,6 +831,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         count: visibleSocialNeedsSupervised.length,
       };
     }
+    if (visibleSocialNeedsManual.length > 0) {
+      return {
+        action: 'manual',
+        titleRu: 'Подключите канал или разместите вручную',
+        titleEn: 'Connect the channel or publish manually',
+        descriptionRu: 'Этот статус означает не OpenClaw-задачу, а отсутствие ключей/прав или ручной fallback. Исправьте подключение либо отметьте размещение вручную.',
+        descriptionEn: 'This status is not an OpenClaw task: keys/permissions are missing or manual fallback is needed. Fix the connection or mark manual placement.',
+        ctaRu: 'Открыть публикацию',
+        ctaEn: 'Open post',
+        count: visibleSocialNeedsManual.length,
+      };
+    }
     if (Number(socialSummary?.published || 0) > 0) {
       return {
         action: 'recommend',
@@ -869,6 +885,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     socialSummary?.total,
     visibleItems.length,
     visibleSocialCanQueue.length,
+    visibleSocialNeedsManual.length,
     visibleSocialNeedsReview.length,
     visibleSocialNeedsSupervised.length,
   ]);
@@ -2834,6 +2851,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
     if (socialPlanNextStep.action === 'supervised') {
       const post = visibleSocialNeedsSupervised[0];
+      const itemId = String(post?.content_plan_item_id || '').trim();
+      if (itemId) {
+        setSelectedQueueItemId(itemId);
+        setEditorItemId(itemId);
+      }
+      return;
+    }
+    if (socialPlanNextStep.action === 'manual') {
+      const post = visibleSocialNeedsManual[0];
       const itemId = String(post?.content_plan_item_id || '').trim();
       if (itemId) {
         setSelectedQueueItemId(itemId);
@@ -5483,6 +5509,7 @@ function _socialQueueGroupLabel(group: SocialQueueGroup, isRu: boolean): string 
   if (key === 'api_ready') return isRu ? 'Готово к API' : 'API ready';
   if (key === 'scheduled') return isRu ? 'Запланировано' : 'Scheduled';
   if (key === 'needs_supervised_publish') return isRu ? 'Нужно контролируемое размещение' : 'Needs supervised placement';
+  if (key === 'needs_manual_publish') return isRu ? 'Нужно вручную / подключить канал' : 'Manual / connection needed';
   if (key === 'published') return isRu ? 'Опубликовано' : 'Published';
   if (key === 'failed') return isRu ? 'Ошибка' : 'Failed';
   return isRu ? 'Очередь' : 'Queue';

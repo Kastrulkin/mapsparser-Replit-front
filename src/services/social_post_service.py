@@ -75,8 +75,15 @@ SOCIAL_QUEUE_GROUPS = (
         "key": "needs_supervised_publish",
         "label_ru": "Нужно контролируемое размещение",
         "label_en": "Needs supervised placement",
-        "next_action_ru": "Открыть контролируемое размещение или передать человеку ручную инструкцию.",
-        "next_action_en": "Open supervised placement or hand off manual instructions.",
+        "next_action_ru": "Открыть controlled-задачу для Яндекс/2ГИС и остановиться перед финальной публикацией.",
+        "next_action_en": "Open the controlled Yandex/2GIS task and stop before final publishing.",
+    },
+    {
+        "key": "needs_manual_publish",
+        "label_ru": "Нужно вручную / подключить канал",
+        "label_en": "Manual / connection needed",
+        "next_action_ru": "Подключить ключи или права, либо разместить вручную и отметить результат.",
+        "next_action_en": "Connect keys or permissions, or publish manually and mark the result.",
     },
     {
         "key": "published",
@@ -983,7 +990,9 @@ def _queue_group_key(post: dict[str, Any]) -> str:
         return "published"
     if status == "failed":
         return "failed"
-    if platform in BROWSER_OR_MANUAL_PLATFORMS or status in {"needs_supervised_publish", "needs_manual_publish"}:
+    if status == "needs_manual_publish":
+        return "needs_manual_publish"
+    if platform in BROWSER_OR_MANUAL_PLATFORMS or status == "needs_supervised_publish":
         return "needs_supervised_publish"
     if platform in API_PLATFORMS and status in {"approved", "publishing"}:
         return "api_ready"
@@ -1963,6 +1972,7 @@ def _summary_for_posts(posts: list[dict[str, Any]]) -> dict[str, Any]:
         "needs_review": by_status.get("needs_review", 0) + by_status.get("draft", 0),
         "scheduled": by_status.get("queued", 0),
         "needs_supervised_publish": by_status.get("needs_supervised_publish", 0),
+        "needs_manual_publish": by_status.get("needs_manual_publish", 0),
         "published": by_status.get("published", 0),
         "failed": by_status.get("failed", 0),
     }
