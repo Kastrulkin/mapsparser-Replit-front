@@ -7,6 +7,7 @@ from services.social_post_service import (
     _meta_channel_readiness,
     _meta_publish_status,
     _publish_external_account_post,
+    _build_social_learning_insights,
     _status_after_social_text_edit,
     _vk_publish_binding,
     _build_next_plan_changes,
@@ -267,3 +268,58 @@ def test_next_plan_changes_prioritize_leads_before_reach():
 
     assert changes[0]["item_id"] == "lead-item"
     assert changes[0]["action"] == "repeat_winning_topic"
+
+
+def test_social_learning_insights_explain_winners_weak_channels_and_no_result_topics():
+    insights = _build_social_learning_insights(
+        [
+            {
+                "item_id": "reach-item",
+                "theme": "Охват без заявок",
+                "reach": 9000,
+                "comments": 0,
+                "inquiries": 0,
+                "leads": 0,
+            },
+            {
+                "item_id": "lead-item",
+                "theme": "Запись на услугу",
+                "reach": 10,
+                "comments": 0,
+                "inquiries": 0,
+                "leads": 1,
+            },
+            {
+                "item_id": "empty-item",
+                "theme": "Без результата",
+                "reach": 0,
+                "comments": 0,
+                "inquiries": 0,
+                "leads": 0,
+            },
+        ],
+        [
+            {
+                "platform": "vk",
+                "status": "published",
+                "reach": 1000,
+                "comments": 2,
+                "inquiries": 0,
+                "leads": 0,
+            },
+            {
+                "platform": "telegram",
+                "status": "published",
+                "reach": 20,
+                "comments": 0,
+                "inquiries": 1,
+                "leads": 0,
+            },
+        ],
+    )
+
+    assert insights["winning_topics"][0]["item_id"] == "lead-item"
+    assert insights["no_result_topics"][0]["item_id"] == "empty-item"
+    assert insights["weak_channels"][0]["platform"] == "vk"
+    assert insights["cta_suggestions"][0]["ru"]
+    assert insights["frequency_suggestions"][0]["ru"]

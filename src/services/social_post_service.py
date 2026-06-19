@@ -768,8 +768,15 @@ def recommend_next_plan_from_social_posts(user_id: str, plan_id: str) -> dict[st
         posts_payload = list_social_posts_for_plan(user_id, plan_id)
         performance_rows = _social_plan_performance_rows(cursor, plan_id)
         proposed_changes = _build_next_plan_changes(performance_rows)
+        recommendation = dict(posts_payload.get("recommendation") or {})
+        recommendation.update(
+            _build_social_learning_insights(
+                performance_rows,
+                list(posts_payload.get("posts") or []),
+            )
+        )
         return {
-            "recommendation": posts_payload.get("recommendation") or {},
+            "recommendation": recommendation,
             "proposed_changes": proposed_changes,
             "applies_automatically": False,
             "approval_required": True,
@@ -2104,16 +2111,7 @@ def _social_plan_performance_rows(cursor: Any, plan_id: str) -> list[dict[str, A
 
 
 def _build_next_plan_changes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    scored: list[dict[str, Any]] = []
-    for row in rows:
-        leads = int(row.get("leads") or 0)
-        inquiries = int(row.get("inquiries") or 0)
-        comments = int(row.get("comments") or 0)
-        shares = int(row.get("shares") or 0)
-        clicks = int(row.get("clicks") or 0)
-        reach = int(row.get("reach") or row.get("views") or 0)
-        score = leads * 100 + inquiries * 60 + comments * 15 + shares * 12 + clicks * 10 + min(reach, 1000) // 100
-        scored.append({**row, "_score": score})
+    scored: list[dict[str, Any]] = [_score_performance_row(row) for row in rows]
     scored.sort(key=lambda item: int(item.get("_score") or 0), reverse=True)
     if not scored:
         return []
@@ -2165,6 +2163,210 @@ def _build_next_plan_changes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
             }
         )
     return changes
+
+
+def _build_social_learning_insights(rows: list[dict[str, Any]], posts: list[dict[str, Any]]) -> dict[str, Any]:
+    scored_rows = [_score_performance_row(row) for row in rows]
+    scored_rows.sort(key=lambda item: int(item.get("_score") or 0), reverse=True)
+    winning_topics = [
+        _topic_insight(item, "repeat")
+        for item in scored_rows
+        if int(item.get("leads") or 0) or int(item.get("inquiries") or 0)
+    ][:3]
+    no_result_topics = [
+        _topic_insight(item, "rewrite")
+        for item in scored_rows
+        if not _row_has_any_signal(item)
+    ][:5]
+    weak_channels = _weak_channel_insights(posts)
+    return {
+        "winning_topics": winning_topics,
+        "weak_channels": weak_channels,
+        "no_result_topics": no_result_topics,
+        "cta_suggestions": _cta_suggestions(winning_topics, weak_channels, no_result_topics),
+        "frequency_suggestions": _frequency_suggestions(winning_topics, weak_channels, no_result_topics),
+    }
+
+
+def _score_performance_row(row: dict[str, Any]) -> dict[str, Any]:
+    leads = int(row.get("leads") or 0)
+    inquiries = int(row.get("inquiries") or 0)
+    comments = int(row.get("comments") or 0)
+    shares = int(row.get("shares") or 0)
+    clicks = int(row.get("clicks") or 0)
+    reach = int(row.get("reach") or row.get("views") or 0)
+    score = leads * 100 + inquiries * 60 + comments * 15 + shares * 12 + clicks * 10 + min(reach, 1000) // 100
+    return {**row, "_score": score}
+
+
+def _row_has_any_signal(row: dict[str, Any]) -> bool:
+    for key in ("leads", "inquiries", "comments", "shares", "clicks", "reach", "views"):
+        if int(row.get(key) or 0) > 0:
+            return True
+    return False
+
+
+def _topic_insight(row: dict[str, Any], action: str) -> dict[str, Any]:
+    return {
+        "item_id": str(row.get("item_id") or "").strip(),
+        "theme": str(row.get("theme") or "").strip(),
+        "action": action,
+        "metrics": {
+            "leads": int(row.get("leads") or 0),
+            "inquiries": int(row.get("inquiries") or 0),
+            "comments": int(row.get("comments") or 0),
+            "shares": int(row.get("shares") or 0),
+            "clicks": int(row.get("clicks") or 0),
+            "reach": int(row.get("reach") or row.get("views") or 0),
+        },
+    }
+
+
+def _weak_channel_insights(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_platform: dict[str, dict[str, int]] = {}
+    for post in posts:
+        platform = str(post.get("platform") or "").strip()
+        if not platform:
+            continue
+        bucket = by_platform.setdefault(
+            platform,
+            {
+                "posts": 0,
+                "published": 0,
+                "failed": 0,
+                "manual": 0,
+                "leads": 0,
+                "inquiries": 0,
+                "comments": 0,
+                "reach": 0,
+            },
+        )
+        bucket["posts"] += 1
+        status = str(post.get("status") or "").strip()
+        if status == "published":
+            bucket["published"] += 1
+        elif status == "failed":
+            bucket["failed"] += 1
+        elif status in {"needs_manual_publish", "needs_supervised_publish"}:
+            bucket["manual"] += 1
+        bucket["leads"] += int(post.get("leads") or 0)
+        bucket["inquiries"] += int(post.get("inquiries") or 0)
+        bucket["comments"] += int(post.get("comments") or 0)
+        bucket["reach"] += int(post.get("reach") or post.get("views") or 0)
+    result: list[dict[str, Any]] = []
+    for platform, stats in by_platform.items():
+        if stats["leads"] or stats["inquiries"]:
+            continue
+        if not (stats["published"] or stats["failed"] or stats["manual"]):
+            continue
+        result.append(
+            {
+                "platform": platform,
+                "platform_label": platform_label(platform),
+                "reason_ru": _weak_channel_reason(stats, True),
+                "reason_en": _weak_channel_reason(stats, False),
+                "metrics": stats,
+            }
+        )
+    result.sort(
+        key=lambda item: (
+            int(item.get("metrics", {}).get("failed") or 0) + int(item.get("metrics", {}).get("manual") or 0),
+            int(item.get("metrics", {}).get("reach") or 0),
+        ),
+        reverse=True,
+    )
+    return result[:5]
+
+
+def _weak_channel_reason(stats: dict[str, int], is_ru: bool) -> str:
+    if int(stats.get("failed") or 0):
+        return (
+            "Есть ошибки публикации: сначала исправить подключение или перевести канал в ручной сценарий."
+            if is_ru
+            else "Publishing errors exist: fix the connection or move this channel to manual flow first."
+        )
+    if int(stats.get("manual") or 0):
+        return (
+            "Канал требует ручного/контролируемого размещения: не считать его автопубликацией."
+            if is_ru
+            else "This channel requires manual/supervised placement; do not treat it as autopublish."
+        )
+    if int(stats.get("reach") or 0):
+        return (
+            "Есть охват без заявок: нужен более прямой оффер и понятный следующий шаг."
+            if is_ru
+            else "There is reach without leads: use a clearer offer and next step."
+        )
+    return (
+        "Нет бизнес-результата: проверить тему, время публикации и CTA."
+        if is_ru
+        else "No business result: check topic, timing, and CTA."
+    )
+
+
+def _cta_suggestions(
+    winning_topics: list[dict[str, Any]],
+    weak_channels: list[dict[str, Any]],
+    no_result_topics: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    if winning_topics:
+        return [
+            {
+                "ru": "Повторить выигравшие темы с прямым CTA: записаться, написать, получить консультацию.",
+                "en": "Repeat winning topics with a direct CTA: book, message, or request a consultation.",
+            },
+            {
+                "ru": "В первом экране поста держать услугу, выгоду и действие клиента.",
+                "en": "Keep service, benefit, and customer action in the first screen of the post.",
+            },
+        ]
+    if weak_channels:
+        return [
+            {
+                "ru": "Для слабых каналов добавить конкретный оффер, срок действия и понятную кнопку/контакт.",
+                "en": "For weak channels, add a concrete offer, deadline, and clear contact/action.",
+            }
+        ]
+    if no_result_topics:
+        return [
+            {
+                "ru": "Темы без результата переписать от проблемы клиента к конкретной услуге и записи.",
+                "en": "Rewrite no-result topics from customer problem to concrete service and booking.",
+            }
+        ]
+    return [
+        {
+            "ru": "Соберите первые заявки/обращения, затем LocalOS предложит точечные CTA.",
+            "en": "Record initial leads/inquiries, then LocalOS will suggest targeted CTAs.",
+        }
+    ]
+
+
+def _frequency_suggestions(
+    winning_topics: list[dict[str, Any]],
+    weak_channels: list[dict[str, Any]],
+    no_result_topics: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    if winning_topics:
+        return [
+            {
+                "ru": "На следующей неделе повторить 1-2 выигравшие темы в разных каналах.",
+                "en": "Next week, repeat 1-2 winning topics across different channels.",
+            }
+        ]
+    if no_result_topics and not weak_channels:
+        return [
+            {
+                "ru": "Не увеличивать частоту: сначала переписать темы и CTA, потом масштабировать.",
+                "en": "Do not increase frequency yet: rewrite topics and CTAs before scaling.",
+            }
+        ]
+    return [
+        {
+            "ru": "Держать текущую частоту, но проверять результат по заявкам и обращениям.",
+            "en": "Keep current frequency, but judge results by leads and inquiries.",
+        }
+    ]
 
 
 def _append_goal_cta(goal: str, cta: str) -> str:

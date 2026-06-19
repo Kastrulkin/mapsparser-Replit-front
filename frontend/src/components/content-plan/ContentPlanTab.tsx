@@ -164,6 +164,11 @@ type SocialRecommendationPayload = {
     inquiries?: number;
     comments?: number;
     reach?: number;
+    winning_topics?: SocialRecommendationTopicInsight[];
+    weak_channels?: SocialRecommendationChannelInsight[];
+    no_result_topics?: SocialRecommendationTopicInsight[];
+    cta_suggestions?: SocialRecommendationTextSuggestion[];
+    frequency_suggestions?: SocialRecommendationTextSuggestion[];
   };
   proposed_changes?: Array<{
     item_id?: string;
@@ -179,6 +184,42 @@ type SocialRecommendationPayload = {
       reach?: number;
     };
   }>;
+};
+
+type SocialRecommendationTopicInsight = {
+  item_id?: string;
+  theme?: string;
+  action?: string;
+  metrics?: {
+    leads?: number;
+    inquiries?: number;
+    comments?: number;
+    shares?: number;
+    clicks?: number;
+    reach?: number;
+  };
+};
+
+type SocialRecommendationChannelInsight = {
+  platform?: string;
+  platform_label?: string;
+  reason_ru?: string;
+  reason_en?: string;
+  metrics?: {
+    posts?: number;
+    published?: number;
+    failed?: number;
+    manual?: number;
+    leads?: number;
+    inquiries?: number;
+    comments?: number;
+    reach?: number;
+  };
+};
+
+type SocialRecommendationTextSuggestion = {
+  ru?: string;
+  en?: string;
 };
 
 type SocialQueueGroup = {
@@ -4480,6 +4521,84 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       </Button>
                     </div>
                   </div>
+                  {Number(socialRecommendation?.recommendation?.winning_topics?.length || 0)
+                    || Number(socialRecommendation?.recommendation?.weak_channels?.length || 0)
+                    || Number(socialRecommendation?.recommendation?.no_result_topics?.length || 0)
+                    || Number(socialRecommendation?.recommendation?.cta_suggestions?.length || 0)
+                    || Number(socialRecommendation?.recommendation?.frequency_suggestions?.length || 0) ? (
+                    <div className="mt-3 grid gap-2 lg:grid-cols-3">
+                      {Number(socialRecommendation?.recommendation?.winning_topics?.length || 0) > 0 ? (
+                        <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
+                          <div className="text-xs font-semibold text-emerald-950">
+                            {isRu ? 'Что сработало' : 'What worked'}
+                          </div>
+                          <div className="mt-2 space-y-2">
+                            {(socialRecommendation?.recommendation?.winning_topics || []).slice(0, 3).map((topic) => (
+                              <div key={String(topic.item_id || topic.theme || '')} className="text-xs leading-5 text-emerald-800">
+                                <span className="font-medium">{String(topic.theme || (isRu ? 'Тема плана' : 'Plan topic'))}</span>
+                                <span className="block text-[11px] text-emerald-700">
+                                  {_socialInsightMetricLine(topic.metrics, isRu)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {Number(socialRecommendation?.recommendation?.weak_channels?.length || 0) > 0 ? (
+                        <div className="rounded-lg border border-amber-100 bg-white px-3 py-2">
+                          <div className="text-xs font-semibold text-amber-950">
+                            {isRu ? 'Слабые каналы' : 'Weak channels'}
+                          </div>
+                          <div className="mt-2 space-y-2">
+                            {(socialRecommendation?.recommendation?.weak_channels || []).slice(0, 3).map((channel) => (
+                              <div key={String(channel.platform || channel.platform_label || '')} className="text-xs leading-5 text-amber-800">
+                                <span className="font-medium">{String(channel.platform_label || _socialPlatformLabel(String(channel.platform || ''), isRu))}</span>
+                                <span className="block">{isRu ? String(channel.reason_ru || '') : String(channel.reason_en || '')}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {Number(socialRecommendation?.recommendation?.no_result_topics?.length || 0) > 0 ? (
+                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                          <div className="text-xs font-semibold text-slate-950">
+                            {isRu ? 'Темы без результата' : 'No-result topics'}
+                          </div>
+                          <div className="mt-2 space-y-2">
+                            {(socialRecommendation?.recommendation?.no_result_topics || []).slice(0, 3).map((topic) => (
+                              <div key={String(topic.item_id || topic.theme || '')} className="text-xs leading-5 text-slate-700">
+                                {String(topic.theme || (isRu ? 'Тема плана' : 'Plan topic'))}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2 lg:col-span-3">
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <div className="text-xs font-semibold text-emerald-950">
+                              {isRu ? 'CTA' : 'CTA'}
+                            </div>
+                            <div className="mt-1 space-y-1 text-xs leading-5 text-emerald-800">
+                              {(socialRecommendation?.recommendation?.cta_suggestions || []).slice(0, 2).map((suggestion, index) => (
+                                <div key={`cta-${index}`}>{isRu ? String(suggestion.ru || '') : String(suggestion.en || '')}</div>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs font-semibold text-emerald-950">
+                              {isRu ? 'Частота' : 'Frequency'}
+                            </div>
+                            <div className="mt-1 space-y-1 text-xs leading-5 text-emerald-800">
+                              {(socialRecommendation?.recommendation?.frequency_suggestions || []).slice(0, 2).map((suggestion, index) => (
+                                <div key={`frequency-${index}`}>{isRu ? String(suggestion.ru || '') : String(suggestion.en || '')}</div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   {Number(socialRecommendation?.proposed_changes?.length || 0) > 0 ? (
                     <div className="mt-3 grid gap-2 md:grid-cols-2">
                       {(socialRecommendation?.proposed_changes || []).slice(0, 4).map((change) => (
@@ -5310,6 +5429,19 @@ function _socialNextActionLabel(action: string, isRu: boolean): string {
   if (normalized === 'retry_or_manual') return isRu ? 'следующий шаг: повторить или вручную' : 'next: retry or manual';
   if (normalized === 'collect_metrics') return isRu ? 'следующий шаг: собрать реакции' : 'next: collect reactions';
   return isRu ? 'следующий шаг не требуется' : 'no next action';
+}
+
+function _socialInsightMetricLine(
+  metrics: SocialRecommendationTopicInsight['metrics'] | undefined,
+  isRu: boolean,
+): string {
+  const leads = Number(metrics?.leads || 0);
+  const inquiries = Number(metrics?.inquiries || 0);
+  const comments = Number(metrics?.comments || 0);
+  const reach = Number(metrics?.reach || 0);
+  return isRu
+    ? `заявки ${leads}, обращения ${inquiries}, комментарии ${comments}, охват ${reach}`
+    : `leads ${leads}, inquiries ${inquiries}, comments ${comments}, reach ${reach}`;
 }
 
 function _socialAttributionFeedback(eventType: SocialAttributionEventType): { ru: string; en: string } {
