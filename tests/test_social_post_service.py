@@ -8,6 +8,7 @@ from services.social_post_service import (
     _meta_publish_status,
     _publish_external_account_post,
     _build_social_learning_insights,
+    _preview_dispatch_decision,
     _queue_preflight_block,
     _status_after_social_text_edit,
     _vk_publish_binding,
@@ -137,6 +138,79 @@ def test_build_social_queue_groups_matches_daily_workflow():
     assert by_key["needs_manual_publish"]["post_ids"] == ["p7"]
     assert by_key["published"]["count"] == 1
     assert by_key["failed"]["count"] == 1
+
+
+def test_preview_dispatch_decision_publish_api_when_channel_ready(monkeypatch):
+    monkeypatch.setattr(social_post_service, "_queue_preflight_block", lambda cursor, post: {})
+
+    preview = _preview_dispatch_decision(
+        None,
+        {
+            "id": "p-api",
+            "business_id": "b1",
+            "content_plan_id": "plan1",
+            "content_plan_item_id": "item1",
+            "platform": "telegram",
+            "publish_mode": "api",
+            "status": "queued",
+            "approved_at": "2026-06-19T10:00:00+00:00",
+        },
+    )
+
+    assert preview["dry_run"] is True
+    assert preview["dispatch_action"] == "publish_api"
+    assert preview["would_status"] == "published_or_failed"
+    assert preview["external_publish"] is True
+    assert preview["approval_required"] is True
+
+
+def test_preview_dispatch_decision_blocks_api_when_preflight_missing(monkeypatch):
+    monkeypatch.setattr(
+        social_post_service,
+        "_queue_preflight_block",
+        lambda cursor, post: {
+            "status": "needs_manual_publish",
+            "last_error": "Для Telegram нужны telegram_bot_token и telegram_chat_id бизнеса.",
+            "metadata_json": {"queue_preflight_status": "missing_keys"},
+        },
+    )
+
+    preview = _preview_dispatch_decision(
+        None,
+        {
+            "id": "p-blocked",
+            "business_id": "b1",
+            "platform": "telegram",
+            "publish_mode": "api",
+            "status": "queued",
+            "approved_at": "2026-06-19T10:00:00+00:00",
+        },
+    )
+
+    assert preview["dispatch_action"] == "manual_handoff"
+    assert preview["would_status"] == "needs_manual_publish"
+    assert preview["external_publish"] is False
+    assert preview["metadata_json"]["queue_preflight_status"] == "missing_keys"
+
+
+def test_preview_dispatch_decision_maps_never_autopublishes(monkeypatch):
+    monkeypatch.setattr(social_post_service, "openclaw_browser_available", lambda: True)
+    preview = _preview_dispatch_decision(
+        None,
+        {
+            "id": "p-map",
+            "business_id": "b1",
+            "platform": "yandex_maps",
+            "publish_mode": "openclaw_browser",
+            "status": "queued",
+            "approved_at": "2026-06-19T10:00:00+00:00",
+        },
+    )
+
+    assert preview["dispatch_action"] == "create_supervised_task"
+    assert preview["would_status"] == "needs_supervised_publish"
+    assert preview["external_publish"] is False
+    assert preview["stop_before_final_publish"] is True
 
 
 def test_queue_preflight_blocks_api_channel_when_readiness_is_missing(monkeypatch):

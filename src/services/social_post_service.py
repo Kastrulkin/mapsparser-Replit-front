@@ -743,6 +743,49 @@ def dispatch_due_social_posts(batch_size: int = 20) -> dict[str, Any]:
     }
 
 
+def preview_due_social_post_dispatch(user_id: str, batch_size: int = 20) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        cursor.execute(
+            """
+            SELECT sp.*
+            FROM social_posts sp
+            WHERE sp.status = 'queued'
+              AND sp.approved_at IS NOT NULL
+              AND COALESCE(sp.scheduled_for, NOW()) <= NOW()
+            ORDER BY sp.scheduled_for ASC NULLS FIRST, sp.updated_at ASC
+            LIMIT %s
+            """,
+            (max(1, min(int(batch_size or 20), 200)),),
+        )
+        due_posts = [_serialize_social_post(cursor, row) for row in cursor.fetchall() or []]
+        preview_items: list[dict[str, Any]] = []
+        skipped = 0
+        for post in due_posts:
+            try:
+                _require_business_access(cursor, user_id, str(post.get("business_id") or ""))
+            except PermissionError:
+                skipped += 1
+                continue
+            preview_items.append(_preview_dispatch_decision(cursor, post))
+        counts: dict[str, int] = {}
+        for item in preview_items:
+            action = str(item.get("dispatch_action") or "unknown")
+            counts[action] = counts.get(action, 0) + 1
+        return {
+            "dry_run": True,
+            "picked": len(preview_items),
+            "skipped_no_access": skipped,
+            "batch_size": max(1, min(int(batch_size or 20), 200)),
+            "by_action": counts,
+            "items": preview_items,
+        }
+    finally:
+        db.close()
+
+
 def collect_due_social_post_metrics(batch_size: int = 50) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -997,6 +1040,65 @@ def _queue_group_key(post: dict[str, Any]) -> str:
     if platform in API_PLATFORMS and status in {"approved", "publishing"}:
         return "api_ready"
     return "needs_review"
+
+
+def _preview_dispatch_decision(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    platform = str(post.get("platform") or "").strip()
+    publish_mode = str(post.get("publish_mode") or "").strip()
+    scheduled_for = post.get("scheduled_for")
+    approved_at = post.get("approved_at")
+    item = {
+        "id": str(post.get("id") or "").strip(),
+        "business_id": str(post.get("business_id") or "").strip(),
+        "content_plan_id": str(post.get("content_plan_id") or "").strip(),
+        "content_plan_item_id": str(post.get("content_plan_item_id") or "").strip(),
+        "platform": platform,
+        "platform_label": platform_label(platform),
+        "publish_mode": publish_mode,
+        "scheduled_for": scheduled_for.isoformat() if isinstance(scheduled_for, (datetime, date)) else scheduled_for,
+        "approved_at": approved_at.isoformat() if isinstance(approved_at, (datetime, date)) else approved_at,
+        "current_status": str(post.get("status") or "").strip(),
+        "dry_run": True,
+    }
+    if platform in BROWSER_OR_MANUAL_PLATFORMS:
+        browser_ready = publish_mode == "openclaw_browser" and openclaw_browser_available()
+        return {
+            **item,
+            "dispatch_action": "create_supervised_task" if browser_ready else "manual_handoff",
+            "would_status": "needs_supervised_publish" if browser_ready else "needs_manual_publish",
+            "reason": "openclaw_browser_ready" if browser_ready else "openclaw_browser_unavailable",
+            "external_publish": False,
+            "approval_required": True,
+            "stop_before_final_publish": True,
+        }
+    if publish_mode != "api":
+        return {
+            **item,
+            "dispatch_action": "manual_handoff",
+            "would_status": "needs_manual_publish",
+            "reason": "publish_mode_not_api",
+            "external_publish": False,
+            "approval_required": True,
+        }
+    queue_block = _queue_preflight_block(cursor, post)
+    if queue_block:
+        return {
+            **item,
+            "dispatch_action": "manual_handoff",
+            "would_status": str(queue_block.get("status") or "needs_manual_publish"),
+            "reason": str(queue_block.get("last_error") or "channel_not_ready"),
+            "external_publish": False,
+            "approval_required": True,
+            "metadata_json": queue_block.get("metadata_json") or {},
+        }
+    return {
+        **item,
+        "dispatch_action": "publish_api",
+        "would_status": "published_or_failed",
+        "reason": "channel_ready",
+        "external_publish": True,
+        "approval_required": True,
+    }
 
 
 def _load_plan_item_for_user(cursor: Any, user_id: str, item_id: str) -> dict[str, Any]:

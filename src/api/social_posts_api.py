@@ -19,6 +19,7 @@ from services.social_post_service import (
     mark_manual_published_posts,
     prepare_social_posts_for_item,
     prepare_social_posts_for_items,
+    preview_due_social_post_dispatch,
     publish_social_post,
     publish_social_posts,
     queue_social_post,
@@ -253,6 +254,29 @@ def social_posts_queue(post_id: str):
     try:
         post = queue_social_post(str(user_data.get("user_id") or ""), post_id)
         return jsonify({"success": True, "post": post})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/dispatch/preview", methods=["POST"])
+def social_posts_dispatch_preview():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "dispatch-preview")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    try:
+        payload = preview_due_social_post_dispatch(
+            str(user_data.get("user_id") or ""),
+            batch_size=int(data.get("batch_size") or 20),
+        )
+        return jsonify({"success": True, **payload})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
     except ValueError:
