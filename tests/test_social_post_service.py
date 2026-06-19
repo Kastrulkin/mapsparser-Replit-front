@@ -1,6 +1,8 @@
 import sys
 
 from services.social_post_service import (
+    _meta_publish_status,
+    _vk_publish_binding,
     _build_next_plan_changes,
     build_social_queue_groups,
     default_publish_mode,
@@ -125,6 +127,36 @@ def test_vk_post_url_uses_owner_and_post_id():
     assert _vk_post_url("-12345", "678") == "https://vk.com/wall-12345_678"
     assert _vk_post_url("", "678") == ""
     assert _vk_post_url("-12345", "") == ""
+
+
+def test_vk_publish_binding_requires_wall_permission_when_scope_is_explicit():
+    account = {"id": "a1", "external_id": "12345"}
+
+    blocked = _vk_publish_binding(account, {"access_token": "token", "scope": "groups photos"})
+    allowed = _vk_publish_binding(account, {"access_token": "token", "scope": "groups wall"})
+
+    assert blocked["ready"] is False
+    assert blocked["status"] == "missing_permissions"
+    assert allowed["ready"] is True
+    assert allowed["owner_id"] == "-12345"
+
+
+def test_vk_publish_binding_accepts_owner_id_without_explicit_scope():
+    binding = _vk_publish_binding(
+        {"id": "a1", "external_id": ""},
+        {"access_token": "token", "owner_id": "-777"},
+    )
+
+    assert binding["ready"] is True
+    assert binding["status"] == "ready"
+
+
+def test_meta_publish_status_separates_connection_binding_and_permissions():
+    assert _meta_publish_status({}, {}, "facebook") == "missing_connection"
+    assert _meta_publish_status({"id": "m1", "external_id": "page-1"}, {}, "facebook") == "missing_keys"
+    assert _meta_publish_status({"id": "m1", "external_id": "page-1"}, {"access_token": "token", "scope": "email"}, "facebook") == "missing_permissions"
+    assert _meta_publish_status({"id": "m1", "external_id": "page-1"}, {"access_token": "token", "scope": "pages_manage_posts"}, "facebook") == "ready"
+    assert _meta_publish_status({"id": "m1", "external_id": "page-1"}, {"access_token": "token", "scope": "instagram_content_publish"}, "instagram") == "missing_binding"
 
 
 def test_next_plan_changes_prioritize_leads_before_reach():

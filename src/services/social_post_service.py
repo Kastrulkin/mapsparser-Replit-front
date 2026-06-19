@@ -1135,21 +1135,18 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "metadata_json": {"provider_status": "vk_connection_missing"},
         }
     auth_data = _external_account_auth_data(account)
-    token = str(auth_data.get("access_token") or auth_data.get("token") or "").strip()
-    group_id = str(auth_data.get("group_id") or auth_data.get("community_id") or account.get("external_id") or "").strip()
-    owner_id = str(auth_data.get("owner_id") or "").strip()
-    if not owner_id and group_id:
-        clean_group_id = group_id[1:] if group_id.startswith("-") else group_id
-        owner_id = f"-{clean_group_id}"
-    if not token or not owner_id:
+    vk_binding = _vk_publish_binding(account, auth_data)
+    if not vk_binding.get("ready"):
         return {
             "status": "needs_manual_publish",
-            "last_error": "Для VK нужны access_token и group_id/owner_id с правом wall.post.",
+            "last_error": _vk_readiness_error(str(vk_binding.get("status") or "")),
             "metadata_json": {
-                "provider_status": "vk_credentials_missing",
+                "provider_status": str(vk_binding.get("status") or "vk_not_ready"),
                 "external_account_id": account.get("id"),
             },
         }
+    token = str(vk_binding.get("token") or "").strip()
+    owner_id = str(vk_binding.get("owner_id") or "").strip()
     text = str(post.get("platform_text") or post.get("base_text") or "").strip()
     if not text:
         return {
@@ -1431,6 +1428,100 @@ def _external_account_auth_data(account: dict[str, Any]) -> dict[str, Any]:
         return {}
 
 
+def _vk_publish_binding(account: dict[str, Any], auth_data: dict[str, Any]) -> dict[str, Any]:
+    if not account:
+        return {"ready": False, "status": "missing_connection"}
+    token = str(auth_data.get("access_token") or auth_data.get("token") or "").strip()
+    group_id = str(auth_data.get("group_id") or auth_data.get("community_id") or account.get("external_id") or "").strip()
+    owner_id = str(auth_data.get("owner_id") or "").strip()
+    if not owner_id and group_id:
+        clean_group_id = group_id[1:] if group_id.startswith("-") else group_id
+        owner_id = f"-{clean_group_id}"
+    if not token:
+        return {"ready": False, "status": "missing_keys", "owner_id": owner_id}
+    if not owner_id:
+        return {"ready": False, "status": "missing_binding", "token": token}
+    if _auth_scope_is_explicit(auth_data) and not _auth_scope_allows(auth_data, {"wall", "wall.post"}):
+        return {"ready": False, "status": "missing_permissions", "token": token, "owner_id": owner_id}
+    return {
+        "ready": True,
+        "status": "ready",
+        "token": token,
+        "owner_id": owner_id,
+    }
+
+
+def _meta_publish_status(account: dict[str, Any], auth_data: dict[str, Any], platform: str) -> str:
+    if not account:
+        return "missing_connection"
+    if not str(auth_data.get("access_token") or auth_data.get("token") or "").strip():
+        return "missing_keys"
+    has_page_binding = bool(str(auth_data.get("page_id") or account.get("external_id") or "").strip())
+    has_ig_binding = bool(str(auth_data.get("ig_user_id") or auth_data.get("instagram_business_account_id") or "").strip())
+    if platform == "instagram" and not has_ig_binding:
+        return "missing_binding"
+    if platform == "facebook" and not has_page_binding:
+        return "missing_binding"
+    if _auth_scope_is_explicit(auth_data):
+        required = {"pages_manage_posts", "pages_read_engagement"}
+        if platform == "instagram":
+            required = {"instagram_content_publish"}
+        if not _auth_scope_allows(auth_data, required):
+            return "missing_permissions"
+    return "ready"
+
+
+def _auth_scope_is_explicit(auth_data: dict[str, Any]) -> bool:
+    for key in ("scope", "scopes", "permissions", "granted_scopes", "granted_permissions"):
+        if key in auth_data and auth_data.get(key):
+            return True
+    return False
+
+
+def _auth_scope_allows(auth_data: dict[str, Any], accepted: set[str]) -> bool:
+    tokens = _auth_scope_tokens(auth_data)
+    if not tokens:
+        return False
+    accepted_normalized = {str(item or "").strip().lower() for item in accepted if str(item or "").strip()}
+    return bool(tokens.intersection(accepted_normalized))
+
+
+def _auth_scope_tokens(auth_data: dict[str, Any]) -> set[str]:
+    tokens: set[str] = set()
+    for key in ("scope", "scopes", "permissions", "granted_scopes", "granted_permissions"):
+        _collect_scope_tokens(auth_data.get(key), tokens)
+    return tokens
+
+
+def _collect_scope_tokens(value: Any, tokens: set[str]) -> None:
+    if value is None:
+        return
+    if isinstance(value, dict):
+        for nested_value in value.values():
+            _collect_scope_tokens(nested_value, tokens)
+        return
+    if isinstance(value, (list, tuple, set)):
+        for nested_value in value:
+            _collect_scope_tokens(nested_value, tokens)
+        return
+    raw = str(value or "").replace(",", " ").replace(";", " ")
+    for token in raw.split():
+        normalized = token.strip().lower()
+        if normalized:
+            tokens.add(normalized)
+
+
+def _vk_readiness_error(status: str) -> str:
+    normalized = str(status or "").strip()
+    if normalized == "missing_permissions":
+        return "VK token найден, но в permissions/scope нет wall.post."
+    if normalized == "missing_binding":
+        return "Для VK нужен group_id или owner_id группы/страницы."
+    if normalized == "missing_connection":
+        return "VK аккаунт/группа не подключены."
+    return "Для VK нужны access_token и group_id/owner_id с правом wall.post."
+
+
 def _telegram_post_url(chat_id: str, message_id: str) -> str:
     chat = str(chat_id or "").strip()
     message = str(message_id or "").strip()
@@ -1623,33 +1714,28 @@ def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, An
     )
     vk_account = _find_active_external_account(cursor, business_id, ("vk", "vk_group", "vk_business"))
     vk_auth = _external_account_auth_data(vk_account)
-    vk_ready = bool(
-        vk_auth.get("access_token") or vk_auth.get("token")
-    ) and bool(
-        vk_auth.get("owner_id") or vk_auth.get("group_id") or vk_auth.get("community_id") or vk_account.get("external_id")
-    )
+    vk_binding = _vk_publish_binding(vk_account, vk_auth)
     google_account = _find_active_external_account(cursor, business_id, ("google_business",))
     meta_account = _find_active_external_account(cursor, business_id, ("meta", "facebook", "instagram"))
     meta_auth = _external_account_auth_data(meta_account)
-    meta_ready = bool(meta_auth.get("access_token")) and bool(
-        meta_auth.get("page_id") or meta_auth.get("ig_user_id") or meta_account.get("external_id")
-    )
+    instagram_status = _meta_publish_status(meta_account, meta_auth, "instagram")
+    facebook_status = _meta_publish_status(meta_account, meta_auth, "facebook")
     browser_ready = openclaw_browser_available()
     return [
         _channel_readiness("telegram", "api", telegram_ready, "ready" if telegram_ready else "missing_keys"),
-        _channel_readiness("vk", "api", vk_ready, "ready" if vk_ready else "missing_keys"),
+        _channel_readiness("vk", "api", bool(vk_binding.get("ready")), str(vk_binding.get("status") or "missing_keys")),
         _channel_readiness("google_business", "api", bool(google_account), "ready" if google_account else "missing_connection"),
         _channel_readiness(
             "instagram",
             "api",
-            meta_ready,
-            "ready" if meta_ready else ("missing_permissions" if meta_account else "missing_connection"),
+            instagram_status == "ready",
+            instagram_status,
         ),
         _channel_readiness(
             "facebook",
             "api",
-            meta_ready,
-            "ready" if meta_ready else ("missing_permissions" if meta_account else "missing_connection"),
+            facebook_status == "ready",
+            facebook_status,
         ),
         _channel_readiness(
             "yandex_maps",
@@ -1699,6 +1785,12 @@ def _channel_readiness_message(platform: str, status: str, is_ru: bool) -> str:
             f"{label}: подключение найдено, но нужны permissions/account binding."
             if is_ru
             else f"{label}: connection exists, but permissions/account binding are required."
+        )
+    if status == "missing_binding":
+        return (
+            f"{label}: ключ найден, но не выбрана группа, страница или бизнес-аккаунт."
+            if is_ru
+            else f"{label}: key exists, but group, page, or business account binding is missing."
         )
     if status == "missing_connection":
         return f"{label}: нужно подключить аккаунт." if is_ru else f"{label}: connect an account first."
