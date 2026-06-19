@@ -39,8 +39,29 @@ def test_social_post_routes_include_bulk_and_attribution_endpoints():
     assert ("/api/social-posts/bulk-publish", frozenset({"POST"})) in routes
     assert ("/api/social-posts/<post_id>/queue", frozenset({"POST"})) in routes
     assert ("/api/social-posts/dispatch/preview", frozenset({"POST"})) in routes
+    assert ("/api/social-posts/runtime-status", frozenset({"GET"})) in routes
     assert ("/api/social-posts/<post_id>", frozenset({"PATCH"})) in routes
     assert ("/api/social-posts/bulk-mark-manual-published", frozenset({"POST"})) in routes
     assert ("/api/social-posts/<post_id>/attribution-events", frozenset({"POST"})) in routes
     assert ("/api/content-plans/<plan_id>/social-posts/recommend-next-plan", frozenset({"POST"})) in routes
     assert ("/api/content-plans/<plan_id>/social-posts/apply-recommendation", frozenset({"POST"})) in routes
+
+
+def test_social_post_runtime_status_reflects_worker_flags(monkeypatch):
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_ENABLED", "true")
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_INTERVAL_SEC", "5")
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_BATCH_SIZE", "250")
+    monkeypatch.setenv("SOCIAL_POST_METRICS_ENABLED", "0")
+    monkeypatch.setenv("SOCIAL_POST_METRICS_INTERVAL_SEC", "20")
+    monkeypatch.setenv("SOCIAL_POST_METRICS_BATCH_SIZE", "999")
+
+    payload = social_posts_api.social_post_runtime_status_payload()
+
+    assert payload["dispatch"]["enabled"] is True
+    assert payload["dispatch"]["interval_sec"] == 15
+    assert payload["dispatch"]["batch_size"] == 200
+    assert payload["metrics"]["enabled"] is False
+    assert payload["metrics"]["interval_sec"] == 60
+    assert payload["metrics"]["batch_size"] == 500
+    assert payload["approval_required"] is True
+    assert payload["browser_final_click_allowed"] is False

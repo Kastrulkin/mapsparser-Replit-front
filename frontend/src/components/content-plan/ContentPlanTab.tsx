@@ -254,6 +254,21 @@ type SocialDispatchPreview = {
   }>;
 };
 
+type SocialRuntimeStatus = {
+  dispatch?: {
+    enabled?: boolean;
+    interval_sec?: number;
+    batch_size?: number;
+  };
+  metrics?: {
+    enabled?: boolean;
+    interval_sec?: number;
+    batch_size?: number;
+  };
+  approval_required?: boolean;
+  browser_final_click_allowed?: boolean;
+};
+
 type SocialChannelReadiness = {
   platform: string;
   platform_label?: string;
@@ -510,6 +525,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialChannelReadiness, setSocialChannelReadiness] = useState<SocialChannelReadiness[]>([]);
   const [socialRecommendation, setSocialRecommendation] = useState<SocialRecommendationPayload | null>(null);
   const [socialDispatchPreview, setSocialDispatchPreview] = useState<SocialDispatchPreview | null>(null);
+  const [socialRuntimeStatus, setSocialRuntimeStatus] = useState<SocialRuntimeStatus | null>(null);
   const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
   const [manualPublishRefs, setManualPublishRefs] = useState<Record<string, { url: string; id: string }>>({});
   const [socialBusyAction, setSocialBusyAction] = useState('');
@@ -1360,6 +1376,22 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const loadSocialRuntimeStatus = async () => {
+    try {
+      const response = await newAuth.makeRequest('/social-posts/runtime-status', {
+        method: 'GET',
+      });
+      setSocialRuntimeStatus({
+        dispatch: response.dispatch || {},
+        metrics: response.metrics || {},
+        approval_required: Boolean(response.approval_required),
+        browser_final_click_allowed: Boolean(response.browser_final_click_allowed),
+      });
+    } catch {
+      setSocialRuntimeStatus(null);
+    }
+  };
+
   const loadSocialPosts = async (planId: string) => {
     if (!planId) return;
     try {
@@ -1432,6 +1464,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     void loadContext();
     void loadPlans();
     void loadLearningMetrics();
+    void loadSocialRuntimeStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
 
@@ -4499,6 +4532,37 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           <div>{isRu ? 'ключи/права' : 'keys/rights'}</div>
                         </div>
                       </div>
+                      {socialRuntimeStatus ? (
+                        <div className="rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200">
+                          <div className="font-semibold text-white">
+                            {isRu ? 'Runtime расписания' : 'Schedule runtime'}
+                          </div>
+                          <div className="mt-1 grid gap-1">
+                            <div className="flex items-center justify-between gap-3">
+                              <span>{isRu ? 'Публикация по расписанию' : 'Scheduled dispatch'}</span>
+                              <span className={socialRuntimeStatus.dispatch?.enabled ? 'font-semibold text-emerald-200' : 'font-semibold text-amber-200'}>
+                                {socialRuntimeStatus.dispatch?.enabled ? (isRu ? 'включена' : 'enabled') : (isRu ? 'выключена' : 'disabled')}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-300">
+                              {isRu
+                                ? `интервал ${Number(socialRuntimeStatus.dispatch?.interval_sec || 0)}с · batch ${Number(socialRuntimeStatus.dispatch?.batch_size || 0)}`
+                                : `interval ${Number(socialRuntimeStatus.dispatch?.interval_sec || 0)}s · batch ${Number(socialRuntimeStatus.dispatch?.batch_size || 0)}`}
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span>{isRu ? 'Сбор реакций' : 'Metrics collection'}</span>
+                              <span className={socialRuntimeStatus.metrics?.enabled ? 'font-semibold text-emerald-200' : 'font-semibold text-amber-200'}>
+                                {socialRuntimeStatus.metrics?.enabled ? (isRu ? 'включён' : 'enabled') : (isRu ? 'выключен' : 'disabled')}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-300">
+                            {isRu
+                              ? 'Внешние публикации всё равно требуют approval; Яндекс/2ГИС не нажимают финальную кнопку без человека.'
+                              : 'External posts still require approval; Yandex/2GIS do not click final publish without a human.'}
+                          </div>
+                        </div>
+                      ) : null}
                       {socialDispatchPreview ? (
                         <div className="rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200">
                           <div className="font-semibold text-white">

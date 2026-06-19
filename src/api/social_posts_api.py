@@ -44,6 +44,30 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _bool_env(name: str, default: bool = False) -> bool:
+    raw = (os.getenv(name) or "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on", "enabled"}
+
+
+def social_post_runtime_status_payload() -> dict[str, object]:
+    return {
+        "dispatch": {
+            "enabled": _bool_env("SOCIAL_POST_DISPATCH_ENABLED", False),
+            "interval_sec": max(15, _int_env("SOCIAL_POST_DISPATCH_INTERVAL_SEC", 60)),
+            "batch_size": max(1, min(_int_env("SOCIAL_POST_DISPATCH_BATCH_SIZE", 20), 200)),
+        },
+        "metrics": {
+            "enabled": _bool_env("SOCIAL_POST_METRICS_ENABLED", False),
+            "interval_sec": max(60, _int_env("SOCIAL_POST_METRICS_INTERVAL_SEC", 3600)),
+            "batch_size": max(1, min(_int_env("SOCIAL_POST_METRICS_BATCH_SIZE", 50), 500)),
+        },
+        "approval_required": True,
+        "browser_final_click_allowed": False,
+    }
+
+
 def _check_write_rate_limit(user_id: str, action: str):
     limit = max(_int_env("SOCIAL_POST_WRITE_RATE_LIMIT", 40), 1)
     window_sec = max(_int_env("SOCIAL_POST_WRITE_RATE_WINDOW_SEC", 3600), 60)
@@ -134,6 +158,14 @@ def social_posts_list(plan_id: str):
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 404
     except Exception:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/runtime-status", methods=["GET"])
+def social_posts_runtime_status():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    return jsonify({"success": True, **social_post_runtime_status_payload()})
 
 
 @social_posts_bp.route("/api/social-posts/bulk-approve", methods=["POST"])
