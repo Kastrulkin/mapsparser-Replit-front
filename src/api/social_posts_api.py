@@ -10,6 +10,7 @@ from flask import Blueprint, jsonify, request
 
 from auth_system import verify_session
 from services.social_post_service import (
+    apply_social_post_recommendation,
     approve_social_post,
     approve_social_posts,
     collect_social_post_metrics,
@@ -20,6 +21,9 @@ from services.social_post_service import (
     prepare_social_posts_for_items,
     publish_social_post,
     publish_social_posts,
+    queue_social_post,
+    queue_social_posts,
+    recommend_next_plan_from_social_posts,
     record_social_post_attribution_event,
 )
 
@@ -191,6 +195,46 @@ def social_posts_bulk_publish():
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
 
 
+@social_posts_bp.route("/api/social-posts/bulk-queue", methods=["POST"])
+def social_posts_bulk_queue():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "bulk-queue")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    post_ids = data.get("post_ids") if isinstance(data.get("post_ids"), list) else []
+    try:
+        payload = queue_social_posts(str(user_data.get("user_id") or ""), post_ids)
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/<post_id>/queue", methods=["POST"])
+def social_posts_queue(post_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "queue")
+    if rate_error:
+        return rate_error
+    try:
+        post = queue_social_post(str(user_data.get("user_id") or ""), post_id)
+        return jsonify({"success": True, "post": post})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
 @social_posts_bp.route("/api/social-posts/<post_id>/publish", methods=["POST"])
 def social_posts_publish(post_id: str):
     user_data, error_response = _require_auth()
@@ -278,6 +322,49 @@ def social_posts_attribution_event(post_id: str):
             value=int(data.get("value") or 1),
             event_source=str(data.get("event_source") or "manual").strip(),
             metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else {},
+        )
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/content-plans/<plan_id>/social-posts/recommend-next-plan", methods=["POST"])
+def social_posts_recommend_next_plan(plan_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "recommend")
+    if rate_error:
+        return rate_error
+    try:
+        payload = recommend_next_plan_from_social_posts(str(user_data.get("user_id") or ""), plan_id)
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/content-plans/<plan_id>/social-posts/apply-recommendation", methods=["POST"])
+def social_posts_apply_recommendation(plan_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "apply-recommendation")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    try:
+        payload = apply_social_post_recommendation(
+            str(user_data.get("user_id") or ""),
+            plan_id,
+            approved=bool(data.get("approved") is True),
         )
         return jsonify({"success": True, **payload})
     except PermissionError:

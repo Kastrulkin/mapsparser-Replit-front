@@ -56,6 +56,7 @@ from services.operator_apify_settlement import settle_apify_actual_cost
 from services.operator_refresh_recovery import release_failed_refresh_reservation
 from services.operator_refresh_telegram_followup import dispatch_operator_refresh_telegram_followup
 from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
+from services.social_post_service import collect_due_social_post_metrics, dispatch_due_social_posts
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -71,6 +72,8 @@ _LAST_YOOKASSA_RENEWALS_AT = 0.0
 _LAST_OUTREACH_DISPATCH_AT = 0.0
 _LAST_CARD_AUTOMATION_AT = 0.0
 _LAST_AGENT_SCHEDULE_DISPATCH_AT = 0.0
+_LAST_SOCIAL_POST_DISPATCH_AT = 0.0
+_LAST_SOCIAL_POST_METRICS_AT = 0.0
 
 _EDITORIAL_SERVICE_PATTERNS = (
     "хорошее место",
@@ -1484,6 +1487,64 @@ def _dispatch_agent_schedules_if_due() -> None:
                 db.close()
         except Exception:
             pass
+
+
+def _dispatch_social_posts_if_due() -> None:
+    global _LAST_SOCIAL_POST_DISPATCH_AT
+    if not _env_bool("SOCIAL_POST_DISPATCH_ENABLED", False):
+        return
+
+    now = time.time()
+    interval_sec = max(15, int(os.getenv("SOCIAL_POST_DISPATCH_INTERVAL_SEC", "60")))
+    if now - _LAST_SOCIAL_POST_DISPATCH_AT < interval_sec:
+        return
+
+    _LAST_SOCIAL_POST_DISPATCH_AT = now
+    try:
+        batch_size = max(1, min(int(os.getenv("SOCIAL_POST_DISPATCH_BATCH_SIZE", "20")), 200))
+        result = dispatch_due_social_posts(batch_size=batch_size)
+        picked = int(result.get("picked") or 0)
+        failed = int(result.get("failed") or 0)
+        if picked > 0 or failed > 0:
+            print(
+                "[SOCIAL_POST_DISPATCH] "
+                f"picked={picked} published={int(result.get('published') or 0)} "
+                f"supervised={int(result.get('supervised') or 0)} "
+                f"manual={int(result.get('manual') or 0)} failed={failed}",
+                flush=True,
+            )
+    except Exception:
+        print("[SOCIAL_POST_DISPATCH] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+
+
+def _collect_social_post_metrics_if_due() -> None:
+    global _LAST_SOCIAL_POST_METRICS_AT
+    if not _env_bool("SOCIAL_POST_METRICS_ENABLED", False):
+        return
+
+    now = time.time()
+    interval_sec = max(60, int(os.getenv("SOCIAL_POST_METRICS_INTERVAL_SEC", "3600")))
+    if now - _LAST_SOCIAL_POST_METRICS_AT < interval_sec:
+        return
+
+    _LAST_SOCIAL_POST_METRICS_AT = now
+    try:
+        batch_size = max(1, min(int(os.getenv("SOCIAL_POST_METRICS_BATCH_SIZE", "50")), 500))
+        result = collect_due_social_post_metrics(batch_size=batch_size)
+        picked = int(result.get("picked") or 0)
+        failed = int(result.get("failed") or 0)
+        if picked > 0 or failed > 0:
+            print(
+                "[SOCIAL_POST_METRICS] "
+                f"picked={picked} collected={int(result.get('collected') or 0)} failed={failed}",
+                flush=True,
+            )
+    except Exception:
+        print("[SOCIAL_POST_METRICS] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
 
 
 def _dispatch_openclaw_callback_outbox_if_due() -> None:
@@ -5959,6 +6020,8 @@ if __name__ == "__main__":
             process_queue()
             _run_card_automation_if_due()
             _dispatch_agent_schedules_if_due()
+            _dispatch_social_posts_if_due()
+            _collect_social_post_metrics_if_due()
             _dispatch_outreach_queue_if_due()
             _dispatch_openclaw_callback_outbox_if_due()
             _check_openclaw_callback_alerts_if_due()

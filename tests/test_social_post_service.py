@@ -1,6 +1,7 @@
 import sys
 
 from services.social_post_service import (
+    _build_next_plan_changes,
     build_social_queue_groups,
     default_publish_mode,
     ensure_social_post_tables,
@@ -69,6 +70,8 @@ def test_next_action_separates_review_api_and_supervised_states():
     assert next_action_for_social_post({"status": "needs_review", "platform": "telegram"}) == "review_required"
     assert next_action_for_social_post({"status": "approved", "platform": "telegram"}) == "wait_for_api_publish"
     assert next_action_for_social_post({"status": "approved", "platform": "yandex_maps"}) == "start_supervised_publish"
+    assert next_action_for_social_post({"status": "queued", "platform": "telegram"}) == "wait_for_scheduled_publish"
+    assert next_action_for_social_post({"status": "queued", "platform": "two_gis"}) == "wait_for_scheduled_supervised_publish"
     assert next_action_for_social_post({"status": "needs_supervised_publish", "platform": "two_gis"}) == "open_supervised_publish"
 
 
@@ -105,12 +108,14 @@ def test_build_social_queue_groups_matches_daily_workflow():
             {"id": "p3", "content_plan_item_id": "i2", "platform": "yandex_maps", "status": "approved"},
             {"id": "p4", "content_plan_item_id": "i3", "platform": "telegram", "status": "published"},
             {"id": "p5", "content_plan_item_id": "i4", "platform": "facebook", "status": "failed"},
+            {"id": "p6", "content_plan_item_id": "i5", "platform": "telegram", "status": "queued"},
         ]
     )
     by_key = {group["key"]: group for group in groups}
 
     assert by_key["needs_review"]["count"] == 1
     assert by_key["api_ready"]["post_ids"] == ["p2"]
+    assert by_key["scheduled"]["post_ids"] == ["p6"]
     assert by_key["needs_supervised_publish"]["post_ids"] == ["p3"]
     assert by_key["published"]["count"] == 1
     assert by_key["failed"]["count"] == 1
@@ -120,3 +125,31 @@ def test_vk_post_url_uses_owner_and_post_id():
     assert _vk_post_url("-12345", "678") == "https://vk.com/wall-12345_678"
     assert _vk_post_url("", "678") == ""
     assert _vk_post_url("-12345", "") == ""
+
+
+def test_next_plan_changes_prioritize_leads_before_reach():
+    changes = _build_next_plan_changes(
+        [
+            {
+                "item_id": "reach-item",
+                "theme": "Большой охват",
+                "goal": "Рассказать о салоне",
+                "reach": 9000,
+                "comments": 0,
+                "inquiries": 0,
+                "leads": 0,
+            },
+            {
+                "item_id": "lead-item",
+                "theme": "Запись на услугу",
+                "goal": "Получить заявки",
+                "reach": 10,
+                "comments": 0,
+                "inquiries": 0,
+                "leads": 1,
+            },
+        ]
+    )
+
+    assert changes[0]["item_id"] == "lead-item"
+    assert changes[0]["action"] == "repeat_winning_topic"

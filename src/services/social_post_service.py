@@ -65,6 +65,13 @@ SOCIAL_QUEUE_GROUPS = (
         "next_action_en": "Queue approved API channels for publishing.",
     },
     {
+        "key": "scheduled",
+        "label_ru": "Запланировано",
+        "label_en": "Scheduled",
+        "next_action_ru": "Ждёт даты публикации. Worker выполнит API publish или создаст controlled task.",
+        "next_action_en": "Waiting for schedule. The worker will publish via API or create a controlled task.",
+    },
+    {
         "key": "needs_supervised_publish",
         "label_ru": "Нужно контролируемое размещение",
         "label_en": "Needs supervised placement",
@@ -133,7 +140,7 @@ def list_social_posts_for_plan(user_id: str, plan_id: str) -> dict[str, Any]:
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        _load_plan_for_user(cursor, user_id, plan_id)
+        plan = _load_plan_for_user(cursor, user_id, plan_id)
         cursor.execute(
             """
             SELECT
@@ -174,6 +181,7 @@ def list_social_posts_for_plan(user_id: str, plan_id: str) -> dict[str, Any]:
             "summary": _summary_for_posts(posts),
             "queue_groups": build_social_queue_groups(posts),
             "recommendation": _build_plan_recommendation(posts),
+            "channel_readiness": _build_channel_readiness(cursor, str(plan.get("business_id") or "")),
         }
     finally:
         db.close()
@@ -245,6 +253,54 @@ def approve_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
     }
 
 
+def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        post = _load_post_for_user(cursor, user_id, post_id)
+        status = str(post.get("status") or "").strip()
+        if status == "published":
+            raise ValueError("Публикация уже опубликована")
+        if status not in {"approved", "queued"} or not post.get("approved_at"):
+            raise PermissionError("Перед постановкой в расписание нужно подтверждение человека")
+        cursor.execute(
+            """
+            UPDATE social_posts
+            SET status = 'queued',
+                last_error = NULL,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (post_id,),
+        )
+        updated = _serialize_social_post(cursor, cursor.fetchone())
+        db.conn.commit()
+        return updated
+    except Exception:
+        db.conn.rollback()
+        raise sys.exc_info()[1]
+    finally:
+        db.close()
+
+
+def queue_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
+    posts: list[dict[str, Any]] = []
+    failed: list[dict[str, str]] = []
+    for post_id in _normalize_ids(post_ids):
+        try:
+            posts.append(queue_social_post(user_id, post_id))
+        except Exception:
+            failed.append({"id": post_id, "error": str(sys.exc_info()[1])})
+    return {
+        "posts": posts,
+        "failed": failed,
+        "summary": _summary_for_posts(posts),
+        "queue_groups": build_social_queue_groups(posts),
+    }
+
+
 def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -259,18 +315,21 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
         if platform in BROWSER_OR_MANUAL_PLATFORMS:
             automation_task_id = str(post.get("automation_task_id") or "").strip() or _new_id()
             metadata.update(_supervised_publish_metadata(post, automation_task_id))
+            browser_ready = publish_mode == "openclaw_browser" and openclaw_browser_available()
+            next_status = "needs_supervised_publish" if browser_ready else "needs_manual_publish"
+            last_error = None if browser_ready else "OpenClaw browser-use недоступен; используйте ручное контролируемое размещение."
             cursor.execute(
                 """
                 UPDATE social_posts
-                SET status = 'needs_supervised_publish',
+                SET status = %s,
                     automation_task_id = %s,
                     metadata_json = %s,
-                    last_error = NULL,
+                    last_error = %s,
                     updated_at = NOW()
                 WHERE id = %s
                 RETURNING *
                 """,
-                (automation_task_id, _json_dumps(metadata), post_id),
+                (next_status, automation_task_id, _json_dumps(metadata), last_error, post_id),
             )
             updated = _serialize_social_post(cursor, cursor.fetchone())
             db.conn.commit()
@@ -536,6 +595,203 @@ def collect_social_post_metrics(user_id: str, business_id: str = "", post_id: st
         db.close()
 
 
+def dispatch_due_social_posts(batch_size: int = 20) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    picked: list[dict[str, Any]] = []
+    try:
+        ensure_social_post_tables(cursor)
+        cursor.execute(
+            """
+            SELECT sp.id, sp.business_id, sp.platform, sp.status, sp.scheduled_for
+            FROM social_posts sp
+            WHERE sp.status = 'queued'
+              AND sp.approved_at IS NOT NULL
+              AND COALESCE(sp.scheduled_for, NOW()) <= NOW()
+            ORDER BY sp.scheduled_for ASC NULLS FIRST, sp.updated_at ASC
+            LIMIT %s
+            """,
+            (max(1, min(int(batch_size or 20), 200)),),
+        )
+        picked = [_row_to_dict(cursor, row) for row in cursor.fetchall() or []]
+    finally:
+        db.close()
+
+    published = 0
+    supervised = 0
+    manual = 0
+    failed = 0
+    errors: list[dict[str, str]] = []
+    posts: list[dict[str, Any]] = []
+    for item in picked:
+        post_id = str(item.get("id") or "").strip()
+        business_id = str(item.get("business_id") or "").strip()
+        owner_id = ""
+        try:
+            owner_id = _owner_id_for_business(business_id)
+            if not owner_id:
+                raise RuntimeError("business owner not found")
+            post = publish_social_post(owner_id, post_id)
+            posts.append(post)
+            status = str(post.get("status") or "").strip()
+            if status == "published":
+                published += 1
+            elif status == "needs_supervised_publish":
+                supervised += 1
+            elif status == "needs_manual_publish":
+                manual += 1
+            elif status == "failed":
+                failed += 1
+        except Exception:
+            failed += 1
+            message = str(sys.exc_info()[1])
+            errors.append({"id": post_id, "error": message})
+            _mark_dispatch_failure(post_id, message)
+    return {
+        "picked": len(picked),
+        "published": published,
+        "supervised": supervised,
+        "manual": manual,
+        "failed": failed,
+        "errors": errors,
+        "posts": posts,
+    }
+
+
+def collect_due_social_post_metrics(batch_size: int = 50) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    picked: list[dict[str, Any]] = []
+    try:
+        ensure_social_post_tables(cursor)
+        cursor.execute(
+            """
+            SELECT sp.id, sp.business_id
+            FROM social_posts sp
+            LEFT JOIN social_post_metrics m
+              ON m.social_post_id = sp.id
+             AND m.metric_date = CURRENT_DATE
+            WHERE sp.status = 'published'
+              AND m.id IS NULL
+            ORDER BY sp.published_at ASC NULLS LAST, sp.updated_at ASC
+            LIMIT %s
+            """,
+            (max(1, min(int(batch_size or 50), 500)),),
+        )
+        picked = [_row_to_dict(cursor, row) for row in cursor.fetchall() or []]
+    finally:
+        db.close()
+
+    collected = 0
+    failed = 0
+    errors: list[dict[str, str]] = []
+    for item in picked:
+        post_id = str(item.get("id") or "").strip()
+        try:
+            owner_id = _owner_id_for_business(str(item.get("business_id") or "").strip())
+            if not owner_id:
+                raise RuntimeError("business owner not found")
+            payload = collect_social_post_metrics(owner_id, post_id=post_id)
+            collected += int(payload.get("collected") or 0)
+        except Exception:
+            failed += 1
+            errors.append({"id": post_id, "error": str(sys.exc_info()[1])})
+    return {
+        "picked": len(picked),
+        "collected": collected,
+        "failed": failed,
+        "errors": errors,
+    }
+
+
+def recommend_next_plan_from_social_posts(user_id: str, plan_id: str) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        _load_plan_for_user(cursor, user_id, plan_id)
+        posts_payload = list_social_posts_for_plan(user_id, plan_id)
+        performance_rows = _social_plan_performance_rows(cursor, plan_id)
+        proposed_changes = _build_next_plan_changes(performance_rows)
+        return {
+            "recommendation": posts_payload.get("recommendation") or {},
+            "proposed_changes": proposed_changes,
+            "applies_automatically": False,
+            "approval_required": True,
+        }
+    finally:
+        db.close()
+
+
+def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool = False) -> dict[str, Any]:
+    if not approved:
+        raise PermissionError("Для изменения контент-плана нужно явное подтверждение")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        _load_plan_for_user(cursor, user_id, plan_id)
+        recommendation_payload = recommend_next_plan_from_social_posts(user_id, plan_id)
+        proposed_changes = [
+            item for item in recommendation_payload.get("proposed_changes", [])
+            if str(item.get("item_id") or "").strip() and str(item.get("proposed_goal") or "").strip()
+        ]
+        applied: list[dict[str, Any]] = []
+        for change in proposed_changes:
+            cursor.execute(
+                """
+                UPDATE contentplanitems
+                SET goal = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND plan_id = %s
+                  AND COALESCE(usernews_id, '') = ''
+                  AND COALESCE(status, '') NOT IN ('skipped', 'published')
+                RETURNING id, theme, goal
+                """,
+                (
+                    str(change.get("proposed_goal") or "").strip(),
+                    str(change.get("item_id") or "").strip(),
+                    plan_id,
+                ),
+            )
+            row = _row_to_dict(cursor, cursor.fetchone())
+            if row:
+                applied.append(row)
+        cursor.execute(
+            """
+            UPDATE contentplans
+            SET edited_plan_json = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (
+                _json_dumps(
+                    {
+                        "source": "social_post_recommendation",
+                        "approved_by": user_id,
+                        "approved_at": datetime.now(timezone.utc).isoformat(),
+                        "recommendation": recommendation_payload,
+                        "applied_item_ids": [str(item.get("id") or "") for item in applied],
+                    }
+                ),
+                plan_id,
+            ),
+        )
+        db.conn.commit()
+        return {
+            "applied_count": len(applied),
+            "applied_items": applied,
+            "recommendation": recommendation_payload.get("recommendation") or {},
+            "proposed_changes": proposed_changes,
+        }
+    except Exception:
+        db.conn.rollback()
+        raise sys.exc_info()[1]
+    finally:
+        db.close()
+
+
 def openclaw_browser_available(fetcher: Any = None) -> bool:
     env_value = str(os.getenv("OPENCLAW_BROWSER_USE_ENABLED") or os.getenv("OPENCLAW_BROWSER_USE_AVAILABLE") or "").strip().lower()
     if env_value in {"1", "true", "yes", "on"}:
@@ -575,10 +831,14 @@ def next_action_for_social_post(post: dict[str, Any]) -> str:
     platform = str(post.get("platform") or "").strip()
     if status in {"draft", "needs_review"}:
         return "review_required"
-    if status in {"approved", "queued"} and platform in BROWSER_OR_MANUAL_PLATFORMS:
+    if status == "approved" and platform in BROWSER_OR_MANUAL_PLATFORMS:
         return "start_supervised_publish"
-    if status in {"approved", "queued"}:
+    if status == "approved":
         return "wait_for_api_publish"
+    if status == "queued" and platform in BROWSER_OR_MANUAL_PLATFORMS:
+        return "wait_for_scheduled_supervised_publish"
+    if status == "queued":
+        return "wait_for_scheduled_publish"
     if status == "needs_supervised_publish":
         return "open_supervised_publish"
     if status == "needs_manual_publish":
@@ -624,13 +884,15 @@ def _queue_group_key(post: dict[str, Any]) -> str:
     platform = str(post.get("platform") or "").strip()
     if status in {"draft", "needs_review"}:
         return "needs_review"
+    if status == "queued":
+        return "scheduled"
     if status == "published":
         return "published"
     if status == "failed":
         return "failed"
     if platform in BROWSER_OR_MANUAL_PLATFORMS or status in {"needs_supervised_publish", "needs_manual_publish"}:
         return "needs_supervised_publish"
-    if platform in API_PLATFORMS and status in {"approved", "queued", "publishing"}:
+    if platform in API_PLATFORMS and status in {"approved", "publishing"}:
         return "api_ready"
     return "needs_review"
 
@@ -1069,6 +1331,41 @@ def _publish_external_account_post(
     }
 
 
+def _owner_id_for_business(business_id: str) -> str:
+    if not business_id:
+        return ""
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        return str(get_business_owner_id(cursor, business_id) or "").strip()
+    finally:
+        db.close()
+
+
+def _mark_dispatch_failure(post_id: str, message: str) -> None:
+    if not post_id:
+        return
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE social_posts
+            SET status = 'failed',
+                last_error = %s,
+                updated_at = NOW()
+            WHERE id = %s
+              AND status IN ('queued', 'publishing')
+            """,
+            (str(message or "Social post dispatch failed").strip()[:1000], post_id),
+        )
+        db.conn.commit()
+    except Exception:
+        db.conn.rollback()
+    finally:
+        db.close()
+
+
 def _load_business_publish_context(cursor: Any, business_id: str) -> dict[str, Any]:
     if not business_id:
         return {}
@@ -1312,10 +1609,100 @@ def _summary_for_posts(posts: list[dict[str, Any]]) -> dict[str, Any]:
         "by_status": by_status,
         "by_platform": by_platform,
         "needs_review": by_status.get("needs_review", 0) + by_status.get("draft", 0),
+        "scheduled": by_status.get("queued", 0),
         "needs_supervised_publish": by_status.get("needs_supervised_publish", 0),
         "published": by_status.get("published", 0),
         "failed": by_status.get("failed", 0),
     }
+
+
+def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, Any]]:
+    business = _load_business_publish_context(cursor, business_id)
+    telegram_ready = bool(decode_telegram_bot_token(business.get("telegram_bot_token"))) and bool(
+        str(business.get("telegram_chat_id") or "").strip()
+    )
+    vk_account = _find_active_external_account(cursor, business_id, ("vk", "vk_group", "vk_business"))
+    vk_auth = _external_account_auth_data(vk_account)
+    vk_ready = bool(
+        vk_auth.get("access_token") or vk_auth.get("token")
+    ) and bool(
+        vk_auth.get("owner_id") or vk_auth.get("group_id") or vk_auth.get("community_id") or vk_account.get("external_id")
+    )
+    google_account = _find_active_external_account(cursor, business_id, ("google_business",))
+    meta_account = _find_active_external_account(cursor, business_id, ("meta", "facebook", "instagram"))
+    meta_auth = _external_account_auth_data(meta_account)
+    meta_ready = bool(meta_auth.get("access_token")) and bool(
+        meta_auth.get("page_id") or meta_auth.get("ig_user_id") or meta_account.get("external_id")
+    )
+    browser_ready = openclaw_browser_available()
+    return [
+        _channel_readiness("telegram", "api", telegram_ready, "ready" if telegram_ready else "missing_keys"),
+        _channel_readiness("vk", "api", vk_ready, "ready" if vk_ready else "missing_keys"),
+        _channel_readiness("google_business", "api", bool(google_account), "ready" if google_account else "missing_connection"),
+        _channel_readiness(
+            "instagram",
+            "api",
+            meta_ready,
+            "ready" if meta_ready else ("missing_permissions" if meta_account else "missing_connection"),
+        ),
+        _channel_readiness(
+            "facebook",
+            "api",
+            meta_ready,
+            "ready" if meta_ready else ("missing_permissions" if meta_account else "missing_connection"),
+        ),
+        _channel_readiness(
+            "yandex_maps",
+            "openclaw_browser" if browser_ready else "manual",
+            browser_ready,
+            "supervised_ready" if browser_ready else "manual_fallback",
+        ),
+        _channel_readiness(
+            "two_gis",
+            "openclaw_browser" if browser_ready else "manual",
+            browser_ready,
+            "supervised_ready" if browser_ready else "manual_fallback",
+        ),
+    ]
+
+
+def _channel_readiness(platform: str, publish_mode: str, ready: bool, status: str) -> dict[str, Any]:
+    return {
+        "platform": platform,
+        "platform_label": platform_label(platform),
+        "publish_mode": publish_mode,
+        "ready": bool(ready),
+        "status": status,
+        "message_ru": _channel_readiness_message(platform, status, True),
+        "message_en": _channel_readiness_message(platform, status, False),
+    }
+
+
+def _channel_readiness_message(platform: str, status: str, is_ru: bool) -> str:
+    label = platform_label(platform)
+    if status == "ready":
+        return f"{label}: готов к публикации после approval." if is_ru else f"{label}: ready to publish after approval."
+    if status == "supervised_ready":
+        return (
+            f"{label}: доступно контролируемое размещение через OpenClaw."
+            if is_ru
+            else f"{label}: supervised placement through OpenClaw is available."
+        )
+    if status == "manual_fallback":
+        return (
+            f"{label}: OpenClaw browser-use не подтверждён, будет ручной fallback."
+            if is_ru
+            else f"{label}: OpenClaw browser-use is not confirmed; manual fallback will be used."
+        )
+    if status == "missing_permissions":
+        return (
+            f"{label}: подключение найдено, но нужны permissions/account binding."
+            if is_ru
+            else f"{label}: connection exists, but permissions/account binding are required."
+        )
+    if status == "missing_connection":
+        return f"{label}: нужно подключить аккаунт." if is_ru else f"{label}: connect an account first."
+    return f"{label}: нужны ключи или настройки канала." if is_ru else f"{label}: keys or channel settings are required."
 
 
 def _build_plan_recommendation(posts: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1358,6 +1745,117 @@ def _recommendation_text(leads: int, inquiries: int, comments: int, reach: int, 
         if is_ru
         else "After publishing, LocalOS will rank topics by leads and inquiries first, then comments and reach."
     )
+
+
+def _social_plan_performance_rows(cursor: Any, plan_id: str) -> list[dict[str, Any]]:
+    cursor.execute(
+        """
+        SELECT
+            i.id AS item_id,
+            i.theme,
+            i.goal,
+            i.scheduled_for,
+            COALESCE(SUM(m.leads), 0) AS leads,
+            COALESCE(SUM(m.inquiries), 0) AS inquiries,
+            COALESCE(SUM(m.comments), 0) AS comments,
+            COALESCE(SUM(m.shares), 0) AS shares,
+            COALESCE(SUM(m.clicks), 0) AS clicks,
+            COALESCE(SUM(m.reach), 0) AS reach,
+            COALESCE(SUM(m.views), 0) AS views
+        FROM contentplanitems i
+        LEFT JOIN social_posts sp ON sp.content_plan_item_id = i.id
+        LEFT JOIN social_post_metrics m ON m.social_post_id = sp.id
+        WHERE i.plan_id = %s
+        GROUP BY i.id, i.theme, i.goal, i.scheduled_for
+        ORDER BY i.scheduled_for ASC, i.created_at ASC
+        """,
+        (plan_id,),
+    )
+    return [_row_to_dict(cursor, row) for row in cursor.fetchall() or []]
+
+
+def _build_next_plan_changes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    scored: list[dict[str, Any]] = []
+    for row in rows:
+        leads = int(row.get("leads") or 0)
+        inquiries = int(row.get("inquiries") or 0)
+        comments = int(row.get("comments") or 0)
+        shares = int(row.get("shares") or 0)
+        clicks = int(row.get("clicks") or 0)
+        reach = int(row.get("reach") or row.get("views") or 0)
+        score = leads * 100 + inquiries * 60 + comments * 15 + shares * 12 + clicks * 10 + min(reach, 1000) // 100
+        scored.append({**row, "_score": score})
+    scored.sort(key=lambda item: int(item.get("_score") or 0), reverse=True)
+    if not scored:
+        return []
+    has_business_result = any(int(item.get("leads") or 0) or int(item.get("inquiries") or 0) for item in scored)
+    changes: list[dict[str, Any]] = []
+    for item in scored[:5]:
+        item_id = str(item.get("item_id") or "").strip()
+        if not item_id:
+            continue
+        theme = str(item.get("theme") or "").strip()
+        goal = str(item.get("goal") or "").strip()
+        leads = int(item.get("leads") or 0)
+        inquiries = int(item.get("inquiries") or 0)
+        comments = int(item.get("comments") or 0)
+        reach = int(item.get("reach") or item.get("views") or 0)
+        if leads or inquiries:
+            action = "repeat_winning_topic"
+            reason_ru = "Тема дала заявки или обращения, поэтому её стоит повторить и усилить CTA."
+            proposed_goal = _append_goal_cta(goal, "Повторить тему с прямым призывом записаться или написать.")
+        elif comments:
+            action = "strengthen_cta"
+            reason_ru = "Есть обсуждение без заявки: нужно сделать оффер и следующий шаг понятнее."
+            proposed_goal = _append_goal_cta(goal, "Добавить конкретный оффер и призыв к записи.")
+        elif reach:
+            action = "commercialize_reach"
+            reason_ru = "Есть охват без обращений: тему нужно приблизить к услуге, акции или записи."
+            proposed_goal = _append_goal_cta(goal, "Сместить текст к услуге, акции и записи.")
+        elif not has_business_result:
+            action = "add_clear_offer"
+            reason_ru = "Пока нет результата: следующая версия должна быть более прикладной и коммерческой."
+            proposed_goal = _append_goal_cta(goal, "Сделать понятный оффер и следующий шаг для клиента.")
+        else:
+            continue
+        changes.append(
+            {
+                "item_id": item_id,
+                "theme": theme,
+                "action": action,
+                "reason_ru": reason_ru,
+                "reason_en": _recommendation_reason_en(action),
+                "current_goal": goal,
+                "proposed_goal": proposed_goal,
+                "metrics": {
+                    "leads": leads,
+                    "inquiries": inquiries,
+                    "comments": comments,
+                    "reach": reach,
+                },
+            }
+        )
+    return changes
+
+
+def _append_goal_cta(goal: str, cta: str) -> str:
+    base = str(goal or "").strip()
+    addition = str(cta or "").strip()
+    if not base:
+        return addition
+    if addition.lower() in base.lower():
+        return base
+    return f"{base}\n\n{addition}"
+
+
+def _recommendation_reason_en(action: str) -> str:
+    if action == "repeat_winning_topic":
+        return "The topic produced leads or inquiries, so repeat it with a stronger CTA."
+    if action == "strengthen_cta":
+        return "There is discussion without a lead; make the offer and next step clearer."
+    if action == "commercialize_reach":
+        return "There is reach without inquiries; move the topic closer to a service, offer, or booking."
+    return "No business result yet; make the next version more practical and commercial."
 
 
 def platform_label(platform: str) -> str:

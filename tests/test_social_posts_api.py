@@ -35,6 +35,10 @@ def test_social_post_routes_include_bulk_and_attribution_endpoints():
 
     assert ("/api/content-plans/social-posts/bulk-prepare", frozenset({"POST"})) in routes
     assert ("/api/social-posts/bulk-approve", frozenset({"POST"})) in routes
+    assert ("/api/social-posts/bulk-queue", frozenset({"POST"})) in routes
     assert ("/api/social-posts/bulk-publish", frozenset({"POST"})) in routes
+    assert ("/api/social-posts/<post_id>/queue", frozenset({"POST"})) in routes
     assert ("/api/social-posts/bulk-mark-manual-published", frozenset({"POST"})) in routes
     assert ("/api/social-posts/<post_id>/attribution-events", frozenset({"POST"})) in routes
+    assert ("/api/content-plans/<plan_id>/social-posts/recommend-next-plan", frozenset({"POST"})) in routes
+    assert ("/api/content-plans/<plan_id>/social-posts/apply-recommendation", frozenset({"POST"})) in routes
