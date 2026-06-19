@@ -236,6 +236,24 @@ type SocialQueueGroup = {
   platforms?: Record<string, number>;
 };
 
+type SocialDispatchPreview = {
+  dry_run?: boolean;
+  picked?: number;
+  skipped_no_access?: number;
+  batch_size?: number;
+  by_action?: Record<string, number>;
+  items?: Array<{
+    id?: string;
+    platform?: string;
+    platform_label?: string;
+    dispatch_action?: string;
+    would_status?: string;
+    reason?: string;
+    external_publish?: boolean;
+    stop_before_final_publish?: boolean;
+  }>;
+};
+
 type SocialChannelReadiness = {
   platform: string;
   platform_label?: string;
@@ -491,6 +509,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialQueueGroups, setSocialQueueGroups] = useState<SocialQueueGroup[]>([]);
   const [socialChannelReadiness, setSocialChannelReadiness] = useState<SocialChannelReadiness[]>([]);
   const [socialRecommendation, setSocialRecommendation] = useState<SocialRecommendationPayload | null>(null);
+  const [socialDispatchPreview, setSocialDispatchPreview] = useState<SocialDispatchPreview | null>(null);
   const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
   const [manualPublishRefs, setManualPublishRefs] = useState<Record<string, { url: string; id: string }>>({});
   const [socialBusyAction, setSocialBusyAction] = useState('');
@@ -1365,6 +1384,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSocialQueueGroups([]);
       setSocialChannelReadiness([]);
       setSocialRecommendation(null);
+      setSocialDispatchPreview(null);
     }
   };
 
@@ -2012,6 +2032,40 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setError(message);
     } finally {
       setBulkBusyAction('');
+    }
+  };
+
+  const previewSocialDispatch = async () => {
+    setSocialBusyAction('dispatch-preview');
+    setError('');
+    setActionSummary(null);
+    try {
+      const response = await newAuth.makeRequest('/social-posts/dispatch/preview', {
+        method: 'POST',
+        body: JSON.stringify({ batch_size: 10 }),
+      });
+      const preview: SocialDispatchPreview = {
+        dry_run: Boolean(response.dry_run),
+        picked: Number(response.picked || 0),
+        skipped_no_access: Number(response.skipped_no_access || 0),
+        batch_size: Number(response.batch_size || 10),
+        by_action: response.by_action && typeof response.by_action === 'object' ? response.by_action : {},
+        items: Array.isArray(response.items) ? response.items : [],
+      };
+      setSocialDispatchPreview(preview);
+      const apiCount = Number(preview.by_action?.publish_api || 0);
+      const supervisedCount = Number(preview.by_action?.create_supervised_task || 0);
+      const manualCount = Number(preview.by_action?.manual_handoff || 0);
+      setActionSummary({
+        tone: manualCount > 0 ? 'warning' : 'success',
+        text_ru: `Dry-run расписания: due-постов ${preview.picked || 0}, API ${apiCount}, controlled ${supervisedCount}, вручную ${manualCount}. Наружу ничего не отправлено.`,
+        text_en: `Schedule dry-run: due posts ${preview.picked || 0}, API ${apiCount}, controlled ${supervisedCount}, manual ${manualCount}. Nothing was sent externally.`,
+      });
+    } catch (previewError) {
+      const message = previewError instanceof Error ? previewError.message : (isRu ? 'Не удалось проверить расписание' : 'Could not preview schedule');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
     }
   };
 
@@ -4420,6 +4474,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           ? (isRu ? 'Выполняем...' : 'Working...')
                           : `${isRu ? socialPlanNextStep.ctaRu : socialPlanNextStep.ctaEn} · ${socialPlanNextStep.count}`}
                       </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => { void previewSocialDispatch(); }}
+                        disabled={Boolean(bulkBusyAction) || Boolean(socialBusyAction)}
+                        className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                      >
+                        {socialBusyAction === 'dispatch-preview'
+                          ? (isRu ? 'Проверяем...' : 'Checking...')
+                          : (isRu ? 'Проверить расписание' : 'Preview schedule')}
+                      </Button>
                       <div className="grid grid-cols-3 gap-2 text-center text-[11px] text-slate-300">
                         <div className="rounded-xl bg-white/10 px-2 py-2">
                           <div className="text-sm font-semibold text-white">{socialReadinessSummary.apiReady}</div>
@@ -4434,6 +4499,21 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           <div>{isRu ? 'ключи/права' : 'keys/rights'}</div>
                         </div>
                       </div>
+                      {socialDispatchPreview ? (
+                        <div className="rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200">
+                          <div className="font-semibold text-white">
+                            {isRu ? 'Dry-run worker' : 'Worker dry-run'}
+                          </div>
+                          <div>
+                            {isRu
+                              ? `Due: ${Number(socialDispatchPreview.picked || 0)} · API: ${Number(socialDispatchPreview.by_action?.publish_api || 0)} · controlled: ${Number(socialDispatchPreview.by_action?.create_supervised_task || 0)} · вручную: ${Number(socialDispatchPreview.by_action?.manual_handoff || 0)}`
+                              : `Due: ${Number(socialDispatchPreview.picked || 0)} · API: ${Number(socialDispatchPreview.by_action?.publish_api || 0)} · controlled: ${Number(socialDispatchPreview.by_action?.create_supervised_task || 0)} · manual: ${Number(socialDispatchPreview.by_action?.manual_handoff || 0)}`}
+                          </div>
+                          <div className="text-[11px] text-slate-300">
+                            {isRu ? 'Внешняя публикация не запускалась.' : 'No external publishing was started.'}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
