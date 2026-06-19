@@ -6,6 +6,7 @@ import services.social_post_service as social_post_service
 from services.social_post_service import (
     _build_openclaw_supervised_task_payload,
     _channel_readiness_message,
+    _dispatch_action_for_status,
     _meta_channel_readiness,
     _meta_publish_status,
     openclaw_browser_capability_status,
@@ -263,6 +264,14 @@ def test_build_social_queue_groups_matches_daily_workflow():
     assert by_key["needs_manual_publish"]["post_ids"] == ["p7"]
     assert by_key["published"]["count"] == 1
     assert by_key["failed"]["count"] == 1
+
+
+def test_dispatch_action_for_status_matches_worker_log_buckets():
+    assert _dispatch_action_for_status("published") == "published"
+    assert _dispatch_action_for_status("needs_supervised_publish") == "supervised"
+    assert _dispatch_action_for_status("needs_manual_publish") == "manual"
+    assert _dispatch_action_for_status("failed") == "failed"
+    assert _dispatch_action_for_status("queued") == "other"
 
 
 def test_preview_dispatch_decision_publish_api_when_channel_ready(monkeypatch):

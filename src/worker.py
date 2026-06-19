@@ -1506,11 +1506,15 @@ def _dispatch_social_posts_if_due() -> None:
         picked = int(result.get("picked") or 0)
         failed = int(result.get("failed") or 0)
         if picked > 0 or failed > 0:
+            by_action = result.get("by_action") if isinstance(result.get("by_action"), dict) else {}
+            by_status = result.get("by_status") if isinstance(result.get("by_status"), dict) else {}
             print(
                 "[SOCIAL_POST_DISPATCH] "
                 f"picked={picked} published={int(result.get('published') or 0)} "
                 f"supervised={int(result.get('supervised') or 0)} "
-                f"manual={int(result.get('manual') or 0)} failed={failed}",
+                f"manual={int(result.get('manual') or 0)} failed={failed} "
+                f"by_action={json.dumps(by_action, ensure_ascii=False, sort_keys=True)} "
+                f"by_status={json.dumps(by_status, ensure_ascii=False, sort_keys=True)}",
                 flush=True,
             )
     except Exception:

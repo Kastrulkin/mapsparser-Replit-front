@@ -764,6 +764,9 @@ def dispatch_due_social_posts(batch_size: int = 20) -> dict[str, Any]:
     failed = 0
     errors: list[dict[str, str]] = []
     posts: list[dict[str, Any]] = []
+    details: list[dict[str, Any]] = []
+    by_status: dict[str, int] = {}
+    by_action: dict[str, int] = {}
     for item in picked:
         post_id = str(item.get("id") or "").strip()
         business_id = str(item.get("business_id") or "").strip()
@@ -775,6 +778,22 @@ def dispatch_due_social_posts(batch_size: int = 20) -> dict[str, Any]:
             post = publish_social_post(owner_id, post_id)
             posts.append(post)
             status = str(post.get("status") or "").strip()
+            action = _dispatch_action_for_status(status)
+            by_status[status or "unknown"] = by_status.get(status or "unknown", 0) + 1
+            by_action[action] = by_action.get(action, 0) + 1
+            details.append(
+                {
+                    "id": post_id,
+                    "business_id": business_id,
+                    "platform": str(post.get("platform") or item.get("platform") or "").strip(),
+                    "status": status,
+                    "action": action,
+                    "automation_task_id": str(post.get("automation_task_id") or "").strip(),
+                    "provider_post_id": str(post.get("provider_post_id") or "").strip(),
+                    "provider_post_url": str(post.get("provider_post_url") or "").strip(),
+                    "last_error": str(post.get("last_error") or "").strip(),
+                }
+            )
             if status == "published":
                 published += 1
             elif status == "needs_supervised_publish":
@@ -787,6 +806,21 @@ def dispatch_due_social_posts(batch_size: int = 20) -> dict[str, Any]:
             failed += 1
             message = str(sys.exc_info()[1])
             errors.append({"id": post_id, "error": message})
+            by_status["failed"] = by_status.get("failed", 0) + 1
+            by_action["failed"] = by_action.get("failed", 0) + 1
+            details.append(
+                {
+                    "id": post_id,
+                    "business_id": business_id,
+                    "platform": str(item.get("platform") or "").strip(),
+                    "status": "failed",
+                    "action": "failed",
+                    "automation_task_id": "",
+                    "provider_post_id": "",
+                    "provider_post_url": "",
+                    "last_error": message,
+                }
+            )
             _mark_dispatch_failure(post_id, message)
     return {
         "picked": len(picked),
@@ -794,6 +828,9 @@ def dispatch_due_social_posts(batch_size: int = 20) -> dict[str, Any]:
         "supervised": supervised,
         "manual": manual,
         "failed": failed,
+        "by_status": by_status,
+        "by_action": by_action,
+        "details": details,
         "errors": errors,
         "posts": posts,
     }
@@ -840,6 +877,21 @@ def preview_due_social_post_dispatch(user_id: str, batch_size: int = 20) -> dict
         }
     finally:
         db.close()
+
+
+def _dispatch_action_for_status(status: str) -> str:
+    clean_status = str(status or "").strip()
+    if clean_status == "published":
+        return "published"
+    if clean_status == "needs_supervised_publish":
+        return "supervised"
+    if clean_status == "needs_manual_publish":
+        return "manual"
+    if clean_status == "failed":
+        return "failed"
+    if clean_status == "publishing":
+        return "publishing"
+    return "other"
 
 
 def collect_due_social_post_metrics(batch_size: int = 50) -> dict[str, Any]:
