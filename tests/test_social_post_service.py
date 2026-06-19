@@ -1,3 +1,4 @@
+import json
 import sys
 from datetime import date, timedelta
 
@@ -586,7 +587,6 @@ def test_apply_social_post_recommendation_requires_explicit_approval(monkeypatch
 def test_apply_social_post_recommendation_changes_only_future_unpublished_items(monkeypatch):
     monkeypatch.setattr(social_post_service, "DatabaseManager", FakeRecommendationDB)
     monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
-    monkeypatch.setattr(social_post_service, "_load_plan_for_user", lambda cursor, user_id, plan_id: {"id": plan_id})
     monkeypatch.setattr(
         social_post_service,
         "recommend_next_plan_from_social_posts",
@@ -600,9 +600,18 @@ def test_apply_social_post_recommendation_changes_only_future_unpublished_items(
             ],
         },
     )
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_plan_for_user",
+        lambda cursor, user_id, plan_id: {
+            "id": plan_id,
+            "edited_plan_json": {"existing_note": "keep me", "social_recommendation_history": [{"applied_count": 0}]},
+        },
+    )
 
     result = apply_social_post_recommendation("user-1", "plan-1", approved=True)
     conn = FakeRecommendationDB.last_conn
+    edited_plan = json.loads(conn.edited_plan_json)
 
     assert result["applied_count"] == 1
     assert result["applied_items"][0]["id"] == "future-draft"
@@ -611,4 +620,7 @@ def test_apply_social_post_recommendation_changes_only_future_unpublished_items(
     assert conn.items["future-published"]["goal"] == "Старый goal"
     assert conn.items["future-news"]["goal"] == "Старый goal"
     assert conn.committed is True
-    assert "approved_by" in conn.edited_plan_json
+    assert edited_plan["existing_note"] == "keep me"
+    assert edited_plan["last_social_recommendation_apply"]["approved_by"] == "user-1"
+    assert edited_plan["last_social_recommendation_apply"]["applied_count"] == 1
+    assert len(edited_plan["social_recommendation_history"]) == 2

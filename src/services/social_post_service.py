@@ -921,7 +921,7 @@ def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool 
     cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
-        _load_plan_for_user(cursor, user_id, plan_id)
+        plan = _load_plan_for_user(cursor, user_id, plan_id)
         recommendation_payload = recommend_next_plan_from_social_posts(user_id, plan_id)
         proposed_changes = [
             item for item in recommendation_payload.get("proposed_changes", [])
@@ -950,6 +950,20 @@ def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool 
             row = _row_to_dict(cursor, cursor.fetchone())
             if row:
                 applied.append(row)
+        edited_plan_json = _json_dict(plan.get("edited_plan_json"))
+        history = edited_plan_json.get("social_recommendation_history")
+        if not isinstance(history, list):
+            history = []
+        approval_record = {
+            "source": "social_post_recommendation",
+            "approved_by": user_id,
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "recommendation": recommendation_payload,
+            "applied_item_ids": [str(item.get("id") or "") for item in applied],
+            "applied_count": len(applied),
+        }
+        edited_plan_json["last_social_recommendation_apply"] = approval_record
+        edited_plan_json["social_recommendation_history"] = [*history, approval_record][-20:]
         cursor.execute(
             """
             UPDATE contentplans
@@ -957,18 +971,7 @@ def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool 
                 updated_at = NOW()
             WHERE id = %s
             """,
-            (
-                _json_dumps(
-                    {
-                        "source": "social_post_recommendation",
-                        "approved_by": user_id,
-                        "approved_at": datetime.now(timezone.utc).isoformat(),
-                        "recommendation": recommendation_payload,
-                        "applied_item_ids": [str(item.get("id") or "") for item in applied],
-                    }
-                ),
-                plan_id,
-            ),
+            (_json_dumps(edited_plan_json), plan_id),
         )
         db.conn.commit()
         return {
