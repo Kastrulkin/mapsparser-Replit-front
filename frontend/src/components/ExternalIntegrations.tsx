@@ -27,6 +27,16 @@ interface GoogleLocation {
   primary_category?: string | null;
 }
 
+interface SocialChannelReadiness {
+  platform: string;
+  platform_label?: string | null;
+  publish_mode?: string | null;
+  ready?: boolean;
+  status?: string | null;
+  message_ru?: string | null;
+  message_en?: string | null;
+}
+
 interface ExternalIntegrationsProps {
   currentBusinessId: string | null;
 }
@@ -39,6 +49,9 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
   const [googleLocations, setGoogleLocations] = useState<GoogleLocation[]>([]);
   const [selectedGoogleLocation, setSelectedGoogleLocation] = useState('');
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [socialReadiness, setSocialReadiness] = useState<SocialChannelReadiness[]>([]);
+  const [socialReadinessSummary, setSocialReadinessSummary] = useState<Record<string, number>>({});
+  const [socialReadinessLoading, setSocialReadinessLoading] = useState(false);
   const { toast } = useToast();
   const { t, language } = useLanguage();
   const matonAccount = accounts.find((acc) => acc.source === 'maton');
@@ -75,6 +88,41 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSocialReadiness = async () => {
+    if (!currentBusinessId) {
+      setSocialReadiness([]);
+      setSocialReadinessSummary({});
+      return;
+    }
+    setSocialReadinessLoading(true);
+    try {
+      const token = newAuth.getToken();
+      if (!token) return;
+
+      const res = await fetch(`/api/business/${currentBusinessId}/social-posts/channel-readiness`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Не удалось получить готовность каналов публикации');
+      }
+      setSocialReadiness(Array.isArray(data.channel_readiness) ? data.channel_readiness : []);
+      setSocialReadinessSummary(data.summary || {});
+    } catch (e: any) {
+      setSocialReadiness([]);
+      setSocialReadinessSummary({});
+      toast({
+        title: t.error,
+        description: e.message || 'Не удалось получить готовность каналов публикации',
+        variant: "destructive",
+      });
+    } finally {
+      setSocialReadinessLoading(false);
     }
   };
 
@@ -165,6 +213,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
       }
       toast({ title: t.success, description: "Карточка Google привязана к бизнесу" });
       await loadAccounts();
+      await loadSocialReadiness();
     } catch (e: any) {
       toast({
         title: t.error,
@@ -196,6 +245,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
       }
       toast({ title: t.success, description: "Отзывы и статистика Google синхронизированы" });
       await loadAccounts();
+      await loadSocialReadiness();
     } catch (e: any) {
       toast({
         title: t.error,
@@ -209,6 +259,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
 
   useEffect(() => {
     loadAccounts();
+    loadSocialReadiness();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBusinessId]);
 
@@ -235,6 +286,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
         description: t.dashboard.settings.external.successDisconnect,
       });
       await loadAccounts();
+      await loadSocialReadiness();
     } catch (e: any) {
       toast({
         title: t.error,
@@ -295,6 +347,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
         description: "Ключ Maton.ai сохранён",
       });
       await loadAccounts();
+      await loadSocialReadiness();
     } catch (e: any) {
       toast({
         title: t.error,
@@ -320,6 +373,88 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        <div className="rounded-3xl border border-slate-200 bg-white p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-slate-950">Публикации из контент-плана</h3>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                Перед постановкой постов в расписание проверьте, какие каналы готовы к API-публикации, а где нужен controlled/manual шаг. Внешняя публикация всё равно пойдёт только после preview и вашего подтверждения.
+              </p>
+            </div>
+            <div className="grid min-w-full gap-2 text-xs sm:grid-cols-3 lg:min-w-[360px]">
+              <div className="rounded-2xl bg-emerald-50 px-3 py-2 text-emerald-800">
+                <div className="font-semibold text-emerald-950">{Number(socialReadinessSummary.api_ready || 0)}</div>
+                <div>API готовы</div>
+              </div>
+              <div className="rounded-2xl bg-amber-50 px-3 py-2 text-amber-800">
+                <div className="font-semibold text-amber-950">{Number(socialReadinessSummary.api_needs_attention || 0)}</div>
+                <div>нужны ключи/права</div>
+              </div>
+              <div className="rounded-2xl bg-sky-50 px-3 py-2 text-sky-800">
+                <div className="font-semibold text-sky-950">{Number(socialReadinessSummary.controlled_or_manual || 0)}</div>
+                <div>controlled/manual</div>
+              </div>
+            </div>
+          </div>
+
+          {socialReadinessLoading ? (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              Проверяем готовность каналов...
+            </div>
+          ) : socialReadiness.length ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {socialReadiness.map((channel) => {
+                const ready = Boolean(channel.ready);
+                const isApi = channel.publish_mode === 'api';
+                const message = language === 'ru' ? channel.message_ru : channel.message_en;
+                return (
+                  <div
+                    key={channel.platform}
+                    className={[
+                      'rounded-2xl border px-4 py-3',
+                      ready
+                        ? 'border-emerald-200 bg-emerald-50/80'
+                        : isApi
+                          ? 'border-amber-200 bg-amber-50/80'
+                          : 'border-sky-200 bg-sky-50/80',
+                    ].join(' ')}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-950">
+                          {channel.platform_label || channel.platform}
+                        </div>
+                        <div className="mt-1 text-xs leading-5 text-slate-600">
+                          {message || 'Проверьте настройки канала.'}
+                        </div>
+                      </div>
+                      <span
+                        className={[
+                          'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold',
+                          ready
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : isApi
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-sky-100 text-sky-800',
+                        ].join(' ')}
+                      >
+                        {ready ? 'готов' : isApi ? 'настроить' : 'controlled'}
+                      </span>
+                    </div>
+                    <div className="mt-3 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                      {isApi ? 'API publish после approval' : 'Ручное или контролируемое размещение'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              Выберите бизнес, чтобы увидеть готовность каналов публикации.
+            </div>
+          )}
+        </div>
+
         {/* Google Business Profile */}
         <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">

@@ -194,6 +194,30 @@ def list_social_posts_for_plan(user_id: str, plan_id: str) -> dict[str, Any]:
         db.close()
 
 
+def get_social_channel_readiness(user_id: str, business_id: str) -> dict[str, Any]:
+    normalized_business_id = str(business_id or "").strip()
+    if not normalized_business_id:
+        raise ValueError("Бизнес не выбран")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        _require_business_access(cursor, user_id, normalized_business_id)
+        readiness = _build_channel_readiness(cursor, normalized_business_id)
+        api_channels = [item for item in readiness if str(item.get("publish_mode") or "") == "api"]
+        return {
+            "channel_readiness": readiness,
+            "summary": {
+                "total": len(readiness),
+                "api_total": len(api_channels),
+                "api_ready": sum(1 for item in api_channels if bool(item.get("ready"))),
+                "api_needs_attention": sum(1 for item in api_channels if not bool(item.get("ready"))),
+                "controlled_or_manual": sum(1 for item in readiness if str(item.get("publish_mode") or "") != "api"),
+            },
+        }
+    finally:
+        db.close()
+
+
 def prepare_social_posts_for_items(user_id: str, item_ids: list[str], platforms: list[str] | None = None) -> dict[str, Any]:
     posts: list[dict[str, Any]] = []
     failed: list[dict[str, str]] = []

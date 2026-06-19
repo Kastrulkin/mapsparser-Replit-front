@@ -14,6 +14,7 @@ from services.social_post_service import (
     approve_social_post,
     approve_social_posts,
     collect_social_post_metrics,
+    get_social_channel_readiness,
     list_social_posts_for_plan,
     mark_manual_published,
     mark_manual_published_posts,
@@ -166,6 +167,22 @@ def social_posts_runtime_status():
     if error_response:
         return error_response
     return jsonify({"success": True, **social_post_runtime_status_payload()})
+
+
+@social_posts_bp.route("/api/business/<business_id>/social-posts/channel-readiness", methods=["GET"])
+def social_posts_channel_readiness(business_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    try:
+        payload = get_social_channel_readiness(str(user_data.get("user_id") or ""), business_id)
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
 
 
 @social_posts_bp.route("/api/social-posts/bulk-approve", methods=["POST"])
