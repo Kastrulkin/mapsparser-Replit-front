@@ -125,6 +125,7 @@ type SocialPost = {
   likes?: number;
   comments?: number;
   shares?: number;
+  clicks?: number;
   inquiries?: number;
   leads?: number;
 };
@@ -215,6 +216,8 @@ type SocialPlanNextStep = {
   count: number;
   disabled?: boolean;
 };
+
+type SocialAttributionEventType = 'lead' | 'inquiry' | 'comment' | 'share' | 'click';
 
 type LearningMetricsPayload = {
   window_days: number;
@@ -1729,7 +1732,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
-  const recordSocialPostAttribution = async (post: SocialPost, eventType: 'lead' | 'inquiry') => {
+  const recordSocialPostAttribution = async (post: SocialPost, eventType: SocialAttributionEventType) => {
     setSocialBusyAction(`attribute:${eventType}:${post.id}`);
     setError('');
     setActionSummary(null);
@@ -1747,14 +1750,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         }),
       });
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      const feedback = _socialAttributionFeedback(eventType);
       setActionSummary({
         tone: 'success',
-        text_ru: eventType === 'lead'
-          ? 'Заявка привязана к публикации. Следующий план будет учитывать её выше охватов.'
-          : 'Обращение привязано к публикации. Следующий план будет учитывать его выше лайков и охватов.',
-        text_en: eventType === 'lead'
-          ? 'Lead recorded for this post. Next plan will rank it above reach.'
-          : 'Inquiry recorded for this post. Next plan will rank it above likes and reach.',
+        text_ru: feedback.ru,
+        text_en: feedback.en,
       });
     } catch (attributeError) {
       const message = attributeError instanceof Error ? attributeError.message : (isRu ? 'Не удалось отметить результат публикации' : 'Could not record post result');
@@ -4878,6 +4878,33 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                         >
                                           {isRu ? 'Было обращение' : 'Record inquiry'}
                                         </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => { void recordSocialPostAttribution(post, 'comment'); }}
+                                          disabled={postBusy}
+                                        >
+                                          {isRu ? 'Был комментарий' : 'Record comment'}
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => { void recordSocialPostAttribution(post, 'share'); }}
+                                          disabled={postBusy}
+                                        >
+                                          {isRu ? 'Был репост' : 'Record share'}
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => { void recordSocialPostAttribution(post, 'click'); }}
+                                          disabled={postBusy}
+                                        >
+                                          {isRu ? 'Был клик' : 'Record click'}
+                                        </Button>
                                       </>
                                     ) : null}
                                   </div>
@@ -4888,8 +4915,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                         {isRu ? `заявки/обращения: ${Number(post.leads || 0) + Number(post.inquiries || 0)}` : `leads/inquiries: ${Number(post.leads || 0) + Number(post.inquiries || 0)}`}
                                       </span>
                                     ) : null}
-                                    {Number(post.comments || 0) || Number(post.reach || 0) ? (
-                                      <span>{isRu ? `реакции: ${Number(post.comments || 0)}, охват: ${Number(post.reach || 0)}` : `comments: ${Number(post.comments || 0)}, reach: ${Number(post.reach || 0)}`}</span>
+                                    {Number(post.comments || 0) || Number(post.shares || 0) || Number(post.clicks || 0) || Number(post.reach || 0) ? (
+                                      <span>
+                                        {isRu
+                                          ? `ранние сигналы: комментарии ${Number(post.comments || 0)}, репосты ${Number(post.shares || 0)}, клики ${Number(post.clicks || 0)}, охват ${Number(post.reach || 0)}`
+                                          : `early signals: comments ${Number(post.comments || 0)}, shares ${Number(post.shares || 0)}, clicks ${Number(post.clicks || 0)}, reach ${Number(post.reach || 0)}`}
+                                      </span>
                                     ) : null}
                                   </div>
                                 </div>
@@ -5207,6 +5238,37 @@ function _socialNextActionLabel(action: string, isRu: boolean): string {
   if (normalized === 'retry_or_manual') return isRu ? 'следующий шаг: повторить или вручную' : 'next: retry or manual';
   if (normalized === 'collect_metrics') return isRu ? 'следующий шаг: собрать реакции' : 'next: collect reactions';
   return isRu ? 'следующий шаг не требуется' : 'no next action';
+}
+
+function _socialAttributionFeedback(eventType: SocialAttributionEventType): { ru: string; en: string } {
+  if (eventType === 'lead') {
+    return {
+      ru: 'Заявка привязана к публикации. Следующий план будет учитывать её выше охватов.',
+      en: 'Lead recorded for this post. Next plan will rank it above reach.',
+    };
+  }
+  if (eventType === 'inquiry') {
+    return {
+      ru: 'Обращение привязано к публикации. Следующий план будет учитывать его выше лайков и охватов.',
+      en: 'Inquiry recorded for this post. Next plan will rank it above likes and reach.',
+    };
+  }
+  if (eventType === 'comment') {
+    return {
+      ru: 'Комментарий привязан к публикации как ранний сигнал интереса.',
+      en: 'Comment recorded as an early interest signal for this post.',
+    };
+  }
+  if (eventType === 'share') {
+    return {
+      ru: 'Репост привязан к публикации. Это усилит оценку формата, но ниже заявок и обращений.',
+      en: 'Share recorded for this post. It helps evaluate the format, below leads and inquiries.',
+    };
+  }
+  return {
+    ru: 'Клик привязан к публикации как ранний сигнал интереса.',
+    en: 'Click recorded as an early interest signal for this post.',
+  };
 }
 
 function _socialQueueGroupLabel(group: SocialQueueGroup, isRu: boolean): string {
