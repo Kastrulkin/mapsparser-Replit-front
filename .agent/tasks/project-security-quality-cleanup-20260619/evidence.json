@@ -1,0 +1,82 @@
+{
+  "task_id": "project-security-quality-cleanup-20260619",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Security block closed in repository code",
+      "status": "PASS",
+      "proof": [
+        "Removed hardcoded Yandex Wordstat secret from src/wordstat_client.py",
+        "Removed verify=False from src/two_gis_maps_scraper.py",
+        "Added public sales-room write rate limits",
+        "Added unit test for sales-room rate limiting"
+      ],
+      "gaps": [
+        "External secret rotation still required",
+        "Redis-backed rate limiting remains a follow-up"
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Quality gate repaired and reproducible",
+      "status": "PASS",
+      "proof": [
+        "Removed disabled JSX block that caused lint errors",
+        "Added scripts/local_quality_gate.sh",
+        "scripts/local_quality_gate.sh exited 0"
+      ],
+      "gaps": [
+        "pip-audit is not installed locally",
+        "Existing frontend lint warnings remain"
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Frontend dependency vulnerabilities remediated",
+      "status": "PASS",
+      "proof": [
+        "npm audit --omit=dev found 0 vulnerabilities",
+        "full npm audit found 0 vulnerabilities"
+      ],
+      "gaps": [
+        "Uses esbuild override to avoid Vite 8 major upgrade"
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Runtime cleanup and hardening plan captured",
+      "status": "PASS",
+      "proof": [
+        "Archived root-level legacy scripts/services/dumps under archive/legacy-runbooks",
+        "Added docs/PROJECT_HARDENING_PLAN.md"
+      ],
+      "gaps": [
+        "Monolith split remains a planned follow-up"
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/wordstat_client.py",
+    "src/two_gis_maps_scraper.py",
+    "src/api/admin_prospecting.py",
+    "frontend/src/components/content-plan/ContentPlanTab.tsx",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "tests/test_sales_rooms.py",
+    "scripts/local_quality_gate.sh",
+    "requirements.test.txt",
+    "docs/PROJECT_HARDENING_PLAN.md",
+    "archive/legacy-runbooks/README.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "scripts/local_quality_gate.sh",
+    "npm --prefix frontend audit --omit=dev",
+    "npm --prefix frontend audit"
+  ],
+  "known_gaps": [
+    "External Yandex Wordstat secret rotation is still required.",
+    "pip-audit is not installed in the current local Python.",
+    "Frontend lint still reports existing warnings but no errors."
+  ]
+}

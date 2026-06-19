@@ -1,11 +1,15 @@
+from flask import Flask
+
 from src.api.admin_prospecting import (
     SALES_ROOM_DATA_AUDITED,
     SALES_ROOM_DATA_TEMPLATE,
     SALES_ROOM_MODE_CLIENT,
     SALES_ROOM_MODE_PARTNER,
+    _check_public_sales_room_rate_limit,
     _build_sales_room_invitation_text,
     _build_sales_room_payload,
     _build_sales_room_proposal,
+    _public_sales_room_rate_buckets,
 )
 
 
@@ -72,3 +76,24 @@ def test_audited_partner_room_includes_match() -> None:
     assert payload["match"]["available"] is True
     assert payload["match"]["match_score"] == 82
     assert payload["business"]["name"] == "Органика"
+
+
+def test_public_sales_room_rate_limit_returns_retry_after() -> None:
+    app = Flask(__name__)
+    _public_sales_room_rate_buckets.clear()
+
+    with app.test_request_context(
+        "/api/sales-rooms/public/demo/messages",
+        method="POST",
+        environ_base={"REMOTE_ADDR": "203.0.113.10"},
+    ):
+        assert _check_public_sales_room_rate_limit("message", "demo", 1, 60) is None
+        limited = _check_public_sales_room_rate_limit("message", "demo", 1, 60)
+
+    assert limited is not None
+    response, status_code = limited
+    assert status_code == 429
+    assert response.headers["Retry-After"]
+    assert response.get_json()["reason"] == "public_sales_room_write_limit"
+
+    _public_sales_room_rate_buckets.clear()

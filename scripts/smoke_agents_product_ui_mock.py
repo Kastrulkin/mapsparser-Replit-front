@@ -197,6 +197,8 @@ async def run_smoke(url, screenshot):
     browser = await playwright.chromium.launch(headless=True)
     try:
         page = await browser.new_page(viewport={"width": 1180, "height": 820}, device_scale_factor=1)
+        console_errors = []
+        page.on("console", lambda message: console_errors.append(message.text) if message.type == "error" else None)
         await page.route("**/api/**", _handle_mock_api)
         await page.add_init_script(
             "localStorage.setItem('auth_token','mock-token');"
@@ -212,20 +214,41 @@ async def run_smoke(url, screenshot):
             "Создать агента",
             "Проверить решения",
             "Следующий шаг",
-            "Что делает агент",
-            "Готовность",
-            "Ручной контроль",
+            "Что делает",
+            "Доступы",
+            "Тест",
+            "Ждёт решения человека",
         ]
-        missing = [item for item in required if item not in body]
+        body_lower = body.lower()
+        missing = [item for item in required if item.lower() not in body_lower]
         forbidden = [
             "Advanced runtime",
             "OpenClaw",
             "Action ledger",
+            "Preflight",
+            "Compiled",
+            "Policy",
+            "Preview run",
+            "provider route",
             "runtime truth",
             "capability не подключена",
-            "Preview run",
+            "ток.",
         ]
-        leaked = [item for item in forbidden if item in body]
+        leaked = [item for item in forbidden if item.lower() in body_lower]
+
+        connection_buttons = page.get_by_role("button", name="Подключения")
+        connection_count = await connection_buttons.count()
+        if connection_count:
+            await connection_buttons.nth(connection_count - 1).click()
+            await page.wait_for_timeout(700)
+            body_after_connections = await page.locator("body").inner_text(timeout=10000)
+            if "Что-то пошло не так" in body_after_connections:
+                leaked.append("error boundary after connections click")
+            if "Подключения агента" not in body_after_connections:
+                missing.append("Подключения агента")
+
+        if console_errors:
+            leaked.append(f"console errors: {console_errors[:2]}")
 
         if screenshot:
             path = Path(screenshot)

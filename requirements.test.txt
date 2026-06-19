@@ -6,4 +6,4 @@ docker
 flask
 flask-migrate
 flask-sqlalchemy
-
+pip-audit

@@ -95,6 +95,14 @@ SALES_ROOM_UPLOAD_DIR = os.environ.get(
     os.path.join(os.environ.get("DEBUG_DIR", "debug_data"), "sales_room_uploads"),
 )
 SALES_ROOM_ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "xls", "xlsx", "csv", "txt", "png", "jpg", "jpeg", "webp"}
+PUBLIC_SALES_ROOM_MESSAGE_LIMIT = int(os.environ.get("PUBLIC_SALES_ROOM_MESSAGE_LIMIT", "20"))
+PUBLIC_SALES_ROOM_FILE_LIMIT = int(os.environ.get("PUBLIC_SALES_ROOM_FILE_LIMIT", "10"))
+PUBLIC_SALES_ROOM_SUGGESTION_LIMIT = int(os.environ.get("PUBLIC_SALES_ROOM_SUGGESTION_LIMIT", "20"))
+PUBLIC_SALES_ROOM_EVENT_LIMIT = int(os.environ.get("PUBLIC_SALES_ROOM_EVENT_LIMIT", "120"))
+PUBLIC_SALES_ROOM_WRITE_WINDOW_SEC = int(os.environ.get("PUBLIC_SALES_ROOM_WRITE_WINDOW_SEC", "3600"))
+PUBLIC_SALES_ROOM_EVENT_WINDOW_SEC = int(os.environ.get("PUBLIC_SALES_ROOM_EVENT_WINDOW_SEC", "60"))
+_public_sales_room_rate_lock = threading.Lock()
+_public_sales_room_rate_buckets: dict[str, list[float]] = {}
 TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS", "14")))
 TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
 TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
@@ -174,6 +182,37 @@ def _add_business_days(start_at: datetime | date | None, business_days: int) -> 
         if current.isoweekday() <= 5:
             remaining -= 1
     return datetime.combine(current, datetime.min.time()).replace(tzinfo=timezone.utc)
+
+
+def _public_sales_room_client_key() -> str:
+    forwarded_for = str(request.headers.get("X-Forwarded-For") or "").split(",", 1)[0].strip()
+    real_ip = str(request.headers.get("X-Real-IP") or "").strip()
+    remote_addr = str(request.remote_addr or "").strip()
+    return (forwarded_for or real_ip or remote_addr or "unknown")[:80]
+
+
+def _check_public_sales_room_rate_limit(action: str, slug: str, limit: int, window_sec: int):
+    if limit <= 0 or window_sec <= 0:
+        return None
+    now = time.monotonic()
+    window_start = now - window_sec
+    key = f"sales-room:{action}:{slug}:{_public_sales_room_client_key()}"
+    with _public_sales_room_rate_lock:
+        entries = [ts for ts in _public_sales_room_rate_buckets.get(key, []) if ts >= window_start]
+        if len(entries) >= limit:
+            retry_after = max(1, int(window_sec - (now - min(entries))))
+            response = jsonify(
+                {
+                    "error": "rate_limited",
+                    "reason": "public_sales_room_write_limit",
+                    "retry_after_seconds": retry_after,
+                }
+            )
+            response.headers["Retry-After"] = str(retry_after)
+            return response, 429
+        entries.append(now)
+        _public_sales_room_rate_buckets[key] = entries
+    return None
 
 
 def _next_followup_at(anchor_at: datetime | date | None = None) -> datetime:
@@ -13602,6 +13641,14 @@ def public_sales_room_welcome(slug):
 def public_sales_room_proposal_suggestion(slug):
     try:
         normalized_slug = _slugify_company_name(slug)
+        rate_limit_response = _check_public_sales_room_rate_limit(
+            "suggestion",
+            normalized_slug,
+            PUBLIC_SALES_ROOM_SUGGESTION_LIMIT,
+            PUBLIC_SALES_ROOM_WRITE_WINDOW_SEC,
+        )
+        if rate_limit_response:
+            return rate_limit_response
         data = request.get_json(silent=True) or {}
         author_name = str(data.get("author_name") or "").strip()
         author_contact = str(data.get("author_contact") or "").strip()
@@ -13692,6 +13739,14 @@ def public_sales_room_proposal_suggestion(slug):
 def public_sales_room_proposal_suggestion_resolve(slug, suggestion_id):
     try:
         normalized_slug = _slugify_company_name(slug)
+        rate_limit_response = _check_public_sales_room_rate_limit(
+            "suggestion-resolve",
+            normalized_slug,
+            PUBLIC_SALES_ROOM_SUGGESTION_LIMIT,
+            PUBLIC_SALES_ROOM_WRITE_WINDOW_SEC,
+        )
+        if rate_limit_response:
+            return rate_limit_response
         normalized_suggestion_id = str(suggestion_id or "").strip()
         if not _is_uuid_string(normalized_suggestion_id):
             return jsonify({"error": "Suggestion not found"}), 404
@@ -13792,6 +13847,14 @@ def public_sales_room_proposal_suggestion_resolve(slug, suggestion_id):
 def public_sales_room_message(slug):
     try:
         normalized_slug = _slugify_company_name(slug)
+        rate_limit_response = _check_public_sales_room_rate_limit(
+            "message",
+            normalized_slug,
+            PUBLIC_SALES_ROOM_MESSAGE_LIMIT,
+            PUBLIC_SALES_ROOM_WRITE_WINDOW_SEC,
+        )
+        if rate_limit_response:
+            return rate_limit_response
         data = request.get_json(silent=True) or {}
         author_name = str(data.get("author_name") or "").strip()
         author_contact = str(data.get("author_contact") or "").strip()
@@ -13873,6 +13936,14 @@ def public_sales_room_message(slug):
 def public_sales_room_file_upload(slug):
     try:
         normalized_slug = _slugify_company_name(slug)
+        rate_limit_response = _check_public_sales_room_rate_limit(
+            "file",
+            normalized_slug,
+            PUBLIC_SALES_ROOM_FILE_LIMIT,
+            PUBLIC_SALES_ROOM_WRITE_WINDOW_SEC,
+        )
+        if rate_limit_response:
+            return rate_limit_response
         uploaded_file = request.files.get("file")
         if not uploaded_file:
             return jsonify({"error": "file is required"}), 400
@@ -13989,6 +14060,14 @@ def public_sales_room_file(slug, file_id):
 def public_sales_room_event(slug):
     try:
         normalized_slug = _slugify_company_name(slug)
+        rate_limit_response = _check_public_sales_room_rate_limit(
+            "event",
+            normalized_slug,
+            PUBLIC_SALES_ROOM_EVENT_LIMIT,
+            PUBLIC_SALES_ROOM_EVENT_WINDOW_SEC,
+        )
+        if rate_limit_response:
+            return rate_limit_response
         data = request.get_json(silent=True) or {}
         event_type = str(data.get("event_type") or "").strip().lower()
         if event_type not in {"cta_click", "audit_open", "copy_link", "view", "proposal_viewed", "message_sent", "file_uploaded"}:

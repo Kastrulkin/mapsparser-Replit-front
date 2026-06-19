@@ -1,0 +1,40 @@
+{
+  "task_id": "project-security-quality-cleanup-20260619",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Repository security fixes are implemented and focused tests pass; external secret rotation remains outside the repo."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Quality gate script runs to completion with exit 0."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Production and full frontend npm audits report zero vulnerabilities."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Legacy runtime artifacts were archived and the hardening plan was documented."
+    }
+  ],
+  "commands_run": [
+    "scripts/local_quality_gate.sh",
+    "python3 -m pytest -q tests/test_sales_rooms.py tests/test_sales_room_file_storage.py tests/test_security_runtime_config.py tests/test_content_plan_policy.py",
+    "npm --prefix frontend audit --omit=dev",
+    "npm --prefix frontend audit",
+    "npm --prefix frontend run build",
+    "npm --prefix frontend run lint",
+    "cd frontend && npx tsc --noEmit"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/project-security-quality-cleanup-20260619/evidence.md",
+    "docs/PROJECT_HARDENING_PLAN.md",
+    "archive/legacy-runbooks/README.md"
+  ]
+}

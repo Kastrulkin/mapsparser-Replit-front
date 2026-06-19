@@ -585,7 +585,6 @@ def _query_catalog_item_byid(
                 response = session.get(
                     api_url,
                     timeout=(connect_timeout, read_timeout),
-                    verify=False,
                     proxies=request_proxies,
                 )
                 payload = response.json() if response.content else {}
@@ -677,7 +676,6 @@ def _parse_2gis_http_fallback(urls: List[str], timeout_sec: int, proxy: Optional
                 target_url,
                 headers=headers,
                 timeout=(connect_timeout, read_timeout),
-                verify=False,
                 allow_redirects=True,
                 proxies=proxies if proxies else None,
             )

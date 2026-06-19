@@ -910,7 +910,7 @@ export default function PublicSalesRoomPage() {
         </section>
 
         <footer className="px-2 py-8 text-sm leading-6 text-slate-500">
-          Цифровая комната LocalOS. Подготовьте предложение и обсудите в одном месте.
+          Цифровая комната. Подготовьте предложение и обсудите в одном месте.
         </footer>
       </section>
       <div className="fixed bottom-4 right-4 z-30 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-500 shadow-sm backdrop-blur sm:bottom-6 sm:right-6">

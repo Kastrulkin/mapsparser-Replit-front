@@ -134,6 +134,14 @@ New agent clients are created as `sandbox` by default. Direct publish, payment, 
 | `POST` | `/api/partnership/leads/import-links` | `beta` | Import links. |
 | `POST` | `/api/partnership/leads/import-file` | `beta` | Import file. |
 | `POST` | `/api/partnership/geo-search` | `beta` | Geo search. |
+| `POST` | `/api/partnership/partners/import` | `beta` | Import source-company partner cards before enrichment. |
+| `GET` | `/api/partnership/partners` | `beta` | List partner cards with Yandex/audit/lead state. |
+| `POST` | `/api/partnership/partners/<partner_id>/find-yandex` | `beta` | Find Yandex Maps candidates; auto-select only high-confidence matches. |
+| `POST` | `/api/partnership/partners/<partner_id>/confirm-yandex-link` | `beta` | Manually confirm or replace a Yandex Maps URL. |
+| `POST` | `/api/partnership/partners/<partner_id>/sync-lead` | `beta` | Sync a partner card into partnership leads at candidate stage. |
+| `POST` | `/api/partnership/partners/<partner_id>/parse` | `beta` | Enqueue parsing for a partner card. |
+| `POST` | `/api/partnership/partners/<partner_id>/audit` | `beta` | Generate public audit and store URL on the partner card. |
+| `POST` | `/api/partnership/partners/bulk-process` | `beta/internal` | Batch find/sync/parse/audit partner cards; residential complexes are skipped. |
 | `GET` | `/api/partnership/leads` | `beta` | Lead list. |
 | `PATCH` | `/api/partnership/leads/<lead_id>` | `beta` | Update lead. |
 | `POST` | `/api/partnership/leads/<lead_id>/parse` | `beta` | Parse lead. |

@@ -191,10 +191,17 @@ class WordstatDataProcessor:
 
 # Пример использования
 if __name__ == "__main__":
+    client_id = os.getenv("YANDEX_WORDSTAT_CLIENT_ID", "").strip()
+    client_secret = os.getenv("YANDEX_WORDSTAT_CLIENT_SECRET", "").strip()
+    if not client_id or not client_secret:
+        raise SystemExit(
+            "Set YANDEX_WORDSTAT_CLIENT_ID and YANDEX_WORDSTAT_CLIENT_SECRET before running this helper."
+        )
+
     # Инициализация клиента
     client = WordstatClient(
-        client_id="623b9605a95c4a57965cc4ccff1a7130",
-        client_secret="8ec666a7306b49e78c895bfbbba63ad4"
+        client_id=client_id,
+        client_secret=client_secret,
     )
     
     # Установка токена (получить вручную через OAuth)
