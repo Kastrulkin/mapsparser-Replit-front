@@ -987,28 +987,82 @@ def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool 
         db.close()
 
 
-def openclaw_browser_available(fetcher: Any = None) -> bool:
+def openclaw_browser_capability_status(fetcher: Any = None) -> dict[str, Any]:
     env_value = str(os.getenv("OPENCLAW_BROWSER_USE_ENABLED") or os.getenv("OPENCLAW_BROWSER_USE_AVAILABLE") or "").strip().lower()
     if env_value in {"1", "true", "yes", "on"}:
-        return True
+        return {
+            "ready": True,
+            "source": "env_override",
+            "status": "available",
+            "reason": "browser_use_enabled_by_env",
+            "action_ref": "openclaw.browser.supervised_publish",
+            "capability": "social.post.publish_supervised_browser",
+        }
     if env_value in {"0", "false", "no", "off"}:
-        return False
+        return {
+            "ready": False,
+            "source": "env_override",
+            "status": "disabled",
+            "reason": "browser_use_disabled_by_env",
+            "action_ref": "",
+            "capability": "social.post.publish_supervised_browser",
+        }
     if not fetcher and not (os.getenv("OPENCLAW_CAPABILITY_CATALOG_URL") or os.getenv("OPENCLAW_BASE_URL")):
-        return False
+        return {
+            "ready": False,
+            "source": "not_configured",
+            "status": "missing_catalog",
+            "reason": "openclaw_catalog_not_configured",
+            "action_ref": "",
+            "capability": "social.post.publish_supervised_browser",
+        }
     try:
         catalog = get_openclaw_capability_catalog(fetcher=fetcher)
     except Exception:
-        return False
+        return {
+            "ready": False,
+            "source": "catalog_error",
+            "status": "error",
+            "reason": "openclaw_catalog_error",
+            "error": str(sys.exc_info()[1]),
+            "action_ref": "",
+            "capability": "social.post.publish_supervised_browser",
+        }
     for action in catalog.get("actions", []) if isinstance(catalog, dict) else []:
         if not isinstance(action, dict):
             continue
+        action_status = str(action.get("status") or "").strip().lower()
+        action_ref = str(action.get("openclaw_action_ref") or "").strip()
+        capability = str(action.get("localos_capability") or "").strip()
         blob = " ".join(
             str(action.get(key) or "")
             for key in ("openclaw_action_ref", "title", "service", "localos_capability", "status")
         ).lower()
-        if "browser" in blob and "available" in blob:
-            return True
-    return False
+        supervised_browser = capability == "social.post.publish_supervised_browser" or (
+            "browser" in blob and ("supervised" in blob or "fill_form" in blob or "publish" in blob)
+        )
+        if supervised_browser and action_status == "available":
+            return {
+                "ready": True,
+                "source": str(catalog.get("source") or "openclaw") if isinstance(catalog, dict) else "openclaw",
+                "status": "available",
+                "reason": "openclaw_supervised_browser_available",
+                "action_ref": action_ref,
+                "capability": capability or "social.post.publish_supervised_browser",
+            }
+    return {
+        "ready": False,
+        "source": str(catalog.get("source") or "openclaw") if isinstance(catalog, dict) else "openclaw",
+        "status": str(catalog.get("status") or "unavailable") if isinstance(catalog, dict) else "unavailable",
+        "reason": "openclaw_supervised_browser_missing",
+        "action_ref": "",
+        "capability": "social.post.publish_supervised_browser",
+        "error": str(catalog.get("error") or "") if isinstance(catalog, dict) else "",
+    }
+
+
+def openclaw_browser_available(fetcher: Any = None) -> bool:
+    return bool(openclaw_browser_capability_status(fetcher=fetcher).get("ready"))
 
 
 def default_publish_mode(platform: str, browser_available: bool | None = None) -> str:
@@ -1277,6 +1331,7 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
     platform = str(post.get("platform") or "").strip()
     target = _map_publish_target(cursor, str(post.get("business_id") or ""), platform)
     task_payload = _build_openclaw_supervised_task_payload(post, automation_task_id, target)
+    capability_status = openclaw_browser_capability_status()
     return {
         "automation_task_id": automation_task_id,
         "openclaw_task": task_payload,
@@ -1289,6 +1344,7 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
             "instruction_ru": "Открыть площадку, вставить текст и медиа, показать предпросмотр, остановиться перед финальной публикацией до подтверждения.",
             "instruction_en": "Open the platform, fill text and media, show preview, and stop before final publish until explicit approval.",
             "stop_before_final_publish": True,
+            "openclaw_capability_status": capability_status,
         },
     }
 

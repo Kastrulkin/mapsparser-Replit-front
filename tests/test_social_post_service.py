@@ -8,6 +8,7 @@ from services.social_post_service import (
     _channel_readiness_message,
     _meta_channel_readiness,
     _meta_publish_status,
+    openclaw_browser_capability_status,
     _publish_external_account_post,
     _build_social_learning_insights,
     _preview_dispatch_decision,
@@ -182,6 +183,23 @@ def test_openclaw_browser_available_detects_live_catalog_action(monkeypatch):
         }
 
     assert openclaw_browser_available(fetcher=fetcher) is True
+    status = openclaw_browser_capability_status(fetcher=fetcher)
+    assert status["ready"] is True
+    assert status["source"] == "openclaw"
+    assert status["action_ref"] == "openclaw.browser.fill_form"
+
+
+def test_openclaw_browser_capability_status_explains_missing_catalog(monkeypatch):
+    monkeypatch.delenv("OPENCLAW_BROWSER_USE_ENABLED", raising=False)
+    monkeypatch.delenv("OPENCLAW_BROWSER_USE_AVAILABLE", raising=False)
+    monkeypatch.delenv("OPENCLAW_CAPABILITY_CATALOG_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_BASE_URL", raising=False)
+
+    status = openclaw_browser_capability_status()
+
+    assert status["ready"] is False
+    assert status["source"] == "not_configured"
+    assert status["reason"] == "openclaw_catalog_not_configured"
 
 
 def test_next_action_separates_review_api_and_supervised_states():
