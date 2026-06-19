@@ -524,6 +524,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialQueueGroups, setSocialQueueGroups] = useState<SocialQueueGroup[]>([]);
   const [socialChannelReadiness, setSocialChannelReadiness] = useState<SocialChannelReadiness[]>([]);
   const [socialRecommendation, setSocialRecommendation] = useState<SocialRecommendationPayload | null>(null);
+  const [socialRecommendationApproved, setSocialRecommendationApproved] = useState(false);
   const [socialDispatchPreview, setSocialDispatchPreview] = useState<SocialDispatchPreview | null>(null);
   const [socialRuntimeStatus, setSocialRuntimeStatus] = useState<SocialRuntimeStatus | null>(null);
   const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
@@ -1410,12 +1411,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSocialQueueGroups(Array.isArray(response.queue_groups) ? response.queue_groups : []);
       setSocialChannelReadiness(Array.isArray(response.channel_readiness) ? response.channel_readiness : []);
       setSocialRecommendation(response.recommendation ? { recommendation: response.recommendation } : null);
+      setSocialRecommendationApproved(false);
     } catch {
       setSocialPostsByItem({});
       setSocialSummary(null);
       setSocialQueueGroups([]);
       setSocialChannelReadiness([]);
       setSocialRecommendation(null);
+      setSocialRecommendationApproved(false);
       setSocialDispatchPreview(null);
     }
   };
@@ -2141,6 +2144,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         recommendation: response.recommendation || {},
         proposed_changes: Array.isArray(response.proposed_changes) ? response.proposed_changes : [],
       });
+      setSocialRecommendationApproved(false);
       setActionSummary({
         tone: 'success',
         text_ru: 'LocalOS подготовил предложения для корректировки плана. Они не применены автоматически.',
@@ -2177,6 +2181,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         text_ru: `Корректировка применена: ${Number(response.applied_count || 0)} пунктов плана.`,
         text_en: `Recommendation applied: ${Number(response.applied_count || 0)} plan items.`,
       });
+      setSocialRecommendationApproved(false);
     } catch (applyError) {
       const message = applyError instanceof Error ? applyError.message : (isRu ? 'Не удалось применить рекомендации' : 'Could not apply recommendations');
       setError(message);
@@ -4762,7 +4767,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         type="button"
                         size="sm"
                         onClick={() => { void applySocialPlanRecommendation(); }}
-                        disabled={socialBusyAction === 'apply-recommendation' || !Number(socialRecommendation?.proposed_changes?.length || 0)}
+                        disabled={socialBusyAction === 'apply-recommendation' || !Number(socialRecommendation?.proposed_changes?.length || 0) || !socialRecommendationApproved}
                       >
                         {socialBusyAction === 'apply-recommendation'
                           ? (isRu ? 'Применяем...' : 'Applying...')
@@ -4849,23 +4854,38 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                   ) : null}
                   {Number(socialRecommendation?.proposed_changes?.length || 0) > 0 ? (
-                    <div className="mt-3 grid gap-2 md:grid-cols-2">
-                      {(socialRecommendation?.proposed_changes || []).slice(0, 4).map((change) => (
-                        <div key={String(change.item_id || change.theme || '')} className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
-                          <div className="line-clamp-1 text-xs font-semibold text-emerald-950">
-                            {String(change.theme || (isRu ? 'Тема плана' : 'Plan topic'))}
+                    <>
+                      <label className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs leading-5 text-emerald-900">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-emerald-300 text-emerald-700 focus:ring-emerald-500"
+                          checked={socialRecommendationApproved}
+                          onChange={(event) => setSocialRecommendationApproved(event.target.checked)}
+                        />
+                        <span>
+                          {isRu
+                            ? 'Я проверил предложения ниже и подтверждаю применение только к будущим пунктам плана.'
+                            : 'I reviewed the proposals below and approve applying them only to future plan items.'}
+                        </span>
+                      </label>
+                      <div className="mt-3 grid gap-2 md:grid-cols-2">
+                        {(socialRecommendation?.proposed_changes || []).slice(0, 4).map((change) => (
+                          <div key={String(change.item_id || change.theme || '')} className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
+                            <div className="line-clamp-1 text-xs font-semibold text-emerald-950">
+                              {String(change.theme || (isRu ? 'Тема плана' : 'Plan topic'))}
+                            </div>
+                            <div className="mt-1 text-xs leading-5 text-emerald-800">
+                              {isRu ? String(change.reason_ru || '') : String(change.reason_en || '')}
+                            </div>
+                            <div className="mt-1 text-[11px] text-emerald-700">
+                              {isRu
+                                ? `заявки: ${Number(change.metrics?.leads || 0)}, обращения: ${Number(change.metrics?.inquiries || 0)}`
+                                : `leads: ${Number(change.metrics?.leads || 0)}, inquiries: ${Number(change.metrics?.inquiries || 0)}`}
+                            </div>
                           </div>
-                          <div className="mt-1 text-xs leading-5 text-emerald-800">
-                            {isRu ? String(change.reason_ru || '') : String(change.reason_en || '')}
-                          </div>
-                          <div className="mt-1 text-[11px] text-emerald-700">
-                            {isRu
-                              ? `заявки: ${Number(change.metrics?.leads || 0)}, обращения: ${Number(change.metrics?.inquiries || 0)}`
-                              : `leads: ${Number(change.metrics?.leads || 0)}, inquiries: ${Number(change.metrics?.inquiries || 0)}`}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    </>
                   ) : null}
                 </div>
               </div>
