@@ -7,6 +7,7 @@ from services.social_post_service import (
     _build_openclaw_supervised_task_payload,
     _channel_readiness_message,
     _dispatch_action_for_status,
+    _merge_metric_totals_into_posts,
     _meta_channel_readiness,
     _meta_publish_status,
     openclaw_browser_capability_status,
@@ -145,6 +146,32 @@ class FakeRecommendationDB:
 
     def close(self):
         pass
+
+
+class FakeMetricTotalsCursor:
+    def __init__(self):
+        self.params = None
+
+    def execute(self, query, params=None):
+        normalized = " ".join(str(query).split()).lower()
+        assert "from social_post_metrics" in normalized
+        self.params = params
+
+    def fetchall(self):
+        return [
+            {
+                "social_post_id": "post-lead",
+                "views": 12,
+                "impressions": 12,
+                "reach": 10,
+                "likes": 1,
+                "comments": 2,
+                "shares": 1,
+                "clicks": 3,
+                "inquiries": 1,
+                "leads": 2,
+            }
+        ]
 
 
 def test_default_publish_mode_uses_api_for_connected_social_channels(monkeypatch):
@@ -593,6 +620,24 @@ def test_social_learning_insights_explain_winners_weak_channels_and_no_result_to
     assert insights["weak_channels"][0]["platform"] == "vk"
     assert insights["cta_suggestions"][0]["ru"]
     assert insights["frequency_suggestions"][0]["ru"]
+
+
+def test_metric_totals_are_merged_back_into_collected_posts():
+    cursor = FakeMetricTotalsCursor()
+    posts = [
+        {"id": "post-lead", "platform": "telegram", "status": "published", "leads": 0, "inquiries": 0},
+        {"id": "post-empty", "platform": "vk", "status": "published"},
+    ]
+
+    enriched = _merge_metric_totals_into_posts(cursor, posts)
+
+    assert cursor.params == (["post-lead", "post-empty"],)
+    assert enriched[0]["leads"] == 2
+    assert enriched[0]["inquiries"] == 1
+    assert enriched[0]["comments"] == 2
+    assert enriched[0]["reach"] == 10
+    assert enriched[1]["id"] == "post-empty"
+    assert "leads" not in enriched[1]
 
 
 def test_apply_social_post_recommendation_requires_explicit_approval(monkeypatch):

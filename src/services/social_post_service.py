@@ -723,11 +723,12 @@ def collect_social_post_metrics(user_id: str, business_id: str = "", post_id: st
                     _json_dumps({"collector": "manual_attribution_v1", "attribution": attribution_metrics}),
                 ),
             )
+        posts_with_metrics = _merge_metric_totals_into_posts(cursor, posts)
         db.conn.commit()
         return {
-            "collected": len(posts),
-            "posts": posts,
-            "recommendation": _build_plan_recommendation(posts),
+            "collected": len(posts_with_metrics),
+            "posts": posts_with_metrics,
+            "recommendation": _build_plan_recommendation(posts_with_metrics),
         }
     except Exception:
         db.conn.rollback()
@@ -2122,6 +2123,53 @@ def _upsert_manual_attribution_metrics(cursor: Any, post_id: str) -> None:
             _json_dumps({"collector": "manual_attribution_v1", "attribution": metrics}),
         ),
     )
+
+
+def _merge_metric_totals_into_posts(cursor: Any, posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    post_ids = [str(post.get("id") or "").strip() for post in posts if str(post.get("id") or "").strip()]
+    if not post_ids:
+        return posts
+    cursor.execute(
+        """
+        SELECT
+            social_post_id,
+            COALESCE(SUM(views), 0) AS views,
+            COALESCE(SUM(impressions), 0) AS impressions,
+            COALESCE(SUM(reach), 0) AS reach,
+            COALESCE(SUM(likes), 0) AS likes,
+            COALESCE(SUM(comments), 0) AS comments,
+            COALESCE(SUM(shares), 0) AS shares,
+            COALESCE(SUM(clicks), 0) AS clicks,
+            COALESCE(SUM(inquiries), 0) AS inquiries,
+            COALESCE(SUM(leads), 0) AS leads
+        FROM social_post_metrics
+        WHERE social_post_id = ANY(%s)
+        GROUP BY social_post_id
+        """,
+        (post_ids,),
+    )
+    totals_by_post_id: dict[str, dict[str, int]] = {}
+    for row in cursor.fetchall() or []:
+        data = _row_to_dict(cursor, row)
+        social_post_id = str(data.get("social_post_id") or "").strip()
+        if not social_post_id:
+            continue
+        totals_by_post_id[social_post_id] = {
+            "views": int(data.get("views") or 0),
+            "impressions": int(data.get("impressions") or 0),
+            "reach": int(data.get("reach") or 0),
+            "likes": int(data.get("likes") or 0),
+            "comments": int(data.get("comments") or 0),
+            "shares": int(data.get("shares") or 0),
+            "clicks": int(data.get("clicks") or 0),
+            "inquiries": int(data.get("inquiries") or 0),
+            "leads": int(data.get("leads") or 0),
+        }
+    enriched_posts = []
+    for post in posts:
+        post_id = str(post.get("id") or "").strip()
+        enriched_posts.append({**post, **totals_by_post_id.get(post_id, {})})
+    return enriched_posts
 
 
 def _attribution_metrics_for_post(cursor: Any, post_id: str) -> dict[str, int]:
