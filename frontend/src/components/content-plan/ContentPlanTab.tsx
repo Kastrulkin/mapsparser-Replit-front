@@ -139,9 +139,11 @@ type SocialPostMetadata = {
     mode?: string;
     target_url?: string;
     target_url_source?: string;
+    openclaw_capability_status?: string;
     stop_before_final_publish?: boolean;
   };
   openclaw_task?: Record<string, unknown>;
+  agent_action_ledger_id?: string;
   provider_status?: string;
   provider_note?: string;
 };
@@ -5375,6 +5377,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const postTextValue = String(socialTextEdits[post.id] ?? post.platform_text ?? postTextFallback);
                               const postTextLocked = _isSocialPostTextLocked(post.status);
                               const postTextDirty = postTextValue.trim() !== String(post.platform_text || '').trim();
+                              const supervisedLedgerId = String(post.metadata_json?.agent_action_ledger_id || '').trim();
+                              const supervisedCapabilityStatus = String(supervisedPayload?.openclaw_capability_status || '').trim();
                               return (
                                 <div key={post.id} className="rounded-2xl border border-slate-200 bg-white p-3">
                                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -5444,6 +5448,24 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       {post.automation_task_id ? (
                                         <div className="mt-2 font-mono text-[11px] text-amber-900">
                                           task: {post.automation_task_id}
+                                        </div>
+                                      ) : null}
+                                      {supervisedLedgerId ? (
+                                        <div className="mt-1 font-mono text-[11px] text-amber-900">
+                                          ledger: {supervisedLedgerId}
+                                        </div>
+                                      ) : null}
+                                      {supervisedCapabilityStatus ? (
+                                        <div className="mt-1 text-[11px] text-amber-900">
+                                          {isRu ? 'OpenClaw browser-use: ' : 'OpenClaw browser-use: '}
+                                          {supervisedCapabilityStatus}
+                                        </div>
+                                      ) : null}
+                                      {post.automation_task_id || supervisedLedgerId ? (
+                                        <div className="mt-2 text-[11px] font-medium text-amber-900">
+                                          {isRu
+                                            ? 'Журнал действия создан; финальная публикация остаётся за человеком.'
+                                            : 'Action ledger is recorded; final publishing stays human-controlled.'}
                                         </div>
                                       ) : null}
                                     </div>
