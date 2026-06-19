@@ -1892,6 +1892,34 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const copySocialPostText = async (post: SocialPost, text: string) => {
+    const value = String(text || post.platform_text || post.base_text || '').trim();
+    if (!value) return;
+    setError('');
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = value;
+        textarea.setAttribute('readonly', 'true');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Текст скопирован. Теперь откройте площадку и вставьте его в форму публикации.',
+        text_en: 'Post text copied. Open the platform and paste it into the publication form.',
+      });
+    } catch {
+      setError(isRu ? 'Не удалось скопировать текст' : 'Could not copy text');
+    }
+  };
+
   const recordSocialPostAttribution = async (post: SocialPost, eventType: SocialAttributionEventType) => {
     setSocialBusyAction(`attribute:${eventType}:${post.id}`);
     setError('');
@@ -5398,6 +5426,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                     ) : null}
                                     {canMarkPublished ? (
                                       <>
+                                        {postTextValue.trim() ? (
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => { void copySocialPostText(post, postTextValue); }}
+                                            disabled={postBusy}
+                                          >
+                                            {isRu ? 'Скопировать текст' : 'Copy text'}
+                                          </Button>
+                                        ) : null}
                                         {supervisedPayload?.target_url ? (
                                           <Button
                                             type="button"
