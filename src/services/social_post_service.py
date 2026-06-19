@@ -350,6 +350,34 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             raise ValueError("Публикация уже опубликована")
         if status not in {"approved", "queued"} or not post.get("approved_at"):
             raise PermissionError("Перед постановкой в расписание нужно подтверждение человека")
+        platform = str(post.get("platform") or "").strip()
+        if platform in BROWSER_OR_MANUAL_PLATFORMS:
+            automation_task_id = str(post.get("automation_task_id") or "").strip() or _new_id()
+            metadata = _json_dict(post.get("metadata_json"))
+            metadata.update(_supervised_publish_metadata(cursor, post, automation_task_id))
+            supervised_state = _supervised_publish_state(post)
+            cursor.execute(
+                """
+                UPDATE social_posts
+                SET status = %s,
+                    automation_task_id = %s,
+                    metadata_json = %s,
+                    last_error = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING *
+                """,
+                (
+                    supervised_state["status"],
+                    automation_task_id,
+                    _json_dumps(metadata),
+                    supervised_state["last_error"],
+                    post_id,
+                ),
+            )
+            updated = _serialize_social_post(cursor, cursor.fetchone())
+            db.conn.commit()
+            return updated
         queue_block = _queue_preflight_block(cursor, post)
         if queue_block:
             metadata = _json_dict(post.get("metadata_json"))
@@ -424,9 +452,7 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
         if platform in BROWSER_OR_MANUAL_PLATFORMS:
             automation_task_id = str(post.get("automation_task_id") or "").strip() or _new_id()
             metadata.update(_supervised_publish_metadata(cursor, post, automation_task_id))
-            browser_ready = publish_mode == "openclaw_browser" and openclaw_browser_available()
-            next_status = "needs_supervised_publish" if browser_ready else "needs_manual_publish"
-            last_error = None if browser_ready else "OpenClaw browser-use недоступен; используйте ручное контролируемое размещение."
+            supervised_state = _supervised_publish_state(post)
             cursor.execute(
                 """
                 UPDATE social_posts
@@ -438,7 +464,13 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
                 WHERE id = %s
                 RETURNING *
                 """,
-                (next_status, automation_task_id, _json_dumps(metadata), last_error, post_id),
+                (
+                    supervised_state["status"],
+                    automation_task_id,
+                    _json_dumps(metadata),
+                    supervised_state["last_error"],
+                    post_id,
+                ),
             )
             updated = _serialize_social_post(cursor, cursor.fetchone())
             db.conn.commit()
@@ -1255,6 +1287,15 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
             "instruction_en": "Open the platform, fill text and media, show preview, and stop before final publish until explicit approval.",
             "stop_before_final_publish": True,
         },
+    }
+
+
+def _supervised_publish_state(post: dict[str, Any]) -> dict[str, str | None]:
+    publish_mode = str(post.get("publish_mode") or "").strip()
+    browser_ready = publish_mode == "openclaw_browser" and openclaw_browser_available()
+    return {
+        "status": "needs_supervised_publish" if browser_ready else "needs_manual_publish",
+        "last_error": None if browser_ready else "OpenClaw browser-use недоступен; используйте ручное контролируемое размещение.",
     }
 
 

@@ -12,6 +12,7 @@ from services.social_post_service import (
     _preview_dispatch_decision,
     _queue_preflight_block,
     _status_after_social_text_edit,
+    _supervised_publish_state,
     _vk_publish_binding,
     apply_social_post_recommendation,
     _build_next_plan_changes,
@@ -357,6 +358,24 @@ def test_queue_preflight_allows_ready_api_channel(monkeypatch):
 def test_queue_preflight_does_not_block_supervised_maps():
     assert _queue_preflight_block(object(), {"business_id": "biz-1", "platform": "yandex_maps"}) == {}
     assert _queue_preflight_block(object(), {"business_id": "biz-1", "platform": "two_gis"}) == {}
+
+
+def test_supervised_publish_state_uses_manual_fallback_without_browser(monkeypatch):
+    monkeypatch.setattr(social_post_service, "openclaw_browser_available", lambda: False)
+
+    state = _supervised_publish_state({"publish_mode": "openclaw_browser"})
+
+    assert state["status"] == "needs_manual_publish"
+    assert "OpenClaw browser-use" in str(state["last_error"])
+
+
+def test_supervised_publish_state_uses_openclaw_when_available(monkeypatch):
+    monkeypatch.setattr(social_post_service, "openclaw_browser_available", lambda: True)
+
+    state = _supervised_publish_state({"publish_mode": "openclaw_browser"})
+
+    assert state["status"] == "needs_supervised_publish"
+    assert state["last_error"] is None
 
 
 def test_vk_post_url_uses_owner_and_post_id():
