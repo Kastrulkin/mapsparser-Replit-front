@@ -198,6 +198,20 @@ type SocialChannelReadiness = {
   message_en?: string;
 };
 
+type SocialPlanNextAction = 'prepare' | 'review' | 'queue' | 'supervised' | 'recommend' | 'wait' | 'none';
+
+type SocialPlanNextStep = {
+  action: SocialPlanNextAction;
+  titleRu: string;
+  titleEn: string;
+  descriptionRu: string;
+  descriptionEn: string;
+  ctaRu: string;
+  ctaEn: string;
+  count: number;
+  disabled?: boolean;
+};
+
 type LearningMetricsPayload = {
   window_days: number;
   items: Array<{
@@ -689,6 +703,148 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const selectedSocialCanMarkPublished = useMemo(() => (
     selectedSocialPosts.filter((post) => post.status === 'needs_supervised_publish' || post.status === 'needs_manual_publish')
   ), [selectedSocialPosts]);
+  const visibleSocialPosts = useMemo(() => (
+    visibleItems.flatMap((item) => socialPostsByItem[item.id] || [])
+  ), [socialPostsByItem, visibleItems]);
+  const visibleSocialNeedsReview = useMemo(() => (
+    visibleSocialPosts.filter((post) => post.status === 'draft' || post.status === 'needs_review')
+  ), [visibleSocialPosts]);
+  const visibleSocialCanQueue = useMemo(() => (
+    visibleSocialPosts.filter((post) => post.status === 'approved')
+  ), [visibleSocialPosts]);
+  const visibleSocialNeedsSupervised = useMemo(() => (
+    visibleSocialPosts.filter((post) => post.status === 'needs_supervised_publish' || post.status === 'needs_manual_publish')
+  ), [visibleSocialPosts]);
+  const socialPlanNextStep = useMemo<SocialPlanNextStep>(() => {
+    if (!currentPlan?.items?.length) {
+      return {
+        action: 'none',
+        titleRu: 'Сначала нужен контент-план',
+        titleEn: 'Start with a content plan',
+        descriptionRu: 'После создания плана здесь появится очередь постов для карт и соцсетей.',
+        descriptionEn: 'After creating a plan, this area will show map and social posts.',
+        ctaRu: 'Создать план',
+        ctaEn: 'Create plan',
+        count: 0,
+        disabled: true,
+      };
+    }
+    if (Number(socialSummary?.total || 0) === 0) {
+      return {
+        action: 'prepare',
+        titleRu: 'Подготовьте посты для каналов',
+        titleEn: 'Prepare channel posts',
+        descriptionRu: 'LocalOS разложит темы на Яндекс Карты, 2ГИС, Google, Telegram, VK, Instagram и Facebook. Наружу ничего не отправится.',
+        descriptionEn: 'LocalOS will split topics into Yandex Maps, 2GIS, Google, Telegram, VK, Instagram, and Facebook. Nothing is sent externally.',
+        ctaRu: selectedItems.length > 0 ? 'Подготовить выбранные' : 'Подготовить ближайшие темы',
+        ctaEn: selectedItems.length > 0 ? 'Prepare selected' : 'Prepare nearest topics',
+        count: selectedItems.length || Math.min(visibleItems.length, 5),
+        disabled: visibleItems.length === 0,
+      };
+    }
+    if (visibleSocialNeedsReview.length > 0) {
+      return {
+        action: 'review',
+        titleRu: 'Проверьте тексты перед approval',
+        titleEn: 'Review copy before approval',
+        descriptionRu: 'Это безопасный preview-этап: текст можно поправить, а внешняя публикация ещё не запускается.',
+        descriptionEn: 'This is the safe preview step: copy can be edited and external publishing is not started yet.',
+        ctaRu: 'Открыть на проверку',
+        ctaEn: 'Open review',
+        count: visibleSocialNeedsReview.length,
+      };
+    }
+    if (visibleSocialCanQueue.length > 0) {
+      return {
+        action: 'queue',
+        titleRu: 'Поставьте утверждённое в расписание',
+        titleEn: 'Queue approved posts',
+        descriptionRu: 'Только после этого worker сможет исполнить API-каналы по дате, а карты перевести в контролируемое размещение.',
+        descriptionEn: 'Only then can the worker publish API channels on schedule and move maps to supervised placement.',
+        ctaRu: 'Поставить в расписание',
+        ctaEn: 'Queue on schedule',
+        count: visibleSocialCanQueue.length,
+      };
+    }
+    if (visibleSocialNeedsSupervised.length > 0) {
+      return {
+        action: 'supervised',
+        titleRu: 'Завершите контролируемое размещение',
+        titleEn: 'Finish supervised placement',
+        descriptionRu: 'Яндекс/2ГИС не считаются стабильным API publish. Откройте задачу, проверьте текст и отметьте размещение.',
+        descriptionEn: 'Yandex/2GIS are not treated as stable API publish. Open the task, verify copy, and mark placement.',
+        ctaRu: 'Открыть задачу',
+        ctaEn: 'Open task',
+        count: visibleSocialNeedsSupervised.length,
+      };
+    }
+    if (Number(socialSummary?.published || 0) > 0) {
+      return {
+        action: 'recommend',
+        titleRu: 'Соберите выводы для следующего плана',
+        titleEn: 'Collect next-plan learnings',
+        descriptionRu: 'LocalOS сравнит заявки, обращения и реакции, но изменения в будущий план применит только после подтверждения.',
+        descriptionEn: 'LocalOS compares leads, inquiries, and reactions, but applies next-plan changes only after approval.',
+        ctaRu: 'Предложить изменения',
+        ctaEn: 'Suggest changes',
+        count: Number(socialSummary?.published || 0),
+      };
+    }
+    if (Number(socialSummary?.scheduled || 0) > 0) {
+      return {
+        action: 'wait',
+        titleRu: 'Публикации ждут дату',
+        titleEn: 'Posts are waiting for schedule',
+        descriptionRu: 'Worker заберёт только due-посты с approval. Если канал не готов, конкретный пост получит понятный статус.',
+        descriptionEn: 'The worker picks only due approved posts. If a channel is not ready, that post gets a clear status.',
+        ctaRu: 'Обновить очередь',
+        ctaEn: 'Refresh queue',
+        count: Number(socialSummary?.scheduled || 0),
+      };
+    }
+    return {
+      action: 'none',
+      titleRu: 'Очередь под контролем',
+      titleEn: 'Queue is under control',
+      descriptionRu: 'Подготовьте новые темы или дождитесь результатов опубликованных постов.',
+      descriptionEn: 'Prepare new topics or wait for results from published posts.',
+      ctaRu: 'Обновить',
+      ctaEn: 'Refresh',
+      count: Number(socialSummary?.total || 0),
+    };
+  }, [
+    currentPlan?.items?.length,
+    selectedItems.length,
+    socialSummary?.published,
+    socialSummary?.scheduled,
+    socialSummary?.total,
+    visibleItems.length,
+    visibleSocialCanQueue.length,
+    visibleSocialNeedsReview.length,
+    visibleSocialNeedsSupervised.length,
+  ]);
+  const socialReadinessSummary = useMemo(() => {
+    let apiReady = 0;
+    let needsAttention = 0;
+    let supervisedOrManual = 0;
+    for (const channel of socialChannelReadiness) {
+      const mode = String(channel.publish_mode || '').trim();
+      if (mode === 'openclaw_browser' || mode === 'local_supervised_browser' || mode === 'manual') {
+        supervisedOrManual += 1;
+      }
+      if (mode === 'api' && channel.ready) {
+        apiReady += 1;
+      }
+      if (!channel.ready) {
+        needsAttention += 1;
+      }
+    }
+    return {
+      apiReady,
+      needsAttention,
+      supervisedOrManual,
+    };
+  }, [socialChannelReadiness]);
   const missingDateCandidates = useMemo(() => (
     visibleItems.filter((item) => !_inputDateValue(item.scheduled_for) && !String(item.usernews_id || '').trim())
   ), [visibleItems]);
@@ -1629,6 +1785,35 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const prepareSuggestedSocialPosts = async () => {
+    const itemsToPrepare = selectedItems.length > 0 ? selectedItems : visibleItems.slice(0, 5);
+    if (itemsToPrepare.length === 0) return;
+    setBulkBusyAction('suggested-social-prepare');
+    setError('');
+    setActionSummary(null);
+    try {
+      await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
+        method: 'POST',
+        body: JSON.stringify({ item_ids: itemsToPrepare.map((item) => item.id) }),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setSelectedItemIds(itemsToPrepare.reduce<Record<string, boolean>>((acc, item) => {
+        acc[item.id] = true;
+        return acc;
+      }, {}));
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Каналы подготовлены. Следующий безопасный шаг - открыть preview и проверить тексты.',
+        text_en: 'Channels prepared. Next safe step: open preview and review copy.',
+      });
+    } catch (bulkError) {
+      const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось подготовить каналы' : 'Could not prepare channels');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
   const approveSelectedSocialPosts = async () => {
     if (!selectedSocialNeedsReview.length) return;
     setBulkBusyAction('selected-social-approve');
@@ -1647,6 +1832,30 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
     } catch (bulkError) {
       const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось подтвердить выбранные публикации' : 'Could not approve selected posts');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
+  const queueVisibleApprovedSocialPosts = async () => {
+    if (!visibleSocialCanQueue.length) return;
+    setBulkBusyAction('visible-social-queue');
+    setError('');
+    setActionSummary(null);
+    try {
+      await newAuth.makeRequest('/social-posts/bulk-queue', {
+        method: 'POST',
+        body: JSON.stringify({ post_ids: visibleSocialCanQueue.map((post) => post.id) }),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Утверждённые публикации поставлены в расписание. API-каналы пойдут через worker, Яндекс/2ГИС - в контролируемое размещение.',
+        text_en: 'Approved posts are queued. API channels go through the worker, Yandex/2GIS go to supervised placement.',
+      });
+    } catch (bulkError) {
+      const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось поставить публикации в расписание' : 'Could not queue posts');
       setError(message);
     } finally {
       setBulkBusyAction('');
@@ -2528,6 +2737,43 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
     if (repeatTemplateCandidate) {
       void runItemDuplicateToOtherLocations(repeatTemplateCandidate);
+    }
+  };
+
+  const runSocialPlanNextStep = () => {
+    setActiveZone('queue');
+    if (socialPlanNextStep.action === 'prepare') {
+      void prepareSuggestedSocialPosts();
+      return;
+    }
+    if (socialPlanNextStep.action === 'review') {
+      const post = visibleSocialNeedsReview[0];
+      const itemId = String(post?.content_plan_item_id || '').trim();
+      if (itemId) {
+        setSelectedQueueItemId(itemId);
+        setEditorItemId(itemId);
+      }
+      return;
+    }
+    if (socialPlanNextStep.action === 'queue') {
+      void queueVisibleApprovedSocialPosts();
+      return;
+    }
+    if (socialPlanNextStep.action === 'supervised') {
+      const post = visibleSocialNeedsSupervised[0];
+      const itemId = String(post?.content_plan_item_id || '').trim();
+      if (itemId) {
+        setSelectedQueueItemId(itemId);
+        setEditorItemId(itemId);
+      }
+      return;
+    }
+    if (socialPlanNextStep.action === 'recommend') {
+      void recommendNextSocialPlan();
+      return;
+    }
+    if (currentPlan?.id) {
+      void loadSocialPosts(currentPlan.id);
     }
   };
 
@@ -4036,7 +4282,48 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   : ` · ${isRu ? 'все даты' : 'all dates'}`}
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="rounded-2xl border border-slate-200 bg-slate-950 px-4 py-4 text-white">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        {isRu ? 'Следующий шаг публикаций' : 'Publishing next step'}
+                      </div>
+                      <div className="mt-2 text-lg font-semibold">
+                        {isRu ? socialPlanNextStep.titleRu : socialPlanNextStep.titleEn}
+                      </div>
+                      <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+                        {isRu ? socialPlanNextStep.descriptionRu : socialPlanNextStep.descriptionEn}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:min-w-[260px]">
+                      <Button
+                        type="button"
+                        onClick={runSocialPlanNextStep}
+                        disabled={Boolean(bulkBusyAction) || Boolean(socialBusyAction) || Boolean(socialPlanNextStep.disabled)}
+                        className="bg-white text-slate-950 hover:bg-slate-100"
+                      >
+                        {Boolean(bulkBusyAction) || Boolean(socialBusyAction)
+                          ? (isRu ? 'Выполняем...' : 'Working...')
+                          : `${isRu ? socialPlanNextStep.ctaRu : socialPlanNextStep.ctaEn} · ${socialPlanNextStep.count}`}
+                      </Button>
+                      <div className="grid grid-cols-3 gap-2 text-center text-[11px] text-slate-300">
+                        <div className="rounded-xl bg-white/10 px-2 py-2">
+                          <div className="text-sm font-semibold text-white">{socialReadinessSummary.apiReady}</div>
+                          <div>{isRu ? 'API готово' : 'API ready'}</div>
+                        </div>
+                        <div className="rounded-xl bg-white/10 px-2 py-2">
+                          <div className="text-sm font-semibold text-white">{socialReadinessSummary.supervisedOrManual}</div>
+                          <div>{isRu ? 'контроль' : 'supervised'}</div>
+                        </div>
+                        <div className="rounded-xl bg-white/10 px-2 py-2">
+                          <div className="text-sm font-semibold text-white">{socialReadinessSummary.needsAttention}</div>
+                          <div>{isRu ? 'ключи/права' : 'keys/rights'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="text-sm font-semibold text-slate-950">
                       {isRu ? 'Очередь публикаций по каналам' : 'Channel publishing queue'}
@@ -4100,6 +4387,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         </div>
                         <div className={channel.ready ? 'mt-1 text-xs leading-5 text-emerald-800' : 'mt-1 text-xs leading-5 text-amber-800'}>
                           {isRu ? channel.message_ru : channel.message_en}
+                        </div>
+                        <div className={channel.ready ? 'mt-2 text-[11px] font-medium text-emerald-700' : 'mt-2 text-[11px] font-medium text-amber-700'}>
+                          {_socialPublishModeLabel(channel.publish_mode || '', isRu)}
                         </div>
                       </div>
                     ))}
