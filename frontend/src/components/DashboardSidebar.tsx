@@ -138,7 +138,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       icon: Sparkles,
       path: '/dashboard/ai-chat-promotion',
       tooltip: language === 'ru'
-        ? 'Настройка AI-коммуникаций и сценариев продвижения.'
+        ? 'GEO-продвижение и сценарии видимости бизнеса в AI-поиске.'
         : 'Configure AI communication and promotion workflows.',
     },
     {

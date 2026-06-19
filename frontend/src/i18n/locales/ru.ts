@@ -299,7 +299,7 @@ export const ru = {
       chats: "Чаты",
       partnerships: "Поиск партнёров",
       finance: "Финансы",
-      aiChatPromotion: "Промоушен AI Chat",
+      aiChatPromotion: "GEO-продвижение",
       settings: "Настройки",
       network: "Управление сетью",
       greeting: "Освободись от рутины! 🚀"
