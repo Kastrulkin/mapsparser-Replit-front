@@ -1390,13 +1390,17 @@ def _publish_external_account_post(
                 "expected_sources": list(sources),
             },
         }
+    # Meta/other external-account adapters are preflight-only until a native
+    # provider publish implementation is explicitly enabled. Returning queued
+    # here would make the worker pick the same post forever without publishing.
     return {
-        "status": "queued",
+        "status": "needs_manual_publish",
+        "last_error": "API-публикация для канала ещё не включена; используйте ручное размещение или подключите native adapter.",
         "metadata_json": {
             "provider_status": ready_status,
             "external_account_id": account.get("id"),
             "external_account_source": account.get("source"),
-            "provider_note": "Adapter preflight passed; native provider publish worker is the next execution boundary.",
+            "provider_note": "Adapter preflight passed, but native provider publish is not enabled; manual handoff is required.",
         },
     }
 

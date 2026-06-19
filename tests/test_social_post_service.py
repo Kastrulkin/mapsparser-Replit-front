@@ -1,8 +1,10 @@
 import sys
 
+import services.social_post_service as social_post_service
 from services.social_post_service import (
     _build_openclaw_supervised_task_payload,
     _meta_publish_status,
+    _publish_external_account_post,
     _vk_publish_binding,
     _build_next_plan_changes,
     build_social_queue_groups,
@@ -158,6 +160,31 @@ def test_meta_publish_status_separates_connection_binding_and_permissions():
     assert _meta_publish_status({"id": "m1", "external_id": "page-1"}, {"access_token": "token", "scope": "email"}, "facebook") == "missing_permissions"
     assert _meta_publish_status({"id": "m1", "external_id": "page-1"}, {"access_token": "token", "scope": "pages_manage_posts"}, "facebook") == "ready"
     assert _meta_publish_status({"id": "m1", "external_id": "page-1"}, {"access_token": "token", "scope": "instagram_content_publish"}, "instagram") == "missing_binding"
+
+
+def test_external_account_preflight_does_not_requeue_without_native_publish(monkeypatch):
+    monkeypatch.setattr(
+        social_post_service,
+        "_find_active_external_account",
+        lambda cursor, business_id, sources: {"id": "m1", "source": "meta", "external_id": "page-1"},
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_external_account_auth_data",
+        lambda account: {"access_token": "token", "scope": "pages_manage_posts"},
+    )
+
+    result = _publish_external_account_post(
+        object(),
+        {"business_id": "biz-1", "platform": "facebook"},
+        ("meta", "facebook", "instagram"),
+        "Meta Graph permissions или бизнес-аккаунт ещё не подтверждены.",
+        "meta_graph_permissions_required",
+    )
+
+    assert result["status"] == "needs_manual_publish"
+    assert result["metadata_json"]["provider_status"] == "meta_graph_permissions_required"
+    assert "manual handoff" in result["metadata_json"]["provider_note"]
 
 
 def test_openclaw_supervised_task_payload_stops_before_final_publish():
