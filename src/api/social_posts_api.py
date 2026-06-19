@@ -25,6 +25,7 @@ from services.social_post_service import (
     queue_social_posts,
     recommend_next_plan_from_social_posts,
     record_social_post_attribution_event,
+    update_social_post_text,
 )
 
 
@@ -165,6 +166,31 @@ def social_posts_approve(post_id: str):
         return rate_error
     try:
         post = approve_social_post(str(user_data.get("user_id") or ""), post_id)
+        return jsonify({"success": True, "post": post})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/<post_id>", methods=["PATCH"])
+def social_posts_update(post_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "update")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    try:
+        post = update_social_post_text(
+            str(user_data.get("user_id") or ""),
+            post_id,
+            platform_text=str(data.get("platform_text") or ""),
+            base_text=str(data.get("base_text") or ""),
+        )
         return jsonify({"success": True, "post": post})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403

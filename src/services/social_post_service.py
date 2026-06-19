@@ -253,6 +253,61 @@ def approve_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
     }
 
 
+def update_social_post_text(
+    user_id: str,
+    post_id: str,
+    platform_text: str,
+    base_text: str = "",
+) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        post = _load_post_for_user(cursor, user_id, post_id)
+        current_status = str(post.get("status") or "").strip()
+        if current_status in {"queued", "publishing", "published"}:
+            raise ValueError("Нельзя менять текст после постановки в расписание или публикации")
+        next_text = str(platform_text or "").strip()
+        next_base_text = str(base_text or post.get("base_text") or "").strip()
+        metadata = _json_dict(post.get("metadata_json"))
+        metadata["last_text_edit"] = {
+            "edited_by": user_id,
+            "edited_at": datetime.now(timezone.utc).isoformat(),
+            "approval_reset": current_status == "approved",
+        }
+        next_status = _status_after_social_text_edit(current_status, next_text)
+        cursor.execute(
+            """
+            UPDATE social_posts
+            SET base_text = %s,
+                platform_text = %s,
+                status = %s,
+                approved_at = NULL,
+                approval_id = NULL,
+                metadata_json = %s,
+                last_error = NULL,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (
+                next_base_text,
+                next_text,
+                next_status,
+                _json_dumps(metadata),
+                post_id,
+            ),
+        )
+        updated = _serialize_social_post(cursor, cursor.fetchone())
+        db.conn.commit()
+        return updated
+    except Exception:
+        db.conn.rollback()
+        raise sys.exc_info()[1]
+    finally:
+        db.close()
+
+
 def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -848,6 +903,14 @@ def next_action_for_social_post(post: dict[str, Any]) -> str:
     if status == "published":
         return "collect_metrics"
     return "none"
+
+
+def _status_after_social_text_edit(current_status: str, platform_text: str) -> str:
+    if not str(platform_text or "").strip():
+        return "draft"
+    if str(current_status or "").strip() == "published":
+        return "published"
+    return "needs_review"
 
 
 def build_social_queue_groups(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:

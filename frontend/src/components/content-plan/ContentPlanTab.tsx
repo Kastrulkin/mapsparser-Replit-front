@@ -448,6 +448,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialQueueGroups, setSocialQueueGroups] = useState<SocialQueueGroup[]>([]);
   const [socialChannelReadiness, setSocialChannelReadiness] = useState<SocialChannelReadiness[]>([]);
   const [socialRecommendation, setSocialRecommendation] = useState<SocialRecommendationPayload | null>(null);
+  const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
   const [socialBusyAction, setSocialBusyAction] = useState('');
   const [activeZone, setActiveZone] = useState<ContentPlanZone>('overview');
   const [contentMode, setContentMode] = useState<ContentPlanMode>('point');
@@ -1680,6 +1681,33 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
     } catch (approveError) {
       const message = approveError instanceof Error ? approveError.message : (isRu ? 'Не удалось подтвердить публикацию' : 'Could not approve post');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
+  const saveSocialPostText = async (post: SocialPost, fallbackText: string) => {
+    const nextText = String(socialTextEdits[post.id] ?? post.platform_text ?? fallbackText ?? '').trim();
+    setSocialBusyAction(`save-text:${post.id}`);
+    setError('');
+    setActionSummary(null);
+    try {
+      await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          platform_text: nextText,
+          base_text: fallbackText,
+        }),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Текст канала сохранён. Перед публикацией снова проверьте и подтвердите его.',
+        text_en: 'Channel copy saved. Review and approve it again before publishing.',
+      });
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : (isRu ? 'Не удалось сохранить текст канала' : 'Could not save channel copy');
       setError(message);
     } finally {
       setSocialBusyAction('');
@@ -4766,6 +4794,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const canMarkPublished = post.status === 'needs_supervised_publish' || post.status === 'needs_manual_publish';
                               const canRecordResult = post.status === 'published';
                               const supervisedPayload = _socialSupervisedPayload(post);
+                              const postTextFallback = String(currentDraft || '').trim();
+                              const postTextValue = String(socialTextEdits[post.id] ?? post.platform_text ?? postTextFallback);
+                              const postTextLocked = _isSocialPostTextLocked(post.status);
+                              const postTextDirty = postTextValue.trim() !== String(post.platform_text || '').trim();
                               return (
                                 <div key={post.id} className="rounded-2xl border border-slate-200 bg-white p-3">
                                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -4781,8 +4813,44 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       {_socialStatusLabel(post.status, isRu)}
                                     </span>
                                   </div>
-                                  <div className="mt-3 line-clamp-3 text-sm leading-6 text-slate-700">
-                                    {String(post.platform_text || currentDraft || '').trim() || (isRu ? 'Текст ещё не подготовлен' : 'Text is not prepared yet')}
+                                  <div className="mt-3 space-y-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                        {isRu ? 'Текст для канала' : 'Channel copy'}
+                                      </div>
+                                      {postTextLocked ? (
+                                        <span className="text-[11px] font-medium text-slate-400">
+                                          {isRu ? 'заблокировано после расписания' : 'locked after queue'}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <Textarea
+                                      rows={5}
+                                      value={postTextValue}
+                                      onChange={(event) => setSocialTextEdits((prev) => ({ ...prev, [post.id]: event.target.value }))}
+                                      disabled={postTextLocked || postBusy}
+                                      placeholder={isRu ? 'Текст ещё не подготовлен' : 'Text is not prepared yet'}
+                                    />
+                                    {!postTextLocked && postTextDirty ? (
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => { void saveSocialPostText(post, postTextFallback); }}
+                                          disabled={postBusy}
+                                        >
+                                          {socialBusyAction === `save-text:${post.id}`
+                                            ? (isRu ? 'Сохраняем...' : 'Saving...')
+                                            : (isRu ? 'Сохранить текст' : 'Save copy')}
+                                        </Button>
+                                        <span className="text-xs leading-5 text-amber-700">
+                                          {isRu
+                                            ? 'После сохранения текст снова нужно подтвердить перед публикацией.'
+                                            : 'After saving, copy must be approved again before publishing.'}
+                                        </span>
+                                      </div>
+                                    ) : null}
                                   </div>
                                   {_isSupervisedPlatform(post.platform) ? (
                                     <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
@@ -4814,7 +4882,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                         type="button"
                                         size="sm"
                                         onClick={() => { void approveSocialPostItem(post); }}
-                                        disabled={postBusy}
+                                        disabled={postBusy || postTextDirty}
                                       >
                                         {isRu ? 'Подтвердить' : 'Approve'}
                                       </Button>
@@ -4825,7 +4893,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => { void queueSocialPostItem(post); }}
-                                        disabled={postBusy}
+                                        disabled={postBusy || postTextDirty}
                                       >
                                         {isRu ? 'Поставить в расписание' : 'Queue on schedule'}
                                       </Button>
@@ -5151,6 +5219,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
 function _isSupervisedPlatform(platform: string): boolean {
   return platform === 'yandex_maps' || platform === 'two_gis';
+}
+
+function _isSocialPostTextLocked(status: string): boolean {
+  return ['queued', 'publishing', 'published'].includes(String(status || '').trim());
 }
 
 function _socialSupervisedPayload(post: SocialPost) {

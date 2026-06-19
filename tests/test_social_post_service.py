@@ -7,6 +7,7 @@ from services.social_post_service import (
     _meta_channel_readiness,
     _meta_publish_status,
     _publish_external_account_post,
+    _status_after_social_text_edit,
     _vk_publish_binding,
     _build_next_plan_changes,
     build_social_queue_groups,
@@ -80,6 +81,12 @@ def test_next_action_separates_review_api_and_supervised_states():
     assert next_action_for_social_post({"status": "queued", "platform": "telegram"}) == "wait_for_scheduled_publish"
     assert next_action_for_social_post({"status": "queued", "platform": "two_gis"}) == "wait_for_scheduled_supervised_publish"
     assert next_action_for_social_post({"status": "needs_supervised_publish", "platform": "two_gis"}) == "open_supervised_publish"
+
+
+def test_social_text_edit_resets_approval_boundary():
+    assert _status_after_social_text_edit("approved", "Новый текст") == "needs_review"
+    assert _status_after_social_text_edit("needs_review", "") == "draft"
+    assert _status_after_social_text_edit("draft", "Готовый текст") == "needs_review"
 
 
 def test_ensure_social_post_tables_is_alembic_only_guard():
