@@ -1,6 +1,7 @@
 import sys
 
 from services.social_post_service import (
+    _build_openclaw_supervised_task_payload,
     _meta_publish_status,
     _vk_publish_binding,
     _build_next_plan_changes,
@@ -157,6 +158,40 @@ def test_meta_publish_status_separates_connection_binding_and_permissions():
     assert _meta_publish_status({"id": "m1", "external_id": "page-1"}, {"access_token": "token", "scope": "email"}, "facebook") == "missing_permissions"
     assert _meta_publish_status({"id": "m1", "external_id": "page-1"}, {"access_token": "token", "scope": "pages_manage_posts"}, "facebook") == "ready"
     assert _meta_publish_status({"id": "m1", "external_id": "page-1"}, {"access_token": "token", "scope": "instagram_content_publish"}, "instagram") == "missing_binding"
+
+
+def test_openclaw_supervised_task_payload_stops_before_final_publish():
+    payload = _build_openclaw_supervised_task_payload(
+        {
+            "id": "post-1",
+            "business_id": "biz-1",
+            "content_plan_id": "plan-1",
+            "content_plan_item_id": "item-1",
+            "platform": "yandex_maps",
+            "platform_text": "Текст для карт",
+            "approved_at": "2026-06-19T10:00:00+00:00",
+            "approval_id": "approval-1",
+            "media_json": [],
+        },
+        "task-1",
+        {
+            "business_name": "Studio",
+            "location_label": "Москва, Тверская",
+            "target_url": "https://yandex.ru/maps/org/123",
+            "target_url_source": "businessmaplinks.yandex",
+        },
+    )
+
+    assert payload["schema"] == "localos_social_supervised_publish_task_v1"
+    assert payload["capability"] == "social.post.publish_supervised_browser"
+    assert payload["risk_class"] == "external_publish"
+    assert payload["approval_class"] == "external_publish"
+    assert payload["stop_before_final_publish"] is True
+    assert payload["auto_final_click_allowed"] is False
+    assert payload["target"]["url"] == "https://yandex.ru/maps/org/123"
+    assert payload["content"]["text"] == "Текст для карт"
+    assert payload["approval_evidence"]["approval_id"] == "approval-1"
+    assert "changed_ui" in payload["fallback"]["reasons"]
 
 
 def test_next_plan_changes_prioritize_leads_before_reach():

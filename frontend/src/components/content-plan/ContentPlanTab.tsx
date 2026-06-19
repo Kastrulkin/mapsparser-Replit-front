@@ -135,7 +135,11 @@ type SocialPostMetadata = {
     instruction_en?: string;
     platform_label?: string;
     mode?: string;
+    target_url?: string;
+    target_url_source?: string;
+    stop_before_final_publish?: boolean;
   };
+  openclaw_task?: Record<string, unknown>;
   provider_status?: string;
   provider_note?: string;
 };
@@ -4832,15 +4836,27 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       </span>
                                     ) : null}
                                     {canMarkPublished ? (
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => { void markSocialPostPublished(post); }}
-                                        disabled={postBusy}
-                                      >
-                                        {isRu ? 'Отметить размещённым' : 'Mark published'}
-                                      </Button>
+                                      <>
+                                        {supervisedPayload?.target_url ? (
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => window.open(String(supervisedPayload.target_url || ''), '_blank', 'noopener,noreferrer')}
+                                          >
+                                            {isRu ? 'Открыть площадку' : 'Open platform'}
+                                          </Button>
+                                        ) : null}
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => { void markSocialPostPublished(post); }}
+                                          disabled={postBusy}
+                                        >
+                                          {isRu ? 'Отметить размещённым' : 'Mark published'}
+                                        </Button>
+                                      </>
                                     ) : null}
                                     {canRecordResult ? (
                                       <>

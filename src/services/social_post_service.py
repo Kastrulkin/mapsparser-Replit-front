@@ -314,7 +314,7 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
         metadata = _json_dict(post.get("metadata_json"))
         if platform in BROWSER_OR_MANUAL_PLATFORMS:
             automation_task_id = str(post.get("automation_task_id") or "").strip() or _new_id()
-            metadata.update(_supervised_publish_metadata(post, automation_task_id))
+            metadata.update(_supervised_publish_metadata(cursor, post, automation_task_id))
             browser_ready = publish_mode == "openclaw_browser" and openclaw_browser_available()
             next_status = "needs_supervised_publish" if browser_ready else "needs_manual_publish"
             last_error = None if browser_ready else "OpenClaw browser-use недоступен; используйте ручное контролируемое размещение."
@@ -1009,16 +1009,89 @@ def _initial_metadata(platform: str, publish_mode: str) -> dict[str, Any]:
     return data
 
 
-def _supervised_publish_metadata(post: dict[str, Any], automation_task_id: str) -> dict[str, Any]:
+def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_task_id: str) -> dict[str, Any]:
     platform = str(post.get("platform") or "").strip()
+    target = _map_publish_target(cursor, str(post.get("business_id") or ""), platform)
+    task_payload = _build_openclaw_supervised_task_payload(post, automation_task_id, target)
     return {
         "automation_task_id": automation_task_id,
+        "openclaw_task": task_payload,
         "supervised_publish": {
             "mode": str(post.get("publish_mode") or "manual"),
             "platform": platform,
             "platform_label": platform_label(platform),
+            "target_url": target.get("target_url", ""),
+            "target_url_source": target.get("target_url_source", ""),
             "instruction_ru": "Открыть площадку, вставить текст и медиа, показать предпросмотр, остановиться перед финальной публикацией до подтверждения.",
             "instruction_en": "Open the platform, fill text and media, show preview, and stop before final publish until explicit approval.",
+            "stop_before_final_publish": True,
+        },
+    }
+
+
+def _build_openclaw_supervised_task_payload(
+    post: dict[str, Any],
+    automation_task_id: str,
+    target: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    platform = str(post.get("platform") or "").strip()
+    target_payload = target if isinstance(target, dict) else {}
+    text = str(post.get("platform_text") or post.get("base_text") or "").strip()
+    return {
+        "schema": "localos_social_supervised_publish_task_v1",
+        "task_id": str(automation_task_id or "").strip(),
+        "capability": "social.post.publish_supervised_browser",
+        "openclaw_action_ref": "openclaw.browser.supervised_publish",
+        "risk_class": "external_publish",
+        "approval_class": "external_publish",
+        "approval_required": True,
+        "stop_before_final_publish": True,
+        "auto_final_click_allowed": False,
+        "status": "ready_for_supervised_or_manual_handoff",
+        "platform": platform,
+        "platform_label": platform_label(platform),
+        "business": {
+            "id": str(post.get("business_id") or "").strip(),
+            "name": str(target_payload.get("business_name") or "").strip(),
+            "location_label": str(target_payload.get("location_label") or "").strip(),
+        },
+        "target": {
+            "url": str(target_payload.get("target_url") or "").strip(),
+            "url_source": str(target_payload.get("target_url_source") or "").strip(),
+            "profile_hint": str(target_payload.get("profile_hint") or "").strip(),
+        },
+        "content": {
+            "text": text,
+            "media": post.get("media_json") if isinstance(post.get("media_json"), list) else [],
+        },
+        "approval_evidence": {
+            "social_post_id": str(post.get("id") or "").strip(),
+            "content_plan_id": str(post.get("content_plan_id") or "").strip(),
+            "content_plan_item_id": str(post.get("content_plan_item_id") or "").strip(),
+            "approved_at": str(post.get("approved_at") or "").strip(),
+            "approval_id": str(post.get("approval_id") or "").strip(),
+        },
+        "instructions": {
+            "ru": [
+                "Открыть целевую площадку или профиль бизнеса.",
+                "Вставить подготовленный текст и медиа.",
+                "Показать предпросмотр человеку.",
+                "Остановиться перед финальной кнопкой публикации.",
+                "Если логин, капча или интерфейс изменился, вернуть manual fallback.",
+            ],
+            "en": [
+                "Open the target platform or business profile.",
+                "Fill the prepared text and media.",
+                "Show preview to a human.",
+                "Stop before the final publish button.",
+                "If login, captcha, or UI changed, return manual fallback.",
+            ],
+        },
+        "fallback": {
+            "status": "needs_manual_publish",
+            "reasons": ["captcha", "login_required", "changed_ui", "browser_capability_unavailable"],
+            "manual_instruction_ru": "Скопируйте текст из LocalOS, разместите его на площадке вручную и отметьте публикацию размещённой.",
+            "manual_instruction_en": "Copy the text from LocalOS, publish it manually on the platform, and mark the post as published.",
         },
     }
 
@@ -1383,6 +1456,84 @@ def _load_business_publish_context(cursor: Any, business_id: str) -> dict[str, A
         (business_id,),
     )
     return _row_to_dict(cursor, cursor.fetchone())
+
+
+def _map_publish_target(cursor: Any, business_id: str, platform: str) -> dict[str, Any]:
+    business = _load_business_publish_target_context(cursor, business_id)
+    target = {
+        "business_name": str(business.get("name") or "").strip(),
+        "location_label": _location_label_from_business(business),
+        "target_url": "",
+        "target_url_source": "",
+        "profile_hint": "",
+    }
+    platform_key = str(platform or "").strip()
+    if platform_key == "yandex_maps":
+        target["profile_hint"] = "Яндекс Бизнес / Яндекс Карты"
+        yandex_url = str(business.get("yandex_url") or "").strip()
+        if yandex_url:
+            target["target_url"] = yandex_url
+            target["target_url_source"] = "businesses.yandex_url"
+            return target
+    elif platform_key == "two_gis":
+        target["profile_hint"] = "2ГИС профиль бизнеса"
+    if not business_id or not _table_exists(cursor, "businessmaplinks"):
+        return target
+    map_types = ("yandex", "yandex_maps", "yandex_business") if platform_key == "yandex_maps" else ("2gis", "two_gis", "apify_2gis")
+    try:
+        cursor.execute(
+            """
+            SELECT url, map_type
+            FROM businessmaplinks
+            WHERE business_id = %s
+              AND (
+                LOWER(COALESCE(map_type, '')) = ANY(%s)
+                OR (%s = 'yandex_maps' AND LOWER(COALESCE(url, '')) LIKE '%%yandex%%')
+                OR (%s = 'two_gis' AND (LOWER(COALESCE(url, '')) LIKE '%%2gis.ru%%' OR LOWER(COALESCE(url, '')) LIKE '%%2gis.com%%'))
+              )
+            ORDER BY created_at DESC NULLS LAST
+            LIMIT 1
+            """,
+            (business_id, list(map_types), platform_key, platform_key),
+        )
+        row = _row_to_dict(cursor, cursor.fetchone())
+    except Exception:
+        row = {}
+    url = str(row.get("url") or "").strip()
+    if url:
+        target["target_url"] = url
+        target["target_url_source"] = f"businessmaplinks.{row.get('map_type') or platform_key}"
+    return target
+
+
+def _load_business_publish_target_context(cursor: Any, business_id: str) -> dict[str, Any]:
+    if not business_id:
+        return {}
+    columns = _table_columns(cursor, "businesses")
+    select_parts = ["id"]
+    for column in ("name", "city", "address", "yandex_url"):
+        if column in columns:
+            select_parts.append(column)
+        else:
+            select_parts.append(f"NULL AS {column}")
+    cursor.execute(
+        f"""
+        SELECT {", ".join(select_parts)}
+        FROM businesses
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (business_id,),
+    )
+    return _row_to_dict(cursor, cursor.fetchone())
+
+
+def _location_label_from_business(business: dict[str, Any]) -> str:
+    parts = [
+        str(business.get("city") or "").strip(),
+        str(business.get("address") or "").strip(),
+    ]
+    return ", ".join([part for part in parts if part])
 
 
 def _find_active_external_account(cursor: Any, business_id: str, sources: tuple[str, ...]) -> dict[str, Any]:
