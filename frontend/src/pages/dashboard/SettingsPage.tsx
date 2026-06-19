@@ -1,4 +1,5 @@
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useLocation, useOutletContext } from 'react-router-dom';
+import { useEffect, useMemo, useRef } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import TelegramConnection from '@/components/TelegramConnection';
 import WhatsAppConnection from '@/components/WhatsAppConnection';
@@ -24,6 +25,8 @@ type SettingsBusiness = {
 };
 
 export const SettingsPage = () => {
+  const location = useLocation();
+  const integrationsRef = useRef<HTMLElement | null>(null);
   const { currentBusinessId, currentBusiness } = useOutletContext<{
     currentBusinessId?: string | null;
     currentBusiness?: SettingsBusiness | null;
@@ -35,6 +38,18 @@ export const SettingsPage = () => {
   const hasWhatsappCredentials = Boolean(
     String(currentBusiness?.waba_phone_id || '').trim() || String(currentBusiness?.waba_access_token || '').trim(),
   );
+  const focusTarget = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    return searchParams.get('focus') || location.hash.replace(/^#/, '');
+  }, [location.hash, location.search]);
+  const integrationsFocused = focusTarget === 'integrations';
+
+  useEffect(() => {
+    if (!integrationsFocused) return;
+    window.setTimeout(() => {
+      integrationsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  }, [integrationsFocused]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-7 pb-10">
@@ -100,9 +115,18 @@ export const SettingsPage = () => {
       </DashboardSection>
 
       <DashboardSection
+        ref={integrationsRef}
         title="Интеграции"
-        description="Внешние кабинеты и сервисы, которые помогают подтягивать данные и автоматизировать рутину."
+        className={integrationsFocused ? 'scroll-mt-24 border-sky-300 ring-2 ring-sky-100' : 'scroll-mt-24'}
+        description={integrationsFocused
+          ? 'Подключите внешние кабинеты, чтобы посты из контент-плана можно было ставить в расписание и публиковать по API после подтверждения.'
+          : 'Внешние кабинеты и сервисы, которые помогают подтягивать данные и автоматизировать рутину.'}
       >
+        {integrationsFocused ? (
+          <div className="mb-5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-900">
+            Для публикаций подключите Google Business Profile и другие внешние кабинеты. Telegram-бот и WhatsApp находятся выше в разделе каналов связи; Яндекс/2ГИС остаются контролируемым или ручным размещением, если API недоступен.
+          </div>
+        ) : null}
         <div className="space-y-5">
           <ExternalIntegrations currentBusinessId={currentBusinessId} />
           <FinanceCrmPanel currentBusinessId={currentBusinessId} surface="embedded" />

@@ -4735,7 +4735,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               size="sm"
                               variant="outline"
                               className="mt-3"
-                              onClick={() => navigate('/dashboard/settings')}
+                              onClick={() => navigate('/dashboard/settings?focus=integrations')}
                             >
                               {isRu ? 'Настроить подключения' : 'Open integrations'}
                             </Button>

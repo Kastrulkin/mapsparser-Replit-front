@@ -138,37 +138,43 @@ export const DashboardActionPanel: React.FC<{
   );
 };
 
-export const DashboardSection: React.FC<{
+type DashboardSectionProps = {
   title?: string;
   description?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
   contentClassName?: string;
-}> = ({ title, description, actions, children, className, contentClassName }) => (
-  <section className={cn("rounded-3xl border border-slate-200/80 bg-white/92 shadow-sm", className)}>
-    {(title || description || actions) ? (
-      <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          {title ? (
-            <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
-          ) : null}
-          {description ? (
-            <p className="text-sm leading-6 text-slate-600">{description}</p>
+};
+
+export const DashboardSection = React.forwardRef<HTMLElement, DashboardSectionProps>(
+  ({ title, description, actions, children, className, contentClassName }, ref) => (
+    <section ref={ref} className={cn("rounded-3xl border border-slate-200/80 bg-white/92 shadow-sm", className)}>
+      {(title || description || actions) ? (
+        <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            {title ? (
+              <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
+            ) : null}
+            {description ? (
+              <p className="text-sm leading-6 text-slate-600">{description}</p>
+            ) : null}
+          </div>
+          {actions ? (
+            <div className="flex shrink-0 flex-wrap gap-2">
+              {actions}
+            </div>
           ) : null}
         </div>
-        {actions ? (
-          <div className="flex shrink-0 flex-wrap gap-2">
-            {actions}
-          </div>
-        ) : null}
+      ) : null}
+      <div className={cn("px-6 py-5", contentClassName)}>
+        {children}
       </div>
-    ) : null}
-    <div className={cn("px-6 py-5", contentClassName)}>
-      {children}
-    </div>
-  </section>
+    </section>
+  ),
 );
+
+DashboardSection.displayName = 'DashboardSection';
 
 export const DashboardEmptyState: React.FC<{
   title: string;
