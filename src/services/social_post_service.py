@@ -1626,6 +1626,19 @@ def _meta_publish_status(account: dict[str, Any], auth_data: dict[str, Any], pla
     return "ready"
 
 
+def _meta_channel_readiness(account: dict[str, Any], auth_data: dict[str, Any], platform: str) -> dict[str, Any]:
+    status = _meta_publish_status(account, auth_data, platform)
+    if status == "ready":
+        return {
+            "ready": False,
+            "status": "adapter_pending",
+        }
+    return {
+        "ready": False,
+        "status": status,
+    }
+
+
 def _auth_scope_is_explicit(auth_data: dict[str, Any]) -> bool:
     for key in ("scope", "scopes", "permissions", "granted_scopes", "granted_permissions"):
         if key in auth_data and auth_data.get(key):
@@ -1873,8 +1886,8 @@ def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, An
     google_account = _find_active_external_account(cursor, business_id, ("google_business",))
     meta_account = _find_active_external_account(cursor, business_id, ("meta", "facebook", "instagram"))
     meta_auth = _external_account_auth_data(meta_account)
-    instagram_status = _meta_publish_status(meta_account, meta_auth, "instagram")
-    facebook_status = _meta_publish_status(meta_account, meta_auth, "facebook")
+    instagram_readiness = _meta_channel_readiness(meta_account, meta_auth, "instagram")
+    facebook_readiness = _meta_channel_readiness(meta_account, meta_auth, "facebook")
     browser_ready = openclaw_browser_available()
     return [
         _channel_readiness("telegram", "api", telegram_ready, "ready" if telegram_ready else "missing_keys"),
@@ -1883,14 +1896,14 @@ def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, An
         _channel_readiness(
             "instagram",
             "api",
-            instagram_status == "ready",
-            instagram_status,
+            bool(instagram_readiness.get("ready")),
+            str(instagram_readiness.get("status") or "missing_connection"),
         ),
         _channel_readiness(
             "facebook",
             "api",
-            facebook_status == "ready",
-            facebook_status,
+            bool(facebook_readiness.get("ready")),
+            str(facebook_readiness.get("status") or "missing_connection"),
         ),
         _channel_readiness(
             "yandex_maps",
@@ -1949,6 +1962,12 @@ def _channel_readiness_message(platform: str, status: str, is_ru: bool) -> str:
         )
     if status == "missing_connection":
         return f"{label}: нужно подключить аккаунт." if is_ru else f"{label}: connect an account first."
+    if status == "adapter_pending":
+        return (
+            f"{label}: подключение выглядит готовым, но API-публикация ещё не включена; будет ручное размещение."
+            if is_ru
+            else f"{label}: connection looks ready, but API publishing is not enabled yet; manual placement will be used."
+        )
     return f"{label}: нужны ключи или настройки канала." if is_ru else f"{label}: keys or channel settings are required."
 
 

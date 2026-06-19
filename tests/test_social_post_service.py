@@ -3,6 +3,8 @@ import sys
 import services.social_post_service as social_post_service
 from services.social_post_service import (
     _build_openclaw_supervised_task_payload,
+    _channel_readiness_message,
+    _meta_channel_readiness,
     _meta_publish_status,
     _publish_external_account_post,
     _vk_publish_binding,
@@ -160,6 +162,17 @@ def test_meta_publish_status_separates_connection_binding_and_permissions():
     assert _meta_publish_status({"id": "m1", "external_id": "page-1"}, {"access_token": "token", "scope": "email"}, "facebook") == "missing_permissions"
     assert _meta_publish_status({"id": "m1", "external_id": "page-1"}, {"access_token": "token", "scope": "pages_manage_posts"}, "facebook") == "ready"
     assert _meta_publish_status({"id": "m1", "external_id": "page-1"}, {"access_token": "token", "scope": "instagram_content_publish"}, "instagram") == "missing_binding"
+
+
+def test_meta_channel_readiness_blocks_ready_until_native_publish_exists():
+    readiness = _meta_channel_readiness(
+        {"id": "m1", "external_id": "page-1"},
+        {"access_token": "token", "scope": "pages_manage_posts"},
+        "facebook",
+    )
+
+    assert readiness == {"ready": False, "status": "adapter_pending"}
+    assert "API-публикация ещё не включена" in _channel_readiness_message("facebook", "adapter_pending", True)
 
 
 def test_external_account_preflight_does_not_requeue_without_native_publish(monkeypatch):
