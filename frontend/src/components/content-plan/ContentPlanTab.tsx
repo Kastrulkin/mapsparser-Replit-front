@@ -931,6 +931,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     let apiReady = 0;
     let needsAttention = 0;
     let supervisedOrManual = 0;
+    const blockedApiChannels: SocialChannelReadiness[] = [];
     for (const channel of socialChannelReadiness) {
       const mode = String(channel.publish_mode || '').trim();
       if (mode === 'openclaw_browser' || mode === 'local_supervised_browser' || mode === 'manual') {
@@ -941,12 +942,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       }
       if (!channel.ready) {
         needsAttention += 1;
+        if (mode === 'api') blockedApiChannels.push(channel);
       }
     }
     return {
       apiReady,
       needsAttention,
       supervisedOrManual,
+      blockedApiChannels,
     };
   }, [socialChannelReadiness]);
   const missingDateCandidates = useMemo(() => (
@@ -4682,34 +4685,77 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   </div>
                 )}
                 {socialChannelReadiness.length > 0 ? (
-                  <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                    {socialChannelReadiness.map((channel) => (
-                      <div
-                        key={channel.platform}
-                        className={[
-                          'rounded-xl border px-3 py-2',
-                          channel.ready
-                            ? 'border-emerald-100 bg-emerald-50'
-                            : 'border-amber-100 bg-amber-50',
-                        ].join(' ')}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className={channel.ready ? 'text-xs font-semibold text-emerald-950' : 'text-xs font-semibold text-amber-950'}>
-                            {channel.platform_label || _socialPlatformLabel(channel.platform, isRu)}
+                  <>
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-3">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-950">
+                            {isRu ? 'Готовность каналов' : 'Channel readiness'}
                           </div>
-                          <span className={channel.ready ? 'text-[11px] font-medium text-emerald-700' : 'text-[11px] font-medium text-amber-700'}>
-                            {channel.ready ? (isRu ? 'готов' : 'ready') : (isRu ? 'нужно внимание' : 'needs attention')}
-                          </span>
+                          <div className="mt-1 text-xs leading-5 text-slate-600">
+                            {socialReadinessSummary.blockedApiChannels.length > 0
+                              ? (isRu
+                                ? 'Перед постановкой API-каналов в расписание подключите ключи или права. Карты останутся controlled/manual и не будут выглядеть как автопубликация.'
+                                : 'Connect keys or permissions before queueing API channels. Maps stay controlled/manual and are not shown as autopublish.')
+                              : (isRu
+                                ? 'API-каналы готовы к публикации после approval. Карты идут через controlled/manual размещение.'
+                                : 'API channels are ready to publish after approval. Maps use controlled/manual placement.')}
+                          </div>
                         </div>
-                        <div className={channel.ready ? 'mt-1 text-xs leading-5 text-emerald-800' : 'mt-1 text-xs leading-5 text-amber-800'}>
-                          {isRu ? channel.message_ru : channel.message_en}
-                        </div>
-                        <div className={channel.ready ? 'mt-2 text-[11px] font-medium text-emerald-700' : 'mt-2 text-[11px] font-medium text-amber-700'}>
-                          {_socialPublishModeLabel(channel.publish_mode || '', isRu)}
+                        <div className="grid gap-2 text-xs sm:grid-cols-3 lg:min-w-[360px]">
+                          <div className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800">
+                            <div className="font-semibold text-emerald-950">{socialReadinessSummary.apiReady}</div>
+                            <div>{isRu ? 'API готовы' : 'API ready'}</div>
+                          </div>
+                          <div className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
+                            <div className="font-semibold text-amber-950">{socialReadinessSummary.needsAttention}</div>
+                            <div>{isRu ? 'нужно внимание' : 'need attention'}</div>
+                          </div>
+                          <div className="rounded-lg bg-sky-50 px-3 py-2 text-sky-800">
+                            <div className="font-semibold text-sky-950">{socialReadinessSummary.supervisedOrManual}</div>
+                            <div>controlled/manual</div>
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                      {socialReadinessSummary.blockedApiChannels.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {socialReadinessSummary.blockedApiChannels.slice(0, 4).map((channel) => (
+                            <span key={channel.platform} className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
+                              {channel.platform_label || _socialPlatformLabel(channel.platform, isRu)} · {isRu ? channel.message_ru : channel.message_en}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                      {socialChannelReadiness.map((channel) => (
+                        <div
+                          key={channel.platform}
+                          className={[
+                            'rounded-xl border px-3 py-2',
+                            channel.ready
+                              ? 'border-emerald-100 bg-emerald-50'
+                              : 'border-amber-100 bg-amber-50',
+                          ].join(' ')}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className={channel.ready ? 'text-xs font-semibold text-emerald-950' : 'text-xs font-semibold text-amber-950'}>
+                              {channel.platform_label || _socialPlatformLabel(channel.platform, isRu)}
+                            </div>
+                            <span className={channel.ready ? 'text-[11px] font-medium text-emerald-700' : 'text-[11px] font-medium text-amber-700'}>
+                              {channel.ready ? (isRu ? 'готов' : 'ready') : (isRu ? 'нужно внимание' : 'needs attention')}
+                            </span>
+                          </div>
+                          <div className={channel.ready ? 'mt-1 text-xs leading-5 text-emerald-800' : 'mt-1 text-xs leading-5 text-amber-800'}>
+                            {isRu ? channel.message_ru : channel.message_en}
+                          </div>
+                          <div className={channel.ready ? 'mt-2 text-[11px] font-medium text-emerald-700' : 'mt-2 text-[11px] font-medium text-amber-700'}>
+                            {_socialPublishModeLabel(channel.publish_mode || '', isRu)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 ) : null}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {['all', 'social', 'maps'].map((filterKey) => (
