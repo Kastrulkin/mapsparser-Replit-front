@@ -4729,6 +4729,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 ? 'API-каналы готовы к публикации после approval. Карты идут через controlled/manual размещение.'
                                 : 'API channels are ready to publish after approval. Maps use controlled/manual placement.')}
                           </div>
+                          {socialReadinessSummary.blockedApiChannels.length > 0 ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="mt-3"
+                              onClick={() => navigate('/dashboard/settings')}
+                            >
+                              {isRu ? 'Настроить подключения' : 'Open integrations'}
+                            </Button>
+                          ) : null}
                         </div>
                         <div className="grid gap-2 text-xs sm:grid-cols-3 lg:min-w-[360px]">
                           <div className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800">
