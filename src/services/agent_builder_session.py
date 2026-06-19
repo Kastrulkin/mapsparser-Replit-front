@@ -2243,8 +2243,36 @@ def _is_telegram_content_analytics_request(text: str) -> bool:
     return any(marker in text for marker in ["контент-план", "собирай вывод", "что изменить", "изменения"])
 
 
+def _is_uploaded_document_request(text: str) -> bool:
+    if any(marker in text for marker in ["таблиц", "xlsx", "excel", "csv"]):
+        return False
+    if not any(marker in text for marker in ["загруж", "файл", "pdf", "docx", "документ", "договор", "акт"]):
+        return False
+    return any(marker in text for marker in ["извлек", "разбери", "найд", "проверь", "сумм", "срок", "риски", "поля", "контрагент", "счет", "счёт"])
+
+
+def _is_browser_monitoring_request(text: str) -> bool:
+    if not any(marker in text for marker in ["сайт", "страниц", "url", "лендинг", "браузер", "browser"]):
+        return False
+    return any(marker in text for marker in ["откры", "провер", "монитор", "след", "измен", "сравн", "собир"])
+
+
+def _is_negative_review_draft_request(text: str) -> bool:
+    if not any(marker in text for marker in ["отзыв", "отзывы"]):
+        return False
+    if not any(marker in text for marker in ["негатив", "плох", "жалоб", "проблем"]):
+        return False
+    return any(marker in text for marker in ["ответ", "черновик", "подготов"])
+
+
 def _default_extraction_rules(category: str, description: str) -> str:
     lowered = description.lower()
+    if category == "documents" and _is_uploaded_document_request(lowered):
+        return "Извлечь факты, суммы, даты, контрагентов, поля и строки, требующие проверки."
+    if category == "tables" and any(marker in lowered for marker in ["дубл", "дубликат"]):
+        return "Найти дубликаты, пустые поля, исключения, суммы, статусы и строки, требующие проверки."
+    if _is_browser_monitoring_request(lowered):
+        return "Открыть указанные сайты или страницы через browser-use, сравнить с прошлым срезом и выделить изменения меню, цен, акций или важных фактов."
     if _is_inventory_control_request(lowered):
         return "Найти остатки расходников и товаров ниже минимума, текущий остаток, минимальный порог и что нужно заказать."
     if _is_staff_schedule_request(lowered):
@@ -2283,6 +2311,8 @@ def _default_extraction_rules(category: str, description: str) -> str:
         return "Подобрать идеи продвижения без скидок на основе сезонности, услуг и отзывов клиентов."
     if _is_repeated_complaints_request(lowered):
         return "Найти повторяющиеся жалобы или проблемы в отзывах и сообщениях, собрать примеры и частоту."
+    if _is_review_location_analysis_request(lowered):
+        return "Сравнить отзывы по точкам сети, найти падение рейтинга и причины в новых отзывах."
     if _is_manager_report_request(lowered):
         return "Собрать данные по филиалам: отзывы, записи, выручка, расходы, проблемы и рекомендации."
     if _is_holiday_readiness_request(lowered):
@@ -2295,8 +2325,8 @@ def _default_extraction_rules(category: str, description: str) -> str:
         return "Найти клиентов с незаполненными контактами, источником прихода или датой последней записи."
     if _is_partner_replies_request(lowered):
         return "Разобрать ответы партнёров по статусам: интересно, отказ, нужен ручной ответ."
-    if _is_review_location_analysis_request(lowered):
-        return "Сравнить отзывы по точкам сети, найти падение рейтинга и причины в новых отзывах."
+    if _is_negative_review_draft_request(lowered):
+        return "Определить проблему в негативном отзыве и подготовить безопасный черновик ответа для ручной проверки."
     if category == "custom" and any(marker in lowered for marker in ["положительные отзывы", "идеи постов", "3 идеи", "три идеи"]):
         return "Выбрать новые положительные отзывы, темы, формулировки клиентов и поводы для постов."
     if category == "communications":
@@ -2324,6 +2354,12 @@ def _default_processing_rules(category: str) -> str:
 
 def _default_output_format(category: str, description: str = "") -> str:
     lowered = description.lower()
+    if category == "documents" and _is_uploaded_document_request(lowered):
+        return "Краткий разбор документа: summary, facts, fields, risks, missing_fields, rows_to_review."
+    if category == "tables" and any(marker in lowered for marker in ["дубл", "дубликат"]):
+        return "Отчёт по таблице: summary, duplicates, empty_fields, exceptions, rows_to_review."
+    if _is_browser_monitoring_request(lowered):
+        return "Отчёт по изменениям сайта: страница, что изменилось, почему важно и черновик уведомления для ручной отправки."
     if _is_inventory_control_request(lowered):
         return "Список для закупки: позиция, текущий остаток, минимум, сколько заказать и приоритет."
     if _is_staff_schedule_request(lowered):
@@ -2362,6 +2398,8 @@ def _default_output_format(category: str, description: str = "") -> str:
         return "3 идеи продвижения без скидок с причиной, каналом и следующим шагом."
     if _is_repeated_complaints_request(lowered):
         return "Повторяющиеся жалобы с примерами и предложением, что изменить в сервисе."
+    if _is_review_location_analysis_request(lowered):
+        return "Короткий разбор по филиалам: где упал рейтинг, какие отзывы повлияли и что сделать."
     if _is_manager_report_request(lowered):
         return "Отчёт по филиалам: отзывы, записи, выручка, расходы, проблемы и рекомендации на неделю."
     if _is_holiday_readiness_request(lowered):
@@ -2376,12 +2414,16 @@ def _default_output_format(category: str, description: str = "") -> str:
         return "Список клиентов с пустыми полями: телефон, email, источник прихода и кому исправить."
     if _is_partner_replies_request(lowered):
         return "Список ответов партнёров по статусам: интересно, отказ, нужен ручной ответ, плюс следующий шаг."
-    if _is_review_location_analysis_request(lowered):
-        return "Короткий разбор по филиалам: где упал рейтинг, какие отзывы повлияли и что сделать."
+    if _is_negative_review_draft_request(lowered):
+        return "Негативный отзыв, краткая причина проблемы и черновик ответа без публикации."
     if category == "custom" and any(marker in lowered for marker in ["положительные отзывы", "идеи постов", "3 идеи", "три идеи"]):
         return "3 идеи постов на основе положительных отзывов с цитатой/поводом и рекомендацией."
+    if category == "custom" and _is_telegram_content_analytics_request(lowered):
+        return "Контент-план: реакции и комментарии Telegram, выводы по посту и что изменить в следующих публикациях."
+    if category == "custom" and any(marker in lowered for marker in ["календарь публикац", "новости в карточ"]):
+        return "Календарь публикаций для карточек на картах: 3 темы, неделя, причина и рекомендация."
     if category == "custom" and any(marker in lowered for marker in ["контент-план", "темы постов", "темы публикац", "постов для карточ"]):
-        return "3 темы постов для карточек на картах с причиной и рекомендацией."
+        return "Контент-план: 3 темы постов для карточек на картах с причиной и рекомендацией."
     if category == "custom" and any(marker in lowered for marker in ["еженедельный отч", "отчёт владельцу", "отчет владельцу", "каждую пятниц"]):
         return "Еженедельный отчёт владельцу: отзывы, продажи, расходы, записи, проблемы и план следующей недели."
     formats = {
@@ -2438,6 +2480,8 @@ def _is_partner_replies_request(text: str) -> bool:
 def _is_review_location_analysis_request(text: str) -> bool:
     if not any(marker in text for marker in ["отзыв", "review"]):
         return False
+    if any(marker in text for marker in ["выруч", "расход", "финанс"]) and any(marker in text for marker in ["запис", "рекомендац", "следующую неделю"]):
+        return False
     return any(marker in text for marker in ["филиал", "точк", "сети", "рейтинг", "паден"])
 
 
@@ -2479,7 +2523,7 @@ def _is_cancellation_risk_request(text: str) -> bool:
 def _is_new_service_control_request(text: str) -> bool:
     if "услуг" not in text:
         return False
-    return any(marker in text for marker in ["новая", "новую", "появляется", "название", "описание", "цен", "улучш"])
+    return any(marker in text for marker in ["новая", "новую", "появляется", "улучш"])
 
 
 def _is_customer_questions_request(text: str) -> bool:

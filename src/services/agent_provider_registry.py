@@ -106,6 +106,10 @@ CAPABILITY_PROVIDER_MAP: Dict[str, List[Dict[str, Any]]] = {
         {"provider": "native_localos", "state": "available", "role": "native_google_sheets_reader"},
         {"provider": "manual", "state": "available", "role": "uploaded_file_or_paste"},
     ],
+    "browser_use.read_page": [
+        {"provider": "openclaw", "state": "available", "role": "browser_use_boundary"},
+        {"provider": "manual", "state": "available", "role": "human_browser_fallback"},
+    ],
     "finance.transaction.create": [
         {"provider": "native_localos", "state": "available", "role": "domain_write_request"},
         {"provider": "manual", "state": "available", "role": "approval_queue"},
@@ -139,6 +143,15 @@ INTEGRATION_PROVIDER_CATALOG: Dict[str, Dict[str, Any]] = {
         "status": "available",
         "provider_candidates": ["native_localos", "maton", "openclaw"],
         "capabilities": ["communications.draft", "communications.send_reminder", "communications.send_offer"],
+    },
+    "browser_use": {
+        "title": "Browser use",
+        "description": "Supervised website reading and change monitoring through the OpenClaw browser boundary.",
+        "required_config": ["target_urls"],
+        "default_limits": {"daily_page_check_cap": 50, "frequency_cap_minutes": 60},
+        "status": "available",
+        "provider_candidates": ["openclaw", "manual"],
+        "capabilities": ["browser_use.read_page"],
     },
     "maton": {
         "title": "Maton.ai",

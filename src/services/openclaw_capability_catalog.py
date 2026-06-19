@@ -57,6 +57,17 @@ STATIC_OPENCLAW_CAPABILITY_FALLBACK: List[Dict[str, Any]] = [
         "status": "available",
     },
     {
+        "openclaw_action_ref": "openclaw.browser.read_page",
+        "title": "Read website page",
+        "service": "browser",
+        "localos_capability": "browser_use.read_page",
+        "risk_class": "read",
+        "required_auth": [],
+        "approval_class": "none",
+        "side_effect": "none",
+        "status": "available",
+    },
+    {
         "openclaw_action_ref": "openclaw.maton.send_message",
         "title": "Send message through Maton bridge",
         "service": "maton",

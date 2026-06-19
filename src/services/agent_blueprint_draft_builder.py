@@ -25,7 +25,13 @@ def _contains_any(text: str, words: List[str]) -> bool:
 
 def infer_blueprint_category(description: str) -> str:
     text = description.lower()
+    if _is_uploaded_document_request(text):
+        return "documents"
+    if _is_local_table_request(text):
+        return "tables"
     if _infer_integration_intent(text):
+        return "custom"
+    if _is_browser_monitoring_request(text):
         return "custom"
     if _is_inventory_control_request(text):
         return "custom"
@@ -61,6 +67,8 @@ def infer_blueprint_category(description: str) -> str:
         return "custom"
     if _is_repeated_complaints_request(text):
         return "custom"
+    if _is_review_location_analysis_request(text):
+        return "reviews"
     if _is_manager_report_request(text):
         return "custom"
     if _is_holiday_readiness_request(text):
@@ -103,8 +111,6 @@ def infer_blueprint_category(description: str) -> str:
         return "documents"
     if _is_email_authoring_request(text):
         return "email"
-    if _contains_any(text, ["таблиц", "xlsx", "excel", "csv", "строк"]):
-        return "tables"
     if _contains_any(text, ["отзыв", "review"]):
         return "reviews"
     if _contains_any(text, ["услуг", "сервис", "пустые описан", "названия", "отсутствующие цены"]):
@@ -153,7 +159,8 @@ def compile_agent_blueprint(
     ai_result = {}
     content_analytics_request = _is_telegram_content_analytics_request(request_text)
     rich_localos_workflow_request = _is_rich_localos_workflow_request(request_text)
-    if use_ai and not content_analytics_request and not rich_localos_workflow_request:
+    browser_monitoring_request = _is_browser_monitoring_request(request_text)
+    if use_ai and not content_analytics_request and not rich_localos_workflow_request and not browser_monitoring_request:
         ai_result = infer_agent_workflow_intent(
             request_text,
             business_id=business_id,
@@ -172,7 +179,7 @@ def compile_agent_blueprint(
             }
             draft["metadata"] = metadata
             return draft
-    integration_intent = {} if content_analytics_request or rich_localos_workflow_request else _infer_integration_intent(request_text)
+    integration_intent = {} if content_analytics_request or rich_localos_workflow_request or browser_monitoring_request else _infer_integration_intent(request_text)
     if integration_intent:
         draft = _source_destination_compilation(request_text, integration_intent)
         if ai_result:
@@ -307,6 +314,17 @@ def _sources_for_category(category: str) -> List[str]:
 def _sources_for_request(category: str, request_text: str) -> List[str]:
     sources = _sources_for_category(category)
     lowered = request_text.lower()
+    if category == "documents" and _is_uploaded_document_request(lowered):
+        return ["uploaded_documents", "business_profile"]
+    if _is_browser_monitoring_request(lowered):
+        result = ["browser_use", "competitor_websites", "business_profile"]
+        if _contains_any(lowered, ["цен", "прайс", "стоимост", "меню", "товар", "услуг"]):
+            result.append("services")
+        if _contains_any(lowered, ["telegram", "телеграм", "присыла", "отправ", "шл", "уведом", "сообщ"]):
+            result.append("telegram")
+        if _contains_any(lowered, ["whatsapp", "ватсап", "вацап"]):
+            result.append("whatsapp")
+        return result
     if _is_inventory_control_request(lowered):
         return ["inventory", "products", "supplies", "business_profile"]
     if _is_staff_schedule_request(lowered):
@@ -351,6 +369,8 @@ def _sources_for_request(category: str, request_text: str) -> List[str]:
         return ["services", "external_reviews", "seasonality", "business_profile"]
     if _is_repeated_complaints_request(lowered):
         return ["external_reviews", "customer_messages", "services", "business_profile"]
+    if _is_review_location_analysis_request(lowered):
+        return ["external_reviews", "locations", "business_profile"]
     if _is_manager_report_request(lowered):
         return ["external_reviews", "appointments", "localos_finance", "locations", "business_profile"]
     if _is_holiday_readiness_request(lowered):
@@ -364,13 +384,11 @@ def _sources_for_request(category: str, request_text: str) -> List[str]:
         return result
     if _is_partner_replies_request(lowered):
         return ["prospectingleads", "outreach_drafts", "business_profile"]
-    if _is_review_location_analysis_request(lowered):
-        return ["external_reviews", "locations", "business_profile"]
     if _is_review_based_content_request(lowered):
         return ["external_reviews", "services", "business_profile", "manual_context"]
     if category == "custom" and _is_telegram_content_analytics_request(request_text):
         return ["telegram", "business_profile", "services", "external_reviews", "manual_context"]
-    if category == "custom" and _contains_any(lowered, ["контент-план", "темы постов", "темы публикац", "постов для карточ", "карточек на картах"]):
+    if category == "custom" and _contains_any(lowered, ["контент-план", "темы постов", "темы публикац", "постов для карточ", "карточек на картах", "новости в карточ", "календарь публикац"]):
         return ["services", "external_reviews", "business_profile", "manual_context"]
     if category == "custom" and _contains_any(lowered, ["еженедельный отч", "отчёт владельцу", "отчет владельцу", "каждую пятниц"]):
         return ["external_reviews", "localos_finance", "appointments", "services", "business_profile"]
@@ -384,6 +402,26 @@ def _is_telegram_content_analytics_request(text: str) -> bool:
     if not _contains_any(lowered, ["реакц", "комментар", "через api"]):
         return False
     return _contains_any(lowered, ["контент-план", "собирай вывод", "что изменить", "изменения"])
+
+
+def _is_uploaded_document_request(text: str) -> bool:
+    if _contains_any(text, ["таблиц", "xlsx", "excel", "csv"]):
+        return False
+    if not _contains_any(text, ["загруж", "файл", "pdf", "docx", "документ", "договор", "акт"]):
+        return False
+    return _contains_any(text, ["извлек", "разбери", "найд", "проверь", "сумм", "срок", "риски", "поля", "контрагент", "счет", "счёт"])
+
+
+def _is_local_table_request(text: str) -> bool:
+    if _contains_any(text, ["google sheets", "google-таблиц", "google таблиц", "docs.google", "telegram", "телеграм", "whatsapp", "localos"]):
+        return False
+    return _contains_any(text, ["таблиц", "xlsx", "excel", "csv", "строк"])
+
+
+def _is_browser_monitoring_request(text: str) -> bool:
+    if not _contains_any(text, ["сайт", "страниц", "url", "лендинг", "браузер", "browser"]):
+        return False
+    return _contains_any(text, ["откры", "провер", "монитор", "след", "измен", "сравн", "собир"])
 
 
 def _metadata(description: str, category: str, sources: List[str]) -> Dict[str, Any]:
@@ -764,6 +802,8 @@ def _is_partner_replies_request(text: str) -> bool:
 def _is_review_location_analysis_request(text: str) -> bool:
     if not _contains_any(text, ["отзыв", "review"]):
         return False
+    if _contains_any(text, ["выруч", "расход", "финанс"]) and _contains_any(text, ["запис", "рекомендац", "следующую неделю"]):
+        return False
     return _contains_any(text, ["филиал", "точк", "сети", "рейтинг", "паден"])
 
 
@@ -798,7 +838,7 @@ def _is_cancellation_risk_request(text: str) -> bool:
 def _is_new_service_control_request(text: str) -> bool:
     if not _contains_any(text, ["услуг"]):
         return False
-    return _contains_any(text, ["новая", "новую", "появляется", "название", "описание", "цен", "улучш"])
+    return _contains_any(text, ["новая", "новую", "появляется", "улучш"])
 
 
 def _is_customer_questions_request(text: str) -> bool:

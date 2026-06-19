@@ -1797,6 +1797,58 @@ def test_agent_builder_understands_fourth_browser_scenario_pack_without_generic_
             assert term.lower() not in surface_text, key
 
 
+def test_agent_builder_new_50_plus_legacy_40_scenario_corpus_is_complete():
+    from tests.agent_builder_scenario_corpus import (
+        LEGACY_BROWSER_SCENARIO_COUNT,
+        MIXED_AGENT_BUILDER_COMBINATIONS,
+        NEW_AGENT_BUILDER_SCENARIOS,
+    )
+
+    keys = [str(item["key"]) for item in NEW_AGENT_BUILDER_SCENARIOS]
+    combination_keys = {key for _, items in MIXED_AGENT_BUILDER_COMBINATIONS for key in items}
+
+    assert LEGACY_BROWSER_SCENARIO_COUNT == 40
+    assert len(NEW_AGENT_BUILDER_SCENARIOS) == 50
+    assert len(set(keys)) == 50
+    assert LEGACY_BROWSER_SCENARIO_COUNT + len(NEW_AGENT_BUILDER_SCENARIOS) == 90
+    assert len(MIXED_AGENT_BUILDER_COMBINATIONS) >= 10
+    assert combination_keys.issubset(set(keys))
+
+    all_sources = {source for item in NEW_AGENT_BUILDER_SCENARIOS for source in item["expected_sources"]}
+    for source in ["browser_use", "google_sheets", "telegram", "whatsapp", "external_reviews", "localos_finance"]:
+        assert source in all_sources
+
+
+def test_agent_builder_understands_new_50_mixed_scenarios_without_wrong_domains():
+    from services.agent_builder_session import build_agent_builder_state
+    from tests.agent_builder_scenario_corpus import NEW_AGENT_BUILDER_SCENARIOS
+
+    for item in NEW_AGENT_BUILDER_SCENARIOS:
+        key = str(item["key"])
+        state = build_agent_builder_state([{"role": "user", "content": item["prompt"]}], use_ai=True)
+        preview = state["preview"]
+        questions_text = " ".join(str(question.get("question") or "") for question in state["missing_questions"]).lower()
+        surface_text = " ".join(
+            [
+                state["category"],
+                preview["category_label"],
+                ", ".join(preview["data_sources"]),
+                preview["extraction_rules"],
+                preview["output_format"],
+                questions_text,
+            ]
+        ).lower()
+        sources = set(preview["data_sources"])
+
+        assert state["category"] == item["expected_category"], key
+        for source in item["expected_sources"]:
+            assert source in sources, key
+        for term in item["expected_terms"]:
+            assert str(term).lower() in surface_text, key
+        for term in item["forbidden_terms"]:
+            assert str(term).lower() not in surface_text, key
+
+
 def test_agent_builder_keeps_real_user_scenarios_on_the_obvious_next_step():
     from services.agent_builder_session import build_agent_builder_state
 
