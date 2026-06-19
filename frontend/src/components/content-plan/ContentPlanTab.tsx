@@ -138,6 +138,18 @@ type SocialPostsSummary = {
   by_status?: Record<string, number>;
 };
 
+type SocialQueueGroup = {
+  key: string;
+  label_ru?: string;
+  label_en?: string;
+  next_action_ru?: string;
+  next_action_en?: string;
+  count: number;
+  post_ids?: string[];
+  item_ids?: string[];
+  platforms?: Record<string, number>;
+};
+
 type LearningMetricsPayload = {
   window_days: number;
   items: Array<{
@@ -363,6 +375,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [recentGeneratedItemId, setRecentGeneratedItemId] = useState('');
   const [socialPostsByItem, setSocialPostsByItem] = useState<Record<string, SocialPost[]>>({});
   const [socialSummary, setSocialSummary] = useState<SocialPostsSummary | null>(null);
+  const [socialQueueGroups, setSocialQueueGroups] = useState<SocialQueueGroup[]>([]);
   const [socialBusyAction, setSocialBusyAction] = useState('');
   const [activeZone, setActiveZone] = useState<ContentPlanZone>('overview');
   const [contentMode, setContentMode] = useState<ContentPlanMode>('point');
@@ -374,13 +387,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [selectedItemIds, setSelectedItemIds] = useState<Record<string, boolean>>({});
   const [showRecentPlans, setShowRecentPlans] = useState(false);
 
-  const allowedHorizons = context?.subscription?.allowed_horizons || [30];
-  const scopeOptions = context?.scope?.scope_options || [];
+  const allowedHorizons = useMemo(() => context?.subscription?.allowed_horizons || [30], [context?.subscription?.allowed_horizons]);
+  const scopeOptions = useMemo(() => context?.scope?.scope_options || [], [context?.scope?.scope_options]);
   const isNetworkContext = Boolean(context?.scope?.network?.is_network);
   const selectedScopeDescription = context?.scope?.selected_scope_description || '';
   const selectedScopeLabel = context?.scope?.selected_scope_label || '';
   const readiness = context?.readiness || null;
-  const missingInputs = Array.isArray(readiness?.missing_inputs) ? readiness?.missing_inputs : [];
+  const missingInputs = useMemo(() => (
+    Array.isArray(readiness?.missing_inputs) ? readiness.missing_inputs : []
+  ), [readiness?.missing_inputs]);
   const mapLinksCount = Number(readiness?.map_links_count || 0);
   const servicesCount = context?.services?.length || 0;
   const seoKeywordsCount = context?.seo_keywords?.length || 0;
@@ -610,6 +625,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const selectedNewsCandidates = useMemo(() => (
     selectedItems.filter((item) => String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim())
   ), [selectedItems]);
+  const selectedSocialPosts = useMemo(() => (
+    selectedItems.flatMap((item) => socialPostsByItem[item.id] || [])
+  ), [selectedItems, socialPostsByItem]);
+  const selectedSocialNeedsReview = useMemo(() => (
+    selectedSocialPosts.filter((post) => post.status === 'draft' || post.status === 'needs_review')
+  ), [selectedSocialPosts]);
+  const selectedSocialCanPublish = useMemo(() => (
+    selectedSocialPosts.filter((post) => post.status === 'approved' || post.status === 'queued')
+  ), [selectedSocialPosts]);
+  const selectedSocialCanMarkPublished = useMemo(() => (
+    selectedSocialPosts.filter((post) => post.status === 'needs_supervised_publish' || post.status === 'needs_manual_publish')
+  ), [selectedSocialPosts]);
   const missingDateCandidates = useMemo(() => (
     visibleItems.filter((item) => !_inputDateValue(item.scheduled_for) && !String(item.usernews_id || '').trim())
   ), [visibleItems]);
@@ -1053,9 +1080,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       }
       setSocialPostsByItem(grouped);
       setSocialSummary(response.summary || null);
+      setSocialQueueGroups(Array.isArray(response.queue_groups) ? response.queue_groups : []);
     } catch {
       setSocialPostsByItem({});
       setSocialSummary(null);
+      setSocialQueueGroups([]);
     }
   };
 
@@ -1103,12 +1132,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     void loadContext();
     void loadPlans();
     void loadLearningMetrics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
 
   useEffect(() => {
     if (!currentPlan?.id) {
       setSocialPostsByItem({});
       setSocialSummary(null);
+      setSocialQueueGroups([]);
       return;
     }
     void loadSocialPosts(currentPlan.id);
@@ -1118,6 +1149,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (!businessId) return;
     if (!selectedScopeKey) return;
     void loadContext(selectedScopeKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedScopeKey, businessId]);
 
   useEffect(() => {
@@ -1482,6 +1514,103 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setError(message);
     } finally {
       setSocialBusyAction('');
+    }
+  };
+
+  const prepareSelectedSocialPosts = async () => {
+    if (!selectedItems.length) return;
+    setBulkBusyAction('selected-social-prepare');
+    setError('');
+    setActionSummary(null);
+    try {
+      const itemIds = selectedItems.map((item) => item.id);
+      await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
+        method: 'POST',
+        body: JSON.stringify({ item_ids: itemIds }),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Каналы подготовлены для выбранных тем. Следующий шаг - проверить тексты.',
+        text_en: 'Channels prepared for selected items. Next step: review copy.',
+      });
+    } catch (bulkError) {
+      const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось подготовить выбранные каналы' : 'Could not prepare selected channels');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
+  const approveSelectedSocialPosts = async () => {
+    if (!selectedSocialNeedsReview.length) return;
+    setBulkBusyAction('selected-social-approve');
+    setError('');
+    setActionSummary(null);
+    try {
+      await newAuth.makeRequest('/social-posts/bulk-approve', {
+        method: 'POST',
+        body: JSON.stringify({ post_ids: selectedSocialNeedsReview.map((post) => post.id) }),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Выбранные публикации подтверждены. Внешняя публикация ещё не запускалась.',
+        text_en: 'Selected posts approved. External publishing has not started yet.',
+      });
+    } catch (bulkError) {
+      const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось подтвердить выбранные публикации' : 'Could not approve selected posts');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
+  const publishSelectedSocialPosts = async () => {
+    if (!selectedSocialCanPublish.length) return;
+    setBulkBusyAction('selected-social-publish');
+    setError('');
+    setActionSummary(null);
+    try {
+      await newAuth.makeRequest('/social-posts/bulk-publish', {
+        method: 'POST',
+        body: JSON.stringify({ post_ids: selectedSocialCanPublish.map((post) => post.id) }),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'API-каналы запущены, а Яндекс/2ГИС переведены в контролируемое размещение.',
+        text_en: 'API channels started; Yandex/2GIS moved to supervised placement.',
+      });
+    } catch (bulkError) {
+      const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось запустить выбранные публикации' : 'Could not start selected publishing');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
+  const markSelectedSocialPostsPublished = async () => {
+    if (!selectedSocialCanMarkPublished.length) return;
+    setBulkBusyAction('selected-social-manual');
+    setError('');
+    setActionSummary(null);
+    try {
+      await newAuth.makeRequest('/social-posts/bulk-mark-manual-published', {
+        method: 'POST',
+        body: JSON.stringify({ post_ids: selectedSocialCanMarkPublished.map((post) => post.id) }),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Выбранные ручные/контролируемые публикации отмечены как размещённые.',
+        text_en: 'Selected manual/supervised posts marked as published.',
+      });
+    } catch (bulkError) {
+      const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось отметить выбранные публикации' : 'Could not mark selected posts');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
     }
   };
 
@@ -3761,6 +3890,50 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   ? ` · ${dateFromFilter || '...'} - ${dateToFilter || '...'}`
                   : ` · ${isRu ? 'все даты' : 'all dates'}`}
               </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-950">
+                      {isRu ? 'Очередь публикаций по каналам' : 'Channel publishing queue'}
+                    </div>
+                    <div className="mt-1 text-xs leading-5 text-slate-500">
+                      {isRu
+                        ? 'Здесь видно, что нужно проверить, что готово к API и где требуется контролируемое размещение.'
+                        : 'See what needs review, what is API-ready, and where supervised placement is required.'}
+                    </div>
+                  </div>
+                  {Number(socialSummary?.total || 0) > 0 ? (
+                    <div className="text-xs font-medium text-slate-500">
+                      {isRu ? `Всего публикаций: ${socialSummary?.total || 0}` : `Posts: ${socialSummary?.total || 0}`}
+                    </div>
+                  ) : null}
+                </div>
+                {socialQueueGroups.length > 0 ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                    {socialQueueGroups.map((group) => (
+                      <div key={group.key} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-xs font-semibold text-slate-700">
+                            {_socialQueueGroupLabel(group, isRu)}
+                          </div>
+                          <div className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-900">
+                            {group.count || 0}
+                          </div>
+                        </div>
+                        <div className="mt-2 min-h-[40px] text-xs leading-5 text-slate-500">
+                          {_socialQueueGroupNextAction(group, isRu)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-600">
+                    {isRu
+                      ? 'Подготовьте каналы для тем плана, чтобы увидеть рабочую очередь публикаций.'
+                      : 'Prepare channels for plan items to see the publishing workload.'}
+                  </div>
+                )}
+              </div>
               {selectedItems.length > 0 ? (
                 <div className="flex w-full flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3">
                   <div className="mr-auto flex items-center gap-2 text-sm font-medium text-slate-900">
@@ -3784,6 +3957,43 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     {bulkBusyAction === 'selected-news'
                       ? (isRu ? 'Создаём новости...' : 'Creating news...')
                       : `${isRu ? 'Создать выбранные новости' : 'Create selected news'} · ${selectedNewsCandidates.length}`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { void prepareSelectedSocialPosts(); }}
+                    disabled={Boolean(bulkBusyAction) || selectedItems.length === 0}
+                  >
+                    <Globe className="mr-2 h-4 w-4" />
+                    {bulkBusyAction === 'selected-social-prepare'
+                      ? (isRu ? 'Готовим каналы...' : 'Preparing channels...')
+                      : `${isRu ? 'Подготовить каналы' : 'Prepare channels'} · ${selectedItems.length}`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { void approveSelectedSocialPosts(); }}
+                    disabled={Boolean(bulkBusyAction) || selectedSocialNeedsReview.length === 0}
+                  >
+                    {bulkBusyAction === 'selected-social-approve'
+                      ? (isRu ? 'Подтверждаем...' : 'Approving...')
+                      : `${isRu ? 'Подтвердить посты' : 'Approve posts'} · ${selectedSocialNeedsReview.length}`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { void publishSelectedSocialPosts(); }}
+                    disabled={Boolean(bulkBusyAction) || selectedSocialCanPublish.length === 0}
+                  >
+                    {bulkBusyAction === 'selected-social-publish'
+                      ? (isRu ? 'Запускаем...' : 'Starting...')
+                      : `${isRu ? 'Запустить публикацию' : 'Start publishing'} · ${selectedSocialCanPublish.length}`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { void markSelectedSocialPostsPublished(); }}
+                    disabled={Boolean(bulkBusyAction) || selectedSocialCanMarkPublished.length === 0}
+                  >
+                    {bulkBusyAction === 'selected-social-manual'
+                      ? (isRu ? 'Отмечаем...' : 'Marking...')
+                      : `${isRu ? 'Отметить размещёнными' : 'Mark published'} · ${selectedSocialCanMarkPublished.length}`}
                   </Button>
                   <Button type="button" variant="ghost" onClick={clearSelectedItems}>
                     {isRu ? 'Снять выбор' : 'Clear'}
@@ -4377,6 +4587,24 @@ function _socialNextActionLabel(action: string, isRu: boolean): string {
   if (normalized === 'retry_or_manual') return isRu ? 'следующий шаг: повторить или вручную' : 'next: retry or manual';
   if (normalized === 'collect_metrics') return isRu ? 'следующий шаг: собрать реакции' : 'next: collect reactions';
   return isRu ? 'следующий шаг не требуется' : 'no next action';
+}
+
+function _socialQueueGroupLabel(group: SocialQueueGroup, isRu: boolean): string {
+  const label = isRu ? group.label_ru : group.label_en;
+  if (label) return label;
+  const key = String(group.key || '').trim();
+  if (key === 'needs_review') return isRu ? 'Нужно проверить' : 'Needs review';
+  if (key === 'api_ready') return isRu ? 'Готово к API' : 'API ready';
+  if (key === 'needs_supervised_publish') return isRu ? 'Нужно контролируемое размещение' : 'Needs supervised placement';
+  if (key === 'published') return isRu ? 'Опубликовано' : 'Published';
+  if (key === 'failed') return isRu ? 'Ошибка' : 'Failed';
+  return isRu ? 'Очередь' : 'Queue';
+}
+
+function _socialQueueGroupNextAction(group: SocialQueueGroup, isRu: boolean): string {
+  const text = isRu ? group.next_action_ru : group.next_action_en;
+  if (text) return text;
+  return isRu ? 'Следующее действие будет показано после подготовки каналов.' : 'Next action appears after channel preparation.';
 }
 
 function _contentTypeLabel(contentType: string, isRu: boolean): string {

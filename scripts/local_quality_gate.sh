@@ -46,7 +46,7 @@ npm --prefix frontend run lint
 
 echo "== Frontend changed-file lint baseline =="
 changed_frontend_files="$(
-  git diff --name-only --diff-filter=ACMR HEAD -- 'frontend/**/*.{ts,tsx}' || true
+  git diff --name-only --diff-filter=ACMR HEAD -- 'frontend/**/*.ts' 'frontend/**/*.tsx' || true
 )"
 if [ -n "${changed_frontend_files}" ]; then
   (

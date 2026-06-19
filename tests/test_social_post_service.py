@@ -1,6 +1,7 @@
 import sys
 
 from services.social_post_service import (
+    build_social_queue_groups,
     default_publish_mode,
     ensure_social_post_tables,
     next_action_for_social_post,
@@ -93,3 +94,22 @@ def test_ensure_social_post_tables_fails_when_migration_is_missing():
     assert error is not None
     assert "Run Alembic migration 20260619_001" in str(error)
     assert "social_post_metrics" in str(error)
+
+
+def test_build_social_queue_groups_matches_daily_workflow():
+    groups = build_social_queue_groups(
+        [
+            {"id": "p1", "content_plan_item_id": "i1", "platform": "telegram", "status": "needs_review"},
+            {"id": "p2", "content_plan_item_id": "i1", "platform": "vk", "status": "approved"},
+            {"id": "p3", "content_plan_item_id": "i2", "platform": "yandex_maps", "status": "approved"},
+            {"id": "p4", "content_plan_item_id": "i3", "platform": "telegram", "status": "published"},
+            {"id": "p5", "content_plan_item_id": "i4", "platform": "facebook", "status": "failed"},
+        ]
+    )
+    by_key = {group["key"]: group for group in groups}
+
+    assert by_key["needs_review"]["count"] == 1
+    assert by_key["api_ready"]["post_ids"] == ["p2"]
+    assert by_key["needs_supervised_publish"]["post_ids"] == ["p3"]
+    assert by_key["published"]["count"] == 1
+    assert by_key["failed"]["count"] == 1

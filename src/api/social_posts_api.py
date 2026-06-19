@@ -11,11 +11,16 @@ from flask import Blueprint, jsonify, request
 from auth_system import verify_session
 from services.social_post_service import (
     approve_social_post,
+    approve_social_posts,
     collect_social_post_metrics,
     list_social_posts_for_plan,
     mark_manual_published,
+    mark_manual_published_posts,
     prepare_social_posts_for_item,
+    prepare_social_posts_for_items,
     publish_social_post,
+    publish_social_posts,
+    record_social_post_attribution_event,
 )
 
 
@@ -87,6 +92,28 @@ def social_posts_prepare(item_id: str):
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
 
 
+@social_posts_bp.route("/api/content-plans/social-posts/bulk-prepare", methods=["POST"])
+def social_posts_bulk_prepare():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "bulk-prepare")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("item_ids") if isinstance(data.get("item_ids"), list) else []
+    platforms = data.get("platforms") if isinstance(data.get("platforms"), list) else None
+    try:
+        payload = prepare_social_posts_for_items(str(user_data.get("user_id") or ""), item_ids, platforms)
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
 @social_posts_bp.route("/api/content-plans/<plan_id>/social-posts", methods=["GET"])
 def social_posts_list(plan_id: str):
     user_data, error_response = _require_auth()
@@ -103,6 +130,27 @@ def social_posts_list(plan_id: str):
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
 
 
+@social_posts_bp.route("/api/social-posts/bulk-approve", methods=["POST"])
+def social_posts_bulk_approve():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "bulk-approve")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    post_ids = data.get("post_ids") if isinstance(data.get("post_ids"), list) else []
+    try:
+        payload = approve_social_posts(str(user_data.get("user_id") or ""), post_ids)
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
 @social_posts_bp.route("/api/social-posts/<post_id>/approve", methods=["POST"])
 def social_posts_approve(post_id: str):
     user_data, error_response = _require_auth()
@@ -114,6 +162,27 @@ def social_posts_approve(post_id: str):
     try:
         post = approve_social_post(str(user_data.get("user_id") or ""), post_id)
         return jsonify({"success": True, "post": post})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/bulk-publish", methods=["POST"])
+def social_posts_bulk_publish():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "bulk-publish")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    post_ids = data.get("post_ids") if isinstance(data.get("post_ids"), list) else []
+    try:
+        payload = publish_social_posts(str(user_data.get("user_id") or ""), post_ids)
+        return jsonify({"success": True, **payload})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
     except ValueError:
@@ -141,6 +210,32 @@ def social_posts_publish(post_id: str):
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
 
 
+@social_posts_bp.route("/api/social-posts/bulk-mark-manual-published", methods=["POST"])
+def social_posts_bulk_mark_manual_published():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "bulk-manual-published")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    post_ids = data.get("post_ids") if isinstance(data.get("post_ids"), list) else []
+    try:
+        payload = mark_manual_published_posts(
+            str(user_data.get("user_id") or ""),
+            post_ids,
+            provider_post_url=str(data.get("provider_post_url") or "").strip(),
+            provider_post_id=str(data.get("provider_post_id") or "").strip(),
+        )
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
 @social_posts_bp.route("/api/social-posts/<post_id>/mark-manual-published", methods=["POST"])
 def social_posts_mark_manual_published(post_id: str):
     user_data, error_response = _require_auth()
@@ -158,6 +253,33 @@ def social_posts_mark_manual_published(post_id: str):
             provider_post_id=str(data.get("provider_post_id") or "").strip(),
         )
         return jsonify({"success": True, "post": post})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/<post_id>/attribution-events", methods=["POST"])
+def social_posts_attribution_event(post_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "attribution")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    try:
+        payload = record_social_post_attribution_event(
+            str(user_data.get("user_id") or ""),
+            post_id,
+            event_type=str(data.get("event_type") or "").strip(),
+            value=int(data.get("value") or 1),
+            event_source=str(data.get("event_source") or "manual").strip(),
+            metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else {},
+        )
+        return jsonify({"success": True, **payload})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
     except ValueError:

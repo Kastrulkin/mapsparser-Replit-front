@@ -3,11 +3,16 @@ from __future__ import annotations
 import json
 import os
 import sys
+import urllib.error
+import urllib.request
 import uuid
 from datetime import date, datetime, timezone
 from typing import Any
 
+from auth_encryption import decrypt_auth_data
 from database_manager import DatabaseManager
+from core.telegram_network import telegram_urlopen
+from core.telegram_token_store import decode_telegram_bot_token
 from core.helpers import get_business_owner_id
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
 
@@ -41,6 +46,44 @@ SOCIAL_POST_TABLES = (
     "social_posts",
     "social_post_metrics",
     "social_post_attribution_events",
+)
+
+SOCIAL_QUEUE_GROUPS = (
+    {
+        "key": "needs_review",
+        "label_ru": "Нужно проверить",
+        "label_en": "Needs review",
+        "next_action_ru": "Проверить тексты и подтвердить публикации.",
+        "next_action_en": "Review copy and approve posts.",
+    },
+    {
+        "key": "api_ready",
+        "label_ru": "Готово к API",
+        "label_en": "API ready",
+        "next_action_ru": "Поставить подтверждённые API-каналы в очередь публикации.",
+        "next_action_en": "Queue approved API channels for publishing.",
+    },
+    {
+        "key": "needs_supervised_publish",
+        "label_ru": "Нужно контролируемое размещение",
+        "label_en": "Needs supervised placement",
+        "next_action_ru": "Открыть контролируемое размещение или передать человеку ручную инструкцию.",
+        "next_action_en": "Open supervised placement or hand off manual instructions.",
+    },
+    {
+        "key": "published",
+        "label_ru": "Опубликовано",
+        "label_en": "Published",
+        "next_action_ru": "Собрать реакции и отметить заявки/обращения.",
+        "next_action_en": "Collect reactions and record leads/inquiries.",
+    },
+    {
+        "key": "failed",
+        "label_ru": "Ошибка",
+        "label_en": "Failed",
+        "next_action_ru": "Исправить подключение, повторить публикацию или перевести в ручной режим.",
+        "next_action_en": "Fix connection, retry, or move to manual publishing.",
+    },
 )
 
 
@@ -128,10 +171,28 @@ def list_social_posts_for_plan(user_id: str, plan_id: str) -> dict[str, Any]:
         return {
             "posts": posts,
             "summary": _summary_for_posts(posts),
+            "queue_groups": build_social_queue_groups(posts),
             "recommendation": _build_plan_recommendation(posts),
         }
     finally:
         db.close()
+
+
+def prepare_social_posts_for_items(user_id: str, item_ids: list[str], platforms: list[str] | None = None) -> dict[str, Any]:
+    posts: list[dict[str, Any]] = []
+    failed: list[dict[str, str]] = []
+    for item_id in _normalize_ids(item_ids):
+        try:
+            payload = prepare_social_posts_for_item(user_id, item_id, platforms)
+            posts.extend(payload.get("posts") or [])
+        except Exception:
+            failed.append({"id": item_id, "error": str(sys.exc_info()[1])})
+    return {
+        "posts": posts,
+        "failed": failed,
+        "summary": _summary_for_posts(posts),
+        "queue_groups": build_social_queue_groups(posts),
+    }
 
 
 def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
@@ -165,6 +226,22 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
         raise sys.exc_info()[1]
     finally:
         db.close()
+
+
+def approve_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
+    posts: list[dict[str, Any]] = []
+    failed: list[dict[str, str]] = []
+    for post_id in _normalize_ids(post_ids):
+        try:
+            posts.append(approve_social_post(user_id, post_id))
+        except Exception:
+            failed.append({"id": post_id, "error": str(sys.exc_info()[1])})
+    return {
+        "posts": posts,
+        "failed": failed,
+        "summary": _summary_for_posts(posts),
+        "queue_groups": build_social_queue_groups(posts),
+    }
 
 
 def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
@@ -212,12 +289,10 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             updated = _serialize_social_post(cursor, cursor.fetchone())
             db.conn.commit()
             return updated
-        metadata["provider_status"] = "queued_for_native_adapter"
-        metadata["provider_note"] = "API publish adapter requires connected account and channel-specific preflight."
         cursor.execute(
             """
             UPDATE social_posts
-            SET status = 'queued',
+            SET status = 'publishing',
                 metadata_json = %s,
                 last_error = NULL,
                 updated_at = NOW()
@@ -225,6 +300,37 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             RETURNING *
             """,
             (_json_dumps(metadata), post_id),
+        )
+        post = _serialize_social_post(cursor, cursor.fetchone())
+        publish_result = _publish_api_post(cursor, post)
+        metadata.update(_json_dict(post.get("metadata_json")))
+        metadata.update(_json_dict(publish_result.get("metadata_json")))
+        next_status = str(publish_result.get("status") or "failed")
+        if next_status not in SOCIAL_POST_STATUSES:
+            next_status = "failed"
+        published_at = datetime.now(timezone.utc) if next_status == "published" else None
+        cursor.execute(
+            """
+            UPDATE social_posts
+            SET status = %s,
+                published_at = COALESCE(published_at, %s),
+                provider_post_id = COALESCE(NULLIF(%s, ''), provider_post_id),
+                provider_post_url = COALESCE(NULLIF(%s, ''), provider_post_url),
+                metadata_json = %s,
+                last_error = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (
+                next_status,
+                published_at,
+                str(publish_result.get("provider_post_id") or "").strip(),
+                str(publish_result.get("provider_post_url") or "").strip(),
+                _json_dumps(metadata),
+                str(publish_result.get("last_error") or "").strip() or None,
+                post_id,
+            ),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
         db.conn.commit()
@@ -234,6 +340,22 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
         raise sys.exc_info()[1]
     finally:
         db.close()
+
+
+def publish_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
+    posts: list[dict[str, Any]] = []
+    failed: list[dict[str, str]] = []
+    for post_id in _normalize_ids(post_ids):
+        try:
+            posts.append(publish_social_post(user_id, post_id))
+        except Exception:
+            failed.append({"id": post_id, "error": str(sys.exc_info()[1])})
+    return {
+        "posts": posts,
+        "failed": failed,
+        "summary": _summary_for_posts(posts),
+        "queue_groups": build_social_queue_groups(posts),
+    }
 
 
 def mark_manual_published(user_id: str, post_id: str, provider_post_url: str = "", provider_post_id: str = "") -> dict[str, Any]:
@@ -262,6 +384,79 @@ def mark_manual_published(user_id: str, post_id: str, provider_post_url: str = "
         updated = _serialize_social_post(cursor, cursor.fetchone())
         db.conn.commit()
         return updated
+    except Exception:
+        db.conn.rollback()
+        raise sys.exc_info()[1]
+    finally:
+        db.close()
+
+
+def mark_manual_published_posts(
+    user_id: str,
+    post_ids: list[str],
+    provider_post_url: str = "",
+    provider_post_id: str = "",
+) -> dict[str, Any]:
+    posts: list[dict[str, Any]] = []
+    failed: list[dict[str, str]] = []
+    for post_id in _normalize_ids(post_ids):
+        try:
+            posts.append(mark_manual_published(user_id, post_id, provider_post_url, provider_post_id))
+        except Exception:
+            failed.append({"id": post_id, "error": str(sys.exc_info()[1])})
+    return {
+        "posts": posts,
+        "failed": failed,
+        "summary": _summary_for_posts(posts),
+        "queue_groups": build_social_queue_groups(posts),
+    }
+
+
+def record_social_post_attribution_event(
+    user_id: str,
+    post_id: str,
+    event_type: str,
+    value: int = 1,
+    event_source: str = "manual",
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        post = _load_post_for_user(cursor, user_id, post_id)
+        normalized_event_type = str(event_type or "").strip().lower()
+        if normalized_event_type not in {"lead", "inquiry", "comment", "share", "click"}:
+            raise ValueError("Неподдерживаемый тип события")
+        event_value = max(int(value or 1), 1)
+        event_id = _new_id()
+        cursor.execute(
+            """
+            INSERT INTO social_post_attribution_events (
+                id, social_post_id, business_id, event_type, event_source, value, metadata_json, event_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            RETURNING *
+            """,
+            (
+                event_id,
+                post.get("id"),
+                post.get("business_id"),
+                normalized_event_type,
+                str(event_source or "manual").strip() or "manual",
+                event_value,
+                _json_dumps(metadata or {}),
+            ),
+        )
+        event = _row_to_dict(cursor, cursor.fetchone())
+        for key, item in list(event.items()):
+            if isinstance(item, (datetime, date)):
+                event[key] = item.isoformat()
+        db.conn.commit()
+        return {
+            "event": event,
+            "post": post,
+        }
     except Exception:
         db.conn.rollback()
         raise sys.exc_info()[1]
@@ -373,6 +568,51 @@ def next_action_for_social_post(post: dict[str, Any]) -> str:
     if status == "published":
         return "collect_metrics"
     return "none"
+
+
+def build_social_queue_groups(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {str(group["key"]): [] for group in SOCIAL_QUEUE_GROUPS}
+    for post in posts:
+        key = _queue_group_key(post)
+        if key not in grouped:
+            grouped[key] = []
+        grouped[key].append(post)
+    result = []
+    for group in SOCIAL_QUEUE_GROUPS:
+        key = str(group["key"])
+        group_posts = grouped.get(key, [])
+        result.append(
+            {
+                **group,
+                "count": len(group_posts),
+                "post_ids": [str(post.get("id") or "") for post in group_posts if str(post.get("id") or "").strip()],
+                "item_ids": sorted(
+                    {
+                        str(post.get("content_plan_item_id") or "").strip()
+                        for post in group_posts
+                        if str(post.get("content_plan_item_id") or "").strip()
+                    }
+                ),
+                "platforms": _summary_for_posts(group_posts).get("by_platform", {}),
+            }
+        )
+    return result
+
+
+def _queue_group_key(post: dict[str, Any]) -> str:
+    status = str(post.get("status") or "").strip()
+    platform = str(post.get("platform") or "").strip()
+    if status in {"draft", "needs_review"}:
+        return "needs_review"
+    if status == "published":
+        return "published"
+    if status == "failed":
+        return "failed"
+    if platform in BROWSER_OR_MANUAL_PLATFORMS or status in {"needs_supervised_publish", "needs_manual_publish"}:
+        return "needs_supervised_publish"
+    if platform in API_PLATFORMS and status in {"approved", "queued", "publishing"}:
+        return "api_ready"
+    return "needs_review"
 
 
 def _load_plan_item_for_user(cursor: Any, user_id: str, item_id: str) -> dict[str, Any]:
@@ -501,6 +741,235 @@ def _supervised_publish_metadata(post: dict[str, Any], automation_task_id: str) 
     }
 
 
+def _publish_api_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    platform = str(post.get("platform") or "").strip()
+    if platform == "telegram":
+        return _publish_telegram_post(cursor, post)
+    if platform == "vk":
+        return _publish_external_account_post(
+            cursor,
+            post,
+            ("vk", "vk_group", "vk_business"),
+            "VK аккаунт/группа не подключены или не выданы права wall.post.",
+            "vk_adapter_waiting_for_native_wall_post",
+        )
+    if platform == "google_business":
+        return _publish_external_account_post(
+            cursor,
+            post,
+            ("google_business",),
+            "Google Business Profile не подключен или не готов к публикации.",
+            "google_business_publish_boundary_ready",
+        )
+    if platform in {"instagram", "facebook"}:
+        return _publish_external_account_post(
+            cursor,
+            post,
+            ("meta", "facebook", "instagram"),
+            "Meta Graph permissions или бизнес-аккаунт ещё не подтверждены.",
+            "meta_graph_permissions_required",
+        )
+    return {
+        "status": "needs_manual_publish",
+        "last_error": "Для канала не настроен API-адаптер",
+        "metadata_json": {"provider_status": "unsupported_api_platform"},
+    }
+
+
+def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    business = _load_business_publish_context(cursor, str(post.get("business_id") or ""))
+    bot_token = decode_telegram_bot_token(business.get("telegram_bot_token"))
+    chat_id = str(business.get("telegram_chat_id") or "").strip()
+    if not bot_token or not chat_id:
+        return {
+            "status": "needs_manual_publish",
+            "last_error": "Для Telegram нужны telegram_bot_token и telegram_chat_id бизнеса.",
+            "metadata_json": {"provider_status": "telegram_connection_missing"},
+        }
+    text = str(post.get("platform_text") or post.get("base_text") or "").strip()
+    if not text:
+        return {
+            "status": "failed",
+            "last_error": "Пустой текст нельзя отправить в Telegram.",
+            "metadata_json": {"provider_status": "telegram_empty_text"},
+        }
+    try:
+        payload = json.dumps(
+            {
+                "chat_id": chat_id,
+                "text": text,
+                "disable_web_page_preview": True,
+            }
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        resp = telegram_urlopen(req, timeout=15)
+        try:
+            body = resp.read().decode("utf-8", errors="ignore")
+            parsed = _json_dict(body)
+            status_code = int(getattr(resp, "status", 500))
+            if not (200 <= status_code < 300) or not bool(parsed.get("ok")):
+                return {
+                    "status": "failed",
+                    "last_error": str(parsed.get("description") or body or f"Telegram HTTP {status_code}")[:1000],
+                    "metadata_json": {"provider_status": "telegram_api_error", "status_code": status_code},
+                }
+            result = parsed.get("result") if isinstance(parsed.get("result"), dict) else {}
+            message_id = str(result.get("message_id") or "").strip()
+            return {
+                "status": "published",
+                "provider_post_id": message_id,
+                "provider_post_url": _telegram_post_url(chat_id, message_id),
+                "metadata_json": {"provider_status": "telegram_published", "telegram_response": parsed},
+            }
+        finally:
+            resp.close()
+    except urllib.error.HTTPError:
+        error = sys.exc_info()[1]
+        body = ""
+        try:
+            body = error.read().decode("utf-8", errors="ignore")
+        except Exception:
+            body = str(error)
+        return {
+            "status": "failed",
+            "last_error": body or str(error),
+            "metadata_json": {"provider_status": "telegram_http_error"},
+        }
+    except (urllib.error.URLError, TimeoutError):
+        error = sys.exc_info()[1]
+        return {
+            "status": "failed",
+            "last_error": str(error),
+            "metadata_json": {"provider_status": "telegram_network_error"},
+        }
+    except Exception:
+        error = sys.exc_info()[1]
+        return {
+            "status": "failed",
+            "last_error": str(error),
+            "metadata_json": {"provider_status": "telegram_unexpected_error"},
+        }
+
+
+def _publish_external_account_post(
+    cursor: Any,
+    post: dict[str, Any],
+    sources: tuple[str, ...],
+    missing_message: str,
+    ready_status: str,
+) -> dict[str, Any]:
+    account = _find_active_external_account(cursor, str(post.get("business_id") or ""), sources)
+    if not account:
+        return {
+            "status": "needs_manual_publish",
+            "last_error": missing_message,
+            "metadata_json": {"provider_status": "connection_missing", "expected_sources": list(sources)},
+        }
+    auth_data = _external_account_auth_data(account)
+    if not auth_data and sources != ("google_business",):
+        return {
+            "status": "needs_manual_publish",
+            "last_error": missing_message,
+            "metadata_json": {
+                "provider_status": "credentials_missing",
+                "external_account_id": account.get("id"),
+                "expected_sources": list(sources),
+            },
+        }
+    return {
+        "status": "queued",
+        "metadata_json": {
+            "provider_status": ready_status,
+            "external_account_id": account.get("id"),
+            "external_account_source": account.get("source"),
+            "provider_note": "Adapter preflight passed; native provider publish worker is the next execution boundary.",
+        },
+    }
+
+
+def _load_business_publish_context(cursor: Any, business_id: str) -> dict[str, Any]:
+    if not business_id:
+        return {}
+    columns = _table_columns(cursor, "businesses")
+    select_parts = ["id", "name"]
+    for column in ("telegram_bot_token", "telegram_chat_id"):
+        if column in columns:
+            select_parts.append(column)
+        else:
+            select_parts.append(f"NULL AS {column}")
+    cursor.execute(
+        f"""
+        SELECT {", ".join(select_parts)}
+        FROM businesses
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (business_id,),
+    )
+    return _row_to_dict(cursor, cursor.fetchone())
+
+
+def _find_active_external_account(cursor: Any, business_id: str, sources: tuple[str, ...]) -> dict[str, Any]:
+    if not business_id or not sources:
+        return {}
+    if not _table_exists(cursor, "externalbusinessaccounts"):
+        return {}
+    columns = _table_columns(cursor, "externalbusinessaccounts")
+    if not {"business_id", "source"}.issubset(columns):
+        return {}
+    select_parts = ["id", "business_id", "source"]
+    for column in ("external_id", "display_name", "auth_data_encrypted", "last_error"):
+        if column in columns:
+            select_parts.append(column)
+        else:
+            select_parts.append(f"NULL AS {column}")
+    is_active_sql = "COALESCE(is_active, TRUE)" if "is_active" in columns else "TRUE"
+    order_sql = "updated_at DESC NULLS LAST, created_at DESC NULLS LAST" if "updated_at" in columns else "id DESC"
+    cursor.execute(
+        f"""
+        SELECT {", ".join(select_parts)}
+        FROM externalbusinessaccounts
+        WHERE business_id = %s
+          AND source = ANY(%s)
+          AND {is_active_sql}
+        ORDER BY {order_sql}
+        LIMIT 1
+        """,
+        (business_id, list(sources)),
+    )
+    return _row_to_dict(cursor, cursor.fetchone())
+
+
+def _external_account_auth_data(account: dict[str, Any]) -> dict[str, Any]:
+    encrypted = str(account.get("auth_data_encrypted") or "").strip()
+    if not encrypted:
+        return {}
+    try:
+        decrypted = decrypt_auth_data(encrypted)
+        parsed = _json_value(decrypted, {})
+        return parsed if isinstance(parsed, dict) else {"raw": str(decrypted or "").strip()}
+    except Exception:
+        return {}
+
+
+def _telegram_post_url(chat_id: str, message_id: str) -> str:
+    chat = str(chat_id or "").strip()
+    message = str(message_id or "").strip()
+    if not chat or not message:
+        return ""
+    if chat.startswith("@"):
+        return f"https://t.me/{chat[1:]}/{message}"
+    normalized = chat[4:] if chat.startswith("-100") else ""
+    if normalized:
+        return f"https://t.me/c/{normalized}/{message}"
+    return ""
+
+
 def _base_text_from_item(item: dict[str, Any]) -> str:
     draft = str(item.get("draft_text") or "").strip()
     if draft:
@@ -542,6 +1011,46 @@ def _normalize_platforms(platforms: list[str] | None) -> list[str]:
     if not result:
         raise ValueError("Не выбраны поддерживаемые каналы публикации")
     return result
+
+
+def _normalize_ids(values: list[str], limit: int = 100) -> list[str]:
+    result = []
+    seen = set()
+    for value in values or []:
+        item_id = str(value or "").strip()
+        if not item_id or item_id in seen:
+            continue
+        seen.add(item_id)
+        result.append(item_id)
+        if len(result) >= limit:
+            break
+    if not result:
+        raise ValueError("Не выбраны элементы для действия")
+    return result
+
+
+def _table_exists(cursor: Any, table_name: str) -> bool:
+    cursor.execute("SELECT to_regclass(%s)", (f"public.{table_name}",))
+    row = cursor.fetchone()
+    return bool(_row_get(row, "to_regclass", 0))
+
+
+def _table_columns(cursor: Any, table_name: str) -> set[str]:
+    cursor.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = %s
+        """,
+        (str(table_name or "").strip().lower(),),
+    )
+    columns = set()
+    for row in cursor.fetchall() or []:
+        value = _row_get(row, "column_name", 0)
+        if value:
+            columns.add(str(value).lower())
+    return columns
 
 
 def _summary_for_posts(posts: list[dict[str, Any]]) -> dict[str, Any]:
