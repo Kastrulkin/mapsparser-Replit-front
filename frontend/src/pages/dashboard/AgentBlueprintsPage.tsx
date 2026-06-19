@@ -4640,8 +4640,6 @@ const DialogAgentBuilder = ({
   const connectionSummaryItems = preview?.connection_summary?.items || [];
   const requiredConnectionChoices = connectionSummaryItems.filter((item) => item.action === 'choose_existing' && item.key && (item.connections?.length || 0) > 1);
   const missingConnectionChoices = requiredConnectionChoices.filter((item) => !selectedConnectionBindings[item.key || '']);
-  const compilerPlanRequiresConfirmation = builderCompilerPlanRequiresConfirmation(preview);
-  const missingCompilerPlanConfirmation = compilerPlanRequiresConfirmation && !acceptedCompilerPlan;
   const requiredProviderRouteKeys = builderRequiredProviderRouteKeys(preview);
   const missingProviderRouteKeys = requiredProviderRouteKeys.filter((key) => !selectedProviderRoutes[key]);
   const providerRoutesRequireConfirmation = requiredProviderRouteKeys.length > 0;
@@ -4656,11 +4654,9 @@ const DialogAgentBuilder = ({
     && !previewUnderstoodTask.includes(currentInputFingerprint),
   );
   const showInlineConnectionSetup = Boolean(missingConnectionChoices.length || missingProviderRouteKeys.length || missingProviderRouteConfirmation);
-  const canCreateDraft = preview?.setup_flow?.can_create_draft !== false
-    && !missingConnectionChoices.length
-    && !missingCompilerPlanConfirmation
-    && !missingProviderRouteKeys.length
-    && !missingProviderRouteConfirmation
+  const setupFlowNextStep = String(preview?.setup_flow?.next_step || '');
+  const setupFlowAllowsDraft = preview?.setup_flow?.can_create_draft !== false || setupFlowNextStep.startsWith('create_draft_then');
+  const canCreateDraft = setupFlowAllowsDraft
     && !previewIsStale;
   const createBlockers: Array<{ key: string; label: string }> = [];
   const addCreateBlocker = (key: string, label: string) => {
@@ -4677,9 +4673,6 @@ const DialogAgentBuilder = ({
   missingConnectionChoices.slice(0, 4).forEach((item) => {
     addCreateBlocker(`choice:${item.key || item.provider}`, `Выберите подключение ${item.title || connectorLabel(item.provider)}.`);
   });
-  if (missingCompilerPlanConfirmation) {
-    addCreateBlocker('compiler_plan_confirmation', 'Подтвердите план перед созданием агента.');
-  }
   if (missingProviderRouteKeys.length) {
     addCreateBlocker('provider_route_selection', `Выберите способ доставки для: ${missingProviderRouteKeys.map((item) => userFacingAgentTechText(humanizeMeta(item))).join(', ')}.`);
   } else if (missingProviderRouteConfirmation) {
@@ -4729,12 +4722,12 @@ const DialogAgentBuilder = ({
       || builderDecision.description);
   const canUsePrimaryAction = builderDecision.action === 'answer'
     ? Boolean(reply.trim())
-    : builderDecision.action === 'create'
+    : builderDecision.action === 'create' || setupFlowAllowsDraft
       ? canCreateDraft
       : false;
   const primaryActionLabel = builderDecision.action === 'answer'
     ? 'Ответить'
-    : canCreateDraft
+    : canCreateDraft || setupFlowAllowsDraft
       ? createDraftLabel
       : builderDecision.cta || 'Продолжить настройку';
   useEffect(() => {
@@ -4790,11 +4783,11 @@ const DialogAgentBuilder = ({
                   </details>
                 ) : null}
               </div>
-              {builderDecision.action === 'answer' || builderDecision.action === 'none' ? null : (
+              {builderDecision.action === 'answer' || (builderDecision.action === 'none' && !setupFlowAllowsDraft) ? null : (
                 <Button
                   type="button"
                   onClick={() => {
-                    if (canCreateDraft || builderDecision.action === 'create') {
+                    if (canCreateDraft || setupFlowAllowsDraft || builderDecision.action === 'create') {
                       onCreate();
                     }
                   }}
@@ -5409,15 +5402,6 @@ const builderPreviewDataText = (preview: AgentBuilderPreview | null, taskText: s
   }
   (preview?.data_sources || []).forEach((item) => addLabel(humanizeMeta(item)));
   return labels.join(', ') || 'ещё не выбрано';
-};
-
-const builderCompilerPlanRequiresConfirmation = (preview?: AgentBuilderPreview | null): boolean => {
-  const review = preview?.compiler_policy_review || null;
-  const draft = preview?.compiler_workflow_draft || review?.workflow_draft || {};
-  const steps = Array.isArray(draft.steps) ? draft.steps : [];
-  const approvals = preview?.compiler_approval_points || review?.approval_points || [];
-  const blockers = preview?.compiler_unsupported_requests || review?.unsupported_requests || [];
-  return Boolean(draft.trigger || steps.length || approvals.length || blockers.length);
 };
 
 const BuilderCompilerPolicyReviewPanel = ({

@@ -2204,6 +2204,11 @@ def _question_is_answered(description: str, question: str) -> bool:
     if "telegram" in q or "телеграм" in q or "канал" in q or "чат" in q or "бот" in q:
         if ("telegram" in text or "телеграм" in text) and any(marker in text for marker in ["мне", "владельцу", "менеджеру", "через бота", "бот", "присыла", "отправ", "шл", "уведом"]):
             return True
+    if any(marker in q for marker in ["spreadsheet id", "spreadsheet_id", "spreadsheet", "sheet", "id таблиц", "id google", "google таблиц", "google sheets", "вкладк", "лист"]):
+        if ("таблица называется" in text or "лист " in text or "вкладк" in text) and any(marker in text for marker in ["google sheets", "google таблиц", "таблиц", "sheet", "лист"]):
+            return True
+        if any(marker in text for marker in ["id сейчас нет", "id нет", "точного id нет", "без id", "подключение", "подключить", "доступах", "следующим шагом", "после создания"]):
+            return True
     if "когда запускать" in q or "распис" in q or "частот" in q or "trigger" in q:
         if any(marker in text for marker in ["каждый", "каждое", "каждую", "ежеднев", "еженед", "раз в", "понедельник", "вторник", "сред", "четверг", "пятниц", "если появ", "при появ", "появляется", "появляются", "вручную"]):
             return True

@@ -3198,6 +3198,74 @@ def test_agent_builder_setup_flow_surfaces_compiler_clarifying_questions(monkeyp
     assert state["preview"]["setup_flow"]["can_create_draft"] is False
 
 
+def test_agent_builder_can_create_draft_when_sheet_id_is_deferred(monkeypatch):
+    from services import agent_builder_session
+
+    def fake_compile_agent_blueprint(description, category="", **kwargs):
+        return {
+            "name": "Orders status agent",
+            "category": "custom",
+            "description": description,
+            "metadata": {
+                "llm_intent": {
+                    "status": "compiled_intent",
+                    "source": "gigachat",
+                    "intent": {
+                        "workflow_draft": {
+                            "trigger": "schedule.hourly",
+                            "steps": [{"key": "read_orders", "capability": "google_sheets.read_rows"}],
+                        },
+                        "clarifying_questions": [
+                            "Пожалуйста, уточните название Google Spreadsheet и Sheet, чтобы продолжить.",
+                        ],
+                        "approval_points": [{"key": "telegram_delivery", "reason": "external delivery requires approval"}],
+                        "unsupported_requests": [],
+                    },
+                },
+                "required_integration_bindings": [
+                    {
+                        "key": "google_sheets_read",
+                        "provider": "google_sheets",
+                        "capability": "google_sheets.read_rows",
+                        "required_config": ["spreadsheet_id", "sheet_name"],
+                    },
+                    {
+                        "key": "telegram_delivery",
+                        "provider": "telegram",
+                        "capability": "communications.draft",
+                        "required_config": ["bot_mode"],
+                    },
+                ],
+            },
+            "summary": {
+                "sources": ["google_sheets", "telegram", "business_profile"],
+                "capability_allowlist": ["google_sheets.read_rows", "communications.draft"],
+            },
+        }
+
+    monkeypatch.setattr(agent_builder_session, "compile_agent_blueprint", fake_compile_agent_blueprint)
+
+    state = agent_builder_session.build_agent_builder_state(
+        [
+            {
+                "role": "user",
+                "content": (
+                    "Каждый час бери новые строки из Google Sheets с заказами и отправляй краткий статус "
+                    "владельцу в Telegram после проверки. Таблица называется Заказы, лист Новый поток. "
+                    "ID сейчас нет. Создай черновик агента без ID, а подключение конкретной таблицы "
+                    "оставь следующим шагом в доступах."
+                ),
+            }
+        ],
+        use_ai=True,
+    )
+
+    assert [item["reason"] for item in state["missing_questions"]] == ["connection_resolver", "connection_resolver"]
+    assert state["preview"]["setup_flow"]["can_create_draft"] is True
+    assert state["preview"]["setup_flow"]["next_step"] == "create_draft_then_choose_route"
+    assert state["preview"]["setup_flow"]["can_run_preview"] is False
+
+
 def test_agent_builder_setup_flow_blocks_compiler_unsupported_request(monkeypatch):
     from services import agent_builder_session
 
@@ -6408,7 +6476,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "compiler_approval_points" in agents_page_source
     assert "compiler_unsupported_requests" in agents_page_source
     assert "accepted_compiler_plan: acceptedBuilderCompilerPlan" in agents_page_source
-    assert "builderCompilerPlanRequiresConfirmation" in agents_page_source
+    assert "builderCompilerPlanRequiresConfirmation" not in agents_page_source
+    assert "const canCreateDraft = setupFlowAllowsDraft" in agents_page_source
     assert "acceptedBuilderCompilerPlan" in agents_page_source
     assert "Принять план" in agents_page_source
     assert "План принят" in agents_page_source
