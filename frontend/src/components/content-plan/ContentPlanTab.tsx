@@ -2068,6 +2068,31 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const collectSocialPostMetricsForBusiness = async () => {
+    if (!businessId) return;
+    setSocialBusyAction('collect-metrics');
+    setError('');
+    setActionSummary(null);
+    try {
+      const response = await newAuth.makeRequest('/social-posts/metrics/collect', {
+        method: 'POST',
+        body: JSON.stringify({ business_id: businessId }),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      const collected = Number(response.collected || 0);
+      setActionSummary({
+        tone: 'success',
+        text_ru: `Реакции обновлены для опубликованных постов: ${collected}. Теперь рекомендации учитывают свежие заявки и обращения.`,
+        text_en: `Reactions updated for published posts: ${collected}. Recommendations now include fresh leads and inquiries.`,
+      });
+    } catch (collectError) {
+      const message = collectError instanceof Error ? collectError.message : (isRu ? 'Не удалось обновить реакции' : 'Could not update reactions');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
   const previewSocialDispatch = async () => {
     setSocialBusyAction('dispatch-preview');
     setError('');
@@ -4711,6 +4736,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { void collectSocialPostMetricsForBusiness(); }}
+                        disabled={socialBusyAction === 'collect-metrics' || !Number(socialSummary?.published || 0)}
+                      >
+                        {socialBusyAction === 'collect-metrics'
+                          ? (isRu ? 'Обновляем...' : 'Updating...')
+                          : `${isRu ? 'Обновить реакции' : 'Update reactions'} · ${Number(socialSummary?.published || 0)}`}
+                      </Button>
                       <Button
                         type="button"
                         size="sm"
