@@ -144,6 +144,10 @@ type SocialPostMetadata = {
   };
   openclaw_task?: Record<string, unknown>;
   agent_action_ledger_id?: string;
+  queue_preflight_ready?: boolean;
+  queue_preflight_status?: string;
+  queue_preflight_message_ru?: string;
+  queue_preflight_message_en?: string;
   provider_status?: string;
   provider_note?: string;
 };
@@ -5379,6 +5383,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const postTextDirty = postTextValue.trim() !== String(post.platform_text || '').trim();
                               const supervisedLedgerId = String(post.metadata_json?.agent_action_ledger_id || '').trim();
                               const supervisedCapabilityStatus = String(supervisedPayload?.openclaw_capability_status || '').trim();
+                              const preflightStatus = String(post.metadata_json?.queue_preflight_status || post.metadata_json?.provider_status || '').trim();
+                              const preflightMessage = String(
+                                isRu
+                                  ? post.metadata_json?.queue_preflight_message_ru || post.metadata_json?.provider_note || ''
+                                  : post.metadata_json?.queue_preflight_message_en || post.metadata_json?.provider_note || ''
+                              ).trim();
                               return (
                                 <div key={post.id} className="rounded-2xl border border-slate-200 bg-white p-3">
                                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -5473,6 +5483,21 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   {post.last_error ? (
                                     <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
                                       {post.last_error}
+                                    </div>
+                                  ) : null}
+                                  {!_isSupervisedPlatform(post.platform) && (preflightMessage || preflightStatus) ? (
+                                    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                                      <div className="font-semibold text-amber-950">
+                                        {isRu ? 'Готовность канала' : 'Channel readiness'}
+                                      </div>
+                                      {preflightMessage ? (
+                                        <div className="mt-1 text-amber-900">{preflightMessage}</div>
+                                      ) : null}
+                                      {preflightStatus ? (
+                                        <div className="mt-1 font-mono text-[11px] text-amber-900">
+                                          status: {preflightStatus}
+                                        </div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                   {canMarkPublished ? (
