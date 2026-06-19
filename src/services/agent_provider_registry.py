@@ -63,6 +63,36 @@ CAPABILITY_PROVIDER_MAP: Dict[str, List[Dict[str, Any]]] = {
     "news.generate": [
         {"provider": "native_localos", "state": "available", "role": "draft_store"},
     ],
+    "social.post.draft": [
+        {"provider": "native_localos", "state": "available", "role": "content_plan_draft_store"},
+        {"provider": "openclaw", "state": "available", "role": "planner_or_generation_boundary"},
+    ],
+    "social.post.prepare_variants": [
+        {"provider": "native_localos", "state": "available", "role": "platform_variant_store"},
+        {"provider": "openclaw", "state": "available", "role": "copy_variation_boundary"},
+    ],
+    "social.post.publish_request": [
+        {"provider": "native_localos", "state": "available", "role": "approval_and_queue_store"},
+        {"provider": "openclaw", "state": "available", "role": "approval_boundary"},
+        {"provider": "manual", "state": "available", "role": "fallback"},
+    ],
+    "social.post.publish_api": [
+        {"provider": "native_localos", "state": "available", "role": "api_channel_adapter"},
+        {"provider": "manual", "state": "available", "role": "fallback"},
+    ],
+    "social.post.publish_supervised_browser": [
+        {"provider": "openclaw", "state": "available", "role": "browser_supervised_boundary"},
+        {"provider": "manual", "state": "available", "role": "fallback"},
+    ],
+    "social.metrics.collect": [
+        {"provider": "native_localos", "state": "available", "role": "metrics_snapshot_store"},
+        {"provider": "openclaw", "state": "available", "role": "provider_metrics_collector"},
+        {"provider": "manual", "state": "available", "role": "manual_metric_entry"},
+    ],
+    "social.plan.recalibrate": [
+        {"provider": "native_localos", "state": "available", "role": "learning_event_store"},
+        {"provider": "openclaw", "state": "available", "role": "planning_reasoner"},
+    ],
     "appointments.read": [
         {"provider": "native_localos", "state": "available", "role": "domain_read"},
         {"provider": "composio", "state": "planned", "role": "external_calendar_or_crm_read"},
@@ -138,7 +168,24 @@ INTEGRATION_PROVIDER_CATALOG: Dict[str, Dict[str, Any]] = {
         "default_limits": {"daily_message_cap": 50, "frequency_cap_minutes": 30},
         "status": "available",
         "provider_candidates": ["native_localos", "maton", "openclaw"],
-        "capabilities": ["communications.draft", "communications.send_reminder", "communications.send_offer"],
+        "capabilities": ["communications.draft", "communications.send_reminder", "communications.send_offer", "social.post.publish_api"],
+    },
+    "social_channels": {
+        "title": "Maps + Social publishing",
+        "description": "LocalOS content-plan publishing queue for maps and social networks with mandatory human approval.",
+        "required_config": ["business_id", "platforms"],
+        "default_limits": {"daily_publish_cap": 20, "frequency_cap_minutes": 30},
+        "status": "available",
+        "provider_candidates": ["native_localos", "openclaw", "manual"],
+        "capabilities": [
+            "social.post.draft",
+            "social.post.prepare_variants",
+            "social.post.publish_request",
+            "social.post.publish_api",
+            "social.post.publish_supervised_browser",
+            "social.metrics.collect",
+            "social.plan.recalibrate",
+        ],
     },
     "maton": {
         "title": "Maton.ai",

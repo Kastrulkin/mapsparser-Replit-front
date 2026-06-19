@@ -115,6 +115,7 @@ from api.metrics_history_api import metrics_history_bp
 from api.networks_api import networks_bp
 from api.network_health_api import network_health_bp
 from api.content_plans_api import content_plans_bp
+from api.social_posts_api import social_posts_bp
 from api.admin_prospecting import (
     admin_prospecting_bp,
     _ensure_admin_prospecting_public_offers_table,
@@ -284,6 +285,7 @@ app.register_blueprint(metrics_history_bp)
 app.register_blueprint(networks_bp)
 app.register_blueprint(network_health_bp)
 app.register_blueprint(content_plans_bp)
+app.register_blueprint(social_posts_bp)
 app.register_blueprint(admin_prospecting_bp)
 app.register_blueprint(admin_industry_patterns_bp)
 app.register_blueprint(agent_security_bp)

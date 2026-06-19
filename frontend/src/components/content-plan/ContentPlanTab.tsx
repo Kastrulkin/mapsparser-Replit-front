@@ -102,6 +102,42 @@ type PlanPayload = {
   updated_at?: string;
 };
 
+type SocialPost = {
+  id: string;
+  business_id?: string;
+  content_plan_id?: string;
+  content_plan_item_id: string;
+  platform: string;
+  platform_label?: string;
+  publish_mode: string;
+  status: string;
+  scheduled_for?: string;
+  approved_at?: string;
+  published_at?: string;
+  platform_text?: string;
+  provider_post_url?: string;
+  automation_task_id?: string;
+  last_error?: string;
+  next_action?: string;
+  metadata_json?: Record<string, unknown>;
+  views?: number;
+  reach?: number;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  inquiries?: number;
+  leads?: number;
+};
+
+type SocialPostsSummary = {
+  total?: number;
+  needs_review?: number;
+  needs_supervised_publish?: number;
+  published?: number;
+  failed?: number;
+  by_status?: Record<string, number>;
+};
+
 type LearningMetricsPayload = {
   window_days: number;
   items: Array<{
@@ -325,6 +361,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [bulkNewsReview, setBulkNewsReview] = useState<BulkNewsReview | null>(null);
   const [bulkActionReview, setBulkActionReview] = useState<BulkActionReview | null>(null);
   const [recentGeneratedItemId, setRecentGeneratedItemId] = useState('');
+  const [socialPostsByItem, setSocialPostsByItem] = useState<Record<string, SocialPost[]>>({});
+  const [socialSummary, setSocialSummary] = useState<SocialPostsSummary | null>(null);
+  const [socialBusyAction, setSocialBusyAction] = useState('');
   const [activeZone, setActiveZone] = useState<ContentPlanZone>('overview');
   const [contentMode, setContentMode] = useState<ContentPlanMode>('point');
   const [contentLanguage, setContentLanguage] = useState<ContentLanguageKey>(() => _normalizeContentLanguage(language));
@@ -999,6 +1038,27 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const loadSocialPosts = async (planId: string) => {
+    if (!planId) return;
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(planId)}/social-posts`, {
+        method: 'GET',
+      });
+      const posts = Array.isArray(response.posts) ? response.posts : [];
+      const grouped: Record<string, SocialPost[]> = {};
+      for (const post of posts) {
+        const itemId = String(post.content_plan_item_id || '').trim();
+        if (!itemId) continue;
+        grouped[itemId] = [...(grouped[itemId] || []), post];
+      }
+      setSocialPostsByItem(grouped);
+      setSocialSummary(response.summary || null);
+    } catch {
+      setSocialPostsByItem({});
+      setSocialSummary(null);
+    }
+  };
+
   const loadContext = async (scopeKey?: string) => {
     if (!businessId) return;
     setLoading(true);
@@ -1044,6 +1104,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     void loadPlans();
     void loadLearningMetrics();
   }, [businessId]);
+
+  useEffect(() => {
+    if (!currentPlan?.id) {
+      setSocialPostsByItem({});
+      setSocialSummary(null);
+      return;
+    }
+    void loadSocialPosts(currentPlan.id);
+  }, [currentPlan?.id]);
 
   useEffect(() => {
     if (!businessId) return;
@@ -1311,6 +1380,108 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setError(message);
     } finally {
       setBusyItemId('');
+    }
+  };
+
+  const prepareSocialPosts = async (itemId: string) => {
+    setSocialBusyAction(`prepare:${itemId}`);
+    setError('');
+    setActionSummary(null);
+    try {
+      await persistItemEdits(itemId);
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}/social-posts/prepare`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      const posts = Array.isArray(response.posts) ? response.posts : [];
+      setSocialPostsByItem((prev) => ({
+        ...prev,
+        [itemId]: posts,
+      }));
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Каналы подготовлены. Проверьте тексты перед внешней публикацией.',
+        text_en: 'Channels prepared. Review texts before external publishing.',
+      });
+    } catch (socialError) {
+      const message = socialError instanceof Error ? socialError.message : (isRu ? 'Не удалось подготовить каналы' : 'Could not prepare channels');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
+  const approveSocialPostItem = async (post: SocialPost) => {
+    setSocialBusyAction(`approve:${post.id}`);
+    setError('');
+    setActionSummary(null);
+    try {
+      await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Публикация подтверждена человеком.',
+        text_en: 'Post approved by a human.',
+      });
+    } catch (approveError) {
+      const message = approveError instanceof Error ? approveError.message : (isRu ? 'Не удалось подтвердить публикацию' : 'Could not approve post');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
+  const publishSocialPostItem = async (post: SocialPost) => {
+    setSocialBusyAction(`publish:${post.id}`);
+    setError('');
+    setActionSummary(null);
+    try {
+      await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/publish`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setActionSummary({
+        tone: 'success',
+        text_ru: _isSupervisedPlatform(post.platform)
+          ? 'Создана задача контролируемого размещения. Финальная публикация не выполняется без подтверждения.'
+          : 'Публикация поставлена в очередь API-канала после подтверждения.',
+        text_en: _isSupervisedPlatform(post.platform)
+          ? 'Supervised placement task created. Final publish is not performed without confirmation.'
+          : 'Post queued for the API channel after approval.',
+      });
+    } catch (publishError) {
+      const message = publishError instanceof Error ? publishError.message : (isRu ? 'Не удалось запустить публикацию' : 'Could not start publishing');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
+  const markSocialPostPublished = async (post: SocialPost) => {
+    setSocialBusyAction(`manual:${post.id}`);
+    setError('');
+    setActionSummary(null);
+    try {
+      await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/mark-manual-published`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Публикация отмечена как размещённая.',
+        text_en: 'Post marked as published.',
+      });
+    } catch (manualError) {
+      const message = manualError instanceof Error ? manualError.message : (isRu ? 'Не удалось отметить публикацию' : 'Could not mark post as published');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
     }
   };
 
@@ -3711,6 +3882,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   const selectedDuplicateTargets = duplicateTargetSelections[item.id] || [];
                   const duplicateTargetDate = duplicateDateOverrides[item.id] || currentInputDate;
                   const status = _planItemStatus(item, isRu);
+                  const itemSocialPosts = socialPostsByItem[item.id] || [];
                   const hasDraft = Boolean(String(currentDraft || '').trim());
                   const hasNews = Boolean(String(item.usernews_id || '').trim());
                   return (
@@ -3808,6 +3980,129 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           onChange={(event) => setDraftEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
                           placeholder={isRu ? 'Здесь появится текст публикации' : 'Draft text will appear here'}
                         />
+                      </div>
+
+                      <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-950">
+                              {isRu ? 'Каналы публикации' : 'Publishing channels'}
+                            </div>
+                            <div className="mt-1 text-sm leading-6 text-slate-600">
+                              {isRu
+                                ? 'Один пункт плана раскладывается на карты и соцсети. Внешняя публикация идёт только после проверки.'
+                                : 'One plan item becomes map and social posts. External publishing starts only after review.'}
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={itemSocialPosts.length ? 'outline' : 'default'}
+                            onClick={() => { void prepareSocialPosts(item.id); }}
+                            disabled={socialBusyAction === `prepare:${item.id}` || !String(currentDraft || currentTheme || '').trim()}
+                          >
+                            <Globe className="mr-2 h-4 w-4" />
+                            {itemSocialPosts.length
+                              ? (isRu ? 'Обновить каналы' : 'Refresh channels')
+                              : (isRu ? 'Подготовить каналы' : 'Prepare channels')}
+                          </Button>
+                        </div>
+
+                        {itemSocialPosts.length > 0 ? (
+                          <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                            {itemSocialPosts.map((post) => {
+                              const postBusy = socialBusyAction.endsWith(`:${post.id}`);
+                              const needsReview = post.status === 'draft' || post.status === 'needs_review';
+                              const canPublish = post.status === 'approved' || post.status === 'queued';
+                              const canMarkPublished = post.status === 'needs_supervised_publish' || post.status === 'needs_manual_publish';
+                              return (
+                                <div key={post.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                                  <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <div>
+                                      <div className="font-semibold text-slate-950">
+                                        {_socialPlatformLabel(post.platform, isRu)}
+                                      </div>
+                                      <div className="mt-1 text-xs text-slate-500">
+                                        {_socialPublishModeLabel(post.publish_mode, isRu)}
+                                      </div>
+                                    </div>
+                                    <span className={_socialStatusClassName(post.status)}>
+                                      {_socialStatusLabel(post.status, isRu)}
+                                    </span>
+                                  </div>
+                                  <div className="mt-3 line-clamp-3 text-sm leading-6 text-slate-700">
+                                    {String(post.platform_text || currentDraft || '').trim() || (isRu ? 'Текст ещё не подготовлен' : 'Text is not prepared yet')}
+                                  </div>
+                                  {_isSupervisedPlatform(post.platform) ? (
+                                    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                                      {isRu
+                                        ? 'Для этого канала LocalOS показывает контролируемое размещение или ручной fallback, а не стабильный API publish.'
+                                        : 'For this channel LocalOS shows supervised placement or manual fallback, not stable API publishing.'}
+                                    </div>
+                                  ) : null}
+                                  {post.last_error ? (
+                                    <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
+                                      {post.last_error}
+                                    </div>
+                                  ) : null}
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {needsReview ? (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => { void approveSocialPostItem(post); }}
+                                        disabled={postBusy}
+                                      >
+                                        {isRu ? 'Подтвердить' : 'Approve'}
+                                      </Button>
+                                    ) : null}
+                                    {canPublish ? (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => { void publishSocialPostItem(post); }}
+                                        disabled={postBusy}
+                                      >
+                                        {_isSupervisedPlatform(post.platform)
+                                          ? (isRu ? 'Открыть размещение' : 'Open placement')
+                                          : (isRu ? 'Поставить в очередь' : 'Queue')}
+                                      </Button>
+                                    ) : null}
+                                    {canMarkPublished ? (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => { void markSocialPostPublished(post); }}
+                                        disabled={postBusy}
+                                      >
+                                        {isRu ? 'Отметить размещённым' : 'Mark published'}
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                                    <span>{_socialNextActionLabel(post.next_action || '', isRu)}</span>
+                                    {Number(post.leads || 0) || Number(post.inquiries || 0) ? (
+                                      <span className="font-medium text-emerald-700">
+                                        {isRu ? `заявки/обращения: ${Number(post.leads || 0) + Number(post.inquiries || 0)}` : `leads/inquiries: ${Number(post.leads || 0) + Number(post.inquiries || 0)}`}
+                                      </span>
+                                    ) : null}
+                                    {Number(post.comments || 0) || Number(post.reach || 0) ? (
+                                      <span>{isRu ? `реакции: ${Number(post.comments || 0)}, охват: ${Number(post.reach || 0)}` : `comments: ${Number(post.comments || 0)}, reach: ${Number(post.reach || 0)}`}</span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-600">
+                            {isRu
+                              ? 'Нажмите «Подготовить каналы», чтобы создать черновики для Яндекс Карт, 2ГИС, Google, Telegram, VK, Instagram и Facebook.'
+                              : 'Click “Prepare channels” to create drafts for Yandex Maps, 2GIS, Google, Telegram, VK, Instagram, and Facebook.'}
+                          </div>
+                        )}
                       </div>
 
                       <div className="sticky bottom-3 z-10 mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 px-3 py-3 shadow-lg backdrop-blur">
@@ -4021,6 +4316,67 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       </div>
     </div>
   );
+}
+
+function _isSupervisedPlatform(platform: string): boolean {
+  return platform === 'yandex_maps' || platform === 'two_gis';
+}
+
+function _socialPlatformLabel(platform: string, isRu: boolean): string {
+  const normalized = String(platform || '').trim();
+  if (normalized === 'yandex_maps') return isRu ? 'Яндекс Карты' : 'Yandex Maps';
+  if (normalized === 'two_gis') return '2ГИС';
+  if (normalized === 'google_business') return 'Google Business';
+  if (normalized === 'telegram') return 'Telegram';
+  if (normalized === 'vk') return 'VK';
+  if (normalized === 'instagram') return 'Instagram';
+  if (normalized === 'facebook') return 'Facebook';
+  return normalized || (isRu ? 'Канал' : 'Channel');
+}
+
+function _socialPublishModeLabel(mode: string, isRu: boolean): string {
+  const normalized = String(mode || '').trim();
+  if (normalized === 'api') return isRu ? 'API после подтверждения' : 'API after approval';
+  if (normalized === 'openclaw_browser') return isRu ? 'OpenClaw browser-use под контролем' : 'Supervised OpenClaw browser-use';
+  if (normalized === 'local_supervised_browser') return isRu ? 'Локальный контролируемый браузер' : 'Local supervised browser';
+  if (normalized === 'manual') return isRu ? 'Ручной fallback' : 'Manual fallback';
+  return isRu ? 'Режим не задан' : 'Mode not set';
+}
+
+function _socialStatusLabel(status: string, isRu: boolean): string {
+  const normalized = String(status || '').trim();
+  if (normalized === 'draft') return isRu ? 'Черновик' : 'Draft';
+  if (normalized === 'needs_review') return isRu ? 'Нужно проверить' : 'Needs review';
+  if (normalized === 'approved') return isRu ? 'Подтверждено' : 'Approved';
+  if (normalized === 'queued') return isRu ? 'В очереди' : 'Queued';
+  if (normalized === 'publishing') return isRu ? 'Публикуется' : 'Publishing';
+  if (normalized === 'published') return isRu ? 'Опубликовано' : 'Published';
+  if (normalized === 'failed') return isRu ? 'Ошибка' : 'Failed';
+  if (normalized === 'needs_manual_publish') return isRu ? 'Нужно вручную' : 'Manual needed';
+  if (normalized === 'needs_supervised_publish') return isRu ? 'Контролируемое размещение' : 'Supervised placement';
+  return isRu ? 'Статус неизвестен' : 'Unknown status';
+}
+
+function _socialStatusClassName(status: string): string {
+  const normalized = String(status || '').trim();
+  const base = 'rounded-full px-3 py-1 text-xs font-medium';
+  if (normalized === 'published') return `${base} bg-emerald-50 text-emerald-800`;
+  if (normalized === 'failed') return `${base} bg-red-50 text-red-800`;
+  if (normalized === 'needs_supervised_publish' || normalized === 'needs_manual_publish') return `${base} bg-amber-50 text-amber-800`;
+  if (normalized === 'approved' || normalized === 'queued' || normalized === 'publishing') return `${base} bg-blue-50 text-blue-800`;
+  return `${base} bg-slate-100 text-slate-700`;
+}
+
+function _socialNextActionLabel(action: string, isRu: boolean): string {
+  const normalized = String(action || '').trim();
+  if (normalized === 'review_required') return isRu ? 'следующий шаг: проверить текст' : 'next: review text';
+  if (normalized === 'start_supervised_publish') return isRu ? 'следующий шаг: открыть контролируемое размещение' : 'next: open supervised placement';
+  if (normalized === 'wait_for_api_publish') return isRu ? 'следующий шаг: поставить API-канал в очередь' : 'next: queue API channel';
+  if (normalized === 'open_supervised_publish') return isRu ? 'следующий шаг: завершить контролируемое размещение' : 'next: finish supervised placement';
+  if (normalized === 'manual_publish') return isRu ? 'следующий шаг: разместить вручную' : 'next: publish manually';
+  if (normalized === 'retry_or_manual') return isRu ? 'следующий шаг: повторить или вручную' : 'next: retry or manual';
+  if (normalized === 'collect_metrics') return isRu ? 'следующий шаг: собрать реакции' : 'next: collect reactions';
+  return isRu ? 'следующий шаг не требуется' : 'no next action';
 }
 
 function _contentTypeLabel(contentType: string, isRu: boolean): string {
