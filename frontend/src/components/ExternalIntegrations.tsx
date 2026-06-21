@@ -35,6 +35,8 @@ interface SocialChannelReadiness {
   status?: string | null;
   message_ru?: string | null;
   message_en?: string | null;
+  next_action_ru?: string | null;
+  next_action_en?: string | null;
 }
 
 interface ExternalIntegrationsProps {
@@ -402,52 +404,81 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
               Проверяем готовность каналов...
             </div>
           ) : socialReadiness.length ? (
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {socialReadiness.map((channel) => {
-                const ready = Boolean(channel.ready);
-                const isApi = channel.publish_mode === 'api';
-                const message = language === 'ru' ? channel.message_ru : channel.message_en;
-                return (
-                  <div
-                    key={channel.platform}
-                    className={[
-                      'rounded-2xl border px-4 py-3',
-                      ready
-                        ? 'border-emerald-200 bg-emerald-50/80'
-                        : isApi
-                          ? 'border-amber-200 bg-amber-50/80'
-                          : 'border-sky-200 bg-sky-50/80',
-                    ].join(' ')}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-950">
-                          {channel.platform_label || channel.platform}
-                        </div>
-                        <div className="mt-1 text-xs leading-5 text-slate-600">
-                          {message || 'Проверьте настройки канала.'}
-                        </div>
-                      </div>
-                      <span
-                        className={[
-                          'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold',
-                          ready
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : isApi
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-sky-100 text-sky-800',
-                        ].join(' ')}
-                      >
-                        {ready ? 'готов' : isApi ? 'настроить' : 'controlled'}
-                      </span>
-                    </div>
-                    <div className="mt-3 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                      {isApi ? 'API publish после approval' : 'Ручное или контролируемое размещение'}
-                    </div>
+            <>
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <div className="text-sm font-semibold text-slate-950">Чеклист публикаций</div>
+                <div className="mt-1 text-xs leading-5 text-slate-600">
+                  Сначала подключите API-каналы для автопубликации по расписанию. Яндекс/2ГИС остаются controlled/manual: LocalOS готовит текст и задачу, финальный клик делает человек.
+                </div>
+                <div className="mt-3 grid gap-2 text-xs md:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-xl bg-white px-3 py-2 text-slate-700 ring-1 ring-slate-200">
+                    <span className="font-semibold text-slate-950">Telegram:</span> telegram_bot_token + telegram_chat_id
                   </div>
-                );
-              })}
-            </div>
+                  <div className="rounded-xl bg-white px-3 py-2 text-slate-700 ring-1 ring-slate-200">
+                    <span className="font-semibold text-slate-950">VK:</span> access_token + group_id/owner_id + wall.post
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2 text-slate-700 ring-1 ring-slate-200">
+                    <span className="font-semibold text-slate-950">Google:</span> Business Profile + location
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2 text-slate-700 ring-1 ring-slate-200">
+                    <span className="font-semibold text-slate-950">Meta:</span> Page/IG business + permissions
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {socialReadiness.map((channel) => {
+                  const ready = Boolean(channel.ready);
+                  const isApi = channel.publish_mode === 'api';
+                  const message = language === 'ru' ? channel.message_ru : channel.message_en;
+                  const nextAction = language === 'ru' ? channel.next_action_ru : channel.next_action_en;
+                  return (
+                    <div
+                      key={channel.platform}
+                      className={[
+                        'rounded-2xl border px-4 py-3',
+                        ready
+                          ? 'border-emerald-200 bg-emerald-50/80'
+                          : isApi
+                            ? 'border-amber-200 bg-amber-50/80'
+                            : 'border-sky-200 bg-sky-50/80',
+                      ].join(' ')}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-950">
+                            {channel.platform_label || channel.platform}
+                          </div>
+                          <div className="mt-1 text-xs leading-5 text-slate-600">
+                            {message || 'Проверьте настройки канала.'}
+                          </div>
+                        </div>
+                        <span
+                          className={[
+                            'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold',
+                            ready
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : isApi
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-sky-100 text-sky-800',
+                          ].join(' ')}
+                        >
+                          {ready ? 'готов' : isApi ? 'настроить' : 'controlled'}
+                        </span>
+                      </div>
+                      <div className="mt-3 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                        {isApi ? 'API publish после approval' : 'Ручное или контролируемое размещение'}
+                      </div>
+                      {nextAction ? (
+                        <div className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs leading-5 text-slate-700 ring-1 ring-slate-200">
+                          <span className="font-semibold text-slate-950">Что сделать: </span>
+                          {nextAction}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           ) : (
             <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
               Выберите бизнес, чтобы увидеть готовность каналов публикации.

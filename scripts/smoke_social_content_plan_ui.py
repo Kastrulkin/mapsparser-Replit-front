@@ -13,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTENT_PLAN_TAB = ROOT / "frontend" / "src" / "components" / "content-plan" / "ContentPlanTab.tsx"
+EXTERNAL_INTEGRATIONS = ROOT / "frontend" / "src" / "components" / "ExternalIntegrations.tsx"
 
 
 REQUIRED_COPY = {
@@ -83,6 +84,24 @@ REQUIRED_DATA_CONTRACT = {
 }
 
 
+REQUIRED_SETTINGS_COPY = {
+    "settings publishing checklist": "Чеклист публикаций",
+    "settings telegram requirements": "telegram_bot_token + telegram_chat_id",
+    "settings vk requirements": "access_token + group_id/owner_id + wall.post",
+    "settings google requirements": "Business Profile + location",
+    "settings meta requirements": "Page/IG business + permissions",
+    "settings next action": "Что сделать: ",
+    "settings maps controlled": "Яндекс/2ГИС остаются controlled/manual",
+}
+
+
+REQUIRED_SETTINGS_DATA_CONTRACT = {
+    "settings readiness next action ru": "next_action_ru",
+    "settings readiness next action en": "next_action_en",
+    "settings channel readiness endpoint": "/social-posts/channel-readiness",
+}
+
+
 FORBIDDEN_COPY = {
     "silent maps autopublish ru": "Яндекс/2ГИС автопубликация",
     "silent maps autopublish en": "Yandex/2GIS autopublish",
@@ -109,13 +128,20 @@ def main() -> int:
     if not CONTENT_PLAN_TAB.exists():
         print(f"Missing UI source: {CONTENT_PLAN_TAB}", file=sys.stderr)
         return 1
+    if not EXTERNAL_INTEGRATIONS.exists():
+        print(f"Missing settings source: {EXTERNAL_INTEGRATIONS}", file=sys.stderr)
+        return 1
 
     source = CONTENT_PLAN_TAB.read_text(encoding="utf-8")
+    settings_source = EXTERNAL_INTEGRATIONS.read_text(encoding="utf-8")
     missing = []
     missing.extend(_assert_contains(source, REQUIRED_COPY))
     missing.extend(_assert_contains(source, REQUIRED_SAFETY_COPY))
     missing.extend(_assert_contains(source, REQUIRED_DATA_CONTRACT))
+    missing.extend(_assert_contains(settings_source, REQUIRED_SETTINGS_COPY))
+    missing.extend(_assert_contains(settings_source, REQUIRED_SETTINGS_DATA_CONTRACT))
     forbidden = _assert_absent(source, FORBIDDEN_COPY)
+    forbidden.extend(_assert_absent(settings_source, FORBIDDEN_COPY))
 
     if missing or forbidden:
         if missing:
