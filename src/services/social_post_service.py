@@ -188,6 +188,7 @@ def list_social_posts_for_plan(user_id: str, plan_id: str) -> dict[str, Any]:
             "summary": _summary_for_posts(posts),
             "queue_groups": build_social_queue_groups(posts),
             "recommendation": _build_plan_recommendation(posts),
+            "learning_readiness": _social_learning_readiness(posts),
             "channel_readiness": _build_channel_readiness(cursor, str(plan.get("business_id") or "")),
         }
     finally:
@@ -1859,6 +1860,7 @@ def recommend_next_plan_from_social_posts(user_id: str, plan_id: str) -> dict[st
         return {
             "recommendation": recommendation,
             "proposed_changes": proposed_changes,
+            "learning_readiness": _social_learning_readiness(posts),
             "applies_automatically": False,
             "approval_required": True,
         }
@@ -3937,6 +3939,133 @@ def _build_plan_recommendation(posts: list[dict[str, Any]]) -> dict[str, Any]:
         "text_en": _recommendation_text(leads, inquiries, comments, reach, False),
         "signal_priority": _recommendation_signal_priority(leads, inquiries, comments, reach),
     }
+
+
+def _social_learning_readiness(posts: list[dict[str, Any]]) -> dict[str, Any]:
+    total_posts = len(posts)
+    published_posts = sum(1 for post in posts if str(post.get("status") or "").strip() == "published")
+    failed_posts = sum(1 for post in posts if str(post.get("status") or "").strip() == "failed")
+    manual_posts = sum(
+        1
+        for post in posts
+        if str(post.get("status") or "").strip() in {"needs_manual_publish", "needs_supervised_publish"}
+    )
+    posts_with_primary_result = sum(
+        1
+        for post in posts
+        if int(post.get("leads") or 0) > 0 or int(post.get("inquiries") or 0) > 0
+    )
+    posts_with_early_signal = sum(
+        1
+        for post in posts
+        if int(post.get("comments") or 0) > 0
+        or int(post.get("shares") or 0) > 0
+        or int(post.get("clicks") or 0) > 0
+        or int(post.get("reach") or post.get("views") or 0) > 0
+    )
+
+    if posts_with_primary_result:
+        status = "ready_from_leads"
+        confidence = "high"
+    elif posts_with_early_signal:
+        status = "early_signals_only"
+        confidence = "medium"
+    elif published_posts:
+        status = "published_without_signals"
+        confidence = "low"
+    elif manual_posts or failed_posts:
+        status = "finish_pending_publish"
+        confidence = "low"
+    else:
+        status = "not_enough_data"
+        confidence = "none"
+
+    return {
+        "schema": "localos_social_learning_readiness_v1",
+        "status": status,
+        "confidence": confidence,
+        "total_posts": total_posts,
+        "published_posts": published_posts,
+        "posts_with_primary_result": posts_with_primary_result,
+        "posts_with_early_signal": posts_with_early_signal,
+        "pending_manual_or_supervised_posts": manual_posts,
+        "failed_posts": failed_posts,
+        "primary_metric_ru": "Заявки и обращения",
+        "primary_metric_en": "Leads and inquiries",
+        "secondary_metric_ru": "Комментарии, репосты и клики",
+        "secondary_metric_en": "Comments, shares, and clicks",
+        "early_metric_ru": "Охват, просмотры и лайки",
+        "early_metric_en": "Reach, views, and likes",
+        "summary_ru": _social_learning_readiness_summary(status, True),
+        "summary_en": _social_learning_readiness_summary(status, False),
+        "next_action_ru": _social_learning_readiness_next_action(status, True),
+        "next_action_en": _social_learning_readiness_next_action(status, False),
+        "safe_to_apply_recommendation": status in {"ready_from_leads", "early_signals_only", "published_without_signals"},
+    }
+
+
+def _social_learning_readiness_summary(status: str, is_ru: bool) -> str:
+    if status == "ready_from_leads":
+        return (
+            "Есть заявки или обращения: рекомендации можно использовать для следующего плана."
+            if is_ru
+            else "Leads or inquiries exist: recommendations can guide the next plan."
+        )
+    if status == "early_signals_only":
+        return (
+            "Есть ранние сигналы, но заявок пока нет: рекомендации полезны, но их стоит применять осторожно."
+            if is_ru
+            else "Early signals exist, but no leads yet: recommendations are useful, but apply them carefully."
+        )
+    if status == "published_without_signals":
+        return (
+            "Посты опубликованы, но результата ещё не видно: предложения будут больше про CTA и оффер."
+            if is_ru
+            else "Posts are published, but no result is visible yet: suggestions will focus on CTA and offer."
+        )
+    if status == "finish_pending_publish":
+        return (
+            "Часть публикаций ещё ждёт ручного/контролируемого размещения или исправления ошибки."
+            if is_ru
+            else "Some posts still need manual/supervised placement or error recovery."
+        )
+    return (
+        "Данных для обучения пока мало: сначала опубликуйте посты и отметьте реакции/заявки."
+        if is_ru
+        else "There is not enough learning data yet: publish posts and record reactions/leads first."
+    )
+
+
+def _social_learning_readiness_next_action(status: str, is_ru: bool) -> str:
+    if status == "ready_from_leads":
+        return (
+            "Нажмите «Предложить изменения», проверьте preview и применяйте только после подтверждения."
+            if is_ru
+            else "Click “Suggest changes”, review the preview, and apply only after approval."
+        )
+    if status == "early_signals_only":
+        return (
+            "Отметьте заявки/обращения, если они были, затем пересчитайте рекомендации."
+            if is_ru
+            else "Record leads/inquiries if any happened, then recalculate recommendations."
+        )
+    if status == "published_without_signals":
+        return (
+            "Обновите реакции позже или отметьте обращения вручную; пока меняйте только CTA/оффер."
+            if is_ru
+            else "Update reactions later or record inquiries manually; for now, adjust only CTA/offer."
+        )
+    if status == "finish_pending_publish":
+        return (
+            "Сначала завершите manual/supervised публикации или исправьте failed-каналы."
+            if is_ru
+            else "Finish manual/supervised posts or recover failed channels first."
+        )
+    return (
+        "Подготовьте, подтвердите и опубликуйте первые посты, затем соберите реакции."
+        if is_ru
+        else "Prepare, approve, and publish the first posts, then collect reactions."
+    )
 
 
 def _recommendation_signal_priority(leads: int, inquiries: int, comments: int, reach: int) -> list[dict[str, Any]]:

@@ -27,6 +27,7 @@ from services.social_post_service import (
     _record_social_supervised_handoff_ledger,
     _social_supervised_blocked_metadata,
     _social_publish_evidence,
+    _social_learning_readiness,
     _status_after_social_text_edit,
     _channel_readiness,
     _channel_readiness_next_action,
@@ -625,6 +626,38 @@ def test_plan_recommendation_explains_signal_priority():
     assert recommendation["signal_priority"][0]["rank"] == 1
     assert recommendation["signal_priority"][0]["role_ru"] == "главный KPI"
     assert recommendation["signal_priority"][3]["value"] == 140
+
+
+def test_social_learning_readiness_prefers_primary_business_results():
+    readiness = _social_learning_readiness(
+        [
+            {"status": "published", "platform": "telegram", "leads": 1, "reach": 5},
+            {"status": "published", "platform": "vk", "reach": 900},
+        ]
+    )
+
+    assert readiness["schema"] == "localos_social_learning_readiness_v1"
+    assert readiness["status"] == "ready_from_leads"
+    assert readiness["confidence"] == "high"
+    assert readiness["posts_with_primary_result"] == 1
+    assert readiness["safe_to_apply_recommendation"] is True
+    assert "Заявки" in readiness["primary_metric_ru"]
+
+
+def test_social_learning_readiness_warns_when_publish_work_is_pending():
+    readiness = _social_learning_readiness(
+        [
+            {"status": "needs_supervised_publish", "platform": "yandex_maps"},
+            {"status": "failed", "platform": "telegram"},
+        ]
+    )
+
+    assert readiness["status"] == "finish_pending_publish"
+    assert readiness["confidence"] == "low"
+    assert readiness["pending_manual_or_supervised_posts"] == 1
+    assert readiness["failed_posts"] == 1
+    assert readiness["safe_to_apply_recommendation"] is False
+    assert "manual/supervised" in readiness["next_action_en"]
 
 
 def test_manual_attribution_metrics_include_views_and_likes():

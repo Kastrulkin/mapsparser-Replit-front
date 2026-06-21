@@ -236,6 +236,7 @@ type SocialRecommendationPayload = {
       role_en?: string;
     }>;
   };
+  learning_readiness?: SocialLearningReadiness;
   proposed_changes?: Array<{
     item_id?: string;
     theme?: string;
@@ -257,6 +258,28 @@ type SocialRecommendationPayload = {
       weak_channels?: SocialRecommendationChannelInsight[];
     };
   }>;
+};
+
+type SocialLearningReadiness = {
+  status?: string;
+  confidence?: string;
+  total_posts?: number;
+  published_posts?: number;
+  posts_with_primary_result?: number;
+  posts_with_early_signal?: number;
+  pending_manual_or_supervised_posts?: number;
+  failed_posts?: number;
+  primary_metric_ru?: string;
+  primary_metric_en?: string;
+  secondary_metric_ru?: string;
+  secondary_metric_en?: string;
+  early_metric_ru?: string;
+  early_metric_en?: string;
+  summary_ru?: string;
+  summary_en?: string;
+  next_action_ru?: string;
+  next_action_en?: string;
+  safe_to_apply_recommendation?: boolean;
 };
 
 type SocialRecommendationTopicInsight = {
@@ -1894,7 +1917,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSocialSummary(response.summary || null);
       setSocialQueueGroups(Array.isArray(response.queue_groups) ? response.queue_groups : []);
       setSocialChannelReadiness(Array.isArray(response.channel_readiness) ? response.channel_readiness : []);
-      setSocialRecommendation(response.recommendation ? { recommendation: response.recommendation } : null);
+      setSocialRecommendation(response.recommendation || response.learning_readiness ? {
+        recommendation: response.recommendation || {},
+        learning_readiness: response.learning_readiness || undefined,
+      } : null);
       setSocialRecommendationApproved(false);
     } catch {
       setSocialPostsByItem({});
@@ -2809,6 +2835,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
       setSocialRecommendation({
         recommendation: response.recommendation || {},
+        learning_readiness: response.learning_readiness || undefined,
         proposed_changes: Array.isArray(response.proposed_changes) ? response.proposed_changes : [],
       });
       setSocialRecommendationApproved(false);
@@ -5826,13 +5853,51 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       <div className="text-sm font-semibold text-emerald-950">
                         {isRu ? 'Что менять в следующем плане' : 'What to change next'}
                       </div>
-                      <div className="mt-1 text-xs leading-5 text-emerald-800">
-                        {isRu
-                          ? String(socialRecommendation?.recommendation?.text_ru || 'После публикаций LocalOS будет ранжировать темы по заявкам и обращениям, затем по комментариям и охвату.')
-                          : String(socialRecommendation?.recommendation?.text_en || 'After publishing, LocalOS will rank topics by leads and inquiries first, then comments and reach.')}
-                      </div>
-                      {socialPrimaryResultCount > 0 || socialEarlySignalCount > 0 ? (
-                        <div className="mt-3 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs leading-5 text-emerald-900">
+                        <div className="mt-1 text-xs leading-5 text-emerald-800">
+                          {isRu
+                            ? String(socialRecommendation?.recommendation?.text_ru || 'После публикаций LocalOS будет ранжировать темы по заявкам и обращениям, затем по комментариям и охвату.')
+                            : String(socialRecommendation?.recommendation?.text_en || 'After publishing, LocalOS will rank topics by leads and inquiries first, then comments and reach.')}
+                        </div>
+                        {socialRecommendation?.learning_readiness ? (
+                          <div className={_socialLearningReadinessClassName(socialRecommendation.learning_readiness.confidence || '')}>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <div className="text-xs font-semibold">
+                                  {isRu ? 'Готовность к корректировке плана' : 'Plan correction readiness'}
+                                </div>
+                                <div className="mt-1 text-xs leading-5">
+                                  {isRu
+                                    ? String(socialRecommendation.learning_readiness.summary_ru || '')
+                                    : String(socialRecommendation.learning_readiness.summary_en || '')}
+                                </div>
+                              </div>
+                              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium">
+                                {_socialLearningConfidenceLabel(socialRecommendation.learning_readiness.confidence || '', isRu)}
+                              </span>
+                            </div>
+                            <div className="mt-2 grid gap-2 text-[11px] sm:grid-cols-3">
+                              <div>
+                                <span className="font-semibold">{isRu ? 'Опубликовано: ' : 'Published: '}</span>
+                                {Number(socialRecommendation.learning_readiness.published_posts || 0)}
+                              </div>
+                              <div>
+                                <span className="font-semibold">{isRu ? 'Заявки/обращения: ' : 'Leads/inquiries: '}</span>
+                                {Number(socialRecommendation.learning_readiness.posts_with_primary_result || 0)}
+                              </div>
+                              <div>
+                                <span className="font-semibold">{isRu ? 'Нужно закрыть: ' : 'Need action: '}</span>
+                                {Number(socialRecommendation.learning_readiness.pending_manual_or_supervised_posts || 0) + Number(socialRecommendation.learning_readiness.failed_posts || 0)}
+                              </div>
+                            </div>
+                            <div className="mt-2 text-[11px] leading-5">
+                              {isRu
+                                ? String(socialRecommendation.learning_readiness.next_action_ru || '')
+                                : String(socialRecommendation.learning_readiness.next_action_en || '')}
+                            </div>
+                          </div>
+                        ) : null}
+                        {socialPrimaryResultCount > 0 || socialEarlySignalCount > 0 ? (
+                          <div className="mt-3 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs leading-5 text-emerald-900">
                           <div className="font-semibold text-emerald-950">
                             {socialPrimaryResultCount > 0
                               ? (isRu
@@ -5892,12 +5957,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           ? (isRu ? 'Считаем...' : 'Calculating...')
                           : (isRu ? 'Предложить изменения' : 'Suggest changes')}
                       </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => { void applySocialPlanRecommendation(); }}
-                        disabled={socialBusyAction === 'apply-recommendation' || !Number(socialRecommendation?.proposed_changes?.length || 0) || !socialRecommendationApproved}
-                      >
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => { void applySocialPlanRecommendation(); }}
+                          disabled={
+                            socialBusyAction === 'apply-recommendation'
+                            || !Number(socialRecommendation?.proposed_changes?.length || 0)
+                            || !socialRecommendationApproved
+                            || socialRecommendation?.learning_readiness?.safe_to_apply_recommendation === false
+                          }
+                        >
                         {socialBusyAction === 'apply-recommendation'
                           ? (isRu ? 'Применяем...' : 'Applying...')
                           : (isRu ? 'Применить после подтверждения' : 'Apply with approval')}
@@ -6069,11 +6139,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       </div>
                       <label className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs leading-5 text-emerald-900">
                         <input
-                          type="checkbox"
-                          className="mt-1 h-4 w-4 rounded border-emerald-300 text-emerald-700 focus:ring-emerald-500"
-                          checked={socialRecommendationApproved}
-                          onChange={(event) => setSocialRecommendationApproved(event.target.checked)}
-                        />
+                            type="checkbox"
+                            className="mt-1 h-4 w-4 rounded border-emerald-300 text-emerald-700 focus:ring-emerald-500"
+                            checked={socialRecommendationApproved}
+                            disabled={socialRecommendation?.learning_readiness?.safe_to_apply_recommendation === false}
+                            onChange={(event) => setSocialRecommendationApproved(event.target.checked)}
+                          />
                         <span>
                           {isRu
                             ? 'Я проверил предпросмотр выше и подтверждаю применение только к будущим пунктам плана.'
@@ -7460,6 +7531,23 @@ function _socialPublishEvidenceClassName(tone: string): string {
   if (normalized === 'warning') return `${base} border-amber-200 bg-amber-50 text-amber-800`;
   if (normalized === 'info') return `${base} border-blue-100 bg-blue-50 text-blue-800`;
   return `${base} border-slate-200 bg-slate-50 text-slate-700`;
+}
+
+function _socialLearningReadinessClassName(confidence: string): string {
+  const normalized = String(confidence || '').trim();
+  const base = 'mt-3 rounded-lg border px-3 py-2';
+  if (normalized === 'high') return `${base} border-emerald-100 bg-white text-emerald-900`;
+  if (normalized === 'medium') return `${base} border-lime-100 bg-white text-lime-900`;
+  if (normalized === 'low') return `${base} border-amber-100 bg-white text-amber-900`;
+  return `${base} border-slate-200 bg-white text-slate-700`;
+}
+
+function _socialLearningConfidenceLabel(confidence: string, isRu: boolean): string {
+  const normalized = String(confidence || '').trim();
+  if (normalized === 'high') return isRu ? 'доверие высокое' : 'high confidence';
+  if (normalized === 'medium') return isRu ? 'среднее доверие' : 'medium confidence';
+  if (normalized === 'low') return isRu ? 'данных мало' : 'low data';
+  return isRu ? 'ждём факты' : 'waiting for facts';
 }
 
 function _socialNextActionLabel(action: string, isRu: boolean): string {
