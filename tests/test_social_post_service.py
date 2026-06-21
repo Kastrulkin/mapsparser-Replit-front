@@ -1573,6 +1573,9 @@ def test_openclaw_supervised_task_payload_stops_before_final_publish():
     assert payload["approval_class"] == "external_publish"
     assert payload["stop_before_final_publish"] is True
     assert payload["auto_final_click_allowed"] is False
+    assert payload["safety_contract"]["side_effect_policy"] == "fill_preview_only"
+    assert "click_final_publish" in payload["safety_contract"]["forbidden_actions"]
+    assert "show_preview" in payload["safety_contract"]["allowed_actions"]
     assert payload["target"]["url"] == "https://yandex.ru/maps/org/123"
     assert payload["content"]["text"] == "Текст для карт"
     assert payload["approval_evidence"]["approval_id"] == "approval-1"
@@ -1624,6 +1627,8 @@ def test_supervised_publish_metadata_exposes_user_visible_contract(monkeypatch):
     assert supervised["profile_hint"] == "2ГИС профиль бизнеса"
     assert supervised["final_publish_policy"] == "human_final_click_required"
     assert supervised["stop_before_final_publish"] is True
+    assert supervised["safety_contract"]["requires_final_human_confirmation"] is True
+    assert "publish_without_human_confirmation" in supervised["safety_contract"]["forbidden_actions"]
     assert supervised["manual_handoff"]["schema"] == "localos_social_manual_publish_handoff_v1"
     assert supervised["manual_handoff"]["copy_ready_text"] == "Текст поста"
     assert supervised["manual_handoff"]["target_url"] == "https://2gis.ru/firm/1"
@@ -1965,6 +1970,8 @@ def test_supervised_handoff_writes_agent_action_ledger_when_available():
     assert metadata["execution_contract"]["delivery_status"] == "pending_openclaw_supervised_task"
     assert metadata["execution_contract"]["side_effect_policy"] == "fill_preview_only"
     assert metadata["execution_contract"]["final_publish_policy"] == "human_final_click_required"
+    assert "click_final_publish" in metadata["execution_contract"]["forbidden_actions"]
+    assert "show_preview" in metadata["execution_contract"]["allowed_actions"]
     assert metadata["provider_write_performed"] is False
     assert metadata["human_final_approval_required"] is True
     assert metadata["browser_final_click_allowed"] is False

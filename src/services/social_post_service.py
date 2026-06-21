@@ -2585,6 +2585,7 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
     task_payload = _build_openclaw_supervised_task_payload(post, automation_task_id, target)
     capability_status = openclaw_browser_capability_status()
     manual_handoff = _manual_publish_handoff_payload(post, target, "browser_capability_unavailable")
+    safety_contract = _social_supervised_safety_contract()
     return {
         "automation_task_id": automation_task_id,
         "openclaw_task": task_payload,
@@ -2608,6 +2609,7 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
             "manual_handoff": manual_handoff,
             "stop_before_final_publish": True,
             "final_publish_policy": "human_final_click_required",
+            "safety_contract": safety_contract,
             "fallback_reasons": ["captcha", "login_required", "changed_ui", "browser_capability_unavailable"],
             "openclaw_capability_status": capability_status,
         },
@@ -2631,6 +2633,7 @@ def _build_openclaw_supervised_task_payload(
     platform = str(post.get("platform") or "").strip()
     target_payload = target if isinstance(target, dict) else {}
     text = str(post.get("platform_text") or post.get("base_text") or "").strip()
+    safety_contract = _social_supervised_safety_contract()
     return {
         "schema": "localos_social_supervised_publish_task_v1",
         "task_id": str(automation_task_id or "").strip(),
@@ -2641,6 +2644,7 @@ def _build_openclaw_supervised_task_payload(
         "approval_required": True,
         "stop_before_final_publish": True,
         "auto_final_click_allowed": False,
+        "safety_contract": safety_contract,
         "status": "ready_for_supervised_or_manual_handoff",
         "platform": platform,
         "platform_label": platform_label(platform),
@@ -2687,6 +2691,43 @@ def _build_openclaw_supervised_task_payload(
             "manual_instruction_ru": "Скопируйте текст из LocalOS, разместите его на площадке вручную и отметьте публикацию размещённой.",
             "manual_instruction_en": "Copy the text from LocalOS, publish it manually on the platform, and mark the post as published.",
         },
+    }
+
+
+def _social_supervised_safety_contract() -> dict[str, Any]:
+    return {
+        "schema": "localos_social_supervised_safety_contract_v1",
+        "risk_class": "external_publish",
+        "approval_class": "external_publish",
+        "side_effect_policy": "fill_preview_only",
+        "final_publish_policy": "human_final_click_required",
+        "provider_write_performed_by_localos": False,
+        "external_publish_performed_by_openclaw": False,
+        "stop_before_final_publish": True,
+        "auto_final_click_allowed": False,
+        "requires_final_human_confirmation": True,
+        "allowed_actions": [
+            "open_platform",
+            "fill_text",
+            "attach_media",
+            "show_preview",
+            "return_task_status",
+        ],
+        "forbidden_actions": [
+            "click_final_publish",
+            "bypass_login",
+            "solve_captcha_without_user",
+            "change_business_profile_data",
+            "publish_without_human_confirmation",
+        ],
+        "manual_fallback_triggers": [
+            "captcha",
+            "login_required",
+            "changed_ui",
+            "missing_target_url",
+            "browser_capability_unavailable",
+            "unexpected_external_prompt",
+        ],
     }
 
 
@@ -2740,6 +2781,11 @@ def _record_social_supervised_handoff_ledger(
         metadata = _json_dict(updated_post.get("metadata_json"))
         task_payload = _json_dict(metadata.get("openclaw_task"))
         supervised_payload = _json_dict(metadata.get("supervised_publish"))
+        safety_contract = _json_dict(
+            supervised_payload.get("safety_contract")
+            or task_payload.get("safety_contract")
+            or _social_supervised_safety_contract()
+        )
         status = str(updated_post.get("status") or "").strip()
         ledger_id = _new_id()
         cursor.execute(
@@ -2791,9 +2837,14 @@ def _record_social_supervised_handoff_ledger(
                             "delivery_status": "pending_openclaw_supervised_task"
                             if status == "needs_supervised_publish"
                             else "manual_fallback_required",
-                            "side_effect_policy": "fill_preview_only",
-                            "final_publish_policy": "human_final_click_required",
+                            "side_effect_policy": str(safety_contract.get("side_effect_policy") or "fill_preview_only"),
+                            "final_publish_policy": str(safety_contract.get("final_publish_policy") or "human_final_click_required"),
                             "fallback_policy": "login_captcha_changed_ui_to_manual",
+                            "allowed_actions": safety_contract.get("allowed_actions") if isinstance(safety_contract.get("allowed_actions"), list) else [],
+                            "forbidden_actions": safety_contract.get("forbidden_actions") if isinstance(safety_contract.get("forbidden_actions"), list) else [],
+                            "manual_fallback_triggers": safety_contract.get("manual_fallback_triggers")
+                            if isinstance(safety_contract.get("manual_fallback_triggers"), list)
+                            else [],
                         },
                         "provider_write_performed": False,
                         "external_publish_performed": False,
