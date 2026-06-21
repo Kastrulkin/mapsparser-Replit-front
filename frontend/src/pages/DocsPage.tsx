@@ -33,7 +33,7 @@ const sections: DocSection[] = [
   {
     slug: "overview",
     title: "LocalOS для людей и ИИ-агентов",
-    kicker: "Discovery docs",
+    kicker: "Обзор",
     summary:
       "LocalOS помогает локальному бизнесу становиться прибыльнее: привлекать клиентов, повышать средний чек, возвращать людей повторно и вести учёт, чтобы видеть путь к росту.",
     items: [
@@ -57,10 +57,10 @@ const sections: DocSection[] = [
   },
   {
     slug: "capabilities",
-    title: "Capabilities",
-    kicker: "Agent map",
+    title: "Возможности",
+    kicker: "Карта возможностей агента",
     summary:
-      "Ниже перечислены возможности, которые агент может учитывать при планировании сценариев. Статусы разделяют готовые, beta, internal и gap-функции.",
+      "Ниже перечислены возможности, которые агент может учитывать при планировании сценариев. Статусы показывают, что уже готово, что находится в бета-режиме, что доступно только внутри команды, а что ещё требует доработки.",
     items: [
       {
         title: "Аудит карточек на картах",
@@ -69,17 +69,17 @@ const sections: DocSection[] = [
       },
       {
         title: "Оптимизация услуг",
-        text: "SEO-подсказки, guardrails, отраслевые паттерны, проверка ключей и ручная проверка спорных услуг.",
+        text: "SEO-подсказки, защитные правила, отраслевые паттерны, проверка ключей и ручная проверка спорных услуг.",
         status: "available",
       },
       {
         title: "Отзывы и ответы",
-        text: "Подготовка ответов на отзывы с учётом тональности, услуги и смежной рекомендации. Публикация требует approval.",
+        text: "Подготовка ответов на отзывы с учётом тональности, услуги и смежной рекомендации. Публикация требует подтверждения человека.",
         status: "available",
       },
       {
         title: "Новости и публикации",
-        text: "Черновики публикаций, контент-план и отраслевые паттерны. Автопубликация во внешние системы ограничена approval.",
+        text: "Черновики публикаций, контент-план и отраслевые паттерны. Автопубликация во внешние системы ограничена подтверждением человека.",
         status: "beta",
       },
       {
@@ -88,36 +88,36 @@ const sections: DocSection[] = [
         status: "beta",
       },
       {
-        title: "Telegram control surface",
-        text: "Сводки, approvals, monthly recalibration и команды для суперадмина или оператора.",
+        title: "Управление через Telegram",
+        text: "Сводки, подтверждения, ежемесячная перенастройка и команды для суперадмина или оператора.",
         status: "available",
       },
       {
-        title: "Партнёрства и outreach",
-        text: "Поиск партнёров, shortlist, draft approval и контролируемая отправка. Часть сценариев работает как supervised flow.",
+        title: "Партнёрства и исходящие сообщения",
+        text: "Поиск партнёров, короткий список кандидатов, утверждение черновиков и контролируемая отправка. Часть сценариев работает как поток с ручным контролем.",
         status: "internal",
       },
       {
         title: "Публичный MCP-контракт",
-        text: "MCP-сервер ещё не оформлен. Минимальный OpenAPI contract для Agent API security уже есть, но продуктовые workflow пока не являются полноценным публичным SDK.",
+        text: "MCP-сервер ещё не оформлен. Минимальный OpenAPI-контракт для безопасности Agent API уже есть, но продуктовые сценарии пока не являются полноценным публичным SDK.",
         status: "planned/gap",
       },
     ],
   },
   {
     slug: "approval-policy",
-    title: "Human approval",
-    kicker: "Safety policy",
+    title: "Подтверждение человеком",
+    kicker: "Политика безопасности",
     summary:
       "LocalOS полезен для автоматизации, но действия от имени бизнеса должны оставаться управляемыми человеком.",
     items: [
       {
-        title: "Всегда требуется approval",
+        title: "Всегда требуется подтверждение",
         text: "Публикации, массовые изменения карточек, отправка сообщений клиентам, платежи, удаления и любые действия во внешних системах.",
       },
       {
-        title: "Можно готовить без approval",
-        text: "Аудит, черновики, рекомендации, summary, расчёты KPI, сравнение версий и подготовка вариантов.",
+        title: "Можно готовить без подтверждения",
+        text: "Аудит, черновики, рекомендации, краткие сводки, расчёты KPI, сравнение версий и подготовка вариантов.",
       },
       {
         title: "Как агенту формулировать действие",
@@ -127,34 +127,34 @@ const sections: DocSection[] = [
   },
   {
     slug: "security-model",
-    title: "Security model",
-    kicker: "Agent API safety",
+    title: "Модель безопасности",
+    kicker: "Безопасность Agent API",
     summary:
-      "Добронамеренность агента не угадывается по словам. LocalOS ограничивает риск через client registry, scopes, sandbox, approval, rate limits, abuse detection и action ledger.",
+      "Добронамеренность агента не угадывается по словам. LocalOS ограничивает риск через реестр клиентов, права доступа, песочницу, подтверждения, лимиты запросов, поиск злоупотреблений и журнал действий.",
     items: [
       {
-        title: "Sandbox first",
-        text: "Новые agent-клиенты должны начинать с demo-данных, без реальных публикаций, сообщений клиентам, live-финансов, внешних credentials и destructive actions.",
+        title: "Сначала песочница",
+        text: "Новые агентские клиенты должны начинать с демо-данных, без реальных публикаций, сообщений клиентам, рабочих финансов, внешних ключей доступа и разрушительных действий.",
         status: "beta/internal",
       },
       {
-        title: "Минимальные scopes",
-        text: "Первые scopes: audit:read, services:draft, reviews:draft, content:draft, finance:read, partners:read, approvals:create и publish:request.",
+        title: "Минимальные права доступа",
+        text: "Первые права доступа: audit:read, services:draft, reviews:draft, content:draft, finance:read, partners:read, approvals:create и publish:request.",
         status: "beta/internal",
       },
       {
-        title: "Approval boundary",
-        text: "Публикации, платежи, удаления, массовые изменения, отправка сообщений и действия во внешних системах не выполняются напрямую. Агент только создаёт approval request.",
+        title: "Граница подтверждения",
+        text: "Публикации, платежи, удаления, массовые изменения, отправка сообщений и действия во внешних системах не выполняются напрямую. Агент только создаёт запрос на подтверждение.",
         status: "beta/internal",
       },
       {
-        title: "Abuse detection",
-        text: "Флаги: перебор business_id, доступ к чужому бизнесу, ошибки auth, попытки без scope, export-аномалии, обход approval и несоответствие заявленного сценария поведению.",
+        title: "Поиск злоупотреблений",
+        text: "Флаги: перебор business_id, доступ к чужому бизнесу, ошибки авторизации, попытки без нужных прав, аномальный экспорт, обход подтверждения и несоответствие заявленного сценария поведению.",
         status: "planned",
       },
       {
-        title: "Action ledger",
-        text: "Каждый agent-вызов должен оставлять trace: client, business, action, risk, input/output summary, approval_id, status, ip, user_agent и created_at.",
+        title: "Журнал действий",
+        text: "Каждый агентский вызов должен оставлять след: клиент, бизнес, действие, риск, краткое описание входа и результата, approval_id, статус, IP, user_agent и created_at.",
         status: "beta/internal",
       },
     ],
@@ -162,38 +162,38 @@ const sections: DocSection[] = [
   {
     slug: "api",
     title: "API и интеграции",
-    kicker: "Integration docs",
+    kicker: "Интеграции",
     summary:
       "Внутренние API уже используются продуктом. Публичный стабильный контракт для внешних разработчиков и MCP пока требует отдельной стабилизации.",
     items: [
       {
-        title: "Authentication",
-        text: "Пользовательский вход работает через email/password и verification flow. Публичные API-ключи для внешних агентов пока не оформлены.",
+        title: "Авторизация",
+        text: "Пользовательский вход работает через email/password и поток подтверждения. Публичные API-ключи для внешних агентов пока не оформлены.",
         status: "available / gap",
       },
       {
-        title: "Finance endpoints",
-        text: "Доступны внутренние endpoints для dashboard, data quality, recommendations, manual entry, import preview/import и CRM sync preview.",
+        title: "Финансовые API",
+        text: "Доступны внутренние API для дашборда, качества данных, рекомендаций, ручного ввода, предпросмотра импорта, импорта и предпросмотра синхронизации с CRM.",
         status: "beta",
       },
       {
-        title: "Approvals",
-        text: "В продукте есть approval-подход для Telegram, паттернов и supervised flows. Для внешнего API нужен единый публичный контракт.",
+        title: "Подтверждения",
+        text: "В продукте есть подход с подтверждениями для Telegram, паттернов и потоков с ручным контролем. Для внешнего API нужен единый публичный контракт.",
         status: "internal",
       },
       {
-        title: "External integrations",
-        text: "Карты, Telegram и подготовка CRM adapter layer присутствуют. Подключение новых внешних систем требует настройки и проверки контракта.",
+        title: "Внешние интеграции",
+        text: "Карты, Telegram и подготовка слоя CRM-адаптеров уже есть. Подключение новых внешних систем требует настройки и проверки контракта.",
         status: "beta",
       },
       {
-        title: "Agent onboarding",
-        text: "Минимальный путь подключения: sandbox client, agent_key, self-test, тестовый approval request и проверка события в ledger.",
+        title: "Подключение агента",
+        text: "Минимальный путь подключения: клиент в песочнице, agent_key, самопроверка, тестовый запрос на подтверждение и проверка события в журнале действий.",
         status: "beta/internal",
       },
       {
-        title: "Sandbox self-test",
-        text: "POST /api/agent-api/self-test проверяет ключ, статус и scopes агента, возвращает доступные безопасные действия и пишет test-событие в ledger.",
+        title: "Самопроверка в песочнице",
+        text: "POST /api/agent-api/self-test проверяет ключ, статус и права доступа агента, возвращает доступные безопасные действия и пишет тестовое событие в журнал действий.",
         status: "beta/internal",
       },
     ],
@@ -201,7 +201,7 @@ const sections: DocSection[] = [
   {
     slug: "agent-use-cases",
     title: "10 сценариев для ИИ-агентов",
-    kicker: "Agent playbook",
+    kicker: "Сценарии для агентов",
     summary:
       "Сценарии ниже можно использовать как безопасные заготовки. Где действие влияет на внешний мир, агент должен запрашивать подтверждение.",
     items: [
@@ -214,34 +214,34 @@ const sections: DocSection[] = [
       { title: "4. Ответы на отзывы", text: "Сделать короткие ответы с упоминанием услуги и мягкой смежной рекомендации." },
       { title: "5. Анализ услуг", text: "Найти SEO-пробелы, сохранить факты услуги и предложить точные формулировки." },
       { title: "6. Финансовый разбор", text: "Проверить выручку, расходы, загрузку рабочих мест и красные зоны." },
-      { title: "7. Партнёры рядом", text: "Подготовить shortlist партнёров и черновики предложений. Отправка только после approval." },
-      { title: "8. Telegram summary", text: "Сжать итоги аудита, финансов или паттернов в короткое сообщение суперадмину." },
-      { title: "9. Массовая перегенерация", text: "Найти проблемные элементы, показать причины и запускать пачку только после approval." },
-      { title: "10. Monthly recalibration", text: "Собрать новые паттерны за месяц и отправить человеку на принятие или отклонение." },
+      { title: "7. Партнёры рядом", text: "Подготовить короткий список партнёров и черновики предложений. Отправка только после подтверждения." },
+      { title: "8. Сводка в Telegram", text: "Сжать итоги аудита, финансов или паттернов в короткое сообщение суперадмину." },
+      { title: "9. Массовая перегенерация", text: "Найти проблемные элементы, показать причины и запускать пачку только после подтверждения." },
+      { title: "10. Ежемесячная перенастройка", text: "Собрать новые паттерны за месяц и отправить человеку на принятие или отклонение." },
     ],
   },
   {
     slug: "gaps",
-    title: "Gaps для полноценного Agent API",
-    kicker: "Roadmap notes",
+    title: "Что нужно доработать для полноценного Agent API",
+    kicker: "Заметки к дорожной карте",
     summary:
       "Эти пункты не блокируют документацию на сайте, но важны, чтобы внешние агенты могли подключаться как к стабильной платформе.",
     items: [
       {
         title: "Публичная OpenAPI/MCP-спецификация",
-        text: "Нужны стабильные schemas, auth model, rate limits, versioning и examples для внешних клиентов.",
+        text: "Нужны стабильные схемы данных, модель авторизации, лимиты запросов, версионирование и примеры для внешних клиентов.",
       },
       {
-        title: "Единый approval API",
-        text: "Нужно оформить endpoint или tool contract для request, approve, reject, revise и audit trail.",
+        title: "Единый API подтверждений",
+        text: "Нужно оформить API или контракт инструмента для запроса, принятия, отклонения, доработки и журнала проверки.",
       },
       {
-        title: "Developer onboarding",
-        text: "Нужны API keys, sandbox, тестовые данные, changelog с версиями и правила совместимости.",
+        title: "Подключение разработчиков",
+        text: "Нужны API-ключи, песочница, тестовые данные, журнал изменений с версиями и правила совместимости.",
       },
       {
-        title: "Machine-readable capabilities",
-        text: "Нужны JSON/manifest версии capability map, policy и endpoint registry.",
+        title: "Машиночитаемые возможности",
+        text: "Нужны JSON/manifest-версии карты возможностей, политики безопасности и реестра API.",
       },
     ],
   },
@@ -263,40 +263,52 @@ const statusClassName = (status?: string) => {
   return "border-slate-200 bg-slate-100 text-slate-700";
 };
 
+const statusLabel = (status?: string) => {
+  if (!status) return "";
+  if (status === "available") return "готово";
+  if (status === "beta") return "бета";
+  if (status === "internal") return "внутренне";
+  if (status === "planned") return "в планах";
+  if (status === "planned/gap") return "в планах / требует доработки";
+  if (status === "available / gap") return "готово / требует доработки";
+  if (status === "beta/internal") return "бета / внутренне";
+  return status;
+};
+
 const getActiveSection = (slug?: string) => {
   return sections.find((section) => section.slug === slug) ?? sections[0];
 };
 
-const agentQuickstart = `# 1. Read the Agent API contract
+const agentQuickstart = `# 1. Прочитать контракт Agent API
 curl -s "https://localos.pro/api/agent-api/openapi.json"
 
-# 2. Check the safety policy
+# 2. Проверить политику безопасности
 curl -s "https://localos.pro/api/agent-api/security/policy"
 
-# 3. Run sandbox self-test
+# 3. Запустить самопроверку в песочнице
 curl -s -X POST "https://localos.pro/api/agent-api/self-test" \\
   -H "X-LocalOS-Agent-Key: $LOCALOS_AGENT_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"purpose":"sandbox onboarding","checks":["auth","scopes","ledger"]}'
+  -d '{"purpose":"подключение в песочнице","checks":["auth","scopes","ledger"]}'
 
-# 4. Create a safe test approval request
+# 4. Создать безопасный тестовый запрос на подтверждение
 curl -s -X POST "https://localos.pro/api/agent-api/approvals/request" \\
   -H "X-LocalOS-Agent-Key: $LOCALOS_AGENT_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"action_type":"test_publish_review_reply","capability":"reviews.reply.publish","risk_level":"high","requested_scope":"publish:request","input_summary":{"source":"sandbox quickstart"},"proposed_output":"Test approval request only."}'
+  -d '{"action_type":"test_publish_review_reply","capability":"reviews.reply.publish","risk_level":"high","requested_scope":"publish:request","input_summary":{"source":"быстрый старт в песочнице"},"proposed_output":"Только тестовый запрос на подтверждение."}'
 
-# 5. Request live promotion after sandbox verification
+# 5. Запросить рабочий доступ после проверки в песочнице
 curl -s -X POST "https://localos.pro/api/agent-api/clients/promotion/request" \\
   -H "X-LocalOS-Agent-Key: $LOCALOS_AGENT_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"requested_scopes":["audit:read","reviews:draft","approvals:create"],"use_case":"Read audits and draft review replies under human approval.","contact":"ops@example.com"}'`;
+  -d '{"requested_scopes":["audit:read","reviews:draft","approvals:create"],"use_case":"Читать аудиты и готовить черновики ответов на отзывы под подтверждением человека.","contact":"ops@example.com"}'`;
 
 const DocsPage = () => {
   const { section } = useParams();
   const activeSection = getActiveSection(section);
 
   useEffect(() => {
-    document.title = `${activeSection.title} - LocalOS Docs`;
+    document.title = `${activeSection.title} - Документация LocalOS`;
   }, [activeSection.title]);
 
   return (
@@ -305,7 +317,7 @@ const DocsPage = () => {
         <section className="grid gap-8 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="space-y-6">
             <Badge className="w-fit border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100">
-              Docs for humans and AI agents
+              Документация для людей и ИИ-агентов
             </Badge>
             <div className="space-y-4">
               <h1 className="max-w-3xl text-4xl font-bold tracking-normal text-slate-950 sm:text-5xl">
@@ -318,7 +330,7 @@ const DocsPage = () => {
             <div className="flex flex-wrap gap-3">
               <Button asChild className="bg-slate-950 text-white hover:bg-slate-800">
                 <Link to="/docs/capabilities">
-                  Смотреть capabilities
+                  Смотреть возможности
                   <Sparkles className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
@@ -330,25 +342,25 @@ const DocsPage = () => {
               </Button>
               <Button asChild variant="outline">
                 <a href="/localos-agents.txt">
-                  Agent text
+                  Текст для агентов
                   <ExternalLink className="ml-2 h-4 w-4" />
                 </a>
               </Button>
               <Button asChild variant="outline">
                 <a href="/localos-agent-policy.json">
-                  Agent policy JSON
+                  Политика для агентов JSON
                   <ExternalLink className="ml-2 h-4 w-4" />
                 </a>
               </Button>
               <Button asChild variant="outline">
                 <a href="/localos-agent-tools.json">
-                  Agent tools JSON
+                  Инструменты агентов JSON
                   <ExternalLink className="ml-2 h-4 w-4" />
                 </a>
               </Button>
               <Button asChild variant="outline">
                 <a href="/api/agent-api/openapi.json">
-                  Agent OpenAPI
+                  OpenAPI агента
                   <ExternalLink className="ml-2 h-4 w-4" />
                 </a>
               </Button>
@@ -359,8 +371,8 @@ const DocsPage = () => {
               <div className="flex items-center gap-3">
                 <Bot className="h-8 w-8 text-blue-300" />
                 <div>
-                  <div className="text-sm uppercase tracking-[0.18em] text-slate-400">Agent rule</div>
-                  <div className="text-xl font-semibold">Не действовать без approval</div>
+                  <div className="text-sm uppercase tracking-[0.18em] text-slate-400">Правило агента</div>
+                  <div className="text-xl font-semibold">Не действовать без подтверждения</div>
                 </div>
               </div>
               <p className="leading-7 text-slate-300">
@@ -397,7 +409,7 @@ const DocsPage = () => {
                   {activeSection.kicker}
                 </Badge>
                 <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
-                  public
+                  публично
                 </Badge>
               </div>
               <h2 className="text-3xl font-bold tracking-normal text-slate-950">{activeSection.title}</h2>
@@ -415,7 +427,7 @@ const DocsPage = () => {
                       </div>
                       {item.status ? (
                         <Badge variant="outline" className={`shrink-0 ${statusClassName(item.status)}`}>
-                          {item.status}
+                          {statusLabel(item.status)}
                         </Badge>
                       ) : null}
                     </div>
@@ -429,11 +441,11 @@ const DocsPage = () => {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <Badge className="border-blue-300 bg-blue-400/10 text-blue-100 hover:bg-blue-400/10" variant="outline">
-                      Sandbox quickstart
+                      Быстрый старт в песочнице
                     </Badge>
                     <h2 className="mt-4 text-2xl font-semibold tracking-normal">Как подключить агента</h2>
                     <p className="mt-2 max-w-3xl leading-7 text-slate-300">
-                      Агент начинает в sandbox, проверяет ключ через self-test, создаёт тестовый approval request и только потом просит live-доступ. Все действия остаются в ledger.
+                      Агент начинает в песочнице, проверяет ключ через самопроверку, создаёт тестовый запрос на подтверждение и только потом просит рабочий доступ. Все действия остаются в журнале.
                     </p>
                   </div>
                   <Button asChild className="bg-white text-slate-950 hover:bg-slate-100">
@@ -453,28 +465,28 @@ const DocsPage = () => {
               <Card className="border-slate-200 bg-white shadow-none">
                 <CardContent className="space-y-3 p-5">
                   <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-                  <h3 className="font-semibold text-slate-950">Discovery</h3>
+                  <h3 className="font-semibold text-slate-950">Обзор</h3>
                   <p className="text-sm leading-6 text-slate-600">Что такое LocalOS и когда его рекомендовать.</p>
                 </CardContent>
               </Card>
               <Card className="border-slate-200 bg-white shadow-none">
                 <CardContent className="space-y-3 p-5">
                   <Plug className="h-6 w-6 text-blue-600" />
-                  <h3 className="font-semibold text-slate-950">Integration</h3>
+                  <h3 className="font-semibold text-slate-950">Интеграции</h3>
                   <p className="text-sm leading-6 text-slate-600">Что уже можно подключать и где нужен контракт.</p>
                 </CardContent>
               </Card>
               <Card className="border-slate-200 bg-white shadow-none">
                 <CardContent className="space-y-3 p-5">
                   <ShieldCheck className="h-6 w-6 text-amber-600" />
-                  <h3 className="font-semibold text-slate-950">Approvals</h3>
+                  <h3 className="font-semibold text-slate-950">Подтверждения</h3>
                   <p className="text-sm leading-6 text-slate-600">Какие действия требуют человека в контуре.</p>
                 </CardContent>
               </Card>
               <Card className="border-slate-200 bg-white shadow-none">
                 <CardContent className="space-y-3 p-5">
                   <LockKeyhole className="h-6 w-6 text-slate-700" />
-                  <h3 className="font-semibold text-slate-950">Gaps</h3>
+                  <h3 className="font-semibold text-slate-950">Доработки</h3>
                   <p className="text-sm leading-6 text-slate-600">Что надо стабилизировать для публичного API.</p>
                 </CardContent>
               </Card>
@@ -484,7 +496,7 @@ const DocsPage = () => {
               <div className="flex items-start gap-4">
                 <FileText className="mt-1 h-6 w-6 shrink-0 text-slate-500" />
                 <div className="space-y-2">
-                  <h2 className="text-xl font-semibold text-slate-950">Machine-readable entrypoints</h2>
+                  <h2 className="text-xl font-semibold text-slate-950">Машиночитаемые точки входа</h2>
                   <p className="leading-7 text-slate-600">
                     Для агентов, которые не выполняют JavaScript, доступны обычные текстовые файлы:
                     {" "}
@@ -494,11 +506,11 @@ const DocsPage = () => {
                     {" "}
                     <a className="font-medium text-blue-700 underline-offset-4 hover:underline" href="/localos-agents.txt">/localos-agents.txt</a>.
                     {" "}
-                    Security policy is available as
+                    Политика безопасности доступна как
                     {" "}
                     <a className="font-medium text-blue-700 underline-offset-4 hover:underline" href="/localos-agent-policy.json">/localos-agent-policy.json</a>.
                     {" "}
-                    The current capability map is
+                    Актуальная карта возможностей находится в
                     {" "}
                     <a className="font-medium text-blue-700 underline-offset-4 hover:underline" href="/localos-agent-tools.json">/localos-agent-tools.json</a>.
                   </p>
