@@ -2709,20 +2709,39 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
   const collectSocialPostMetricsForBusiness = async () => {
     if (!businessId) return;
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        isRu
+          ? 'Собрать реакции один раз для опубликованных постов текущего бизнеса? Это не публикует новые посты и только обновляет метрики/заявки для рекомендаций.'
+          : 'Collect reactions once for published posts in the current business? This will not publish new posts and only updates metrics/leads for recommendations.'
+      );
+      if (!confirmed) return;
+    }
     setSocialBusyAction('collect-metrics');
     setError('');
     setActionSummary(null);
     try {
-      const response = await newAuth.makeRequest('/social-posts/metrics/collect', {
+      const response = await newAuth.makeRequest('/social-posts/metrics/run-once', {
         method: 'POST',
-        body: JSON.stringify({ business_id: businessId }),
+        body: JSON.stringify({ business_id: businessId, batch_size: 25, approved: true }),
       });
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
-      const collected = Number(response.collected || 0);
+      const result = response.metrics_result && typeof response.metrics_result === 'object'
+        ? response.metrics_result
+        : {};
+      const collected = Number(result.collected || 0);
+      const picked = Number(result.picked || 0);
+      const failed = Number(result.failed || 0);
       setActionSummary({
-        tone: 'success',
-        text_ru: `Реакции обновлены для опубликованных постов: ${collected}. Теперь рекомендации учитывают свежие заявки и обращения.`,
-        text_en: `Reactions updated for published posts: ${collected}. Recommendations now include fresh leads and inquiries.`,
+        tone: failed > 0 ? 'warning' : 'success',
+        text_ru: String(response.message_ru || `Сбор реакций выполнен: проверено ${picked}, обновлено ${collected}, ошибок ${failed}.`),
+        text_en: String(response.message_en || `Metrics collection finished: checked ${picked}, updated ${collected}, failed ${failed}.`),
+        details_ru: [
+          'Внешние публикации не запускались. Следующий шаг - нажать “Предложить изменения”, чтобы пересчитать план по заявкам и обращениям.',
+        ],
+        details_en: [
+          'No external publishing was started. Next step: click “Suggest changes” to recalculate the plan by leads and inquiries.',
+        ],
       });
     } catch (collectError) {
       const message = collectError instanceof Error ? collectError.message : (isRu ? 'Не удалось обновить реакции' : 'Could not update reactions');
@@ -6059,8 +6078,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         disabled={socialBusyAction === 'collect-metrics' || !Number(socialSummary?.published || 0)}
                       >
                         {socialBusyAction === 'collect-metrics'
-                          ? (isRu ? 'Обновляем...' : 'Updating...')
-                          : `${isRu ? 'Обновить реакции' : 'Update reactions'} · ${Number(socialSummary?.published || 0)}`}
+                          ? (isRu ? 'Собираем...' : 'Collecting...')
+                          : `${isRu ? 'Собрать реакции один раз' : 'Collect reactions once'} · ${Number(socialSummary?.published || 0)}`}
                       </Button>
                       <Button
                         type="button"

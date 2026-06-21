@@ -30,6 +30,7 @@ from services.social_post_service import (
     recommend_next_plan_from_social_posts,
     record_social_post_attribution_event,
     run_scoped_social_dispatch_once,
+    run_scoped_social_metrics_once,
     update_social_post_text,
 )
 
@@ -580,6 +581,33 @@ def social_posts_metrics_collect():
             str(user_data.get("user_id") or ""),
             business_id=str(data.get("business_id") or "").strip(),
             post_id=str(data.get("post_id") or "").strip(),
+        )
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/metrics/run-once", methods=["POST"])
+def social_posts_metrics_run_once():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "metrics-run-once")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    if not bool(data.get("approved")):
+        return jsonify({"success": False, "error": "Для сбора реакций нужно явное подтверждение"}), 403
+    try:
+        payload = run_scoped_social_metrics_once(
+            str(user_data.get("user_id") or ""),
+            business_id=str(data.get("business_id") or ""),
+            batch_size=int(data.get("batch_size") or 25),
+            approved=bool(data.get("approved")),
         )
         return jsonify({"success": True, **payload})
     except PermissionError:

@@ -55,6 +55,7 @@ from services.social_post_service import (
     queue_social_post,
     record_social_post_attribution_event,
     run_scoped_social_dispatch_once,
+    run_scoped_social_metrics_once,
     _vk_post_url,
 )
 
@@ -842,6 +843,58 @@ def test_collect_due_social_post_metrics_blocks_unscoped_by_default(monkeypatch)
     assert result["picked"] == 0
     assert result["blocked"] is True
     assert result["blocked_reason"] == "business_scope_required"
+
+
+def test_run_scoped_social_metrics_once_requires_approval_before_access_check(monkeypatch):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("metrics collection must not check access without approval")
+
+    monkeypatch.setattr(social_post_service, "DatabaseManager", fail_if_called)
+
+    error = None
+    try:
+        run_scoped_social_metrics_once("user-1", "biz-1", approved=False)
+    except PermissionError:
+        error = sys.exc_info()[1]
+
+    assert error is not None
+    assert "явное подтверждение" in str(error)
+
+
+def test_run_scoped_social_metrics_once_collects_only_requested_business(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_require_business_access",
+        lambda cursor, user_id, business_id: captured.setdefault(
+            "access",
+            {"user_id": user_id, "business_id": business_id},
+        ),
+    )
+
+    def fake_collect_due(batch_size=50, business_id=""):
+        captured["collect_due"] = {"batch_size": batch_size, "business_id": business_id}
+        return {
+            "picked": 3,
+            "collected": 2,
+            "failed": 1,
+            "errors": [{"id": "post-3", "error": "temporary"}],
+            "business_scope": business_id,
+        }
+
+    monkeypatch.setattr(social_post_service, "collect_due_social_post_metrics", fake_collect_due)
+
+    result = run_scoped_social_metrics_once("user-1", "biz-1", batch_size=500, approved=True)
+
+    assert result["business_id"] == "biz-1"
+    assert result["batch_size"] == 100
+    assert result["external_publish_performed"] is False
+    assert result["metrics_result"]["collected"] == 2
+    assert "ошибок 1" in result["message_ru"]
+    assert captured["access"] == {"user_id": "user-1", "business_id": "biz-1"}
+    assert captured["collect_due"] == {"batch_size": 100, "business_id": "biz-1"}
 
 
 def test_collect_vk_post_metrics_reads_wall_counters(monkeypatch):

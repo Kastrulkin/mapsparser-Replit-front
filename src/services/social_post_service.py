@@ -1257,6 +1257,40 @@ def run_scoped_social_dispatch_once(
     }
 
 
+def run_scoped_social_metrics_once(
+    user_id: str,
+    business_id: str,
+    batch_size: int = 25,
+    approved: bool = False,
+) -> dict[str, Any]:
+    if not approved:
+        raise PermissionError("Для сбора реакций нужно явное подтверждение")
+    normalized_business_id = str(business_id or "").strip()
+    if not normalized_business_id:
+        raise ValueError("Бизнес не выбран")
+    clean_batch_size = max(1, min(int(batch_size or 25), 100))
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        _require_business_access(cursor, user_id, normalized_business_id)
+    finally:
+        db.close()
+    metrics_result = collect_due_social_post_metrics(
+        batch_size=clean_batch_size,
+        business_id=normalized_business_id,
+    )
+    return {
+        "approved": True,
+        "business_id": normalized_business_id,
+        "batch_size": clean_batch_size,
+        "metrics_result": metrics_result,
+        "external_publish_performed": False,
+        "message_ru": _social_metrics_once_message(metrics_result, True),
+        "message_en": _social_metrics_once_message(metrics_result, False),
+    }
+
+
 def _social_dispatch_once_message(result: dict[str, Any], is_ru: bool) -> str:
     picked = int(result.get("picked") or 0)
     published = int(result.get("published") or 0)
@@ -1278,6 +1312,27 @@ def _social_dispatch_once_message(result: dict[str, Any], is_ru: bool) -> str:
         f"First scoped cycle finished: picked {picked}, published {published}, "
         f"controlled {supervised}, manual {manual}, failed {failed}."
     )
+
+
+def _social_metrics_once_message(result: dict[str, Any], is_ru: bool) -> str:
+    if result.get("blocked"):
+        return (
+            "Сбор реакций заблокирован: нужен явный business scope."
+            if is_ru
+            else "Metrics collection is blocked: an explicit business scope is required."
+        )
+    picked = int(result.get("picked") or 0)
+    collected = int(result.get("collected") or 0)
+    failed = int(result.get("failed") or 0)
+    if picked <= 0:
+        return (
+            "Новых опубликованных постов для сбора реакций нет."
+            if is_ru
+            else "There are no new published posts to collect reactions for."
+        )
+    if is_ru:
+        return f"Сбор реакций выполнен: проверено {picked}, обновлено {collected}, ошибок {failed}."
+    return f"Metrics collection finished: checked {picked}, updated {collected}, failed {failed}."
 
 
 def preview_due_social_post_dispatch(user_id: str, batch_size: int = 20, business_id: str = "") -> dict[str, Any]:
