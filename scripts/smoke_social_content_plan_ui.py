@@ -58,8 +58,10 @@ REQUIRED_COPY = {
     "apply with confirmation": "Применить после подтверждения",
     "lead attribution": "Была заявка",
     "inquiry attribution": "Было обращение",
-    "like attribution": "Был лайк",
-    "view attribution": "Был просмотр",
+    "primary result attribution group": "Главный результат",
+    "early signal attribution group": "Ранние сигналы",
+    "like attribution": "Лайк",
+    "view attribution": "Просмотр",
     "result nudge": "Есть заявки/обращения",
     "stale recommendation guard": "Рекомендации сброшены",
 }

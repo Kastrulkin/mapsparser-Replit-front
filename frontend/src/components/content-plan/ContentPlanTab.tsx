@@ -6507,71 +6507,86 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       </>
                                     ) : null}
                                     {canRecordResult ? (
-                                      <>
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => { void recordSocialPostAttribution(post, 'lead'); }}
-                                          disabled={postBusy}
-                                        >
-                                          {isRu ? 'Была заявка' : 'Record lead'}
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => { void recordSocialPostAttribution(post, 'inquiry'); }}
-                                          disabled={postBusy}
-                                        >
-                                          {isRu ? 'Было обращение' : 'Record inquiry'}
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => { void recordSocialPostAttribution(post, 'comment'); }}
-                                          disabled={postBusy}
-                                        >
-                                          {isRu ? 'Был комментарий' : 'Record comment'}
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => { void recordSocialPostAttribution(post, 'share'); }}
-                                          disabled={postBusy}
-                                        >
-                                          {isRu ? 'Был репост' : 'Record share'}
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => { void recordSocialPostAttribution(post, 'click'); }}
-                                          disabled={postBusy}
-                                        >
-                                          {isRu ? 'Был клик' : 'Record click'}
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => { void recordSocialPostAttribution(post, 'like'); }}
-                                          disabled={postBusy}
-                                        >
-                                          {isRu ? 'Был лайк' : 'Record like'}
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => { void recordSocialPostAttribution(post, 'view'); }}
-                                          disabled={postBusy}
-                                        >
-                                          {isRu ? 'Был просмотр' : 'Record view'}
-                                        </Button>
-                                      </>
+                                      <div className="mt-1 flex w-full flex-col gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="text-xs font-semibold uppercase text-emerald-800">
+                                            {isRu ? 'Главный результат' : 'Primary result'}
+                                          </span>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            className="h-7 bg-emerald-700 px-2 text-xs text-white hover:bg-emerald-800"
+                                            onClick={() => { void recordSocialPostAttribution(post, 'lead'); }}
+                                            disabled={postBusy}
+                                          >
+                                            {isRu ? 'Была заявка' : 'Record lead'}
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            className="h-7 bg-emerald-700 px-2 text-xs text-white hover:bg-emerald-800"
+                                            onClick={() => { void recordSocialPostAttribution(post, 'inquiry'); }}
+                                            disabled={postBusy}
+                                          >
+                                            {isRu ? 'Было обращение' : 'Record inquiry'}
+                                          </Button>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="text-xs font-semibold uppercase text-slate-500">
+                                            {isRu ? 'Ранние сигналы' : 'Early signals'}
+                                          </span>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 bg-white px-2 text-xs"
+                                            onClick={() => { void recordSocialPostAttribution(post, 'comment'); }}
+                                            disabled={postBusy}
+                                          >
+                                            {isRu ? 'Комментарий' : 'Comment'}
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 bg-white px-2 text-xs"
+                                            onClick={() => { void recordSocialPostAttribution(post, 'share'); }}
+                                            disabled={postBusy}
+                                          >
+                                            {isRu ? 'Репост' : 'Share'}
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 bg-white px-2 text-xs"
+                                            onClick={() => { void recordSocialPostAttribution(post, 'click'); }}
+                                            disabled={postBusy}
+                                          >
+                                            {isRu ? 'Клик' : 'Click'}
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 bg-white px-2 text-xs"
+                                            onClick={() => { void recordSocialPostAttribution(post, 'like'); }}
+                                            disabled={postBusy}
+                                          >
+                                            {isRu ? 'Лайк' : 'Like'}
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 bg-white px-2 text-xs"
+                                            onClick={() => { void recordSocialPostAttribution(post, 'view'); }}
+                                            disabled={postBusy}
+                                          >
+                                            {isRu ? 'Просмотр' : 'View'}
+                                          </Button>
+                                        </div>
+                                      </div>
                                     ) : null}
                                   </div>
                                   <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
