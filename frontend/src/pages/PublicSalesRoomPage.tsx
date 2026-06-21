@@ -138,7 +138,7 @@ const formatDateTime = (value?: string) => {
 
 const roomAuthorNameKey = 'localos_sales_room_author_name';
 const roomAuthorCompanyKey = 'localos_sales_room_author_company';
-const fileUploadsVisible = false;
+const fileUploadsVisible = true;
 const defaultWelcomeText =
   'Рад знакомству. Я подготовил эту цифровую комнату, чтобы было проще обсуждать детали, подключать коллег и видеть всё в одном месте.\n\n' +
   'Ниже - актуальный документ. Можно оставить комментарий и предложить правку.\n\n' +
@@ -441,8 +441,8 @@ export default function PublicSalesRoomPage() {
       setComposerError('Укажите компанию.');
       return;
     }
-    if (!cleanMessage && (!fileUploadsVisible || pendingAttachments.length === 0)) {
-      setComposerError('Напишите сообщение.');
+    if (!cleanMessage && pendingAttachments.length === 0) {
+      setComposerError('Напишите сообщение или приложите файл.');
       return;
     }
     setSending(true);
