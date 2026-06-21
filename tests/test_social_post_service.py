@@ -8,6 +8,7 @@ import services.social_post_service as social_post_service
 from services.social_post_service import (
     _build_openclaw_supervised_task_payload,
     _build_plan_recommendation,
+    _add_channel_breakdown_to_changes,
     _build_social_launch_preflight_payload,
     _channel_readiness_message,
     _dispatch_action_for_status,
@@ -1254,6 +1255,55 @@ def test_next_plan_changes_prioritize_leads_before_reach():
 
     assert changes[0]["item_id"] == "lead-item"
     assert changes[0]["action"] == "repeat_winning_topic"
+
+
+def test_next_plan_change_channel_breakdown_explains_where_to_repeat_or_fix():
+    changes = _add_channel_breakdown_to_changes(
+        [
+            {
+                "item_id": "item-1",
+                "theme": "Запись на услугу",
+                "action": "repeat_winning_topic",
+                "proposed_goal": "Повторить",
+            }
+        ],
+        [
+            {
+                "id": "post-telegram",
+                "content_plan_item_id": "item-1",
+                "platform": "telegram",
+                "status": "published",
+                "leads": 1,
+                "inquiries": 0,
+                "comments": 1,
+                "reach": 30,
+            },
+            {
+                "id": "post-vk",
+                "content_plan_item_id": "item-1",
+                "platform": "vk",
+                "status": "published",
+                "leads": 0,
+                "inquiries": 0,
+                "comments": 2,
+                "reach": 500,
+            },
+            {
+                "id": "post-yandex",
+                "content_plan_item_id": "item-1",
+                "platform": "yandex_maps",
+                "status": "needs_manual_publish",
+                "leads": 0,
+                "inquiries": 0,
+            },
+        ],
+    )
+
+    breakdown = changes[0]["channel_breakdown"]
+    assert breakdown["best_channels"][0]["platform"] == "telegram"
+    assert breakdown["best_channels"][0]["reason_ru"]
+    assert breakdown["weak_channels"][0]["platform"] == "yandex_maps"
+    assert "Telegram" in breakdown["summary_ru"]
 
 
 def test_social_learning_insights_explain_winners_weak_channels_and_no_result_topics():

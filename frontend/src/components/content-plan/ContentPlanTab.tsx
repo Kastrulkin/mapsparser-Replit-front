@@ -233,6 +233,12 @@ type SocialRecommendationPayload = {
       comments?: number;
       reach?: number;
     };
+    channel_breakdown?: {
+      summary_ru?: string;
+      summary_en?: string;
+      best_channels?: SocialRecommendationChannelInsight[];
+      weak_channels?: SocialRecommendationChannelInsight[];
+    };
   }>;
 };
 
@@ -5916,6 +5922,36 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   ? `сигналы: заявки ${Number(change.metrics?.leads || 0)}, обращения ${Number(change.metrics?.inquiries || 0)}, комментарии ${Number(change.metrics?.comments || 0)}, охват ${Number(change.metrics?.reach || 0)}`
                                   : `signals: leads ${Number(change.metrics?.leads || 0)}, inquiries ${Number(change.metrics?.inquiries || 0)}, comments ${Number(change.metrics?.comments || 0)}, reach ${Number(change.metrics?.reach || 0)}`}
                               </div>
+                              {change.channel_breakdown?.summary_ru || change.channel_breakdown?.summary_en ? (
+                                <div className="mt-2 rounded-md border border-emerald-100 bg-white px-2 py-1.5 text-[11px] leading-5 text-emerald-900">
+                                  <div className="font-semibold text-emerald-950">
+                                    {isRu ? 'По каналам' : 'By channel'}
+                                  </div>
+                                  <div>
+                                    {isRu
+                                      ? String(change.channel_breakdown?.summary_ru || '')
+                                      : String(change.channel_breakdown?.summary_en || '')}
+                                  </div>
+                                  {Number(change.channel_breakdown?.best_channels?.length || 0) > 0 ? (
+                                    <div className="mt-1 text-emerald-800">
+                                      {(change.channel_breakdown?.best_channels || []).slice(0, 2).map((channel) => (
+                                        <div key={`best:${String(change.item_id || '')}:${String(channel.platform || channel.platform_label || '')}`}>
+                                          + {String(channel.platform_label || _socialPlatformLabel(String(channel.platform || ''), isRu))}: {_socialInsightMetricLine(channel.metrics, isRu)}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                  {Number(change.channel_breakdown?.weak_channels?.length || 0) > 0 ? (
+                                    <div className="mt-1 text-amber-800">
+                                      {(change.channel_breakdown?.weak_channels || []).slice(0, 2).map((channel) => (
+                                        <div key={`weak:${String(change.item_id || '')}:${String(channel.platform || channel.platform_label || '')}`}>
+                                          - {String(channel.platform_label || _socialPlatformLabel(String(channel.platform || ''), isRu))}: {isRu ? String(channel.reason_ru || '') : String(channel.reason_en || '')}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
                             </div>
                           ))}
                         </div>

@@ -1549,12 +1549,16 @@ def recommend_next_plan_from_social_posts(user_id: str, plan_id: str) -> dict[st
         _load_plan_for_user(cursor, user_id, plan_id)
         posts_payload = list_social_posts_for_plan(user_id, plan_id)
         performance_rows = _social_plan_performance_rows(cursor, plan_id)
-        proposed_changes = _build_next_plan_changes(performance_rows)
+        posts = list(posts_payload.get("posts") or [])
+        proposed_changes = _add_channel_breakdown_to_changes(
+            _build_next_plan_changes(performance_rows),
+            posts,
+        )
         recommendation = dict(posts_payload.get("recommendation") or {})
         recommendation.update(
             _build_social_learning_insights(
                 performance_rows,
-                list(posts_payload.get("posts") or []),
+                posts,
             )
         )
         return {
@@ -3555,6 +3559,116 @@ def _build_next_plan_changes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
             }
         )
     return changes
+
+
+def _add_channel_breakdown_to_changes(
+    changes: list[dict[str, Any]],
+    posts: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    posts_by_item_id: dict[str, list[dict[str, Any]]] = {}
+    for post in posts:
+        item_id = str(post.get("content_plan_item_id") or "").strip()
+        if not item_id:
+            continue
+        posts_by_item_id.setdefault(item_id, []).append(post)
+
+    enriched: list[dict[str, Any]] = []
+    for change in changes:
+        item_id = str(change.get("item_id") or "").strip()
+        item_posts = posts_by_item_id.get(item_id, [])
+        breakdown = _channel_breakdown_for_posts(item_posts)
+        enriched.append({**change, "channel_breakdown": breakdown})
+    return enriched
+
+
+def _channel_breakdown_for_posts(posts: list[dict[str, Any]]) -> dict[str, Any]:
+    best_channels: list[dict[str, Any]] = []
+    weak_channels: list[dict[str, Any]] = []
+    for post in posts:
+        platform = str(post.get("platform") or "").strip()
+        if not platform:
+            continue
+        metrics = {
+            "leads": int(post.get("leads") or 0),
+            "inquiries": int(post.get("inquiries") or 0),
+            "comments": int(post.get("comments") or 0),
+            "reach": int(post.get("reach") or post.get("views") or 0),
+        }
+        status = str(post.get("status") or "").strip()
+        item = {
+            "platform": platform,
+            "platform_label": platform_label(platform),
+            "status": status,
+            "metrics": metrics,
+        }
+        if metrics["leads"] or metrics["inquiries"]:
+            item["reason_ru"] = "Канал дал заявку или обращение; повторить тему здесь в первую очередь."
+            item["reason_en"] = "This channel produced a lead or inquiry; repeat the topic here first."
+            best_channels.append(item)
+        elif status in {"published", "failed", "needs_manual_publish", "needs_supervised_publish"}:
+            item["reason_ru"] = _channel_breakdown_weak_reason(status, metrics, True)
+            item["reason_en"] = _channel_breakdown_weak_reason(status, metrics, False)
+            weak_channels.append(item)
+
+    best_channels.sort(
+        key=lambda item: (
+            int(item.get("metrics", {}).get("leads") or 0),
+            int(item.get("metrics", {}).get("inquiries") or 0),
+            int(item.get("metrics", {}).get("comments") or 0),
+            int(item.get("metrics", {}).get("reach") or 0),
+        ),
+        reverse=True,
+    )
+    weak_channels.sort(
+        key=lambda item: (
+            1 if str(item.get("status") or "") in {"failed", "needs_manual_publish", "needs_supervised_publish"} else 0,
+            int(item.get("metrics", {}).get("reach") or 0),
+            int(item.get("metrics", {}).get("comments") or 0),
+        ),
+        reverse=True,
+    )
+    summary_ru = "Канальных данных пока нет: сначала опубликуйте посты и отметьте заявки/обращения."
+    summary_en = "No channel data yet: publish posts first and record leads/inquiries."
+    if best_channels:
+        labels = ", ".join(str(item.get("platform_label") or "") for item in best_channels[:2] if item.get("platform_label"))
+        summary_ru = f"Повторить тему в каналах, где были заявки/обращения: {labels}."
+        summary_en = f"Repeat the topic in channels that produced leads/inquiries: {labels}."
+    elif weak_channels:
+        labels = ", ".join(str(item.get("platform_label") or "") for item in weak_channels[:2] if item.get("platform_label"))
+        summary_ru = f"Сначала поправить слабые каналы: {labels}."
+        summary_en = f"Fix weak channels first: {labels}."
+    return {
+        "best_channels": best_channels[:3],
+        "weak_channels": weak_channels[:3],
+        "summary_ru": summary_ru,
+        "summary_en": summary_en,
+    }
+
+
+def _channel_breakdown_weak_reason(status: str, metrics: dict[str, int], is_ru: bool) -> str:
+    if status == "failed":
+        return (
+            "Публикация не вышла: сначала исправить подключение или запустить ручной сценарий."
+            if is_ru
+            else "Publishing failed: fix the connection or run the manual flow first."
+        )
+    if status in {"needs_manual_publish", "needs_supervised_publish"}:
+        return (
+            "Пост ждёт ручное/контролируемое размещение; без этого канал нельзя оценить по результату."
+            if is_ru
+            else "The post awaits manual/supervised placement; the channel cannot be judged until it is published."
+        )
+    if int(metrics.get("reach") or 0) or int(metrics.get("comments") or 0):
+        return (
+            "Есть ранние сигналы без заявки: усилить оффер и следующий шаг."
+            if is_ru
+            else "Early signals exist without a lead: strengthen the offer and next step."
+        )
+    return (
+        "Пост опубликован, но результата пока нет: проверить тему, время и CTA."
+        if is_ru
+        else "The post is published but has no result yet: check topic, timing, and CTA."
+    )
 
 
 def _build_social_learning_insights(rows: list[dict[str, Any]], posts: list[dict[str, Any]]) -> dict[str, Any]:
