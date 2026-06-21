@@ -3776,8 +3776,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             </h4>
             <p className="max-w-3xl text-sm leading-6 text-slate-600">
               {isRu
-                ? 'Один рабочий экран: понять состояние, собрать план, разобрать очередь и довести выбранную тему до новости.'
-                : 'One workspace: understand status, build the plan, work the queue, and turn one selected topic into news.'}
+                ? 'Один рабочий экран: понять состояние, собрать план, разобрать очередь и довести выбранную тему до публикации.'
+                : 'One workspace: understand status, build the plan, work the queue, and turn one selected topic into a publication.'}
             </p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
@@ -3863,14 +3863,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   ? (planOperationalSummary.needsDraft > 0
                     ? (isRu ? 'Сначала допишите пустые темы' : 'Start by filling empty topics')
                     : planOperationalSummary.readyToPublish > 0
-                      ? (isRu ? 'Готовые тексты можно превратить в новости' : 'Ready texts can become news')
+                      ? (isRu ? 'Готовые тексты можно превратить в публикации' : 'Ready texts can become publications')
                       : (isRu ? 'План выглядит спокойно' : 'The plan looks calm'))
                   : (isRu ? 'Соберите первый план публикаций' : 'Build the first content plan')}
               </div>
             <div className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
               {isRu
-                ? 'Здесь короткая сводка: сколько тем уже есть, сколько текстов готово к новости, сколько ещё надо дописать и что делать следующим шагом.'
-                : 'A short summary: how many topics exist, how many drafts are ready to become news, how many still need text, and the next step.'}
+                ? 'Здесь короткая сводка: сколько тем уже есть, сколько текстов готово к публикации, сколько ещё надо дописать и что делать следующим шагом.'
+                : 'A short summary: how many topics exist, how many drafts are ready to publish, how many still need text, and the next step.'}
             </div>
             </div>
             {!currentPlan?.items?.length ? (
@@ -4189,10 +4189,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             <div className="mt-1 text-sm leading-6 text-slate-600">
               {isRu
                 ? (currentPlan?.items?.length
-                  ? 'Новый план создавать не нужно, если вы просто хотите найти тему, дописать текст или создать новость. Для этого откройте очередь.'
+                  ? 'Новый план создавать не нужно, если вы просто хотите найти тему, дописать текст или создать публикацию. Для этого откройте очередь.'
                   : 'Создайте один план. Источники, плотность и тонкие настройки спрятаны, чтобы экран не начинался с перегруза.')
                 : (currentPlan?.items?.length
-                  ? 'You do not need a new plan if you only want to find a topic, edit a draft, or create news. Open the queue instead.'
+                  ? 'You do not need a new plan if you only want to find a topic, edit a draft, or create a publication. Open the queue instead.'
                   : 'Create one plan. Sources, density, and detailed controls are tucked away to reduce first-screen noise.')}
             </div>
           </div>
@@ -4705,8 +4705,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             </div>
             <div className="mt-1">
               {isRu
-                ? 'Сначала создайте план во вкладке «План». После этого здесь появятся темы, тексты и кнопки создания новостей.'
-                : 'Create a plan in the Plan tab first. Then topics, drafts, and news creation actions will appear here.'}
+                ? 'Сначала создайте план во вкладке «План». После этого здесь появятся темы, тексты и действия для публикаций.'
+                : 'Create a plan in the Plan tab first. Then topics, drafts, and publishing actions will appear here.'}
             </div>
             <div className="mt-4">
               <Button type="button" onClick={() => setActiveZone('plan')}>
@@ -4728,13 +4728,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     {planOperationalSummary.needsDraft > 0
                       ? (isRu ? 'В плане есть темы без текста' : 'Some plan topics need text')
                       : planOperationalSummary.readyToPublish > 0
-                        ? (isRu ? 'Теперь можно создать новости' : 'Now create news items')
+                        ? (isRu ? 'Теперь можно создать публикации' : 'Now create publications')
                         : (isRu ? 'План под контролем' : 'Plan is under control')}
                   </div>
                   <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
                     {isRu
-                      ? 'Это не создаёт новый план. Здесь вы работаете с уже выбранным планом: дописываете тексты, находите нужную тему и создаёте новости.'
-                      : 'This does not create a new plan. Here you work with the selected plan: fill text, find topics, and create news.'}
+                      ? 'Это не создаёт новый план. Здесь вы работаете с уже выбранным планом: дописываете тексты, находите нужную тему и создаёте публикации.'
+                      : 'This does not create a new plan. Here you work with the selected plan: fill text, find topics, and create publications.'}
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center text-xs text-slate-300 sm:min-w-[320px]">
@@ -4744,7 +4744,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   </div>
                   <div className="rounded-2xl bg-white/10 px-3 py-3">
                     <div className="text-lg font-semibold text-white">{planOperationalSummary.readyToPublish}</div>
-                    <div>{isRu ? 'к новости' : 'ready'}</div>
+                    <div>{isRu ? 'к публикации' : 'ready'}</div>
                   </div>
                   <div className="rounded-2xl bg-white/10 px-3 py-3">
                     <div className="text-lg font-semibold text-white">{planOperationalSummary.published}</div>
@@ -4854,7 +4854,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         </div>
                         <div className="rounded-xl bg-white px-3 py-2">
                           <div className="font-semibold text-slate-950">{slice.readyToPublish}</div>
-                          <div className="text-slate-500">{isRu ? 'к новости' : 'ready'}</div>
+                          <div className="text-slate-500">{isRu ? 'к публикации' : 'ready'}</div>
                         </div>
                         <div className="rounded-xl bg-white px-3 py-2">
                           <div className="font-semibold text-slate-950">{slice.published}</div>
@@ -4916,7 +4916,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         >
                           {bulkBusyAction === `focus-news:${slice.key}:${slice.focusWeekKey}`
                             ? (isRu ? 'Создаём...' : 'Creating...')
-                            : `${isRu ? 'Создать новости' : 'Create news'} · ${slice.focusWeekReadyToPublish}`}
+                            : `${isRu ? 'Создать публикации' : 'Create publications'} · ${slice.focusWeekReadyToPublish}`}
                         </Button>
                         <Button
                           type="button"
@@ -6274,8 +6274,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     disabled={Boolean(bulkBusyAction) || selectedNewsCandidates.length === 0}
                   >
                     {bulkBusyAction === 'selected-news'
-                      ? (isRu ? 'Создаём новости...' : 'Creating news...')
-                      : `${isRu ? 'Создать выбранные новости' : 'Create selected news'} · ${selectedNewsCandidates.length}`}
+                      ? (isRu ? 'Создаём публикации...' : 'Creating publications...')
+                      : `${isRu ? 'Создать выбранные публикации' : 'Create selected publications'} · ${selectedNewsCandidates.length}`}
                   </Button>
                   <Button
                     variant="outline"
