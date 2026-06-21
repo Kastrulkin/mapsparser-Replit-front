@@ -28,6 +28,7 @@ from services.social_post_service import (
     _social_supervised_blocked_metadata,
     _social_publish_evidence,
     _social_learning_readiness,
+    _social_openclaw_browser_readiness,
     _status_after_social_text_edit,
     _channel_readiness,
     _channel_readiness_next_action,
@@ -530,6 +531,38 @@ def test_openclaw_browser_capability_status_explains_missing_catalog(monkeypatch
     assert status["ready"] is False
     assert status["source"] == "not_configured"
     assert status["reason"] == "openclaw_catalog_not_configured"
+
+
+def test_social_openclaw_browser_readiness_explains_ready_and_manual_fallback():
+    ready = _social_openclaw_browser_readiness(
+        {
+            "ready": True,
+            "source": "openclaw",
+            "status": "available",
+            "reason": "openclaw_supervised_browser_available",
+            "action_ref": "openclaw.browser.fill_form",
+            "capability": "social.post.publish_supervised_browser",
+        }
+    )
+    fallback = _social_openclaw_browser_readiness(
+        {
+            "ready": False,
+            "source": "not_configured",
+            "status": "missing_catalog",
+            "reason": "openclaw_catalog_not_configured",
+            "action_ref": "",
+        }
+    )
+
+    assert ready["ready"] is True
+    assert ready["status"] == "ready"
+    assert ready["action_ref"] == "openclaw.browser.fill_form"
+    assert ready["browser_final_click_allowed"] is False
+    assert "controlled-задачи" in ready["message_ru"]
+    assert fallback["ready"] is False
+    assert fallback["status"] == "manual_fallback"
+    assert "ручном fallback" in fallback["message_ru"]
+    assert "capability catalog" in fallback["next_action_ru"]
 
 
 def test_approve_social_post_rejects_empty_copy(monkeypatch):

@@ -159,6 +159,21 @@ type SocialOpenClawCapabilityStatus = {
   error?: string;
 };
 
+type SocialOpenClawReadiness = {
+  ready?: boolean;
+  status?: string;
+  capability?: string;
+  action_ref?: string;
+  source?: string;
+  provider_status?: string;
+  reason?: string;
+  browser_final_click_allowed?: boolean;
+  message_ru?: string;
+  message_en?: string;
+  next_action_ru?: string;
+  next_action_en?: string;
+};
+
 type SocialPostMetadata = {
   supervised_publish?: {
     instruction_ru?: string;
@@ -765,6 +780,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialSummary, setSocialSummary] = useState<SocialPostsSummary | null>(null);
   const [socialQueueGroups, setSocialQueueGroups] = useState<SocialQueueGroup[]>([]);
   const [socialChannelReadiness, setSocialChannelReadiness] = useState<SocialChannelReadiness[]>([]);
+  const [socialOpenClawReadiness, setSocialOpenClawReadiness] = useState<SocialOpenClawReadiness | null>(null);
   const [socialRecommendation, setSocialRecommendation] = useState<SocialRecommendationPayload | null>(null);
   const [socialRecommendationApproved, setSocialRecommendationApproved] = useState(false);
   const [socialDispatchPreview, setSocialDispatchPreview] = useState<SocialDispatchPreview | null>(null);
@@ -1928,6 +1944,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSocialSummary(response.summary || null);
       setSocialQueueGroups(Array.isArray(response.queue_groups) ? response.queue_groups : []);
       setSocialChannelReadiness(Array.isArray(response.channel_readiness) ? response.channel_readiness : []);
+      setSocialOpenClawReadiness(response.openclaw_browser_readiness && typeof response.openclaw_browser_readiness === 'object'
+        ? response.openclaw_browser_readiness
+        : null);
       setSocialRecommendation(response.recommendation || response.learning_readiness ? {
         recommendation: response.recommendation || {},
         learning_readiness: response.learning_readiness || undefined,
@@ -1938,6 +1957,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSocialSummary(null);
       setSocialQueueGroups([]);
       setSocialChannelReadiness([]);
+      setSocialOpenClawReadiness(null);
       setSocialRecommendation(null);
       setSocialRecommendationApproved(false);
       setSocialDispatchPreview(null);
@@ -5858,6 +5878,33 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 ? 'API-каналы готовы к публикации после approval. Карты идут через controlled/manual размещение.'
                                 : 'API channels are ready to publish after approval. Maps use controlled/manual placement.')}
                           </div>
+                          {socialOpenClawReadiness ? (
+                            <div className={[
+                              'mt-3 rounded-lg border px-3 py-2 text-xs leading-5',
+                              socialOpenClawReadiness.ready
+                                ? 'border-sky-100 bg-sky-50 text-sky-800'
+                                : 'border-amber-100 bg-amber-50 text-amber-800',
+                            ].join(' ')}
+                            >
+                              <div className={socialOpenClawReadiness.ready ? 'font-semibold text-sky-950' : 'font-semibold text-amber-950'}>
+                                {socialOpenClawReadiness.ready
+                                  ? (isRu ? 'OpenClaw browser-use готов' : 'OpenClaw browser-use ready')
+                                  : (isRu ? 'OpenClaw browser-use не подтверждён' : 'OpenClaw browser-use not confirmed')}
+                              </div>
+                              <div className="mt-1">
+                                {isRu ? socialOpenClawReadiness.message_ru : socialOpenClawReadiness.message_en}
+                              </div>
+                              <div className="mt-1 font-medium">
+                                {isRu ? socialOpenClawReadiness.next_action_ru : socialOpenClawReadiness.next_action_en}
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-2 font-mono text-[11px] opacity-80">
+                                {socialOpenClawReadiness.source ? <span>source: {socialOpenClawReadiness.source}</span> : null}
+                                {socialOpenClawReadiness.provider_status ? <span>status: {socialOpenClawReadiness.provider_status}</span> : null}
+                                {socialOpenClawReadiness.action_ref ? <span>action: {socialOpenClawReadiness.action_ref}</span> : null}
+                                <span>final_click: human</span>
+                              </div>
+                            </div>
+                          ) : null}
                           {socialReadinessSummary.blockedApiChannels.length > 0 ? (
                             <Button
                               type="button"

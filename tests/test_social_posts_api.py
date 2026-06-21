@@ -159,6 +159,11 @@ def test_social_post_channel_readiness_endpoint_is_read_only(monkeypatch):
                     "message_en": "Telegram: keys required.",
                 }
             ],
+            "openclaw_browser_readiness": {
+                "ready": False,
+                "status": "manual_fallback",
+                "browser_final_click_allowed": False,
+            },
             "summary": {"api_ready": 0, "api_needs_attention": 1},
         },
     )
@@ -169,6 +174,8 @@ def test_social_post_channel_readiness_endpoint_is_read_only(monkeypatch):
     payload = response.get_json()
     assert payload["success"] is True
     assert payload["channel_readiness"][0]["platform"] == "telegram"
+    assert payload["openclaw_browser_readiness"]["status"] == "manual_fallback"
+    assert payload["openclaw_browser_readiness"]["browser_final_click_allowed"] is False
     assert payload["summary"]["api_needs_attention"] == 1
 
 

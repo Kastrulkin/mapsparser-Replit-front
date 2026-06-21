@@ -190,6 +190,7 @@ def list_social_posts_for_plan(user_id: str, plan_id: str) -> dict[str, Any]:
             "recommendation": _build_plan_recommendation(posts),
             "learning_readiness": _social_learning_readiness(posts),
             "channel_readiness": _build_channel_readiness(cursor, str(plan.get("business_id") or "")),
+            "openclaw_browser_readiness": _social_openclaw_browser_readiness(),
         }
     finally:
         db.close()
@@ -207,6 +208,7 @@ def get_social_channel_readiness(user_id: str, business_id: str) -> dict[str, An
         api_channels = [item for item in readiness if str(item.get("publish_mode") or "") == "api"]
         return {
             "channel_readiness": readiness,
+            "openclaw_browser_readiness": _social_openclaw_browser_readiness(),
             "summary": {
                 "total": len(readiness),
                 "api_total": len(api_channels),
@@ -2049,6 +2051,41 @@ def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool 
         raise sys.exc_info()[1]
     finally:
         db.close()
+
+
+def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None) -> dict[str, Any]:
+    capability_status = status if isinstance(status, dict) else openclaw_browser_capability_status()
+    ready = bool(capability_status.get("ready"))
+    return {
+        "ready": ready,
+        "status": "ready" if ready else "manual_fallback",
+        "capability": str(capability_status.get("capability") or "social.post.publish_supervised_browser").strip(),
+        "action_ref": str(capability_status.get("action_ref") or "").strip(),
+        "source": str(capability_status.get("source") or "").strip(),
+        "provider_status": str(capability_status.get("status") or "").strip(),
+        "reason": str(capability_status.get("reason") or "").strip(),
+        "browser_final_click_allowed": False,
+        "message_ru": (
+            "OpenClaw browser-use готов: Яндекс/2ГИС можно вести как controlled-задачи без финального клика."
+            if ready
+            else "OpenClaw browser-use не подтверждён: Яндекс/2ГИС останутся в ручном fallback."
+        ),
+        "message_en": (
+            "OpenClaw browser-use is ready: Yandex/2GIS can use controlled tasks without the final click."
+            if ready
+            else "OpenClaw browser-use is not confirmed: Yandex/2GIS will stay in manual fallback."
+        ),
+        "next_action_ru": (
+            "Создайте controlled задачу у поста карты и проверьте preview перед финальным размещением."
+            if ready
+            else "Проверьте capability catalog/OpenClaw настройки или используйте ручное размещение."
+        ),
+        "next_action_en": (
+            "Create a controlled task on the map post and review the preview before final placement."
+            if ready
+            else "Check the capability catalog/OpenClaw settings or use manual placement."
+        ),
+    }
 
 
 def openclaw_browser_capability_status(fetcher: Any = None) -> dict[str, Any]:
