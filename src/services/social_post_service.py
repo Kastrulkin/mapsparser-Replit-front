@@ -725,14 +725,19 @@ def collect_social_post_metrics(user_id: str, business_id: str = "", post_id: st
         today = date.today()
         for post in posts:
             attribution_metrics = _attribution_metrics_for_post(cursor, str(post.get("id") or ""))
+            provider_metrics = _collect_provider_metrics_for_post(cursor, post)
             cursor.execute(
                 """
                 INSERT INTO social_post_metrics (
                     id, social_post_id, metric_date, views, impressions, reach, likes, comments, shares, clicks, inquiries, leads, raw_json, captured_at
                 )
-                VALUES (%s, %s, %s, 0, 0, 0, 0, %s, %s, %s, %s, %s, %s, NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (social_post_id, metric_date)
                 DO UPDATE SET
+                    views = GREATEST(social_post_metrics.views, EXCLUDED.views),
+                    impressions = GREATEST(social_post_metrics.impressions, EXCLUDED.impressions),
+                    reach = GREATEST(social_post_metrics.reach, EXCLUDED.reach),
+                    likes = GREATEST(social_post_metrics.likes, EXCLUDED.likes),
                     comments = GREATEST(social_post_metrics.comments, EXCLUDED.comments),
                     shares = GREATEST(social_post_metrics.shares, EXCLUDED.shares),
                     clicks = GREATEST(social_post_metrics.clicks, EXCLUDED.clicks),
@@ -745,12 +750,22 @@ def collect_social_post_metrics(user_id: str, business_id: str = "", post_id: st
                     _new_id(),
                     post.get("id"),
                     today,
-                    attribution_metrics.get("comments", 0),
-                    attribution_metrics.get("shares", 0),
+                    provider_metrics.get("views", 0),
+                    provider_metrics.get("impressions", 0),
+                    provider_metrics.get("reach", 0),
+                    provider_metrics.get("likes", 0),
+                    max(int(attribution_metrics.get("comments", 0) or 0), int(provider_metrics.get("comments", 0) or 0)),
+                    max(int(attribution_metrics.get("shares", 0) or 0), int(provider_metrics.get("shares", 0) or 0)),
                     attribution_metrics.get("clicks", 0),
                     attribution_metrics.get("inquiries", 0),
                     attribution_metrics.get("leads", 0),
-                    _json_dumps({"collector": "manual_attribution_v1", "attribution": attribution_metrics}),
+                    _json_dumps(
+                        {
+                            "collector": "provider_metrics_v1",
+                            "attribution": attribution_metrics,
+                            "provider_metrics": provider_metrics,
+                        }
+                    ),
                 ),
             )
         posts_with_metrics = _merge_metric_totals_into_posts(cursor, posts)
@@ -767,23 +782,38 @@ def collect_social_post_metrics(user_id: str, business_id: str = "", post_id: st
         db.close()
 
 
-def dispatch_due_social_posts(batch_size: int = 20) -> dict[str, Any]:
+def _social_dispatch_business_scope(business_id: str = "") -> str:
+    return str(business_id or os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
+
+
+def _social_metrics_business_scope(business_id: str = "") -> str:
+    return str(business_id or os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
+
+
+def dispatch_due_social_posts(batch_size: int = 20, business_id: str = "") -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
     picked: list[dict[str, Any]] = []
+    business_scope = _social_dispatch_business_scope(business_id)
     try:
         ensure_social_post_tables(cursor)
+        scope_clause = "AND sp.business_id = %s" if business_scope else ""
+        params: list[Any] = []
+        if business_scope:
+            params.append(business_scope)
+        params.append(max(1, min(int(batch_size or 20), 200)))
         cursor.execute(
-            """
+            f"""
             SELECT sp.id, sp.business_id, sp.platform, sp.status, sp.scheduled_for
             FROM social_posts sp
             WHERE sp.status = 'queued'
               AND sp.approved_at IS NOT NULL
               AND COALESCE(sp.scheduled_for, NOW()) <= NOW()
+              {scope_clause}
             ORDER BY sp.scheduled_for ASC NULLS FIRST, sp.updated_at ASC
             LIMIT %s
             """,
-            (max(1, min(int(batch_size or 20), 200)),),
+            tuple(params),
         )
         picked = [_row_to_dict(cursor, row) for row in cursor.fetchall() or []]
     finally:
@@ -864,25 +894,33 @@ def dispatch_due_social_posts(batch_size: int = 20) -> dict[str, Any]:
         "details": details,
         "errors": errors,
         "posts": posts,
+        "business_scope": business_scope,
     }
 
 
-def preview_due_social_post_dispatch(user_id: str, batch_size: int = 20) -> dict[str, Any]:
+def preview_due_social_post_dispatch(user_id: str, batch_size: int = 20, business_id: str = "") -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
+    business_scope = _social_dispatch_business_scope(business_id)
     try:
         ensure_social_post_tables(cursor)
+        scope_clause = "AND sp.business_id = %s" if business_scope else ""
+        params: list[Any] = []
+        if business_scope:
+            params.append(business_scope)
+        params.append(max(1, min(int(batch_size or 20), 200)))
         cursor.execute(
-            """
+            f"""
             SELECT sp.*
             FROM social_posts sp
             WHERE sp.status = 'queued'
               AND sp.approved_at IS NOT NULL
               AND COALESCE(sp.scheduled_for, NOW()) <= NOW()
+              {scope_clause}
             ORDER BY sp.scheduled_for ASC NULLS FIRST, sp.updated_at ASC
             LIMIT %s
             """,
-            (max(1, min(int(batch_size or 20), 200)),),
+            tuple(params),
         )
         due_posts = [_serialize_social_post(cursor, row) for row in cursor.fetchall() or []]
         preview_items: list[dict[str, Any]] = []
@@ -904,6 +942,7 @@ def preview_due_social_post_dispatch(user_id: str, batch_size: int = 20) -> dict
             "picked": len(preview_items),
             "skipped_no_access": skipped,
             "batch_size": max(1, min(int(batch_size or 20), 200)),
+            "business_scope": business_scope,
             "by_action": counts,
             "readiness": readiness,
             "items": preview_items,
@@ -997,14 +1036,20 @@ def _dispatch_preview_readiness_message(status: str, is_ru: bool) -> str:
     )
 
 
-def collect_due_social_post_metrics(batch_size: int = 50) -> dict[str, Any]:
+def collect_due_social_post_metrics(batch_size: int = 50, business_id: str = "") -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
     picked: list[dict[str, Any]] = []
+    business_scope = _social_metrics_business_scope(business_id)
     try:
         ensure_social_post_tables(cursor)
+        scope_clause = "AND sp.business_id = %s" if business_scope else ""
+        params: list[Any] = []
+        if business_scope:
+            params.append(business_scope)
+        params.append(max(1, min(int(batch_size or 50), 500)))
         cursor.execute(
-            """
+            f"""
             SELECT sp.id, sp.business_id
             FROM social_posts sp
             LEFT JOIN social_post_metrics m
@@ -1012,10 +1057,11 @@ def collect_due_social_post_metrics(batch_size: int = 50) -> dict[str, Any]:
              AND m.metric_date = CURRENT_DATE
             WHERE sp.status = 'published'
               AND m.id IS NULL
+              {scope_clause}
             ORDER BY sp.published_at ASC NULLS LAST, sp.updated_at ASC
             LIMIT %s
             """,
-            (max(1, min(int(batch_size or 50), 500)),),
+            tuple(params),
         )
         picked = [_row_to_dict(cursor, row) for row in cursor.fetchall() or []]
     finally:
@@ -1040,6 +1086,7 @@ def collect_due_social_post_metrics(batch_size: int = 50) -> dict[str, Any]:
         "collected": collected,
         "failed": failed,
         "errors": errors,
+        "business_scope": business_scope,
     }
 
 
@@ -1494,11 +1541,16 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
             "mode": str(post.get("publish_mode") or "manual"),
             "platform": platform,
             "platform_label": platform_label(platform),
+            "capability": str(task_payload.get("capability") or "social.post.publish_supervised_browser").strip(),
+            "openclaw_action_ref": str(task_payload.get("openclaw_action_ref") or "openclaw.browser.supervised_publish").strip(),
+            "task_status": str(task_payload.get("status") or "ready_for_supervised_or_manual_handoff").strip(),
             "target_url": target.get("target_url", ""),
             "target_url_source": target.get("target_url_source", ""),
             "instruction_ru": "Открыть площадку, вставить текст и медиа, показать предпросмотр, остановиться перед финальной публикацией до подтверждения.",
             "instruction_en": "Open the platform, fill text and media, show preview, and stop before final publish until explicit approval.",
             "stop_before_final_publish": True,
+            "final_publish_policy": "human_final_click_required",
+            "fallback_reasons": ["captcha", "login_required", "changed_ui", "browser_capability_unavailable"],
             "openclaw_capability_status": capability_status,
         },
     }
@@ -1637,6 +1689,16 @@ def _record_social_supervised_handoff_ledger(
                         "automation_task_id": str(automation_task_id or "").strip(),
                         "content_plan_id": str(updated_post.get("content_plan_id") or original_post.get("content_plan_id") or "").strip(),
                         "content_plan_item_id": str(updated_post.get("content_plan_item_id") or original_post.get("content_plan_item_id") or "").strip(),
+                        "execution_contract": {
+                            "capability": "social.post.publish_supervised_browser",
+                            "openclaw_action_ref": str(task_payload.get("openclaw_action_ref") or "openclaw.browser.supervised_publish").strip(),
+                            "delivery_status": "pending_openclaw_supervised_task"
+                            if status == "needs_supervised_publish"
+                            else "manual_fallback_required",
+                            "side_effect_policy": "fill_preview_only",
+                            "final_publish_policy": "human_final_click_required",
+                            "fallback_policy": "login_captcha_changed_ui_to_manual",
+                        },
                         "provider_write_performed": False,
                         "external_publish_performed": False,
                         "human_final_approval_required": True,
@@ -2245,6 +2307,77 @@ def _vk_readiness_error(status: str) -> str:
     return "Для VK нужны access_token и group_id/owner_id с правом wall.post."
 
 
+def _collect_provider_metrics_for_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    platform = str(post.get("platform") or "").strip()
+    if platform == "vk":
+        return _collect_vk_post_metrics(cursor, post)
+    return {"source": "manual_attribution_only", "provider": platform or "unknown"}
+
+
+def _collect_vk_post_metrics(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    account = _find_active_external_account(cursor, str(post.get("business_id") or ""), ("vk", "vk_group", "vk_business"))
+    auth_data = _external_account_auth_data(account)
+    binding = _vk_publish_binding(account, auth_data)
+    if not binding.get("ready"):
+        return {"source": "vk_api", "provider": "vk", "status": str(binding.get("status") or "vk_not_ready")}
+    token = str(binding.get("token") or "").strip()
+    owner_id = _vk_metrics_owner_id(post, binding)
+    post_id = str(post.get("provider_post_id") or "").strip()
+    if not token or not owner_id or not post_id:
+        return {"source": "vk_api", "provider": "vk", "status": "missing_provider_post_binding"}
+    query = urllib.parse.urlencode(
+        {
+            "access_token": token,
+            "posts": f"{owner_id}_{post_id}",
+            "v": str(auth_data.get("api_version") or "5.199"),
+        }
+    )
+    req = urllib.request.Request(f"https://api.vk.com/method/wall.getById?{query}", method="GET")
+    try:
+        resp = urllib.request.urlopen(req, timeout=15)
+        try:
+            body = resp.read().decode("utf-8", errors="ignore")
+            parsed = _json_dict(body)
+        finally:
+            resp.close()
+    except Exception:
+        return {"source": "vk_api", "provider": "vk", "status": "vk_metrics_network_error", "error": str(sys.exc_info()[1])}
+    if isinstance(parsed.get("error"), dict):
+        return {"source": "vk_api", "provider": "vk", "status": "vk_metrics_api_error", "error": parsed.get("error")}
+    response = parsed.get("response")
+    item = response[0] if isinstance(response, list) and response else {}
+    if not isinstance(item, dict):
+        return {"source": "vk_api", "provider": "vk", "status": "vk_metrics_empty_response", "response": parsed}
+    views = int(_json_dict(item.get("views")).get("count") or 0)
+    likes = int(_json_dict(item.get("likes")).get("count") or 0)
+    comments = int(_json_dict(item.get("comments")).get("count") or 0)
+    shares = int(_json_dict(item.get("reposts")).get("count") or 0)
+    return {
+        "source": "vk_api",
+        "provider": "vk",
+        "status": "vk_metrics_collected",
+        "views": views,
+        "impressions": views,
+        "reach": views,
+        "likes": likes,
+        "comments": comments,
+        "shares": shares,
+        "clicks": 0,
+        "provider_post_id": post_id,
+        "owner_id": owner_id,
+    }
+
+
+def _vk_metrics_owner_id(post: dict[str, Any], binding: dict[str, Any]) -> str:
+    provider_url = str(post.get("provider_post_url") or "").strip()
+    if "wall" in provider_url:
+        tail = provider_url.rsplit("wall", 1)[-1]
+        owner = tail.split("_", 1)[0].strip()
+        if owner:
+            return owner
+    return str(binding.get("owner_id") or "").strip()
+
+
 def _telegram_post_url(chat_id: str, message_id: str) -> str:
     chat = str(chat_id or "").strip()
     message = str(message_id or "").strip()
@@ -2627,7 +2760,49 @@ def _build_plan_recommendation(posts: list[dict[str, Any]]) -> dict[str, Any]:
         "reach": reach,
         "text_ru": _recommendation_text(leads, inquiries, comments, reach, True),
         "text_en": _recommendation_text(leads, inquiries, comments, reach, False),
+        "signal_priority": _recommendation_signal_priority(leads, inquiries, comments, reach),
     }
+
+
+def _recommendation_signal_priority(leads: int, inquiries: int, comments: int, reach: int) -> list[dict[str, Any]]:
+    return [
+        {
+            "key": "leads",
+            "rank": 1,
+            "value": int(leads or 0),
+            "label_ru": "Заявки",
+            "label_en": "Leads",
+            "role_ru": "главный KPI",
+            "role_en": "primary KPI",
+        },
+        {
+            "key": "inquiries",
+            "rank": 2,
+            "value": int(inquiries or 0),
+            "label_ru": "Обращения",
+            "label_en": "Inquiries",
+            "role_ru": "главный KPI",
+            "role_en": "primary KPI",
+        },
+        {
+            "key": "comments",
+            "rank": 3,
+            "value": int(comments or 0),
+            "label_ru": "Комментарии",
+            "label_en": "Comments",
+            "role_ru": "ранний сигнал",
+            "role_en": "early signal",
+        },
+        {
+            "key": "reach",
+            "rank": 4,
+            "value": int(reach or 0),
+            "label_ru": "Охват",
+            "label_en": "Reach",
+            "role_ru": "ранний сигнал",
+            "role_en": "early signal",
+        },
+    ]
 
 
 def _recommendation_text(leads: int, inquiries: int, comments: int, reach: int, is_ru: bool) -> str:

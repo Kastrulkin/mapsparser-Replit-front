@@ -53,16 +53,22 @@ def _bool_env(name: str, default: bool = False) -> bool:
 
 
 def social_post_runtime_status_payload() -> dict[str, object]:
+    dispatch_business_scope = str(os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
+    metrics_business_scope = str(os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
     return {
         "dispatch": {
             "enabled": _bool_env("SOCIAL_POST_DISPATCH_ENABLED", False),
             "interval_sec": max(15, _int_env("SOCIAL_POST_DISPATCH_INTERVAL_SEC", 60)),
             "batch_size": max(1, min(_int_env("SOCIAL_POST_DISPATCH_BATCH_SIZE", 20), 200)),
+            "business_scope": dispatch_business_scope,
+            "scoped": bool(dispatch_business_scope),
         },
         "metrics": {
             "enabled": _bool_env("SOCIAL_POST_METRICS_ENABLED", False),
             "interval_sec": max(60, _int_env("SOCIAL_POST_METRICS_INTERVAL_SEC", 3600)),
             "batch_size": max(1, min(_int_env("SOCIAL_POST_METRICS_BATCH_SIZE", 50), 500)),
+            "business_scope": metrics_business_scope,
+            "scoped": bool(metrics_business_scope),
         },
         "approval_required": True,
         "browser_final_click_allowed": False,
@@ -324,6 +330,7 @@ def social_posts_dispatch_preview():
         payload = preview_due_social_post_dispatch(
             str(user_data.get("user_id") or ""),
             batch_size=int(data.get("batch_size") or 20),
+            business_id=str(data.get("business_id") or ""),
         )
         return jsonify({"success": True, **payload})
     except PermissionError:

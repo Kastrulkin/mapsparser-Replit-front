@@ -5,6 +5,7 @@ from datetime import date, timedelta
 import services.social_post_service as social_post_service
 from services.social_post_service import (
     _build_openclaw_supervised_task_payload,
+    _build_plan_recommendation,
     _channel_readiness_message,
     _dispatch_action_for_status,
     _dispatch_preview_readiness,
@@ -14,6 +15,7 @@ from services.social_post_service import (
     openclaw_browser_capability_status,
     _publish_external_account_post,
     _build_social_learning_insights,
+    _collect_vk_post_metrics,
     _preview_dispatch_decision,
     _queue_preflight_block,
     _record_social_supervised_handoff_ledger,
@@ -23,10 +25,13 @@ from services.social_post_service import (
     apply_social_post_recommendation,
     _build_next_plan_changes,
     build_social_queue_groups,
+    collect_due_social_post_metrics,
     default_publish_mode,
+    dispatch_due_social_posts,
     ensure_social_post_tables,
     next_action_for_social_post,
     openclaw_browser_available,
+    preview_due_social_post_dispatch,
     queue_social_post,
     _vk_post_url,
 )
@@ -250,6 +255,37 @@ class FakeQueueFallbackDB:
         pass
 
 
+class FakeDispatchScopeConn:
+    def __init__(self):
+        self.cursor_obj = FakeDispatchScopeCursor()
+
+    def cursor(self):
+        return self.cursor_obj
+
+
+class FakeDispatchScopeCursor:
+    last_query = ""
+    last_params = ()
+
+    def execute(self, query, params=None):
+        FakeDispatchScopeCursor.last_query = str(query)
+        FakeDispatchScopeCursor.last_params = tuple(params or ())
+
+    def fetchall(self):
+        return []
+
+
+class FakeDispatchScopeDB:
+    last_conn = None
+
+    def __init__(self):
+        self.conn = FakeDispatchScopeConn()
+        FakeDispatchScopeDB.last_conn = self.conn
+
+    def close(self):
+        pass
+
+
 def test_default_publish_mode_uses_api_for_connected_social_channels(monkeypatch):
     monkeypatch.delenv("OPENCLAW_BROWSER_USE_ENABLED", raising=False)
     monkeypatch.delenv("OPENCLAW_BROWSER_USE_AVAILABLE", raising=False)
@@ -369,12 +405,121 @@ def test_build_social_queue_groups_matches_daily_workflow():
     assert by_key["failed"]["count"] == 1
 
 
+def test_plan_recommendation_explains_signal_priority():
+    recommendation = _build_plan_recommendation(
+        [
+            {"id": "p1", "leads": 2, "inquiries": 1, "comments": 5, "reach": 100},
+            {"id": "p2", "views": 40, "likes": 9},
+        ]
+    )
+
+    assert recommendation["primary_metric"] == "leads_and_inquiries"
+    assert recommendation["leads"] == 2
+    assert recommendation["inquiries"] == 1
+    assert [item["key"] for item in recommendation["signal_priority"]] == ["leads", "inquiries", "comments", "reach"]
+    assert recommendation["signal_priority"][0]["rank"] == 1
+    assert recommendation["signal_priority"][0]["role_ru"] == "главный KPI"
+    assert recommendation["signal_priority"][3]["value"] == 140
+
+
 def test_dispatch_action_for_status_matches_worker_log_buckets():
     assert _dispatch_action_for_status("published") == "published"
     assert _dispatch_action_for_status("needs_supervised_publish") == "supervised"
     assert _dispatch_action_for_status("needs_manual_publish") == "manual"
     assert _dispatch_action_for_status("failed") == "failed"
     assert _dispatch_action_for_status("queued") == "other"
+
+
+def test_dispatch_due_social_posts_can_scope_to_one_business(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_BUSINESS_ID", "biz-test")
+
+    result = dispatch_due_social_posts(batch_size=500)
+
+    assert result["picked"] == 0
+    assert result["business_scope"] == "biz-test"
+    assert "sp.business_id = %s" in FakeDispatchScopeCursor.last_query
+    assert FakeDispatchScopeCursor.last_params == ("biz-test", 200)
+
+
+def test_preview_due_social_post_dispatch_can_scope_to_one_business(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_BUSINESS_ID", raising=False)
+
+    result = preview_due_social_post_dispatch("user-1", batch_size=2, business_id="biz-preview")
+
+    assert result["picked"] == 0
+    assert result["business_scope"] == "biz-preview"
+    assert "sp.business_id = %s" in FakeDispatchScopeCursor.last_query
+    assert FakeDispatchScopeCursor.last_params == ("biz-preview", 2)
+
+
+def test_collect_due_social_post_metrics_can_scope_to_one_business(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setenv("SOCIAL_POST_METRICS_BUSINESS_ID", "biz-metrics")
+
+    result = collect_due_social_post_metrics(batch_size=999)
+
+    assert result["picked"] == 0
+    assert result["business_scope"] == "biz-metrics"
+    assert "sp.business_id = %s" in FakeDispatchScopeCursor.last_query
+    assert FakeDispatchScopeCursor.last_params == ("biz-metrics", 500)
+
+
+def test_collect_vk_post_metrics_reads_wall_counters(monkeypatch):
+    class FakeResponse:
+        def read(self):
+            return json.dumps(
+                {
+                    "response": [
+                        {
+                            "views": {"count": 120},
+                            "likes": {"count": 7},
+                            "comments": {"count": 3},
+                            "reposts": {"count": 2},
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+        def close(self):
+            pass
+
+    requested_urls = []
+    monkeypatch.setattr(
+        social_post_service,
+        "_find_active_external_account",
+        lambda cursor, business_id, sources: {"id": "vk-1", "external_id": "12345", "auth_data_encrypted": "x"},
+    )
+    monkeypatch.setattr(social_post_service, "_external_account_auth_data", lambda account: {"access_token": "token", "scope": "wall"})
+    monkeypatch.setattr(
+        social_post_service.urllib.request,
+        "urlopen",
+        lambda req, timeout=15: (requested_urls.append(req.full_url) or FakeResponse()),
+    )
+
+    metrics = _collect_vk_post_metrics(
+        object(),
+        {
+            "id": "post-1",
+            "business_id": "biz-1",
+            "platform": "vk",
+            "provider_post_id": "678",
+            "provider_post_url": "https://vk.com/wall-12345_678",
+        },
+    )
+
+    assert metrics["status"] == "vk_metrics_collected"
+    assert metrics["views"] == 120
+    assert metrics["reach"] == 120
+    assert metrics["likes"] == 7
+    assert metrics["comments"] == 3
+    assert metrics["shares"] == 2
+    assert "wall.getById" in requested_urls[0]
+    assert "posts=-12345_678" in requested_urls[0]
 
 
 def test_preview_dispatch_decision_publish_api_when_channel_ready(monkeypatch):
@@ -822,6 +967,11 @@ def test_supervised_handoff_writes_agent_action_ledger_when_available():
     assert params[8] == "approval-1"
     assert params[9] == "queued_for_supervised_handoff"
     metadata = json.loads(params[11])
+    assert metadata["execution_contract"]["capability"] == "social.post.publish_supervised_browser"
+    assert metadata["execution_contract"]["openclaw_action_ref"] == "openclaw.browser.supervised_publish"
+    assert metadata["execution_contract"]["delivery_status"] == "pending_openclaw_supervised_task"
+    assert metadata["execution_contract"]["side_effect_policy"] == "fill_preview_only"
+    assert metadata["execution_contract"]["final_publish_policy"] == "human_final_click_required"
     assert metadata["provider_write_performed"] is False
     assert metadata["human_final_approval_required"] is True
     assert metadata["browser_final_click_allowed"] is False

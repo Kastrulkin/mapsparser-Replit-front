@@ -1502,7 +1502,8 @@ def _dispatch_social_posts_if_due() -> None:
     _LAST_SOCIAL_POST_DISPATCH_AT = now
     try:
         batch_size = max(1, min(int(os.getenv("SOCIAL_POST_DISPATCH_BATCH_SIZE", "20")), 200))
-        result = dispatch_due_social_posts(batch_size=batch_size)
+        business_scope = str(os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
+        result = dispatch_due_social_posts(batch_size=batch_size, business_id=business_scope)
         picked = int(result.get("picked") or 0)
         failed = int(result.get("failed") or 0)
         if picked > 0 or failed > 0:
@@ -1514,7 +1515,8 @@ def _dispatch_social_posts_if_due() -> None:
                 f"supervised={int(result.get('supervised') or 0)} "
                 f"manual={int(result.get('manual') or 0)} failed={failed} "
                 f"by_action={json.dumps(by_action, ensure_ascii=False, sort_keys=True)} "
-                f"by_status={json.dumps(by_status, ensure_ascii=False, sort_keys=True)}",
+                f"by_status={json.dumps(by_status, ensure_ascii=False, sort_keys=True)} "
+                f"business_scope={business_scope or 'all'}",
                 flush=True,
             )
     except Exception:
@@ -1536,13 +1538,15 @@ def _collect_social_post_metrics_if_due() -> None:
     _LAST_SOCIAL_POST_METRICS_AT = now
     try:
         batch_size = max(1, min(int(os.getenv("SOCIAL_POST_METRICS_BATCH_SIZE", "50")), 500))
-        result = collect_due_social_post_metrics(batch_size=batch_size)
+        business_scope = str(os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
+        result = collect_due_social_post_metrics(batch_size=batch_size, business_id=business_scope)
         picked = int(result.get("picked") or 0)
         failed = int(result.get("failed") or 0)
         if picked > 0 or failed > 0:
             print(
                 "[SOCIAL_POST_METRICS] "
-                f"picked={picked} collected={int(result.get('collected') or 0)} failed={failed}",
+                f"picked={picked} collected={int(result.get('collected') or 0)} failed={failed} "
+                f"business_scope={business_scope or 'all'}",
                 flush=True,
             )
     except Exception:

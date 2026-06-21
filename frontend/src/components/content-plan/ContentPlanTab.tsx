@@ -137,9 +137,22 @@ type SocialPostMetadata = {
     instruction_en?: string;
     platform_label?: string;
     mode?: string;
+    capability?: string;
+    openclaw_action_ref?: string;
+    task_status?: string;
     target_url?: string;
     target_url_source?: string;
-    openclaw_capability_status?: string;
+    final_publish_policy?: string;
+    fallback_reasons?: string[];
+    openclaw_capability_status?: string | {
+      ready?: boolean;
+      status?: string;
+      source?: string;
+      reason?: string;
+      action_ref?: string;
+      capability?: string;
+      error?: string;
+    };
     stop_before_final_publish?: boolean;
   };
   openclaw_task?: Record<string, unknown>;
@@ -177,6 +190,15 @@ type SocialRecommendationPayload = {
     no_result_topics?: SocialRecommendationTopicInsight[];
     cta_suggestions?: SocialRecommendationTextSuggestion[];
     frequency_suggestions?: SocialRecommendationTextSuggestion[];
+    signal_priority?: Array<{
+      key?: string;
+      rank?: number;
+      value?: number;
+      label_ru?: string;
+      label_en?: string;
+      role_ru?: string;
+      role_en?: string;
+    }>;
   };
   proposed_changes?: Array<{
     item_id?: string;
@@ -247,6 +269,7 @@ type SocialDispatchPreview = {
   picked?: number;
   skipped_no_access?: number;
   batch_size?: number;
+  business_scope?: string;
   by_action?: Record<string, number>;
   readiness?: {
     status?: string;
@@ -281,11 +304,15 @@ type SocialRuntimeStatus = {
     enabled?: boolean;
     interval_sec?: number;
     batch_size?: number;
+    business_scope?: string;
+    scoped?: boolean;
   };
   metrics?: {
     enabled?: boolean;
     interval_sec?: number;
     batch_size?: number;
+    business_scope?: string;
+    scoped?: boolean;
   };
   approval_required?: boolean;
   browser_final_click_allowed?: boolean;
@@ -2192,13 +2219,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     try {
       const response = await newAuth.makeRequest('/social-posts/dispatch/preview', {
         method: 'POST',
-        body: JSON.stringify({ batch_size: 10 }),
+        body: JSON.stringify({ batch_size: 10, business_id: businessId }),
       });
       const preview: SocialDispatchPreview = {
         dry_run: Boolean(response.dry_run),
         picked: Number(response.picked || 0),
         skipped_no_access: Number(response.skipped_no_access || 0),
         batch_size: Number(response.batch_size || 10),
+        business_scope: String(response.business_scope || ''),
         by_action: response.by_action && typeof response.by_action === 'object' ? response.by_action : {},
         readiness: response.readiness && typeof response.readiness === 'object' ? response.readiness : {},
         items: Array.isArray(response.items) ? response.items : [],
@@ -2211,8 +2239,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       const dryRunMessageEn = String(preview.readiness?.message_en || '');
       setActionSummary({
         tone: manualCount > 0 || Number(preview.skipped_no_access || 0) > 0 ? 'warning' : 'success',
-        text_ru: `Dry-run расписания: due-постов ${preview.picked || 0}, API ${apiCount}, controlled ${supervisedCount}, вручную ${manualCount}. Наружу ничего не отправлено.`,
-        text_en: `Schedule dry-run: due posts ${preview.picked || 0}, API ${apiCount}, controlled ${supervisedCount}, manual ${manualCount}. Nothing was sent externally.`,
+        text_ru: `Dry-run расписания по текущему бизнесу: due-постов ${preview.picked || 0}, API ${apiCount}, controlled ${supervisedCount}, вручную ${manualCount}. Наружу ничего не отправлено.`,
+        text_en: `Schedule dry-run for the current business: due posts ${preview.picked || 0}, API ${apiCount}, controlled ${supervisedCount}, manual ${manualCount}. Nothing was sent externally.`,
         details_ru: dryRunMessageRu ? [dryRunMessageRu] : [],
         details_en: dryRunMessageEn ? [dryRunMessageEn] : [],
       });
@@ -4673,11 +4701,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 ? `интервал ${Number(socialRuntimeStatus.dispatch?.interval_sec || 0)}с · batch ${Number(socialRuntimeStatus.dispatch?.batch_size || 0)}`
                                 : `interval ${Number(socialRuntimeStatus.dispatch?.interval_sec || 0)}s · batch ${Number(socialRuntimeStatus.dispatch?.batch_size || 0)}`}
                             </div>
+                            <div className="text-[11px] text-slate-300">
+                              {socialRuntimeStatus.dispatch?.scoped
+                                ? (isRu
+                                  ? `область: только бизнес ${String(socialRuntimeStatus.dispatch?.business_scope || '')}`
+                                  : `scope: business ${String(socialRuntimeStatus.dispatch?.business_scope || '')}`)
+                                : (isRu ? 'область: все due-посты' : 'scope: all due posts')}
+                            </div>
                             <div className="flex items-center justify-between gap-3">
                               <span>{isRu ? 'Сбор реакций' : 'Metrics collection'}</span>
                               <span className={socialRuntimeStatus.metrics?.enabled ? 'font-semibold text-emerald-200' : 'font-semibold text-amber-200'}>
                                 {socialRuntimeStatus.metrics?.enabled ? (isRu ? 'включён' : 'enabled') : (isRu ? 'выключен' : 'disabled')}
                               </span>
+                            </div>
+                            <div className="text-[11px] text-slate-300">
+                              {socialRuntimeStatus.metrics?.scoped
+                                ? (isRu
+                                  ? `реакции: только бизнес ${String(socialRuntimeStatus.metrics?.business_scope || '')}`
+                                  : `metrics: business ${String(socialRuntimeStatus.metrics?.business_scope || '')}`)
+                                : (isRu ? 'реакции: все опубликованные посты' : 'metrics: all published posts')}
                             </div>
                           </div>
                           <div className="mt-1 text-[11px] text-slate-300">
@@ -4716,6 +4758,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           </div>
                           <div className="text-[11px] text-slate-300">
                             {isRu ? 'Внешняя публикация не запускалась.' : 'No external publishing was started.'}
+                          </div>
+                          <div className="text-[11px] text-slate-300">
+                            {socialDispatchPreview.business_scope
+                              ? (isRu
+                                ? `Проверка ограничена бизнесом: ${String(socialDispatchPreview.business_scope)}`
+                                : `Dry-run scoped to business: ${String(socialDispatchPreview.business_scope)}`)
+                              : (isRu ? 'Проверка без ограничения по бизнесу.' : 'Dry-run is not business-scoped.')}
                           </div>
                           {socialDispatchPreview.readiness?.message_ru || socialDispatchPreview.readiness?.message_en ? (
                             <div
@@ -4930,6 +4979,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           ? String(socialRecommendation?.recommendation?.text_ru || 'После публикаций LocalOS будет ранжировать темы по заявкам и обращениям, затем по комментариям и охвату.')
                           : String(socialRecommendation?.recommendation?.text_en || 'After publishing, LocalOS will rank topics by leads and inquiries first, then comments and reach.')}
                       </div>
+                      {Number(socialRecommendation?.recommendation?.signal_priority?.length || 0) > 0 ? (
+                        <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                          {(socialRecommendation?.recommendation?.signal_priority || []).slice(0, 4).map((signal) => (
+                            <div key={String(signal.key || signal.rank || '')} className="rounded-lg border border-emerald-100 bg-white px-2.5 py-2">
+                              <div className="text-[11px] font-medium text-emerald-700">
+                                #{Number(signal.rank || 0)} · {isRu ? String(signal.role_ru || '') : String(signal.role_en || '')}
+                              </div>
+                              <div className="mt-1 flex items-baseline justify-between gap-2">
+                                <span className="text-xs font-semibold text-emerald-950">
+                                  {isRu ? String(signal.label_ru || signal.key || '') : String(signal.label_en || signal.key || '')}
+                                </span>
+                                <span className="text-sm font-semibold text-emerald-900">
+                                  {Number(signal.value || 0)}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -5372,6 +5440,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const canQueue = post.status === 'approved';
                               const canMarkPublished = post.status === 'needs_supervised_publish' || post.status === 'needs_manual_publish';
                               const canRecordResult = post.status === 'published';
+                              const isSupervisedPost = _isSupervisedPlatform(post.platform);
                               const supervisedPayload = _socialSupervisedPayload(post);
                               const manualRefs = manualPublishRefs[post.id] || {
                                 url: String(post.provider_post_url || ''),
@@ -5453,7 +5522,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       </div>
                                     ) : null}
                                   </div>
-                                  {_isSupervisedPlatform(post.platform) ? (
+                                  {isSupervisedPost ? (
                                     <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
                                       {isRu
                                         ? 'Для этого канала LocalOS показывает контролируемое размещение или ручной fallback, а не стабильный API publish.'
@@ -5495,7 +5564,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       {post.last_error}
                                     </div>
                                   ) : null}
-                                  {!_isSupervisedPlatform(post.platform) && (preflightMessage || preflightStatus) ? (
+                                  {!isSupervisedPost && (preflightMessage || preflightStatus) ? (
                                     <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
                                       <div className="font-semibold text-amber-950">
                                         {isRu ? 'Готовность канала' : 'Channel readiness'}
@@ -5508,6 +5577,50 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                           status: {preflightStatus}
                                         </div>
                                       ) : null}
+                                    </div>
+                                  ) : null}
+                                  {!canRecordResult ? (
+                                    <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-900">
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <div className="font-semibold text-sky-950">
+                                          {isRu ? 'Предпросмотр перед подтверждением' : 'Preview before approval'}
+                                        </div>
+                                        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-sky-800">
+                                          {_formatPlanItemDate(post.scheduled_for, isRu)}
+                                        </span>
+                                      </div>
+                                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                        <div>
+                                          <div className="text-[11px] uppercase tracking-[0.12em] text-sky-700">
+                                            {isRu ? 'Канал' : 'Channel'}
+                                          </div>
+                                          <div className="font-medium">
+                                            {_socialPlatformLabel(post.platform, isRu)}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <div className="text-[11px] uppercase tracking-[0.12em] text-sky-700">
+                                            {isRu ? 'Исполнение' : 'Execution'}
+                                          </div>
+                                          <div className="font-medium">
+                                            {_socialPublishModeLabel(post.publish_mode, isRu)}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="mt-2 rounded-lg bg-white px-3 py-2 text-slate-700">
+                                        {postTextValue.trim()
+                                          ? postTextValue.trim()
+                                          : (isRu ? 'Текст ещё пустой: перед подтверждением нужно сохранить текст.' : 'Copy is still empty: save copy before approval.')}
+                                      </div>
+                                      <div className="mt-2 text-[11px] text-sky-800">
+                                        {isSupervisedPost
+                                          ? (isRu
+                                            ? 'После подтверждения LocalOS создаст controlled/manual задачу; финальная публикация остаётся за человеком.'
+                                            : 'After approval, LocalOS creates a controlled/manual task; final publishing stays human-controlled.')
+                                          : (isRu
+                                            ? 'После подтверждения можно поставить в расписание; API-публикация запустится только worker’ом и только по дате.'
+                                            : 'After approval, you can queue it; API publishing starts only through the worker and only on schedule.')}
+                                      </div>
                                     </div>
                                   ) : null}
                                   {canMarkPublished ? (
