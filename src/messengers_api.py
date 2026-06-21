@@ -427,6 +427,10 @@ def update_business_profile():
             encoded_token = encode_telegram_bot_token(data['telegram_bot_token'])
             update_fields.append('telegram_bot_token = %s')
             update_values.append(encoded_token or None)
+
+        if 'telegram_chat_id' in data and 'telegram_chat_id' in business_columns:
+            update_fields.append('telegram_chat_id = %s')
+            update_values.append(str(data.get('telegram_chat_id') or '').strip() or None)
         
         # AI Agent settings
         if 'ai_agent_enabled' in data:

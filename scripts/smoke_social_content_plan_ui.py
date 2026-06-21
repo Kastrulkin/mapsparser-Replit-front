@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CONTENT_PLAN_TAB = ROOT / "frontend" / "src" / "components" / "content-plan" / "ContentPlanTab.tsx"
 EXTERNAL_INTEGRATIONS = ROOT / "frontend" / "src" / "components" / "ExternalIntegrations.tsx"
+TELEGRAM_BOT_CREDENTIALS = ROOT / "frontend" / "src" / "components" / "TelegramBotCredentials.tsx"
 
 
 REQUIRED_COPY = {
@@ -112,6 +113,23 @@ REQUIRED_SETTINGS_DATA_CONTRACT = {
 }
 
 
+REQUIRED_TELEGRAM_SETTINGS_COPY = {
+    "telegram publish target label": "Канал или чат для публикаций",
+    "telegram publish chat id need": "Для постов из контент-плана нужен telegram_chat_id",
+    "telegram publish chat id placeholder": "@channelname или -1001234567890",
+    "telegram publish api warning": "не сможет отправить его по API",
+    "telegram publish save success": "Telegram подключён для публикаций из контент-плана.",
+}
+
+
+REQUIRED_TELEGRAM_SETTINGS_DATA_CONTRACT = {
+    "telegram status endpoint": "/api/business/telegram-bot/status",
+    "telegram profile endpoint": "/api/business/profile",
+    "telegram chat id payload": "telegram_chat_id",
+    "telegram optional token payload": "telegram_bot_token",
+}
+
+
 FORBIDDEN_COPY = {
     "silent maps autopublish ru": "Яндекс/2ГИС автопубликация",
     "silent maps autopublish en": "Yandex/2GIS autopublish",
@@ -141,15 +159,21 @@ def main() -> int:
     if not EXTERNAL_INTEGRATIONS.exists():
         print(f"Missing settings source: {EXTERNAL_INTEGRATIONS}", file=sys.stderr)
         return 1
+    if not TELEGRAM_BOT_CREDENTIALS.exists():
+        print(f"Missing Telegram settings source: {TELEGRAM_BOT_CREDENTIALS}", file=sys.stderr)
+        return 1
 
     source = CONTENT_PLAN_TAB.read_text(encoding="utf-8")
     settings_source = EXTERNAL_INTEGRATIONS.read_text(encoding="utf-8")
+    telegram_settings_source = TELEGRAM_BOT_CREDENTIALS.read_text(encoding="utf-8")
     missing = []
     missing.extend(_assert_contains(source, REQUIRED_COPY))
     missing.extend(_assert_contains(source, REQUIRED_SAFETY_COPY))
     missing.extend(_assert_contains(source, REQUIRED_DATA_CONTRACT))
     missing.extend(_assert_contains(settings_source, REQUIRED_SETTINGS_COPY))
     missing.extend(_assert_contains(settings_source, REQUIRED_SETTINGS_DATA_CONTRACT))
+    missing.extend(_assert_contains(telegram_settings_source, REQUIRED_TELEGRAM_SETTINGS_COPY))
+    missing.extend(_assert_contains(telegram_settings_source, REQUIRED_TELEGRAM_SETTINGS_DATA_CONTRACT))
     forbidden = _assert_absent(source, FORBIDDEN_COPY)
     forbidden.extend(_assert_absent(settings_source, FORBIDDEN_COPY))
 

@@ -129,6 +129,10 @@ def init_database_schema():
             if 'telegram_bot_token' not in columns:
                 cursor.execute("ALTER TABLE Businesses ADD COLUMN telegram_bot_token TEXT")
                 print("✅ Добавлена колонка telegram_bot_token")
+
+            if 'telegram_chat_id' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN telegram_chat_id TEXT")
+                print("✅ Добавлена колонка telegram_chat_id")
             
             # AI Agent settings
             if 'ai_agent_enabled' not in columns:

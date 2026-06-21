@@ -16,19 +16,23 @@ interface TelegramBotCredentialsProps {
 export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCredentialsProps) => {
   const { t } = useLanguage();
   const [botToken, setBotToken] = useState('');
+  const [chatId, setChatId] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [saving, setSaving] = useState(false);
   const [configured, setConfigured] = useState(false);
   const [maskedToken, setMaskedToken] = useState<string | null>(null);
+  const [configuredChatId, setConfiguredChatId] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     setBotToken('');
+    setChatId('');
     setShowToken(false);
     setConfigured(Boolean(business?.telegram_bot_token_configured));
     setMaskedToken(business?.telegram_bot_token_masked || null);
-  }, [business?.id, business?.telegram_bot_token_configured, business?.telegram_bot_token_masked]);
+    setConfiguredChatId(business?.telegram_chat_id || null);
+  }, [business?.id, business?.telegram_bot_token_configured, business?.telegram_bot_token_masked, business?.telegram_chat_id]);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -49,6 +53,8 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
         if (response.ok && data?.success) {
           setConfigured(Boolean(data.configured));
           setMaskedToken(data.masked_token || null);
+          setConfiguredChatId(data.telegram_chat_id || null);
+          setChatId(data.telegram_chat_id || '');
         }
       } catch {
         // no-op: fallback is business payload state
@@ -69,7 +75,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
       return;
     }
 
-    if (!botToken) {
+    if (!configured && !botToken.trim()) {
       toast({
         title: t.common.error,
         description: t.dashboard.settings.telegram2.errorEmpty,
@@ -78,19 +84,32 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
       return;
     }
 
+    if (!chatId.trim()) {
+      toast({
+        title: t.common.error,
+        description: 'Укажите telegram_chat_id канала или чата для публикаций.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const token = localStorage.getItem('auth_token');
+      const payload: { business_id: string; telegram_chat_id: string; telegram_bot_token?: string } = {
+        business_id: businessId,
+        telegram_chat_id: chatId.trim(),
+      };
+      if (botToken.trim()) {
+        payload.telegram_bot_token = botToken.trim();
+      }
       const response = await fetch('/api/business/profile', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          business_id: businessId,
-          telegram_bot_token: botToken
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
@@ -100,9 +119,10 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
         setShowToken(false);
         setConfigured(true);
         setMaskedToken('Сохранён');
+        setConfiguredChatId(chatId.trim());
         toast({
           title: t.common.success,
-          description: t.dashboard.settings.telegram2.successSave,
+          description: 'Telegram подключён для публикаций из контент-плана.',
         });
       } else {
         toast({
@@ -134,9 +154,12 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
       });
       const data = await response.json();
       if (response.ok && data?.success && data.configured) {
+        setConfiguredChatId(data.telegram_chat_id || null);
         toast({
           title: 'Подключение активно',
-          description: `Telegram bot token подключён (${data.masked_token || 'скрыт'})`,
+          description: data.telegram_chat_id
+            ? `Telegram bot token подключён (${data.masked_token || 'скрыт'}), chat_id сохранён.`
+            : 'Telegram bot token подключён, но для публикаций нужен telegram_chat_id.',
         });
       } else {
         toast({
@@ -211,6 +234,23 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
           </p>
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="telegram-chat-id">Канал или чат для публикаций</Label>
+          <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${configuredChatId ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'}`}>
+            {configuredChatId ? `chat_id сохранён: ${configuredChatId}` : 'Для постов из контент-плана нужен telegram_chat_id'}
+          </div>
+          <Input
+            id="telegram-chat-id"
+            placeholder="@channelname или -1001234567890"
+            value={chatId}
+            onChange={(event) => setChatId(event.target.value)}
+            disabled={saving}
+          />
+          <p className="text-xs text-slate-500">
+            Для канала добавьте бота администратором и укажите username канала или числовой chat_id. Без этого LocalOS подготовит пост, но не сможет отправить его по API.
+          </p>
+        </div>
+
         <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
           <Button
             type="button"
@@ -222,7 +262,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
           </Button>
           <Button
             onClick={handleSave}
-            disabled={saving || !botToken}
+            disabled={saving || (!configured && !botToken.trim()) || !chatId.trim()}
             className="bg-slate-900 text-white hover:bg-slate-800"
           >
             {saving ? (

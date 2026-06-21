@@ -73,6 +73,7 @@ CREATE TABLE Businesses (
     whatsapp_phone TEXT,
     whatsapp_verified BOOLEAN DEFAULT FALSE,
     telegram_bot_token TEXT,
+    telegram_chat_id TEXT,
     ai_agent_enabled BOOLEAN DEFAULT FALSE,
     ai_agent_type TEXT,
     ai_agent_id TEXT,

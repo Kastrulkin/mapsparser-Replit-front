@@ -20,6 +20,7 @@ import {
 type SettingsBusiness = {
   network_id?: string | number | null;
   telegram_bot_token?: string | null;
+  telegram_chat_id?: string | null;
   waba_phone_id?: string | null;
   waba_access_token?: string | null;
 };
