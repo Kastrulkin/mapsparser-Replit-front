@@ -56,6 +56,14 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
   const [abMode, setAbMode] = useState<'auto' | 'force_a' | 'force_b'>('auto');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const headerTitle = workspaceMode === 'plan'
+    ? (interfaceLanguage === 'ru' ? 'Контент-план и посты' : 'Content plan and posts')
+    : t.dashboard.card.newsGenerator.title;
+  const headerSubtitle = workspaceMode === 'plan'
+    ? (interfaceLanguage === 'ru'
+      ? 'Готовьте посты для карт и соцсетей, проверяйте тексты, ставьте публикации в расписание и собирайте результат.'
+      : 'Prepare map and social posts, review copy, queue publishing, and collect results.')
+    : t.dashboard.card.newsGenerator.subtitle;
 
   const LANGUAGE_OPTIONS = [
     { value: 'ru', label: 'Русский' },
@@ -275,9 +283,9 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
         <div>
           <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Newspaper className="w-6 h-6 text-primary" />
-            {t.dashboard.card.newsGenerator.title}
+            {headerTitle}
           </h3>
-          <p className="text-gray-600 mt-1">{t.dashboard.card.newsGenerator.subtitle}</p>
+          <p className="text-gray-600 mt-1">{headerSubtitle}</p>
         </div>
       </div>
 
