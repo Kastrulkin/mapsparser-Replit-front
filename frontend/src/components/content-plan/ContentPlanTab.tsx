@@ -2315,19 +2315,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (!value) return;
     setError('');
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(value);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = value;
-        textarea.setAttribute('readonly', 'true');
-        textarea.style.position = 'fixed';
-        textarea.style.left = '-9999px';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
+      await copyTextToClipboard(value);
       setActionSummary({
         tone: 'success',
         text_ru: 'Текст скопирован. Теперь откройте площадку и вставьте его в форму публикации.',
@@ -2335,6 +2323,24 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
     } catch {
       setError(isRu ? 'Не удалось скопировать текст' : 'Could not copy text');
+    }
+  };
+
+  const copySocialWorkerEnv = async () => {
+    const dispatchEnv = socialLaunchPreflight?.recommended_env?.dispatch || {};
+    const metricsEnv = socialLaunchPreflight?.recommended_env?.metrics || {};
+    const lines = _socialWorkerEnvLines(dispatchEnv, metricsEnv);
+    if (!lines.length) return;
+    setError('');
+    try {
+      await copyTextToClipboard(lines.join('\n'));
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Env для scoped dispatch скопирован. Включайте его на сервере только для выбранного бизнеса и проверьте worker logs после первого цикла.',
+        text_en: 'Scoped dispatch env copied. Enable it on the server only for the selected business and check worker logs after the first cycle.',
+      });
+    } catch {
+      setError(isRu ? 'Не удалось скопировать env для worker' : 'Could not copy worker env');
     }
   };
 
@@ -5249,6 +5255,28 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ? `Рекомендованный scope: SOCIAL_POST_DISPATCH_BUSINESS_ID=${String(socialLaunchPreflight.recommended_env?.dispatch?.SOCIAL_POST_DISPATCH_BUSINESS_ID || businessId || '')}`
                               : `Recommended scope: SOCIAL_POST_DISPATCH_BUSINESS_ID=${String(socialLaunchPreflight.recommended_env?.dispatch?.SOCIAL_POST_DISPATCH_BUSINESS_ID || businessId || '')}`}
                           </div>
+                          <div className="mt-2 rounded-lg bg-slate-950/30 px-2 py-2 text-[11px] text-slate-100 ring-1 ring-white/10">
+                            <div className="font-semibold text-white">
+                              {isRu ? 'Команды для controlled launch' : 'Controlled launch env'}
+                            </div>
+                            <div className="mt-1 space-y-0.5 font-mono text-[10px] leading-4 text-slate-200">
+                              {_socialWorkerEnvLines(
+                                socialLaunchPreflight.recommended_env?.dispatch || {},
+                                socialLaunchPreflight.recommended_env?.metrics || {},
+                              ).map((line) => (
+                                <div key={line} className="break-all">{line}</div>
+                              ))}
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="mt-2 h-7 border-white/20 bg-white/10 px-2 text-[11px] text-white hover:bg-white/20"
+                              onClick={() => { void copySocialWorkerEnv(); }}
+                            >
+                              {isRu ? 'Скопировать env для worker' : 'Copy worker env'}
+                            </Button>
+                          </div>
                           <div className="mt-1 text-[11px] text-slate-300">
                             {isRu
                               ? 'Preflight ничего не публикует: approval обязателен, карты остаются controlled/manual без финального клика.'
@@ -6859,6 +6887,48 @@ function _socialSettingsPathForPlatform(platform: string): string {
   const normalized = String(platform || '').trim();
   if (normalized === 'telegram') return '/dashboard/settings?focus=channels';
   return '/dashboard/settings?focus=integrations';
+}
+
+function _socialWorkerEnvLines(
+  dispatchEnv: Record<string, string>,
+  metricsEnv: Record<string, string>,
+): string[] {
+  const lines: string[] = [];
+  for (const key of [
+    'SOCIAL_POST_DISPATCH_ENABLED',
+    'SOCIAL_POST_DISPATCH_INTERVAL_SEC',
+    'SOCIAL_POST_DISPATCH_BATCH_SIZE',
+    'SOCIAL_POST_DISPATCH_BUSINESS_ID',
+  ]) {
+    const value = String(dispatchEnv[key] || '').trim();
+    if (value) lines.push(`${key}=${value}`);
+  }
+  for (const key of [
+    'SOCIAL_POST_METRICS_ENABLED',
+    'SOCIAL_POST_METRICS_INTERVAL_SEC',
+    'SOCIAL_POST_METRICS_BATCH_SIZE',
+    'SOCIAL_POST_METRICS_BUSINESS_ID',
+  ]) {
+    const value = String(metricsEnv[key] || '').trim();
+    if (value) lines.push(`${key}=${value}`);
+  }
+  return lines;
+}
+
+async function copyTextToClipboard(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', 'true');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
 }
 
 function _socialPublishModeLabel(mode: string, isRu: boolean): string {
