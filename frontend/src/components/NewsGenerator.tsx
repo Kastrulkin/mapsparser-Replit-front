@@ -27,9 +27,10 @@ import ContentPlanTab from '@/components/content-plan/ContentPlanTab';
 
 type ServiceLite = { id: string; name: string };
 type SeoKeywordLite = { keyword: string; views?: number };
+type NewsWorkspaceMode = 'news' | 'plan';
 
-export default function NewsGenerator({ services, businessId, externalPosts }: { services: ServiceLite[]; businessId?: string; externalPosts?: any[] }) {
-  const [workspaceMode, setWorkspaceMode] = useState<'news' | 'plan'>('news');
+export default function NewsGenerator({ services, businessId, externalPosts, initialWorkspaceMode = 'news' }: { services: ServiceLite[]; businessId?: string; externalPosts?: any[]; initialWorkspaceMode?: NewsWorkspaceMode }) {
+  const [workspaceMode, setWorkspaceMode] = useState<NewsWorkspaceMode>(initialWorkspaceMode);
   const [useService, setUseService] = useState(false);
   const [useTransaction, setUseTransaction] = useState(false);
   const [useSeoKeywords, setUseSeoKeywords] = useState(false);

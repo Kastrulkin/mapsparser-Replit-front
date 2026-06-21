@@ -187,6 +187,7 @@ type NewsTabProps = {
   businessId?: string;
   externalPosts: Array<{ source?: string }>;
   selectedSource: string;
+  initialWorkspaceMode?: 'news' | 'plan';
 };
 
 export const NewsTab = ({
@@ -196,12 +197,14 @@ export const NewsTab = ({
   businessId,
   externalPosts,
   selectedSource,
+  initialWorkspaceMode,
 }: NewsTabProps) => (
   automationAllowed ? (
     <NewsGenerator
       services={services}
       businessId={businessId}
       externalPosts={externalPosts.filter((post) => selectedSource === 'all' || (post.source && post.source.toLowerCase().includes(selectedSource)))}
+      initialWorkspaceMode={initialWorkspaceMode}
     />
   ) : <AutomationLockedNotice message={automationLockedMessage} />
 );

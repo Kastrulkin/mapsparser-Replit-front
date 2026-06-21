@@ -189,8 +189,10 @@ export const CardOverviewPage = () => {
   const automationAccess = getAutomationAccessForBusiness(currentBusiness);
   const automationLockedMessage = automationAccess.message || 'Автоматизация доступна только после оплаты тарифа.';
   const initialTabParam = String(searchParams.get('tab') || '').trim().toLowerCase();
+  const initialModeParam = String(searchParams.get('mode') || '').trim().toLowerCase();
   const initialReviewFocusParam = String(searchParams.get('review_filter') || '').trim().toLowerCase();
   const [activeTab, setActiveTab] = useState<CardTabValue>(isCardTabValue(initialTabParam) ? initialTabParam : 'services');
+  const initialNewsWorkspaceMode = activeTab === 'news' && initialModeParam === 'plan' ? 'plan' : 'news';
   const reviewFocus = isReviewFocusValue(initialReviewFocusParam) ? initialReviewFocusParam : 'all';
 
   // Состояния для рейтинга и отзывов
@@ -1493,6 +1495,7 @@ export const CardOverviewPage = () => {
               businessId={currentBusinessId}
               externalPosts={externalPosts}
               selectedSource={selectedSource}
+              initialWorkspaceMode={initialNewsWorkspaceMode}
             />
           </TabsContent>
 
