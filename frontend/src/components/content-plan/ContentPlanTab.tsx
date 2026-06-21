@@ -4033,6 +4033,89 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             </div>
           </div>
 
+          {socialLaunchStages.length > 0 ? (
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-950">
+                    {isRu ? 'Цель публикаций' : 'Publishing goal'}
+                  </div>
+                  <div className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
+                    {isRu
+                      ? 'Дойти от темы в контент-плане до публикации, результата и корректировки следующей недели. Карты идут через controlled/manual, API-каналы — только после approval.'
+                      : 'Move from a content-plan topic to publishing, results, and next-week correction. Maps stay controlled/manual; API channels run only after approval.'}
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="bg-white"
+                  onClick={() => setActiveZone('queue')}
+                >
+                  {isRu ? 'Открыть очередь' : 'Open queue'}
+                </Button>
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {socialLaunchStages.map((stage) => (
+                  <div
+                    key={`overview-${stage.key}`}
+                    className={[
+                      'rounded-xl border bg-white px-3 py-3',
+                      stage.status === 'done'
+                        ? 'border-emerald-100'
+                        : stage.status === 'current'
+                          ? 'border-sky-200'
+                          : stage.status === 'attention'
+                            ? 'border-red-200'
+                            : 'border-slate-200',
+                    ].join(' ')}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div
+                        className={[
+                          'text-xs font-semibold',
+                          stage.status === 'done'
+                            ? 'text-emerald-800'
+                            : stage.status === 'current'
+                              ? 'text-sky-800'
+                              : stage.status === 'attention'
+                                ? 'text-red-800'
+                                : 'text-slate-600',
+                        ].join(' ')}
+                      >
+                        {isRu ? stage.labelRu : stage.labelEn}
+                      </div>
+                      <span
+                        className={[
+                          'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                          stage.status === 'done'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : stage.status === 'current'
+                              ? 'bg-sky-50 text-sky-700'
+                              : stage.status === 'attention'
+                                ? 'bg-red-50 text-red-700'
+                                : 'bg-slate-100 text-slate-500',
+                        ].join(' ')}
+                      >
+                        {stage.status === 'done'
+                          ? (isRu ? 'готово' : 'done')
+                          : stage.status === 'current'
+                            ? (isRu ? 'сейчас' : 'now')
+                            : stage.status === 'attention'
+                              ? (isRu ? 'внимание' : 'attention')
+                              : (isRu ? 'позже' : 'later')}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs leading-5 text-slate-500">
+                      {isRu ? stage.detailRu : stage.detailEn}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
             <button
               type="button"
