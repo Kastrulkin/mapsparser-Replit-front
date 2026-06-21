@@ -298,6 +298,13 @@ def _build_social_launch_preflight_payload(
             "controlled_channels": len(controlled_channels),
             "skipped_no_access": skipped_no_access,
         },
+        "first_cycle_verification": _social_worker_first_cycle_verification(
+            external_publish_count,
+            controlled_count,
+            manual_count,
+            skipped_no_access,
+            str(business_id or "").strip(),
+        ),
         "message_ru": _social_launch_preflight_message(status, True),
         "message_en": _social_launch_preflight_message(status, False),
         "next_action_ru": _social_launch_preflight_next_action(status, str(business_id or "").strip(), True),
@@ -1316,6 +1323,13 @@ def _dispatch_preview_readiness(
             manual_count,
             skipped_no_access,
         ),
+        "first_cycle_verification": _social_worker_first_cycle_verification(
+            external_publish_count,
+            controlled_count,
+            manual_count,
+            skipped_no_access,
+            business_scope,
+        ),
         "safety_notes_ru": [
             "Внешние публикации уходят только из approved/queued постов.",
             "Яндекс/2ГИС остаются controlled/manual: финальный клик публикации не выполняется worker.",
@@ -1393,6 +1407,84 @@ def _dispatch_preview_first_cycle_steps(
             }
         )
     return steps
+
+
+def _social_worker_first_cycle_verification(
+    external_publish_count: int,
+    controlled_count: int,
+    manual_count: int,
+    skipped_no_access: int = 0,
+    business_scope: str = "",
+) -> dict[str, Any]:
+    expected_statuses = []
+    if int(external_publish_count or 0) > 0:
+        expected_statuses.append(
+            {
+                "key": "api_channels",
+                "label_ru": "API-каналы",
+                "label_en": "API channels",
+                "expected_ru": "published или failed с понятной причиной",
+                "expected_en": "published or failed with a clear reason",
+            }
+        )
+    if int(controlled_count or 0) > 0:
+        expected_statuses.append(
+            {
+                "key": "maps_controlled",
+                "label_ru": "Яндекс/2ГИС",
+                "label_en": "Yandex/2GIS",
+                "expected_ru": "needs_supervised_publish или needs_manual_publish; финального клика нет",
+                "expected_en": "needs_supervised_publish or needs_manual_publish; no final click",
+            }
+        )
+    if int(manual_count or 0) > 0:
+        expected_statuses.append(
+            {
+                "key": "manual_fallback",
+                "label_ru": "Ручной fallback",
+                "label_en": "Manual fallback",
+                "expected_ru": "needs_manual_publish с инструкцией и copy-ready текстом",
+                "expected_en": "needs_manual_publish with instructions and copy-ready text",
+            }
+        )
+    if int(skipped_no_access or 0) > 0:
+        expected_statuses.append(
+            {
+                "key": "skipped_no_access",
+                "label_ru": "Нет доступа",
+                "label_en": "No access",
+                "expected_ru": "без изменений; проверить права или business scope",
+                "expected_en": "unchanged; check permissions or business scope",
+            }
+        )
+    if not expected_statuses:
+        expected_statuses.append(
+            {
+                "key": "noop",
+                "label_ru": "Нет due-постов",
+                "label_en": "No due posts",
+                "expected_ru": "worker не должен ничего отправить",
+                "expected_en": "worker should not send anything",
+            }
+        )
+    log_filter = "[SOCIAL_POST_DISPATCH]"
+    return {
+        "log_filter": log_filter,
+        "business_scope": str(business_scope or "").strip(),
+        "expected_statuses": expected_statuses,
+        "checks_ru": [
+            f"В логах worker найти строку {log_filter}.",
+            "Сверить picked/published/supervised/manual/failed с dry-run перед запуском.",
+            "Если есть failed: открыть карточку поста, last_error и readiness канала.",
+            "Если есть manual/supervised: завершить размещение из карточки поста и отметить ссылку/ID.",
+        ],
+        "checks_en": [
+            f"Find the {log_filter} line in worker logs.",
+            "Compare picked/published/supervised/manual/failed with the pre-launch dry-run.",
+            "If failed exists: open the post card, last_error, and channel readiness.",
+            "If manual/supervised exists: complete placement from the post card and record URL/ID.",
+        ],
+    }
 
 
 def _dispatch_preview_readiness_message(status: str, is_ru: bool) -> str:

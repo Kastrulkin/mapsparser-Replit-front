@@ -328,6 +328,7 @@ type SocialDispatchPreview = {
       description_ru?: string;
       description_en?: string;
     }>;
+    first_cycle_verification?: SocialFirstCycleVerification;
     safety_notes_ru?: string[];
     safety_notes_en?: string[];
   };
@@ -341,6 +342,20 @@ type SocialDispatchPreview = {
     external_publish?: boolean;
     stop_before_final_publish?: boolean;
   }>;
+};
+
+type SocialFirstCycleVerification = {
+  log_filter?: string;
+  business_scope?: string;
+  expected_statuses?: Array<{
+    key?: string;
+    label_ru?: string;
+    label_en?: string;
+    expected_ru?: string;
+    expected_en?: string;
+  }>;
+  checks_ru?: string[];
+  checks_en?: string[];
 };
 
 type SocialLaunchPreflight = {
@@ -378,6 +393,7 @@ type SocialLaunchPreflight = {
   message_en?: string;
   next_action_ru?: string;
   next_action_en?: string;
+  first_cycle_verification?: SocialFirstCycleVerification;
 };
 
 type SocialRuntimeStatus = {
@@ -5326,13 +5342,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               variant="outline"
                               className="mt-2 h-7 border-white/20 bg-white/10 px-2 text-[11px] text-white hover:bg-white/20"
                               onClick={() => { void copySocialWorkerEnv(); }}
-                            >
-                              {isRu ? 'Скопировать env для worker' : 'Copy worker env'}
-                            </Button>
-                          </div>
-                          <div className="mt-1 text-[11px] text-slate-300">
-                            {isRu
-                              ? 'Preflight ничего не публикует: approval обязателен, карты остаются controlled/manual без финального клика.'
+                                                      >
+                                                        {isRu ? 'Скопировать env для worker' : 'Copy worker env'}
+                                                      </Button>
+                                                    </div>
+                          {_socialFirstCycleVerificationBlock(socialLaunchPreflight.first_cycle_verification, isRu)}
+                                                    <div className="mt-1 text-[11px] text-slate-300">
+                                                      {isRu
+                                                        ? 'Preflight ничего не публикует: approval обязателен, карты остаются controlled/manual без финального клика.'
                               : 'Preflight publishes nothing: approval is required, and maps stay controlled/manual without the final click.'}
                           </div>
                         </div>
@@ -5389,9 +5406,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   ? `external ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · controlled ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · manual ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`
                                   : `external ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · controlled ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · manual ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`}
                               </div>
-                            </div>
-                          ) : null}
-                          {Number(socialDispatchPreview.readiness?.first_cycle_steps?.length || 0) > 0 ? (
+                                                      </div>
+                                                    ) : null}
+                          {_socialFirstCycleVerificationBlock(socialDispatchPreview.readiness?.first_cycle_verification, isRu)}
+                                                    {Number(socialDispatchPreview.readiness?.first_cycle_steps?.length || 0) > 0 ? (
                             <div className="mt-2 rounded-lg border border-sky-300/20 bg-sky-400/10 px-2 py-2 text-[11px] leading-5 text-sky-50">
                               <div className="font-semibold text-white">
                                 {isRu ? 'Что сделает первый цикл' : 'What the first cycle will do'}
@@ -7120,6 +7138,54 @@ function _socialWorkerEnvLines(
     if (value) lines.push(`${key}=${value}`);
   }
   return lines;
+}
+
+function _socialFirstCycleVerificationBlock(
+  verification: SocialFirstCycleVerification | undefined,
+  isRu: boolean,
+) {
+  const expected = Array.isArray(verification?.expected_statuses)
+    ? verification.expected_statuses.filter(Boolean)
+    : [];
+  const checks = Array.isArray(isRu ? verification?.checks_ru : verification?.checks_en)
+    ? (isRu ? verification?.checks_ru : verification?.checks_en) || []
+    : [];
+  const logFilter = String(verification?.log_filter || '').trim();
+  if (!expected.length && !checks.length && !logFilter) return null;
+  return (
+    <div className="mt-2 rounded-lg border border-violet-300/20 bg-violet-400/10 px-2 py-2 text-[11px] leading-5 text-violet-50">
+      <div className="font-semibold text-white">
+        {isRu ? 'Проверка после первого цикла' : 'First-cycle verification'}
+      </div>
+      {logFilter ? (
+        <div className="mt-1 font-mono text-[10px] text-violet-100">
+          logs: {logFilter}
+        </div>
+      ) : null}
+      {expected.length > 0 ? (
+        <div className="mt-1 space-y-1">
+          {expected.slice(0, 4).map((item) => (
+            <div key={String(item.key || item.label_ru || item.label_en)} className="rounded-md bg-white/10 px-2 py-1">
+              <span className="font-medium text-white">
+                {isRu ? String(item.label_ru || '') : String(item.label_en || '')}
+              </span>
+              <span className="text-violet-100">
+                {' '}
+                - {isRu ? String(item.expected_ru || '') : String(item.expected_en || '')}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {checks.length > 0 ? (
+        <div className="mt-1 space-y-0.5 text-violet-100">
+          {checks.slice(0, 4).map((check) => (
+            <div key={String(check)}>{String(check)}</div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 async function copyTextToClipboard(value: string): Promise<void> {

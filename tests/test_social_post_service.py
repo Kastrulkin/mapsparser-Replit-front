@@ -1414,6 +1414,12 @@ def test_dispatch_preview_readiness_explains_external_controlled_and_manual_work
     assert readiness["first_cycle_steps"][1]["stop_before_final_publish"] is True
     assert readiness["first_cycle_steps"][2]["key"] == "manual_handoff_or_connection"
     assert readiness["first_cycle_steps"][3]["key"] == "skipped_no_access"
+    verification = readiness["first_cycle_verification"]
+    assert verification["log_filter"] == "[SOCIAL_POST_DISPATCH]"
+    assert verification["business_scope"] == "biz-1"
+    assert verification["expected_statuses"][0]["key"] == "api_channels"
+    assert verification["expected_statuses"][1]["key"] == "maps_controlled"
+    assert "picked/published" in verification["checks_en"][1]
     assert "Dry-run" in readiness["safety_notes_ru"][2]
 
 
@@ -1478,6 +1484,8 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert payload["safety"]["browser_final_click_allowed"] is False
     assert payload["safety"]["maps_are_supervised_or_manual"] is True
     assert "SOCIAL_POST_DISPATCH_BUSINESS_ID=biz-1" in payload["next_action_ru"]
+    assert payload["first_cycle_verification"]["log_filter"] == "[SOCIAL_POST_DISPATCH]"
+    assert payload["first_cycle_verification"]["expected_statuses"][0]["key"] == "api_channels"
 
 
 def test_social_launch_preflight_payload_handles_no_due_posts_as_next_ui_work():
