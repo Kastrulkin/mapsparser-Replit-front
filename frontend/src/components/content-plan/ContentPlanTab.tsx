@@ -2444,6 +2444,43 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const createSupervisedPostTask = async (post: SocialPost) => {
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        isRu
+          ? 'Создать controlled задачу для Яндекс/2ГИС? LocalOS подготовит текст, инструкцию и handoff для OpenClaw/manual. Финальную кнопку публикации он не нажимает.'
+          : 'Create a controlled Yandex/2GIS task? LocalOS will prepare copy, instructions, and OpenClaw/manual handoff. It will not click the final publish button.'
+      );
+      if (!confirmed) return;
+    }
+    setSocialBusyAction(`supervised-task:${post.id}`);
+    setError('');
+    setActionSummary(null);
+    try {
+      const response = await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/supervised-task`, {
+        method: 'POST',
+        body: JSON.stringify({ approved: true }),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      const updatedPost = response.post && typeof response.post === 'object' ? response.post : {};
+      const status = String(updatedPost.status || '').trim();
+      setActionSummary({
+        tone: status === 'needs_manual_publish' ? 'warning' : 'success',
+        text_ru: status === 'needs_manual_publish'
+          ? 'Controlled задача подготовлена как ручной fallback: OpenClaw browser-use сейчас недоступен или не подтверждён.'
+          : 'Controlled задача создана. Проверьте инструкцию, откройте площадку и завершите размещение только после проверки preview.',
+        text_en: status === 'needs_manual_publish'
+          ? 'Controlled task was prepared as manual fallback: OpenClaw browser-use is unavailable or not confirmed.'
+          : 'Controlled task created. Review the instructions, open the platform, and finish placement only after preview review.',
+      });
+    } catch (taskError) {
+      const message = taskError instanceof Error ? taskError.message : (isRu ? 'Не удалось создать controlled задачу' : 'Could not create controlled task');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
   const copySocialPostText = async (post: SocialPost, text: string) => {
     const value = String(text || post.platform_text || post.base_text || '').trim();
     if (!value) return;
@@ -6617,6 +6654,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const canMarkPublished = post.status === 'needs_supervised_publish' || post.status === 'needs_manual_publish';
                               const canRecordResult = post.status === 'published';
                               const isSupervisedPost = _isSupervisedPlatform(post.platform);
+                              const canCreateSupervisedTask = isSupervisedPost
+                                && (post.status === 'approved' || post.status === 'queued' || post.status === 'needs_manual_publish');
                               const supervisedPayload = _socialSupervisedPayload(post);
                               const manualRefs = manualPublishRefs[post.id] || {
                                 url: String(post.provider_post_url || ''),
@@ -7012,6 +7051,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-800">
                                         {isRu ? 'В расписании' : 'Scheduled'}
                                       </span>
+                                    ) : null}
+                                    {canCreateSupervisedTask ? (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => { void createSupervisedPostTask(post); }}
+                                        disabled={postBusy || postTextDirty}
+                                      >
+                                        {isRu ? 'Создать controlled задачу' : 'Create controlled task'}
+                                      </Button>
                                     ) : null}
                                     {canMarkPublished ? (
                                       <>

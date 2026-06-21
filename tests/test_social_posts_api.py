@@ -47,6 +47,7 @@ def test_social_post_routes_include_bulk_and_attribution_endpoints():
     assert ("/api/social-posts/<post_id>", frozenset({"PATCH"})) in routes
     assert ("/api/social-posts/bulk-mark-manual-published", frozenset({"POST"})) in routes
     assert ("/api/social-posts/<post_id>/mark-supervised-blocked", frozenset({"POST"})) in routes
+    assert ("/api/social-posts/<post_id>/supervised-task", frozenset({"POST"})) in routes
     assert ("/api/social-posts/<post_id>/attribution-events", frozenset({"POST"})) in routes
     assert ("/api/content-plans/<plan_id>/social-posts/recommend-next-plan", frozenset({"POST"})) in routes
     assert ("/api/content-plans/<plan_id>/social-posts/apply-recommendation", frozenset({"POST"})) in routes
@@ -358,3 +359,54 @@ def test_social_post_mark_supervised_blocked_endpoint_records_manual_fallback(mo
         "reason": "captcha",
         "blocked_source": "openclaw",
     }
+
+
+def test_social_post_create_supervised_task_requires_explicit_approval(monkeypatch):
+    app = Flask(__name__)
+    app.register_blueprint(social_posts_api.social_posts_bp)
+    monkeypatch.setattr(social_posts_api, "_require_auth", lambda: ({"user_id": "user-1"}, None))
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("supervised task must not run without explicit approval")
+
+    monkeypatch.setattr(social_posts_api, "create_supervised_publish_task", fail_if_called)
+
+    response = app.test_client().post(
+        "/api/social-posts/post-1/supervised-task",
+        json={"approved": False},
+    )
+
+    assert response.status_code == 403
+    assert "подтверждение" in response.get_json()["error"]
+
+
+def test_social_post_create_supervised_task_endpoint_returns_post(monkeypatch):
+    app = Flask(__name__)
+    app.register_blueprint(social_posts_api.social_posts_bp)
+    monkeypatch.setattr(social_posts_api, "_require_auth", lambda: ({"user_id": "user-1"}, None))
+    captured = {}
+
+    def fake_create(user_id, post_id, approved=False):
+        captured["user_id"] = user_id
+        captured["post_id"] = post_id
+        captured["approved"] = approved
+        return {
+            "id": post_id,
+            "status": "needs_supervised_publish",
+            "automation_task_id": "task-1",
+            "metadata_json": {"browser_final_click_allowed": False},
+        }
+
+    monkeypatch.setattr(social_posts_api, "create_supervised_publish_task", fake_create)
+
+    response = app.test_client().post(
+        "/api/social-posts/post-1/supervised-task",
+        json={"approved": True},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["post"]["automation_task_id"] == "task-1"
+    assert payload["post"]["metadata_json"]["browser_final_click_allowed"] is False
+    assert captured == {"user_id": "user-1", "post_id": "post-1", "approved": True}

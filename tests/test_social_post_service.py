@@ -45,6 +45,7 @@ from services.social_post_service import (
     _attribution_metrics_for_post,
     build_social_queue_groups,
     collect_due_social_post_metrics,
+    create_supervised_publish_task,
     default_publish_mode,
     dispatch_due_social_posts,
     ensure_social_post_tables,
@@ -814,6 +815,63 @@ def test_run_scoped_social_dispatch_once_runs_only_requested_business(monkeypatc
     assert result["external_publish_only_after_approval"] is True
     assert captured["preflight"] == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 50}
     assert captured["dispatch"] == {"business_id": "biz-1", "batch_size": 50}
+
+
+def test_create_supervised_publish_task_requires_explicit_approval_before_db(monkeypatch):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("supervised task must not touch DB without approval")
+
+    monkeypatch.setattr(social_post_service, "DatabaseManager", fail_if_called)
+
+    error = None
+    try:
+        create_supervised_publish_task("user-1", "post-map", approved=False)
+    except PermissionError:
+        error = sys.exc_info()[1]
+
+    assert error is not None
+    assert "явное подтверждение" in str(error)
+
+
+def test_create_supervised_publish_task_reuses_controlled_handoff_helper(monkeypatch):
+    captured = {}
+    post = {
+        "id": "post-map",
+        "business_id": "biz-1",
+        "platform": "yandex_maps",
+        "status": "approved",
+        "approved_at": "2026-06-19T10:00:00+00:00",
+        "platform_text": "Текст для карт",
+    }
+
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeQueueFallbackDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: captured.setdefault(
+            "load",
+            {"user_id": user_id, "post_id": post_id},
+        ) and post,
+    )
+
+    def fake_create(cursor, loaded_post):
+        captured["create"] = loaded_post
+        return {
+            **loaded_post,
+            "status": "needs_supervised_publish",
+            "automation_task_id": "task-1",
+        }
+
+    monkeypatch.setattr(social_post_service, "_create_supervised_publish_task", fake_create)
+
+    result = create_supervised_publish_task("user-1", "post-map", approved=True)
+
+    assert result["status"] == "needs_supervised_publish"
+    assert result["automation_task_id"] == "task-1"
+    assert captured["load"] == {"user_id": "user-1", "post_id": "post-map"}
+    assert captured["create"]["id"] == "post-map"
+    assert FakeQueueFallbackDB.last_conn.committed is True
 
 
 def test_collect_due_social_post_metrics_can_scope_to_one_business(monkeypatch):

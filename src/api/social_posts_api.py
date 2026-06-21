@@ -14,6 +14,7 @@ from services.social_post_service import (
     approve_social_post,
     approve_social_posts,
     collect_social_post_metrics,
+    create_supervised_publish_task,
     get_social_channel_readiness,
     get_social_launch_preflight,
     list_social_posts_for_plan,
@@ -487,6 +488,32 @@ def social_posts_mark_supervised_blocked(post_id: str):
             post_id,
             reason=str(data.get("reason") or "").strip(),
             blocked_source=str(data.get("blocked_source") or "manual").strip(),
+        )
+        return jsonify({"success": True, "post": post})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/<post_id>/supervised-task", methods=["POST"])
+def social_posts_create_supervised_task(post_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "supervised-task")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    if not bool(data.get("approved")):
+        return jsonify({"success": False, "error": "Для создания controlled-задачи нужно явное подтверждение"}), 403
+    try:
+        post = create_supervised_publish_task(
+            str(user_data.get("user_id") or ""),
+            post_id,
+            approved=bool(data.get("approved")),
         )
         return jsonify({"success": True, "post": post})
     except PermissionError:

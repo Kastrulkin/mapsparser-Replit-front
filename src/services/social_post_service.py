@@ -523,45 +523,7 @@ def queue_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             raise PermissionError("Перед постановкой в расписание нужно подтверждение человека")
         platform = str(post.get("platform") or "").strip()
         if platform in BROWSER_OR_MANUAL_PLATFORMS:
-            automation_task_id = str(post.get("automation_task_id") or "").strip() or _new_id()
-            metadata = _json_dict(post.get("metadata_json"))
-            metadata.update(_supervised_publish_metadata(cursor, post, automation_task_id))
-            supervised_state = _supervised_publish_state(post)
-            cursor.execute(
-                """
-                UPDATE social_posts
-                SET status = %s,
-                    automation_task_id = %s,
-                    metadata_json = %s,
-                    last_error = %s,
-                    updated_at = NOW()
-                WHERE id = %s
-                RETURNING *
-                """,
-                (
-                    supervised_state["status"],
-                    automation_task_id,
-                    _json_dumps(metadata),
-                    supervised_state["last_error"],
-                    post_id,
-                ),
-            )
-            updated = _serialize_social_post(cursor, cursor.fetchone())
-            ledger_id = _record_social_supervised_handoff_ledger(cursor, post, updated, automation_task_id)
-            if ledger_id:
-                metadata = _json_dict(updated.get("metadata_json"))
-                metadata["agent_action_ledger_id"] = ledger_id
-                cursor.execute(
-                    """
-                    UPDATE social_posts
-                    SET metadata_json = %s,
-                        updated_at = NOW()
-                    WHERE id = %s
-                    RETURNING *
-                    """,
-                    (_json_dumps(metadata), post_id),
-                )
-                updated = _serialize_social_post(cursor, cursor.fetchone())
+            updated = _create_supervised_publish_task(cursor, post)
             db.conn.commit()
             return updated
         queue_block = _queue_preflight_block(cursor, post)
@@ -624,6 +586,79 @@ def queue_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
     }
 
 
+def create_supervised_publish_task(user_id: str, post_id: str, approved: bool = False) -> dict[str, Any]:
+    if not approved:
+        raise PermissionError("Для создания controlled-задачи нужно явное подтверждение")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        post = _load_post_for_user(cursor, user_id, post_id)
+        updated = _create_supervised_publish_task(cursor, post)
+        db.conn.commit()
+        return updated
+    except Exception:
+        db.conn.rollback()
+        raise sys.exc_info()[1]
+    finally:
+        db.close()
+
+
+def _create_supervised_publish_task(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    post_id = str(post.get("id") or "").strip()
+    platform = str(post.get("platform") or "").strip()
+    status = str(post.get("status") or "").strip()
+    if platform not in BROWSER_OR_MANUAL_PLATFORMS:
+        raise ValueError("Controlled-задача доступна только для Яндекс/2ГИС")
+    if status == "published":
+        raise ValueError("Публикация уже опубликована")
+    if not post.get("approved_at") and status not in {"approved", "queued", "needs_supervised_publish", "needs_manual_publish"}:
+        raise PermissionError("Перед controlled-размещением нужно подтверждение человека")
+    if not _social_post_has_text(post):
+        raise ValueError("Перед controlled-размещением нужно заполнить текст")
+
+    automation_task_id = str(post.get("automation_task_id") or "").strip() or _new_id()
+    metadata = _json_dict(post.get("metadata_json"))
+    metadata.update(_supervised_publish_metadata(cursor, post, automation_task_id))
+    supervised_state = _supervised_publish_state(post)
+    cursor.execute(
+        """
+        UPDATE social_posts
+        SET status = %s,
+            automation_task_id = %s,
+            metadata_json = %s,
+            last_error = %s,
+            updated_at = NOW()
+        WHERE id = %s
+        RETURNING *
+        """,
+        (
+            supervised_state["status"],
+            automation_task_id,
+            _json_dumps(metadata),
+            supervised_state["last_error"],
+            post_id,
+        ),
+    )
+    updated = _serialize_social_post(cursor, cursor.fetchone())
+    ledger_id = _record_social_supervised_handoff_ledger(cursor, post, updated, automation_task_id)
+    if ledger_id:
+        metadata = _json_dict(updated.get("metadata_json"))
+        metadata["agent_action_ledger_id"] = ledger_id
+        cursor.execute(
+            """
+            UPDATE social_posts
+            SET metadata_json = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (_json_dumps(metadata), post_id),
+        )
+        updated = _serialize_social_post(cursor, cursor.fetchone())
+    return updated
+
+
 def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -653,44 +688,7 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
         publish_mode = str(post.get("publish_mode") or "").strip()
         metadata = _json_dict(post.get("metadata_json"))
         if platform in BROWSER_OR_MANUAL_PLATFORMS:
-            automation_task_id = str(post.get("automation_task_id") or "").strip() or _new_id()
-            metadata.update(_supervised_publish_metadata(cursor, post, automation_task_id))
-            supervised_state = _supervised_publish_state(post)
-            cursor.execute(
-                """
-                UPDATE social_posts
-                SET status = %s,
-                    automation_task_id = %s,
-                    metadata_json = %s,
-                    last_error = %s,
-                    updated_at = NOW()
-                WHERE id = %s
-                RETURNING *
-                """,
-                (
-                    supervised_state["status"],
-                    automation_task_id,
-                    _json_dumps(metadata),
-                    supervised_state["last_error"],
-                    post_id,
-                ),
-            )
-            updated = _serialize_social_post(cursor, cursor.fetchone())
-            ledger_id = _record_social_supervised_handoff_ledger(cursor, post, updated, automation_task_id)
-            if ledger_id:
-                metadata = _json_dict(updated.get("metadata_json"))
-                metadata["agent_action_ledger_id"] = ledger_id
-                cursor.execute(
-                    """
-                    UPDATE social_posts
-                    SET metadata_json = %s,
-                        updated_at = NOW()
-                    WHERE id = %s
-                    RETURNING *
-                    """,
-                    (_json_dumps(metadata), post_id),
-                )
-                updated = _serialize_social_post(cursor, cursor.fetchone())
+            updated = _create_supervised_publish_task(cursor, post)
             db.conn.commit()
             return updated
         if publish_mode != "api":
