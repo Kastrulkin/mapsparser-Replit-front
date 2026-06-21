@@ -131,6 +131,16 @@ type SocialPost = {
   leads?: number;
 };
 
+type SocialOpenClawCapabilityStatus = {
+  ready?: boolean;
+  status?: string;
+  source?: string;
+  reason?: string;
+  action_ref?: string;
+  capability?: string;
+  error?: string;
+};
+
 type SocialPostMetadata = {
   supervised_publish?: {
     instruction_ru?: string;
@@ -144,15 +154,7 @@ type SocialPostMetadata = {
     target_url_source?: string;
     final_publish_policy?: string;
     fallback_reasons?: string[];
-    openclaw_capability_status?: string | {
-      ready?: boolean;
-      status?: string;
-      source?: string;
-      reason?: string;
-      action_ref?: string;
-      capability?: string;
-      error?: string;
-    };
+    openclaw_capability_status?: string | SocialOpenClawCapabilityStatus;
     stop_before_final_publish?: boolean;
   };
   openclaw_task?: Record<string, unknown>;
@@ -5451,7 +5453,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const postTextLocked = _isSocialPostTextLocked(post.status);
                               const postTextDirty = postTextValue.trim() !== String(post.platform_text || '').trim();
                               const supervisedLedgerId = String(post.metadata_json?.agent_action_ledger_id || '').trim();
-                              const supervisedCapabilityStatus = String(supervisedPayload?.openclaw_capability_status || '').trim();
+                              const supervisedCapabilityLine = _socialOpenClawCapabilityLine(supervisedPayload?.openclaw_capability_status, isRu);
+                              const supervisedTaskStatus = String(supervisedPayload?.task_status || '').trim();
+                              const supervisedActionRef = String(supervisedPayload?.openclaw_action_ref || '').trim();
+                              const supervisedFallbackReasons = Array.isArray(supervisedPayload?.fallback_reasons)
+                                ? supervisedPayload.fallback_reasons.filter(Boolean).map(String)
+                                : [];
                               const preflightStatus = String(post.metadata_json?.queue_preflight_status || post.metadata_json?.provider_status || '').trim();
                               const preflightMessage = String(
                                 isRu
@@ -5524,9 +5531,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   </div>
                                   {isSupervisedPost ? (
                                     <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-                                      {isRu
-                                        ? 'Для этого канала LocalOS показывает контролируемое размещение или ручной fallback, а не стабильный API publish.'
-                                        : 'For this channel LocalOS shows supervised placement or manual fallback, not stable API publishing.'}
+                                      <div className="font-semibold text-amber-950">
+                                        {isRu ? 'Контролируемое размещение' : 'Supervised placement'}
+                                      </div>
+                                      <div className="mt-1">
+                                        {isRu
+                                          ? 'Для этого канала LocalOS готовит задачу для OpenClaw/manual handoff, а не делает вид стабильной API-автопубликации.'
+                                          : 'For this channel LocalOS prepares an OpenClaw/manual handoff task instead of pretending stable API autopublishing exists.'}
+                                      </div>
                                       {supervisedPayload?.instruction_ru || supervisedPayload?.instruction_en ? (
                                         <div className="mt-2 text-amber-900">
                                           {isRu
@@ -5534,9 +5546,32 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                             : String(supervisedPayload.instruction_en || '')}
                                         </div>
                                       ) : null}
-                                      {post.automation_task_id ? (
-                                        <div className="mt-2 font-mono text-[11px] text-amber-900">
-                                          task: {post.automation_task_id}
+                                      {post.automation_task_id || supervisedTaskStatus || supervisedActionRef || supervisedPayload?.target_url ? (
+                                        <div className="mt-3 grid gap-2 rounded-lg bg-white px-3 py-2 text-[11px] text-amber-950 sm:grid-cols-2">
+                                          {post.automation_task_id ? (
+                                            <div>
+                                              <span className="font-semibold">task:</span>{' '}
+                                              <span className="font-mono">{post.automation_task_id}</span>
+                                            </div>
+                                          ) : null}
+                                          {supervisedTaskStatus ? (
+                                            <div>
+                                              <span className="font-semibold">status:</span>{' '}
+                                              <span className="font-mono">{supervisedTaskStatus}</span>
+                                            </div>
+                                          ) : null}
+                                          {supervisedActionRef ? (
+                                            <div>
+                                              <span className="font-semibold">action:</span>{' '}
+                                              <span className="font-mono">{supervisedActionRef}</span>
+                                            </div>
+                                          ) : null}
+                                          {supervisedPayload?.target_url ? (
+                                            <div>
+                                              <span className="font-semibold">{isRu ? 'цель:' : 'target:'}</span>{' '}
+                                              <span className="break-all">{String(supervisedPayload.target_url)}</span>
+                                            </div>
+                                          ) : null}
                                         </div>
                                       ) : null}
                                       {supervisedLedgerId ? (
@@ -5544,10 +5579,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                           ledger: {supervisedLedgerId}
                                         </div>
                                       ) : null}
-                                      {supervisedCapabilityStatus ? (
+                                      {supervisedCapabilityLine ? (
                                         <div className="mt-1 text-[11px] text-amber-900">
-                                          {isRu ? 'OpenClaw browser-use: ' : 'OpenClaw browser-use: '}
-                                          {supervisedCapabilityStatus}
+                                          {supervisedCapabilityLine}
+                                        </div>
+                                      ) : null}
+                                      {supervisedFallbackReasons.length > 0 ? (
+                                        <div className="mt-1 text-[11px] text-amber-900">
+                                          {isRu ? 'fallback: ' : 'fallback: '}
+                                          {supervisedFallbackReasons.join(', ')}
                                         </div>
                                       ) : null}
                                       {post.automation_task_id || supervisedLedgerId ? (
@@ -6039,6 +6079,27 @@ function _isSocialPostTextLocked(status: string): boolean {
 
 function _socialSupervisedPayload(post: SocialPost) {
   return post.metadata_json?.supervised_publish || null;
+}
+
+function _socialOpenClawCapabilityLine(
+  status: string | SocialOpenClawCapabilityStatus | undefined,
+  isRu: boolean,
+): string {
+  if (!status) return '';
+  if (typeof status === 'string') {
+    return status.trim() ? `OpenClaw browser-use: ${status.trim()}` : '';
+  }
+  const state = status.ready
+    ? (isRu ? 'готов' : 'ready')
+    : (isRu ? 'недоступен' : 'unavailable');
+  const details = [
+    status.status,
+    status.source,
+    status.reason,
+    status.action_ref,
+    status.error,
+  ].map((item) => String(item || '').trim()).filter(Boolean);
+  return `OpenClaw browser-use: ${state}${details.length ? ` · ${details.join(' · ')}` : ''}`;
 }
 
 function _normalizeSocialChannelFilter(value: string): 'all' | 'social' | 'maps' {

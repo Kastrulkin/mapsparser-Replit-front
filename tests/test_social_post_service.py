@@ -20,6 +20,7 @@ from services.social_post_service import (
     _queue_preflight_block,
     _record_social_supervised_handoff_ledger,
     _status_after_social_text_edit,
+    _supervised_publish_metadata,
     _supervised_publish_state,
     _vk_publish_binding,
     apply_social_post_recommendation,
@@ -796,6 +797,53 @@ def test_openclaw_supervised_task_payload_stops_before_final_publish():
     assert payload["content"]["text"] == "Текст для карт"
     assert payload["approval_evidence"]["approval_id"] == "approval-1"
     assert "changed_ui" in payload["fallback"]["reasons"]
+
+
+def test_supervised_publish_metadata_exposes_user_visible_contract(monkeypatch):
+    monkeypatch.setattr(
+        social_post_service,
+        "_map_publish_target",
+        lambda cursor, business_id, platform: {
+            "business_name": "Salon",
+            "location_label": "Moscow",
+            "target_url": "https://2gis.ru/firm/1",
+            "target_url_source": "businessmaplinks.two_gis",
+            "profile_hint": "2ГИС профиль бизнеса",
+        },
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "openclaw_browser_capability_status",
+        lambda: {
+            "ready": True,
+            "status": "available",
+            "source": "openclaw",
+            "reason": "openclaw_supervised_browser_available",
+        },
+    )
+
+    metadata = _supervised_publish_metadata(
+        object(),
+        {
+            "id": "post-1",
+            "business_id": "biz-1",
+            "platform": "two_gis",
+            "publish_mode": "openclaw_browser",
+            "platform_text": "Текст поста",
+            "approved_at": "2026-06-19T10:00:00+00:00",
+        },
+        "task-1",
+    )
+
+    supervised = metadata["supervised_publish"]
+    assert supervised["capability"] == "social.post.publish_supervised_browser"
+    assert supervised["openclaw_action_ref"] == "openclaw.browser.supervised_publish"
+    assert supervised["task_status"] == "ready_for_supervised_or_manual_handoff"
+    assert supervised["target_url"] == "https://2gis.ru/firm/1"
+    assert supervised["final_publish_policy"] == "human_final_click_required"
+    assert supervised["stop_before_final_publish"] is True
+    assert "captcha" in supervised["fallback_reasons"]
+    assert supervised["openclaw_capability_status"]["ready"] is True
 
 
 def test_next_plan_changes_prioritize_leads_before_reach():
