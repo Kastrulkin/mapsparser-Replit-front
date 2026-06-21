@@ -323,7 +323,7 @@ async def _handle_mock_api(route):
                 "schema": "localos_agent_post_create_handoff_v1",
                 "status": "needs_connection",
                 "workspace_mode": "connections",
-                "next_binding_key": "telegram_delivery",
+                "next_binding_key": "browser_use_read",
             },
         })
         return
@@ -509,18 +509,53 @@ async def _handle_mock_api(route):
         await _fulfill(route, {"catalog": []})
         return
 
-    if path == "/agent-blueprints/agent-browser-telegram/integrations":
+    if path == "/agent-blueprints/agent-browser-telegram/integrations" and method == "POST":
+        MOCK_CONNECTED_AGENT_PROVIDERS.add("agent-browser-telegram:browser_use")
         await _fulfill(route, {
-            "integrations": [],
+            "integration": {"id": "browser-use-integration-1", "provider": "browser_use", "status": "active"},
+            "post_connect_handoff": {
+                "schema": "localos_agent_post_connect_handoff_v1",
+                "status": "connected",
+                "workspace_mode": "connections",
+            },
+        })
+        return
+
+    if path == "/agent-blueprints/agent-browser-telegram/integrations":
+        connected = "agent-browser-telegram:browser_use" in MOCK_CONNECTED_AGENT_PROVIDERS
+        await _fulfill(route, {
+            "integrations": [{
+                "id": "browser-use-integration-1",
+                "provider": "browser_use",
+                "display_name": "Browser use",
+                "status": "active",
+                "config": {"target_urls": ["https://example.com"], "mode": "openclaw_browser_boundary"},
+                "limits": {"daily_page_check_cap": 50},
+            }] if connected else [],
             "available_integrations": [],
-            "provider_catalog": [],
-            "external_auth_options": [],
-            "binding_status": [{
-                "key": "telegram_delivery",
-                "provider": "telegram",
-                "status": "missing",
-                "missing_config": ["telegram_chat_id"],
+            "provider_catalog": [{
+                "provider": "browser_use",
+                "title": "Browser use",
+                "status": "available",
             }],
+            "external_auth_options": [],
+            "binding_status": [
+                {
+                    "key": "browser_use_read",
+                    "provider": "browser_use",
+                    "status": "connected" if connected else "missing",
+                    "direction": "external_read",
+                    "capability": "browser_use.read_page",
+                    "missing_config": [] if connected else ["target_urls"],
+                    "approval_required": True,
+                },
+                {
+                    "key": "telegram_delivery",
+                    "provider": "telegram",
+                    "status": "missing",
+                    "missing_config": ["telegram_chat_id"],
+                },
+            ],
             "custom_process": {},
         })
         return
@@ -813,6 +848,24 @@ async def run_smoke(url, screenshot):
                         missing.append("created browser-use Telegram agent")
                     if "Агент создан" not in created_body:
                         missing.append("browser-use post-create success banner")
+                    if "Browser use" not in created_body:
+                        missing.append("browser-use connection panel")
+                    browser_url_box = page.get_by_placeholder("https://example.com")
+                    if await browser_url_box.count() == 0:
+                        missing.append("browser-use target URL field")
+                    else:
+                        await browser_url_box.first.fill("https://example.com")
+                        browser_save_button = page.get_by_role("button", name="Сохранить Browser use для выбранного шага")
+                        if await browser_save_button.count() == 0:
+                            browser_save_button = page.get_by_role("button", name="Сохранить Browser use")
+                        if await browser_save_button.count() == 0:
+                            missing.append("browser-use save button")
+                        else:
+                            await browser_save_button.first.click()
+                            await page.wait_for_timeout(1000)
+                            connected_body = await page.locator("body").inner_text(timeout=10000)
+                            if "Browser use готово" not in connected_body and "1/2" not in connected_body:
+                                missing.append("browser-use connected state")
 
             await page.wait_for_timeout(500)
             create_buttons = page.get_by_role("button", name="Создать агента")

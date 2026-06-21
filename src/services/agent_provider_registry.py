@@ -404,6 +404,9 @@ def integration_execution_boundary(provider: str) -> Dict[str, Any]:
     if provider_key == "google_sheets":
         executor = "agent_sheet_provider_executor_v1"
         external_write = "approved_append_row"
+    elif provider_key == "browser_use":
+        executor = "openclaw_browser_boundary"
+        external_write = "none_read_only"
     elif provider_key in {"telegram", "whatsapp"}:
         executor = "channel_router"
         external_write = "approved_delivery_only"

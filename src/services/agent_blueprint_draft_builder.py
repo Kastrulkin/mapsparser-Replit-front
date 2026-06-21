@@ -207,6 +207,7 @@ def compile_agent_blueprint(
         }
 
     sources = _sources_for_request(category, request_text)
+    required_bindings = _generic_required_integration_bindings(sources)
     version_payload = {
         "goal": request_text,
         "inputs_schema": {
@@ -232,7 +233,16 @@ def compile_agent_blueprint(
             },
         },
     }
+    if required_bindings:
+        version_payload["required_integration_bindings"] = required_bindings
+        version_payload["capability_allowlist"] = [
+            str(binding.get("capability") or "")
+            for binding in required_bindings
+            if str(binding.get("capability") or "").strip()
+        ]
     metadata = _metadata(request_text, category, sources)
+    if required_bindings:
+        metadata["required_integration_bindings"] = required_bindings
     _attach_compiled_metadata(metadata, version_payload, f"compiled_{category}_workflow_v1", "final_output")
     return {
         "name": _draft_name(request_text, _default_name_for_category(category)),
@@ -437,6 +447,50 @@ def _metadata(description: str, category: str, sources: List[str]) -> Dict[str, 
         "external_delivery": "approval_required",
         "side_effects": "none_in_draft_builder",
     }
+
+
+def _generic_required_integration_bindings(sources: List[str]) -> List[Dict[str, Any]]:
+    bindings = []
+    if "browser_use" in sources:
+        bindings.append(
+            {
+                "key": "browser_use_read",
+                "provider": "browser_use",
+                "direction": "external_read",
+                "capability": "browser_use.read_page",
+                "required": True,
+                "approval_required": True,
+                "required_config": ["target_urls"],
+                "default_limits": {"daily_page_check_cap": 50, "frequency_cap_minutes": 60},
+                "execution_boundary": "openclaw_browser_boundary",
+            }
+        )
+    if "telegram" in sources:
+        bindings.append(
+            {
+                "key": "telegram_delivery",
+                "provider": "telegram",
+                "direction": "external_write",
+                "capability": "communications.draft",
+                "required": True,
+                "approval_required": True,
+                "default_limits": {"daily_message_cap": 50, "frequency_cap_minutes": 30},
+            }
+        )
+    if "whatsapp" in sources:
+        bindings.append(
+            {
+                "key": "whatsapp_delivery",
+                "provider": "whatsapp",
+                "direction": "external_write",
+                "capability": "communications.draft",
+                "required": True,
+                "approval_required": True,
+                "required_config": ["channel_mode"],
+                "default_limits": {"daily_message_cap": 50, "frequency_cap_minutes": 30},
+            }
+        )
+    return bindings
 
 
 def _attach_compiled_metadata(metadata: Dict[str, Any], version_payload: Dict[str, Any], schema: str, approval_boundary: str) -> None:

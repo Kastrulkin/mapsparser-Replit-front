@@ -6100,6 +6100,42 @@ def test_whatsapp_integration_config_is_supported_channel_boundary():
     assert boundary["external_write"] == "approved_delivery_only"
 
 
+def test_browser_use_integration_config_and_generic_binding_use_openclaw_boundary():
+    from api import agent_blueprints_api
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+    from services.agent_provider_registry import integration_provider_catalog
+
+    config = agent_blueprints_api._sanitize_agent_integration_config(
+        "browser_use",
+        {"config": {"target_urls": "https://example.com\nhttps://competitor.example"}},
+    )
+    limits = agent_blueprints_api._sanitize_agent_integration_limits(
+        "browser_use",
+        {"limits": {"daily_page_check_cap": 12, "frequency_cap_minutes": 45}},
+    )
+    catalog = {item["provider"]: item for item in integration_provider_catalog()}
+    boundary = agent_blueprints_api._agent_integration_execution_boundary("browser_use")
+    draft = compile_agent_blueprint(
+        "Через browser use открой сайт конкурента https://example.com, проверь изменения цен и подготовь сообщение владельцу в Telegram.",
+        use_ai=True,
+    )
+    metadata = draft["metadata"]
+    required = metadata["required_integration_bindings"]
+    browser_binding = next(item for item in required if item["provider"] == "browser_use")
+
+    assert config["target_urls"] == ["https://example.com", "https://competitor.example"]
+    assert config["mode"] == "openclaw_browser_boundary"
+    assert limits["daily_page_check_cap"] == 12
+    assert limits["frequency_cap_minutes"] == 45
+    assert catalog["browser_use"]["status"] == "available"
+    assert boundary["executor"] == "openclaw_browser_boundary"
+    assert boundary["capabilities"] == ["browser_use.read_page"]
+    assert browser_binding["key"] == "browser_use_read"
+    assert browser_binding["capability"] == "browser_use.read_page"
+    assert browser_binding["required_config"] == ["target_urls"]
+    assert browser_binding["execution_boundary"] == "openclaw_browser_boundary"
+
+
 def test_custom_process_mapping_updates_compiled_version_steps():
     from api import agent_blueprints_api
     from services.agent_blueprint_draft_builder import compile_agent_blueprint

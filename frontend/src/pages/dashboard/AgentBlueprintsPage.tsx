@@ -1338,6 +1338,7 @@ const formatPreflightBlock = (preflight?: AgentIntegrationPreflight | null) => {
 
 const connectorLabel = (provider?: string) => ({
   google_sheets: 'Google Sheets',
+  browser_use: 'Browser use',
   telegram: 'Telegram',
   whatsapp: 'WhatsApp',
   openclaw: 'защищенный способ LocalOS',
@@ -1548,6 +1549,9 @@ const bindingUserFacingRole = (binding: AgentIntegrationBindingStatus) => {
     }
     return 'Источник данных или канал результата: Google Sheets';
   }
+  if (binding.provider === 'browser_use') {
+    return 'Источник данных: чтение сайта через защищенный способ LocalOS';
+  }
   if (binding.provider === 'telegram') {
     if (direction === 'trigger' || trigger) {
       return 'Событие запуска: сообщение или событие в Telegram';
@@ -1576,6 +1580,9 @@ const bindingActionHint = (binding: AgentIntegrationBindingStatus) => {
   if (binding.provider === 'google_sheets') {
     return 'Выберите существующий Google-доступ или укажите таблицу и лист ниже.';
   }
+  if (binding.provider === 'browser_use') {
+    return 'Укажите сайт для проверки. Чтение выполняется через OpenClaw boundary внутри правил LocalOS.';
+  }
   if (binding.provider === 'telegram') {
     return 'Выберите режим бота ниже, чтобы агент мог принимать события Telegram.';
   }
@@ -1602,6 +1609,14 @@ const connectionResourceFacts = (provider?: string, config?: Record<string, unkn
       String(data.sheet_name || '').trim() ? `лист: ${String(data.sheet_name).trim()}` : '',
       String(data.gid || '').trim() ? `gid: ${String(data.gid).trim()}` : '',
     ].filter(Boolean);
+  }
+  if (provider === 'browser_use') {
+    const rawUrls = Array.isArray(data.target_urls) ? data.target_urls : [data.target_url || data.url].filter(Boolean);
+    return rawUrls
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+      .slice(0, 3)
+      .map((item) => `сайт: ${item}`);
   }
   if (provider === 'telegram') {
     return [
@@ -2596,6 +2611,8 @@ export const AgentBlueprintsPage = () => {
   const [sheetName, setSheetName] = useState('Sheet1');
   const [sheetAuthRef, setSheetAuthRef] = useState('');
   const [sheetDailyCap, setSheetDailyCap] = useState('50');
+  const [browserTargetUrls, setBrowserTargetUrls] = useState('');
+  const [browserDailyCap, setBrowserDailyCap] = useState('50');
   const [telegramBotMode, setTelegramBotMode] = useState('business_bot');
   const [telegramDailyCap, setTelegramDailyCap] = useState('50');
   const [whatsappChannelMode, setWhatsappChannelMode] = useState('whatsapp_business');
@@ -3554,6 +3571,40 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
+  const saveBrowserUseIntegration = async () => {
+    if (!selectedBlueprint || !browserTargetUrls.trim()) {
+      return;
+    }
+    const selectedBinding = agentBindingStatus.find((item) => item.key === selectedConnectionBindingKey && item.provider === 'browser_use');
+    const existing = [...agentIntegrations, ...availableAgentIntegrations].find((item) => item.provider === 'browser_use');
+    setActionLoading(true);
+    setError(null);
+    try {
+      const response = await api.post(`/agent-blueprints/${selectedBlueprint.id}/integrations`, {
+        integration_id: existing?.id,
+        binding_key: selectedBinding?.key || '',
+        provider: 'browser_use',
+        status: 'active',
+        display_name: 'Browser use',
+        config: {
+          target_urls: browserTargetUrls,
+        },
+        limits: {
+          daily_page_check_cap: Number(browserDailyCap) > 0 ? Number(browserDailyCap) : 50,
+          frequency_cap_minutes: 60,
+        },
+      });
+      await loadAgentIntegrations(selectedBlueprint.id);
+      await loadBlueprintDetails(selectedBlueprint.id);
+      applyPostConnectHandoff(response.data?.post_connect_handoff);
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось подключить Browser use.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const saveTelegramIntegration = async () => {
     if (!selectedBlueprint) {
       return;
@@ -4196,6 +4247,8 @@ export const AgentBlueprintsPage = () => {
                 sheetName={sheetName}
                 sheetAuthRef={sheetAuthRef}
                 sheetDailyCap={sheetDailyCap}
+                browserTargetUrls={browserTargetUrls}
+                browserDailyCap={browserDailyCap}
                 telegramBotMode={telegramBotMode}
                 telegramDailyCap={telegramDailyCap}
                 whatsappChannelMode={whatsappChannelMode}
@@ -4239,6 +4292,8 @@ export const AgentBlueprintsPage = () => {
                 onSheetNameChange={setSheetName}
                 onSheetAuthRefChange={setSheetAuthRef}
                 onSheetDailyCapChange={setSheetDailyCap}
+                onBrowserTargetUrlsChange={setBrowserTargetUrls}
+                onBrowserDailyCapChange={setBrowserDailyCap}
                 onTelegramBotModeChange={setTelegramBotMode}
                 onTelegramDailyCapChange={setTelegramDailyCap}
                 onWhatsappChannelModeChange={setWhatsappChannelMode}
@@ -4249,6 +4304,7 @@ export const AgentBlueprintsPage = () => {
                 onProcessRowValuesChange={setProcessRowValues}
                 onProcessPreviewMessageChange={setProcessPreviewMessage}
                 onSaveSheetIntegration={saveSheetIntegration}
+                onSaveBrowserUseIntegration={saveBrowserUseIntegration}
                 onSaveTelegramIntegration={saveTelegramIntegration}
                 onSaveWhatsappIntegration={saveWhatsappIntegration}
                 onSaveMatonIntegration={saveMatonIntegration}
@@ -6861,6 +6917,8 @@ const AgentDetailPanel = ({
   sheetName,
   sheetAuthRef,
   sheetDailyCap,
+  browserTargetUrls,
+  browserDailyCap,
   telegramBotMode,
   telegramDailyCap,
   whatsappChannelMode,
@@ -6904,6 +6962,8 @@ const AgentDetailPanel = ({
   onSheetNameChange,
   onSheetAuthRefChange,
   onSheetDailyCapChange,
+  onBrowserTargetUrlsChange,
+  onBrowserDailyCapChange,
   onTelegramBotModeChange,
   onTelegramDailyCapChange,
   onWhatsappChannelModeChange,
@@ -6914,6 +6974,7 @@ const AgentDetailPanel = ({
   onProcessRowValuesChange,
   onProcessPreviewMessageChange,
   onSaveSheetIntegration,
+  onSaveBrowserUseIntegration,
   onSaveTelegramIntegration,
   onSaveWhatsappIntegration,
   onSaveMatonIntegration,
@@ -6961,6 +7022,8 @@ const AgentDetailPanel = ({
   sheetName: string;
   sheetAuthRef: string;
   sheetDailyCap: string;
+  browserTargetUrls: string;
+  browserDailyCap: string;
   telegramBotMode: string;
   telegramDailyCap: string;
   whatsappChannelMode: string;
@@ -7004,6 +7067,8 @@ const AgentDetailPanel = ({
   onSheetNameChange: (value: string) => void;
   onSheetAuthRefChange: (value: string) => void;
   onSheetDailyCapChange: (value: string) => void;
+  onBrowserTargetUrlsChange: (value: string) => void;
+  onBrowserDailyCapChange: (value: string) => void;
   onTelegramBotModeChange: (value: string) => void;
   onTelegramDailyCapChange: (value: string) => void;
   onWhatsappChannelModeChange: (value: string) => void;
@@ -7014,6 +7079,7 @@ const AgentDetailPanel = ({
   onProcessRowValuesChange: (value: string) => void;
   onProcessPreviewMessageChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
+  onSaveBrowserUseIntegration: () => void;
   onSaveTelegramIntegration: () => void;
   onSaveWhatsappIntegration: () => void;
   onSaveMatonIntegration: () => void;
@@ -7165,6 +7231,8 @@ const AgentDetailPanel = ({
         sheetName={sheetName}
         sheetAuthRef={sheetAuthRef}
         sheetDailyCap={sheetDailyCap}
+        browserTargetUrls={browserTargetUrls}
+        browserDailyCap={browserDailyCap}
         telegramBotMode={telegramBotMode}
         telegramDailyCap={telegramDailyCap}
         whatsappChannelMode={whatsappChannelMode}
@@ -7179,6 +7247,8 @@ const AgentDetailPanel = ({
         onSheetNameChange={onSheetNameChange}
         onSheetAuthRefChange={onSheetAuthRefChange}
         onSheetDailyCapChange={onSheetDailyCapChange}
+        onBrowserTargetUrlsChange={onBrowserTargetUrlsChange}
+        onBrowserDailyCapChange={onBrowserDailyCapChange}
         onTelegramBotModeChange={onTelegramBotModeChange}
         onTelegramDailyCapChange={onTelegramDailyCapChange}
         onWhatsappChannelModeChange={onWhatsappChannelModeChange}
@@ -7189,6 +7259,7 @@ const AgentDetailPanel = ({
         onProcessRowValuesChange={onProcessRowValuesChange}
         onProcessPreviewMessageChange={onProcessPreviewMessageChange}
         onSaveSheetIntegration={onSaveSheetIntegration}
+        onSaveBrowserUseIntegration={onSaveBrowserUseIntegration}
         onSaveTelegramIntegration={onSaveTelegramIntegration}
         onSaveWhatsappIntegration={onSaveWhatsappIntegration}
         onSaveMatonIntegration={onSaveMatonIntegration}
@@ -7931,6 +8002,8 @@ const AgentConnectionsPanel = ({
   sheetName,
   sheetAuthRef,
   sheetDailyCap,
+  browserTargetUrls,
+  browserDailyCap,
   telegramBotMode,
   telegramDailyCap,
   whatsappChannelMode,
@@ -7945,6 +8018,8 @@ const AgentConnectionsPanel = ({
   onSheetNameChange,
   onSheetAuthRefChange,
   onSheetDailyCapChange,
+  onBrowserTargetUrlsChange,
+  onBrowserDailyCapChange,
   onTelegramBotModeChange,
   onTelegramDailyCapChange,
   onWhatsappChannelModeChange,
@@ -7955,6 +8030,7 @@ const AgentConnectionsPanel = ({
   onProcessRowValuesChange,
   onProcessPreviewMessageChange,
   onSaveSheetIntegration,
+  onSaveBrowserUseIntegration,
   onSaveTelegramIntegration,
   onSaveWhatsappIntegration,
   onSaveMatonIntegration,
@@ -7977,6 +8053,8 @@ const AgentConnectionsPanel = ({
   sheetName: string;
   sheetAuthRef: string;
   sheetDailyCap: string;
+  browserTargetUrls: string;
+  browserDailyCap: string;
   telegramBotMode: string;
   telegramDailyCap: string;
   whatsappChannelMode: string;
@@ -7991,6 +8069,8 @@ const AgentConnectionsPanel = ({
   onSheetNameChange: (value: string) => void;
   onSheetAuthRefChange: (value: string) => void;
   onSheetDailyCapChange: (value: string) => void;
+  onBrowserTargetUrlsChange: (value: string) => void;
+  onBrowserDailyCapChange: (value: string) => void;
   onTelegramBotModeChange: (value: string) => void;
   onTelegramDailyCapChange: (value: string) => void;
   onWhatsappChannelModeChange: (value: string) => void;
@@ -8001,6 +8081,7 @@ const AgentConnectionsPanel = ({
   onProcessRowValuesChange: (value: string) => void;
   onProcessPreviewMessageChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
+  onSaveBrowserUseIntegration: () => void;
   onSaveTelegramIntegration: () => void;
   onSaveWhatsappIntegration: () => void;
   onSaveMatonIntegration: () => void;
@@ -8053,6 +8134,8 @@ const AgentConnectionsPanel = ({
       sheetName={sheetName}
       sheetAuthRef={sheetAuthRef}
       sheetDailyCap={sheetDailyCap}
+      browserTargetUrls={browserTargetUrls}
+      browserDailyCap={browserDailyCap}
       telegramBotMode={telegramBotMode}
       telegramDailyCap={telegramDailyCap}
       whatsappChannelMode={whatsappChannelMode}
@@ -8067,6 +8150,8 @@ const AgentConnectionsPanel = ({
       onSheetNameChange={onSheetNameChange}
       onSheetAuthRefChange={onSheetAuthRefChange}
       onSheetDailyCapChange={onSheetDailyCapChange}
+      onBrowserTargetUrlsChange={onBrowserTargetUrlsChange}
+      onBrowserDailyCapChange={onBrowserDailyCapChange}
       onTelegramBotModeChange={onTelegramBotModeChange}
       onTelegramDailyCapChange={onTelegramDailyCapChange}
       onWhatsappChannelModeChange={onWhatsappChannelModeChange}
@@ -8077,6 +8162,7 @@ const AgentConnectionsPanel = ({
       onProcessRowValuesChange={onProcessRowValuesChange}
       onProcessPreviewMessageChange={onProcessPreviewMessageChange}
         onSaveSheetIntegration={onSaveSheetIntegration}
+        onSaveBrowserUseIntegration={onSaveBrowserUseIntegration}
         onSaveTelegramIntegration={onSaveTelegramIntegration}
         onSaveWhatsappIntegration={onSaveWhatsappIntegration}
         onSaveMatonIntegration={onSaveMatonIntegration}
@@ -8879,6 +8965,8 @@ const AgentIntegrationsPanel = ({
   sheetName,
   sheetAuthRef,
   sheetDailyCap,
+  browserTargetUrls,
+  browserDailyCap,
   telegramBotMode,
   telegramDailyCap,
   whatsappChannelMode,
@@ -8893,6 +8981,8 @@ const AgentIntegrationsPanel = ({
   onSheetNameChange,
   onSheetAuthRefChange,
   onSheetDailyCapChange,
+  onBrowserTargetUrlsChange,
+  onBrowserDailyCapChange,
   onTelegramBotModeChange,
   onTelegramDailyCapChange,
   onWhatsappChannelModeChange,
@@ -8903,6 +8993,7 @@ const AgentIntegrationsPanel = ({
   onProcessRowValuesChange,
   onProcessPreviewMessageChange,
   onSaveSheetIntegration,
+  onSaveBrowserUseIntegration,
   onSaveTelegramIntegration,
   onSaveWhatsappIntegration,
   onSaveMatonIntegration,
@@ -8924,6 +9015,8 @@ const AgentIntegrationsPanel = ({
   sheetName: string;
   sheetAuthRef: string;
   sheetDailyCap: string;
+  browserTargetUrls: string;
+  browserDailyCap: string;
   telegramBotMode: string;
   telegramDailyCap: string;
   whatsappChannelMode: string;
@@ -8938,6 +9031,8 @@ const AgentIntegrationsPanel = ({
   onSheetNameChange: (value: string) => void;
   onSheetAuthRefChange: (value: string) => void;
   onSheetDailyCapChange: (value: string) => void;
+  onBrowserTargetUrlsChange: (value: string) => void;
+  onBrowserDailyCapChange: (value: string) => void;
   onTelegramBotModeChange: (value: string) => void;
   onTelegramDailyCapChange: (value: string) => void;
   onWhatsappChannelModeChange: (value: string) => void;
@@ -8948,6 +9043,7 @@ const AgentIntegrationsPanel = ({
   onProcessRowValuesChange: (value: string) => void;
   onProcessPreviewMessageChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
+  onSaveBrowserUseIntegration: () => void;
   onSaveTelegramIntegration: () => void;
   onSaveWhatsappIntegration: () => void;
   onSaveMatonIntegration: () => void;
@@ -8959,10 +9055,12 @@ const AgentIntegrationsPanel = ({
   onPreviewRun: () => void;
 }) => {
   const sheetIntegration = integrations.find((item) => item.provider === 'google_sheets');
+  const browserIntegration = integrations.find((item) => item.provider === 'browser_use');
   const telegramIntegration = integrations.find((item) => item.provider === 'telegram');
   const whatsappIntegration = integrations.find((item) => item.provider === 'whatsapp');
   const matonIntegration = integrations.find((item) => item.provider === 'maton');
   const selectedPlanItem = (connectionPlan?.items || []).find((item) => item.key === selectedBindingKey);
+  const needsBrowserUse = bindingStatus.some((binding) => binding.provider === 'browser_use');
   const needsTelegram = bindingStatus.some((binding) => binding.provider === 'telegram');
   const needsWhatsapp = bindingStatus.some((binding) => binding.provider === 'whatsapp');
   const needsMaton = bindingStatus.some((binding) => binding.provider === 'maton') || (selectedPlanItem?.provider_routes || []).some((route) => route.provider === 'maton');
@@ -9018,6 +9116,7 @@ const AgentIntegrationsPanel = ({
       </div>
 
       <div className="grid gap-2">
+        {needsBrowserUse ? <AgentIntegrationStatusItem integration={browserIntegration} provider="browser_use" fallbackTitle="Browser use" /> : null}
         {needsTelegram || !bindingStatus.length ? <AgentIntegrationStatusItem integration={telegramIntegration} provider="telegram" fallbackTitle="Telegram" /> : null}
         {needsWhatsapp ? <AgentIntegrationStatusItem integration={whatsappIntegration} provider="whatsapp" fallbackTitle="WhatsApp" /> : null}
         {needsMaton ? <AgentIntegrationStatusItem integration={matonIntegration} provider="maton" fallbackTitle="Maton.ai bridge" /> : null}
@@ -9137,6 +9236,34 @@ const AgentIntegrationsPanel = ({
             Проверить на примере
           </Button>
         </div>
+      </div>
+      ) : null}
+
+      {needsBrowserUse ? (
+      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'browser_use' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+          <Workflow className="h-4 w-4" />
+          Browser use
+        </div>
+        <div className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
+          Чтение сайтов идёт через защищенный способ LocalOS/OpenClaw. Агент готовит результат, внешние действия требуют подтверждения.
+        </div>
+        <textarea
+          className="min-h-20 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={browserTargetUrls}
+          onChange={(event) => onBrowserTargetUrlsChange(event.target.value)}
+          placeholder="https://example.com"
+        />
+        <input
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={browserDailyCap}
+          onChange={(event) => onBrowserDailyCapChange(event.target.value)}
+          placeholder="Лимит проверок страниц в день"
+          inputMode="numeric"
+        />
+        <Button type="button" size="sm" variant="outline" onClick={onSaveBrowserUseIntegration} disabled={actionLoading || !browserTargetUrls.trim()}>
+          {selectedProvider === 'browser_use' ? 'Сохранить Browser use для выбранного шага' : 'Сохранить Browser use'}
+        </Button>
       </div>
       ) : null}
 

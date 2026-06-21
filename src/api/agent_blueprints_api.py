@@ -248,6 +248,7 @@ def _normalize_agent_integration(row: dict, *, attached: bool = True) -> dict:
 def _agent_integration_provider_label(provider: str) -> str:
     labels = {
         "google_sheets": "Google Sheets",
+        "browser_use": "Browser use",
         "telegram": "Telegram",
         "whatsapp": "WhatsApp",
         "maton": "Maton.ai",
@@ -267,6 +268,13 @@ def _agent_integration_execution_boundary(provider: str) -> dict:
             "approval_required": True,
             "executor": "agent_sheet_provider_executor_v1",
             "external_write": "approved_append_row",
+        }
+    if provider == "browser_use":
+        return {
+            "capabilities": ["browser_use.read_page"],
+            "approval_required": True,
+            "executor": "openclaw_browser_boundary",
+            "external_write": "none_read_only",
         }
     if provider in {"telegram", "whatsapp"}:
         return {
@@ -1010,6 +1018,19 @@ def _sanitize_agent_integration_config(provider: str, payload: dict) -> dict:
             "operation": operation,
             "mode": "approved_executor",
         }
+    if provider == "browser_use":
+        raw_urls = source.get("target_urls") or source.get("urls") or source.get("target_url") or ""
+        if isinstance(raw_urls, str):
+            urls = [item.strip() for item in raw_urls.replace("\n", ",").split(",") if item.strip()]
+        elif isinstance(raw_urls, list):
+            urls = [str(item or "").strip() for item in raw_urls if str(item or "").strip()]
+        else:
+            urls = []
+        return {
+            "target_urls": urls[:10],
+            "mode": "openclaw_browser_boundary",
+            "read_only": True,
+        }
     if provider == "telegram":
         return {
             "bot_mode": str(source.get("bot_mode") or "business_bot").strip() or "business_bot",
@@ -1046,6 +1067,11 @@ def _sanitize_agent_integration_limits(provider: str, payload: dict) -> dict:
         return {
             "daily_append_cap": _safe_int(source.get("daily_append_cap"), 50, 1, 500),
             "frequency_cap_minutes": _safe_int(source.get("frequency_cap_minutes"), 0, 0, 1440),
+        }
+    if provider == "browser_use":
+        return {
+            "daily_page_check_cap": _safe_int(source.get("daily_page_check_cap"), 50, 1, 500),
+            "frequency_cap_minutes": _safe_int(source.get("frequency_cap_minutes"), 60, 0, 1440),
         }
     if provider in {"telegram", "whatsapp"}:
         return {
@@ -3190,7 +3216,7 @@ def save_agent_blueprint_integration(blueprint_id: str):
         return error_response
     payload = request.get_json(silent=True) or {}
     provider = str(payload.get("provider") or "").strip().lower()
-    if provider not in {"google_sheets", "telegram", "whatsapp", "maton", "localos_finance", "composio"}:
+    if provider not in {"google_sheets", "browser_use", "telegram", "whatsapp", "maton", "localos_finance", "composio"}:
         return _json_error("Unsupported integration provider", 400, "UNSUPPORTED_PROVIDER")
     status = str(payload.get("status") or "active").strip().lower()
     if status not in {"draft", "active", "paused"}:
@@ -3198,6 +3224,8 @@ def save_agent_blueprint_integration(blueprint_id: str):
     config = _sanitize_agent_integration_config(provider, payload)
     if provider == "google_sheets" and not str(config.get("spreadsheet_id") or "").strip():
         return _json_error("spreadsheet_id is required for Google Sheets integration", 400, "SPREADSHEET_REQUIRED")
+    if provider == "browser_use" and not config.get("target_urls"):
+        return _json_error("target_urls is required for Browser use integration", 400, "TARGET_URLS_REQUIRED")
     limits = _sanitize_agent_integration_limits(provider, payload)
     integration_id = str(payload.get("integration_id") or payload.get("id") or "").strip()
     if not integration_id:
