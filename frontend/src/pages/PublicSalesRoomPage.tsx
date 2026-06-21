@@ -206,6 +206,16 @@ export default function PublicSalesRoomPage() {
   const [savingWelcome, setSavingWelcome] = useState(false);
   const [welcomeError, setWelcomeError] = useState<string | null>(null);
 
+  const updateAuthorName = (value: string) => {
+    setAuthorName(value);
+    localStorage.setItem(roomAuthorNameKey, value);
+  };
+
+  const updateAuthorCompany = (value: string) => {
+    setAuthorCompany(value);
+    localStorage.setItem(roomAuthorCompanyKey, value);
+  };
+
   const loadRoom = async () => {
     if (!roomSlug) return;
     try {
@@ -326,7 +336,7 @@ export default function PublicSalesRoomPage() {
     const cleanReplacement = replacementText.trim();
     const cleanComment = commentText.trim();
     if (!cleanName || !cleanCompany) {
-      setReviewError('Укажите имя и компанию ниже в форме обсуждения, чтобы было понятно, кто предложил правку.');
+      setReviewError('Укажите имя и компанию под приветствием, чтобы было понятно, кто предложил правку.');
       return;
     }
     if (!cleanSelection) {
@@ -374,7 +384,7 @@ export default function PublicSalesRoomPage() {
     const cleanName = authorName.trim();
     const cleanCompany = authorCompany.trim();
     if (!cleanName || !cleanCompany) {
-      setReviewError('Укажите имя и компанию ниже в форме обсуждения, чтобы принять или отклонить правку.');
+      setReviewError('Укажите имя и компанию под приветствием, чтобы принять или отклонить правку.');
       return;
     }
     setResolvingSuggestionId(suggestion.id);
@@ -636,6 +646,26 @@ export default function PublicSalesRoomPage() {
                   ))}
                 </div>
               )}
+              <div className="mt-6 max-w-2xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="text-sm font-bold text-slate-950">Представьтесь для правок и сообщений</div>
+                <p className="mt-1 text-sm leading-6 text-slate-500">
+                  Имя и компания будут видны рядом с вашими комментариями, правками и файлами.
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <Input
+                    value={authorName}
+                    onChange={(event) => updateAuthorName(event.currentTarget.value)}
+                    placeholder="Ваше имя"
+                    autoComplete="name"
+                  />
+                  <Input
+                    value={authorCompany}
+                    onChange={(event) => updateAuthorCompany(event.currentTarget.value)}
+                    placeholder="Компания"
+                    autoComplete="organization"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -800,25 +830,11 @@ export default function PublicSalesRoomPage() {
             <MessageSquare className="h-4 w-4 text-orange-500" />
             Обсудить следующий шаг
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <Input
-              value={authorName}
-              onChange={(event) => setAuthorName(event.currentTarget.value)}
-              placeholder="Ваше имя"
-              autoComplete="name"
-            />
-            <Input
-              value={authorCompany}
-              onChange={(event) => setAuthorCompany(event.currentTarget.value)}
-              placeholder="Компания"
-              autoComplete="organization"
-            />
-          </div>
           <Textarea
             value={messageText}
             onChange={(event) => setMessageText(event.currentTarget.value)}
             placeholder="Напишите, что уточнить, изменить или обсудить..."
-            className="mt-3 min-h-28 resize-none"
+            className="mt-4 min-h-28 resize-none"
           />
 
           {pendingAttachments.length > 0 ? (
