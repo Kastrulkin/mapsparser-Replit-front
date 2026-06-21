@@ -144,6 +144,15 @@ INTEGRATION_PROVIDER_CATALOG: Dict[str, Dict[str, Any]] = {
         "provider_candidates": ["native_localos", "maton", "openclaw"],
         "capabilities": ["communications.draft", "communications.send_reminder", "communications.send_offer"],
     },
+    "whatsapp": {
+        "title": "WhatsApp",
+        "description": "Inbound customer questions and supervised WhatsApp delivery through LocalOS channel router.",
+        "required_config": ["channel_mode"],
+        "default_limits": {"daily_message_cap": 50, "frequency_cap_minutes": 30},
+        "status": "available",
+        "provider_candidates": ["native_localos", "maton", "openclaw", "manual"],
+        "capabilities": ["communications.draft", "communications.send_reminder", "communications.send_offer"],
+    },
     "browser_use": {
         "title": "Browser use",
         "description": "Supervised website reading and change monitoring through the OpenClaw browser boundary.",
@@ -395,7 +404,7 @@ def integration_execution_boundary(provider: str) -> Dict[str, Any]:
     if provider_key == "google_sheets":
         executor = "agent_sheet_provider_executor_v1"
         external_write = "approved_append_row"
-    elif provider_key == "telegram":
+    elif provider_key in {"telegram", "whatsapp"}:
         executor = "channel_router"
         external_write = "approved_delivery_only"
     elif provider_key == "maton":

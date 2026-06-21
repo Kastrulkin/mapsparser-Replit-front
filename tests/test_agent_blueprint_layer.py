@@ -6075,6 +6075,31 @@ def test_maton_integration_config_is_delivery_bridge_with_caps():
     assert limits["frequency_cap_minutes"] == 15
 
 
+def test_whatsapp_integration_config_is_supported_channel_boundary():
+    from api import agent_blueprints_api
+    from services.agent_provider_registry import integration_provider_catalog
+
+    config = agent_blueprints_api._sanitize_agent_integration_config(
+        "whatsapp",
+        {"config": {"channel_mode": "manual_whatsapp"}},
+    )
+    limits = agent_blueprints_api._sanitize_agent_integration_limits(
+        "whatsapp",
+        {"limits": {"daily_message_cap": 35, "frequency_cap_minutes": 20}},
+    )
+    catalog = {item["provider"]: item for item in integration_provider_catalog()}
+    boundary = agent_blueprints_api._agent_integration_execution_boundary("whatsapp")
+
+    assert config["channel_mode"] == "manual_whatsapp"
+    assert config["trigger"] == "whatsapp.message.received"
+    assert config["mode"] == "trigger_boundary"
+    assert limits["daily_message_cap"] == 35
+    assert limits["frequency_cap_minutes"] == 20
+    assert catalog["whatsapp"]["status"] == "available"
+    assert boundary["executor"] == "channel_router"
+    assert boundary["external_write"] == "approved_delivery_only"
+
+
 def test_custom_process_mapping_updates_compiled_version_steps():
     from api import agent_blueprints_api
     from services.agent_blueprint_draft_builder import compile_agent_blueprint

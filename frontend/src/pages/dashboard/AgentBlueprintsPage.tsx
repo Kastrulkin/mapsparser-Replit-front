@@ -1339,6 +1339,7 @@ const formatPreflightBlock = (preflight?: AgentIntegrationPreflight | null) => {
 const connectorLabel = (provider?: string) => ({
   google_sheets: 'Google Sheets',
   telegram: 'Telegram',
+  whatsapp: 'WhatsApp',
   openclaw: 'защищенный способ LocalOS',
   native_localos: 'LocalOS',
   manual: 'ручной режим',
@@ -1553,6 +1554,12 @@ const bindingUserFacingRole = (binding: AgentIntegrationBindingStatus) => {
     }
     return 'Канал результата: Telegram';
   }
+  if (binding.provider === 'whatsapp') {
+    if (direction === 'trigger' || trigger) {
+      return 'Событие запуска: сообщение или вопрос клиента в WhatsApp';
+    }
+    return 'Канал результата: WhatsApp';
+  }
   if (binding.provider === 'maton') {
     return 'Канал результата: Maton.ai';
   }
@@ -1571,6 +1578,9 @@ const bindingActionHint = (binding: AgentIntegrationBindingStatus) => {
   }
   if (binding.provider === 'telegram') {
     return 'Выберите режим бота ниже, чтобы агент мог принимать события Telegram.';
+  }
+  if (binding.provider === 'whatsapp') {
+    return 'Выберите режим WhatsApp ниже, чтобы агент мог учитывать вопросы клиентов или готовить сообщения.';
   }
   if (binding.provider === 'maton') {
     return 'Используйте сохранённый Maton.ai доступ бизнеса или добавьте ключ в интеграциях.';
@@ -1596,6 +1606,12 @@ const connectionResourceFacts = (provider?: string, config?: Record<string, unkn
   if (provider === 'telegram') {
     return [
       String(data.telegram_target || data.chat_id || '').trim() ? `канал: ${String(data.telegram_target || data.chat_id).trim()}` : '',
+      String(data.target_type || '').trim() ? userFacingAgentTechText(humanizeMeta(String(data.target_type).trim())) : '',
+    ].filter(Boolean);
+  }
+  if (provider === 'whatsapp') {
+    return [
+      String(data.whatsapp_target || data.phone_id || data.channel_mode || '').trim() ? `канал: ${String(data.whatsapp_target || data.phone_id || data.channel_mode).trim()}` : '',
       String(data.target_type || '').trim() ? userFacingAgentTechText(humanizeMeta(String(data.target_type).trim())) : '',
     ].filter(Boolean);
   }
@@ -2582,6 +2598,8 @@ export const AgentBlueprintsPage = () => {
   const [sheetDailyCap, setSheetDailyCap] = useState('50');
   const [telegramBotMode, setTelegramBotMode] = useState('business_bot');
   const [telegramDailyCap, setTelegramDailyCap] = useState('50');
+  const [whatsappChannelMode, setWhatsappChannelMode] = useState('whatsapp_business');
+  const [whatsappDailyCap, setWhatsappDailyCap] = useState('50');
   const [matonAuthRef, setMatonAuthRef] = useState('');
   const [matonChannel, setMatonChannel] = useState('maton_bridge');
   const [matonDailyCap, setMatonDailyCap] = useState('50');
@@ -3570,6 +3588,40 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
+  const saveWhatsappIntegration = async () => {
+    if (!selectedBlueprint) {
+      return;
+    }
+    const selectedBinding = agentBindingStatus.find((item) => item.key === selectedConnectionBindingKey && item.provider === 'whatsapp');
+    const existing = [...agentIntegrations, ...availableAgentIntegrations].find((item) => item.provider === 'whatsapp');
+    setActionLoading(true);
+    setError(null);
+    try {
+      const response = await api.post(`/agent-blueprints/${selectedBlueprint.id}/integrations`, {
+        integration_id: existing?.id,
+        binding_key: selectedBinding?.key || '',
+        provider: 'whatsapp',
+        status: 'active',
+        display_name: 'WhatsApp',
+        config: {
+          channel_mode: whatsappChannelMode,
+        },
+        limits: {
+          daily_message_cap: Number(whatsappDailyCap) > 0 ? Number(whatsappDailyCap) : 50,
+          frequency_cap_minutes: 30,
+        },
+      });
+      await loadAgentIntegrations(selectedBlueprint.id);
+      await loadBlueprintDetails(selectedBlueprint.id);
+      applyPostConnectHandoff(response.data?.post_connect_handoff);
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось подключить WhatsApp.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const saveMatonIntegration = async () => {
     if (!selectedBlueprint) {
       return;
@@ -4146,6 +4198,8 @@ export const AgentBlueprintsPage = () => {
                 sheetDailyCap={sheetDailyCap}
                 telegramBotMode={telegramBotMode}
                 telegramDailyCap={telegramDailyCap}
+                whatsappChannelMode={whatsappChannelMode}
+                whatsappDailyCap={whatsappDailyCap}
                 matonAuthRef={matonAuthRef}
                 matonChannel={matonChannel}
                 matonDailyCap={matonDailyCap}
@@ -4187,6 +4241,8 @@ export const AgentBlueprintsPage = () => {
                 onSheetDailyCapChange={setSheetDailyCap}
                 onTelegramBotModeChange={setTelegramBotMode}
                 onTelegramDailyCapChange={setTelegramDailyCap}
+                onWhatsappChannelModeChange={setWhatsappChannelMode}
+                onWhatsappDailyCapChange={setWhatsappDailyCap}
                 onMatonAuthRefChange={setMatonAuthRef}
                 onMatonChannelChange={setMatonChannel}
                 onMatonDailyCapChange={setMatonDailyCap}
@@ -4194,6 +4250,7 @@ export const AgentBlueprintsPage = () => {
                 onProcessPreviewMessageChange={setProcessPreviewMessage}
                 onSaveSheetIntegration={saveSheetIntegration}
                 onSaveTelegramIntegration={saveTelegramIntegration}
+                onSaveWhatsappIntegration={saveWhatsappIntegration}
                 onSaveMatonIntegration={saveMatonIntegration}
                 onChooseProviderRoute={chooseProviderRoute}
                 onAttachExistingIntegration={attachExistingAgentIntegration}
@@ -6806,6 +6863,8 @@ const AgentDetailPanel = ({
   sheetDailyCap,
   telegramBotMode,
   telegramDailyCap,
+  whatsappChannelMode,
+  whatsappDailyCap,
   matonAuthRef,
   matonChannel,
   matonDailyCap,
@@ -6847,6 +6906,8 @@ const AgentDetailPanel = ({
   onSheetDailyCapChange,
   onTelegramBotModeChange,
   onTelegramDailyCapChange,
+  onWhatsappChannelModeChange,
+  onWhatsappDailyCapChange,
   onMatonAuthRefChange,
   onMatonChannelChange,
   onMatonDailyCapChange,
@@ -6854,6 +6915,7 @@ const AgentDetailPanel = ({
   onProcessPreviewMessageChange,
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
+  onSaveWhatsappIntegration,
   onSaveMatonIntegration,
   onChooseProviderRoute,
   onAttachExistingIntegration,
@@ -6901,6 +6963,8 @@ const AgentDetailPanel = ({
   sheetDailyCap: string;
   telegramBotMode: string;
   telegramDailyCap: string;
+  whatsappChannelMode: string;
+  whatsappDailyCap: string;
   matonAuthRef: string;
   matonChannel: string;
   matonDailyCap: string;
@@ -6942,6 +7006,8 @@ const AgentDetailPanel = ({
   onSheetDailyCapChange: (value: string) => void;
   onTelegramBotModeChange: (value: string) => void;
   onTelegramDailyCapChange: (value: string) => void;
+  onWhatsappChannelModeChange: (value: string) => void;
+  onWhatsappDailyCapChange: (value: string) => void;
   onMatonAuthRefChange: (value: string) => void;
   onMatonChannelChange: (value: string) => void;
   onMatonDailyCapChange: (value: string) => void;
@@ -6949,6 +7015,7 @@ const AgentDetailPanel = ({
   onProcessPreviewMessageChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
+  onSaveWhatsappIntegration: () => void;
   onSaveMatonIntegration: () => void;
   onChooseProviderRoute: (bindingKey: string, route: AgentProviderRoute) => void;
   onAttachExistingIntegration: (integration: AgentIntegration, bindingKey?: string) => void;
@@ -7100,6 +7167,8 @@ const AgentDetailPanel = ({
         sheetDailyCap={sheetDailyCap}
         telegramBotMode={telegramBotMode}
         telegramDailyCap={telegramDailyCap}
+        whatsappChannelMode={whatsappChannelMode}
+        whatsappDailyCap={whatsappDailyCap}
         matonAuthRef={matonAuthRef}
         matonChannel={matonChannel}
         matonDailyCap={matonDailyCap}
@@ -7112,6 +7181,8 @@ const AgentDetailPanel = ({
         onSheetDailyCapChange={onSheetDailyCapChange}
         onTelegramBotModeChange={onTelegramBotModeChange}
         onTelegramDailyCapChange={onTelegramDailyCapChange}
+        onWhatsappChannelModeChange={onWhatsappChannelModeChange}
+        onWhatsappDailyCapChange={onWhatsappDailyCapChange}
         onMatonAuthRefChange={onMatonAuthRefChange}
         onMatonChannelChange={onMatonChannelChange}
         onMatonDailyCapChange={onMatonDailyCapChange}
@@ -7119,6 +7190,7 @@ const AgentDetailPanel = ({
         onProcessPreviewMessageChange={onProcessPreviewMessageChange}
         onSaveSheetIntegration={onSaveSheetIntegration}
         onSaveTelegramIntegration={onSaveTelegramIntegration}
+        onSaveWhatsappIntegration={onSaveWhatsappIntegration}
         onSaveMatonIntegration={onSaveMatonIntegration}
         onChooseProviderRoute={onChooseProviderRoute}
         onAttachExistingIntegration={onAttachExistingIntegration}
@@ -7861,6 +7933,8 @@ const AgentConnectionsPanel = ({
   sheetDailyCap,
   telegramBotMode,
   telegramDailyCap,
+  whatsappChannelMode,
+  whatsappDailyCap,
   matonAuthRef,
   matonChannel,
   matonDailyCap,
@@ -7873,6 +7947,8 @@ const AgentConnectionsPanel = ({
   onSheetDailyCapChange,
   onTelegramBotModeChange,
   onTelegramDailyCapChange,
+  onWhatsappChannelModeChange,
+  onWhatsappDailyCapChange,
   onMatonAuthRefChange,
   onMatonChannelChange,
   onMatonDailyCapChange,
@@ -7880,6 +7956,7 @@ const AgentConnectionsPanel = ({
   onProcessPreviewMessageChange,
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
+  onSaveWhatsappIntegration,
   onSaveMatonIntegration,
   onChooseProviderRoute,
   onAttachExistingIntegration,
@@ -7902,6 +7979,8 @@ const AgentConnectionsPanel = ({
   sheetDailyCap: string;
   telegramBotMode: string;
   telegramDailyCap: string;
+  whatsappChannelMode: string;
+  whatsappDailyCap: string;
   matonAuthRef: string;
   matonChannel: string;
   matonDailyCap: string;
@@ -7914,6 +7993,8 @@ const AgentConnectionsPanel = ({
   onSheetDailyCapChange: (value: string) => void;
   onTelegramBotModeChange: (value: string) => void;
   onTelegramDailyCapChange: (value: string) => void;
+  onWhatsappChannelModeChange: (value: string) => void;
+  onWhatsappDailyCapChange: (value: string) => void;
   onMatonAuthRefChange: (value: string) => void;
   onMatonChannelChange: (value: string) => void;
   onMatonDailyCapChange: (value: string) => void;
@@ -7921,6 +8002,7 @@ const AgentConnectionsPanel = ({
   onProcessPreviewMessageChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
+  onSaveWhatsappIntegration: () => void;
   onSaveMatonIntegration: () => void;
   onChooseProviderRoute: (bindingKey: string, route: AgentProviderRoute) => void;
   onAttachExistingIntegration: (integration: AgentIntegration, bindingKey?: string) => void;
@@ -7973,6 +8055,8 @@ const AgentConnectionsPanel = ({
       sheetDailyCap={sheetDailyCap}
       telegramBotMode={telegramBotMode}
       telegramDailyCap={telegramDailyCap}
+      whatsappChannelMode={whatsappChannelMode}
+      whatsappDailyCap={whatsappDailyCap}
       matonAuthRef={matonAuthRef}
       matonChannel={matonChannel}
       matonDailyCap={matonDailyCap}
@@ -7985,6 +8069,8 @@ const AgentConnectionsPanel = ({
       onSheetDailyCapChange={onSheetDailyCapChange}
       onTelegramBotModeChange={onTelegramBotModeChange}
       onTelegramDailyCapChange={onTelegramDailyCapChange}
+      onWhatsappChannelModeChange={onWhatsappChannelModeChange}
+      onWhatsappDailyCapChange={onWhatsappDailyCapChange}
       onMatonAuthRefChange={onMatonAuthRefChange}
       onMatonChannelChange={onMatonChannelChange}
       onMatonDailyCapChange={onMatonDailyCapChange}
@@ -7992,6 +8078,7 @@ const AgentConnectionsPanel = ({
       onProcessPreviewMessageChange={onProcessPreviewMessageChange}
         onSaveSheetIntegration={onSaveSheetIntegration}
         onSaveTelegramIntegration={onSaveTelegramIntegration}
+        onSaveWhatsappIntegration={onSaveWhatsappIntegration}
         onSaveMatonIntegration={onSaveMatonIntegration}
         onChooseProviderRoute={onChooseProviderRoute}
       onAttachExistingIntegration={onAttachExistingIntegration}
@@ -8794,6 +8881,8 @@ const AgentIntegrationsPanel = ({
   sheetDailyCap,
   telegramBotMode,
   telegramDailyCap,
+  whatsappChannelMode,
+  whatsappDailyCap,
   matonAuthRef,
   matonChannel,
   matonDailyCap,
@@ -8806,6 +8895,8 @@ const AgentIntegrationsPanel = ({
   onSheetDailyCapChange,
   onTelegramBotModeChange,
   onTelegramDailyCapChange,
+  onWhatsappChannelModeChange,
+  onWhatsappDailyCapChange,
   onMatonAuthRefChange,
   onMatonChannelChange,
   onMatonDailyCapChange,
@@ -8813,6 +8904,7 @@ const AgentIntegrationsPanel = ({
   onProcessPreviewMessageChange,
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
+  onSaveWhatsappIntegration,
   onSaveMatonIntegration,
   onChooseProviderRoute,
   onAttachExistingIntegration,
@@ -8834,6 +8926,8 @@ const AgentIntegrationsPanel = ({
   sheetDailyCap: string;
   telegramBotMode: string;
   telegramDailyCap: string;
+  whatsappChannelMode: string;
+  whatsappDailyCap: string;
   matonAuthRef: string;
   matonChannel: string;
   matonDailyCap: string;
@@ -8846,6 +8940,8 @@ const AgentIntegrationsPanel = ({
   onSheetDailyCapChange: (value: string) => void;
   onTelegramBotModeChange: (value: string) => void;
   onTelegramDailyCapChange: (value: string) => void;
+  onWhatsappChannelModeChange: (value: string) => void;
+  onWhatsappDailyCapChange: (value: string) => void;
   onMatonAuthRefChange: (value: string) => void;
   onMatonChannelChange: (value: string) => void;
   onMatonDailyCapChange: (value: string) => void;
@@ -8853,6 +8949,7 @@ const AgentIntegrationsPanel = ({
   onProcessPreviewMessageChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
+  onSaveWhatsappIntegration: () => void;
   onSaveMatonIntegration: () => void;
   onChooseProviderRoute: (bindingKey: string, route: AgentProviderRoute) => void;
   onAttachExistingIntegration: (integration: AgentIntegration, bindingKey?: string) => void;
@@ -8863,9 +8960,11 @@ const AgentIntegrationsPanel = ({
 }) => {
   const sheetIntegration = integrations.find((item) => item.provider === 'google_sheets');
   const telegramIntegration = integrations.find((item) => item.provider === 'telegram');
+  const whatsappIntegration = integrations.find((item) => item.provider === 'whatsapp');
   const matonIntegration = integrations.find((item) => item.provider === 'maton');
   const selectedPlanItem = (connectionPlan?.items || []).find((item) => item.key === selectedBindingKey);
   const needsTelegram = bindingStatus.some((binding) => binding.provider === 'telegram');
+  const needsWhatsapp = bindingStatus.some((binding) => binding.provider === 'whatsapp');
   const needsMaton = bindingStatus.some((binding) => binding.provider === 'maton') || (selectedPlanItem?.provider_routes || []).some((route) => route.provider === 'maton');
   const needsSheetsRead = bindingStatus.some((binding) => binding.provider === 'google_sheets' && binding.capability === 'google_sheets.read_rows');
   const needsSheetsAppend = bindingStatus.some((binding) => binding.provider === 'google_sheets' && binding.capability === 'sheets.append_row_request');
@@ -8920,6 +9019,7 @@ const AgentIntegrationsPanel = ({
 
       <div className="grid gap-2">
         {needsTelegram || !bindingStatus.length ? <AgentIntegrationStatusItem integration={telegramIntegration} provider="telegram" fallbackTitle="Telegram" /> : null}
+        {needsWhatsapp ? <AgentIntegrationStatusItem integration={whatsappIntegration} provider="whatsapp" fallbackTitle="WhatsApp" /> : null}
         {needsMaton ? <AgentIntegrationStatusItem integration={matonIntegration} provider="maton" fallbackTitle="Maton.ai bridge" /> : null}
         {needsSheets || !bindingStatus.length ? <AgentIntegrationStatusItem integration={sheetIntegration} provider="google_sheets" fallbackTitle={sheetsTitle} /> : null}
       </div>
@@ -9063,6 +9163,33 @@ const AgentIntegrationsPanel = ({
         />
         <Button type="button" size="sm" variant="outline" onClick={onSaveTelegramIntegration} disabled={actionLoading}>
           {selectedProvider === 'telegram' ? 'Сохранить Telegram для выбранного шага' : 'Подключить Telegram'}
+        </Button>
+      </div>
+      ) : null}
+
+      {needsWhatsapp ? (
+      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'whatsapp' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+          <MessageSquareText className="h-4 w-4" />
+          WhatsApp
+        </div>
+        <select
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={whatsappChannelMode}
+          onChange={(event) => onWhatsappChannelModeChange(event.target.value)}
+        >
+          <option value="whatsapp_business">WhatsApp Business</option>
+          <option value="manual_whatsapp">Ручная отправка через WhatsApp</option>
+        </select>
+        <input
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={whatsappDailyCap}
+          onChange={(event) => onWhatsappDailyCapChange(event.target.value)}
+          placeholder="Лимит сообщений в день"
+          inputMode="numeric"
+        />
+        <Button type="button" size="sm" variant="outline" onClick={onSaveWhatsappIntegration} disabled={actionLoading}>
+          {selectedProvider === 'whatsapp' ? 'Сохранить WhatsApp для выбранного шага' : 'Подключить WhatsApp'}
         </Button>
       </div>
       ) : null}

@@ -249,6 +249,7 @@ def _agent_integration_provider_label(provider: str) -> str:
     labels = {
         "google_sheets": "Google Sheets",
         "telegram": "Telegram",
+        "whatsapp": "WhatsApp",
         "maton": "Maton.ai",
         "localos_finance": "Финансы LocalOS",
         "composio": "Composio",
@@ -267,9 +268,9 @@ def _agent_integration_execution_boundary(provider: str) -> dict:
             "executor": "agent_sheet_provider_executor_v1",
             "external_write": "approved_append_row",
         }
-    if provider == "telegram":
+    if provider in {"telegram", "whatsapp"}:
         return {
-            "triggers": ["telegram.message.received"],
+            "triggers": [f"{provider}.message.received"],
             "capabilities": ["communications.draft", "communications.send_reminder", "communications.send_offer"],
             "approval_required": True,
             "executor": "channel_router",
@@ -1015,6 +1016,12 @@ def _sanitize_agent_integration_config(provider: str, payload: dict) -> dict:
             "trigger": "telegram.message.received",
             "mode": "trigger_boundary",
         }
+    if provider == "whatsapp":
+        return {
+            "channel_mode": str(source.get("channel_mode") or "whatsapp_business").strip() or "whatsapp_business",
+            "trigger": "whatsapp.message.received",
+            "mode": "trigger_boundary",
+        }
     if provider == "maton":
         return {
             "channel": str(source.get("channel") or "maton_bridge").strip() or "maton_bridge",
@@ -1040,7 +1047,7 @@ def _sanitize_agent_integration_limits(provider: str, payload: dict) -> dict:
             "daily_append_cap": _safe_int(source.get("daily_append_cap"), 50, 1, 500),
             "frequency_cap_minutes": _safe_int(source.get("frequency_cap_minutes"), 0, 0, 1440),
         }
-    if provider == "telegram":
+    if provider in {"telegram", "whatsapp"}:
         return {
             "daily_message_cap": _safe_int(source.get("daily_message_cap"), 50, 1, 500),
             "frequency_cap_minutes": _safe_int(source.get("frequency_cap_minutes"), 30, 0, 1440),
@@ -3183,7 +3190,7 @@ def save_agent_blueprint_integration(blueprint_id: str):
         return error_response
     payload = request.get_json(silent=True) or {}
     provider = str(payload.get("provider") or "").strip().lower()
-    if provider not in {"google_sheets", "telegram", "maton", "localos_finance", "composio"}:
+    if provider not in {"google_sheets", "telegram", "whatsapp", "maton", "localos_finance", "composio"}:
         return _json_error("Unsupported integration provider", 400, "UNSUPPORTED_PROVIDER")
     status = str(payload.get("status") or "active").strip().lower()
     if status not in {"draft", "active", "paused"}:

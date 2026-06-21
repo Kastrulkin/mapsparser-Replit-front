@@ -13,7 +13,9 @@ from playwright.async_api import async_playwright
 DEFAULT_URL = "http://127.0.0.1:3000/dashboard/agents"
 SHEETS_AGENT_BUILDER_SESSION_ID = "builder-session-sheets-telegram"
 BROWSER_AGENT_BUILDER_SESSION_ID = "builder-session-browser-telegram"
+WHATSAPP_AGENT_BUILDER_SESSION_ID = "builder-session-whatsapp-faq"
 MOCK_CREATED_AGENT_IDS = set()
+MOCK_CONNECTED_AGENT_PROVIDERS = set()
 
 
 def _json_response(body):
@@ -131,6 +133,21 @@ async def _handle_mock_api(route):
                 "pending_approvals_count": 0,
                 "sources_count": 0,
             })
+        if "agent-whatsapp-faq" in MOCK_CREATED_AGENT_IDS:
+            blueprints.append({
+                "id": "agent-whatsapp-faq",
+                "business_id": "biz-1",
+                "name": "Вопросы WhatsApp → FAQ",
+                "category": "custom",
+                "status": "draft",
+                "description": "Собирает вопросы клиентов из WhatsApp и предлагает новые пункты FAQ после проверки.",
+                "active_version_id": "ver-whatsapp-faq",
+                "active_version_number": 1,
+                "latest_version_number": 1,
+                "last_run_status": "",
+                "pending_approvals_count": 0,
+                "sources_count": 0,
+            })
         await _fulfill(route, {
             "blueprints": blueprints,
         })
@@ -166,6 +183,21 @@ async def _handle_mock_api(route):
                     extraction_rules="Открыть сайт конкурента, найти изменения в акциях, ценах и новых блоках.",
                     processing_rules="Собрать короткий отчёт владельцу, не выполнять внешние действия без подтверждения.",
                     output_format="Короткий Telegram-отчёт владельцу.",
+                    missing_questions=[],
+                    can_create_draft=True,
+                    next_step="create_draft_then_choose_route",
+                ),
+            })
+        elif "whatsapp" in message_lower or "ватсап" in message_lower or "faq" in message_lower:
+            await _fulfill(route, {
+                "session": _builder_session(
+                    session_id=WHATSAPP_AGENT_BUILDER_SESSION_ID,
+                    agent_name="Вопросы WhatsApp → FAQ",
+                    message=message,
+                    data_sources=["whatsapp", "customer_questions", "business_profile"],
+                    extraction_rules="Собрать вопросы клиентов из WhatsApp, сгруппировать по темам и выделить повторяющиеся.",
+                    processing_rules="Предлагать пункты FAQ как черновик, ничего не отправлять клиентам без подтверждения.",
+                    output_format="Список тем и новых пунктов FAQ для проверки.",
                     missing_questions=[],
                     can_create_draft=True,
                     next_step="create_draft_then_choose_route",
@@ -218,6 +250,31 @@ async def _handle_mock_api(route):
                 can_create_draft=True,
                 next_step="create_draft_then_choose_route",
             ),
+        })
+        return
+
+    if path == f"/agent-builder/sessions/{WHATSAPP_AGENT_BUILDER_SESSION_ID}/create-blueprint" and method == "POST":
+        MOCK_CREATED_AGENT_IDS.add("agent-whatsapp-faq")
+        await _fulfill(route, {
+            "blueprint": {
+                "id": "agent-whatsapp-faq",
+                "business_id": "biz-1",
+                "name": "Вопросы WhatsApp → FAQ",
+                "category": "custom",
+                "status": "draft",
+                "description": "Собирает вопросы клиентов из WhatsApp и предлагает новые пункты FAQ после проверки.",
+                "active_version_id": "ver-whatsapp-faq",
+                "active_version_number": 1,
+                "latest_version_number": 1,
+            },
+            "version": {"id": "ver-whatsapp-faq", "version_number": 1},
+            "session": {"id": WHATSAPP_AGENT_BUILDER_SESSION_ID, "status": "blueprint_created", "blueprint_id": "agent-whatsapp-faq"},
+            "post_create_handoff": {
+                "schema": "localos_agent_post_create_handoff_v1",
+                "status": "needs_connection",
+                "workspace_mode": "connections",
+                "next_binding_key": "whatsapp_questions",
+            },
         })
         return
 
@@ -468,6 +525,96 @@ async def _handle_mock_api(route):
         })
         return
 
+    if path == "/agent-blueprints/agent-whatsapp-faq":
+        await _fulfill(route, {
+            "blueprint": {
+                "id": "agent-whatsapp-faq",
+                "business_id": "biz-1",
+                "name": "Вопросы WhatsApp → FAQ",
+                "category": "custom",
+                "status": "draft",
+                "description": "Собирает вопросы клиентов из WhatsApp и предлагает новые пункты FAQ после проверки.",
+                "active_version_id": "ver-whatsapp-faq",
+                "active_version_number": 1,
+                "latest_version_number": 1,
+            },
+            "active_version_id": "ver-whatsapp-faq",
+            "active_version_number": 1,
+            "active_version": {"id": "ver-whatsapp-faq", "version_number": 1, "status": "draft"},
+            "versions": [{"id": "ver-whatsapp-faq", "version_number": 1, "status": "draft"}],
+            "runs": [],
+            "approval_queue": [],
+            "learning_events": [],
+            "version_events": [],
+            "legacy_migration": {},
+        })
+        return
+
+    if path == "/agent-blueprints/agent-whatsapp-faq/review":
+        await _fulfill(route, {
+            "review": {
+                "has_run": False,
+                "run_status": "",
+                "setup": {
+                    "workflow_description": "Собирать вопросы клиентов из WhatsApp и готовить FAQ-черновик.",
+                    "extraction_rules": "Вопросы, темы, повторяющиеся формулировки и контекст услуги.",
+                    "processing_rules": "Не отвечать клиентам без подтверждения.",
+                    "output_format": "Список новых пунктов FAQ.",
+                },
+                "sources": [],
+                "used_sources": [],
+                "sections": [],
+            },
+        })
+        return
+
+    if path == "/agent-blueprints/agent-whatsapp-faq/sources/catalog":
+        await _fulfill(route, {"catalog": []})
+        return
+
+    if path == "/agent-blueprints/agent-whatsapp-faq/integrations" and method == "POST":
+        MOCK_CONNECTED_AGENT_PROVIDERS.add("agent-whatsapp-faq:whatsapp")
+        await _fulfill(route, {
+            "integration": {"id": "whatsapp-integration-1", "provider": "whatsapp", "status": "active"},
+            "post_connect_handoff": {
+                "schema": "localos_agent_post_connect_handoff_v1",
+                "status": "connected",
+                "workspace_mode": "connections",
+            },
+        })
+        return
+
+    if path == "/agent-blueprints/agent-whatsapp-faq/integrations":
+        connected = "agent-whatsapp-faq:whatsapp" in MOCK_CONNECTED_AGENT_PROVIDERS
+        await _fulfill(route, {
+            "integrations": [{
+                "id": "whatsapp-integration-1",
+                "provider": "whatsapp",
+                "display_name": "WhatsApp",
+                "status": "active",
+                "config": {"channel_mode": "whatsapp_business"},
+                "limits": {"daily_message_cap": 50},
+            }] if connected else [],
+            "available_integrations": [],
+            "provider_catalog": [{
+                "provider": "whatsapp",
+                "title": "WhatsApp",
+                "status": "available",
+            }],
+            "external_auth_options": [],
+            "binding_status": [{
+                "key": "whatsapp_questions",
+                "provider": "whatsapp",
+                "status": "connected" if connected else "missing",
+                "direction": "trigger",
+                "trigger": "whatsapp.message.received",
+                "missing_config": [] if connected else ["channel_mode"],
+                "approval_required": True,
+            }],
+            "custom_process": {},
+        })
+        return
+
     await _fulfill(route, {})
 
 
@@ -666,6 +813,48 @@ async def run_smoke(url, screenshot):
                         missing.append("created browser-use Telegram agent")
                     if "Агент создан" not in created_body:
                         missing.append("browser-use post-create success banner")
+
+            await page.wait_for_timeout(500)
+            create_buttons = page.get_by_role("button", name="Создать агента")
+            if await create_buttons.count() == 0:
+                missing.append("third button: Создать агента")
+            else:
+                await create_buttons.first.click()
+                dialog = page.get_by_role("dialog", name="Создать агента")
+                await dialog.wait_for(state="visible", timeout=10000)
+                prompt_box = dialog.get_by_placeholder(
+                    "Например: мне нужен агент, который проверяет договоры, находит риски и готовит краткий отчёт"
+                )
+                await prompt_box.fill(
+                    "Каждую неделю собирай вопросы клиентов из WhatsApp, группируй их по темам и предлагай новые пункты FAQ."
+                )
+                await dialog.get_by_role("button", name="Начать диалог").click()
+                await page.wait_for_timeout(1000)
+                dialog_body = await dialog.inner_text(timeout=10000)
+                if "Создать агента" not in dialog_body:
+                    missing.append("whatsapp draft-ready step")
+                draft_button = dialog.get_by_role("button", name="Создать агента")
+                if not await draft_button.is_enabled():
+                    missing.append("enabled WhatsApp draft create button")
+                else:
+                    await draft_button.click()
+                    await page.wait_for_timeout(1000)
+                    created_body = await page.locator("body").inner_text(timeout=10000)
+                    if "Вопросы WhatsApp → FAQ" not in created_body:
+                        missing.append("created WhatsApp FAQ agent")
+                    if "WhatsApp" not in created_body:
+                        missing.append("WhatsApp connection panel")
+                    whatsapp_save_button = page.get_by_role("button", name="Сохранить WhatsApp для выбранного шага")
+                    if await whatsapp_save_button.count() == 0:
+                        whatsapp_save_button = page.get_by_role("button", name="Подключить WhatsApp")
+                    if await whatsapp_save_button.count() == 0:
+                        missing.append("WhatsApp save button")
+                    else:
+                        await whatsapp_save_button.first.click()
+                        await page.wait_for_timeout(1000)
+                        connected_body = await page.locator("body").inner_text(timeout=10000)
+                        if "Все обязательные подключения готовы" not in connected_body and "WhatsApp готово" not in connected_body:
+                            missing.append("WhatsApp connected state")
 
         if console_errors:
             leaked.append(f"console errors: {console_errors[:2]}")
