@@ -4447,7 +4447,139 @@ def _serialize_social_post(cursor: Any, row: Any) -> dict[str, Any]:
             data[key] = value.isoformat()
     data["platform_label"] = platform_label(str(data.get("platform") or ""))
     data["next_action"] = next_action_for_social_post(data)
+    data["publish_evidence"] = _social_publish_evidence(data)
     return data
+
+
+def _social_publish_evidence(post: dict[str, Any]) -> dict[str, Any]:
+    status = str(post.get("status") or "").strip()
+    platform = str(post.get("platform") or "").strip()
+    provider_label = platform_label(platform)
+    provider_post_url = str(post.get("provider_post_url") or "").strip()
+    provider_post_id = str(post.get("provider_post_id") or "").strip()
+    automation_task_id = str(post.get("automation_task_id") or "").strip()
+    last_error = str(post.get("last_error") or "").strip()
+    metadata = _json_dict(post.get("metadata_json"))
+    provider_status = str(metadata.get("provider_status") or metadata.get("queue_preflight_status") or "").strip()
+
+    base: dict[str, Any] = {
+        "schema": "localos_social_publish_evidence_v1",
+        "platform": platform,
+        "platform_label": provider_label,
+        "status": status,
+        "provider_status": provider_status,
+        "proof_url": provider_post_url,
+        "proof_id": provider_post_id,
+        "automation_task_id": automation_task_id,
+        "last_error": last_error,
+        "recoverable": status in {"failed", "needs_manual_publish", "needs_supervised_publish"},
+    }
+
+    if status == "published":
+        if provider_post_url:
+            summary_ru = "Пост опубликован, ссылка сохранена."
+            summary_en = "The post is published and the URL is saved."
+        elif provider_post_id:
+            summary_ru = "Пост опубликован, ID публикации сохранён."
+            summary_en = "The post is published and the provider ID is saved."
+        else:
+            summary_ru = "Пост отмечен опубликованным; добавьте ссылку или ID, если они есть."
+            summary_en = "The post is marked published; add a URL or ID if available."
+        base.update(
+            {
+                "tone": "success",
+                "title_ru": f"{provider_label}: опубликовано",
+                "title_en": f"{provider_label}: published",
+                "summary_ru": summary_ru,
+                "summary_en": summary_en,
+                "next_action_ru": "Обновите реакции и отметьте заявки, если они пришли с этой публикации.",
+                "next_action_en": "Update reactions and record leads if they came from this post.",
+            }
+        )
+        return base
+
+    if status == "needs_supervised_publish":
+        base.update(
+            {
+                "tone": "warning",
+                "title_ru": f"{provider_label}: нужно контролируемое размещение",
+                "title_en": f"{provider_label}: supervised placement needed",
+                "summary_ru": "LocalOS подготовил controlled/manual задачу; финальный клик публикации остаётся за человеком.",
+                "summary_en": "LocalOS prepared a controlled/manual task; the final publish click stays with a human.",
+                "next_action_ru": "Откройте контролируемое размещение, проверьте предпросмотр и отметьте результат.",
+                "next_action_en": "Open supervised placement, review the preview, and record the result.",
+            }
+        )
+        return base
+
+    if status == "needs_manual_publish":
+        summary_ru = last_error or "Канал требует ручного размещения или подключения ключей."
+        summary_en = last_error or "The channel needs manual placement or connected credentials."
+        base.update(
+            {
+                "tone": "warning",
+                "title_ru": f"{provider_label}: нужно действие человека",
+                "title_en": f"{provider_label}: human action needed",
+                "summary_ru": summary_ru,
+                "summary_en": summary_en,
+                "next_action_ru": "Подключите канал или разместите пост вручную и сохраните ссылку/ID.",
+                "next_action_en": "Connect the channel or publish manually, then save the URL/ID.",
+            }
+        )
+        return base
+
+    if status == "failed":
+        base.update(
+            {
+                "tone": "danger",
+                "title_ru": f"{provider_label}: публикация не выполнена",
+                "title_en": f"{provider_label}: publishing failed",
+                "summary_ru": last_error or "Проверьте подключение канала и повторите публикацию.",
+                "summary_en": last_error or "Check the channel connection and retry publishing.",
+                "next_action_ru": "Исправьте причину, повторите отправку или переведите пост в ручной режим.",
+                "next_action_en": "Fix the cause, retry publishing, or move the post to manual flow.",
+            }
+        )
+        return base
+
+    if status == "queued":
+        base.update(
+            {
+                "tone": "info",
+                "title_ru": f"{provider_label}: в расписании",
+                "title_en": f"{provider_label}: queued",
+                "summary_ru": "Пост утверждён и ждёт даты публикации; worker выполнит его по расписанию.",
+                "summary_en": "The post is approved and waiting for its scheduled time; the worker will dispatch it.",
+                "next_action_ru": "Дождитесь времени публикации или запустите scoped dispatch вручную.",
+                "next_action_en": "Wait for the scheduled time or run scoped dispatch manually.",
+            }
+        )
+        return base
+
+    if status == "publishing":
+        base.update(
+            {
+                "tone": "info",
+                "title_ru": f"{provider_label}: публикуется",
+                "title_en": f"{provider_label}: publishing",
+                "summary_ru": "LocalOS сейчас выполняет отправку в канал.",
+                "summary_en": "LocalOS is sending this post to the channel now.",
+                "next_action_ru": "Проверьте итог после завершения worker dispatch.",
+                "next_action_en": "Check the result after worker dispatch finishes.",
+            }
+        )
+        return base
+
+    return {
+        **base,
+        "tone": "neutral",
+        "title_ru": f"{provider_label}: результат ещё не зафиксирован",
+        "title_en": f"{provider_label}: no publish result yet",
+        "summary_ru": "Сначала проверьте текст, подтвердите его и поставьте публикацию в расписание.",
+        "summary_en": "Review the copy, approve it, and queue the post first.",
+        "next_action_ru": "Подготовьте preview и подтвердите публикацию.",
+        "next_action_en": "Prepare the preview and approve the post.",
+    }
 
 
 def _row_to_dict(cursor: Any, row: Any) -> dict[str, Any]:

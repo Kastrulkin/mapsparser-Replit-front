@@ -26,6 +26,7 @@ from services.social_post_service import (
     _queue_preflight_block,
     _record_social_supervised_handoff_ledger,
     _social_supervised_blocked_metadata,
+    _social_publish_evidence,
     _status_after_social_text_edit,
     _channel_readiness,
     _channel_readiness_next_action,
@@ -1602,6 +1603,57 @@ def test_supervised_handoff_ledger_is_optional_when_table_missing():
 
     assert ledger_id == ""
     assert cursor.inserted == []
+
+
+def test_social_publish_evidence_explains_published_api_result():
+    evidence = _social_publish_evidence(
+        {
+            "platform": "vk",
+            "status": "published",
+            "provider_post_id": "678",
+            "provider_post_url": "https://vk.com/wall-12345_678",
+            "metadata_json": {"provider_status": "vk_published"},
+        }
+    )
+
+    assert evidence["schema"] == "localos_social_publish_evidence_v1"
+    assert evidence["tone"] == "success"
+    assert evidence["proof_url"] == "https://vk.com/wall-12345_678"
+    assert evidence["proof_id"] == "678"
+    assert evidence["provider_status"] == "vk_published"
+    assert "заявки" in evidence["next_action_ru"]
+
+
+def test_social_publish_evidence_explains_recoverable_failure():
+    evidence = _social_publish_evidence(
+        {
+            "platform": "telegram",
+            "status": "needs_manual_publish",
+            "last_error": "Для Telegram нужны telegram_bot_token и telegram_chat_id бизнеса.",
+            "metadata_json": {"queue_preflight_status": "missing_keys"},
+        }
+    )
+
+    assert evidence["tone"] == "warning"
+    assert evidence["recoverable"] is True
+    assert evidence["provider_status"] == "missing_keys"
+    assert "telegram_bot_token" in evidence["summary_ru"]
+    assert "ссылку/ID" in evidence["next_action_ru"]
+
+
+def test_social_publish_evidence_keeps_supervised_maps_human_controlled():
+    evidence = _social_publish_evidence(
+        {
+            "platform": "yandex_maps",
+            "status": "needs_supervised_publish",
+            "automation_task_id": "task-1",
+        }
+    )
+
+    assert evidence["tone"] == "warning"
+    assert evidence["automation_task_id"] == "task-1"
+    assert "финальный клик" in evidence["summary_ru"]
+    assert "controlled/manual" in evidence["summary_ru"]
 
 
 def test_social_supervised_blocked_metadata_preserves_manual_fallback_contract():

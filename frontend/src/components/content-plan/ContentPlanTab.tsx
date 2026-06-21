@@ -121,6 +121,7 @@ type SocialPost = {
   automation_task_id?: string;
   last_error?: string;
   next_action?: string;
+  publish_evidence?: SocialPublishEvidence;
   metadata_json?: SocialPostMetadata;
   views?: number;
   reach?: number;
@@ -130,6 +131,22 @@ type SocialPost = {
   clicks?: number;
   inquiries?: number;
   leads?: number;
+};
+
+type SocialPublishEvidence = {
+  tone?: string;
+  title_ru?: string;
+  title_en?: string;
+  summary_ru?: string;
+  summary_en?: string;
+  next_action_ru?: string;
+  next_action_en?: string;
+  proof_url?: string;
+  proof_id?: string;
+  automation_task_id?: string;
+  provider_status?: string;
+  last_error?: string;
+  recoverable?: boolean;
 };
 
 type SocialOpenClawCapabilityStatus = {
@@ -5365,9 +5382,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 <div key={line} className="break-all">{line}</div>
                               ))}
                             </div>
-	                            <Button
-	                              type="button"
-	                              size="sm"
+                              <Button
+                                type="button"
+                                size="sm"
                               variant="outline"
                               className="mt-2 h-7 border-white/20 bg-white/10 px-2 text-[11px] text-white hover:bg-white/20"
                               onClick={() => { void copySocialWorkerEnv(); }}
@@ -6425,14 +6442,21 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 ? supervisedPayload.fallback_reasons.filter(Boolean).map(String)
                                 : [];
                               const preflightStatus = String(post.metadata_json?.queue_preflight_status || post.metadata_json?.provider_status || '').trim();
-                              const preflightMessage = String(
-                                isRu
-                                  ? post.metadata_json?.queue_preflight_message_ru || post.metadata_json?.provider_note || ''
-                                  : post.metadata_json?.queue_preflight_message_en || post.metadata_json?.provider_note || ''
-                              ).trim();
-                              const nextActionLabel = _socialNextActionLabel(post.next_action || '', isRu);
-                              const hasNextAction = Boolean(String(post.next_action || '').trim());
-                              return (
+                                const preflightMessage = String(
+                                  isRu
+                                    ? post.metadata_json?.queue_preflight_message_ru || post.metadata_json?.provider_note || ''
+                                    : post.metadata_json?.queue_preflight_message_en || post.metadata_json?.provider_note || ''
+                                ).trim();
+                                const nextActionLabel = _socialNextActionLabel(post.next_action || '', isRu);
+                                const hasNextAction = Boolean(String(post.next_action || '').trim());
+                                const publishEvidence = post.publish_evidence || null;
+                                const evidenceTitle = String(isRu ? publishEvidence?.title_ru || '' : publishEvidence?.title_en || '').trim();
+                                const evidenceSummary = String(isRu ? publishEvidence?.summary_ru || '' : publishEvidence?.summary_en || '').trim();
+                                const evidenceNextAction = String(isRu ? publishEvidence?.next_action_ru || '' : publishEvidence?.next_action_en || '').trim();
+                                const evidenceProofUrl = String(publishEvidence?.proof_url || post.provider_post_url || '').trim();
+                                const evidenceProofId = String(publishEvidence?.proof_id || post.provider_post_id || '').trim();
+                                const evidenceProviderStatus = String(publishEvidence?.provider_status || '').trim();
+                                return (
                                 <div key={post.id} className="rounded-2xl border border-slate-200 bg-white p-3">
                                   <div className="flex flex-wrap items-start justify-between gap-2">
                                     <div>
@@ -6591,14 +6615,57 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                             ? 'Журнал действия создан; финальная публикация остаётся за человеком.'
                                             : 'Action ledger is recorded; final publishing stays human-controlled.'}
                                         </div>
-                                      ) : null}
-                                    </div>
-                                  ) : null}
-                                  {post.last_error ? (
-                                    <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
-                                      {post.last_error}
-                                    </div>
-                                  ) : null}
+                                        ) : null}
+                                      </div>
+                                    ) : null}
+                                    {publishEvidence && (evidenceTitle || evidenceSummary || evidenceNextAction || evidenceProofUrl || evidenceProofId) ? (
+                                      <div className={_socialPublishEvidenceClassName(publishEvidence.tone || '')}>
+                                        {evidenceTitle ? (
+                                          <div className="font-semibold">
+                                            {evidenceTitle}
+                                          </div>
+                                        ) : null}
+                                        {evidenceSummary ? (
+                                          <div className="mt-1">
+                                            {evidenceSummary}
+                                          </div>
+                                        ) : null}
+                                        {evidenceNextAction ? (
+                                          <div className="mt-1 font-medium">
+                                            {evidenceNextAction}
+                                          </div>
+                                        ) : null}
+                                        {evidenceProofUrl || evidenceProofId || evidenceProviderStatus ? (
+                                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                                            {evidenceProofUrl ? (
+                                              <a
+                                                href={evidenceProofUrl}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="font-medium underline underline-offset-2"
+                                              >
+                                                {isRu ? 'Открыть опубликованный пост' : 'Open published post'}
+                                              </a>
+                                            ) : null}
+                                            {evidenceProofId ? (
+                                              <span className="font-mono">
+                                                id: {evidenceProofId}
+                                              </span>
+                                            ) : null}
+                                            {evidenceProviderStatus ? (
+                                              <span className="font-mono">
+                                                status: {evidenceProviderStatus}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    ) : null}
+                                    {post.last_error && !publishEvidence ? (
+                                      <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
+                                        {post.last_error}
+                                      </div>
+                                    ) : null}
                                   {!isSupervisedPost && (preflightMessage || preflightStatus) ? (
                                     <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
                                       <div className="font-semibold text-amber-950">
@@ -6694,8 +6761,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       </div>
                                     </div>
                                   ) : null}
-                                  {post.provider_post_url || post.provider_post_id ? (
-                                    <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
+                                    {(post.provider_post_url || post.provider_post_id) && !publishEvidence ? (
+                                      <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
                                       {post.provider_post_url ? (
                                         <a
                                           href={post.provider_post_url}
@@ -7383,6 +7450,16 @@ function _socialStatusClassName(status: string): string {
   if (normalized === 'needs_supervised_publish' || normalized === 'needs_manual_publish') return `${base} bg-amber-50 text-amber-800`;
   if (normalized === 'approved' || normalized === 'queued' || normalized === 'publishing') return `${base} bg-blue-50 text-blue-800`;
   return `${base} bg-slate-100 text-slate-700`;
+}
+
+function _socialPublishEvidenceClassName(tone: string): string {
+  const normalized = String(tone || '').trim();
+  const base = 'mt-3 rounded-xl border px-3 py-2 text-xs leading-5';
+  if (normalized === 'success') return `${base} border-emerald-200 bg-emerald-50 text-emerald-800`;
+  if (normalized === 'danger') return `${base} border-red-200 bg-red-50 text-red-700`;
+  if (normalized === 'warning') return `${base} border-amber-200 bg-amber-50 text-amber-800`;
+  if (normalized === 'info') return `${base} border-blue-100 bg-blue-50 text-blue-800`;
+  return `${base} border-slate-200 bg-slate-50 text-slate-700`;
 }
 
 function _socialNextActionLabel(action: string, isRu: boolean): string {
