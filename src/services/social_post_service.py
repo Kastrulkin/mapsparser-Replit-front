@@ -3361,6 +3361,10 @@ def _channel_readiness(platform: str, publish_mode: str, ready: bool, status: st
         "message_en": _channel_readiness_message(platform, status, False),
         "next_action_ru": _channel_readiness_next_action(platform, status, True),
         "next_action_en": _channel_readiness_next_action(platform, status, False),
+        "setup_steps_ru": _channel_readiness_setup_steps(platform, status, True),
+        "setup_steps_en": _channel_readiness_setup_steps(platform, status, False),
+        "missing_fields": _channel_readiness_missing_fields(platform, status),
+        "settings_path": _channel_readiness_settings_path(platform),
     }
 
 
@@ -3485,6 +3489,153 @@ def _channel_readiness_next_action(platform: str, status: str, is_ru: bool) -> s
     if status_key == "missing_connection":
         return "Подключите аккаунт канала." if is_ru else "Connect the channel account."
     return "Проверьте ключи и настройки канала." if is_ru else "Check channel keys and settings."
+
+
+def _channel_readiness_setup_steps(platform: str, status: str, is_ru: bool) -> list[str]:
+    platform_key = str(platform or "").strip()
+    status_key = str(status or "").strip()
+    if status_key == "ready":
+        return [
+            "Проверьте preview поста.",
+            "Утвердите текст.",
+            "Поставьте в расписание.",
+        ] if is_ru else [
+            "Review the post preview.",
+            "Approve the copy.",
+            "Queue it on schedule.",
+        ]
+    if status_key == "supervised_ready":
+        return [
+            "Проверьте текст и медиа.",
+            "Поставьте пост в расписание.",
+            "Откройте controlled task и подтвердите финальный шаг вручную.",
+        ] if is_ru else [
+            "Review copy and media.",
+            "Queue the post on schedule.",
+            "Open the controlled task and confirm the final step manually.",
+        ]
+    if status_key == "manual_fallback":
+        return [
+            "Скопируйте подготовленный текст.",
+            "Разместите пост на площадке вручную.",
+            "Отметьте публикацию размещённой в LocalOS.",
+        ] if is_ru else [
+            "Copy the prepared text.",
+            "Publish it on the platform manually.",
+            "Mark the post as published in LocalOS.",
+        ]
+    if platform_key == "telegram":
+        return [
+            "Добавьте токен Telegram-бота бизнеса.",
+            "Укажите chat_id канала или чата.",
+            "Проверьте, что бот имеет право писать в этот канал.",
+        ] if is_ru else [
+            "Add the business Telegram bot token.",
+            "Set the channel or chat chat_id.",
+            "Check that the bot can post to that channel.",
+        ]
+    if platform_key == "vk":
+        if status_key == "missing_permissions":
+            return [
+                "Обновите VK access_token.",
+                "Добавьте permission wall.post.",
+                "Проверьте group_id или owner_id сообщества.",
+            ] if is_ru else [
+                "Refresh the VK access_token.",
+                "Add the wall.post permission.",
+                "Verify the group_id or owner_id.",
+            ]
+        return [
+            "Подключите VK account/token.",
+            "Укажите group_id или owner_id.",
+            "Проверьте право wall.post.",
+        ] if is_ru else [
+            "Connect the VK account/token.",
+            "Set group_id or owner_id.",
+            "Verify wall.post permission.",
+        ]
+    if platform_key == "google_business":
+        return [
+            "Подключите Google Business Profile.",
+            "Выберите business location.",
+            "Проверьте, что Google publish доступен для аккаунта.",
+        ] if is_ru else [
+            "Connect Google Business Profile.",
+            "Select the business location.",
+            "Check that Google publishing is available for the account.",
+        ]
+    if platform_key in {"instagram", "facebook"}:
+        if status_key == "adapter_pending":
+            return [
+                "Оставьте канал в manual handoff.",
+                "Проверьте Meta Page/IG business binding.",
+                "Включайте API publish только после подтверждения permissions.",
+            ] if is_ru else [
+                "Keep the channel in manual handoff.",
+                "Verify Meta Page/IG business binding.",
+                "Enable API publish only after permissions are confirmed.",
+            ]
+        return [
+            "Подключите Meta account.",
+            "Выберите Page или Instagram business account.",
+            "Проверьте permissions для публикации.",
+        ] if is_ru else [
+            "Connect the Meta account.",
+            "Choose the Page or Instagram business account.",
+            "Verify publishing permissions.",
+        ]
+    if status_key == "missing_permissions":
+        return ["Обновите права подключения."] if is_ru else ["Update connection permissions."]
+    if status_key == "missing_binding":
+        return ["Выберите аккаунт или страницу для публикации."] if is_ru else ["Choose the account or page for publishing."]
+    if status_key == "missing_connection":
+        return ["Подключите аккаунт канала."] if is_ru else ["Connect the channel account."]
+    return ["Проверьте ключи и настройки канала."] if is_ru else ["Check channel keys and settings."]
+
+
+def _channel_readiness_missing_fields(platform: str, status: str) -> list[str]:
+    platform_key = str(platform or "").strip()
+    status_key = str(status or "").strip()
+    if status_key in {"ready", "supervised_ready", "manual_fallback", "adapter_pending"}:
+        return []
+    if platform_key == "telegram":
+        return ["telegram_bot_token", "telegram_chat_id"]
+    if platform_key == "vk":
+        if status_key == "missing_permissions":
+            return ["vk_access_token.wall_post_scope"]
+        if status_key == "missing_binding":
+            return ["vk_group_id_or_owner_id"]
+        return ["vk_access_token", "vk_group_id_or_owner_id", "wall.post"]
+    if platform_key == "google_business":
+        return ["google_business_account", "google_business_location"]
+    if platform_key == "instagram":
+        if status_key == "missing_permissions":
+            return ["meta_permissions.instagram_content_publish"]
+        if status_key == "missing_binding":
+            return ["instagram_business_account"]
+        return ["meta_account", "instagram_business_account", "instagram_content_publish"]
+    if platform_key == "facebook":
+        if status_key == "missing_permissions":
+            return ["meta_permissions.pages_manage_posts"]
+        if status_key == "missing_binding":
+            return ["facebook_page"]
+        return ["meta_account", "facebook_page", "pages_manage_posts"]
+    if status_key == "missing_permissions":
+        return ["permissions"]
+    if status_key == "missing_binding":
+        return ["account_binding"]
+    if status_key == "missing_connection":
+        return ["account_connection"]
+    return ["channel_settings"]
+
+
+def _channel_readiness_settings_path(platform: str) -> str:
+    platform_key = str(platform or "").strip()
+    if platform_key == "telegram":
+        return "/dashboard/settings?focus=channels"
+    if platform_key in {"yandex_maps", "two_gis"}:
+        return "/dashboard/card?tab=news&mode=plan"
+    return "/dashboard/settings?focus=integrations"
 
 
 def _build_plan_recommendation(posts: list[dict[str, Any]]) -> dict[str, Any]:

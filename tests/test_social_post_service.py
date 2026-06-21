@@ -29,6 +29,7 @@ from services.social_post_service import (
     _status_after_social_text_edit,
     _channel_readiness,
     _channel_readiness_next_action,
+    _channel_readiness_setup_steps,
     _supervised_publish_metadata,
     _supervised_publish_state,
     _vk_publish_binding,
@@ -1089,6 +1090,13 @@ def test_channel_readiness_exposes_owner_next_action():
     assert "wall.post" in vk["next_action_en"]
     assert "Instagram business account" in meta["next_action_en"]
     assert "ручного действия" in maps["next_action_ru"]
+    assert telegram["missing_fields"] == ["telegram_bot_token", "telegram_chat_id"]
+    assert "Telegram-бота" in telegram["setup_steps_ru"][0]
+    assert vk["missing_fields"] == ["vk_access_token.wall_post_scope"]
+    assert "wall.post" in vk["setup_steps_en"][1]
+    assert maps["missing_fields"] == []
+    assert "Скопируйте" in maps["setup_steps_ru"][0]
+    assert telegram["settings_path"] == "/dashboard/settings?focus=channels"
 
 
 def test_channel_readiness_next_action_distinguishes_ready_and_supervised():
@@ -1097,6 +1105,15 @@ def test_channel_readiness_next_action_distinguishes_ready_and_supervised():
 
     assert "controlled" in supervised_next
     assert "финальная кнопка" in supervised_next
+
+
+def test_channel_readiness_setup_steps_are_actionable_for_ready_and_meta():
+    ready_steps = _channel_readiness_setup_steps("telegram", "ready", True)
+    meta_steps = _channel_readiness("facebook", "api", False, "missing_permissions")
+
+    assert ready_steps == ["Проверьте preview поста.", "Утвердите текст.", "Поставьте в расписание."]
+    assert meta_steps["missing_fields"] == ["meta_permissions.pages_manage_posts"]
+    assert "permissions" in meta_steps["setup_steps_en"][2]
 
 
 def test_external_account_preflight_does_not_requeue_without_native_publish(monkeypatch):

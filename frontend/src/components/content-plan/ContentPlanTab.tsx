@@ -431,6 +431,10 @@ type SocialChannelReadiness = {
   message_en?: string;
   next_action_ru?: string;
   next_action_en?: string;
+  setup_steps_ru?: string[];
+  setup_steps_en?: string[];
+  missing_fields?: string[];
+  settings_path?: string;
 };
 
 type SocialPlanNextAction = 'prepare' | 'review' | 'queue' | 'supervised' | 'manual' | 'recommend' | 'wait' | 'none';
@@ -5701,13 +5705,37 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               {isRu ? channel.next_action_ru : channel.next_action_en}
                             </div>
                           ) : null}
+                          {((isRu ? channel.setup_steps_ru : channel.setup_steps_en) || []).length > 0 ? (
+                            <div className={channel.ready ? 'mt-2 rounded-lg border border-emerald-100 bg-white/70 px-2 py-1.5' : 'mt-2 rounded-lg border border-amber-100 bg-white/70 px-2 py-1.5'}>
+                              <div className={channel.ready ? 'text-[11px] font-semibold text-emerald-950' : 'text-[11px] font-semibold text-amber-950'}>
+                                {isRu ? 'Чеклист' : 'Checklist'}
+                              </div>
+                              <ul className={channel.ready ? 'mt-1 space-y-1 text-[11px] leading-4 text-emerald-800' : 'mt-1 space-y-1 text-[11px] leading-4 text-amber-800'}>
+                                {((isRu ? channel.setup_steps_ru : channel.setup_steps_en) || []).slice(0, 3).map((step, index) => (
+                                  <li key={`${channel.platform}-setup-${index}`} className="flex gap-1.5">
+                                    <span className="mt-[1px] shrink-0 font-semibold">{index + 1}.</span>
+                                    <span>{step}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+                          {!channel.ready && (channel.missing_fields || []).length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {(channel.missing_fields || []).slice(0, 3).map((field) => (
+                                <span key={`${channel.platform}-missing-${field}`} className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                                  {field}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
                           {!channel.ready && channel.publish_mode === 'api' ? (
                             <Button
                               type="button"
                               size="sm"
                               variant="outline"
                               className="mt-2 h-7 rounded-lg px-2 text-[11px]"
-                              onClick={() => navigate(_socialSettingsPathForPlatform(String(channel.platform || '')))}
+                              onClick={() => navigate(channel.settings_path || _socialSettingsPathForPlatform(String(channel.platform || '')))}
                             >
                               {isRu ? 'Открыть настройку канала' : 'Open channel setup'}
                             </Button>
