@@ -657,7 +657,7 @@ def record_social_post_attribution_event(
         ensure_social_post_tables(cursor)
         post = _load_post_for_user(cursor, user_id, post_id)
         normalized_event_type = str(event_type or "").strip().lower()
-        if normalized_event_type not in {"lead", "inquiry", "comment", "share", "click"}:
+        if normalized_event_type not in {"lead", "inquiry", "comment", "share", "click", "like", "view"}:
             raise ValueError("Неподдерживаемый тип события")
         event_value = max(int(value or 1), 1)
         event_id = _new_id()
@@ -750,10 +750,10 @@ def collect_social_post_metrics(user_id: str, business_id: str = "", post_id: st
                     _new_id(),
                     post.get("id"),
                     today,
-                    provider_metrics.get("views", 0),
-                    provider_metrics.get("impressions", 0),
-                    provider_metrics.get("reach", 0),
-                    provider_metrics.get("likes", 0),
+                    max(int(attribution_metrics.get("views", 0) or 0), int(provider_metrics.get("views", 0) or 0)),
+                    max(int(attribution_metrics.get("views", 0) or 0), int(provider_metrics.get("impressions", 0) or 0)),
+                    max(int(attribution_metrics.get("views", 0) or 0), int(provider_metrics.get("reach", 0) or 0)),
+                    max(int(attribution_metrics.get("likes", 0) or 0), int(provider_metrics.get("likes", 0) or 0)),
                     max(int(attribution_metrics.get("comments", 0) or 0), int(provider_metrics.get("comments", 0) or 0)),
                     max(int(attribution_metrics.get("shares", 0) or 0), int(provider_metrics.get("shares", 0) or 0)),
                     attribution_metrics.get("clicks", 0),
@@ -2406,9 +2406,13 @@ def _upsert_manual_attribution_metrics(cursor: Any, post_id: str) -> None:
         INSERT INTO social_post_metrics (
             id, social_post_id, metric_date, views, impressions, reach, likes, comments, shares, clicks, inquiries, leads, raw_json, captured_at
         )
-        VALUES (%s, %s, %s, 0, 0, 0, 0, %s, %s, %s, %s, %s, %s, NOW())
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         ON CONFLICT (social_post_id, metric_date)
         DO UPDATE SET
+            views = GREATEST(social_post_metrics.views, EXCLUDED.views),
+            impressions = GREATEST(social_post_metrics.impressions, EXCLUDED.impressions),
+            reach = GREATEST(social_post_metrics.reach, EXCLUDED.reach),
+            likes = GREATEST(social_post_metrics.likes, EXCLUDED.likes),
             comments = GREATEST(social_post_metrics.comments, EXCLUDED.comments),
             shares = GREATEST(social_post_metrics.shares, EXCLUDED.shares),
             clicks = GREATEST(social_post_metrics.clicks, EXCLUDED.clicks),
@@ -2421,6 +2425,10 @@ def _upsert_manual_attribution_metrics(cursor: Any, post_id: str) -> None:
             _new_id(),
             post_id,
             date.today(),
+            metrics.get("views", 0),
+            metrics.get("views", 0),
+            metrics.get("views", 0),
+            metrics.get("likes", 0),
             metrics.get("comments", 0),
             metrics.get("shares", 0),
             metrics.get("clicks", 0),
@@ -2480,7 +2488,7 @@ def _merge_metric_totals_into_posts(cursor: Any, posts: list[dict[str, Any]]) ->
 
 def _attribution_metrics_for_post(cursor: Any, post_id: str) -> dict[str, int]:
     if not post_id:
-        return {"comments": 0, "shares": 0, "clicks": 0, "inquiries": 0, "leads": 0}
+        return {"views": 0, "likes": 0, "comments": 0, "shares": 0, "clicks": 0, "inquiries": 0, "leads": 0}
     cursor.execute(
         """
         SELECT event_type, COALESCE(SUM(value), 0) AS total
@@ -2490,7 +2498,7 @@ def _attribution_metrics_for_post(cursor: Any, post_id: str) -> dict[str, int]:
         """,
         (post_id,),
     )
-    result = {"comments": 0, "shares": 0, "clicks": 0, "inquiries": 0, "leads": 0}
+    result = {"views": 0, "likes": 0, "comments": 0, "shares": 0, "clicks": 0, "inquiries": 0, "leads": 0}
     for row in cursor.fetchall() or []:
         event_type = str(_row_get(row, "event_type", 0) or "").strip()
         total = int(_row_get(row, "total", 1, 0) or 0)
@@ -2504,6 +2512,10 @@ def _attribution_metrics_for_post(cursor: Any, post_id: str) -> dict[str, int]:
             result["shares"] += total
         elif event_type == "click":
             result["clicks"] += total
+        elif event_type == "like":
+            result["likes"] += total
+        elif event_type == "view":
+            result["views"] += total
     return result
 
 

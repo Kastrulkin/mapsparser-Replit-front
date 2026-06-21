@@ -27,6 +27,7 @@ from services.social_post_service import (
     _vk_publish_binding,
     apply_social_post_recommendation,
     _build_next_plan_changes,
+    _attribution_metrics_for_post,
     build_social_queue_groups,
     collect_due_social_post_metrics,
     default_publish_mode,
@@ -182,6 +183,23 @@ class FakeMetricTotalsCursor:
                 "inquiries": 1,
                 "leads": 2,
             }
+        ]
+
+
+class FakeAttributionMetricsCursor:
+    def execute(self, query, params=None):
+        self.query = query
+        self.params = params
+
+    def fetchall(self):
+        return [
+            {"event_type": "view", "total": 25},
+            {"event_type": "like", "total": 4},
+            {"event_type": "comment", "total": 2},
+            {"event_type": "share", "total": 1},
+            {"event_type": "click", "total": 3},
+            {"event_type": "inquiry", "total": 1},
+            {"event_type": "lead", "total": 1},
         ]
 
 
@@ -423,6 +441,18 @@ def test_plan_recommendation_explains_signal_priority():
     assert recommendation["signal_priority"][0]["rank"] == 1
     assert recommendation["signal_priority"][0]["role_ru"] == "главный KPI"
     assert recommendation["signal_priority"][3]["value"] == 140
+
+
+def test_manual_attribution_metrics_include_views_and_likes():
+    metrics = _attribution_metrics_for_post(FakeAttributionMetricsCursor(), "post-1")
+
+    assert metrics["views"] == 25
+    assert metrics["likes"] == 4
+    assert metrics["comments"] == 2
+    assert metrics["shares"] == 1
+    assert metrics["clicks"] == 3
+    assert metrics["inquiries"] == 1
+    assert metrics["leads"] == 1
 
 
 def test_dispatch_action_for_status_matches_worker_log_buckets():

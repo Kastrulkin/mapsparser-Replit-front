@@ -346,7 +346,7 @@ type SocialPlanNextStep = {
   disabled?: boolean;
 };
 
-type SocialAttributionEventType = 'lead' | 'inquiry' | 'comment' | 'share' | 'click';
+type SocialAttributionEventType = 'lead' | 'inquiry' | 'comment' | 'share' | 'click' | 'like' | 'view';
 
 type LearningMetricsPayload = {
   window_days: number;
@@ -5836,6 +5836,24 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                         >
                                           {isRu ? 'Был клик' : 'Record click'}
                                         </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => { void recordSocialPostAttribution(post, 'like'); }}
+                                          disabled={postBusy}
+                                        >
+                                          {isRu ? 'Был лайк' : 'Record like'}
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => { void recordSocialPostAttribution(post, 'view'); }}
+                                          disabled={postBusy}
+                                        >
+                                          {isRu ? 'Был просмотр' : 'Record view'}
+                                        </Button>
                                       </>
                                     ) : null}
                                   </div>
@@ -5845,11 +5863,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                         {isRu ? `заявки/обращения: ${Number(post.leads || 0) + Number(post.inquiries || 0)}` : `leads/inquiries: ${Number(post.leads || 0) + Number(post.inquiries || 0)}`}
                                       </span>
                                     ) : null}
-                                    {Number(post.comments || 0) || Number(post.shares || 0) || Number(post.clicks || 0) || Number(post.reach || 0) ? (
+                                    {Number(post.comments || 0) || Number(post.shares || 0) || Number(post.clicks || 0) || Number(post.likes || 0) || Number(post.views || 0) || Number(post.reach || 0) ? (
                                       <span>
                                         {isRu
-                                          ? `ранние сигналы: комментарии ${Number(post.comments || 0)}, репосты ${Number(post.shares || 0)}, клики ${Number(post.clicks || 0)}, охват ${Number(post.reach || 0)}`
-                                          : `early signals: comments ${Number(post.comments || 0)}, shares ${Number(post.shares || 0)}, clicks ${Number(post.clicks || 0)}, reach ${Number(post.reach || 0)}`}
+                                          ? `ранние сигналы: комментарии ${Number(post.comments || 0)}, репосты ${Number(post.shares || 0)}, клики ${Number(post.clicks || 0)}, лайки ${Number(post.likes || 0)}, просмотры ${Number(post.views || post.reach || 0)}`
+                                          : `early signals: comments ${Number(post.comments || 0)}, shares ${Number(post.shares || 0)}, clicks ${Number(post.clicks || 0)}, likes ${Number(post.likes || 0)}, views ${Number(post.views || post.reach || 0)}`}
                                       </span>
                                     ) : null}
                                   </div>
@@ -6248,6 +6266,18 @@ function _socialAttributionFeedback(eventType: SocialAttributionEventType): { ru
     return {
       ru: 'Репост привязан к публикации. Это усилит оценку формата, но ниже заявок и обращений.',
       en: 'Share recorded for this post. It helps evaluate the format, below leads and inquiries.',
+    };
+  }
+  if (eventType === 'like') {
+    return {
+      ru: 'Лайк привязан к публикации как ранний сигнал. Заявки и обращения всё равно важнее.',
+      en: 'Like recorded as an early signal. Leads and inquiries still rank higher.',
+    };
+  }
+  if (eventType === 'view') {
+    return {
+      ru: 'Просмотр привязан к публикации как ранний сигнал охвата.',
+      en: 'View recorded as an early reach signal for this post.',
     };
   }
   return {

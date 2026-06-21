@@ -3099,6 +3099,183 @@ def test_agent_preview_run_and_activation_endpoints_enforce_safe_gate(monkeypatc
     assert preview_input["external_side_effects_allowed"] is False
 
 
+def test_browser_use_to_telegram_agent_preview_run_is_ready_after_connections(monkeypatch):
+    from flask import Flask
+
+    from api import agent_blueprints_api
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+
+    draft = compile_agent_blueprint(
+        "Через browser use открой сайт конкурента https://competitor.example, проверь изменения цен "
+        "и подготовь короткое сообщение владельцу в Telegram.",
+        use_ai=True,
+    )
+    metadata = dict(draft["metadata"])
+    metadata["agent_integration_ids"] = ["browser-1", "telegram-1"]
+    metadata["agent_binding_integrations"] = {
+        "browser_use_read": {
+            "integration_id": "browser-1",
+            "provider": "browser_use",
+        },
+        "telegram_delivery": {
+            "integration_id": "openclaw_boundary",
+            "provider": "openclaw",
+            "route_provider": "openclaw",
+            "status": "active",
+        },
+    }
+    metadata["agent_binding_provider_routes"] = {
+        "telegram_delivery": {
+            "route_provider": "openclaw",
+            "provider": "openclaw",
+            "status": "active",
+            "integration_id": "openclaw_boundary",
+            "execution_boundary": "localos_policy_envelope",
+        },
+    }
+    metadata["custom_process"] = {
+        "browser_use": {
+            "integration_id": "browser-1",
+            "target_urls": ["https://competitor.example"],
+            "mode": "openclaw_browser_boundary",
+        },
+        "browser_use_read": {
+            "integration_id": "browser-1",
+            "target_urls": ["https://competitor.example"],
+            "mode": "openclaw_browser_boundary",
+        },
+        "telegram": {
+            "integration_id": "openclaw_boundary",
+            "route_provider": "openclaw",
+            "status": "active",
+        },
+    }
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp-browser"] = {
+        "id": "bp-browser",
+        "business_id": "biz1",
+        "name": "Мониторинг сайта конкурента",
+        "category": "custom",
+        "description": "Browser use проверяет сайт конкурента и готовит Telegram-отчёт.",
+        "status": "draft",
+        "metadata_json": metadata,
+    }
+    cursor.tables["agent_blueprint_versions"]["ver-browser"] = {
+        "id": "ver-browser",
+        "blueprint_id": "bp-browser",
+        "version_number": 1,
+        "goal": draft["version_payload"]["goal"],
+        "inputs_schema_json": draft["version_payload"]["inputs_schema"],
+        "steps_json": draft["version_payload"]["steps"],
+        "capability_allowlist_json": draft["version_payload"]["capability_allowlist"],
+        "approval_policy_json": draft["version_payload"]["approval_policy"],
+        "output_schema_json": draft["version_payload"]["output_schema"],
+    }
+    cursor.tables["agent_integrations"]["browser-1"] = {
+        "id": "browser-1",
+        "business_id": "biz1",
+        "provider": "browser_use",
+        "status": "active",
+        "display_name": "Browser use через OpenClaw",
+        "auth_ref": None,
+        "config_json": {
+            "target_urls": ["https://competitor.example"],
+            "mode": "openclaw_browser_boundary",
+        },
+        "limits_json": {"daily_page_check_cap": 12, "frequency_cap_minutes": 60},
+        "connected_by_user_id": "user1",
+        "created_at": "2026-06-21T10:00:00Z",
+        "updated_at": "2026-06-21T10:00:00Z",
+    }
+    cursor.tables["agent_integrations"]["telegram-1"] = {
+        "id": "telegram-1",
+        "business_id": "biz1",
+        "provider": "telegram",
+        "status": "active",
+        "display_name": "Бот владельца",
+        "auth_ref": None,
+        "config_json": {"bot_mode": "business_bot"},
+        "limits_json": {"daily_message_cap": 30, "frequency_cap_minutes": 30},
+        "connected_by_user_id": "user1",
+        "created_at": "2026-06-21T10:00:00Z",
+        "updated_at": "2026-06-21T10:00:00Z",
+    }
+
+    class FakeConnection:
+        def __init__(self):
+            self.cursor_instance = cursor
+            self.commit_count = 0
+            self.rollback_count = 0
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            self.commit_count += 1
+
+        def rollback(self):
+            self.rollback_count += 1
+
+    class FakeDatabase:
+        def __init__(self):
+            self.conn = fake_connection
+
+        def close(self):
+            return None
+
+    fake_connection = FakeConnection()
+    monkeypatch.setattr(agent_blueprints_api, "DatabaseManager", FakeDatabase)
+    monkeypatch.setattr(agent_blueprints_api, "_require_auth", lambda: ({"user_id": "user1"}, None))
+    monkeypatch.setattr(agent_blueprints_api, "_require_business_access", lambda cursor, business_id, user_data: (True, None))
+    monkeypatch.setattr(agent_blueprints_api, "build_agent_blueprint_orchestrator", CountingOrchestrator)
+
+    app = Flask(__name__)
+    preflight_context = app.test_request_context(
+        "/api/agent-blueprints/bp-browser/preflight",
+        method="POST",
+        json={"blueprint_version_id": "ver-browser", "input": {"preview_mode": True}},
+    )
+    preflight_context.push()
+    try:
+        preflight_response = agent_blueprints_api.preflight_agent_blueprint_run("bp-browser")
+    finally:
+        preflight_context.pop()
+    preflight_payload = preflight_response.get_json()
+
+    run_context = app.test_request_context(
+        "/api/agent-blueprints/bp-browser/runs",
+        method="POST",
+        json={"blueprint_version_id": "ver-browser", "input": {"preview_mode": True}},
+    )
+    run_context.push()
+    try:
+        run_response, run_status = agent_blueprints_api.start_agent_blueprint_run("bp-browser")
+    finally:
+        run_context.pop()
+    run_payload = run_response.get_json()
+    run_input = cursor.tables["agent_runs"][run_payload["run"]["id"]]["input_json"]
+    preflight_items = {
+        item["key"]: item
+        for item in preflight_payload["preflight"]["items"]
+    }
+
+    assert preflight_payload["success"] is True
+    assert preflight_payload["can_start"] is True
+    assert preflight_payload["preflight"]["ready"] is True
+    assert preflight_items["browser_use_read"]["provider"] == "browser_use"
+    assert preflight_items["browser_use_read"]["resolution"] == "blueprint_metadata"
+    assert preflight_items["browser_use_read"]["execution_boundary"] == "connected_provider"
+    assert preflight_items["telegram_delivery"]["resolution"] == "provider_route_openclaw_boundary"
+    assert preflight_payload["preview_input"]["external_side_effects_allowed"] is False
+    assert run_status == 201
+    assert run_payload["success"] is True
+    assert run_input["preview_mode"] is True
+    assert run_input["external_side_effects_allowed"] is False
+    assert run_payload["run"]["observability"]["preview_summary"]["safe_preview"] is True
+    assert fake_connection.commit_count == 1
+    assert fake_connection.rollback_count == 0
+
+
 def test_agent_builder_setup_flow_blocks_draft_until_clarification_is_answered():
     from services.agent_builder_session import build_agent_builder_state
 
@@ -8785,6 +8962,7 @@ class FakeCursor:
             "finance_import_batches": {},
             "finance_entries": {},
             "agent_action_ledger": {},
+            "agent_integrations": {},
         }
         self.last_result = None
         self.last_results = []
@@ -8890,6 +9068,20 @@ class FakeCursor:
             return None
         if normalized_query.startswith("select * from agent_blueprints where id"):
             self.last_result = self.tables["agent_blueprints"].get(params[0])
+            return None
+        if "from agent_integrations" in normalized_query:
+            business_id = params[0]
+            integration_ids = []
+            if "id = any" in normalized_query and len(params) > 1:
+                integration_ids = list(params[1] or [])
+            rows = [
+                row
+                for row in self.tables["agent_integrations"].values()
+                if row.get("business_id") == business_id
+                and (not integration_ids or row.get("id") in integration_ids)
+            ]
+            rows = sorted(rows, key=lambda item: str(item.get("updated_at") or item.get("created_at") or ""), reverse=True)
+            self.last_results = rows[:100]
             return None
         if normalized_query.startswith("insert into agent_runs"):
             self.tables["agent_runs"][params[0]] = {
