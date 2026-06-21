@@ -364,6 +364,22 @@ type SocialFirstCycleVerification = {
   checks_en?: string[];
 };
 
+type SocialLaunchRunbook = {
+  ready?: boolean;
+  scope?: string;
+  status?: string;
+  title_ru?: string;
+  title_en?: string;
+  summary_ru?: string;
+  summary_en?: string;
+  steps_ru?: string[];
+  steps_en?: string[];
+  success_criteria_ru?: string[];
+  success_criteria_en?: string[];
+  blocked_reason_ru?: string;
+  blocked_reason_en?: string;
+};
+
 type SocialLaunchPreflight = {
   business_id?: string;
   status?: string;
@@ -400,6 +416,7 @@ type SocialLaunchPreflight = {
   next_action_ru?: string;
   next_action_en?: string;
   first_cycle_verification?: SocialFirstCycleVerification;
+  launch_runbook?: SocialLaunchRunbook;
 };
 
 type SocialRuntimeStatus = {
@@ -2394,13 +2411,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     const metricsEnv = socialLaunchPreflight?.recommended_env?.metrics || {};
     const lines = _socialWorkerEnvLines(dispatchEnv, metricsEnv);
     if (!lines.length) return;
+    const runbookLines = _socialLaunchRunbookClipboardLines(socialLaunchPreflight?.launch_runbook, isRu);
     setError('');
     try {
-      await copyTextToClipboard(lines.join('\n'));
+      await copyTextToClipboard([...lines, ...runbookLines].join('\n'));
       setActionSummary({
         tone: 'success',
-        text_ru: 'Env для scoped dispatch скопирован. Включайте его на сервере только для выбранного бизнеса и проверьте worker logs после первого цикла.',
-        text_en: 'Scoped dispatch env copied. Enable it on the server only for the selected business and check worker logs after the first cycle.',
+        text_ru: 'Env и runbook первого цикла скопированы. Включайте worker только для выбранного бизнеса и проверьте логи после одного цикла.',
+        text_en: 'Scoped dispatch env and first-cycle runbook copied. Enable the worker only for the selected business and check logs after one cycle.',
       });
     } catch {
       setError(isRu ? 'Не удалось скопировать env для worker' : 'Could not copy worker env');
@@ -2735,6 +2753,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         message_en: String(response.message_en || ''),
         next_action_ru: String(response.next_action_ru || ''),
         next_action_en: String(response.next_action_en || ''),
+        launch_runbook: response.launch_runbook && typeof response.launch_runbook === 'object' ? response.launch_runbook : undefined,
       };
       setSocialLaunchPreflight(preflight);
       if (dispatchPreview) {
@@ -5346,20 +5365,21 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 <div key={line} className="break-all">{line}</div>
                               ))}
                             </div>
-                            <Button
-                              type="button"
-                              size="sm"
+	                            <Button
+	                              type="button"
+	                              size="sm"
                               variant="outline"
                               className="mt-2 h-7 border-white/20 bg-white/10 px-2 text-[11px] text-white hover:bg-white/20"
                               onClick={() => { void copySocialWorkerEnv(); }}
-                                                      >
-                                                        {isRu ? 'Скопировать env для worker' : 'Copy worker env'}
-                                                      </Button>
-                                                    </div>
+                            >
+                              {isRu ? 'Скопировать env + runbook' : 'Copy env + runbook'}
+                            </Button>
+                          </div>
                           {_socialFirstCycleVerificationBlock(socialLaunchPreflight.first_cycle_verification, isRu)}
-                                                    <div className="mt-1 text-[11px] text-slate-300">
-                                                      {isRu
-                                                        ? 'Preflight ничего не публикует: approval обязателен, карты остаются controlled/manual без финального клика.'
+                          {_socialLaunchRunbookBlock(socialLaunchPreflight.launch_runbook, isRu)}
+                          <div className="mt-1 text-[11px] text-slate-300">
+                            {isRu
+                              ? 'Preflight ничего не публикует: approval обязателен, карты остаются controlled/manual без финального клика.'
                               : 'Preflight publishes nothing: approval is required, and maps stay controlled/manual without the final click.'}
                           </div>
                         </div>
@@ -7185,6 +7205,85 @@ function _socialWorkerEnvLines(
   ]) {
     const value = String(metricsEnv[key] || '').trim();
     if (value) lines.push(`${key}=${value}`);
+  }
+  return lines;
+}
+
+function _socialLaunchRunbookBlock(runbook: SocialLaunchRunbook | undefined, isRu: boolean) {
+  const steps = Array.isArray(isRu ? runbook?.steps_ru : runbook?.steps_en)
+    ? (isRu ? runbook?.steps_ru : runbook?.steps_en) || []
+    : [];
+  const criteria = Array.isArray(isRu ? runbook?.success_criteria_ru : runbook?.success_criteria_en)
+    ? (isRu ? runbook?.success_criteria_ru : runbook?.success_criteria_en) || []
+    : [];
+  const title = isRu ? String(runbook?.title_ru || '') : String(runbook?.title_en || '');
+  const summary = isRu ? String(runbook?.summary_ru || '') : String(runbook?.summary_en || '');
+  const blockedReason = isRu ? String(runbook?.blocked_reason_ru || '') : String(runbook?.blocked_reason_en || '');
+  if (!title && !summary && !steps.length && !criteria.length && !blockedReason) return null;
+  return (
+    <div className="mt-2 rounded-lg border border-emerald-300/20 bg-emerald-400/10 px-2 py-2 text-[11px] leading-5 text-emerald-50">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold text-white">
+          {title || (isRu ? 'Runbook первого цикла' : 'First-cycle runbook')}
+        </span>
+        <span className={runbook?.ready ? 'rounded-full bg-emerald-300/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-50' : 'rounded-full bg-amber-300/20 px-2 py-0.5 text-[10px] font-semibold text-amber-50'}>
+          {runbook?.ready ? (isRu ? 'готов' : 'ready') : (isRu ? 'не готов' : 'not ready')}
+        </span>
+      </div>
+      {summary ? (
+        <div className="mt-1 text-emerald-100">{summary}</div>
+      ) : null}
+      {blockedReason ? (
+        <div className="mt-1 rounded-md bg-amber-400/10 px-2 py-1 text-amber-100">
+          {blockedReason}
+        </div>
+      ) : null}
+      {steps.length > 0 ? (
+        <div className="mt-2 space-y-1">
+          <div className="font-semibold text-white">{isRu ? 'Шаги' : 'Steps'}</div>
+          {steps.slice(0, 6).map((step, index) => (
+            <div key={`${index}-${String(step)}`} className="flex gap-1.5 rounded-md bg-white/10 px-2 py-1">
+              <span className="shrink-0 font-semibold text-white">{index + 1}.</span>
+              <span>{String(step)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {criteria.length > 0 ? (
+        <div className="mt-2 space-y-1">
+          <div className="font-semibold text-white">{isRu ? 'Успех первого цикла' : 'First-cycle success'}</div>
+          {criteria.slice(0, 5).map((item) => (
+            <div key={String(item)} className="rounded-md bg-white/10 px-2 py-1">
+              {String(item)}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function _socialLaunchRunbookClipboardLines(runbook: SocialLaunchRunbook | undefined, isRu: boolean): string[] {
+  const steps = Array.isArray(isRu ? runbook?.steps_ru : runbook?.steps_en)
+    ? (isRu ? runbook?.steps_ru : runbook?.steps_en) || []
+    : [];
+  const criteria = Array.isArray(isRu ? runbook?.success_criteria_ru : runbook?.success_criteria_en)
+    ? (isRu ? runbook?.success_criteria_ru : runbook?.success_criteria_en) || []
+    : [];
+  const blockedReason = isRu ? String(runbook?.blocked_reason_ru || '') : String(runbook?.blocked_reason_en || '');
+  const lines: string[] = [];
+  if (steps.length || criteria.length || blockedReason) {
+    lines.push('', isRu ? '# Runbook первого цикла dispatch' : '# First-cycle dispatch runbook');
+  }
+  if (blockedReason) lines.push(`${isRu ? 'Blocked' : 'Blocked'}: ${blockedReason}`);
+  steps.forEach((step, index) => {
+    lines.push(`${index + 1}. ${String(step)}`);
+  });
+  if (criteria.length) {
+    lines.push(isRu ? 'Критерии успеха:' : 'Success criteria:');
+    criteria.forEach((item) => {
+      lines.push(`- ${String(item)}`);
+    });
   }
   return lines;
 }

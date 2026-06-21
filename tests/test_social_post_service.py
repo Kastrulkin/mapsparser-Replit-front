@@ -1511,6 +1511,12 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert "SOCIAL_POST_DISPATCH_BUSINESS_ID=biz-1" in payload["next_action_ru"]
     assert payload["first_cycle_verification"]["log_filter"] == "[SOCIAL_POST_DISPATCH]"
     assert payload["first_cycle_verification"]["expected_statuses"][0]["key"] == "api_channels"
+    assert payload["launch_runbook"]["ready"] is True
+    assert payload["launch_runbook"]["scope"] == "biz-1"
+    assert payload["launch_runbook"]["blocked_reason_ru"] == ""
+    assert "SOCIAL_POST_DISPATCH_BUSINESS_ID=biz-1" in payload["launch_runbook"]["steps_ru"][0]
+    assert "provider_post_id" in payload["launch_runbook"]["steps_ru"][3]
+    assert "needs_supervised_publish" in payload["launch_runbook"]["success_criteria_ru"][1]
 
 
 def test_social_launch_preflight_payload_handles_no_due_posts_as_next_ui_work():
@@ -1537,6 +1543,9 @@ def test_social_launch_preflight_payload_handles_no_due_posts_as_next_ui_work():
     assert payload["safe_to_enable_scoped_dispatch"] is False
     assert payload["summary"]["due_posts"] == 0
     assert "подготовьте" in payload["message_ru"]
+    assert payload["launch_runbook"]["ready"] is False
+    assert "Нет due-постов" in payload["launch_runbook"]["blocked_reason_ru"]
+    assert "Подготовьте" in payload["launch_runbook"]["steps_ru"][0]
 
 
 def test_supervised_handoff_writes_agent_action_ledger_when_available():

@@ -268,8 +268,16 @@ def _build_social_launch_preflight_payload(
     elif skipped_no_access > 0:
         status = "access_limited"
     safe_to_enable = bool(str(business_id or "").strip()) and due_count > 0 and skipped_no_access == 0
+    scope = str(business_id or "").strip()
+    first_cycle_verification = _social_worker_first_cycle_verification(
+        external_publish_count,
+        controlled_count,
+        manual_count,
+        skipped_no_access,
+        scope,
+    )
     return {
-        "business_id": str(business_id or "").strip(),
+        "business_id": scope,
         "status": status,
         "safe_to_enable_scoped_dispatch": safe_to_enable,
         "channel_readiness": channel_readiness,
@@ -298,17 +306,21 @@ def _build_social_launch_preflight_payload(
             "controlled_channels": len(controlled_channels),
             "skipped_no_access": skipped_no_access,
         },
-        "first_cycle_verification": _social_worker_first_cycle_verification(
+        "first_cycle_verification": first_cycle_verification,
+        "launch_runbook": _social_launch_runbook(
+            status,
+            scope,
+            due_count,
             external_publish_count,
             controlled_count,
             manual_count,
             skipped_no_access,
-            str(business_id or "").strip(),
+            first_cycle_verification,
         ),
         "message_ru": _social_launch_preflight_message(status, True),
         "message_en": _social_launch_preflight_message(status, False),
-        "next_action_ru": _social_launch_preflight_next_action(status, str(business_id or "").strip(), True),
-        "next_action_en": _social_launch_preflight_next_action(status, str(business_id or "").strip(), False),
+        "next_action_ru": _social_launch_preflight_next_action(status, scope, True),
+        "next_action_en": _social_launch_preflight_next_action(status, scope, False),
     }
 
 
@@ -1556,6 +1568,197 @@ def _dispatch_preview_next_action(status: str, business_scope: str, is_ru: bool)
         if is_ru
         else "No due posts yet: continue preparing, approving, and queueing posts."
     )
+
+
+def _social_launch_runbook(
+    status: str,
+    business_scope: str,
+    due_count: int,
+    external_publish_count: int,
+    controlled_count: int,
+    manual_count: int,
+    skipped_no_access: int,
+    first_cycle_verification: dict[str, Any],
+) -> dict[str, Any]:
+    scope = str(business_scope or "").strip()
+    log_filter = str(first_cycle_verification.get("log_filter") or "[SOCIAL_POST_DISPATCH]").strip()
+    due = int(due_count or 0)
+    external = int(external_publish_count or 0)
+    controlled = int(controlled_count or 0)
+    manual = int(manual_count or 0)
+    skipped = int(skipped_no_access or 0)
+    can_launch = bool(scope) and due > 0 and skipped == 0
+    return {
+        "ready": can_launch,
+        "scope": scope,
+        "status": str(status or "").strip(),
+        "title_ru": "Runbook первого цикла dispatch",
+        "title_en": "First-cycle dispatch runbook",
+        "summary_ru": (
+            f"Due {due}: API {external}, controlled {controlled}, manual {manual}. "
+            f"Scope: {scope or 'не задан'}."
+        ),
+        "summary_en": (
+            f"Due {due}: API {external}, controlled {controlled}, manual {manual}. "
+            f"Scope: {scope or 'not set'}."
+        ),
+        "steps_ru": _social_launch_runbook_steps(
+            scope,
+            due,
+            external,
+            controlled,
+            manual,
+            skipped,
+            log_filter,
+            True,
+        ),
+        "steps_en": _social_launch_runbook_steps(
+            scope,
+            due,
+            external,
+            controlled,
+            manual,
+            skipped,
+            log_filter,
+            False,
+        ),
+        "success_criteria_ru": _social_launch_runbook_success_criteria(external, controlled, manual, skipped, True),
+        "success_criteria_en": _social_launch_runbook_success_criteria(external, controlled, manual, skipped, False),
+        "blocked_reason_ru": _social_launch_runbook_blocked_reason(scope, due, skipped, True),
+        "blocked_reason_en": _social_launch_runbook_blocked_reason(scope, due, skipped, False),
+    }
+
+
+def _social_launch_runbook_steps(
+    scope: str,
+    due_count: int,
+    external_publish_count: int,
+    controlled_count: int,
+    manual_count: int,
+    skipped_no_access: int,
+    log_filter: str,
+    is_ru: bool,
+) -> list[str]:
+    if int(due_count or 0) <= 0:
+        return [
+            "Подготовьте посты, утвердите их и поставьте в расписание."
+            if is_ru
+            else "Prepare posts, approve them, and queue them on schedule.",
+            "Запустите preflight снова перед включением worker."
+            if is_ru
+            else "Run preflight again before enabling the worker.",
+        ]
+    steps = [
+        (
+            f"Включите dispatch только со scope: SOCIAL_POST_DISPATCH_BUSINESS_ID={scope}."
+            if is_ru
+            else f"Enable dispatch only with scope: SOCIAL_POST_DISPATCH_BUSINESS_ID={scope}."
+        )
+        if scope
+        else (
+            "Сначала задайте SOCIAL_POST_DISPATCH_BUSINESS_ID для тестового бизнеса."
+            if is_ru
+            else "Set SOCIAL_POST_DISPATCH_BUSINESS_ID for the test business first."
+        ),
+        (
+            f"Дождитесь одного цикла worker и найдите в логах {log_filter}."
+            if is_ru
+            else f"Wait for one worker cycle and find {log_filter} in logs."
+        ),
+        (
+            "Сверьте picked/published/supervised/manual/failed с dry-run."
+            if is_ru
+            else "Compare picked/published/supervised/manual/failed with the dry-run."
+        ),
+    ]
+    if int(external_publish_count or 0) > 0:
+        steps.append(
+            "Для API-постов проверьте provider_post_id/provider_post_url или понятный last_error."
+            if is_ru
+            else "For API posts, check provider_post_id/provider_post_url or a clear last_error."
+        )
+    if int(controlled_count or 0) > 0:
+        steps.append(
+            "Для Яндекс/2ГИС проверьте supervised/manual задачу: финальный клик не должен быть выполнен worker."
+            if is_ru
+            else "For Yandex/2GIS, check the supervised/manual task: the worker must not perform the final click."
+        )
+    if int(manual_count or 0) > 0:
+        steps.append(
+            "Для manual fallback откройте карточку поста, скопируйте текст и отметьте размещение вручную."
+            if is_ru
+            else "For manual fallback, open the post card, copy text, and mark placement manually."
+        )
+    if int(skipped_no_access or 0) > 0:
+        steps.append(
+            "Есть skipped_no_access: сузьте scope или проверьте права перед запуском."
+            if is_ru
+            else "skipped_no_access exists: narrow scope or check permissions before launch."
+        )
+    return steps
+
+
+def _social_launch_runbook_success_criteria(
+    external_publish_count: int,
+    controlled_count: int,
+    manual_count: int,
+    skipped_no_access: int,
+    is_ru: bool,
+) -> list[str]:
+    criteria = []
+    if int(external_publish_count or 0) > 0:
+        criteria.append(
+            "API-каналы стали published или failed с recoverable причиной."
+            if is_ru
+            else "API channels become published or failed with a recoverable reason."
+        )
+    if int(controlled_count or 0) > 0:
+        criteria.append(
+            "Яндекс/2ГИС перешли в needs_supervised_publish/needs_manual_publish без финального клика."
+            if is_ru
+            else "Yandex/2GIS move to needs_supervised_publish/needs_manual_publish without the final click."
+        )
+    if int(manual_count or 0) > 0:
+        criteria.append(
+            "Manual fallback показывает инструкцию и copy-ready текст."
+            if is_ru
+            else "Manual fallback shows instructions and copy-ready text."
+        )
+    if int(skipped_no_access or 0) > 0:
+        criteria.append(
+            "Skipped posts остались без изменений и требуют проверки прав/scope."
+            if is_ru
+            else "Skipped posts remain unchanged and require permission/scope review."
+        )
+    if not criteria:
+        criteria.append(
+            "Worker не отправил ничего наружу, потому что due-постов нет."
+            if is_ru
+            else "The worker sends nothing externally because there are no due posts."
+        )
+    return criteria
+
+
+def _social_launch_runbook_blocked_reason(scope: str, due_count: int, skipped_no_access: int, is_ru: bool) -> str:
+    if not str(scope or "").strip():
+        return (
+            "Нельзя включать production dispatch без SOCIAL_POST_DISPATCH_BUSINESS_ID."
+            if is_ru
+            else "Do not enable production dispatch without SOCIAL_POST_DISPATCH_BUSINESS_ID."
+        )
+    if int(due_count or 0) <= 0:
+        return (
+            "Нет due-постов: сначала подготовьте, утвердите и поставьте публикации в расписание."
+            if is_ru
+            else "No due posts: prepare, approve, and queue publications first."
+        )
+    if int(skipped_no_access or 0) > 0:
+        return (
+            "Есть skipped_no_access: сначала проверьте права или business scope."
+            if is_ru
+            else "skipped_no_access exists: check permissions or business scope first."
+        )
+    return ""
 
 
 def _dispatch_preview_recommended_env(business_scope: str) -> dict[str, str]:
