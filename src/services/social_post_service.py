@@ -3650,9 +3650,9 @@ def _queue_preflight_error(platform: str, status: str) -> str:
 
 def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, Any]]:
     business = _load_business_publish_context(cursor, business_id)
-    telegram_ready = bool(decode_telegram_bot_token(business.get("telegram_bot_token"))) and bool(
-        str(business.get("telegram_chat_id") or "").strip()
-    )
+    telegram_token_present = bool(decode_telegram_bot_token(business.get("telegram_bot_token")))
+    telegram_chat_present = bool(str(business.get("telegram_chat_id") or "").strip())
+    telegram_ready = telegram_token_present and telegram_chat_present
     vk_account = _find_active_external_account(cursor, business_id, ("vk", "vk_group", "vk_business"))
     vk_auth = _external_account_auth_data(vk_account)
     vk_binding = _vk_publish_binding(vk_account, vk_auth)
@@ -3662,38 +3662,68 @@ def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, An
     instagram_readiness = _meta_channel_readiness(meta_account, meta_auth, "instagram")
     facebook_readiness = _meta_channel_readiness(meta_account, meta_auth, "facebook")
     browser_ready = openclaw_browser_available()
+    yandex_target = _map_publish_target(cursor, business_id, "yandex_maps")
+    two_gis_target = _map_publish_target(cursor, business_id, "two_gis")
     return [
-        _channel_readiness("telegram", "api", telegram_ready, "ready" if telegram_ready else "missing_keys"),
-        _channel_readiness("vk", "api", bool(vk_binding.get("ready")), str(vk_binding.get("status") or "missing_keys")),
-        _channel_readiness("google_business", "api", bool(google_account), "ready" if google_account else "missing_connection"),
+        _channel_readiness(
+            "telegram",
+            "api",
+            telegram_ready,
+            "ready" if telegram_ready else "missing_keys",
+            _telegram_connection_checks(telegram_token_present, telegram_chat_present),
+        ),
+        _channel_readiness(
+            "vk",
+            "api",
+            bool(vk_binding.get("ready")),
+            str(vk_binding.get("status") or "missing_keys"),
+            _vk_connection_checks(vk_account, vk_auth, vk_binding),
+        ),
+        _channel_readiness(
+            "google_business",
+            "api",
+            bool(google_account),
+            "ready" if google_account else "missing_connection",
+            _google_business_connection_checks(google_account),
+        ),
         _channel_readiness(
             "instagram",
             "api",
             bool(instagram_readiness.get("ready")),
             str(instagram_readiness.get("status") or "missing_connection"),
+            _meta_connection_checks(meta_account, meta_auth, "instagram", str(instagram_readiness.get("status") or "")),
         ),
         _channel_readiness(
             "facebook",
             "api",
             bool(facebook_readiness.get("ready")),
             str(facebook_readiness.get("status") or "missing_connection"),
+            _meta_connection_checks(meta_account, meta_auth, "facebook", str(facebook_readiness.get("status") or "")),
         ),
         _channel_readiness(
             "yandex_maps",
             "openclaw_browser" if browser_ready else "manual",
             browser_ready,
             "supervised_ready" if browser_ready else "manual_fallback",
+            _maps_connection_checks(browser_ready, yandex_target),
         ),
         _channel_readiness(
             "two_gis",
             "openclaw_browser" if browser_ready else "manual",
             browser_ready,
             "supervised_ready" if browser_ready else "manual_fallback",
+            _maps_connection_checks(browser_ready, two_gis_target),
         ),
     ]
 
 
-def _channel_readiness(platform: str, publish_mode: str, ready: bool, status: str) -> dict[str, Any]:
+def _channel_readiness(
+    platform: str,
+    publish_mode: str,
+    ready: bool,
+    status: str,
+    connection_checks: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     return {
         "platform": platform,
         "platform_label": platform_label(platform),
@@ -3708,7 +3738,228 @@ def _channel_readiness(platform: str, publish_mode: str, ready: bool, status: st
         "setup_steps_en": _channel_readiness_setup_steps(platform, status, False),
         "missing_fields": _channel_readiness_missing_fields(platform, status),
         "settings_path": _channel_readiness_settings_path(platform),
+        "connection_checks": connection_checks or [],
     }
+
+
+def _connection_check(
+    key: str,
+    ok: bool,
+    label_ru: str,
+    label_en: str,
+    detail_ru: str = "",
+    detail_en: str = "",
+    state: str = "",
+) -> dict[str, Any]:
+    resolved_state = str(state or ("ok" if ok else "missing")).strip()
+    return {
+        "key": str(key or "").strip(),
+        "ok": bool(ok),
+        "state": resolved_state,
+        "label_ru": str(label_ru or "").strip(),
+        "label_en": str(label_en or "").strip(),
+        "detail_ru": str(detail_ru or "").strip(),
+        "detail_en": str(detail_en or "").strip(),
+    }
+
+
+def _telegram_connection_checks(token_present: bool, chat_present: bool) -> list[dict[str, Any]]:
+    return [
+        _connection_check(
+            "telegram_bot_token",
+            token_present,
+            "Токен бота",
+            "Bot token",
+            "токен найден" if token_present else "добавьте telegram_bot_token",
+            "token found" if token_present else "add telegram_bot_token",
+        ),
+        _connection_check(
+            "telegram_chat_id",
+            chat_present,
+            "Канал или чат",
+            "Channel or chat",
+            "chat_id найден" if chat_present else "укажите telegram_chat_id",
+            "chat_id found" if chat_present else "set telegram_chat_id",
+        ),
+        _connection_check(
+            "telegram_publish_probe",
+            token_present and chat_present,
+            "Права на публикацию",
+            "Publishing permission",
+            "проверится при первом publish" if token_present and chat_present else "проверка невозможна без токена и chat_id",
+            "checked on first publish" if token_present and chat_present else "cannot check without token and chat_id",
+            "deferred" if token_present and chat_present else "blocked",
+        ),
+    ]
+
+
+def _vk_connection_checks(
+    account: dict[str, Any],
+    auth_data: dict[str, Any],
+    binding: dict[str, Any],
+) -> list[dict[str, Any]]:
+    has_account = bool(account)
+    has_token = bool(str(binding.get("token") or auth_data.get("access_token") or auth_data.get("token") or "").strip())
+    has_owner = bool(str(binding.get("owner_id") or auth_data.get("owner_id") or account.get("external_id") or "").strip())
+    explicit_scope = _auth_scope_is_explicit(auth_data)
+    has_wall_permission = (not explicit_scope and has_token) or _auth_scope_allows(auth_data, {"wall", "wall.post"})
+    return [
+        _connection_check(
+            "vk_account",
+            has_account,
+            "VK подключение",
+            "VK connection",
+            "аккаунт найден" if has_account else "подключите VK account/token",
+            "account found" if has_account else "connect VK account/token",
+        ),
+        _connection_check(
+            "vk_access_token",
+            has_token,
+            "Access token",
+            "Access token",
+            "токен найден" if has_token else "добавьте access_token",
+            "token found" if has_token else "add access_token",
+        ),
+        _connection_check(
+            "vk_owner_id",
+            has_owner,
+            "Группа/owner_id",
+            "Group/owner_id",
+            "цель публикации выбрана" if has_owner else "укажите group_id или owner_id",
+            "posting target selected" if has_owner else "set group_id or owner_id",
+        ),
+        _connection_check(
+            "vk_wall_permission",
+            has_wall_permission,
+            "Право wall.post",
+            "wall.post permission",
+            "scope разрешает wall.post" if has_wall_permission and explicit_scope else (
+                "scope не указан, проверится при publish" if has_wall_permission else "обновите token с правом wall.post"
+            ),
+            "scope allows wall.post" if has_wall_permission and explicit_scope else (
+                "scope is absent, checked on publish" if has_wall_permission else "refresh token with wall.post"
+            ),
+            "ok" if has_wall_permission and explicit_scope else ("deferred" if has_wall_permission else "missing"),
+        ),
+    ]
+
+
+def _google_business_connection_checks(account: dict[str, Any]) -> list[dict[str, Any]]:
+    has_account = bool(account)
+    has_location = bool(str(account.get("external_id") or "").strip())
+    return [
+        _connection_check(
+            "google_business_account",
+            has_account,
+            "Google Business Profile",
+            "Google Business Profile",
+            "аккаунт подключен" if has_account else "подключите Google Business Profile",
+            "account connected" if has_account else "connect Google Business Profile",
+        ),
+        _connection_check(
+            "google_business_location",
+            has_location,
+            "Location",
+            "Location",
+            "location выбрана" if has_location else "выберите location для публикации",
+            "location selected" if has_location else "select a location for publishing",
+        ),
+    ]
+
+
+def _meta_connection_checks(
+    account: dict[str, Any],
+    auth_data: dict[str, Any],
+    platform: str,
+    status: str,
+) -> list[dict[str, Any]]:
+    platform_key = str(platform or "").strip()
+    has_account = bool(account)
+    has_token = bool(str(auth_data.get("access_token") or auth_data.get("token") or "").strip())
+    has_binding = bool(str(auth_data.get("page_id") or account.get("external_id") or "").strip())
+    permission_key = "pages_manage_posts"
+    if platform_key == "instagram":
+        has_binding = bool(str(auth_data.get("ig_user_id") or auth_data.get("instagram_business_account_id") or "").strip())
+        permission_key = "instagram_content_publish"
+    has_permission = (not _auth_scope_is_explicit(auth_data) and has_token) or _auth_scope_allows(auth_data, {permission_key})
+    adapter_enabled = str(status or "").strip() != "adapter_pending"
+    return [
+        _connection_check(
+            "meta_account",
+            has_account,
+            "Meta подключение",
+            "Meta connection",
+            "аккаунт найден" if has_account else "подключите Meta account",
+            "account found" if has_account else "connect Meta account",
+        ),
+        _connection_check(
+            "meta_token",
+            has_token,
+            "Access token",
+            "Access token",
+            "токен найден" if has_token else "добавьте access_token",
+            "token found" if has_token else "add access_token",
+        ),
+        _connection_check(
+            "meta_binding",
+            has_binding,
+            "Page/IG binding",
+            "Page/IG binding",
+            "asset выбран" if has_binding else "выберите Page или IG business account",
+            "asset selected" if has_binding else "choose Page or IG business account",
+        ),
+        _connection_check(
+            "meta_permission",
+            has_permission,
+            "Permission",
+            "Permission",
+            f"permission {permission_key} доступен" if has_permission else f"нужен permission {permission_key}",
+            f"permission {permission_key} available" if has_permission else f"permission {permission_key} required",
+            "ok" if has_permission and _auth_scope_is_explicit(auth_data) else ("deferred" if has_permission else "missing"),
+        ),
+        _connection_check(
+            "meta_native_publish",
+            adapter_enabled,
+            "API publish",
+            "API publish",
+            "native adapter включен" if adapter_enabled else "пока manual handoff до проверки Meta publish",
+            "native adapter enabled" if adapter_enabled else "manual handoff until Meta publish is verified",
+            "ok" if adapter_enabled else "blocked",
+        ),
+    ]
+
+
+def _maps_connection_checks(browser_ready: bool, target: dict[str, Any]) -> list[dict[str, Any]]:
+    target_url = str(target.get("target_url") or "").strip()
+    return [
+        _connection_check(
+            "openclaw_browser_use",
+            browser_ready,
+            "OpenClaw browser-use",
+            "OpenClaw browser-use",
+            "capability подтверждена" if browser_ready else "capability не подтверждена, будет ручной fallback",
+            "capability confirmed" if browser_ready else "capability is not confirmed; manual fallback will be used",
+            "ok" if browser_ready else "manual",
+        ),
+        _connection_check(
+            "map_profile_url",
+            bool(target_url),
+            "Ссылка на профиль",
+            "Profile URL",
+            "ссылка найдена" if target_url else "добавьте ссылку на карточку, чтобы открыть площадку быстрее",
+            "URL found" if target_url else "add the listing URL to open the platform faster",
+            "ok" if target_url else "recommended",
+        ),
+        _connection_check(
+            "final_publish_policy",
+            True,
+            "Финальный клик",
+            "Final click",
+            "всегда остаётся за человеком",
+            "always remains human-owned",
+            "human_approval",
+        ),
+    ]
 
 
 def _channel_readiness_message(platform: str, status: str, is_ru: bool) -> str:

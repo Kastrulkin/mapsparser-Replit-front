@@ -498,6 +498,17 @@ type SocialChannelReadiness = {
   setup_steps_en?: string[];
   missing_fields?: string[];
   settings_path?: string;
+  connection_checks?: SocialChannelConnectionCheck[];
+};
+
+type SocialChannelConnectionCheck = {
+  key?: string;
+  ok?: boolean;
+  state?: string;
+  label_ru?: string;
+  label_en?: string;
+  detail_ru?: string;
+  detail_en?: string;
 };
 
 type SocialPlanNextAction = 'prepare' | 'review' | 'queue' | 'supervised' | 'manual' | 'recommend' | 'wait' | 'none';
@@ -5859,6 +5870,40 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 {isRu ? 'Что сделать: ' : 'Next: '}
                               </span>
                               {isRu ? channel.next_action_ru : channel.next_action_en}
+                            </div>
+                          ) : null}
+                          {(channel.connection_checks || []).length > 0 ? (
+                            <div className={channel.ready ? 'mt-2 rounded-lg border border-emerald-100 bg-white/70 px-2 py-1.5' : 'mt-2 rounded-lg border border-amber-100 bg-white/70 px-2 py-1.5'}>
+                              <div className={channel.ready ? 'text-[11px] font-semibold text-emerald-950' : 'text-[11px] font-semibold text-amber-950'}>
+                                {isRu ? 'Диагностика' : 'Diagnostics'}
+                              </div>
+                              <div className="mt-1 space-y-1">
+                                {(channel.connection_checks || []).slice(0, 4).map((check) => {
+                                  const checkOk = Boolean(check.ok);
+                                  const state = String(check.state || '').trim();
+                                  const neutral = state === 'deferred' || state === 'manual' || state === 'recommended' || state === 'human_approval';
+                                  return (
+                                    <div
+                                      key={`${channel.platform}-check-${String(check.key || check.label_en || check.label_ru || '')}`}
+                                      className="flex gap-1.5 text-[11px] leading-4"
+                                    >
+                                      <span className={[
+                                        'mt-[1px] shrink-0 font-semibold',
+                                        checkOk ? 'text-emerald-700' : neutral ? 'text-sky-700' : 'text-amber-700',
+                                      ].join(' ')}
+                                      >
+                                        {checkOk ? '✓' : neutral ? '•' : '!'}
+                                      </span>
+                                      <span className={checkOk ? 'text-emerald-800' : neutral ? 'text-sky-800' : 'text-amber-800'}>
+                                        <span className="font-medium">
+                                          {isRu ? String(check.label_ru || '') : String(check.label_en || '')}
+                                        </span>
+                                        {(isRu ? check.detail_ru : check.detail_en) ? ` · ${isRu ? String(check.detail_ru || '') : String(check.detail_en || '')}` : ''}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
                           ) : null}
                           {((isRu ? channel.setup_steps_ru : channel.setup_steps_en) || []).length > 0 ? (

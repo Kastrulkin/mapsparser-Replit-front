@@ -32,8 +32,12 @@ from services.social_post_service import (
     _channel_readiness,
     _channel_readiness_next_action,
     _channel_readiness_setup_steps,
+    _maps_connection_checks,
+    _meta_connection_checks,
+    _telegram_connection_checks,
     _supervised_publish_metadata,
     _supervised_publish_state,
+    _vk_connection_checks,
     _vk_publish_binding,
     apply_social_post_recommendation,
     approve_social_post,
@@ -1192,6 +1196,47 @@ def test_channel_readiness_exposes_owner_next_action():
     assert maps["missing_fields"] == []
     assert "Скопируйте" in maps["setup_steps_ru"][0]
     assert telegram["settings_path"] == "/dashboard/settings?focus=channels"
+
+
+def test_channel_readiness_can_expose_safe_connection_checks():
+    checks = _telegram_connection_checks(token_present=True, chat_present=False)
+    readiness = _channel_readiness("telegram", "api", False, "missing_keys", checks)
+
+    assert readiness["connection_checks"][0]["key"] == "telegram_bot_token"
+    assert readiness["connection_checks"][0]["ok"] is True
+    assert readiness["connection_checks"][1]["key"] == "telegram_chat_id"
+    assert readiness["connection_checks"][1]["ok"] is False
+    assert "token" not in readiness["connection_checks"][0]["detail_ru"].lower()
+
+
+def test_provider_connection_checks_explain_vk_meta_and_maps_states():
+    vk_checks = _vk_connection_checks(
+        {"id": "vk-1", "external_id": "123"},
+        {"access_token": "secret", "scope": "groups"},
+        {"ready": False, "status": "missing_permissions", "token": "secret", "owner_id": "-123"},
+    )
+    meta_checks = _meta_connection_checks(
+        {"id": "m1", "external_id": "page-1"},
+        {"access_token": "secret", "scope": "pages_manage_posts"},
+        "facebook",
+        "adapter_pending",
+    )
+    maps_checks = _maps_connection_checks(False, {"target_url": ""})
+
+    assert [item["key"] for item in vk_checks][:4] == [
+        "vk_account",
+        "vk_access_token",
+        "vk_owner_id",
+        "vk_wall_permission",
+    ]
+    assert vk_checks[3]["ok"] is False
+    assert "wall.post" in vk_checks[3]["detail_en"]
+    assert meta_checks[-1]["key"] == "meta_native_publish"
+    assert meta_checks[-1]["ok"] is False
+    assert meta_checks[-1]["state"] == "blocked"
+    assert maps_checks[0]["key"] == "openclaw_browser_use"
+    assert maps_checks[0]["state"] == "manual"
+    assert maps_checks[2]["state"] == "human_approval"
 
 
 def test_channel_readiness_next_action_distinguishes_ready_and_supervised():
