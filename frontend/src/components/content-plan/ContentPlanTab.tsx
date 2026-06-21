@@ -1073,6 +1073,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const visibleSocialPosts = useMemo(() => (
     visibleItems.flatMap((item) => socialPostsByItem[item.id] || [])
   ), [socialPostsByItem, visibleItems]);
+  const socialMetricsSourceSummary = useMemo(() => {
+    const byPlatform = new Map<string, { platform: string; label: string; posts: number; published: number; sourceRu: string; sourceEn: string }>();
+    for (const post of visibleSocialPosts) {
+      const platform = String(post.platform || '').trim();
+      if (!platform) continue;
+      const existing = byPlatform.get(platform) || {
+        platform,
+        label: post.platform_label || _socialPlatformLabel(platform, isRu),
+        posts: 0,
+        published: 0,
+        sourceRu: _socialMetricsSourceText(platform, true),
+        sourceEn: _socialMetricsSourceText(platform, false),
+      };
+      existing.posts += 1;
+      if (post.status === 'published') existing.published += 1;
+      byPlatform.set(platform, existing);
+    }
+    return Array.from(byPlatform.values()).sort((left, right) => left.label.localeCompare(right.label));
+  }, [isRu, visibleSocialPosts]);
   const visibleSocialNeedsReview = useMemo(() => (
     visibleSocialPosts.filter((post) => post.status === 'draft' || post.status === 'needs_review')
   ), [visibleSocialPosts]);
@@ -6401,6 +6420,35 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           ))}
                         </div>
                       ) : null}
+                      {socialMetricsSourceSummary.length > 0 ? (
+                        <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-700">
+                          <div className="font-semibold text-slate-950">
+                            {isRu ? 'Как считаем результат' : 'How results are counted'}
+                          </div>
+                          <div className="mt-1 text-slate-500">
+                            {isRu
+                              ? 'Заявки и обращения всегда главнее охватов. Где API-метрик нет, LocalOS честно ждёт ручную отметку результата.'
+                              : 'Leads and inquiries always rank above reach. Where API metrics are unavailable, LocalOS clearly uses manual result marking.'}
+                          </div>
+                          <div className="mt-2 grid gap-2 md:grid-cols-2">
+                            {socialMetricsSourceSummary.map((item) => (
+                              <div key={item.platform} className="rounded-lg bg-slate-50 px-2.5 py-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-semibold text-slate-900">{item.label}</span>
+                                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                                    {isRu
+                                      ? `опубликовано ${item.published}/${item.posts}`
+                                      : `published ${item.published}/${item.posts}`}
+                                  </span>
+                                </div>
+                                <div className="mt-1 text-[11px] leading-4 text-slate-600">
+                                  {isRu ? item.sourceRu : item.sourceEn}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -7794,6 +7842,38 @@ function _socialPlatformLabel(platform: string, isRu: boolean): string {
   if (normalized === 'instagram') return 'Instagram';
   if (normalized === 'facebook') return 'Facebook';
   return normalized || (isRu ? 'Канал' : 'Channel');
+}
+
+function _socialMetricsSourceText(platform: string, isRu: boolean): string {
+  const normalized = String(platform || '').trim();
+  if (normalized === 'vk') {
+    return isRu
+      ? 'API-снимок: просмотры, лайки, комментарии и репосты; заявки/обращения можно отметить вручную.'
+      : 'API snapshot: views, likes, comments, and shares; leads/inquiries can be marked manually.';
+  }
+  if (normalized === 'telegram') {
+    return isRu
+      ? 'Результат учитывается через ручные отметки заявок/обращений; Bot API не даёт полный срез реакций для обычного sendMessage.'
+      : 'Results use manual lead/inquiry marking; Bot API does not expose a full reaction snapshot for ordinary sendMessage posts.';
+  }
+  if (normalized === 'yandex_maps' || normalized === 'two_gis') {
+    return isRu
+      ? 'После controlled/manual размещения отметьте публикацию и заявки вручную; LocalOS не подставляет недоступные API-метрики.'
+      : 'After controlled/manual placement, mark publishing and leads manually; LocalOS does not invent unavailable API metrics.';
+  }
+  if (normalized === 'google_business') {
+    return isRu
+      ? 'Метрики собираются через Google boundary там, где есть разрешения; иначе используйте ручные заявки/обращения.'
+      : 'Metrics are collected through the Google boundary where permissions allow; otherwise use manual leads/inquiries.';
+  }
+  if (normalized === 'instagram' || normalized === 'facebook') {
+    return isRu
+      ? 'Meta-метрики появятся после permissions и business/page binding; до этого результат отмечается вручную.'
+      : 'Meta metrics appear after permissions and business/page binding; until then, mark results manually.';
+  }
+  return isRu
+    ? 'Результат учитывается по доступным API-метрикам и ручным отметкам заявок/обращений.'
+    : 'Results use available API metrics and manual lead/inquiry marks.';
 }
 
 function _socialSettingsPathForPlatform(platform: string): string {
