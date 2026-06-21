@@ -208,6 +208,7 @@ type SocialRecommendationPayload = {
     action?: string;
     reason_ru?: string;
     reason_en?: string;
+    current_goal?: string;
     proposed_goal?: string;
     metrics?: {
       leads?: number;
@@ -5126,6 +5127,59 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   ) : null}
                   {Number(socialRecommendation?.proposed_changes?.length || 0) > 0 ? (
                     <>
+                      <div className="mt-3 rounded-lg border border-emerald-100 bg-white px-3 py-3">
+                        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <div className="text-xs font-semibold text-emerald-950">
+                              {isRu ? 'Предпросмотр изменений плана' : 'Plan changes preview'}
+                            </div>
+                            <div className="mt-1 text-xs leading-5 text-emerald-800">
+                              {isRu
+                                ? 'LocalOS покажет, какие будущие цели изменятся. Уже опубликованные и прошлые пункты не перезаписываются.'
+                                : 'LocalOS shows which future goals will change. Published and past items are not overwritten.'}
+                            </div>
+                          </div>
+                          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800">
+                            {isRu
+                              ? `изменений: ${Number(socialRecommendation?.proposed_changes?.length || 0)}`
+                              : `changes: ${Number(socialRecommendation?.proposed_changes?.length || 0)}`}
+                          </span>
+                        </div>
+                        <div className="mt-3 grid gap-2 md:grid-cols-2">
+                          {(socialRecommendation?.proposed_changes || []).slice(0, 4).map((change) => (
+                            <div key={String(change.item_id || change.theme || '')} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                              <div className="line-clamp-1 text-xs font-semibold text-slate-950">
+                                {String(change.theme || (isRu ? 'Тема плана' : 'Plan topic'))}
+                              </div>
+                              <div className="mt-2 grid gap-2 text-[11px] leading-4 text-slate-700">
+                                <div>
+                                  <span className="font-semibold text-slate-500">{isRu ? 'Сейчас: ' : 'Now: '}</span>
+                                  {String(change.current_goal || (isRu ? 'цель не задана' : 'no goal set'))}
+                                </div>
+                                <div>
+                                  <span className="font-semibold text-emerald-700">{isRu ? 'Станет: ' : 'Will become: '}</span>
+                                  {String(change.proposed_goal || '')}
+                                </div>
+                              </div>
+                              <div className="mt-2 text-xs leading-5 text-emerald-800">
+                                {isRu ? String(change.reason_ru || '') : String(change.reason_en || '')}
+                              </div>
+                              <div className="mt-1 text-[11px] text-slate-500">
+                                {isRu
+                                  ? `сигналы: заявки ${Number(change.metrics?.leads || 0)}, обращения ${Number(change.metrics?.inquiries || 0)}, комментарии ${Number(change.metrics?.comments || 0)}, охват ${Number(change.metrics?.reach || 0)}`
+                                  : `signals: leads ${Number(change.metrics?.leads || 0)}, inquiries ${Number(change.metrics?.inquiries || 0)}, comments ${Number(change.metrics?.comments || 0)}, reach ${Number(change.metrics?.reach || 0)}`}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {Number(socialRecommendation?.proposed_changes?.length || 0) > 4 ? (
+                          <div className="mt-2 text-[11px] text-emerald-700">
+                            {isRu
+                              ? `Ещё ${Number(socialRecommendation?.proposed_changes?.length || 0) - 4} изменений будут применены по тому же правилу.`
+                              : `${Number(socialRecommendation?.proposed_changes?.length || 0) - 4} more changes will be applied by the same rule.`}
+                          </div>
+                        ) : null}
+                      </div>
                       <label className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs leading-5 text-emerald-900">
                         <input
                           type="checkbox"
@@ -5135,27 +5189,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         />
                         <span>
                           {isRu
-                            ? 'Я проверил предложения ниже и подтверждаю применение только к будущим пунктам плана.'
-                            : 'I reviewed the proposals below and approve applying them only to future plan items.'}
+                            ? 'Я проверил предпросмотр выше и подтверждаю применение только к будущим пунктам плана.'
+                            : 'I reviewed the preview above and approve applying it only to future plan items.'}
                         </span>
                       </label>
-                      <div className="mt-3 grid gap-2 md:grid-cols-2">
-                        {(socialRecommendation?.proposed_changes || []).slice(0, 4).map((change) => (
-                          <div key={String(change.item_id || change.theme || '')} className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
-                            <div className="line-clamp-1 text-xs font-semibold text-emerald-950">
-                              {String(change.theme || (isRu ? 'Тема плана' : 'Plan topic'))}
-                            </div>
-                            <div className="mt-1 text-xs leading-5 text-emerald-800">
-                              {isRu ? String(change.reason_ru || '') : String(change.reason_en || '')}
-                            </div>
-                            <div className="mt-1 text-[11px] text-emerald-700">
-                              {isRu
-                                ? `заявки: ${Number(change.metrics?.leads || 0)}, обращения: ${Number(change.metrics?.inquiries || 0)}`
-                                : `leads: ${Number(change.metrics?.leads || 0)}, inquiries: ${Number(change.metrics?.inquiries || 0)}`}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
                     </>
                   ) : null}
                 </div>
