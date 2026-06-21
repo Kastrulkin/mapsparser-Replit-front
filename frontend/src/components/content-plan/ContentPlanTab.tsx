@@ -3751,7 +3751,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const contentPlanZones: Array<{ key: ContentPlanZone; titleRu: string; titleEn: string; hintRu: string; hintEn: string }> = [
     { key: 'overview', titleRu: 'Обзор', titleEn: 'Overview', hintRu: 'Состояние и следующий шаг', hintEn: 'Status and next step' },
     { key: 'plan', titleRu: 'План', titleEn: 'Plan', hintRu: 'Создание и источники', hintEn: 'Creation and inputs' },
-    { key: 'queue', titleRu: 'Готовая очередь по плану', titleEn: 'Plan queue', hintRu: 'Темы, тексты и создание новостей', hintEn: 'Topics, drafts, and news creation' },
+    { key: 'queue', titleRu: 'Готовая очередь по плану', titleEn: 'Plan queue', hintRu: 'Темы, тексты и публикации', hintEn: 'Topics, drafts, and publishing' },
   ];
 
   if (!businessId) {
@@ -4047,8 +4047,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           </div>
           <div className="mt-1 leading-6 text-emerald-900/90">
             {isRu
-              ? `Сейчас активен план «${currentPlan.title || 'Контент-план'}»: ${planOperationalSummary.total} тем, ${planOperationalSummary.readyToPublish} готово к новости, ${planOperationalSummary.needsDraft} без текста. Работать с ним нужно во вкладке «Готовая очередь по плану».`
-              : `The active plan is "${currentPlan.title || 'Content plan'}": ${planOperationalSummary.total} topics, ${planOperationalSummary.readyToPublish} ready for news, ${planOperationalSummary.needsDraft} without text. Work with it in the Plan queue tab.`}
+              ? `Сейчас активен план «${currentPlan.title || 'Контент-план'}»: ${planOperationalSummary.total} тем, ${planOperationalSummary.readyToPublish} готово к публикации, ${planOperationalSummary.needsDraft} без текста. Работать с ним нужно во вкладке «Готовая очередь по плану».`
+              : `The active plan is "${currentPlan.title || 'Content plan'}": ${planOperationalSummary.total} topics, ${planOperationalSummary.readyToPublish} ready to publish, ${planOperationalSummary.needsDraft} without text. Work with it in the Plan queue tab.`}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button type="button" size="sm" onClick={() => setActiveZone('queue')}>
@@ -4666,11 +4666,16 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             <div className="mt-1 text-lg font-semibold text-slate-950">
               {currentPlan?.title || (isRu ? 'План ещё не собран' : 'No plan yet')}
             </div>
+            <div className="mt-2 inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-100">
+              {isRu
+                ? 'Каналы: карты + соцсети, публикация только после approval'
+                : 'Channels: maps + social, publish only after approval'}
+            </div>
             <div className="mt-1 text-sm leading-6 text-slate-600">
               {currentPlan?.items?.length
                 ? (isRu
-                  ? 'Здесь рабочий список тем из выбранного плана: найти тему, открыть текст, создать новость.'
-                  : 'This is the working list from the selected plan: find a topic, open a draft, create news.')
+                  ? 'Здесь рабочий список тем из выбранного плана: найти тему, открыть текст, подготовить публикации.'
+                  : 'This is the working list from the selected plan: find a topic, open a draft, prepare publications.')
                 : (isRu
                   ? 'Очередь появится после создания первого плана.'
                   : 'The queue appears after the first plan is created.')}
@@ -7105,8 +7110,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             disabled={busyItemId === item.id || !String(currentDraft || '').trim() || hasNews}
                           >
                             {hasNews
-                              ? (isRu ? 'Новость создана' : 'News created')
-                              : (isRu ? 'Создать новость' : 'Create news')}
+                              ? (isRu ? 'Публикация создана' : 'Publication created')
+                              : (isRu ? 'Создать публикацию' : 'Create publication')}
                           </Button>
                           <Button
                             variant="outline"
