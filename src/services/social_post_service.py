@@ -866,6 +866,18 @@ def _social_supervised_blocked_metadata(metadata: dict[str, Any], reason: str, b
     payload = dict(metadata or {})
     supervised = _json_dict(payload.get("supervised_publish"))
     blocked_at = datetime.now(timezone.utc).isoformat()
+    manual_handoff = _manual_publish_handoff_payload(
+        {
+            "platform": supervised.get("platform", ""),
+            "platform_text": supervised.get("copy_ready_text", ""),
+        },
+        {
+            "target_url": supervised.get("target_url", ""),
+            "target_url_source": supervised.get("target_url_source", ""),
+            "profile_hint": supervised.get("profile_hint", ""),
+        },
+        reason,
+    )
     supervised.update(
         {
             "task_status": "blocked_needs_manual_publish",
@@ -875,6 +887,9 @@ def _social_supervised_blocked_metadata(metadata: dict[str, Any], reason: str, b
             "manual_fallback_required": True,
             "final_publish_policy": "human_final_click_required",
             "stop_before_final_publish": True,
+            "manual_handoff": manual_handoff,
+            "manual_checklist_ru": manual_handoff["checklist_ru"],
+            "manual_checklist_en": manual_handoff["checklist_en"],
         }
     )
     payload["supervised_publish"] = supervised
@@ -883,6 +898,7 @@ def _social_supervised_blocked_metadata(metadata: dict[str, Any], reason: str, b
         "reason": str(reason or "").strip(),
         "source": str(blocked_source or "manual").strip() or "manual",
         "blocked_at": blocked_at,
+        "handoff": manual_handoff,
     }
     payload["browser_final_click_allowed"] = False
     payload["human_final_approval_required"] = True
@@ -1992,6 +2008,7 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
     target = _map_publish_target(cursor, str(post.get("business_id") or ""), platform)
     task_payload = _build_openclaw_supervised_task_payload(post, automation_task_id, target)
     capability_status = openclaw_browser_capability_status()
+    manual_handoff = _manual_publish_handoff_payload(post, target, "browser_capability_unavailable")
     return {
         "automation_task_id": automation_task_id,
         "openclaw_task": task_payload,
@@ -2004,8 +2021,15 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
             "task_status": str(task_payload.get("status") or "ready_for_supervised_or_manual_handoff").strip(),
             "target_url": target.get("target_url", ""),
             "target_url_source": target.get("target_url_source", ""),
+            "profile_hint": target.get("profile_hint", ""),
+            "copy_ready_text": str(post.get("platform_text") or post.get("base_text") or "").strip(),
             "instruction_ru": "Открыть площадку, вставить текст и медиа, показать предпросмотр, остановиться перед финальной публикацией до подтверждения.",
             "instruction_en": "Open the platform, fill text and media, show preview, and stop before final publish until explicit approval.",
+            "manual_instruction_ru": manual_handoff["instruction_ru"],
+            "manual_instruction_en": manual_handoff["instruction_en"],
+            "manual_checklist_ru": manual_handoff["checklist_ru"],
+            "manual_checklist_en": manual_handoff["checklist_en"],
+            "manual_handoff": manual_handoff,
             "stop_before_final_publish": True,
             "final_publish_policy": "human_final_click_required",
             "fallback_reasons": ["captcha", "login_required", "changed_ui", "browser_capability_unavailable"],
@@ -2087,6 +2111,44 @@ def _build_openclaw_supervised_task_payload(
             "manual_instruction_ru": "Скопируйте текст из LocalOS, разместите его на площадке вручную и отметьте публикацию размещённой.",
             "manual_instruction_en": "Copy the text from LocalOS, publish it manually on the platform, and mark the post as published.",
         },
+    }
+
+
+def _manual_publish_handoff_payload(post: dict[str, Any], target: dict[str, Any], reason: str = "") -> dict[str, Any]:
+    platform = str(post.get("platform") or "").strip()
+    text = str(post.get("platform_text") or post.get("base_text") or "").strip()
+    target_url = str(target.get("target_url") or "").strip()
+    reason_text = str(reason or "").strip()
+    checklist_ru = [
+        "Скопировать готовый текст из LocalOS.",
+        "Открыть профиль площадки для нужной точки бизнеса.",
+        "Вставить текст и медиа в форму публикации.",
+        "Проверить предпросмотр и не публиковать без финального подтверждения.",
+        "После размещения вставить ссылку или ID поста и нажать «Отметить размещённым».",
+    ]
+    checklist_en = [
+        "Copy the prepared text from LocalOS.",
+        "Open the platform profile for the right business location.",
+        "Paste text and media into the post form.",
+        "Review the preview and do not publish without final confirmation.",
+        "After publishing, paste the post URL or ID and click Mark published.",
+    ]
+    return {
+        "schema": "localos_social_manual_publish_handoff_v1",
+        "platform": platform,
+        "platform_label": platform_label(platform),
+        "target_url": target_url,
+        "target_url_source": str(target.get("target_url_source") or "").strip(),
+        "profile_hint": str(target.get("profile_hint") or "").strip(),
+        "copy_ready_text": text,
+        "reason": reason_text,
+        "instruction_ru": "Разместите этот пост вручную или под контролем OpenClaw. LocalOS хранит текст, ссылку на площадку и чеклист, а финальная публикация остаётся за человеком.",
+        "instruction_en": "Publish this post manually or with OpenClaw supervision. LocalOS keeps the copy, platform link, and checklist, while final publishing stays human-controlled.",
+        "checklist_ru": checklist_ru,
+        "checklist_en": checklist_en,
+        "final_publish_policy": "human_final_click_required",
+        "stop_before_final_publish": True,
+        "browser_final_click_allowed": False,
     }
 
 

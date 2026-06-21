@@ -146,6 +146,22 @@ type SocialPostMetadata = {
   supervised_publish?: {
     instruction_ru?: string;
     instruction_en?: string;
+    manual_instruction_ru?: string;
+    manual_instruction_en?: string;
+    manual_checklist_ru?: string[];
+    manual_checklist_en?: string[];
+    manual_handoff?: {
+      instruction_ru?: string;
+      instruction_en?: string;
+      checklist_ru?: string[];
+      checklist_en?: string[];
+      copy_ready_text?: string;
+      target_url?: string;
+      profile_hint?: string;
+      reason?: string;
+    };
+    copy_ready_text?: string;
+    profile_hint?: string;
     platform_label?: string;
     mode?: string;
     capability?: string;
@@ -6268,6 +6284,20 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const supervisedCapabilityLine = _socialOpenClawCapabilityLine(supervisedPayload?.openclaw_capability_status, isRu);
                               const supervisedTaskStatus = String(supervisedPayload?.task_status || '').trim();
                               const supervisedActionRef = String(supervisedPayload?.openclaw_action_ref || '').trim();
+                              const supervisedManualHandoff = supervisedPayload?.manual_handoff || null;
+                              const supervisedManualInstruction = String(
+                                isRu
+                                  ? supervisedPayload?.manual_instruction_ru || supervisedManualHandoff?.instruction_ru || ''
+                                  : supervisedPayload?.manual_instruction_en || supervisedManualHandoff?.instruction_en || ''
+                              ).trim();
+                              const supervisedManualChecklistSource = isRu
+                                ? supervisedPayload?.manual_checklist_ru || supervisedManualHandoff?.checklist_ru || []
+                                : supervisedPayload?.manual_checklist_en || supervisedManualHandoff?.checklist_en || [];
+                              const supervisedManualChecklist = Array.isArray(supervisedManualChecklistSource)
+                                ? supervisedManualChecklistSource.filter(Boolean).map(String)
+                                : [];
+                              const supervisedCopyReadyText = String(supervisedPayload?.copy_ready_text || supervisedManualHandoff?.copy_ready_text || '').trim();
+                              const supervisedProfileHint = String(supervisedPayload?.profile_hint || supervisedManualHandoff?.profile_hint || '').trim();
                               const supervisedFallbackReasons = Array.isArray(supervisedPayload?.fallback_reasons)
                                 ? supervisedPayload.fallback_reasons.filter(Boolean).map(String)
                                 : [];
@@ -6356,6 +6386,36 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                           {isRu
                                             ? String(supervisedPayload.instruction_ru || '')
                                             : String(supervisedPayload.instruction_en || '')}
+                                        </div>
+                                      ) : null}
+                                      {supervisedManualInstruction || supervisedManualChecklist.length > 0 || supervisedCopyReadyText ? (
+                                        <div className="mt-3 rounded-lg bg-white px-3 py-2 text-amber-950">
+                                          <div className="font-semibold">
+                                            {isRu ? 'Ручной fallback без догадок' : 'Manual fallback without guessing'}
+                                          </div>
+                                          {supervisedManualInstruction ? (
+                                            <div className="mt-1 text-[11px] leading-5 text-amber-900">
+                                              {supervisedManualInstruction}
+                                            </div>
+                                          ) : null}
+                                          {supervisedProfileHint ? (
+                                            <div className="mt-1 text-[11px] leading-5 text-amber-900">
+                                              {isRu ? 'Профиль: ' : 'Profile: '}
+                                              {supervisedProfileHint}
+                                            </div>
+                                          ) : null}
+                                          {supervisedCopyReadyText ? (
+                                            <div className="mt-2 rounded-md border border-amber-100 bg-amber-50 px-2 py-1.5 text-[11px] leading-5 text-slate-700">
+                                              {supervisedCopyReadyText}
+                                            </div>
+                                          ) : null}
+                                          {supervisedManualChecklist.length > 0 ? (
+                                            <ol className="mt-2 list-decimal space-y-1 pl-4 text-[11px] leading-5 text-amber-900">
+                                              {supervisedManualChecklist.map((step, index) => (
+                                                <li key={`${post.id}:manual-step:${index}`}>{step}</li>
+                                              ))}
+                                            </ol>
+                                          ) : null}
                                         </div>
                                       ) : null}
                                       {post.automation_task_id || supervisedTaskStatus || supervisedActionRef || supervisedPayload?.target_url ? (

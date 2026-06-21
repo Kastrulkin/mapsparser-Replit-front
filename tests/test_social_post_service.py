@@ -1214,8 +1214,16 @@ def test_supervised_publish_metadata_exposes_user_visible_contract(monkeypatch):
     assert supervised["openclaw_action_ref"] == "openclaw.browser.supervised_publish"
     assert supervised["task_status"] == "ready_for_supervised_or_manual_handoff"
     assert supervised["target_url"] == "https://2gis.ru/firm/1"
+    assert supervised["copy_ready_text"] == "Текст поста"
+    assert supervised["profile_hint"] == "2ГИС профиль бизнеса"
     assert supervised["final_publish_policy"] == "human_final_click_required"
     assert supervised["stop_before_final_publish"] is True
+    assert supervised["manual_handoff"]["schema"] == "localos_social_manual_publish_handoff_v1"
+    assert supervised["manual_handoff"]["copy_ready_text"] == "Текст поста"
+    assert supervised["manual_handoff"]["target_url"] == "https://2gis.ru/firm/1"
+    assert supervised["manual_handoff"]["browser_final_click_allowed"] is False
+    assert "Скопировать готовый текст" in supervised["manual_checklist_ru"][0]
+    assert "Mark published" in supervised["manual_checklist_en"][-1]
     assert "captcha" in supervised["fallback_reasons"]
     assert supervised["openclaw_capability_status"]["ready"] is True
 
@@ -1524,8 +1532,14 @@ def test_social_supervised_blocked_metadata_preserves_manual_fallback_contract()
     assert supervised["blocked_source"] == "openclaw"
     assert supervised["manual_fallback_required"] is True
     assert supervised["stop_before_final_publish"] is True
+    assert supervised["manual_handoff"]["schema"] == "localos_social_manual_publish_handoff_v1"
+    assert supervised["manual_handoff"]["target_url"] == "https://2gis.ru/firm/1"
+    assert supervised["manual_handoff"]["reason"] == "captcha"
+    assert supervised["manual_handoff"]["browser_final_click_allowed"] is False
+    assert "Отметить размещённым" in supervised["manual_checklist_ru"][-1]
     assert metadata["manual_fallback"]["required"] is True
     assert metadata["manual_fallback"]["reason"] == "captcha"
+    assert metadata["manual_fallback"]["handoff"]["target_url"] == "https://2gis.ru/firm/1"
     assert metadata["browser_final_click_allowed"] is False
     assert metadata["human_final_approval_required"] is True
 
