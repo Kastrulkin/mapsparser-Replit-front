@@ -27,6 +27,7 @@ type SettingsBusiness = {
 
 export const SettingsPage = () => {
   const location = useLocation();
+  const channelsRef = useRef<HTMLElement | null>(null);
   const integrationsRef = useRef<HTMLElement | null>(null);
   const { currentBusinessId, currentBusiness } = useOutletContext<{
     currentBusinessId?: string | null;
@@ -43,14 +44,19 @@ export const SettingsPage = () => {
     const searchParams = new URLSearchParams(location.search);
     return searchParams.get('focus') || location.hash.replace(/^#/, '');
   }, [location.hash, location.search]);
+  const channelsFocused = focusTarget === 'channels' || focusTarget === 'telegram';
   const integrationsFocused = focusTarget === 'integrations';
 
   useEffect(() => {
-    if (!integrationsFocused) return;
+    if (!channelsFocused && !integrationsFocused) return;
     window.setTimeout(() => {
+      if (channelsFocused) {
+        channelsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
       integrationsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 80);
-  }, [integrationsFocused]);
+  }, [channelsFocused, integrationsFocused]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-7 pb-10">
@@ -102,9 +108,16 @@ export const SettingsPage = () => {
       />
 
       <DashboardSection
+        ref={channelsRef}
         title={t.dashboard.settings.messengers}
+        className={channelsFocused ? 'scroll-mt-24 border-sky-300 ring-2 ring-sky-100' : 'scroll-mt-24'}
         description="Подключите каналы, через которые LocalOS будет общаться с клиентами и обрабатывать обращения."
       >
+        {channelsFocused ? (
+          <div className="mb-5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-900">
+            Для публикаций в Telegram заполните bot token и канал/чат для публикаций. После сохранения вернитесь в контент-план и обновите готовность каналов.
+          </div>
+        ) : null}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <TelegramConnection currentBusinessId={currentBusinessId} />
           <WhatsAppConnection currentBusinessId={currentBusinessId} business={currentBusiness} />

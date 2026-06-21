@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTENT_PLAN_TAB = ROOT / "frontend" / "src" / "components" / "content-plan" / "ContentPlanTab.tsx"
 EXTERNAL_INTEGRATIONS = ROOT / "frontend" / "src" / "components" / "ExternalIntegrations.tsx"
 TELEGRAM_BOT_CREDENTIALS = ROOT / "frontend" / "src" / "components" / "TelegramBotCredentials.tsx"
+SETTINGS_PAGE = ROOT / "frontend" / "src" / "pages" / "dashboard" / "SettingsPage.tsx"
 
 
 REQUIRED_COPY = {
@@ -37,6 +38,9 @@ REQUIRED_COPY = {
     "queue summary": "Очередь публикаций по каналам",
     "channel readiness": "Готовность каналов",
     "readiness next action": "Что сделать:",
+    "channel-specific setup action": "Открыть настройку канала",
+    "telegram setup focus path": "/dashboard/settings?focus=channels",
+    "integrations setup focus path": "/dashboard/settings?focus=integrations",
     "approval preview": "Предпросмотр перед подтверждением",
     "bulk approval saved preview guard": "Сначала сохраните правки текста",
     "queue action": "Поставить в расписание",
@@ -122,6 +126,13 @@ REQUIRED_TELEGRAM_SETTINGS_COPY = {
 }
 
 
+REQUIRED_SETTINGS_PAGE_COPY = {
+    "settings channels focus note": "вернитесь в контент-план и обновите готовность каналов",
+    "settings channels focus param": "focusTarget === 'channels'",
+    "settings telegram focus param": "focusTarget === 'telegram'",
+}
+
+
 REQUIRED_TELEGRAM_SETTINGS_DATA_CONTRACT = {
     "telegram status endpoint": "/api/business/telegram-bot/status",
     "telegram profile endpoint": "/api/business/profile",
@@ -162,10 +173,14 @@ def main() -> int:
     if not TELEGRAM_BOT_CREDENTIALS.exists():
         print(f"Missing Telegram settings source: {TELEGRAM_BOT_CREDENTIALS}", file=sys.stderr)
         return 1
+    if not SETTINGS_PAGE.exists():
+        print(f"Missing settings page source: {SETTINGS_PAGE}", file=sys.stderr)
+        return 1
 
     source = CONTENT_PLAN_TAB.read_text(encoding="utf-8")
     settings_source = EXTERNAL_INTEGRATIONS.read_text(encoding="utf-8")
     telegram_settings_source = TELEGRAM_BOT_CREDENTIALS.read_text(encoding="utf-8")
+    settings_page_source = SETTINGS_PAGE.read_text(encoding="utf-8")
     missing = []
     missing.extend(_assert_contains(source, REQUIRED_COPY))
     missing.extend(_assert_contains(source, REQUIRED_SAFETY_COPY))
@@ -174,6 +189,7 @@ def main() -> int:
     missing.extend(_assert_contains(settings_source, REQUIRED_SETTINGS_DATA_CONTRACT))
     missing.extend(_assert_contains(telegram_settings_source, REQUIRED_TELEGRAM_SETTINGS_COPY))
     missing.extend(_assert_contains(telegram_settings_source, REQUIRED_TELEGRAM_SETTINGS_DATA_CONTRACT))
+    missing.extend(_assert_contains(settings_page_source, REQUIRED_SETTINGS_PAGE_COPY))
     forbidden = _assert_absent(source, FORBIDDEN_COPY)
     forbidden.extend(_assert_absent(settings_source, FORBIDDEN_COPY))
 

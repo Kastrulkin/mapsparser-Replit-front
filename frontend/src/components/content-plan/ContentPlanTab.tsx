@@ -1189,6 +1189,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       blockedApiChannels,
     };
   }, [socialChannelReadiness]);
+  const socialReadinessSetupPath = useMemo(() => {
+    const firstBlocked = socialReadinessSummary.blockedApiChannels[0];
+    if (!firstBlocked) return '/dashboard/settings?focus=integrations';
+    return _socialSettingsPathForPlatform(String(firstBlocked.platform || ''));
+  }, [socialReadinessSummary.blockedApiChannels]);
   const socialLaunchStages = useMemo<SocialLaunchStage[]>(() => {
     const totalPosts = Number(socialSummary?.total || 0);
     const needsReview = visibleSocialNeedsReview.length;
@@ -5495,9 +5500,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               size="sm"
                               variant="outline"
                               className="mt-3"
-                              onClick={() => navigate('/dashboard/settings?focus=integrations')}
+                              onClick={() => navigate(socialReadinessSetupPath)}
                             >
-                              {isRu ? 'Настроить подключения' : 'Open integrations'}
+                              {isRu ? 'Настроить нужный канал' : 'Open required setup'}
                             </Button>
                           ) : null}
                         </div>
@@ -5558,6 +5563,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               </span>
                               {isRu ? channel.next_action_ru : channel.next_action_en}
                             </div>
+                          ) : null}
+                          {!channel.ready && channel.publish_mode === 'api' ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="mt-2 h-7 rounded-lg px-2 text-[11px]"
+                              onClick={() => navigate(_socialSettingsPathForPlatform(String(channel.platform || '')))}
+                            >
+                              {isRu ? 'Открыть настройку канала' : 'Open channel setup'}
+                            </Button>
                           ) : null}
                         </div>
                       ))}
@@ -6837,6 +6853,12 @@ function _socialPlatformLabel(platform: string, isRu: boolean): string {
   if (normalized === 'instagram') return 'Instagram';
   if (normalized === 'facebook') return 'Facebook';
   return normalized || (isRu ? 'Канал' : 'Channel');
+}
+
+function _socialSettingsPathForPlatform(platform: string): string {
+  const normalized = String(platform || '').trim();
+  if (normalized === 'telegram') return '/dashboard/settings?focus=channels';
+  return '/dashboard/settings?focus=integrations';
 }
 
 function _socialPublishModeLabel(mode: string, isRu: boolean): string {
