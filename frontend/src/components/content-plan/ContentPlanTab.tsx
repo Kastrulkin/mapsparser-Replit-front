@@ -2276,6 +2276,35 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const markSupervisedPostBlocked = async (post: SocialPost) => {
+    setSocialBusyAction(`blocked:${post.id}`);
+    setError('');
+    setActionSummary(null);
+    const reason = isRu
+      ? 'Контролируемое размещение заблокировано: нужен ручной fallback (логин, капча или изменённый интерфейс площадки).'
+      : 'Supervised placement is blocked: manual fallback is needed (login, captcha, or changed platform UI).';
+    try {
+      await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/mark-supervised-blocked`, {
+        method: 'POST',
+        body: JSON.stringify({
+          reason,
+          blocked_source: 'localos_ui',
+        }),
+      });
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setActionSummary({
+        tone: 'warning',
+        text_ru: 'Пост переведён в ручной fallback. Текст и ссылка на площадку остались доступны, план не сорван.',
+        text_en: 'Post moved to manual fallback. Copy and platform link remain available, and the plan is not blocked.',
+      });
+    } catch (blockedError) {
+      const message = blockedError instanceof Error ? blockedError.message : (isRu ? 'Не удалось перевести пост в ручной fallback' : 'Could not move post to manual fallback');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
   const copySocialPostText = async (post: SocialPost, text: string) => {
     const value = String(text || post.platform_text || post.base_text || '').trim();
     if (!value) return;
@@ -6409,6 +6438,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                             onClick={() => window.open(String(supervisedPayload.target_url || ''), '_blank', 'noopener,noreferrer')}
                                           >
                                             {isRu ? 'Открыть площадку' : 'Open platform'}
+                                          </Button>
+                                        ) : null}
+                                        {post.status === 'needs_supervised_publish' ? (
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => { void markSupervisedPostBlocked(post); }}
+                                            disabled={postBusy}
+                                          >
+                                            {isRu ? 'Нужен ручной fallback' : 'Manual fallback needed'}
                                           </Button>
                                         ) : null}
                                         <Button

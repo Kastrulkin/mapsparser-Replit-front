@@ -19,6 +19,7 @@ from services.social_post_service import (
     list_social_posts_for_plan,
     mark_manual_published,
     mark_manual_published_posts,
+    mark_supervised_publish_blocked,
     prepare_social_posts_for_item,
     prepare_social_posts_for_items,
     preview_due_social_post_dispatch,
@@ -432,6 +433,31 @@ def social_posts_mark_manual_published(post_id: str):
             post_id,
             provider_post_url=str(data.get("provider_post_url") or "").strip(),
             provider_post_id=str(data.get("provider_post_id") or "").strip(),
+        )
+        return jsonify({"success": True, "post": post})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/<post_id>/mark-supervised-blocked", methods=["POST"])
+def social_posts_mark_supervised_blocked(post_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "supervised-blocked")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    try:
+        post = mark_supervised_publish_blocked(
+            str(user_data.get("user_id") or ""),
+            post_id,
+            reason=str(data.get("reason") or "").strip(),
+            blocked_source=str(data.get("blocked_source") or "manual").strip(),
         )
         return jsonify({"success": True, "post": post})
     except PermissionError:

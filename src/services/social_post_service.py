@@ -790,6 +790,57 @@ def mark_manual_published(user_id: str, post_id: str, provider_post_url: str = "
         db.close()
 
 
+def mark_supervised_publish_blocked(
+    user_id: str,
+    post_id: str,
+    reason: str = "",
+    blocked_source: str = "manual",
+) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        post = _load_post_for_user(cursor, user_id, post_id)
+        platform = str(post.get("platform") or "").strip()
+        status = str(post.get("status") or "").strip()
+        if platform not in BROWSER_OR_MANUAL_PLATFORMS and status != "needs_supervised_publish":
+            raise ValueError("Этот пост не является controlled/browser-use публикацией")
+        if status not in {"needs_supervised_publish", "needs_manual_publish", "queued"}:
+            raise ValueError("Controlled fallback доступен только для запланированных или controlled публикаций")
+
+        blocked_reason = str(reason or "").strip()
+        if not blocked_reason:
+            blocked_reason = (
+                "Контролируемое размещение заблокировано: нужен ручной fallback "
+                "(логин, капча или изменённый интерфейс площадки)."
+            )
+        metadata = _social_supervised_blocked_metadata(
+            _json_dict(post.get("metadata_json")),
+            blocked_reason,
+            str(blocked_source or "manual").strip() or "manual",
+        )
+        cursor.execute(
+            """
+            UPDATE social_posts
+            SET status = 'needs_manual_publish',
+                metadata_json = %s,
+                last_error = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (_json_dumps(metadata), blocked_reason, post_id),
+        )
+        updated = _serialize_social_post(cursor, cursor.fetchone())
+        db.conn.commit()
+        return updated
+    except Exception:
+        db.conn.rollback()
+        raise sys.exc_info()[1]
+    finally:
+        db.close()
+
+
 def mark_manual_published_posts(
     user_id: str,
     post_ids: list[str],
@@ -809,6 +860,33 @@ def mark_manual_published_posts(
         "summary": _summary_for_posts(posts),
         "queue_groups": build_social_queue_groups(posts),
     }
+
+
+def _social_supervised_blocked_metadata(metadata: dict[str, Any], reason: str, blocked_source: str) -> dict[str, Any]:
+    payload = dict(metadata or {})
+    supervised = _json_dict(payload.get("supervised_publish"))
+    blocked_at = datetime.now(timezone.utc).isoformat()
+    supervised.update(
+        {
+            "task_status": "blocked_needs_manual_publish",
+            "blocked_reason": str(reason or "").strip(),
+            "blocked_source": str(blocked_source or "manual").strip() or "manual",
+            "blocked_at": blocked_at,
+            "manual_fallback_required": True,
+            "final_publish_policy": "human_final_click_required",
+            "stop_before_final_publish": True,
+        }
+    )
+    payload["supervised_publish"] = supervised
+    payload["manual_fallback"] = {
+        "required": True,
+        "reason": str(reason or "").strip(),
+        "source": str(blocked_source or "manual").strip() or "manual",
+        "blocked_at": blocked_at,
+    }
+    payload["browser_final_click_allowed"] = False
+    payload["human_final_approval_required"] = True
+    return payload
 
 
 def record_social_post_attribution_event(

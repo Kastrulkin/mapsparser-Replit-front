@@ -22,6 +22,7 @@ from services.social_post_service import (
     _preview_dispatch_decision,
     _queue_preflight_block,
     _record_social_supervised_handoff_ledger,
+    _social_supervised_blocked_metadata,
     _status_after_social_text_edit,
     _channel_readiness,
     _channel_readiness_next_action,
@@ -1462,6 +1463,32 @@ def test_supervised_handoff_ledger_is_optional_when_table_missing():
 
     assert ledger_id == ""
     assert cursor.inserted == []
+
+
+def test_social_supervised_blocked_metadata_preserves_manual_fallback_contract():
+    metadata = _social_supervised_blocked_metadata(
+        {
+            "supervised_publish": {
+                "task_status": "ready_for_supervised_or_manual_handoff",
+                "target_url": "https://2gis.ru/firm/1",
+            },
+            "openclaw_task": {"task_id": "task-1"},
+        },
+        "captcha",
+        "openclaw",
+    )
+
+    supervised = metadata["supervised_publish"]
+    assert supervised["task_status"] == "blocked_needs_manual_publish"
+    assert supervised["target_url"] == "https://2gis.ru/firm/1"
+    assert supervised["blocked_reason"] == "captcha"
+    assert supervised["blocked_source"] == "openclaw"
+    assert supervised["manual_fallback_required"] is True
+    assert supervised["stop_before_final_publish"] is True
+    assert metadata["manual_fallback"]["required"] is True
+    assert metadata["manual_fallback"]["reason"] == "captcha"
+    assert metadata["browser_final_click_allowed"] is False
+    assert metadata["human_final_approval_required"] is True
 
 
 def test_apply_social_post_recommendation_requires_explicit_approval(monkeypatch):

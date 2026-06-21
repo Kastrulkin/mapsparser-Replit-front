@@ -44,6 +44,7 @@ def test_social_post_routes_include_bulk_and_attribution_endpoints():
     assert ("/api/business/<business_id>/social-posts/launch-preflight", frozenset({"GET"})) in routes
     assert ("/api/social-posts/<post_id>", frozenset({"PATCH"})) in routes
     assert ("/api/social-posts/bulk-mark-manual-published", frozenset({"POST"})) in routes
+    assert ("/api/social-posts/<post_id>/mark-supervised-blocked", frozenset({"POST"})) in routes
     assert ("/api/social-posts/<post_id>/attribution-events", frozenset({"POST"})) in routes
     assert ("/api/content-plans/<plan_id>/social-posts/recommend-next-plan", frozenset({"POST"})) in routes
     assert ("/api/content-plans/<plan_id>/social-posts/apply-recommendation", frozenset({"POST"})) in routes
@@ -202,3 +203,44 @@ def test_social_post_launch_preflight_endpoint_is_read_only(monkeypatch):
     assert payload["recommended_env"]["dispatch"]["SOCIAL_POST_DISPATCH_BUSINESS_ID"] == "biz-1"
     assert payload["safety"]["browser_final_click_allowed"] is False
     assert captured == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 25}
+
+
+def test_social_post_mark_supervised_blocked_endpoint_records_manual_fallback(monkeypatch):
+    app = Flask(__name__)
+    app.register_blueprint(social_posts_api.social_posts_bp)
+    monkeypatch.setattr(social_posts_api, "_require_auth", lambda: ({"user_id": "user-1"}, None))
+    captured = {}
+
+    def fake_mark_blocked(user_id, post_id, reason="", blocked_source="manual"):
+        captured["user_id"] = user_id
+        captured["post_id"] = post_id
+        captured["reason"] = reason
+        captured["blocked_source"] = blocked_source
+        return {
+            "id": post_id,
+            "status": "needs_manual_publish",
+            "last_error": reason,
+            "metadata_json": {
+                "manual_fallback": {"required": True, "reason": reason},
+                "browser_final_click_allowed": False,
+            },
+        }
+
+    monkeypatch.setattr(social_posts_api, "mark_supervised_publish_blocked", fake_mark_blocked)
+
+    response = app.test_client().post(
+        "/api/social-posts/post-1/mark-supervised-blocked",
+        json={"reason": "captcha", "blocked_source": "openclaw"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["post"]["status"] == "needs_manual_publish"
+    assert payload["post"]["metadata_json"]["browser_final_click_allowed"] is False
+    assert captured == {
+        "user_id": "user-1",
+        "post_id": "post-1",
+        "reason": "captcha",
+        "blocked_source": "openclaw",
+    }
