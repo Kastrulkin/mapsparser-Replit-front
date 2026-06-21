@@ -13,6 +13,7 @@ from services.social_post_service import (
     apply_social_post_recommendation,
     approve_social_post,
     approve_social_posts,
+    check_social_openclaw_browser_readiness,
     collect_social_post_metrics,
     create_supervised_publish_task,
     get_social_channel_readiness,
@@ -197,6 +198,22 @@ def social_posts_channel_readiness(business_id: str):
         return error_response
     try:
         payload = get_social_channel_readiness(str(user_data.get("user_id") or ""), business_id)
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/business/<business_id>/social-posts/openclaw-browser-check", methods=["GET"])
+def social_posts_openclaw_browser_check(business_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    try:
+        payload = check_social_openclaw_browser_readiness(str(user_data.get("user_id") or ""), business_id)
         return jsonify({"success": True, **payload})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403

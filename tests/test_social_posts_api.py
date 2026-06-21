@@ -43,6 +43,7 @@ def test_social_post_routes_include_bulk_and_attribution_endpoints():
     assert ("/api/social-posts/metrics/run-once", frozenset({"POST"})) in routes
     assert ("/api/social-posts/runtime-status", frozenset({"GET"})) in routes
     assert ("/api/business/<business_id>/social-posts/channel-readiness", frozenset({"GET"})) in routes
+    assert ("/api/business/<business_id>/social-posts/openclaw-browser-check", frozenset({"GET"})) in routes
     assert ("/api/business/<business_id>/social-posts/launch-preflight", frozenset({"GET"})) in routes
     assert ("/api/social-posts/<post_id>", frozenset({"PATCH"})) in routes
     assert ("/api/social-posts/bulk-mark-manual-published", frozenset({"POST"})) in routes
@@ -177,6 +178,40 @@ def test_social_post_channel_readiness_endpoint_is_read_only(monkeypatch):
     assert payload["openclaw_browser_readiness"]["status"] == "manual_fallback"
     assert payload["openclaw_browser_readiness"]["browser_final_click_allowed"] is False
     assert payload["summary"]["api_needs_attention"] == 1
+
+
+def test_social_post_openclaw_browser_check_endpoint_is_read_only(monkeypatch):
+    app = Flask(__name__)
+    app.register_blueprint(social_posts_api.social_posts_bp)
+    monkeypatch.setattr(social_posts_api, "_require_auth", lambda: ({"user_id": "user-1"}, None))
+    captured = {}
+
+    def fake_check(user_id, business_id):
+        captured["user_id"] = user_id
+        captured["business_id"] = business_id
+        return {
+            "business_id": business_id,
+            "read_only": True,
+            "external_publish_performed": False,
+            "browser_final_click_allowed": False,
+            "openclaw_browser_readiness": {
+                "ready": True,
+                "status": "ready",
+                "browser_final_click_allowed": False,
+            },
+        }
+
+    monkeypatch.setattr(social_posts_api, "check_social_openclaw_browser_readiness", fake_check)
+
+    response = app.test_client().get("/api/business/biz-1/social-posts/openclaw-browser-check")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["read_only"] is True
+    assert payload["external_publish_performed"] is False
+    assert payload["openclaw_browser_readiness"]["status"] == "ready"
+    assert captured == {"user_id": "user-1", "business_id": "biz-1"}
 
 
 def test_social_post_launch_preflight_endpoint_is_read_only(monkeypatch):

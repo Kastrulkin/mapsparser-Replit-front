@@ -2501,6 +2501,36 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const checkOpenClawBrowserReadiness = async () => {
+    if (!businessId) return;
+    setSocialBusyAction('openclaw-check');
+    setError('');
+    setActionSummary(null);
+    try {
+      const response = await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/social-posts/openclaw-browser-check`, {
+        method: 'GET',
+      });
+      const readiness = response.openclaw_browser_readiness && typeof response.openclaw_browser_readiness === 'object'
+        ? response.openclaw_browser_readiness
+        : null;
+      setSocialOpenClawReadiness(readiness);
+      setActionSummary({
+        tone: readiness?.ready ? 'success' : 'warning',
+        text_ru: readiness?.ready
+          ? 'OpenClaw browser-use подтверждён. Яндекс/2ГИС можно вести через controlled-задачи без финального клика.'
+          : 'OpenClaw browser-use не подтверждён. Яндекс/2ГИС останутся в ручном fallback, план не будет сорван.',
+        text_en: readiness?.ready
+          ? 'OpenClaw browser-use is confirmed. Yandex/2GIS can use controlled tasks without the final click.'
+          : 'OpenClaw browser-use is not confirmed. Yandex/2GIS will stay in manual fallback, and the plan will not be blocked.',
+      });
+    } catch (checkError) {
+      const message = checkError instanceof Error ? checkError.message : (isRu ? 'Не удалось проверить OpenClaw browser-use' : 'Could not check OpenClaw browser-use');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
   const copySocialPostText = async (post: SocialPost, text: string) => {
     const value = String(text || post.platform_text || post.base_text || '').trim();
     if (!value) return;
@@ -5903,6 +5933,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 {socialOpenClawReadiness.action_ref ? <span>action: {socialOpenClawReadiness.action_ref}</span> : null}
                                 <span>final_click: human</span>
                               </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="mt-2 h-7 rounded-lg bg-white/80 px-2 text-[11px]"
+                                onClick={() => { void checkOpenClawBrowserReadiness(); }}
+                                disabled={socialBusyAction === 'openclaw-check'}
+                              >
+                                {socialBusyAction === 'openclaw-check'
+                                  ? (isRu ? 'Проверяем...' : 'Checking...')
+                                  : (isRu ? 'Проверить OpenClaw сейчас' : 'Check OpenClaw now')}
+                              </Button>
                             </div>
                           ) : null}
                           {socialReadinessSummary.blockedApiChannels.length > 0 ? (

@@ -45,6 +45,7 @@ from services.social_post_service import (
     _build_next_plan_changes,
     _attribution_metrics_for_post,
     build_social_queue_groups,
+    check_social_openclaw_browser_readiness,
     collect_due_social_post_metrics,
     create_supervised_publish_task,
     default_publish_mode,
@@ -563,6 +564,37 @@ def test_social_openclaw_browser_readiness_explains_ready_and_manual_fallback():
     assert fallback["status"] == "manual_fallback"
     assert "ручном fallback" in fallback["message_ru"]
     assert "capability catalog" in fallback["next_action_ru"]
+
+
+def test_check_social_openclaw_browser_readiness_is_read_only_and_scoped(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeQueueFallbackDB)
+    monkeypatch.setattr(
+        social_post_service,
+        "_require_business_access",
+        lambda cursor, user_id, business_id: captured.setdefault(
+            "access",
+            {"user_id": user_id, "business_id": business_id},
+        ),
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_social_openclaw_browser_readiness",
+        lambda: {
+            "ready": True,
+            "status": "ready",
+            "browser_final_click_allowed": False,
+        },
+    )
+
+    result = check_social_openclaw_browser_readiness("user-1", "biz-1")
+
+    assert result["business_id"] == "biz-1"
+    assert result["read_only"] is True
+    assert result["external_publish_performed"] is False
+    assert result["browser_final_click_allowed"] is False
+    assert result["openclaw_browser_readiness"]["status"] == "ready"
+    assert captured["access"] == {"user_id": "user-1", "business_id": "biz-1"}
 
 
 def test_approve_social_post_rejects_empty_copy(monkeypatch):

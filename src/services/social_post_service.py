@@ -221,6 +221,25 @@ def get_social_channel_readiness(user_id: str, business_id: str) -> dict[str, An
         db.close()
 
 
+def check_social_openclaw_browser_readiness(user_id: str, business_id: str) -> dict[str, Any]:
+    normalized_business_id = str(business_id or "").strip()
+    if not normalized_business_id:
+        raise ValueError("Бизнес не выбран")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        _require_business_access(cursor, user_id, normalized_business_id)
+        return {
+            "business_id": normalized_business_id,
+            "openclaw_browser_readiness": _social_openclaw_browser_readiness(),
+            "read_only": True,
+            "external_publish_performed": False,
+            "browser_final_click_allowed": False,
+        }
+    finally:
+        db.close()
+
+
 def get_social_launch_preflight(user_id: str, business_id: str, batch_size: int = 10) -> dict[str, Any]:
     normalized_business_id = str(business_id or "").strip()
     if not normalized_business_id:
