@@ -43,6 +43,7 @@ def test_social_post_routes_include_bulk_and_attribution_endpoints():
     assert ("/api/social-posts/metrics/run-once", frozenset({"POST"})) in routes
     assert ("/api/social-posts/runtime-status", frozenset({"GET"})) in routes
     assert ("/api/business/<business_id>/social-posts/channel-readiness", frozenset({"GET"})) in routes
+    assert ("/api/business/<business_id>/social-posts/api-channel-preflight", frozenset({"GET"})) in routes
     assert ("/api/business/<business_id>/social-posts/openclaw-browser-check", frozenset({"GET"})) in routes
     assert ("/api/business/<business_id>/social-posts/launch-preflight", frozenset({"GET"})) in routes
     assert ("/api/social-posts/<post_id>", frozenset({"PATCH"})) in routes
@@ -211,6 +212,41 @@ def test_social_post_openclaw_browser_check_endpoint_is_read_only(monkeypatch):
     assert payload["read_only"] is True
     assert payload["external_publish_performed"] is False
     assert payload["openclaw_browser_readiness"]["status"] == "ready"
+    assert captured == {"user_id": "user-1", "business_id": "biz-1"}
+
+
+def test_social_post_api_channel_preflight_endpoint_is_read_only(monkeypatch):
+    app = Flask(__name__)
+    app.register_blueprint(social_posts_api.social_posts_bp)
+    monkeypatch.setattr(social_posts_api, "_require_auth", lambda: ({"user_id": "user-1"}, None))
+    captured = {}
+
+    def fake_preflight(user_id, business_id):
+        captured["user_id"] = user_id
+        captured["business_id"] = business_id
+        return {
+            "business_id": business_id,
+            "read_only": True,
+            "external_publish_performed": False,
+            "human_approval_required_for_publish": True,
+            "api_preflight": [
+                {"platform": "telegram", "ready": True, "status": "ready"},
+                {"platform": "vk", "ready": False, "status": "missing_permissions"},
+            ],
+            "summary": {"checked": 2, "ready": 1, "needs_attention": 1},
+        }
+
+    monkeypatch.setattr(social_posts_api, "check_social_api_channel_preflight", fake_preflight)
+
+    response = app.test_client().get("/api/business/biz-1/social-posts/api-channel-preflight")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["read_only"] is True
+    assert payload["external_publish_performed"] is False
+    assert payload["api_preflight"][0]["platform"] == "telegram"
+    assert payload["summary"]["needs_attention"] == 1
     assert captured == {"user_id": "user-1", "business_id": "biz-1"}
 
 

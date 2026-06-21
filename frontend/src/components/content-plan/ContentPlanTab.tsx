@@ -516,6 +516,19 @@ type SocialChannelReadiness = {
   connection_checks?: SocialChannelConnectionCheck[];
 };
 
+type SocialApiChannelPreflight = {
+  platform: string;
+  platform_label?: string;
+  publish_mode?: string;
+  ready?: boolean;
+  status?: string;
+  message_ru?: string;
+  message_en?: string;
+  connection_checks?: SocialChannelConnectionCheck[];
+  read_only?: boolean;
+  external_publish_performed?: boolean;
+};
+
 type SocialChannelConnectionCheck = {
   key?: string;
   ok?: boolean;
@@ -780,6 +793,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialSummary, setSocialSummary] = useState<SocialPostsSummary | null>(null);
   const [socialQueueGroups, setSocialQueueGroups] = useState<SocialQueueGroup[]>([]);
   const [socialChannelReadiness, setSocialChannelReadiness] = useState<SocialChannelReadiness[]>([]);
+  const [socialApiPreflight, setSocialApiPreflight] = useState<SocialApiChannelPreflight[]>([]);
   const [socialOpenClawReadiness, setSocialOpenClawReadiness] = useState<SocialOpenClawReadiness | null>(null);
   const [socialRecommendation, setSocialRecommendation] = useState<SocialRecommendationPayload | null>(null);
   const [socialRecommendationApproved, setSocialRecommendationApproved] = useState(false);
@@ -1341,6 +1355,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (!firstBlocked) return '/dashboard/settings?focus=integrations';
     return _socialSettingsPathForPlatform(String(firstBlocked.platform || ''));
   }, [socialReadinessSummary.blockedApiChannels]);
+  const socialApiPreflightByPlatform = useMemo(() => {
+    const byPlatform: Record<string, SocialApiChannelPreflight> = {};
+    for (const item of socialApiPreflight) {
+      const platform = String(item.platform || '').trim();
+      if (platform) byPlatform[platform] = item;
+    }
+    return byPlatform;
+  }, [socialApiPreflight]);
   const socialLaunchStages = useMemo<SocialLaunchStage[]>(() => {
     const totalPosts = Number(socialSummary?.total || 0);
     const needsReview = visibleSocialNeedsReview.length;
@@ -2525,6 +2547,36 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
     } catch (checkError) {
       const message = checkError instanceof Error ? checkError.message : (isRu ? 'Не удалось проверить OpenClaw browser-use' : 'Could not check OpenClaw browser-use');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
+  const checkApiChannelPreflight = async () => {
+    if (!businessId) return;
+    setSocialBusyAction('api-channel-preflight');
+    setError('');
+    setActionSummary(null);
+    try {
+      const response = await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/social-posts/api-channel-preflight`, {
+        method: 'GET',
+      });
+      const preflight = Array.isArray(response.api_preflight) ? response.api_preflight : [];
+      setSocialApiPreflight(preflight);
+      const readyCount = Number(response.summary?.ready || 0);
+      const attentionCount = Number(response.summary?.needs_attention || 0);
+      setActionSummary({
+        tone: attentionCount > 0 ? 'warning' : 'success',
+        text_ru: attentionCount > 0
+          ? `API-каналы проверены без публикации: готовы ${readyCount}, требуют внимания ${attentionCount}. Исправьте ключи/права до расписания.`
+          : `API-каналы проверены без публикации: готовы ${readyCount}. Публикация всё равно начнётся только после approval и расписания.`,
+        text_en: attentionCount > 0
+          ? `API channels checked without publishing: ready ${readyCount}, need attention ${attentionCount}. Fix keys/permissions before scheduling.`
+          : `API channels checked without publishing: ready ${readyCount}. Publishing still starts only after approval and queueing.`,
+      });
+    } catch (preflightError) {
+      const message = preflightError instanceof Error ? preflightError.message : (isRu ? 'Не удалось проверить API-каналы' : 'Could not check API channels');
       setError(message);
     } finally {
       setSocialBusyAction('');
@@ -6031,16 +6083,42 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             </div>
                           ) : null}
                           {socialReadinessSummary.blockedApiChannels.length > 0 ? (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => navigate(socialReadinessSetupPath)}
+                              >
+                                {isRu ? 'Настроить нужный канал' : 'Open required setup'}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="bg-white"
+                                onClick={() => { void checkApiChannelPreflight(); }}
+                                disabled={socialBusyAction === 'api-channel-preflight'}
+                              >
+                                {socialBusyAction === 'api-channel-preflight'
+                                  ? (isRu ? 'Проверяем API...' : 'Checking API...')
+                                  : (isRu ? 'Проверить API-каналы' : 'Check API channels')}
+                              </Button>
+                            </div>
+                          ) : (
                             <Button
                               type="button"
                               size="sm"
                               variant="outline"
-                              className="mt-3"
-                              onClick={() => navigate(socialReadinessSetupPath)}
+                              className="mt-3 bg-white"
+                              onClick={() => { void checkApiChannelPreflight(); }}
+                              disabled={socialBusyAction === 'api-channel-preflight'}
                             >
-                              {isRu ? 'Настроить нужный канал' : 'Open required setup'}
+                              {socialBusyAction === 'api-channel-preflight'
+                                ? (isRu ? 'Проверяем API...' : 'Checking API...')
+                                : (isRu ? 'Проверить API-каналы' : 'Check API channels')}
                             </Button>
-                          ) : null}
+                          )}
                         </div>
                         <div className="grid gap-2 text-xs sm:grid-cols-3 lg:min-w-[360px]">
                           <div className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800">
@@ -6131,6 +6209,52 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                     </div>
                                   );
                                 })}
+                              </div>
+                            </div>
+                          ) : null}
+                          {socialApiPreflightByPlatform[String(channel.platform || '')] ? (
+                            <div
+                              className={
+                                socialApiPreflightByPlatform[String(channel.platform || '')].ready
+                                  ? 'mt-2 rounded-lg border border-emerald-200 bg-white px-2 py-1.5'
+                                  : 'mt-2 rounded-lg border border-amber-200 bg-white px-2 py-1.5'
+                              }
+                            >
+                              <div
+                                className={
+                                  socialApiPreflightByPlatform[String(channel.platform || '')].ready
+                                    ? 'text-[11px] font-semibold text-emerald-950'
+                                    : 'text-[11px] font-semibold text-amber-950'
+                                }
+                              >
+                                {isRu ? 'Live API-проверка' : 'Live API preflight'}
+                              </div>
+                              <div
+                                className={
+                                  socialApiPreflightByPlatform[String(channel.platform || '')].ready
+                                    ? 'mt-1 text-[11px] leading-4 text-emerald-800'
+                                    : 'mt-1 text-[11px] leading-4 text-amber-800'
+                                }
+                              >
+                                {isRu
+                                  ? socialApiPreflightByPlatform[String(channel.platform || '')].message_ru
+                                  : socialApiPreflightByPlatform[String(channel.platform || '')].message_en}
+                              </div>
+                              <div className="mt-1 space-y-1">
+                                {(socialApiPreflightByPlatform[String(channel.platform || '')].connection_checks || []).slice(-2).map((check) => (
+                                  <div key={`${channel.platform}-live-${String(check.key || check.label_en || check.label_ru || '')}`} className="flex gap-1.5 text-[11px] leading-4">
+                                    <span className={check.ok ? 'text-emerald-700' : 'text-amber-700'}>
+                                      {check.ok ? '✓' : '!'}
+                                    </span>
+                                    <span className={check.ok ? 'text-emerald-800' : 'text-amber-800'}>
+                                      <span className="font-medium">{isRu ? String(check.label_ru || '') : String(check.label_en || '')}</span>
+                                      {(isRu ? check.detail_ru : check.detail_en) ? ` · ${isRu ? String(check.detail_ru || '') : String(check.detail_en || '')}` : ''}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="mt-1 text-[10px] font-medium text-slate-500">
+                                {isRu ? 'Посты не отправлялись. Publish только после approval.' : 'No posts were sent. Publish only after approval.'}
                               </div>
                             </div>
                           ) : null}

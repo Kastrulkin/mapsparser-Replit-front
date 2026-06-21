@@ -1073,6 +1073,78 @@ def test_collect_vk_post_metrics_reads_wall_counters(monkeypatch):
     assert "posts=-12345_678" in requested_urls[0]
 
 
+def test_telegram_api_channel_preflight_checks_bot_and_chat_without_publish(monkeypatch):
+    class FakeResponse:
+        status = 200
+
+        def read(self):
+            return json.dumps({"ok": True, "result": {"id": 100}}).encode("utf-8")
+
+        def close(self):
+            pass
+
+    requested_urls = []
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_business_publish_context",
+        lambda cursor, business_id: {"telegram_bot_token": "encrypted", "telegram_chat_id": "@localos_test"},
+    )
+    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "telegram-token")
+    monkeypatch.setattr(
+        social_post_service,
+        "telegram_urlopen",
+        lambda req, timeout=10: (requested_urls.append(req.full_url) or FakeResponse()),
+    )
+
+    result = social_post_service._telegram_api_channel_preflight(object(), "biz-1")
+
+    assert result["ready"] is True
+    assert result["read_only"] is True
+    assert result["external_publish_performed"] is False
+    assert any("getMe" in url for url in requested_urls)
+    assert any("getChat" in url for url in requested_urls)
+    assert all("sendMessage" not in url for url in requested_urls)
+    assert [item["key"] for item in result["connection_checks"]][-2:] == ["telegram_get_me", "telegram_get_chat"]
+
+
+def test_vk_api_channel_preflight_uses_read_only_wall_get(monkeypatch):
+    class FakeResponse:
+        status = 200
+
+        def read(self):
+            return json.dumps({"response": {"count": 0, "items": []}}).encode("utf-8")
+
+        def close(self):
+            pass
+
+    requested_urls = []
+    monkeypatch.setattr(
+        social_post_service,
+        "_find_active_external_account",
+        lambda cursor, business_id, sources: {"id": "vk-1", "external_id": "12345", "auth_data_encrypted": "x"},
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_external_account_auth_data",
+        lambda account: {"access_token": "vk-token", "owner_id": "-12345", "scope": "wall", "api_version": "5.199"},
+    )
+    monkeypatch.setattr(
+        social_post_service.urllib.request,
+        "urlopen",
+        lambda req, timeout=10: (requested_urls.append(req.full_url) or FakeResponse()),
+    )
+
+    result = social_post_service._vk_api_channel_preflight(object(), "biz-1")
+
+    assert result["ready"] is True
+    assert result["read_only"] is True
+    assert result["external_publish_performed"] is False
+    assert requested_urls
+    assert "wall.get" in requested_urls[0]
+    assert "wall.post" not in requested_urls[0]
+    assert result["connection_checks"][-1]["key"] == "vk_wall_read_probe"
+
+
 def test_preview_dispatch_decision_publish_api_when_channel_ready(monkeypatch):
     monkeypatch.setattr(social_post_service, "_queue_preflight_block", lambda cursor, post: {})
 

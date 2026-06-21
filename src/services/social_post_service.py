@@ -221,6 +221,34 @@ def get_social_channel_readiness(user_id: str, business_id: str) -> dict[str, An
         db.close()
 
 
+def check_social_api_channel_preflight(user_id: str, business_id: str) -> dict[str, Any]:
+    normalized_business_id = str(business_id or "").strip()
+    if not normalized_business_id:
+        raise ValueError("Бизнес не выбран")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        _require_business_access(cursor, user_id, normalized_business_id)
+        api_preflight = [
+            _telegram_api_channel_preflight(cursor, normalized_business_id),
+            _vk_api_channel_preflight(cursor, normalized_business_id),
+        ]
+        return {
+            "business_id": normalized_business_id,
+            "api_preflight": api_preflight,
+            "read_only": True,
+            "external_publish_performed": False,
+            "human_approval_required_for_publish": True,
+            "summary": {
+                "checked": len(api_preflight),
+                "ready": sum(1 for item in api_preflight if bool(item.get("ready"))),
+                "needs_attention": sum(1 for item in api_preflight if not bool(item.get("ready"))),
+            },
+        }
+    finally:
+        db.close()
+
+
 def check_social_openclaw_browser_readiness(user_id: str, business_id: str) -> dict[str, Any]:
     normalized_business_id = str(business_id or "").strip()
     if not normalized_business_id:
@@ -3073,6 +3101,194 @@ def _publish_google_business_post(cursor: Any, post: dict[str, Any]) -> dict[str
             "provider_status": "google_business_published",
             "external_account_id": account.get("id"),
         },
+    }
+
+
+def _telegram_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, Any]:
+    business = _load_business_publish_context(cursor, business_id)
+    bot_token = decode_telegram_bot_token(business.get("telegram_bot_token"))
+    chat_id = str(business.get("telegram_chat_id") or "").strip()
+    checks = _telegram_connection_checks(bool(bot_token), bool(chat_id))
+    if not bot_token or not chat_id:
+        return _api_channel_preflight_result(
+            "telegram",
+            False,
+            "missing_keys",
+            checks,
+            "Для Telegram нужны telegram_bot_token и telegram_chat_id бизнеса.",
+            "Telegram needs business telegram_bot_token and telegram_chat_id.",
+        )
+    bot_probe = _telegram_safe_api_probe(bot_token, "getMe")
+    chat_probe = _telegram_safe_api_probe(bot_token, "getChat", {"chat_id": chat_id})
+    checks = checks + [
+        _connection_check(
+            "telegram_get_me",
+            bool(bot_probe.get("ok")),
+            "Бот отвечает",
+            "Bot responds",
+            "getMe прошёл" if bot_probe.get("ok") else str(bot_probe.get("error_ru") or "Telegram getMe не прошёл"),
+            "getMe passed" if bot_probe.get("ok") else str(bot_probe.get("error_en") or "Telegram getMe failed"),
+            "ok" if bot_probe.get("ok") else str(bot_probe.get("status") or "failed"),
+        ),
+        _connection_check(
+            "telegram_get_chat",
+            bool(chat_probe.get("ok")),
+            "Чат доступен",
+            "Chat is reachable",
+            "getChat прошёл" if chat_probe.get("ok") else str(chat_probe.get("error_ru") or "Telegram getChat не прошёл"),
+            "getChat passed" if chat_probe.get("ok") else str(chat_probe.get("error_en") or "Telegram getChat failed"),
+            "ok" if chat_probe.get("ok") else str(chat_probe.get("status") or "failed"),
+        ),
+    ]
+    ready = bool(bot_probe.get("ok")) and bool(chat_probe.get("ok"))
+    return _api_channel_preflight_result(
+        "telegram",
+        ready,
+        "ready" if ready else "live_probe_failed",
+        checks,
+        "Telegram готов к API-публикации после approval." if ready else "Telegram ключи заполнены, но live-проверка не прошла.",
+        "Telegram is ready for API publishing after approval." if ready else "Telegram keys exist, but live preflight failed.",
+    )
+
+
+def _telegram_safe_api_probe(bot_token: str, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    query = urllib.parse.urlencode(params or {})
+    suffix = f"?{query}" if query else ""
+    req = urllib.request.Request(f"https://api.telegram.org/bot{bot_token}/{method}{suffix}", method="GET")
+    try:
+        resp = telegram_urlopen(req, timeout=10)
+        try:
+            body = resp.read().decode("utf-8", errors="ignore")
+            parsed = _json_dict(body)
+            status_code = int(getattr(resp, "status", 500))
+        finally:
+            resp.close()
+    except urllib.error.HTTPError:
+        error = sys.exc_info()[1]
+        body = ""
+        try:
+            body = error.read().decode("utf-8", errors="ignore")
+        except Exception:
+            body = str(error)
+        return _api_probe_error("telegram", int(getattr(error, "code", 0) or 0), body or str(error))
+    except (urllib.error.URLError, TimeoutError):
+        return _api_probe_error("telegram", 0, str(sys.exc_info()[1]), "network_error")
+    except Exception:
+        return _api_probe_error("telegram", 0, str(sys.exc_info()[1]), "unexpected_error")
+    if 200 <= status_code < 300 and bool(parsed.get("ok")):
+        return {"ok": True, "status": "ok"}
+    return _api_probe_error("telegram", status_code, str(parsed.get("description") or body or "Telegram API error"))
+
+
+def _vk_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, Any]:
+    account = _find_active_external_account(cursor, business_id, ("vk", "vk_group", "vk_business"))
+    auth_data = _external_account_auth_data(account)
+    binding = _vk_publish_binding(account, auth_data)
+    checks = _vk_connection_checks(account, auth_data, binding)
+    if not binding.get("ready"):
+        return _api_channel_preflight_result(
+            "vk",
+            False,
+            str(binding.get("status") or "missing_keys"),
+            checks,
+            _vk_readiness_error(str(binding.get("status") or "")),
+            _vk_readiness_error(str(binding.get("status") or "")),
+        )
+    token = str(binding.get("token") or "").strip()
+    owner_id = str(binding.get("owner_id") or "").strip()
+    read_probe = _vk_safe_wall_read_probe(token, owner_id, str(auth_data.get("api_version") or "5.199"))
+    checks = checks + [
+        _connection_check(
+            "vk_wall_read_probe",
+            bool(read_probe.get("ok")),
+            "VK API отвечает",
+            "VK API responds",
+            "wall.get прошёл; wall.post всё равно выполняется только после approval" if read_probe.get("ok") else str(read_probe.get("error_ru") or "VK live-проверка не прошла"),
+            "wall.get passed; wall.post still runs only after approval" if read_probe.get("ok") else str(read_probe.get("error_en") or "VK live preflight failed"),
+            "ok" if read_probe.get("ok") else str(read_probe.get("status") or "failed"),
+        )
+    ]
+    ready = bool(read_probe.get("ok"))
+    return _api_channel_preflight_result(
+        "vk",
+        ready,
+        "ready" if ready else "live_probe_failed",
+        checks,
+        "VK готов к API-публикации после approval." if ready else "VK binding найден, но live-проверка API не прошла.",
+        "VK is ready for API publishing after approval." if ready else "VK binding exists, but live API preflight failed.",
+    )
+
+
+def _vk_safe_wall_read_probe(token: str, owner_id: str, api_version: str) -> dict[str, Any]:
+    query = urllib.parse.urlencode(
+        {
+            "access_token": token,
+            "owner_id": owner_id,
+            "count": "1",
+            "filter": "owner",
+            "v": api_version or "5.199",
+        }
+    )
+    req = urllib.request.Request(f"https://api.vk.com/method/wall.get?{query}", method="GET")
+    try:
+        resp = urllib.request.urlopen(req, timeout=10)
+        try:
+            body = resp.read().decode("utf-8", errors="ignore")
+            parsed = _json_dict(body)
+            status_code = int(getattr(resp, "status", 500))
+        finally:
+            resp.close()
+    except urllib.error.HTTPError:
+        error = sys.exc_info()[1]
+        body = ""
+        try:
+            body = error.read().decode("utf-8", errors="ignore")
+        except Exception:
+            body = str(error)
+        return _api_probe_error("vk", int(getattr(error, "code", 0) or 0), body or str(error))
+    except (urllib.error.URLError, TimeoutError):
+        return _api_probe_error("vk", 0, str(sys.exc_info()[1]), "network_error")
+    except Exception:
+        return _api_probe_error("vk", 0, str(sys.exc_info()[1]), "unexpected_error")
+    if not (200 <= status_code < 300):
+        return _api_probe_error("vk", status_code, body or f"VK HTTP {status_code}")
+    if isinstance(parsed.get("error"), dict):
+        error = parsed.get("error") or {}
+        return _api_probe_error("vk", int(error.get("error_code") or 0), str(error.get("error_msg") or "VK API error"))
+    return {"ok": True, "status": "ok"}
+
+
+def _api_channel_preflight_result(
+    platform: str,
+    ready: bool,
+    status: str,
+    checks: list[dict[str, Any]],
+    message_ru: str,
+    message_en: str,
+) -> dict[str, Any]:
+    return {
+        "platform": platform,
+        "platform_label": platform_label(platform),
+        "publish_mode": "api",
+        "ready": bool(ready),
+        "status": str(status or "").strip(),
+        "message_ru": str(message_ru or "").strip(),
+        "message_en": str(message_en or "").strip(),
+        "connection_checks": checks,
+        "read_only": True,
+        "external_publish_performed": False,
+    }
+
+
+def _api_probe_error(provider: str, status_code: int, error: str, status: str = "api_error") -> dict[str, Any]:
+    clean_error = str(error or "").strip()[:500]
+    return {
+        "ok": False,
+        "provider": str(provider or "").strip(),
+        "status": str(status or "api_error").strip(),
+        "status_code": int(status_code or 0),
+        "error_ru": clean_error,
+        "error_en": clean_error,
     }
 
 
