@@ -2823,6 +2823,52 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const runSocialDispatchOnce = async () => {
+    if (!businessId) return;
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        isRu
+          ? 'Запустить один scoped цикл публикаций для текущего бизнеса? API-каналы могут быть опубликованы, если посты уже утверждены и стоят в расписании. Яндекс/2ГИС перейдут в controlled/manual без финального клика.'
+          : 'Run one scoped publishing cycle for the current business? API channels may publish if posts are already approved and queued. Yandex/2GIS will move to controlled/manual without the final click.'
+      );
+      if (!confirmed) return;
+    }
+    setSocialBusyAction('dispatch-run-once');
+    setError('');
+    setActionSummary(null);
+    try {
+      const response = await newAuth.makeRequest('/social-posts/dispatch/run-once', {
+        method: 'POST',
+        body: JSON.stringify({ business_id: businessId, batch_size: 10, approved: true }),
+      });
+      const result = response.dispatch_result && typeof response.dispatch_result === 'object'
+        ? response.dispatch_result
+        : {};
+      setActionSummary({
+        tone: Number(result.failed || 0) > 0 || Number(result.manual || 0) > 0 ? 'warning' : 'success',
+        text_ru: String(response.message_ru || `Первый scoped цикл выполнен: взято ${Number(result.picked || 0)}, опубликовано ${Number(result.published || 0)}, controlled ${Number(result.supervised || 0)}, вручную ${Number(result.manual || 0)}, ошибок ${Number(result.failed || 0)}.`),
+        text_en: String(response.message_en || `First scoped cycle finished: picked ${Number(result.picked || 0)}, published ${Number(result.published || 0)}, controlled ${Number(result.supervised || 0)}, manual ${Number(result.manual || 0)}, failed ${Number(result.failed || 0)}.`),
+        details_ru: [
+          'Проверьте карточки постов: API должны показать ссылку/ID или понятную ошибку, карты - controlled/manual задачу.',
+        ],
+        details_en: [
+          'Check post cards: API posts should show a URL/ID or a clear error, maps should show a controlled/manual task.',
+        ],
+      });
+      if (currentPlan?.id) {
+        await loadSocialPosts(currentPlan.id);
+      }
+      await loadSocialRuntimeStatus();
+      setSocialDispatchPreview(null);
+      setSocialLaunchPreflight(null);
+    } catch (dispatchError) {
+      const message = dispatchError instanceof Error ? dispatchError.message : (isRu ? 'Не удалось запустить scoped цикл' : 'Could not run scoped cycle');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
   const recommendNextSocialPlan = async () => {
     if (!currentPlan?.id) return;
     setSocialBusyAction('recommend');
@@ -5396,6 +5442,26 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             {isRu
                               ? `Рекомендованный scope: SOCIAL_POST_DISPATCH_BUSINESS_ID=${String(socialLaunchPreflight.recommended_env?.dispatch?.SOCIAL_POST_DISPATCH_BUSINESS_ID || businessId || '')}`
                               : `Recommended scope: SOCIAL_POST_DISPATCH_BUSINESS_ID=${String(socialLaunchPreflight.recommended_env?.dispatch?.SOCIAL_POST_DISPATCH_BUSINESS_ID || businessId || '')}`}
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => { void runSocialDispatchOnce(); }}
+                            disabled={
+                              Boolean(bulkBusyAction)
+                              || Boolean(socialBusyAction)
+                              || !socialLaunchPreflight.safe_to_enable_scoped_dispatch
+                            }
+                            className="mt-2 h-8 bg-white text-slate-950 hover:bg-slate-100"
+                          >
+                            {socialBusyAction === 'dispatch-run-once'
+                              ? (isRu ? 'Запускаем цикл...' : 'Running cycle...')
+                              : (isRu ? 'Запустить один scoped цикл' : 'Run one scoped cycle')}
+                          </Button>
+                          <div className="mt-1 text-[11px] text-slate-300">
+                            {isRu
+                              ? 'Запускает только due-посты текущего бизнеса. API может опубликовать approved/queued посты; Яндекс/2ГИС останутся controlled/manual.'
+                              : 'Runs only due posts for the current business. API may publish approved/queued posts; Yandex/2GIS stay controlled/manual.'}
                           </div>
                           <div className="mt-2 rounded-lg bg-slate-950/30 px-2 py-2 text-[11px] text-slate-100 ring-1 ring-white/10">
                             <div className="font-semibold text-white">

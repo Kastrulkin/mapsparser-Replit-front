@@ -1223,6 +1223,63 @@ def dispatch_due_social_posts(batch_size: int = 20, business_id: str = "") -> di
     }
 
 
+def run_scoped_social_dispatch_once(
+    user_id: str,
+    business_id: str,
+    batch_size: int = 10,
+    approved: bool = False,
+) -> dict[str, Any]:
+    if not approved:
+        raise PermissionError("Для запуска первого цикла публикаций нужно явное подтверждение")
+    normalized_business_id = str(business_id or "").strip()
+    if not normalized_business_id:
+        raise ValueError("Бизнес не выбран")
+    clean_batch_size = max(1, min(int(batch_size or 10), 50))
+    preflight = get_social_launch_preflight(user_id, normalized_business_id, batch_size=clean_batch_size)
+    summary = preflight.get("summary") if isinstance(preflight.get("summary"), dict) else {}
+    if int(summary.get("skipped_no_access") or 0) > 0:
+        raise PermissionError("Есть due-посты вне доступа текущего пользователя; проверьте business scope")
+    dispatch_result = dispatch_due_social_posts(
+        batch_size=clean_batch_size,
+        business_id=normalized_business_id,
+    )
+    return {
+        "approved": True,
+        "business_id": normalized_business_id,
+        "batch_size": clean_batch_size,
+        "preflight": preflight,
+        "dispatch_result": dispatch_result,
+        "external_publish_only_after_approval": True,
+        "browser_final_click_allowed": False,
+        "maps_are_supervised_or_manual": True,
+        "message_ru": _social_dispatch_once_message(dispatch_result, True),
+        "message_en": _social_dispatch_once_message(dispatch_result, False),
+    }
+
+
+def _social_dispatch_once_message(result: dict[str, Any], is_ru: bool) -> str:
+    picked = int(result.get("picked") or 0)
+    published = int(result.get("published") or 0)
+    supervised = int(result.get("supervised") or 0)
+    manual = int(result.get("manual") or 0)
+    failed = int(result.get("failed") or 0)
+    if picked <= 0:
+        return (
+            "Due-постов для этого бизнеса нет; внешний запуск ничего не отправил."
+            if is_ru
+            else "There are no due posts for this business; no external action was sent."
+        )
+    if is_ru:
+        return (
+            f"Первый scoped цикл выполнен: взято {picked}, опубликовано {published}, "
+            f"controlled {supervised}, вручную {manual}, ошибок {failed}."
+        )
+    return (
+        f"First scoped cycle finished: picked {picked}, published {published}, "
+        f"controlled {supervised}, manual {manual}, failed {failed}."
+    )
+
+
 def preview_due_social_post_dispatch(user_id: str, batch_size: int = 20, business_id: str = "") -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()

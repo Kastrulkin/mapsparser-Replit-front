@@ -50,6 +50,7 @@ from services.social_post_service import (
     publish_social_post,
     queue_social_post,
     record_social_post_attribution_event,
+    run_scoped_social_dispatch_once,
     _vk_post_url,
 )
 
@@ -756,6 +757,58 @@ def test_preview_due_social_post_dispatch_can_scope_to_one_business(monkeypatch)
     assert result["business_scope"] == "biz-preview"
     assert "sp.business_id = %s" in FakeDispatchScopeCursor.last_query
     assert FakeDispatchScopeCursor.last_params == ("biz-preview", 2)
+
+
+def test_run_scoped_social_dispatch_once_requires_approval_before_preflight(monkeypatch):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("preflight must not run without approval")
+
+    monkeypatch.setattr(social_post_service, "get_social_launch_preflight", fail_if_called)
+
+    error = None
+    try:
+        run_scoped_social_dispatch_once("user-1", "biz-1", approved=False)
+    except PermissionError:
+        error = sys.exc_info()[1]
+
+    assert error is not None
+    assert "явное подтверждение" in str(error)
+
+
+def test_run_scoped_social_dispatch_once_runs_only_requested_business(monkeypatch):
+    captured = {}
+
+    def fake_preflight(user_id, business_id, batch_size=10):
+        captured["preflight"] = {"user_id": user_id, "business_id": business_id, "batch_size": batch_size}
+        return {
+            "business_id": business_id,
+            "summary": {"due_posts": 2, "skipped_no_access": 0},
+            "safety": {"browser_final_click_allowed": False},
+        }
+
+    def fake_dispatch(batch_size=20, business_id=""):
+        captured["dispatch"] = {"business_id": business_id, "batch_size": batch_size}
+        return {
+            "picked": 2,
+            "published": 1,
+            "supervised": 1,
+            "manual": 0,
+            "failed": 0,
+            "business_scope": business_id,
+        }
+
+    monkeypatch.setattr(social_post_service, "get_social_launch_preflight", fake_preflight)
+    monkeypatch.setattr(social_post_service, "dispatch_due_social_posts", fake_dispatch)
+
+    result = run_scoped_social_dispatch_once("user-1", "biz-1", batch_size=500, approved=True)
+
+    assert result["business_id"] == "biz-1"
+    assert result["batch_size"] == 50
+    assert result["dispatch_result"]["published"] == 1
+    assert result["browser_final_click_allowed"] is False
+    assert result["external_publish_only_after_approval"] is True
+    assert captured["preflight"] == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 50}
+    assert captured["dispatch"] == {"business_id": "biz-1", "batch_size": 50}
 
 
 def test_collect_due_social_post_metrics_can_scope_to_one_business(monkeypatch):

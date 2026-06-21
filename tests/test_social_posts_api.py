@@ -39,6 +39,7 @@ def test_social_post_routes_include_bulk_and_attribution_endpoints():
     assert ("/api/social-posts/bulk-publish", frozenset({"POST"})) in routes
     assert ("/api/social-posts/<post_id>/queue", frozenset({"POST"})) in routes
     assert ("/api/social-posts/dispatch/preview", frozenset({"POST"})) in routes
+    assert ("/api/social-posts/dispatch/run-once", frozenset({"POST"})) in routes
     assert ("/api/social-posts/runtime-status", frozenset({"GET"})) in routes
     assert ("/api/business/<business_id>/social-posts/channel-readiness", frozenset({"GET"})) in routes
     assert ("/api/business/<business_id>/social-posts/launch-preflight", frozenset({"GET"})) in routes
@@ -203,6 +204,65 @@ def test_social_post_launch_preflight_endpoint_is_read_only(monkeypatch):
     assert payload["recommended_env"]["dispatch"]["SOCIAL_POST_DISPATCH_BUSINESS_ID"] == "biz-1"
     assert payload["safety"]["browser_final_click_allowed"] is False
     assert captured == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 25}
+
+
+def test_social_post_dispatch_run_once_requires_explicit_approval(monkeypatch):
+    app = Flask(__name__)
+    app.register_blueprint(social_posts_api.social_posts_bp)
+    monkeypatch.setattr(social_posts_api, "_require_auth", lambda: ({"user_id": "user-1"}, None))
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("dispatch must not run without explicit approval")
+
+    monkeypatch.setattr(social_posts_api, "run_scoped_social_dispatch_once", fail_if_called)
+
+    response = app.test_client().post(
+        "/api/social-posts/dispatch/run-once",
+        json={"business_id": "biz-1", "approved": False},
+    )
+
+    assert response.status_code == 403
+    assert "подтверждение" in response.get_json()["error"]
+
+
+def test_social_post_dispatch_run_once_runs_scoped_first_cycle(monkeypatch):
+    app = Flask(__name__)
+    app.register_blueprint(social_posts_api.social_posts_bp)
+    monkeypatch.setattr(social_posts_api, "_require_auth", lambda: ({"user_id": "user-1"}, None))
+    captured = {}
+
+    def fake_run_once(user_id, business_id, batch_size=10, approved=False):
+        captured["user_id"] = user_id
+        captured["business_id"] = business_id
+        captured["batch_size"] = batch_size
+        captured["approved"] = approved
+        return {
+            "business_id": business_id,
+            "approved": approved,
+            "dispatch_result": {
+                "picked": 2,
+                "published": 1,
+                "supervised": 1,
+                "manual": 0,
+                "failed": 0,
+            },
+            "browser_final_click_allowed": False,
+            "message_ru": "Первый scoped цикл выполнен.",
+        }
+
+    monkeypatch.setattr(social_posts_api, "run_scoped_social_dispatch_once", fake_run_once)
+
+    response = app.test_client().post(
+        "/api/social-posts/dispatch/run-once",
+        json={"business_id": "biz-1", "batch_size": 500, "approved": True},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["dispatch_result"]["published"] == 1
+    assert payload["browser_final_click_allowed"] is False
+    assert captured == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 500, "approved": True}
 
 
 def test_social_post_mark_supervised_blocked_endpoint_records_manual_fallback(monkeypatch):

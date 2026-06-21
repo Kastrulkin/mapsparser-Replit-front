@@ -29,6 +29,7 @@ from services.social_post_service import (
     queue_social_posts,
     recommend_next_plan_from_social_posts,
     record_social_post_attribution_event,
+    run_scoped_social_dispatch_once,
     update_social_post_text,
 )
 
@@ -363,6 +364,33 @@ def social_posts_dispatch_preview():
             str(user_data.get("user_id") or ""),
             batch_size=int(data.get("batch_size") or 20),
             business_id=str(data.get("business_id") or ""),
+        )
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/dispatch/run-once", methods=["POST"])
+def social_posts_dispatch_run_once():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "dispatch-run-once")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    if not bool(data.get("approved")):
+        return jsonify({"success": False, "error": "Для запуска первого цикла публикаций нужно явное подтверждение"}), 403
+    try:
+        payload = run_scoped_social_dispatch_once(
+            str(user_data.get("user_id") or ""),
+            business_id=str(data.get("business_id") or ""),
+            batch_size=int(data.get("batch_size") or 10),
+            approved=bool(data.get("approved")),
         )
         return jsonify({"success": True, **payload})
     except PermissionError:
