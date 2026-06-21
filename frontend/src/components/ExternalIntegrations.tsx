@@ -51,6 +51,10 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
   const [googleLocations, setGoogleLocations] = useState<GoogleLocation[]>([]);
   const [selectedGoogleLocation, setSelectedGoogleLocation] = useState('');
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [vkAccessToken, setVkAccessToken] = useState('');
+  const [vkOwnerId, setVkOwnerId] = useState('');
+  const [vkScope, setVkScope] = useState('wall');
+  const [vkBusy, setVkBusy] = useState(false);
   const [socialReadiness, setSocialReadiness] = useState<SocialChannelReadiness[]>([]);
   const [socialReadinessSummary, setSocialReadinessSummary] = useState<Record<string, number>>({});
   const [socialReadinessLoading, setSocialReadinessLoading] = useState(false);
@@ -58,6 +62,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
   const { t, language } = useLanguage();
   const matonAccount = accounts.find((acc) => acc.source === 'maton');
   const googleAccount = accounts.find((acc) => acc.source === 'google_business');
+  const vkAccount = accounts.find((acc) => acc.source === 'vk' || acc.source === 'vk_group' || acc.source === 'vk_business');
 
   const loadAccounts = async () => {
     if (!currentBusinessId) return;
@@ -361,6 +366,73 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
     }
   };
 
+  const handleSaveVk = async () => {
+    if (!currentBusinessId) {
+      toast({
+        title: t.error,
+        description: t.dashboard.settings.external.selectBusiness,
+        variant: "destructive",
+      });
+      return;
+    }
+    const tokenValue = vkAccessToken.trim();
+    const ownerValue = vkOwnerId.trim();
+    if (!tokenValue || !ownerValue) {
+      toast({
+        title: t.error,
+        description: "Для VK нужны access_token и group_id/owner_id.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setVkBusy(true);
+    try {
+      const token = newAuth.getToken();
+      if (!token) return;
+      const res = await fetch(`/api/business/${currentBusinessId}/external-accounts`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          source: "vk",
+          external_id: ownerValue,
+          display_name: "VK публикации",
+          auth_data: {
+            access_token: tokenValue,
+            owner_id: ownerValue,
+            group_id: ownerValue.replace(/^-/, ''),
+            scope: vkScope.trim() || "wall",
+          },
+          is_active: true,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Не удалось сохранить VK подключение");
+      }
+
+      setVkAccessToken('');
+      toast({
+        title: t.success,
+        description: "VK подключение сохранено. Готовность каналов обновлена.",
+      });
+      await loadAccounts();
+      await loadSocialReadiness();
+    } catch (e: any) {
+      toast({
+        title: t.error,
+        description: e.message || "Ошибка сохранения VK подключения",
+        variant: "destructive",
+      });
+    } finally {
+      setVkBusy(false);
+    }
+  };
+
   return (
     <Card className="overflow-hidden rounded-3xl border-slate-200/80 bg-white shadow-sm">
       <CardHeader className="pb-4">
@@ -560,6 +632,57 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
               </p>
             </div>
           )}
+        </div>
+
+        {/* VK */}
+        <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-slate-950">VK публикации</h3>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+                Подключите токен сообщества с правом wall.post, чтобы утверждённые посты выходили во VK по расписанию.
+              </p>
+            </div>
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${vkAccount ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
+              {vkAccount ? 'Подключён' : 'Не подключён'}
+            </span>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[1fr_220px_160px]">
+            <Input
+              type="password"
+              placeholder="VK access_token с правом wall.post"
+              value={vkAccessToken}
+              onChange={(event) => setVkAccessToken(event.target.value)}
+              disabled={vkBusy || !currentBusinessId}
+            />
+            <Input
+              placeholder="group_id или owner_id"
+              value={vkOwnerId}
+              onChange={(event) => setVkOwnerId(event.target.value)}
+              disabled={vkBusy || !currentBusinessId}
+            />
+            <Input
+              placeholder="scope"
+              value={vkScope}
+              onChange={(event) => setVkScope(event.target.value)}
+              disabled={vkBusy || !currentBusinessId}
+            />
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-5 text-slate-500">
+              Токен хранится зашифрованно и после сохранения не отображается. Для группы обычно нужен owner_id вида -123456 или group_id без минуса.
+              {vkAccount ? ` Сейчас подключено: ${vkAccount.display_name || vkAccount.external_id || 'VK'}.` : ''}
+            </p>
+            <Button
+              type="button"
+              onClick={handleSaveVk}
+              disabled={vkBusy || !currentBusinessId || !vkAccessToken.trim() || !vkOwnerId.trim()}
+              className="bg-slate-900 text-white hover:bg-slate-800 sm:min-w-[180px]"
+            >
+              {vkBusy ? t.dashboard.subscription.processing : "Сохранить VK"}
+            </Button>
+          </div>
         </div>
 
         {/* Maton.ai */}

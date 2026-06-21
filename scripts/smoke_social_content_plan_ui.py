@@ -88,6 +88,12 @@ REQUIRED_SETTINGS_COPY = {
     "settings publishing checklist": "Чеклист публикаций",
     "settings telegram requirements": "telegram_bot_token + telegram_chat_id",
     "settings vk requirements": "access_token + group_id/owner_id + wall.post",
+    "settings vk form title": "VK публикации",
+    "settings vk form description": "утверждённые посты выходили во VK по расписанию",
+    "settings vk token placeholder": "VK access_token с правом wall.post",
+    "settings vk owner placeholder": "group_id или owner_id",
+    "settings vk encrypted storage": "Токен хранится зашифрованно",
+    "settings vk save action": "Сохранить VK",
     "settings google requirements": "Business Profile + location",
     "settings meta requirements": "Page/IG business + permissions",
     "settings next action": "Что сделать: ",
@@ -99,6 +105,10 @@ REQUIRED_SETTINGS_DATA_CONTRACT = {
     "settings readiness next action ru": "next_action_ru",
     "settings readiness next action en": "next_action_en",
     "settings channel readiness endpoint": "/social-posts/channel-readiness",
+    "settings external accounts endpoint": "/external-accounts",
+    "settings vk source": 'source: "vk"',
+    "settings vk auth token": "access_token: tokenValue",
+    "settings vk group id": "group_id: ownerValue.replace",
 }
 
 
