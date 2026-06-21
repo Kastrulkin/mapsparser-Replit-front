@@ -65,13 +65,75 @@ def test_social_post_runtime_status_reflects_worker_flags(monkeypatch):
     assert payload["dispatch"]["batch_size"] == 200
     assert payload["dispatch"]["business_scope"] == "biz-test"
     assert payload["dispatch"]["scoped"] is True
+    assert payload["dispatch"]["allow_unscoped"] is False
+    assert payload["dispatch"]["requires_business_scope"] is True
+    assert payload["dispatch"]["blocked_without_scope"] is False
     assert payload["metrics"]["enabled"] is False
     assert payload["metrics"]["interval_sec"] == 60
     assert payload["metrics"]["batch_size"] == 500
     assert payload["metrics"]["business_scope"] == "biz-metrics"
     assert payload["metrics"]["scoped"] is True
+    assert payload["metrics"]["allow_unscoped"] is False
+    assert payload["metrics"]["requires_business_scope"] is True
+    assert payload["metrics"]["blocked_without_scope"] is False
     assert payload["approval_required"] is True
     assert payload["browser_final_click_allowed"] is False
+
+
+def test_social_post_runtime_status_blocks_enabled_unscoped_dispatch(monkeypatch):
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_ENABLED", "true")
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_BUSINESS_ID", raising=False)
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED", raising=False)
+
+    payload = social_posts_api.social_post_runtime_status_payload()
+
+    assert payload["dispatch"]["enabled"] is True
+    assert payload["dispatch"]["scoped"] is False
+    assert payload["dispatch"]["allow_unscoped"] is False
+    assert payload["dispatch"]["requires_business_scope"] is True
+    assert payload["dispatch"]["blocked_without_scope"] is True
+
+
+def test_social_post_runtime_status_allows_explicit_unscoped_dispatch(monkeypatch):
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_ENABLED", "true")
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED", "true")
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_BUSINESS_ID", raising=False)
+
+    payload = social_posts_api.social_post_runtime_status_payload()
+
+    assert payload["dispatch"]["enabled"] is True
+    assert payload["dispatch"]["scoped"] is False
+    assert payload["dispatch"]["allow_unscoped"] is True
+    assert payload["dispatch"]["requires_business_scope"] is False
+    assert payload["dispatch"]["blocked_without_scope"] is False
+
+
+def test_social_post_runtime_status_blocks_enabled_unscoped_metrics(monkeypatch):
+    monkeypatch.setenv("SOCIAL_POST_METRICS_ENABLED", "true")
+    monkeypatch.delenv("SOCIAL_POST_METRICS_BUSINESS_ID", raising=False)
+    monkeypatch.delenv("SOCIAL_POST_METRICS_ALLOW_UNSCOPED", raising=False)
+
+    payload = social_posts_api.social_post_runtime_status_payload()
+
+    assert payload["metrics"]["enabled"] is True
+    assert payload["metrics"]["scoped"] is False
+    assert payload["metrics"]["allow_unscoped"] is False
+    assert payload["metrics"]["requires_business_scope"] is True
+    assert payload["metrics"]["blocked_without_scope"] is True
+
+
+def test_social_post_runtime_status_allows_explicit_unscoped_metrics(monkeypatch):
+    monkeypatch.setenv("SOCIAL_POST_METRICS_ENABLED", "true")
+    monkeypatch.setenv("SOCIAL_POST_METRICS_ALLOW_UNSCOPED", "true")
+    monkeypatch.delenv("SOCIAL_POST_METRICS_BUSINESS_ID", raising=False)
+
+    payload = social_posts_api.social_post_runtime_status_payload()
+
+    assert payload["metrics"]["enabled"] is True
+    assert payload["metrics"]["scoped"] is False
+    assert payload["metrics"]["allow_unscoped"] is True
+    assert payload["metrics"]["requires_business_scope"] is False
+    assert payload["metrics"]["blocked_without_scope"] is False
 
 
 def test_social_post_channel_readiness_endpoint_is_read_only(monkeypatch):

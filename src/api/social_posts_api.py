@@ -55,20 +55,30 @@ def _bool_env(name: str, default: bool = False) -> bool:
 def social_post_runtime_status_payload() -> dict[str, object]:
     dispatch_business_scope = str(os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
     metrics_business_scope = str(os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
+    dispatch_allow_unscoped = _bool_env("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED", False)
+    dispatch_enabled = _bool_env("SOCIAL_POST_DISPATCH_ENABLED", False)
+    metrics_allow_unscoped = _bool_env("SOCIAL_POST_METRICS_ALLOW_UNSCOPED", False)
+    metrics_enabled = _bool_env("SOCIAL_POST_METRICS_ENABLED", False)
     return {
         "dispatch": {
-            "enabled": _bool_env("SOCIAL_POST_DISPATCH_ENABLED", False),
+            "enabled": dispatch_enabled,
             "interval_sec": max(15, _int_env("SOCIAL_POST_DISPATCH_INTERVAL_SEC", 60)),
             "batch_size": max(1, min(_int_env("SOCIAL_POST_DISPATCH_BATCH_SIZE", 20), 200)),
             "business_scope": dispatch_business_scope,
             "scoped": bool(dispatch_business_scope),
+            "allow_unscoped": dispatch_allow_unscoped,
+            "requires_business_scope": not dispatch_allow_unscoped,
+            "blocked_without_scope": dispatch_enabled and not dispatch_business_scope and not dispatch_allow_unscoped,
         },
         "metrics": {
-            "enabled": _bool_env("SOCIAL_POST_METRICS_ENABLED", False),
+            "enabled": metrics_enabled,
             "interval_sec": max(60, _int_env("SOCIAL_POST_METRICS_INTERVAL_SEC", 3600)),
             "batch_size": max(1, min(_int_env("SOCIAL_POST_METRICS_BATCH_SIZE", 50), 500)),
             "business_scope": metrics_business_scope,
             "scoped": bool(metrics_business_scope),
+            "allow_unscoped": metrics_allow_unscoped,
+            "requires_business_scope": not metrics_allow_unscoped,
+            "blocked_without_scope": metrics_enabled and not metrics_business_scope and not metrics_allow_unscoped,
         },
         "approval_required": True,
         "browser_final_click_allowed": False,

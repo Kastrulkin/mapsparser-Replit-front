@@ -289,6 +289,9 @@ type SocialDispatchPreview = {
     browser_final_click_allowed?: boolean;
     message_ru?: string;
     message_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+    recommended_dispatch_env?: Record<string, string>;
   };
   items?: Array<{
     id?: string;
@@ -309,6 +312,9 @@ type SocialRuntimeStatus = {
     batch_size?: number;
     business_scope?: string;
     scoped?: boolean;
+    allow_unscoped?: boolean;
+    requires_business_scope?: boolean;
+    blocked_without_scope?: boolean;
   };
   metrics?: {
     enabled?: boolean;
@@ -316,6 +322,9 @@ type SocialRuntimeStatus = {
     batch_size?: number;
     business_scope?: string;
     scoped?: boolean;
+    allow_unscoped?: boolean;
+    requires_business_scope?: boolean;
+    blocked_without_scope?: boolean;
   };
   approval_required?: boolean;
   browser_final_click_allowed?: boolean;
@@ -861,7 +870,32 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     visibleSocialPosts.filter((post) => post.status === 'needs_manual_publish')
   ), [visibleSocialPosts]);
   const socialDispatchEnabled = Boolean(socialRuntimeStatus?.dispatch?.enabled);
+  const socialDispatchBlockedWithoutScope = Boolean(socialRuntimeStatus?.dispatch?.blocked_without_scope);
+  const socialDispatchScopeMismatch = Boolean(
+    socialRuntimeStatus?.dispatch?.scoped
+    && businessId
+    && String(socialRuntimeStatus.dispatch.business_scope || '').trim()
+    && String(socialRuntimeStatus.dispatch.business_scope || '').trim() !== String(businessId || '').trim(),
+  );
   const socialQueueExecutionNotice = useMemo(() => {
+    if (socialDispatchBlockedWithoutScope) {
+      return {
+        tone: 'warning',
+        titleRu: 'Dispatch включён, но остановлен защитой',
+        titleEn: 'Dispatch is enabled but guarded',
+        textRu: 'LocalOS не запустит публикации, пока не указан business scope. Укажите SOCIAL_POST_DISPATCH_BUSINESS_ID для тестового бизнеса или включите явный allow-all.',
+        textEn: 'LocalOS will not publish until a business scope is set. Set SOCIAL_POST_DISPATCH_BUSINESS_ID for the test business or enable explicit allow-all.',
+      };
+    }
+    if (socialDispatchScopeMismatch) {
+      return {
+        tone: 'warning',
+        titleRu: 'Dispatch включён для другого бизнеса',
+        titleEn: 'Dispatch is scoped to another business',
+        textRu: `Worker сейчас ограничен бизнесом ${String(socialRuntimeStatus?.dispatch?.business_scope || '')}. Посты этого бизнеса можно готовить и ставить в расписание, но они не уйдут, пока scope не совпадёт.`,
+        textEn: `The worker is currently scoped to business ${String(socialRuntimeStatus?.dispatch?.business_scope || '')}. You can prepare and queue this business posts, but they will not publish until the scope matches.`,
+      };
+    }
     if (socialDispatchEnabled) {
       return {
         tone: 'ok',
@@ -878,7 +912,37 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       textRu: 'Можно готовить, проверять и ставить посты в расписание, но автоматическое исполнение не начнётся до включения dispatch. Для Яндекс/2ГИС останется controlled/manual handoff.',
       textEn: 'You can prepare, review, and queue posts, but automatic execution will not start until dispatch is enabled. Yandex/2GIS remain controlled/manual handoff.',
     };
-  }, [socialDispatchEnabled]);
+  }, [socialDispatchBlockedWithoutScope, socialDispatchEnabled, socialDispatchScopeMismatch, socialRuntimeStatus?.dispatch?.business_scope]);
+  const socialQueueResultSummary = (selectedOnly: boolean) => {
+    const subjectRu = selectedOnly ? 'Выбранные публикации поставлены в расписание.' : 'Утверждённые публикации поставлены в расписание.';
+    const subjectEn = selectedOnly ? 'Selected posts are queued.' : 'Approved posts are queued.';
+    if (socialDispatchBlockedWithoutScope) {
+      return {
+        tone: 'success',
+        text_ru: `${subjectRu} Queue сохранена, но LocalOS не запустит внешний worker без SOCIAL_POST_DISPATCH_BUSINESS_ID или явного allow-all.`,
+        text_en: `${subjectEn} The queue is saved, but LocalOS will not start the external worker without SOCIAL_POST_DISPATCH_BUSINESS_ID or explicit allow-all.`,
+      };
+    }
+    if (socialDispatchScopeMismatch) {
+      return {
+        tone: 'success',
+        text_ru: `${subjectRu} Queue сохранена, но текущий worker смотрит другой business scope и не обработает эти посты.`,
+        text_en: `${subjectEn} The queue is saved, but the current worker is scoped to another business and will not process these posts.`,
+      };
+    }
+    if (socialDispatchEnabled) {
+      return {
+        tone: 'success',
+        text_ru: `${subjectRu} Worker обработает их по дате: API-каналы пойдут через adapters, Яндекс/2ГИС - в контролируемое размещение.`,
+        text_en: `${subjectEn} The worker will process them on schedule: API channels use adapters, Yandex/2GIS move to supervised placement.`,
+      };
+    }
+    return {
+      tone: 'success',
+      text_ru: `${subjectRu} Dispatch выключен: очередь сохранена, но внешний запуск начнётся только после включения worker.`,
+      text_en: `${subjectEn} Dispatch is disabled: the queue is saved, but external execution starts only after the worker is enabled.`,
+    };
+  };
   const socialPlanNextStep = useMemo<SocialPlanNextStep>(() => {
     if (!currentPlan?.items?.length) {
       return {
@@ -921,14 +985,30 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (visibleSocialCanQueue.length > 0) {
       return {
         action: 'queue',
-        titleRu: socialDispatchEnabled ? 'Поставьте утверждённое в расписание' : 'Поставьте в расписание, затем включите dispatch',
-        titleEn: socialDispatchEnabled ? 'Queue approved posts' : 'Queue posts, then enable dispatch',
-        descriptionRu: socialDispatchEnabled
-          ? 'Worker сможет исполнить API-каналы по дате, а карты перевести в контролируемое размещение.'
-          : 'Queue зафиксирует approval и даты, но внешнее исполнение не стартует, пока worker dispatch выключен.',
-        descriptionEn: socialDispatchEnabled
-          ? 'The worker can publish API channels on schedule and move maps to supervised placement.'
-          : 'Queueing records approval and dates, but external execution will not start while worker dispatch is disabled.',
+        titleRu: socialDispatchBlockedWithoutScope
+          ? 'Поставьте в расписание, затем задайте business scope'
+          : socialDispatchScopeMismatch
+            ? 'Поставьте в расписание, затем исправьте scope'
+            : socialDispatchEnabled ? 'Поставьте утверждённое в расписание' : 'Поставьте в расписание, затем включите dispatch',
+        titleEn: socialDispatchBlockedWithoutScope
+          ? 'Queue posts, then set business scope'
+          : socialDispatchScopeMismatch
+            ? 'Queue posts, then fix dispatch scope'
+            : socialDispatchEnabled ? 'Queue approved posts' : 'Queue posts, then enable dispatch',
+        descriptionRu: socialDispatchBlockedWithoutScope
+          ? 'Queue зафиксирует approval и даты, но worker не начнёт внешние действия, пока dispatch включён без SOCIAL_POST_DISPATCH_BUSINESS_ID.'
+          : socialDispatchScopeMismatch
+            ? 'Queue зафиксирует approval и даты, но worker сейчас смотрит другой business scope и не обработает эти посты.'
+            : socialDispatchEnabled
+              ? 'Worker сможет исполнить API-каналы по дате, а карты перевести в контролируемое размещение.'
+              : 'Queue зафиксирует approval и даты, но внешнее исполнение не стартует, пока worker dispatch выключен.',
+        descriptionEn: socialDispatchBlockedWithoutScope
+          ? 'Queueing records approval and dates, but the worker will not start external actions while dispatch is enabled without SOCIAL_POST_DISPATCH_BUSINESS_ID.'
+          : socialDispatchScopeMismatch
+            ? 'Queueing records approval and dates, but the worker is scoped to another business and will not process these posts.'
+            : socialDispatchEnabled
+              ? 'The worker can publish API channels on schedule and move maps to supervised placement.'
+              : 'Queueing records approval and dates, but external execution will not start while worker dispatch is disabled.',
         ctaRu: 'Поставить в расписание',
         ctaEn: 'Queue on schedule',
         count: visibleSocialCanQueue.length,
@@ -995,7 +1075,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   }, [
     currentPlan?.items?.length,
     selectedItems.length,
+    socialDispatchBlockedWithoutScope,
     socialDispatchEnabled,
+    socialDispatchScopeMismatch,
     socialSummary?.published,
     socialSummary?.scheduled,
     socialSummary?.total,
@@ -2123,15 +2205,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         body: JSON.stringify({ post_ids: visibleSocialCanQueue.map((post) => post.id) }),
       });
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
-      setActionSummary({
-        tone: 'success',
-        text_ru: socialDispatchEnabled
-          ? 'Утверждённые публикации поставлены в расписание. API-каналы пойдут через worker, Яндекс/2ГИС - в контролируемое размещение.'
-          : 'Утверждённые публикации поставлены в расписание. Dispatch выключен: очередь сохранена, но внешний запуск начнётся только после включения worker.',
-        text_en: socialDispatchEnabled
-          ? 'Approved posts are queued. API channels go through the worker, Yandex/2GIS go to supervised placement.'
-          : 'Approved posts are queued. Dispatch is disabled: the queue is saved, but external execution starts only after the worker is enabled.',
-      });
+      setActionSummary(socialQueueResultSummary(false));
     } catch (bulkError) {
       const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось поставить публикации в расписание' : 'Could not queue posts');
       setError(message);
@@ -2151,15 +2225,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         body: JSON.stringify({ post_ids: selectedSocialCanQueue.map((post) => post.id) }),
       });
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
-      setActionSummary({
-        tone: 'success',
-        text_ru: socialDispatchEnabled
-          ? 'Выбранные публикации поставлены в расписание. Исполнение начнётся по дате после approval.'
-          : 'Выбранные публикации поставлены в расписание. Dispatch выключен, поэтому это пока сохранённая очередь без автоматического внешнего запуска.',
-        text_en: socialDispatchEnabled
-          ? 'Selected posts queued. Execution starts on schedule after approval.'
-          : 'Selected posts queued. Dispatch is disabled, so this is a saved queue without automatic external execution for now.',
-      });
+      setActionSummary(socialQueueResultSummary(true));
     } catch (bulkError) {
       const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось поставить выбранные публикации в расписание' : 'Could not queue selected posts');
       setError(message);
@@ -4707,12 +4773,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 : `interval ${Number(socialRuntimeStatus.dispatch?.interval_sec || 0)}s · batch ${Number(socialRuntimeStatus.dispatch?.batch_size || 0)}`}
                             </div>
                             <div className="text-[11px] text-slate-300">
-                              {socialRuntimeStatus.dispatch?.scoped
+                              {socialRuntimeStatus.dispatch?.blocked_without_scope
+                                ? (isRu
+                                  ? 'область: заблокировано без выбранного бизнеса'
+                                  : 'scope: blocked until a business scope is set')
+                                : socialRuntimeStatus.dispatch?.scoped
                                 ? (isRu
                                   ? `область: только бизнес ${String(socialRuntimeStatus.dispatch?.business_scope || '')}`
                                   : `scope: business ${String(socialRuntimeStatus.dispatch?.business_scope || '')}`)
-                                : (isRu ? 'область: все due-посты' : 'scope: all due posts')}
+                                : socialRuntimeStatus.dispatch?.allow_unscoped
+                                  ? (isRu ? 'область: все due-посты явно разрешены' : 'scope: all due posts explicitly allowed')
+                                  : (isRu ? 'область: нужен business scope перед запуском' : 'scope: business scope required before dispatch')}
                             </div>
+                            {socialRuntimeStatus.dispatch?.blocked_without_scope ? (
+                              <div className="rounded-lg border border-amber-300/30 bg-amber-400/10 px-2 py-1 text-[11px] font-medium text-amber-100">
+                                {isRu
+                                  ? 'Dispatch включён, но LocalOS не запустит публикации без SOCIAL_POST_DISPATCH_BUSINESS_ID или явного allow-all.'
+                                  : 'Dispatch is enabled, but LocalOS will not publish without SOCIAL_POST_DISPATCH_BUSINESS_ID or explicit allow-all.'}
+                              </div>
+                            ) : null}
                             <div className="flex items-center justify-between gap-3">
                               <span>{isRu ? 'Сбор реакций' : 'Metrics collection'}</span>
                               <span className={socialRuntimeStatus.metrics?.enabled ? 'font-semibold text-emerald-200' : 'font-semibold text-amber-200'}>
@@ -4720,12 +4799,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               </span>
                             </div>
                             <div className="text-[11px] text-slate-300">
-                              {socialRuntimeStatus.metrics?.scoped
+                              {socialRuntimeStatus.metrics?.blocked_without_scope
+                                ? (isRu
+                                  ? 'реакции: заблокировано без выбранного бизнеса'
+                                  : 'metrics: blocked until a business scope is set')
+                                : socialRuntimeStatus.metrics?.scoped
                                 ? (isRu
                                   ? `реакции: только бизнес ${String(socialRuntimeStatus.metrics?.business_scope || '')}`
                                   : `metrics: business ${String(socialRuntimeStatus.metrics?.business_scope || '')}`)
-                                : (isRu ? 'реакции: все опубликованные посты' : 'metrics: all published posts')}
+                                : socialRuntimeStatus.metrics?.allow_unscoped
+                                  ? (isRu ? 'реакции: все опубликованные посты явно разрешены' : 'metrics: all published posts explicitly allowed')
+                                  : (isRu ? 'реакции: нужен business scope перед сбором' : 'metrics: business scope required before collection')}
                             </div>
+                            {socialRuntimeStatus.metrics?.blocked_without_scope ? (
+                              <div className="rounded-lg border border-amber-300/30 bg-amber-400/10 px-2 py-1 text-[11px] font-medium text-amber-100">
+                                {isRu
+                                  ? 'Сбор реакций включён, но LocalOS не будет вызывать внешние API без SOCIAL_POST_METRICS_BUSINESS_ID или явного allow-all.'
+                                  : 'Metrics collection is enabled, but LocalOS will not call external APIs without SOCIAL_POST_METRICS_BUSINESS_ID or explicit allow-all.'}
+                              </div>
+                            ) : null}
                           </div>
                           <div className="mt-1 text-[11px] text-slate-300">
                             {isRu
@@ -4790,6 +4882,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   ? String(socialDispatchPreview.readiness?.message_ru || '')
                                   : String(socialDispatchPreview.readiness?.message_en || '')}
                               </div>
+                              {socialDispatchPreview.readiness?.next_action_ru || socialDispatchPreview.readiness?.next_action_en ? (
+                                <div className="mt-1 font-medium text-white">
+                                  {isRu ? 'Следующий шаг: ' : 'Next step: '}
+                                  {isRu
+                                    ? String(socialDispatchPreview.readiness?.next_action_ru || '')
+                                    : String(socialDispatchPreview.readiness?.next_action_en || '')}
+                                </div>
+                              ) : null}
                               <div className="mt-1 text-slate-300">
                                 {isRu
                                   ? `external ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · controlled ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · manual ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`

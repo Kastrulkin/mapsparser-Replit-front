@@ -790,11 +790,48 @@ def _social_metrics_business_scope(business_id: str = "") -> str:
     return str(business_id or os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
 
 
+def _social_dispatch_allow_unscoped() -> bool:
+    return str(os.getenv("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+        "enabled",
+    }
+
+
+def _social_metrics_allow_unscoped() -> bool:
+    return str(os.getenv("SOCIAL_POST_METRICS_ALLOW_UNSCOPED") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+        "enabled",
+    }
+
+
 def dispatch_due_social_posts(batch_size: int = 20, business_id: str = "") -> dict[str, Any]:
-    db = DatabaseManager()
-    cursor = db.conn.cursor()
     picked: list[dict[str, Any]] = []
     business_scope = _social_dispatch_business_scope(business_id)
+    if not business_scope and not _social_dispatch_allow_unscoped():
+        return {
+            "picked": 0,
+            "published": 0,
+            "supervised": 0,
+            "manual": 0,
+            "failed": 0,
+            "by_status": {},
+            "by_action": {"blocked_without_scope": 1},
+            "details": [],
+            "errors": [],
+            "posts": [],
+            "business_scope": "",
+            "blocked": True,
+            "blocked_reason": "business_scope_required",
+            "message": "SOCIAL_POST_DISPATCH_BUSINESS_ID is required unless SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED=true.",
+        }
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
         scope_clause = "AND sp.business_id = %s" if business_scope else ""
@@ -936,7 +973,7 @@ def preview_due_social_post_dispatch(user_id: str, batch_size: int = 20, busines
         for item in preview_items:
             action = str(item.get("dispatch_action") or "unknown")
             counts[action] = counts.get(action, 0) + 1
-        readiness = _dispatch_preview_readiness(preview_items, counts, skipped)
+        readiness = _dispatch_preview_readiness(preview_items, counts, skipped, business_scope)
         return {
             "dry_run": True,
             "picked": len(preview_items),
@@ -970,6 +1007,7 @@ def _dispatch_preview_readiness(
     preview_items: list[dict[str, Any]],
     counts: dict[str, int],
     skipped_no_access: int = 0,
+    business_scope: str = "",
 ) -> dict[str, Any]:
     external_publish_count = int(counts.get("publish_api") or 0)
     controlled_count = int(counts.get("create_supervised_task") or 0)
@@ -1001,6 +1039,9 @@ def _dispatch_preview_readiness(
         "browser_final_click_allowed": False,
         "message_ru": _dispatch_preview_readiness_message(status, True),
         "message_en": _dispatch_preview_readiness_message(status, False),
+        "next_action_ru": _dispatch_preview_next_action(status, business_scope, True),
+        "next_action_en": _dispatch_preview_next_action(status, business_scope, False),
+        "recommended_dispatch_env": _dispatch_preview_recommended_env(business_scope),
     }
 
 
@@ -1036,11 +1077,71 @@ def _dispatch_preview_readiness_message(status: str, is_ru: bool) -> str:
     )
 
 
+def _dispatch_preview_next_action(status: str, business_scope: str, is_ru: bool) -> str:
+    scope = str(business_scope or "").strip()
+    if status == "external_publish_ready":
+        if scope:
+            return (
+                f"Можно включать scoped dispatch для бизнеса {scope}: проверьте ключи и логи после первого цикла."
+                if is_ru
+                else f"You can enable scoped dispatch for business {scope}: check credentials and logs after the first cycle."
+            )
+        return (
+            "Перед включением реального dispatch задайте SOCIAL_POST_DISPATCH_BUSINESS_ID."
+            if is_ru
+            else "Set SOCIAL_POST_DISPATCH_BUSINESS_ID before enabling real dispatch."
+        )
+    if status == "controlled_tasks_ready":
+        return (
+            "Можно запускать scoped dispatch: карты перейдут в controlled/manual задачи без финального клика."
+            if is_ru
+            else "Scoped dispatch can run: map posts will move to controlled/manual tasks without a final click."
+        )
+    if status == "manual_only":
+        return (
+            "Сначала подключите каналы или подготовьте ручное размещение; API-публикации в этом dry-run нет."
+            if is_ru
+            else "Connect channels or prepare manual placement first; this dry-run has no API publishing."
+        )
+    if status == "access_limited":
+        return (
+            "Запустите dry-run пользователем с доступом к нужному бизнесу или сузьте business scope."
+            if is_ru
+            else "Run the dry-run as a user with access to the business or narrow the business scope."
+        )
+    return (
+        "Новых due-постов нет: продолжайте готовить, утверждать и ставить публикации в расписание."
+        if is_ru
+        else "No due posts yet: continue preparing, approving, and queueing posts."
+    )
+
+
+def _dispatch_preview_recommended_env(business_scope: str) -> dict[str, str]:
+    scope = str(business_scope or "").strip()
+    return {
+        "SOCIAL_POST_DISPATCH_ENABLED": "true",
+        "SOCIAL_POST_DISPATCH_INTERVAL_SEC": "60",
+        "SOCIAL_POST_DISPATCH_BATCH_SIZE": "10",
+        "SOCIAL_POST_DISPATCH_BUSINESS_ID": scope,
+    }
+
+
 def collect_due_social_post_metrics(batch_size: int = 50, business_id: str = "") -> dict[str, Any]:
-    db = DatabaseManager()
-    cursor = db.conn.cursor()
     picked: list[dict[str, Any]] = []
     business_scope = _social_metrics_business_scope(business_id)
+    if not business_scope and not _social_metrics_allow_unscoped():
+        return {
+            "picked": 0,
+            "collected": 0,
+            "failed": 0,
+            "errors": [],
+            "business_scope": "",
+            "blocked": True,
+            "blocked_reason": "business_scope_required",
+            "message": "SOCIAL_POST_METRICS_BUSINESS_ID is required unless SOCIAL_POST_METRICS_ALLOW_UNSCOPED=true.",
+        }
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
     try:
         ensure_social_post_tables(cursor)
         scope_clause = "AND sp.business_id = %s" if business_scope else ""

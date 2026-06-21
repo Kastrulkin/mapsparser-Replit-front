@@ -463,10 +463,27 @@ def test_dispatch_action_for_status_matches_worker_log_buckets():
     assert _dispatch_action_for_status("queued") == "other"
 
 
+def test_dispatch_due_social_posts_blocks_unscoped_by_default(monkeypatch):
+    def fail_if_db_opens():
+        raise AssertionError("unscoped dispatch must not open DB")
+
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_BUSINESS_ID", raising=False)
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED", raising=False)
+    monkeypatch.setattr(social_post_service, "DatabaseManager", fail_if_db_opens)
+
+    result = dispatch_due_social_posts(batch_size=20)
+
+    assert result["picked"] == 0
+    assert result["blocked"] is True
+    assert result["blocked_reason"] == "business_scope_required"
+    assert result["by_action"]["blocked_without_scope"] == 1
+
+
 def test_dispatch_due_social_posts_can_scope_to_one_business(monkeypatch):
     monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
     monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
     monkeypatch.setenv("SOCIAL_POST_DISPATCH_BUSINESS_ID", "biz-test")
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED", raising=False)
 
     result = dispatch_due_social_posts(batch_size=500)
 
@@ -493,6 +510,7 @@ def test_collect_due_social_post_metrics_can_scope_to_one_business(monkeypatch):
     monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
     monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
     monkeypatch.setenv("SOCIAL_POST_METRICS_BUSINESS_ID", "biz-metrics")
+    monkeypatch.delenv("SOCIAL_POST_METRICS_ALLOW_UNSCOPED", raising=False)
 
     result = collect_due_social_post_metrics(batch_size=999)
 
@@ -500,6 +518,21 @@ def test_collect_due_social_post_metrics_can_scope_to_one_business(monkeypatch):
     assert result["business_scope"] == "biz-metrics"
     assert "sp.business_id = %s" in FakeDispatchScopeCursor.last_query
     assert FakeDispatchScopeCursor.last_params == ("biz-metrics", 500)
+
+
+def test_collect_due_social_post_metrics_blocks_unscoped_by_default(monkeypatch):
+    def fail_if_db_opens():
+        raise AssertionError("unscoped metrics must not open DB")
+
+    monkeypatch.delenv("SOCIAL_POST_METRICS_BUSINESS_ID", raising=False)
+    monkeypatch.delenv("SOCIAL_POST_METRICS_ALLOW_UNSCOPED", raising=False)
+    monkeypatch.setattr(social_post_service, "DatabaseManager", fail_if_db_opens)
+
+    result = collect_due_social_post_metrics(batch_size=50)
+
+    assert result["picked"] == 0
+    assert result["blocked"] is True
+    assert result["blocked_reason"] == "business_scope_required"
 
 
 def test_collect_vk_post_metrics_reads_wall_counters(monkeypatch):
@@ -1012,6 +1045,7 @@ def test_dispatch_preview_readiness_explains_external_controlled_and_manual_work
             "manual_handoff": 1,
         },
         skipped_no_access=2,
+        business_scope="biz-1",
     )
 
     assert readiness["status"] == "external_publish_ready"
@@ -1024,6 +1058,9 @@ def test_dispatch_preview_readiness_explains_external_controlled_and_manual_work
     assert readiness["external_publish_requires_approval"] is True
     assert readiness["browser_final_click_allowed"] is False
     assert "approved" in readiness["message_en"]
+    assert "biz-1" in readiness["next_action_en"]
+    assert readiness["recommended_dispatch_env"]["SOCIAL_POST_DISPATCH_BUSINESS_ID"] == "biz-1"
+    assert readiness["recommended_dispatch_env"]["SOCIAL_POST_DISPATCH_ENABLED"] == "true"
 
 
 def test_dispatch_preview_readiness_marks_no_due_posts_as_safe_noop():
@@ -1033,6 +1070,7 @@ def test_dispatch_preview_readiness_marks_no_due_posts_as_safe_noop():
     assert readiness["due_count"] == 0
     assert readiness["external_publish_count"] == 0
     assert readiness["message_ru"]
+    assert readiness["next_action_ru"]
 
 
 def test_supervised_handoff_writes_agent_action_ledger_when_available():

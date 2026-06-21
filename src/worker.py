@@ -1504,6 +1504,15 @@ def _dispatch_social_posts_if_due() -> None:
         batch_size = max(1, min(int(os.getenv("SOCIAL_POST_DISPATCH_BATCH_SIZE", "20")), 200))
         business_scope = str(os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
         result = dispatch_due_social_posts(batch_size=batch_size, business_id=business_scope)
+        if bool(result.get("blocked")):
+            print(
+                "[SOCIAL_POST_DISPATCH] "
+                f"blocked=true reason={str(result.get('blocked_reason') or 'unknown')} "
+                f"business_scope={business_scope or 'none'} "
+                f"message={str(result.get('message') or '')}",
+                flush=True,
+            )
+            return
         picked = int(result.get("picked") or 0)
         failed = int(result.get("failed") or 0)
         if picked > 0 or failed > 0:
@@ -1540,6 +1549,15 @@ def _collect_social_post_metrics_if_due() -> None:
         batch_size = max(1, min(int(os.getenv("SOCIAL_POST_METRICS_BATCH_SIZE", "50")), 500))
         business_scope = str(os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
         result = collect_due_social_post_metrics(batch_size=batch_size, business_id=business_scope)
+        if bool(result.get("blocked")):
+            print(
+                "[SOCIAL_POST_METRICS] "
+                f"blocked=true reason={str(result.get('blocked_reason') or 'unknown')} "
+                f"business_scope={business_scope or 'none'} "
+                f"message={str(result.get('message') or '')}",
+                flush=True,
+            )
+            return
         picked = int(result.get("picked") or 0)
         failed = int(result.get("failed") or 0)
         if picked > 0 or failed > 0:
