@@ -20,6 +20,8 @@ from services.social_post_service import (
     _queue_preflight_block,
     _record_social_supervised_handoff_ledger,
     _status_after_social_text_edit,
+    _channel_readiness,
+    _channel_readiness_next_action,
     _supervised_publish_metadata,
     _supervised_publish_state,
     _vk_publish_binding,
@@ -738,6 +740,26 @@ def test_meta_channel_readiness_blocks_ready_until_native_publish_exists():
 
     assert readiness == {"ready": False, "status": "adapter_pending"}
     assert "API-публикация ещё не включена" in _channel_readiness_message("facebook", "adapter_pending", True)
+
+
+def test_channel_readiness_exposes_owner_next_action():
+    telegram = _channel_readiness("telegram", "api", False, "missing_keys")
+    vk = _channel_readiness("vk", "api", False, "missing_permissions")
+    meta = _channel_readiness("instagram", "api", False, "missing_binding")
+    maps = _channel_readiness("yandex_maps", "manual", False, "manual_fallback")
+
+    assert "telegram_bot_token" in telegram["next_action_en"]
+    assert "wall.post" in vk["next_action_en"]
+    assert "Instagram business account" in meta["next_action_en"]
+    assert "ручного действия" in maps["next_action_ru"]
+
+
+def test_channel_readiness_next_action_distinguishes_ready_and_supervised():
+    assert "расписание" in _channel_readiness_next_action("telegram", "ready", True)
+    supervised_next = _channel_readiness_next_action("two_gis", "supervised_ready", True)
+
+    assert "controlled" in supervised_next
+    assert "финальная кнопка" in supervised_next
 
 
 def test_external_account_preflight_does_not_requeue_without_native_publish(monkeypatch):
