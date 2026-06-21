@@ -928,9 +928,12 @@ export default function PublicSalesRoomPage() {
           Цифровая комната. Подготовьте предложение и обсудите в одном месте.
         </footer>
       </section>
-      <div className="fixed bottom-4 right-4 z-30 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-500 shadow-sm backdrop-blur sm:bottom-6 sm:right-6">
+      <a
+        href="https://localos.pro/"
+        className="fixed bottom-4 right-4 z-30 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-500 shadow-sm backdrop-blur transition hover:border-orange-200 hover:text-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 sm:bottom-6 sm:right-6"
+      >
         Подготовлено в LocalOS
-      </div>
+      </a>
     </main>
   );
 }
