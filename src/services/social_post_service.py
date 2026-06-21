@@ -2194,6 +2194,27 @@ def _publish_api_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _telegram_publish_error_state(status_code: int = 0, description: str = "") -> tuple[str, str]:
+    clean_description = str(description or "").strip()
+    normalized = clean_description.lower()
+    recoverable_connection_markers = (
+        "unauthorized",
+        "forbidden",
+        "chat not found",
+        "bot was blocked",
+        "not enough rights",
+        "have no rights",
+        "need administrator",
+        "group chat was upgraded",
+        "peer_id_invalid",
+    )
+    if int(status_code or 0) in {400, 401, 403} and any(marker in normalized for marker in recoverable_connection_markers):
+        return "needs_manual_publish", "telegram_connection_invalid"
+    if int(status_code or 0) in {401, 403}:
+        return "needs_manual_publish", "telegram_connection_invalid"
+    return "failed", "telegram_api_error"
+
+
 def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     business = _load_business_publish_context(cursor, str(post.get("business_id") or ""))
     bot_token = decode_telegram_bot_token(business.get("telegram_bot_token"))
@@ -2231,10 +2252,12 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             parsed = _json_dict(body)
             status_code = int(getattr(resp, "status", 500))
             if not (200 <= status_code < 300) or not bool(parsed.get("ok")):
+                description = str(parsed.get("description") or body or f"Telegram HTTP {status_code}")[:1000]
+                status, provider_status = _telegram_publish_error_state(status_code, description)
                 return {
-                    "status": "failed",
-                    "last_error": str(parsed.get("description") or body or f"Telegram HTTP {status_code}")[:1000],
-                    "metadata_json": {"provider_status": "telegram_api_error", "status_code": status_code},
+                    "status": status,
+                    "last_error": description,
+                    "metadata_json": {"provider_status": provider_status, "status_code": status_code},
                 }
             result = parsed.get("result") if isinstance(parsed.get("result"), dict) else {}
             message_id = str(result.get("message_id") or "").strip()
@@ -2253,10 +2276,13 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             body = error.read().decode("utf-8", errors="ignore")
         except Exception:
             body = str(error)
+        status_code = int(getattr(error, "code", 0) or 0)
+        description = str(_json_dict(body).get("description") or body or str(error))[:1000]
+        status, provider_status = _telegram_publish_error_state(status_code, description)
         return {
-            "status": "failed",
-            "last_error": body or str(error),
-            "metadata_json": {"provider_status": "telegram_http_error"},
+            "status": status,
+            "last_error": description,
+            "metadata_json": {"provider_status": provider_status, "status_code": status_code},
         }
     except (urllib.error.URLError, TimeoutError):
         error = sys.exc_info()[1]

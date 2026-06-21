@@ -21,6 +21,7 @@ from services.social_post_service import (
     _collect_vk_post_metrics,
     _preview_dispatch_decision,
     _dispatch_preview_first_cycle_steps,
+    _telegram_publish_error_state,
     _queue_preflight_block,
     _record_social_supervised_handoff_ledger,
     _social_supervised_blocked_metadata,
@@ -1120,6 +1121,22 @@ def test_external_account_preflight_does_not_requeue_without_native_publish(monk
     assert result["status"] == "needs_manual_publish"
     assert result["metadata_json"]["provider_status"] == "meta_graph_permissions_required"
     assert "manual handoff" in result["metadata_json"]["provider_note"]
+
+
+def test_telegram_publish_error_state_marks_connection_errors_recoverable():
+    assert _telegram_publish_error_state(401, "Unauthorized") == (
+        "needs_manual_publish",
+        "telegram_connection_invalid",
+    )
+    assert _telegram_publish_error_state(400, "Bad Request: chat not found") == (
+        "needs_manual_publish",
+        "telegram_connection_invalid",
+    )
+    assert _telegram_publish_error_state(403, "Forbidden: bot was blocked by the user") == (
+        "needs_manual_publish",
+        "telegram_connection_invalid",
+    )
+    assert _telegram_publish_error_state(429, "Too Many Requests") == ("failed", "telegram_api_error")
 
 
 def test_openclaw_supervised_task_payload_stops_before_final_publish():
