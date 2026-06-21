@@ -1294,7 +1294,89 @@ def _dispatch_preview_readiness(
         "next_action_ru": _dispatch_preview_next_action(status, business_scope, True),
         "next_action_en": _dispatch_preview_next_action(status, business_scope, False),
         "recommended_dispatch_env": _dispatch_preview_recommended_env(business_scope),
+        "first_cycle_steps": _dispatch_preview_first_cycle_steps(
+            external_publish_count,
+            controlled_count,
+            manual_count,
+            skipped_no_access,
+        ),
+        "safety_notes_ru": [
+            "Внешние публикации уходят только из approved/queued постов.",
+            "Яндекс/2ГИС остаются controlled/manual: финальный клик публикации не выполняется worker.",
+            "Dry-run ничего не отправляет наружу и нужен для проверки первого цикла.",
+        ],
+        "safety_notes_en": [
+            "External publishing runs only for approved/queued posts.",
+            "Yandex/2GIS stay controlled/manual: the worker does not perform the final publish click.",
+            "Dry-run sends nothing externally and exists to verify the first cycle.",
+        ],
     }
+
+
+def _dispatch_preview_first_cycle_steps(
+    external_publish_count: int,
+    controlled_count: int,
+    manual_count: int,
+    skipped_no_access: int = 0,
+) -> list[dict[str, Any]]:
+    steps = [
+        {
+            "key": "api_publish_after_approval",
+            "label_ru": "API: публикация после approval",
+            "label_en": "API: publish after approval",
+            "count": int(external_publish_count or 0),
+            "external_publish": True,
+            "requires_approval": True,
+            "stop_before_final_publish": False,
+            "expected_status_ru": "published или failed с понятной причиной",
+            "expected_status_en": "published or failed with a clear reason",
+            "description_ru": "Telegram/VK/Google/Meta уйдут наружу только если пост уже approved, queued и канал готов.",
+            "description_en": "Telegram/VK/Google/Meta publish externally only when the post is already approved, queued, and the channel is ready.",
+        },
+        {
+            "key": "maps_controlled_without_final_click",
+            "label_ru": "Карты: controlled/manual без финального клика",
+            "label_en": "Maps: controlled/manual without final click",
+            "count": int(controlled_count or 0),
+            "external_publish": False,
+            "requires_approval": True,
+            "stop_before_final_publish": True,
+            "expected_status_ru": "needs_supervised_publish",
+            "expected_status_en": "needs_supervised_publish",
+            "description_ru": "Яндекс/2ГИС получают supervised task для OpenClaw, но финальная публикация остаётся за человеком.",
+            "description_en": "Yandex/2GIS receive an OpenClaw supervised task, while final publishing stays human-controlled.",
+        },
+        {
+            "key": "manual_handoff_or_connection",
+            "label_ru": "Ручной fallback или подключение канала",
+            "label_en": "Manual fallback or channel connection",
+            "count": int(manual_count or 0),
+            "external_publish": False,
+            "requires_approval": True,
+            "stop_before_final_publish": True,
+            "expected_status_ru": "needs_manual_publish",
+            "expected_status_en": "needs_manual_publish",
+            "description_ru": "Посты без ключей, browser-use или готового текста не будут скрыто публиковаться.",
+            "description_en": "Posts without credentials, browser-use, or ready copy will not publish silently.",
+        },
+    ]
+    if int(skipped_no_access or 0) > 0:
+        steps.append(
+            {
+                "key": "skipped_no_access",
+                "label_ru": "Пропущено без доступа",
+                "label_en": "Skipped without access",
+                "count": int(skipped_no_access or 0),
+                "external_publish": False,
+                "requires_approval": True,
+                "stop_before_final_publish": True,
+                "expected_status_ru": "без изменений",
+                "expected_status_en": "unchanged",
+                "description_ru": "Эти посты не попали в первый цикл для текущего пользователя или business scope.",
+                "description_en": "These posts are outside the current user or business scope for the first cycle.",
+            }
+        )
+    return steps
 
 
 def _dispatch_preview_readiness_message(status: str, is_ru: bool) -> str:

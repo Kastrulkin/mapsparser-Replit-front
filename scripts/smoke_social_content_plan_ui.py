@@ -16,6 +16,7 @@ CONTENT_PLAN_TAB = ROOT / "frontend" / "src" / "components" / "content-plan" / "
 EXTERNAL_INTEGRATIONS = ROOT / "frontend" / "src" / "components" / "ExternalIntegrations.tsx"
 TELEGRAM_BOT_CREDENTIALS = ROOT / "frontend" / "src" / "components" / "TelegramBotCredentials.tsx"
 SETTINGS_PAGE = ROOT / "frontend" / "src" / "pages" / "dashboard" / "SettingsPage.tsx"
+SOCIAL_POST_SERVICE = ROOT / "src" / "services" / "social_post_service.py"
 
 
 REQUIRED_COPY = {
@@ -32,6 +33,9 @@ REQUIRED_COPY = {
     "worker dispatch env enabled": "SOCIAL_POST_DISPATCH_ENABLED",
     "worker metrics env scope": "SOCIAL_POST_METRICS_BUSINESS_ID",
     "worker launch no publish": "Preflight ничего не публикует",
+    "worker first cycle preview": "Что сделает первый цикл",
+    "worker first cycle expected status": "Ожидаемый статус",
+    "worker first cycle safety boundaries": "Границы безопасности",
     "manual fallback button": "Нужен ручной fallback",
     "dispatch scope guard": "заблокировано без выбранного бизнеса",
     "dispatch guarded notice": "Dispatch включён, но остановлен защитой",
@@ -48,6 +52,9 @@ REQUIRED_COPY = {
     "approval preview": "Предпросмотр перед подтверждением",
     "bulk approval saved preview guard": "Сначала сохраните правки текста",
     "queue action": "Поставить в расписание",
+    "selected post path": "Маршрут выбранных постов",
+    "selected preview first": "Сначала откройте карточку темы ниже",
+    "selected prepared topics stay checked": "LocalOS отметил подготовленные темы",
     "queue saved guard feedback": "Queue сохранена, но LocalOS не запустит внешний worker",
     "queue saved scope feedback": "текущий worker смотрит другой business scope",
     "supervised placement state": "Контролируемое размещение",
@@ -139,6 +146,15 @@ REQUIRED_SETTINGS_PAGE_COPY = {
 }
 
 
+REQUIRED_BACKEND_DISPATCH_COPY = {
+    "worker first cycle api step": "API: публикация после approval",
+    "worker first cycle maps step": "Карты: controlled/manual без финального клика",
+    "worker first cycle manual step": "Ручной fallback или подключение канала",
+    "worker first cycle safety notes": "Внешние публикации уходят только из approved/queued постов.",
+    "worker first cycle final click guard": "финальный клик публикации не выполняется worker",
+}
+
+
 REQUIRED_TELEGRAM_SETTINGS_DATA_CONTRACT = {
     "telegram status endpoint": "/api/business/telegram-bot/status",
     "telegram profile endpoint": "/api/business/profile",
@@ -182,11 +198,15 @@ def main() -> int:
     if not SETTINGS_PAGE.exists():
         print(f"Missing settings page source: {SETTINGS_PAGE}", file=sys.stderr)
         return 1
+    if not SOCIAL_POST_SERVICE.exists():
+        print(f"Missing social post service source: {SOCIAL_POST_SERVICE}", file=sys.stderr)
+        return 1
 
     source = CONTENT_PLAN_TAB.read_text(encoding="utf-8")
     settings_source = EXTERNAL_INTEGRATIONS.read_text(encoding="utf-8")
     telegram_settings_source = TELEGRAM_BOT_CREDENTIALS.read_text(encoding="utf-8")
     settings_page_source = SETTINGS_PAGE.read_text(encoding="utf-8")
+    service_source = SOCIAL_POST_SERVICE.read_text(encoding="utf-8")
     missing = []
     missing.extend(_assert_contains(source, REQUIRED_COPY))
     missing.extend(_assert_contains(source, REQUIRED_SAFETY_COPY))
@@ -196,6 +216,7 @@ def main() -> int:
     missing.extend(_assert_contains(telegram_settings_source, REQUIRED_TELEGRAM_SETTINGS_COPY))
     missing.extend(_assert_contains(telegram_settings_source, REQUIRED_TELEGRAM_SETTINGS_DATA_CONTRACT))
     missing.extend(_assert_contains(settings_page_source, REQUIRED_SETTINGS_PAGE_COPY))
+    missing.extend(_assert_contains(service_source, REQUIRED_BACKEND_DISPATCH_COPY))
     forbidden = _assert_absent(source, FORBIDDEN_COPY)
     forbidden.extend(_assert_absent(settings_source, FORBIDDEN_COPY))
 

@@ -20,6 +20,7 @@ from services.social_post_service import (
     _build_social_learning_insights,
     _collect_vk_post_metrics,
     _preview_dispatch_decision,
+    _dispatch_preview_first_cycle_steps,
     _queue_preflight_block,
     _record_social_supervised_handoff_ledger,
     _social_supervised_blocked_metadata,
@@ -1332,6 +1333,27 @@ def test_dispatch_preview_readiness_explains_external_controlled_and_manual_work
     assert "biz-1" in readiness["next_action_en"]
     assert readiness["recommended_dispatch_env"]["SOCIAL_POST_DISPATCH_BUSINESS_ID"] == "biz-1"
     assert readiness["recommended_dispatch_env"]["SOCIAL_POST_DISPATCH_ENABLED"] == "true"
+    assert readiness["first_cycle_steps"][0]["key"] == "api_publish_after_approval"
+    assert readiness["first_cycle_steps"][0]["external_publish"] is True
+    assert readiness["first_cycle_steps"][1]["key"] == "maps_controlled_without_final_click"
+    assert readiness["first_cycle_steps"][1]["stop_before_final_publish"] is True
+    assert readiness["first_cycle_steps"][2]["key"] == "manual_handoff_or_connection"
+    assert readiness["first_cycle_steps"][3]["key"] == "skipped_no_access"
+    assert "Dry-run" in readiness["safety_notes_ru"][2]
+
+
+def test_dispatch_preview_first_cycle_steps_keep_owner_safe_before_worker_launch():
+    steps = _dispatch_preview_first_cycle_steps(2, 1, 3)
+
+    assert steps[0]["label_ru"] == "API: публикация после approval"
+    assert steps[0]["count"] == 2
+    assert steps[0]["external_publish"] is True
+    assert steps[0]["requires_approval"] is True
+    assert steps[1]["label_ru"] == "Карты: controlled/manual без финального клика"
+    assert steps[1]["external_publish"] is False
+    assert steps[1]["stop_before_final_publish"] is True
+    assert steps[2]["label_ru"] == "Ручной fallback или подключение канала"
+    assert steps[2]["count"] == 3
 
 
 def test_dispatch_preview_readiness_marks_no_due_posts_as_safe_noop():

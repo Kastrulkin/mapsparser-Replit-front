@@ -293,6 +293,21 @@ type SocialDispatchPreview = {
     next_action_ru?: string;
     next_action_en?: string;
     recommended_dispatch_env?: Record<string, string>;
+    first_cycle_steps?: Array<{
+      key?: string;
+      label_ru?: string;
+      label_en?: string;
+      count?: number;
+      external_publish?: boolean;
+      requires_approval?: boolean;
+      stop_before_final_publish?: boolean;
+      expected_status_ru?: string;
+      expected_status_en?: string;
+      description_ru?: string;
+      description_en?: string;
+    }>;
+    safety_notes_ru?: string[];
+    safety_notes_en?: string[];
   };
   items?: Array<{
     id?: string;
@@ -2422,6 +2437,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         tone: 'success',
         text_ru: 'Каналы подготовлены для выбранных тем. Следующий шаг - проверить тексты.',
         text_en: 'Channels prepared for selected items. Next step: review copy.',
+        details_ru: [
+          'Выбранные темы остались отмечены. В панели ниже откройте preview, сохраните правки и нажмите “Подтвердить посты”.',
+          'Наружу ничего не отправлено: approval и постановка в расписание идут отдельными шагами.',
+        ],
+        details_en: [
+          'Selected topics stayed checked. In the panel below, open preview, save edits, and click “Approve posts”.',
+          'Nothing was sent externally: approval and queueing stay separate steps.',
+        ],
       });
     } catch (bulkError) {
       const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось подготовить выбранные каналы' : 'Could not prepare selected channels');
@@ -2451,6 +2474,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         tone: 'success',
         text_ru: 'Каналы подготовлены. Следующий безопасный шаг - открыть preview и проверить тексты.',
         text_en: 'Channels prepared. Next safe step: open preview and review copy.',
+        details_ru: [
+          'LocalOS отметил подготовленные темы, чтобы bulk approval был виден сразу.',
+          'Откройте карточку темы ниже: там есть “Предпросмотр перед подтверждением” для каждого канала.',
+        ],
+        details_en: [
+          'LocalOS selected the prepared topics so bulk approval is visible immediately.',
+          'Open a topic card below: it contains “Preview before approval” for each channel.',
+        ],
       });
     } catch (bulkError) {
       const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось подготовить каналы' : 'Could not prepare channels');
@@ -5338,6 +5369,44 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               </div>
                             </div>
                           ) : null}
+                          {Number(socialDispatchPreview.readiness?.first_cycle_steps?.length || 0) > 0 ? (
+                            <div className="mt-2 rounded-lg border border-sky-300/20 bg-sky-400/10 px-2 py-2 text-[11px] leading-5 text-sky-50">
+                              <div className="font-semibold text-white">
+                                {isRu ? 'Что сделает первый цикл' : 'What the first cycle will do'}
+                              </div>
+                              <div className="mt-1 space-y-1.5">
+                                {(socialDispatchPreview.readiness?.first_cycle_steps || []).map((step) => (
+                                  <div key={String(step.key || step.label_ru || step.label_en)} className="rounded-md bg-white/10 px-2 py-1.5">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-medium text-white">
+                                        {isRu ? String(step.label_ru || '') : String(step.label_en || '')}
+                                      </span>
+                                      <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white">
+                                        {Number(step.count || 0)}
+                                      </span>
+                                    </div>
+                                    <div className="mt-0.5 text-sky-100">
+                                      {isRu ? String(step.description_ru || '') : String(step.description_en || '')}
+                                    </div>
+                                    <div className="mt-0.5 text-sky-200">
+                                      {isRu ? 'Ожидаемый статус: ' : 'Expected status: '}
+                                      {isRu ? String(step.expected_status_ru || '') : String(step.expected_status_en || '')}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                          {Number((isRu ? socialDispatchPreview.readiness?.safety_notes_ru : socialDispatchPreview.readiness?.safety_notes_en)?.length || 0) > 0 ? (
+                            <div className="mt-2 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] leading-5 text-slate-200">
+                              <div className="font-semibold text-white">
+                                {isRu ? 'Границы безопасности' : 'Safety boundaries'}
+                              </div>
+                              {((isRu ? socialDispatchPreview.readiness?.safety_notes_ru : socialDispatchPreview.readiness?.safety_notes_en) || []).map((note) => (
+                                <div key={String(note)}>{String(note)}</div>
+                              ))}
+                            </div>
+                          ) : null}
                           {Number(socialDispatchPreview.items?.length || 0) > 0 ? (
                             <div className="mt-2 space-y-1">
                               {(socialDispatchPreview.items || []).slice(0, 5).map((item) => (
@@ -5864,6 +5933,33 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   <div className="mr-auto flex items-center gap-2 text-sm font-medium text-slate-900">
                     <CheckSquare className="h-4 w-4" />
                     {isRu ? `Выбрано: ${selectedItems.length}` : `Selected: ${selectedItems.length}`}
+                  </div>
+                  <div className="w-full rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-900">
+                    <div className="font-semibold text-blue-950">
+                      {isRu ? 'Маршрут выбранных постов' : 'Selected post path'}
+                    </div>
+                    <div className="mt-1">
+                      {isRu
+                        ? `Проверить preview: ${selectedSocialNeedsReview.length} · поставить в расписание: ${selectedSocialCanQueue.length} · ручное/controlled размещение: ${selectedSocialCanMarkPublished.length}.`
+                        : `Review preview: ${selectedSocialNeedsReview.length} · queue on schedule: ${selectedSocialCanQueue.length} · manual/controlled placement: ${selectedSocialCanMarkPublished.length}.`}
+                    </div>
+                    <div className="mt-1 text-blue-800">
+                      {selectedSocialNeedsReview.length > 0
+                        ? (isRu
+                          ? 'Сначала откройте карточку темы ниже, проверьте “Предпросмотр перед подтверждением”, затем нажмите “Подтвердить посты”.'
+                          : 'First open a topic card below, review “Preview before approval”, then click “Approve posts”.')
+                        : selectedSocialCanQueue.length > 0
+                          ? (isRu
+                            ? 'Посты подтверждены: следующий безопасный шаг - “Поставить в расписание”.'
+                            : 'Posts are approved: the next safe step is “Queue on schedule”.')
+                          : selectedSocialCanMarkPublished.length > 0
+                            ? (isRu
+                              ? 'Для этих каналов нужен ручной или controlled финал: проверьте задачу и отметьте размещение.'
+                              : 'These channels need a manual or controlled finish: review the task and mark placement.')
+                            : (isRu
+                              ? 'Если кнопки ниже показывают 0, сначала подготовьте каналы для выбранных тем.'
+                              : 'If the buttons below show 0, prepare channels for the selected topics first.')}
+                    </div>
                   </div>
                   <Button
                     variant="outline"
