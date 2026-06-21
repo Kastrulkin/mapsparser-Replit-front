@@ -507,7 +507,7 @@ export default function PublicSalesRoomPage() {
 
   const recipientName = room.recipient?.name || 'получатель';
   const businessName = room.business?.name || 'Компания';
-  const managerName = 'Aleksandr Demianov';
+  const managerName = 'Александр Демьянов';
   const managerInitial = managerName.trim().charAt(0).toUpperCase();
   const welcomeText = String(room.welcome?.body_text || defaultWelcomeText);
   const canEditWelcome = Boolean(room.permissions?.can_edit_welcome);
@@ -590,7 +590,6 @@ export default function PublicSalesRoomPage() {
                 {managerInitial}
               </div>
               <div className="mt-5 text-xl font-black tracking-tight text-slate-950">{managerName}</div>
-              <div className="mt-1 text-sm font-semibold text-slate-500">Founder, LocalOS</div>
             </aside>
             <div className="px-5 py-7 sm:px-8 lg:px-10">
               <div className="flex flex-wrap items-center justify-between gap-3">
