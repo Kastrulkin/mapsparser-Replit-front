@@ -2,6 +2,8 @@ import json
 import sys
 from datetime import date, timedelta
 
+import pytest
+
 import services.social_post_service as social_post_service
 from services.social_post_service import (
     _build_openclaw_supervised_task_payload,
@@ -26,6 +28,7 @@ from services.social_post_service import (
     _supervised_publish_state,
     _vk_publish_binding,
     apply_social_post_recommendation,
+    approve_social_post,
     _build_next_plan_changes,
     _attribution_metrics_for_post,
     build_social_queue_groups,
@@ -36,7 +39,9 @@ from services.social_post_service import (
     next_action_for_social_post,
     openclaw_browser_available,
     preview_due_social_post_dispatch,
+    publish_social_post,
     queue_social_post,
+    record_social_post_attribution_event,
     _vk_post_url,
 )
 
@@ -203,6 +208,76 @@ class FakeAttributionMetricsCursor:
         ]
 
 
+class FakeAttributionEventConn:
+    def __init__(self):
+        self.committed = False
+        self.rolled_back = False
+        self.inserted_event = None
+        self.metric_upserted = False
+
+    def cursor(self):
+        return FakeAttributionEventCursor(self)
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+
+class FakeAttributionEventCursor:
+    def __init__(self, conn):
+        self.conn = conn
+        self.next_row = None
+        self.metric_query_count = 0
+
+    def execute(self, query, params=None):
+        normalized = " ".join(str(query).split()).lower()
+        if "insert into social_post_attribution_events" in normalized:
+            self.conn.inserted_event = params
+            self.next_row = {
+                "id": params[0],
+                "social_post_id": params[1],
+                "business_id": params[2],
+                "event_type": params[3],
+                "event_source": params[4],
+                "value": params[5],
+                "metadata_json": params[6],
+                "event_at": "2026-06-21T10:00:00+00:00",
+            }
+            return
+        if "insert into social_post_metrics" in normalized:
+            self.conn.metric_upserted = True
+            self.next_row = None
+            return
+        if "from social_post_attribution_events" in normalized:
+            self.metric_query_count += 1
+            self.next_row = None
+            return
+        raise AssertionError(f"unexpected SQL: {query}")
+
+    def fetchone(self):
+        return self.next_row
+
+    def fetchall(self):
+        return [
+            {"event_type": "lead", "total": 2},
+            {"event_type": "inquiry", "total": 1},
+            {"event_type": "comment", "total": 3},
+        ]
+
+
+class FakeAttributionEventDB:
+    last_conn = None
+
+    def __init__(self):
+        self.conn = FakeAttributionEventConn()
+        FakeAttributionEventDB.last_conn = self.conn
+
+    def close(self):
+        pass
+
+
 class FakeSocialLedgerCursor:
     def __init__(self, table_exists=True):
         self.table_exists = table_exists
@@ -271,6 +346,85 @@ class FakeQueueFallbackDB:
     def __init__(self):
         self.conn = FakeQueueFallbackConn()
         FakeQueueFallbackDB.last_conn = self.conn
+
+    def close(self):
+        pass
+
+
+class FakeApproveGuardConn:
+    def __init__(self):
+        self.committed = False
+        self.rolled_back = False
+
+    def cursor(self):
+        return object()
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+
+class FakeApproveGuardDB:
+    last_conn = None
+
+    def __init__(self):
+        self.conn = FakeApproveGuardConn()
+        FakeApproveGuardDB.last_conn = self.conn
+
+    def close(self):
+        pass
+
+
+class FakePublishEmptyCopyConn:
+    def __init__(self):
+        self.committed = False
+        self.rolled_back = False
+        self.updated_row = {}
+
+    def cursor(self):
+        return FakePublishEmptyCopyCursor(self)
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+
+class FakePublishEmptyCopyCursor:
+    def __init__(self, conn):
+        self.conn = conn
+        self.next_row = None
+
+    def execute(self, query, params=None):
+        normalized = " ".join(str(query).split()).lower()
+        if "update social_posts" in normalized and "status = 'needs_review'" in normalized:
+            self.conn.updated_row = {
+                "id": "post-empty",
+                "business_id": "biz-1",
+                "platform": "telegram",
+                "publish_mode": "api",
+                "status": "needs_review",
+                "platform_text": "",
+                "base_text": "",
+                "last_error": params[0],
+            }
+            self.next_row = self.conn.updated_row
+            return
+        raise AssertionError(f"unexpected SQL: {query}")
+
+    def fetchone(self):
+        return self.next_row
+
+
+class FakePublishEmptyCopyDB:
+    last_conn = None
+
+    def __init__(self):
+        self.conn = FakePublishEmptyCopyConn()
+        FakePublishEmptyCopyDB.last_conn = self.conn
 
     def close(self):
         pass
@@ -363,6 +517,29 @@ def test_openclaw_browser_capability_status_explains_missing_catalog(monkeypatch
     assert status["reason"] == "openclaw_catalog_not_configured"
 
 
+def test_approve_social_post_rejects_empty_copy(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeApproveGuardDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "telegram",
+            "status": "needs_review",
+            "platform_text": "   ",
+            "base_text": "",
+        },
+    )
+
+    with pytest.raises(ValueError, match="текст публикации"):
+        approve_social_post("user-1", "post-empty")
+
+    assert FakeApproveGuardDB.last_conn.committed is False
+    assert FakeApproveGuardDB.last_conn.rolled_back is True
+
+
 def test_next_action_separates_review_api_and_supervised_states():
     assert next_action_for_social_post({"status": "needs_review", "platform": "telegram"}) == "review_required"
     assert next_action_for_social_post({"status": "approved", "platform": "telegram"}) == "wait_for_api_publish"
@@ -453,6 +630,41 @@ def test_manual_attribution_metrics_include_views_and_likes():
     assert metrics["clicks"] == 3
     assert metrics["inquiries"] == 1
     assert metrics["leads"] == 1
+
+
+def test_record_social_post_attribution_event_returns_updated_metrics(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeAttributionEventDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "telegram",
+            "status": "published",
+            "leads": 0,
+            "inquiries": 0,
+        },
+    )
+
+    payload = record_social_post_attribution_event(
+        "user-1",
+        "post-1",
+        "lead",
+        value=2,
+        event_source="manual_content_plan",
+        metadata={"source": "button"},
+    )
+
+    assert payload["event"]["event_type"] == "lead"
+    assert payload["event"]["value"] == 2
+    assert payload["metrics"]["leads"] == 2
+    assert payload["metrics"]["inquiries"] == 1
+    assert payload["post"]["leads"] == 2
+    assert payload["post"]["comments"] == 3
+    assert FakeAttributionEventDB.last_conn.metric_upserted is True
+    assert FakeAttributionEventDB.last_conn.committed is True
 
 
 def test_dispatch_action_for_status_matches_worker_log_buckets():
@@ -602,6 +814,7 @@ def test_preview_dispatch_decision_publish_api_when_channel_ready(monkeypatch):
             "publish_mode": "api",
             "status": "queued",
             "approved_at": "2026-06-19T10:00:00+00:00",
+            "platform_text": "Готовый текст",
         },
     )
 
@@ -632,6 +845,7 @@ def test_preview_dispatch_decision_blocks_api_when_preflight_missing(monkeypatch
             "publish_mode": "api",
             "status": "queued",
             "approved_at": "2026-06-19T10:00:00+00:00",
+            "platform_text": "Готовый текст",
         },
     )
 
@@ -652,6 +866,7 @@ def test_preview_dispatch_decision_maps_never_autopublishes(monkeypatch):
             "publish_mode": "openclaw_browser",
             "status": "queued",
             "approved_at": "2026-06-19T10:00:00+00:00",
+            "platform_text": "Готовый текст",
         },
     )
 
@@ -659,6 +874,60 @@ def test_preview_dispatch_decision_maps_never_autopublishes(monkeypatch):
     assert preview["would_status"] == "needs_supervised_publish"
     assert preview["external_publish"] is False
     assert preview["stop_before_final_publish"] is True
+
+
+def test_preview_dispatch_decision_blocks_empty_copy_before_worker_publish(monkeypatch):
+    monkeypatch.setattr(social_post_service, "_queue_preflight_block", lambda cursor, post: {})
+
+    preview = _preview_dispatch_decision(
+        None,
+        {
+            "id": "p-empty",
+            "business_id": "b1",
+            "platform": "telegram",
+            "publish_mode": "api",
+            "status": "queued",
+            "approved_at": "2026-06-19T10:00:00+00:00",
+            "platform_text": "   ",
+            "base_text": "",
+        },
+    )
+
+    assert preview["dispatch_action"] == "manual_handoff"
+    assert preview["would_status"] == "needs_review"
+    assert preview["reason"] == "empty_post_copy"
+    assert preview["external_publish"] is False
+
+
+def test_publish_social_post_moves_empty_copy_back_to_review(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakePublishEmptyCopyDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "telegram",
+            "publish_mode": "api",
+            "status": "queued",
+            "approved_at": "2026-06-19T10:00:00+00:00",
+            "platform_text": " ",
+            "base_text": "",
+        },
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_publish_api_post",
+        lambda cursor, post: (_ for _ in ()).throw(AssertionError("empty post must not call provider")),
+    )
+
+    post = publish_social_post("user-1", "post-empty")
+
+    assert post["status"] == "needs_review"
+    assert "заново подтвердить" in post["last_error"]
+    assert FakePublishEmptyCopyDB.last_conn.committed is True
+    assert FakePublishEmptyCopyDB.last_conn.rolled_back is False
 
 
 def test_queue_preflight_blocks_api_channel_when_readiness_is_missing(monkeypatch):

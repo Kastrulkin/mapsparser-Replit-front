@@ -244,6 +244,8 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
         status = str(post.get("status") or "").strip()
         if status == "published":
             raise ValueError("Публикация уже опубликована")
+        if not _social_post_has_text(post):
+            raise ValueError("Перед подтверждением нужно заполнить текст публикации")
         now = datetime.now(timezone.utc)
         cursor.execute(
             """
@@ -461,6 +463,23 @@ def publish_social_post(user_id: str, post_id: str) -> dict[str, Any]:
         post = _load_post_for_user(cursor, user_id, post_id)
         if not post.get("approved_at") and str(post.get("status") or "") not in {"approved", "queued"}:
             raise PermissionError("Перед внешней публикацией нужно подтверждение человека")
+        if not _social_post_has_text(post):
+            cursor.execute(
+                """
+                UPDATE social_posts
+                SET status = 'needs_review',
+                    approved_at = NULL,
+                    approval_id = NULL,
+                    last_error = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING *
+                """,
+                ("Перед публикацией нужно заполнить текст и заново подтвердить preview", post_id),
+            )
+            updated = _serialize_social_post(cursor, cursor.fetchone())
+            db.conn.commit()
+            return updated
         platform = str(post.get("platform") or "").strip()
         publish_mode = str(post.get("publish_mode") or "").strip()
         metadata = _json_dict(post.get("metadata_json"))
@@ -684,10 +703,16 @@ def record_social_post_attribution_event(
             if isinstance(item, (datetime, date)):
                 event[key] = item.isoformat()
         _upsert_manual_attribution_metrics(cursor, str(post.get("id") or ""))
+        metrics = _attribution_metrics_for_post(cursor, str(post.get("id") or ""))
+        updated_post = {
+            **post,
+            **metrics,
+        }
         db.conn.commit()
         return {
             "event": event,
-            "post": post,
+            "post": updated_post,
+            "metrics": metrics,
         }
     except Exception:
         db.conn.rollback()
@@ -1410,6 +1435,10 @@ def _status_after_social_text_edit(current_status: str, platform_text: str) -> s
     return "needs_review"
 
 
+def _social_post_has_text(post: dict[str, Any]) -> bool:
+    return bool(str(post.get("platform_text") or post.get("base_text") or "").strip())
+
+
 def build_social_queue_groups(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = {str(group["key"]): [] for group in SOCIAL_QUEUE_GROUPS}
     for post in posts:
@@ -1478,6 +1507,16 @@ def _preview_dispatch_decision(cursor: Any, post: dict[str, Any]) -> dict[str, A
         "dry_run": True,
     }
     if platform in BROWSER_OR_MANUAL_PLATFORMS:
+        if not _social_post_has_text(post):
+            return {
+                **item,
+                "dispatch_action": "manual_handoff",
+                "would_status": "needs_review",
+                "reason": "empty_post_copy",
+                "external_publish": False,
+                "approval_required": True,
+                "stop_before_final_publish": True,
+            }
         browser_ready = publish_mode == "openclaw_browser" and openclaw_browser_available()
         return {
             **item,
@@ -1494,6 +1533,15 @@ def _preview_dispatch_decision(cursor: Any, post: dict[str, Any]) -> dict[str, A
             "dispatch_action": "manual_handoff",
             "would_status": "needs_manual_publish",
             "reason": "publish_mode_not_api",
+            "external_publish": False,
+            "approval_required": True,
+        }
+    if not _social_post_has_text(post):
+        return {
+            **item,
+            "dispatch_action": "manual_handoff",
+            "would_status": "needs_review",
+            "reason": "empty_post_copy",
             "external_publish": False,
             "approval_required": True,
         }

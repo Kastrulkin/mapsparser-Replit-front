@@ -17,6 +17,9 @@ CONTENT_PLAN_TAB = ROOT / "frontend" / "src" / "components" / "content-plan" / "
 
 REQUIRED_COPY = {
     "main next action": "Следующий шаг публикаций",
+    "launch readiness": "Готовность к рабочему запуску",
+    "launch loop path": "Короткий путь до полного цикла",
+    "launch primary signal": "заявки и обращения важнее охватов",
     "schedule preview": "Проверить расписание",
     "dispatch scope guard": "заблокировано без выбранного бизнеса",
     "dispatch guarded notice": "Dispatch включён, но остановлен защитой",
@@ -28,6 +31,7 @@ REQUIRED_COPY = {
     "channel readiness": "Готовность каналов",
     "readiness next action": "Что сделать:",
     "approval preview": "Предпросмотр перед подтверждением",
+    "bulk approval saved preview guard": "Сначала сохраните правки текста",
     "queue action": "Поставить в расписание",
     "queue saved guard feedback": "Queue сохранена, но LocalOS не запустит внешний worker",
     "queue saved scope feedback": "текущий worker смотрит другой business scope",
@@ -41,6 +45,8 @@ REQUIRED_COPY = {
     "inquiry attribution": "Было обращение",
     "like attribution": "Был лайк",
     "view attribution": "Был просмотр",
+    "result nudge": "Есть заявки/обращения",
+    "stale recommendation guard": "Рекомендации сброшены",
 }
 
 
