@@ -11,8 +11,9 @@ from playwright.async_api import async_playwright
 
 
 DEFAULT_URL = "http://127.0.0.1:3000/dashboard/agents"
-AGENT_BUILDER_SESSION_ID = "builder-session-sheets-telegram"
-MOCK_CREATED_AGENT = False
+SHEETS_AGENT_BUILDER_SESSION_ID = "builder-session-sheets-telegram"
+BROWSER_AGENT_BUILDER_SESSION_ID = "builder-session-browser-telegram"
+MOCK_CREATED_AGENT_IDS = set()
 
 
 def _json_response(body):
@@ -28,7 +29,6 @@ async def _fulfill(route, body):
 
 
 async def _handle_mock_api(route):
-    global MOCK_CREATED_AGENT
     parsed = urlparse(route.request.url)
     path = parsed.path
     if path.startswith("/api"):
@@ -101,7 +101,7 @@ async def _handle_mock_api(route):
                 "sources_count": 3,
             },
         ]
-        if MOCK_CREATED_AGENT:
+        if "agent-sheets-telegram" in MOCK_CREATED_AGENT_IDS:
             blueprints.append({
                 "id": "agent-sheets-telegram",
                 "business_id": "biz-1",
@@ -110,6 +110,21 @@ async def _handle_mock_api(route):
                 "status": "draft",
                 "description": "Проверяет новые строки в Google Sheets и готовит краткий статус владельцу в Telegram.",
                 "active_version_id": "ver-sheets-telegram",
+                "active_version_number": 1,
+                "latest_version_number": 1,
+                "last_run_status": "",
+                "pending_approvals_count": 0,
+                "sources_count": 0,
+            })
+        if "agent-browser-telegram" in MOCK_CREATED_AGENT_IDS:
+            blueprints.append({
+                "id": "agent-browser-telegram",
+                "business_id": "biz-1",
+                "name": "Мониторинг сайта конкурента",
+                "category": "custom",
+                "status": "draft",
+                "description": "Через browser use проверяет сайт конкурента и готовит короткий Telegram-отчёт владельцу.",
+                "active_version_id": "ver-browser-telegram",
                 "active_version_number": 1,
                 "latest_version_number": 1,
                 "last_run_status": "",
@@ -138,30 +153,61 @@ async def _handle_mock_api(route):
         return
 
     if path == "/agent-builder/sessions" and method == "POST":
-        await _fulfill(route, {
-            "session": _builder_session(
-                message="Каждый час бери новые строки из Google Sheets с заказами и отправляй краткий статус владельцу в Telegram после проверки.",
-                missing_questions=[{
-                    "key": "orders_columns",
-                    "question": "Какие столбцы или критерии в Google Sheets определяют новый заказ?",
-                    "reason": "compiled_intent_clarification",
-                }],
-                can_create_draft=False,
-                next_step="answer_clarification",
-            ),
-        })
+        body = json.loads(route.request.post_data or "{}")
+        message = str(body.get("message") or "")
+        message_lower = message.lower()
+        if "browser" in message_lower or "сайт конкурент" in message_lower or "example.com" in message_lower:
+            await _fulfill(route, {
+                "session": _builder_session(
+                    session_id=BROWSER_AGENT_BUILDER_SESSION_ID,
+                    agent_name="Мониторинг сайта конкурента",
+                    message=message,
+                    data_sources=["browser_use", "competitor_websites", "telegram", "business_profile"],
+                    extraction_rules="Открыть сайт конкурента, найти изменения в акциях, ценах и новых блоках.",
+                    processing_rules="Собрать короткий отчёт владельцу, не выполнять внешние действия без подтверждения.",
+                    output_format="Короткий Telegram-отчёт владельцу.",
+                    missing_questions=[],
+                    can_create_draft=True,
+                    next_step="create_draft_then_choose_route",
+                ),
+            })
+        else:
+            await _fulfill(route, {
+                "session": _builder_session(
+                    session_id=SHEETS_AGENT_BUILDER_SESSION_ID,
+                    agent_name="Google Sheets → Telegram",
+                    message="Каждый час бери новые строки из Google Sheets с заказами и отправляй краткий статус владельцу в Telegram после проверки.",
+                    data_sources=["google_sheets", "telegram", "business_profile"],
+                    extraction_rules="Новые строки, клиент, заказ, статус.",
+                    processing_rules="Собирать короткий статус, не отправлять клиентам без подтверждения.",
+                    output_format="Короткое сообщение владельцу в Telegram.",
+                    missing_questions=[{
+                        "key": "orders_columns",
+                        "question": "Какие столбцы или критерии в Google Sheets определяют новый заказ?",
+                        "reason": "compiled_intent_clarification",
+                    }],
+                    can_create_draft=False,
+                    next_step="answer_clarification",
+                ),
+            })
         return
 
-    if path == f"/agent-builder/sessions/{AGENT_BUILDER_SESSION_ID}/message" and method == "POST":
+    if path == f"/agent-builder/sessions/{SHEETS_AGENT_BUILDER_SESSION_ID}/message" and method == "POST":
         body = json.loads(route.request.post_data or "{}")
         message = str(body.get("message") or "")
         await _fulfill(route, {
             "session": _builder_session(
+                session_id=SHEETS_AGENT_BUILDER_SESSION_ID,
+                agent_name="Google Sheets → Telegram",
                 message=(
                     "Каждый час бери новые строки из Google Sheets с заказами и отправляй краткий статус владельцу "
                     "в Telegram после проверки. "
                     f"{message}"
                 ),
+                data_sources=["google_sheets", "telegram", "business_profile"],
+                extraction_rules="Новые строки, клиент, заказ, статус.",
+                processing_rules="Собирать короткий статус, не отправлять клиентам без подтверждения.",
+                output_format="Короткое сообщение владельцу в Telegram.",
                 missing_questions=[{
                     "key": "google_sheets_target",
                     "question": "Какую Google таблицу и вкладку использовать как источник данных?",
@@ -175,8 +221,8 @@ async def _handle_mock_api(route):
         })
         return
 
-    if path == f"/agent-builder/sessions/{AGENT_BUILDER_SESSION_ID}/create-blueprint" and method == "POST":
-        MOCK_CREATED_AGENT = True
+    if path == f"/agent-builder/sessions/{SHEETS_AGENT_BUILDER_SESSION_ID}/create-blueprint" and method == "POST":
+        MOCK_CREATED_AGENT_IDS.add("agent-sheets-telegram")
         await _fulfill(route, {
             "blueprint": {
                 "id": "agent-sheets-telegram",
@@ -190,12 +236,37 @@ async def _handle_mock_api(route):
                 "latest_version_number": 1,
             },
             "version": {"id": "ver-sheets-telegram", "version_number": 1},
-            "session": {"id": AGENT_BUILDER_SESSION_ID, "status": "blueprint_created", "blueprint_id": "agent-sheets-telegram"},
+            "session": {"id": SHEETS_AGENT_BUILDER_SESSION_ID, "status": "blueprint_created", "blueprint_id": "agent-sheets-telegram"},
             "post_create_handoff": {
                 "schema": "localos_agent_post_create_handoff_v1",
                 "status": "needs_connection",
                 "workspace_mode": "connections",
                 "next_binding_key": "google_sheets_read",
+            },
+        })
+        return
+
+    if path == f"/agent-builder/sessions/{BROWSER_AGENT_BUILDER_SESSION_ID}/create-blueprint" and method == "POST":
+        MOCK_CREATED_AGENT_IDS.add("agent-browser-telegram")
+        await _fulfill(route, {
+            "blueprint": {
+                "id": "agent-browser-telegram",
+                "business_id": "biz-1",
+                "name": "Мониторинг сайта конкурента",
+                "category": "custom",
+                "status": "draft",
+                "description": "Через browser use проверяет сайт конкурента и готовит короткий Telegram-отчёт владельцу.",
+                "active_version_id": "ver-browser-telegram",
+                "active_version_number": 1,
+                "latest_version_number": 1,
+            },
+            "version": {"id": "ver-browser-telegram", "version_number": 1},
+            "session": {"id": BROWSER_AGENT_BUILDER_SESSION_ID, "status": "blueprint_created", "blueprint_id": "agent-browser-telegram"},
+            "post_create_handoff": {
+                "schema": "localos_agent_post_create_handoff_v1",
+                "status": "needs_connection",
+                "workspace_mode": "connections",
+                "next_binding_key": "telegram_delivery",
             },
         })
         return
@@ -334,12 +405,87 @@ async def _handle_mock_api(route):
         })
         return
 
+    if path == "/agent-blueprints/agent-browser-telegram":
+        await _fulfill(route, {
+            "blueprint": {
+                "id": "agent-browser-telegram",
+                "business_id": "biz-1",
+                "name": "Мониторинг сайта конкурента",
+                "category": "custom",
+                "status": "draft",
+                "description": "Через browser use проверяет сайт конкурента и готовит короткий Telegram-отчёт владельцу.",
+                "active_version_id": "ver-browser-telegram",
+                "active_version_number": 1,
+                "latest_version_number": 1,
+            },
+            "active_version_id": "ver-browser-telegram",
+            "active_version_number": 1,
+            "active_version": {"id": "ver-browser-telegram", "version_number": 1, "status": "draft"},
+            "versions": [{"id": "ver-browser-telegram", "version_number": 1, "status": "draft"}],
+            "runs": [],
+            "approval_queue": [],
+            "learning_events": [],
+            "version_events": [],
+            "legacy_migration": {},
+        })
+        return
+
+    if path == "/agent-blueprints/agent-browser-telegram/review":
+        await _fulfill(route, {
+            "review": {
+                "has_run": False,
+                "run_status": "",
+                "setup": {
+                    "workflow_description": "Через browser use проверять сайт конкурента и готовить Telegram-отчёт.",
+                    "extraction_rules": "Изменения цен, акций, новых блоков и офферов.",
+                    "processing_rules": "Не отправлять клиентам и не менять внешние системы без подтверждения.",
+                    "output_format": "Короткий отчёт владельцу.",
+                },
+                "sources": [],
+                "used_sources": [],
+                "sections": [],
+            },
+        })
+        return
+
+    if path == "/agent-blueprints/agent-browser-telegram/sources/catalog":
+        await _fulfill(route, {"catalog": []})
+        return
+
+    if path == "/agent-blueprints/agent-browser-telegram/integrations":
+        await _fulfill(route, {
+            "integrations": [],
+            "available_integrations": [],
+            "provider_catalog": [],
+            "external_auth_options": [],
+            "binding_status": [{
+                "key": "telegram_delivery",
+                "provider": "telegram",
+                "status": "missing",
+                "missing_config": ["telegram_chat_id"],
+            }],
+            "custom_process": {},
+        })
+        return
+
     await _fulfill(route, {})
 
 
-def _builder_session(message, missing_questions, can_create_draft, next_step):
+def _builder_session(
+    session_id,
+    agent_name,
+    message,
+    data_sources,
+    extraction_rules,
+    processing_rules,
+    output_format,
+    missing_questions,
+    can_create_draft,
+    next_step,
+):
+    first_question = missing_questions[0]["question"] if missing_questions else "Деталей достаточно для первой версии."
     return {
-        "id": AGENT_BUILDER_SESSION_ID,
+        "id": session_id,
         "business_id": "biz-1",
         "status": "draft",
         "messages": [{"role": "user", "content": message}],
@@ -348,11 +494,11 @@ def _builder_session(message, missing_questions, can_create_draft, next_step):
             "understood_task": message,
             "category": "custom",
             "category_label": "Кастомный агент",
-            "agent_name": "Google Sheets → Telegram",
-            "data_sources": ["google_sheets", "telegram", "business_profile"],
-            "extraction_rules": "Новые строки, клиент, заказ, статус.",
-            "processing_rules": "Собирать короткий статус, не отправлять клиентам без подтверждения.",
-            "output_format": "Короткое сообщение владельцу в Telegram.",
+            "agent_name": agent_name,
+            "data_sources": data_sources,
+            "extraction_rules": extraction_rules,
+            "processing_rules": processing_rules,
+            "output_format": output_format,
             "manual_control": "Ручное подтверждение перед внешним действием.",
             "cost_preview": {"estimated_credits": 3},
             "setup_flow": {
@@ -364,7 +510,7 @@ def _builder_session(message, missing_questions, can_create_draft, next_step):
                 "next_step_description": (
                     "Черновик можно создать сейчас. После создания выберите способ выполнения: защищённый способ LocalOS, Maton.ai, встроенный способ LocalOS или ручной режим."
                     if can_create_draft
-                    else missing_questions[0]["question"]
+                    else first_question
                 ),
                 "can_create_draft": can_create_draft,
                 "can_run_preview": False,
@@ -375,7 +521,7 @@ def _builder_session(message, missing_questions, can_create_draft, next_step):
                     "key": "clarify",
                     "label": "Уточнение",
                     "status": "done" if can_create_draft else "active",
-                    "description": "Деталей достаточно для первой версии." if can_create_draft else missing_questions[0]["question"],
+                    "description": "Деталей достаточно для первой версии." if can_create_draft else first_question,
                     "questions": missing_questions,
                     "blocking_questions": [] if can_create_draft else missing_questions,
                 }],
@@ -488,6 +634,38 @@ async def run_smoke(url, screenshot):
                     missing.append("post-create success banner")
                 if "Подключения" not in created_body and "Доступы" not in created_body:
                     missing.append("post-create connection step")
+
+            await page.wait_for_timeout(500)
+            create_buttons = page.get_by_role("button", name="Создать агента")
+            if await create_buttons.count() == 0:
+                missing.append("second button: Создать агента")
+            else:
+                await create_buttons.first.click()
+                dialog = page.get_by_role("dialog", name="Создать агента")
+                await dialog.wait_for(state="visible", timeout=10000)
+                prompt_box = dialog.get_by_placeholder(
+                    "Например: мне нужен агент, который проверяет договоры, находит риски и готовит краткий отчёт"
+                )
+                await prompt_box.fill(
+                    "Через browser use открой сайт конкурента https://example.com, проверь изменения цен и акций "
+                    "и подготовь сообщение владельцу в Telegram."
+                )
+                await dialog.get_by_role("button", name="Начать диалог").click()
+                await page.wait_for_timeout(1000)
+                dialog_body = await dialog.inner_text(timeout=10000)
+                if "Создать агента" not in dialog_body:
+                    missing.append("browser-use draft-ready step")
+                draft_button = dialog.get_by_role("button", name="Создать агента")
+                if not await draft_button.is_enabled():
+                    missing.append("enabled browser-use draft create button")
+                else:
+                    await draft_button.click()
+                    await page.wait_for_timeout(1000)
+                    created_body = await page.locator("body").inner_text(timeout=10000)
+                    if "Мониторинг сайта конкурента" not in created_body:
+                        missing.append("created browser-use Telegram agent")
+                    if "Агент создан" not in created_body:
+                        missing.append("browser-use post-create success banner")
 
         if console_errors:
             leaked.append(f"console errors: {console_errors[:2]}")

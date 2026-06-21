@@ -1799,6 +1799,8 @@ def test_agent_builder_understands_fourth_browser_scenario_pack_without_generic_
 
 def test_agent_builder_new_50_plus_legacy_40_scenario_corpus_is_complete():
     from tests.agent_builder_scenario_corpus import (
+        AGENT_BUILDER_REGRESSION_PLAN,
+        LEGACY_AGENT_BUILDER_COMBINATION_PACKS,
         LEGACY_BROWSER_SCENARIO_COUNT,
         MIXED_AGENT_BUILDER_COMBINATIONS,
         NEW_AGENT_BUILDER_SCENARIOS,
@@ -1806,6 +1808,12 @@ def test_agent_builder_new_50_plus_legacy_40_scenario_corpus_is_complete():
 
     keys = [str(item["key"]) for item in NEW_AGENT_BUILDER_SCENARIOS]
     combination_keys = {key for _, items in MIXED_AGENT_BUILDER_COMBINATIONS for key in items}
+    legacy_combination_count = sum(int(pack["scenario_count"]) for pack in LEGACY_AGENT_BUILDER_COMBINATION_PACKS)
+    legacy_combination_names = {
+        name
+        for pack in LEGACY_AGENT_BUILDER_COMBINATION_PACKS
+        for name in pack["combinations"]
+    }
 
     assert LEGACY_BROWSER_SCENARIO_COUNT == 40
     assert len(NEW_AGENT_BUILDER_SCENARIOS) == 50
@@ -1813,6 +1821,14 @@ def test_agent_builder_new_50_plus_legacy_40_scenario_corpus_is_complete():
     assert LEGACY_BROWSER_SCENARIO_COUNT + len(NEW_AGENT_BUILDER_SCENARIOS) == 90
     assert len(MIXED_AGENT_BUILDER_COMBINATIONS) >= 10
     assert combination_keys.issubset(set(keys))
+    assert len(LEGACY_AGENT_BUILDER_COMBINATION_PACKS) == 4
+    assert legacy_combination_count == 40
+    assert len(legacy_combination_names) == 40
+    assert AGENT_BUILDER_REGRESSION_PLAN["new_scenario_count"] == 50
+    assert AGENT_BUILDER_REGRESSION_PLAN["legacy_scenario_count"] == 40
+    assert AGENT_BUILDER_REGRESSION_PLAN["total_scenario_count"] == 90
+    assert AGENT_BUILDER_REGRESSION_PLAN["new_combinations"] == MIXED_AGENT_BUILDER_COMBINATIONS
+    assert AGENT_BUILDER_REGRESSION_PLAN["legacy_combinations"] == LEGACY_AGENT_BUILDER_COMBINATION_PACKS
 
     all_sources = {source for item in NEW_AGENT_BUILDER_SCENARIOS for source in item["expected_sources"]}
     for source in ["browser_use", "google_sheets", "telegram", "whatsapp", "external_reviews", "localos_finance"]:

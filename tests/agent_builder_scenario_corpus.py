@@ -1,5 +1,72 @@
 LEGACY_BROWSER_SCENARIO_COUNT = 40
 
+LEGACY_AGENT_BUILDER_COMBINATION_PACKS = [
+    {
+        "pack": "legacy_core",
+        "scenario_count": 10,
+        "combinations": [
+            "reviews_to_telegram",
+            "daily_owner_message_to_telegram",
+            "sheets_to_telegram",
+            "uploaded_tables",
+            "negative_reviews",
+            "map_content_plan",
+            "services_check",
+            "finance_import_from_sheets",
+            "partner_search",
+            "booking_control",
+        ],
+    },
+    {
+        "pack": "legacy_operations",
+        "scenario_count": 10,
+        "combinations": [
+            "finance_to_telegram",
+            "client_data_quality",
+            "expense_control",
+            "booking_prepayment",
+            "network_reviews",
+            "content_from_reviews",
+            "service_duplicates",
+            "client_reactivation",
+            "partner_replies",
+            "daily_problem_digest",
+        ],
+    },
+    {
+        "pack": "legacy_quality",
+        "scenario_count": 10,
+        "combinations": [
+            "photo_quality",
+            "competitor_prices",
+            "cancellation_risk",
+            "new_services_control",
+            "customer_questions_monitoring",
+            "team_tasks_check",
+            "no_discount_promos",
+            "repeated_complaints",
+            "manager_report",
+            "holiday_readiness",
+        ],
+    },
+    {
+        "pack": "legacy_runtime",
+        "scenario_count": 10,
+        "combinations": [
+            "inventory_control",
+            "staff_schedule_check",
+            "cancellation_reasons",
+            "admin_response_control",
+            "faq_from_chats",
+            "new_employee_check",
+            "seasonal_services",
+            "revenue_anomalies",
+            "map_questions_answers",
+            "location_description_quality",
+        ],
+    },
+]
+
 
 def _scenario(key, prompt, expected_category, expected_sources, expected_terms, forbidden_terms):
     return {
@@ -428,3 +495,12 @@ MIXED_AGENT_BUILDER_COMBINATIONS = [
     ("operations_and_staff", ["inventory_low_supplies", "staff_schedule_conflicts", "tasks_overdue_digest"]),
     ("documents_and_tables", ["document_contract_risks", "uploaded_table_duplicates"]),
 ]
+
+
+AGENT_BUILDER_REGRESSION_PLAN = {
+    "new_scenario_count": len(NEW_AGENT_BUILDER_SCENARIOS),
+    "legacy_scenario_count": LEGACY_BROWSER_SCENARIO_COUNT,
+    "total_scenario_count": len(NEW_AGENT_BUILDER_SCENARIOS) + LEGACY_BROWSER_SCENARIO_COUNT,
+    "new_combinations": MIXED_AGENT_BUILDER_COMBINATIONS,
+    "legacy_combinations": LEGACY_AGENT_BUILDER_COMBINATION_PACKS,
+}
