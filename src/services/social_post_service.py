@@ -218,6 +218,155 @@ def get_social_channel_readiness(user_id: str, business_id: str) -> dict[str, An
         db.close()
 
 
+def get_social_launch_preflight(user_id: str, business_id: str, batch_size: int = 10) -> dict[str, Any]:
+    normalized_business_id = str(business_id or "").strip()
+    if not normalized_business_id:
+        raise ValueError("Бизнес не выбран")
+    channel_payload = get_social_channel_readiness(user_id, normalized_business_id)
+    dispatch_preview = preview_due_social_post_dispatch(
+        user_id,
+        batch_size=max(1, min(int(batch_size or 10), 50)),
+        business_id=normalized_business_id,
+    )
+    channel_readiness = channel_payload.get("channel_readiness")
+    channel_summary = channel_payload.get("summary")
+    return _build_social_launch_preflight_payload(
+        normalized_business_id,
+        channel_readiness if isinstance(channel_readiness, list) else [],
+        channel_summary if isinstance(channel_summary, dict) else {},
+        dispatch_preview,
+    )
+
+
+def _build_social_launch_preflight_payload(
+    business_id: str,
+    channel_readiness: list[dict[str, Any]],
+    channel_summary: dict[str, Any],
+    dispatch_preview: dict[str, Any],
+) -> dict[str, Any]:
+    readiness = dispatch_preview.get("readiness") if isinstance(dispatch_preview.get("readiness"), dict) else {}
+    due_count = int(readiness.get("due_count") or dispatch_preview.get("picked") or 0)
+    external_publish_count = int(readiness.get("external_publish_count") or 0)
+    controlled_count = int(readiness.get("controlled_count") or 0)
+    manual_count = int(readiness.get("manual_count") or 0)
+    skipped_no_access = int(readiness.get("skipped_no_access") or dispatch_preview.get("skipped_no_access") or 0)
+    blocked_api_channels = [
+        item for item in channel_readiness
+        if str(item.get("publish_mode") or "") == "api" and not bool(item.get("ready"))
+    ]
+    controlled_channels = [
+        item for item in channel_readiness
+        if str(item.get("publish_mode") or "") != "api"
+    ]
+    status = "no_due_posts"
+    if external_publish_count > 0:
+        status = "ready_for_api_dispatch"
+    elif controlled_count > 0:
+        status = "ready_for_controlled_handoff"
+    elif manual_count > 0:
+        status = "manual_or_connection_needed"
+    elif skipped_no_access > 0:
+        status = "access_limited"
+    safe_to_enable = bool(str(business_id or "").strip()) and due_count > 0 and skipped_no_access == 0
+    return {
+        "business_id": str(business_id or "").strip(),
+        "status": status,
+        "safe_to_enable_scoped_dispatch": safe_to_enable,
+        "channel_readiness": channel_readiness,
+        "channel_summary": channel_summary,
+        "dispatch_preview": dispatch_preview,
+        "dispatch_readiness": readiness,
+        "blocked_api_channels": blocked_api_channels,
+        "controlled_channels": controlled_channels,
+        "recommended_env": {
+            "dispatch": _dispatch_preview_recommended_env(str(business_id or "").strip()),
+            "metrics": _metrics_preview_recommended_env(str(business_id or "").strip()),
+        },
+        "safety": {
+            "approval_required": True,
+            "scoped_dispatch_required": True,
+            "external_publish_only_after_approval": True,
+            "browser_final_click_allowed": False,
+            "maps_are_supervised_or_manual": True,
+        },
+        "summary": {
+            "due_posts": due_count,
+            "api_due_posts": external_publish_count,
+            "controlled_due_posts": controlled_count,
+            "manual_due_posts": manual_count,
+            "blocked_api_channels": len(blocked_api_channels),
+            "controlled_channels": len(controlled_channels),
+            "skipped_no_access": skipped_no_access,
+        },
+        "message_ru": _social_launch_preflight_message(status, True),
+        "message_en": _social_launch_preflight_message(status, False),
+        "next_action_ru": _social_launch_preflight_next_action(status, str(business_id or "").strip(), True),
+        "next_action_en": _social_launch_preflight_next_action(status, str(business_id or "").strip(), False),
+    }
+
+
+def _social_launch_preflight_message(status: str, is_ru: bool) -> str:
+    if status == "ready_for_api_dispatch":
+        return (
+            "Есть due API-публикации: scoped worker сможет отправить их только после уже полученного approval."
+            if is_ru
+            else "Due API posts exist: the scoped worker can publish them only after existing approval."
+        )
+    if status == "ready_for_controlled_handoff":
+        return (
+            "Есть due публикации для карт: worker создаст controlled/manual задачи без финального клика."
+            if is_ru
+            else "Due map posts exist: the worker will create controlled/manual tasks without the final click."
+        )
+    if status == "manual_or_connection_needed":
+        return (
+            "Due-посты есть, но сейчас они требуют ручного fallback или подключения каналов."
+            if is_ru
+            else "Due posts exist, but they currently require manual fallback or channel connections."
+        )
+    if status == "access_limited":
+        return (
+            "Часть due-постов вне доступа текущего пользователя; scoped запуск нужно сузить или проверить права."
+            if is_ru
+            else "Some due posts are outside this user's access; narrow the scoped launch or check permissions."
+        )
+    return (
+        "Due-постов нет: сначала подготовьте, подтвердите и поставьте публикации в расписание."
+        if is_ru
+        else "No due posts: prepare, approve, and queue publications first."
+    )
+
+
+def _social_launch_preflight_next_action(status: str, business_id: str, is_ru: bool) -> str:
+    if status in {"ready_for_api_dispatch", "ready_for_controlled_handoff", "manual_or_connection_needed"}:
+        return (
+            f"Для первого запуска включайте worker только с SOCIAL_POST_DISPATCH_BUSINESS_ID={business_id} и проверьте логи после одного цикла."
+            if is_ru
+            else f"For the first launch, enable the worker only with SOCIAL_POST_DISPATCH_BUSINESS_ID={business_id} and check logs after one cycle."
+        )
+    if status == "access_limited":
+        return (
+            "Запустите preflight пользователем с доступом к бизнесу или выберите другой business scope."
+            if is_ru
+            else "Run preflight as a user with access to the business or choose another business scope."
+        )
+    return (
+        "Следующий шаг в интерфейсе: подготовить каналы, проверить preview, утвердить и поставить посты в расписание."
+        if is_ru
+        else "Next in the UI: prepare channels, review preview, approve, and queue posts on schedule."
+    )
+
+
+def _metrics_preview_recommended_env(business_scope: str) -> dict[str, str]:
+    scope = str(business_scope or "").strip()
+    return {
+        "SOCIAL_POST_METRICS_ENABLED": "true",
+        "SOCIAL_POST_METRICS_INTERVAL_SEC": "3600",
+        "SOCIAL_POST_METRICS_BATCH_SIZE": "50",
+        "SOCIAL_POST_METRICS_BUSINESS_ID": scope,
+    }
+
+
 def prepare_social_posts_for_items(user_id: str, item_ids: list[str], platforms: list[str] | None = None) -> dict[str, Any]:
     posts: list[dict[str, Any]] = []
     failed: list[dict[str, str]] = []

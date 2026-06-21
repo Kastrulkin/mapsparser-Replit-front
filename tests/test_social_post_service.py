@@ -8,6 +8,7 @@ import services.social_post_service as social_post_service
 from services.social_post_service import (
     _build_openclaw_supervised_task_payload,
     _build_plan_recommendation,
+    _build_social_launch_preflight_payload,
     _channel_readiness_message,
     _dispatch_action_for_status,
     _dispatch_preview_readiness,
@@ -1340,6 +1341,71 @@ def test_dispatch_preview_readiness_marks_no_due_posts_as_safe_noop():
     assert readiness["external_publish_count"] == 0
     assert readiness["message_ru"]
     assert readiness["next_action_ru"]
+
+
+def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_invariants():
+    payload = _build_social_launch_preflight_payload(
+        "biz-1",
+        [
+            _channel_readiness("telegram", "api", True, "ready"),
+            _channel_readiness("vk", "api", False, "missing_permissions"),
+            _channel_readiness("yandex_maps", "manual", False, "manual_fallback"),
+        ],
+        {"api_ready": 1, "api_needs_attention": 1, "controlled_or_manual": 1},
+        {
+            "dry_run": True,
+            "picked": 2,
+            "skipped_no_access": 0,
+            "readiness": {
+                "status": "external_publish_ready",
+                "due_count": 2,
+                "external_publish_count": 1,
+                "controlled_count": 1,
+                "manual_count": 0,
+                "skipped_no_access": 0,
+            },
+        },
+    )
+
+    assert payload["status"] == "ready_for_api_dispatch"
+    assert payload["safe_to_enable_scoped_dispatch"] is True
+    assert payload["summary"]["api_due_posts"] == 1
+    assert payload["summary"]["controlled_due_posts"] == 1
+    assert payload["summary"]["blocked_api_channels"] == 1
+    assert payload["blocked_api_channels"][0]["platform"] == "vk"
+    assert payload["controlled_channels"][0]["platform"] == "yandex_maps"
+    assert payload["recommended_env"]["dispatch"]["SOCIAL_POST_DISPATCH_BUSINESS_ID"] == "biz-1"
+    assert payload["recommended_env"]["metrics"]["SOCIAL_POST_METRICS_BUSINESS_ID"] == "biz-1"
+    assert payload["safety"]["approval_required"] is True
+    assert payload["safety"]["browser_final_click_allowed"] is False
+    assert payload["safety"]["maps_are_supervised_or_manual"] is True
+    assert "SOCIAL_POST_DISPATCH_BUSINESS_ID=biz-1" in payload["next_action_ru"]
+
+
+def test_social_launch_preflight_payload_handles_no_due_posts_as_next_ui_work():
+    payload = _build_social_launch_preflight_payload(
+        "biz-1",
+        [_channel_readiness("telegram", "api", True, "ready")],
+        {"api_ready": 1},
+        {
+            "dry_run": True,
+            "picked": 0,
+            "skipped_no_access": 0,
+            "readiness": {
+                "status": "no_due_posts",
+                "due_count": 0,
+                "external_publish_count": 0,
+                "controlled_count": 0,
+                "manual_count": 0,
+                "skipped_no_access": 0,
+            },
+        },
+    )
+
+    assert payload["status"] == "no_due_posts"
+    assert payload["safe_to_enable_scoped_dispatch"] is False
+    assert payload["summary"]["due_posts"] == 0
+    assert "подготовьте" in payload["message_ru"]
 
 
 def test_supervised_handoff_writes_agent_action_ledger_when_available():

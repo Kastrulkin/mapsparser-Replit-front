@@ -306,6 +306,43 @@ type SocialDispatchPreview = {
   }>;
 };
 
+type SocialLaunchPreflight = {
+  business_id?: string;
+  status?: string;
+  safe_to_enable_scoped_dispatch?: boolean;
+  channel_summary?: {
+    api_ready?: number;
+    api_needs_attention?: number;
+    controlled_or_manual?: number;
+  };
+  dispatch_preview?: SocialDispatchPreview;
+  dispatch_readiness?: SocialDispatchPreview['readiness'];
+  recommended_env?: {
+    dispatch?: Record<string, string>;
+    metrics?: Record<string, string>;
+  };
+  safety?: {
+    approval_required?: boolean;
+    scoped_dispatch_required?: boolean;
+    external_publish_only_after_approval?: boolean;
+    browser_final_click_allowed?: boolean;
+    maps_are_supervised_or_manual?: boolean;
+  };
+  summary?: {
+    due_posts?: number;
+    api_due_posts?: number;
+    controlled_due_posts?: number;
+    manual_due_posts?: number;
+    blocked_api_channels?: number;
+    controlled_channels?: number;
+    skipped_no_access?: number;
+  };
+  message_ru?: string;
+  message_en?: string;
+  next_action_ru?: string;
+  next_action_en?: string;
+};
+
 type SocialRuntimeStatus = {
   dispatch?: {
     enabled?: boolean;
@@ -600,6 +637,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialRecommendation, setSocialRecommendation] = useState<SocialRecommendationPayload | null>(null);
   const [socialRecommendationApproved, setSocialRecommendationApproved] = useState(false);
   const [socialDispatchPreview, setSocialDispatchPreview] = useState<SocialDispatchPreview | null>(null);
+  const [socialLaunchPreflight, setSocialLaunchPreflight] = useState<SocialLaunchPreflight | null>(null);
   const [socialRuntimeStatus, setSocialRuntimeStatus] = useState<SocialRuntimeStatus | null>(null);
   const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
   const [manualPublishRefs, setManualPublishRefs] = useState<Record<string, { url: string; id: string }>>({});
@@ -1764,6 +1802,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSocialRecommendation(null);
       setSocialRecommendationApproved(false);
       setSocialDispatchPreview(null);
+      setSocialLaunchPreflight(null);
     }
   };
 
@@ -2536,6 +2575,67 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
     } catch (previewError) {
       const message = previewError instanceof Error ? previewError.message : (isRu ? 'Не удалось проверить расписание' : 'Could not preview schedule');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
+  const checkSocialLaunchPreflight = async () => {
+    if (!businessId) return;
+    setSocialBusyAction('launch-preflight');
+    setError('');
+    setActionSummary(null);
+    try {
+      const response = await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/social-posts/launch-preflight`, {
+        method: 'GET',
+      });
+      const dispatchPreview = response.dispatch_preview && typeof response.dispatch_preview === 'object'
+        ? {
+          dry_run: Boolean(response.dispatch_preview.dry_run),
+          picked: Number(response.dispatch_preview.picked || 0),
+          skipped_no_access: Number(response.dispatch_preview.skipped_no_access || 0),
+          batch_size: Number(response.dispatch_preview.batch_size || 10),
+          business_scope: String(response.dispatch_preview.business_scope || ''),
+          by_action: response.dispatch_preview.by_action && typeof response.dispatch_preview.by_action === 'object' ? response.dispatch_preview.by_action : {},
+          readiness: response.dispatch_preview.readiness && typeof response.dispatch_preview.readiness === 'object' ? response.dispatch_preview.readiness : {},
+          items: Array.isArray(response.dispatch_preview.items) ? response.dispatch_preview.items : [],
+        }
+        : null;
+      const preflight: SocialLaunchPreflight = {
+        business_id: String(response.business_id || businessId),
+        status: String(response.status || ''),
+        safe_to_enable_scoped_dispatch: Boolean(response.safe_to_enable_scoped_dispatch),
+        channel_summary: response.channel_summary && typeof response.channel_summary === 'object' ? response.channel_summary : {},
+        dispatch_preview: dispatchPreview || undefined,
+        dispatch_readiness: response.dispatch_readiness && typeof response.dispatch_readiness === 'object' ? response.dispatch_readiness : {},
+        recommended_env: response.recommended_env && typeof response.recommended_env === 'object' ? response.recommended_env : {},
+        safety: response.safety && typeof response.safety === 'object' ? response.safety : {},
+        summary: response.summary && typeof response.summary === 'object' ? response.summary : {},
+        message_ru: String(response.message_ru || ''),
+        message_en: String(response.message_en || ''),
+        next_action_ru: String(response.next_action_ru || ''),
+        next_action_en: String(response.next_action_en || ''),
+      };
+      setSocialLaunchPreflight(preflight);
+      if (dispatchPreview) {
+        setSocialDispatchPreview(dispatchPreview);
+      }
+      setActionSummary({
+        tone: preflight.safe_to_enable_scoped_dispatch ? 'success' : 'warning',
+        text_ru: preflight.message_ru || 'Preflight запуска worker готов.',
+        text_en: preflight.message_en || 'Worker launch preflight is ready.',
+        details_ru: [
+          `Due: ${Number(preflight.summary?.due_posts || 0)} · API: ${Number(preflight.summary?.api_due_posts || 0)} · controlled: ${Number(preflight.summary?.controlled_due_posts || 0)} · manual: ${Number(preflight.summary?.manual_due_posts || 0)}.`,
+          preflight.next_action_ru || 'Следующий шаг появится в блоке запуска.',
+        ],
+        details_en: [
+          `Due: ${Number(preflight.summary?.due_posts || 0)} · API: ${Number(preflight.summary?.api_due_posts || 0)} · controlled: ${Number(preflight.summary?.controlled_due_posts || 0)} · manual: ${Number(preflight.summary?.manual_due_posts || 0)}.`,
+          preflight.next_action_en || 'The next step is shown in the launch block.',
+        ],
+      });
+    } catch (preflightError) {
+      const message = preflightError instanceof Error ? preflightError.message : (isRu ? 'Не удалось проверить запуск worker' : 'Could not check worker launch');
       setError(message);
     } finally {
       setSocialBusyAction('');
@@ -4960,6 +5060,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           ? (isRu ? 'Проверяем...' : 'Checking...')
                           : (isRu ? 'Проверить расписание' : 'Preview schedule')}
                       </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => { void checkSocialLaunchPreflight(); }}
+                        disabled={Boolean(bulkBusyAction) || Boolean(socialBusyAction) || !businessId}
+                        className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                      >
+                        {socialBusyAction === 'launch-preflight'
+                          ? (isRu ? 'Проверяем запуск...' : 'Checking launch...')
+                          : (isRu ? 'Проверить запуск worker' : 'Check worker launch')}
+                      </Button>
                       <div className="grid grid-cols-3 gap-2 text-center text-[11px] text-slate-300">
                         <div className="rounded-xl bg-white/10 px-2 py-2">
                           <div className="text-sm font-semibold text-white">{socialReadinessSummary.apiReady}</div>
@@ -5059,6 +5170,55 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           </div>
                           <div className="mt-1">
                             {isRu ? socialQueueExecutionNotice.textRu : socialQueueExecutionNotice.textEn}
+                          </div>
+                        </div>
+                      ) : null}
+                      {socialLaunchPreflight ? (
+                        <div
+                          className={[
+                            'rounded-xl border px-3 py-2 text-xs leading-5',
+                            socialLaunchPreflight.safe_to_enable_scoped_dispatch
+                              ? 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100'
+                              : 'border-amber-300/30 bg-amber-400/10 text-amber-100',
+                          ].join(' ')}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold">
+                              {isRu ? 'Preflight запуска worker' : 'Worker launch preflight'}
+                            </span>
+                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white">
+                              {socialLaunchPreflight.safe_to_enable_scoped_dispatch
+                                ? (isRu ? 'можно scoped' : 'scoped ready')
+                                : (isRu ? 'сначала подготовить' : 'prepare first')}
+                            </span>
+                          </div>
+                          <div className="mt-1">
+                            {isRu
+                              ? String(socialLaunchPreflight.message_ru || '')
+                              : String(socialLaunchPreflight.message_en || '')}
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-200">
+                            {isRu
+                              ? `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · controlled ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · manual ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`
+                              : `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · controlled ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · manual ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`}
+                          </div>
+                          {socialLaunchPreflight.next_action_ru || socialLaunchPreflight.next_action_en ? (
+                            <div className="mt-1 font-medium text-white">
+                              {isRu ? 'Следующий шаг: ' : 'Next step: '}
+                              {isRu
+                                ? String(socialLaunchPreflight.next_action_ru || '')
+                                : String(socialLaunchPreflight.next_action_en || '')}
+                            </div>
+                          ) : null}
+                          <div className="mt-2 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] text-slate-200">
+                            {isRu
+                              ? `Рекомендованный scope: SOCIAL_POST_DISPATCH_BUSINESS_ID=${String(socialLaunchPreflight.recommended_env?.dispatch?.SOCIAL_POST_DISPATCH_BUSINESS_ID || businessId || '')}`
+                              : `Recommended scope: SOCIAL_POST_DISPATCH_BUSINESS_ID=${String(socialLaunchPreflight.recommended_env?.dispatch?.SOCIAL_POST_DISPATCH_BUSINESS_ID || businessId || '')}`}
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-300">
+                            {isRu
+                              ? 'Preflight ничего не публикует: approval обязателен, карты остаются controlled/manual без финального клика.'
+                              : 'Preflight publishes nothing: approval is required, and maps stay controlled/manual without the final click.'}
                           </div>
                         </div>
                       ) : null}

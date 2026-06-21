@@ -15,6 +15,7 @@ from services.social_post_service import (
     approve_social_posts,
     collect_social_post_metrics,
     get_social_channel_readiness,
+    get_social_launch_preflight,
     list_social_posts_for_plan,
     mark_manual_published,
     mark_manual_published_posts,
@@ -192,6 +193,26 @@ def social_posts_channel_readiness(business_id: str):
         return error_response
     try:
         payload = get_social_channel_readiness(str(user_data.get("user_id") or ""), business_id)
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/business/<business_id>/social-posts/launch-preflight", methods=["GET"])
+def social_posts_launch_preflight(business_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    try:
+        payload = get_social_launch_preflight(
+            str(user_data.get("user_id") or ""),
+            business_id,
+            batch_size=_int_env("SOCIAL_POST_PREFLIGHT_BATCH_SIZE", 10),
+        )
         return jsonify({"success": True, **payload})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
