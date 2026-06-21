@@ -829,6 +829,9 @@ def test_preview_dispatch_decision_publish_api_when_channel_ready(monkeypatch):
     assert preview["would_status"] == "published_or_failed"
     assert preview["external_publish"] is True
     assert preview["approval_required"] is True
+    assert preview["action_label_ru"] == "API-публикация"
+    assert "published или failed" in preview["safety_summary_ru"]
+    assert "Channel is ready" in preview["reason_label_en"]
 
 
 def test_preview_dispatch_decision_blocks_api_when_preflight_missing(monkeypatch):
@@ -859,6 +862,8 @@ def test_preview_dispatch_decision_blocks_api_when_preflight_missing(monkeypatch
     assert preview["would_status"] == "needs_manual_publish"
     assert preview["external_publish"] is False
     assert preview["metadata_json"]["queue_preflight_status"] == "missing_keys"
+    assert preview["action_label_en"] == "Manual fallback"
+    assert "Worker не будет публиковать наружу" in preview["safety_summary_ru"]
 
 
 def test_preview_dispatch_decision_maps_never_autopublishes(monkeypatch):
@@ -880,6 +885,8 @@ def test_preview_dispatch_decision_maps_never_autopublishes(monkeypatch):
     assert preview["would_status"] == "needs_supervised_publish"
     assert preview["external_publish"] is False
     assert preview["stop_before_final_publish"] is True
+    assert preview["action_label_ru"] == "Controlled task"
+    assert "не нажмёт финальную кнопку" in preview["safety_summary_ru"]
 
 
 def test_preview_dispatch_decision_blocks_empty_copy_before_worker_publish(monkeypatch):
@@ -903,6 +910,7 @@ def test_preview_dispatch_decision_blocks_empty_copy_before_worker_publish(monke
     assert preview["would_status"] == "needs_review"
     assert preview["reason"] == "empty_post_copy"
     assert preview["external_publish"] is False
+    assert "сначала нужен текст" in preview["safety_summary_ru"]
 
 
 def test_publish_social_post_moves_empty_copy_back_to_review(monkeypatch):

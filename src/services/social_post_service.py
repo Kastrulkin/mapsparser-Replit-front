@@ -1929,62 +1929,143 @@ def _preview_dispatch_decision(cursor: Any, post: dict[str, Any]) -> dict[str, A
     }
     if platform in BROWSER_OR_MANUAL_PLATFORMS:
         if not _social_post_has_text(post):
-            return {
+            return _with_dispatch_preview_labels(
+                {
+                    **item,
+                    "dispatch_action": "manual_handoff",
+                    "would_status": "needs_review",
+                    "reason": "empty_post_copy",
+                    "external_publish": False,
+                    "approval_required": True,
+                    "stop_before_final_publish": True,
+                }
+            )
+        browser_ready = publish_mode == "openclaw_browser" and openclaw_browser_available()
+        return _with_dispatch_preview_labels(
+            {
+                **item,
+                "dispatch_action": "create_supervised_task" if browser_ready else "manual_handoff",
+                "would_status": "needs_supervised_publish" if browser_ready else "needs_manual_publish",
+                "reason": "openclaw_browser_ready" if browser_ready else "openclaw_browser_unavailable",
+                "external_publish": False,
+                "approval_required": True,
+                "stop_before_final_publish": True,
+            }
+        )
+    if publish_mode != "api":
+        return _with_dispatch_preview_labels(
+            {
+                **item,
+                "dispatch_action": "manual_handoff",
+                "would_status": "needs_manual_publish",
+                "reason": "publish_mode_not_api",
+                "external_publish": False,
+                "approval_required": True,
+            }
+        )
+    if not _social_post_has_text(post):
+        return _with_dispatch_preview_labels(
+            {
                 **item,
                 "dispatch_action": "manual_handoff",
                 "would_status": "needs_review",
                 "reason": "empty_post_copy",
                 "external_publish": False,
                 "approval_required": True,
-                "stop_before_final_publish": True,
             }
-        browser_ready = publish_mode == "openclaw_browser" and openclaw_browser_available()
-        return {
-            **item,
-            "dispatch_action": "create_supervised_task" if browser_ready else "manual_handoff",
-            "would_status": "needs_supervised_publish" if browser_ready else "needs_manual_publish",
-            "reason": "openclaw_browser_ready" if browser_ready else "openclaw_browser_unavailable",
-            "external_publish": False,
-            "approval_required": True,
-            "stop_before_final_publish": True,
-        }
-    if publish_mode != "api":
-        return {
-            **item,
-            "dispatch_action": "manual_handoff",
-            "would_status": "needs_manual_publish",
-            "reason": "publish_mode_not_api",
-            "external_publish": False,
-            "approval_required": True,
-        }
-    if not _social_post_has_text(post):
-        return {
-            **item,
-            "dispatch_action": "manual_handoff",
-            "would_status": "needs_review",
-            "reason": "empty_post_copy",
-            "external_publish": False,
-            "approval_required": True,
-        }
+        )
     queue_block = _queue_preflight_block(cursor, post)
     if queue_block:
-        return {
+        return _with_dispatch_preview_labels(
+            {
+                **item,
+                "dispatch_action": "manual_handoff",
+                "would_status": str(queue_block.get("status") or "needs_manual_publish"),
+                "reason": str(queue_block.get("last_error") or "channel_not_ready"),
+                "external_publish": False,
+                "approval_required": True,
+                "metadata_json": queue_block.get("metadata_json") or {},
+            }
+        )
+    return _with_dispatch_preview_labels(
+        {
             **item,
-            "dispatch_action": "manual_handoff",
-            "would_status": str(queue_block.get("status") or "needs_manual_publish"),
-            "reason": str(queue_block.get("last_error") or "channel_not_ready"),
-            "external_publish": False,
+            "dispatch_action": "publish_api",
+            "would_status": "published_or_failed",
+            "reason": "channel_ready",
+            "external_publish": True,
             "approval_required": True,
-            "metadata_json": queue_block.get("metadata_json") or {},
         }
-    return {
-        **item,
-        "dispatch_action": "publish_api",
-        "would_status": "published_or_failed",
-        "reason": "channel_ready",
-        "external_publish": True,
-        "approval_required": True,
-    }
+    )
+
+
+def _with_dispatch_preview_labels(item: dict[str, Any]) -> dict[str, Any]:
+    action = str(item.get("dispatch_action") or "").strip()
+    reason = str(item.get("reason") or "").strip()
+    would_status = str(item.get("would_status") or "").strip()
+    item["action_label_ru"] = _dispatch_preview_action_label(action, True)
+    item["action_label_en"] = _dispatch_preview_action_label(action, False)
+    item["reason_label_ru"] = _dispatch_preview_reason_label(reason, True)
+    item["reason_label_en"] = _dispatch_preview_reason_label(reason, False)
+    item["safety_summary_ru"] = _dispatch_preview_safety_summary(action, would_status, bool(item.get("external_publish")), True)
+    item["safety_summary_en"] = _dispatch_preview_safety_summary(action, would_status, bool(item.get("external_publish")), False)
+    return item
+
+
+def _dispatch_preview_action_label(action: str, is_ru: bool) -> str:
+    clean = str(action or "").strip()
+    if clean == "publish_api":
+        return "API-публикация" if is_ru else "API publish"
+    if clean == "create_supervised_task":
+        return "Controlled task" if is_ru else "Controlled task"
+    if clean == "manual_handoff":
+        return "Ручной fallback" if is_ru else "Manual fallback"
+    return "Без действия" if is_ru else "No action"
+
+
+def _dispatch_preview_reason_label(reason: str, is_ru: bool) -> str:
+    clean = str(reason or "").strip()
+    if clean == "channel_ready":
+        return "Канал готов, есть approval и расписание." if is_ru else "Channel is ready, approved, and scheduled."
+    if clean == "openclaw_browser_ready":
+        return "OpenClaw browser-use доступен; будет создана supervised задача." if is_ru else "OpenClaw browser-use is available; a supervised task will be created."
+    if clean == "openclaw_browser_unavailable":
+        return "OpenClaw browser-use не подтверждён; нужен ручной fallback." if is_ru else "OpenClaw browser-use is not confirmed; manual fallback is required."
+    if clean == "empty_post_copy":
+        return "Текст пустой: сначала верните пост на проверку и заполните copy." if is_ru else "Copy is empty: send the post back to review and fill it first."
+    if clean == "publish_mode_not_api":
+        return "Канал не настроен как API-публикация." if is_ru else "The channel is not configured for API publishing."
+    if clean:
+        return clean
+    return "Причина не указана." if is_ru else "No reason provided."
+
+
+def _dispatch_preview_safety_summary(action: str, would_status: str, external_publish: bool, is_ru: bool) -> str:
+    clean_action = str(action or "").strip()
+    clean_status = str(would_status or "").strip()
+    if bool(external_publish):
+        return (
+            "Worker может отправить наружу только этот API-пост; итог будет published или failed."
+            if is_ru
+            else "The worker may send only this API post externally; result will be published or failed."
+        )
+    if clean_action == "create_supervised_task":
+        return (
+            "Worker создаст controlled задачу и не нажмёт финальную кнопку публикации."
+            if is_ru
+            else "The worker will create a controlled task and will not click the final publish button."
+        )
+    if clean_status == "needs_review":
+        return (
+            "Worker не будет публиковать: сначала нужен текст и повторное подтверждение."
+            if is_ru
+            else "The worker will not publish: copy and another review are required first."
+        )
+    return (
+        "Worker не будет публиковать наружу; пост перейдёт в ручной понятный статус."
+        if is_ru
+        else "The worker will not publish externally; the post will move to a clear manual status."
+    )
 
 
 def _load_plan_item_for_user(cursor: Any, user_id: str, item_id: str) -> dict[str, Any]:

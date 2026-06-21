@@ -339,6 +339,12 @@ type SocialDispatchPreview = {
     dispatch_action?: string;
     would_status?: string;
     reason?: string;
+    action_label_ru?: string;
+    action_label_en?: string;
+    reason_label_ru?: string;
+    reason_label_en?: string;
+    safety_summary_ru?: string;
+    safety_summary_en?: string;
     external_publish?: boolean;
     stop_before_final_publish?: boolean;
   }>;
@@ -5410,10 +5416,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   ? `external ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · controlled ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · manual ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`
                                   : `external ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · controlled ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · manual ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`}
                               </div>
-                                                      </div>
-                                                    ) : null}
+                            </div>
+                          ) : null}
                           {_socialFirstCycleVerificationBlock(socialDispatchPreview.readiness?.first_cycle_verification, isRu)}
-                                                    {Number(socialDispatchPreview.readiness?.first_cycle_steps?.length || 0) > 0 ? (
+                          {Number(socialDispatchPreview.readiness?.first_cycle_steps?.length || 0) > 0 ? (
                             <div className="mt-2 rounded-lg border border-sky-300/20 bg-sky-400/10 px-2 py-2 text-[11px] leading-5 text-sky-50">
                               <div className="font-semibold text-white">
                                 {isRu ? 'Что сделает первый цикл' : 'What the first cycle will do'}
@@ -5460,12 +5466,27 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       {String(item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu))}
                                     </span>
                                     <span className="shrink-0 text-[11px] text-slate-200">
-                                      {_socialDispatchActionLabel(String(item.dispatch_action || ''), isRu)}
+                                      {isRu
+                                        ? String(item.action_label_ru || _socialDispatchActionLabel(String(item.dispatch_action || ''), isRu))
+                                        : String(item.action_label_en || _socialDispatchActionLabel(String(item.dispatch_action || ''), false))}
                                     </span>
                                   </div>
+                                  {item.would_status ? (
+                                    <div className="mt-0.5 text-[11px] font-medium text-slate-200">
+                                      {isRu ? 'Итог: ' : 'Result: '}
+                                      {String(item.would_status || '')}
+                                    </div>
+                                  ) : null}
                                   {item.reason ? (
                                     <div className="mt-0.5 line-clamp-2 text-[11px] text-slate-300">
-                                      {_socialDispatchReasonLabel(String(item.reason || ''), isRu)}
+                                      {isRu
+                                        ? String(item.reason_label_ru || _socialDispatchReasonLabel(String(item.reason || ''), isRu))
+                                        : String(item.reason_label_en || _socialDispatchReasonLabel(String(item.reason || ''), false))}
+                                    </div>
+                                  ) : null}
+                                  {item.safety_summary_ru || item.safety_summary_en ? (
+                                    <div className="mt-1 rounded-md bg-black/10 px-2 py-1 text-[11px] leading-4 text-slate-200">
+                                      {isRu ? String(item.safety_summary_ru || '') : String(item.safety_summary_en || '')}
                                     </div>
                                   ) : null}
                                 </div>
