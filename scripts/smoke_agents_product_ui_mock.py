@@ -650,6 +650,89 @@ async def _handle_mock_api(route):
         })
         return
 
+    if path == "/agent-blueprints/agent-whatsapp-faq/preflight" and method == "POST":
+        await _fulfill(route, {
+            "success": True,
+            "blueprint_id": "agent-whatsapp-faq",
+            "blueprint_version_id": "ver-whatsapp-faq",
+            "preflight": {
+                "status": "ready",
+                "ready": True,
+                "items": [{
+                    "key": "whatsapp_questions",
+                    "provider": "whatsapp",
+                    "status": "ready",
+                    "resolution": "agent_integration",
+                    "required": True,
+                    "missing_config": [],
+                }],
+                "missing": [],
+                "missing_count": 0,
+                "next_action": "",
+            },
+            "connection_plan": {
+                "items": [{
+                    "key": "whatsapp_questions",
+                    "provider": "whatsapp",
+                    "binding_status": "ready",
+                    "action": "ready",
+                }],
+            },
+            "next_binding_key": "",
+            "preview_run_gate": {
+                "schema": "localos_agent_preview_run_gate_v1",
+                "status": "ready",
+                "can_preview_run": True,
+                "external_side_effects_allowed": False,
+                "approval_required_for_external_actions": True,
+                "next_step": "start_preview_run",
+            },
+            "preview_input": {"schema": "localos_agent_preview_input_v1", "preview_mode": True},
+            "can_start": True,
+        })
+        return
+
+    if path == "/agent-blueprints/agent-whatsapp-faq/runs" and method == "POST":
+        await _fulfill(route, {
+            "success": True,
+            "run": {
+                "id": "run-whatsapp-faq-preview",
+                "blueprint_id": "agent-whatsapp-faq",
+                "version_id": "ver-whatsapp-faq",
+                "status": "completed",
+                "started_at": "2026-06-21 11:50",
+                "completed_at": "2026-06-21 11:50",
+                "input_json": {"schema": "localos_agent_preview_input_v1", "preview_mode": True},
+                "observability": {
+                    "preview_summary": {
+                        "schema": "localos_agent_preview_summary_v1",
+                        "preflight_ready": True,
+                        "external_actions_performed": False,
+                        "completed_steps": ["collect_questions", "group_topics", "draft_faq"],
+                        "next_step": "review_result",
+                    },
+                },
+                "steps": [{
+                    "id": "step-whatsapp-faq",
+                    "step_key": "draft_faq",
+                    "step_type": "artifact",
+                    "status": "completed",
+                    "output_json": {
+                        "topics": ["Запись", "Цены", "Подготовка"],
+                        "external_dispatch_performed": False,
+                    },
+                }],
+                "artifacts": [{
+                    "id": "artifact-whatsapp-faq",
+                    "artifact_type": "agent_preview_result",
+                    "title": "Черновик FAQ по WhatsApp-вопросам",
+                    "payload_json": {"items": ["Как записаться?", "Какие цены?", "Как подготовиться?"]},
+                }],
+                "approvals": [],
+            },
+        })
+        return
+
     await _fulfill(route, {})
 
 
@@ -908,6 +991,19 @@ async def run_smoke(url, screenshot):
                         connected_body = await page.locator("body").inner_text(timeout=10000)
                         if "Все обязательные подключения готовы" not in connected_body and "WhatsApp готово" not in connected_body:
                             missing.append("WhatsApp connected state")
+                        preview_button = page.get_by_role("button", name="Проверить на примере")
+                        if await preview_button.count() == 0:
+                            missing.append("enabled preview run button")
+                        else:
+                            await preview_button.first.click()
+                            await page.wait_for_timeout(1200)
+                            result_body = await page.locator("body").inner_text(timeout=10000)
+                            if "Результат" not in result_body:
+                                missing.append("preview result workspace")
+                            if "completed" not in result_body.lower() and "готов" not in result_body.lower():
+                                missing.append("preview run completed state")
+                            if "Черновик FAQ по WhatsApp-вопросам" not in result_body and "Как агент дошёл до результата" not in result_body:
+                                missing.append("preview run result details")
 
         if console_errors:
             leaked.append(f"console errors: {console_errors[:2]}")
