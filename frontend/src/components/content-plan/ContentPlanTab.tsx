@@ -145,6 +145,12 @@ type SocialPublishEvidence = {
   proof_id?: string;
   automation_task_id?: string;
   provider_status?: string;
+  proof_source?: string;
+  proof_quality?: string;
+  ready_for_metrics?: boolean;
+  ready_for_attribution?: boolean;
+  external_publish_proven?: boolean;
+  manual_confirmation?: boolean;
   last_error?: string;
   target_url?: string;
   profile_hint?: string;
@@ -9002,6 +9008,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 const evidenceProofUrl = String(publishEvidence?.proof_url || post.provider_post_url || '').trim();
                                 const evidenceProofId = String(publishEvidence?.proof_id || post.provider_post_id || '').trim();
                                 const evidenceProviderStatus = String(publishEvidence?.provider_status || '').trim();
+                                const evidenceProofSource = String(publishEvidence?.proof_source || '').trim();
+                                const evidenceProofQuality = String(publishEvidence?.proof_quality || '').trim();
                                 const actionHint = needsReview
                                   ? {
                                     tone: 'safe',
@@ -9314,6 +9322,39 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                         {evidenceNextAction ? (
                                           <div className="mt-1 font-medium">
                                             {evidenceNextAction}
+                                          </div>
+                                        ) : null}
+                                        {evidenceProofQuality || evidenceProofSource || publishEvidence.ready_for_metrics || publishEvidence.external_publish_proven ? (
+                                          <div
+                                            data-testid="social-provider-proof-quality"
+                                            className="mt-2 flex flex-wrap gap-1.5 text-[11px]"
+                                          >
+                                            {evidenceProofQuality ? (
+                                              <span className="rounded-full bg-white/70 px-2 py-0.5 font-medium">
+                                                {isRu ? 'proof: ' : 'proof: '}
+                                                {_socialProofQualityLabel(evidenceProofQuality, isRu)}
+                                              </span>
+                                            ) : null}
+                                            {evidenceProofSource ? (
+                                              <span className="rounded-full bg-white/70 px-2 py-0.5 font-mono">
+                                                {evidenceProofSource}
+                                              </span>
+                                            ) : null}
+                                            {publishEvidence.external_publish_proven ? (
+                                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+                                                {isRu ? 'внешняя публикация подтверждена' : 'external publish proven'}
+                                              </span>
+                                            ) : null}
+                                            {publishEvidence.ready_for_metrics ? (
+                                              <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium text-sky-700">
+                                                {isRu ? 'готово к метрикам' : 'ready for metrics'}
+                                              </span>
+                                            ) : null}
+                                            {publishEvidence.manual_confirmation ? (
+                                              <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
+                                                {isRu ? 'ручная отметка' : 'manual confirmation'}
+                                              </span>
+                                            ) : null}
                                           </div>
                                         ) : null}
                                         {evidenceProofUrl || evidenceProofId || evidenceProviderStatus ? (
@@ -10633,6 +10674,17 @@ function _socialPublishEvidenceClassName(tone: string): string {
   if (normalized === 'warning') return `${base} border-amber-200 bg-amber-50 text-amber-800`;
   if (normalized === 'info') return `${base} border-blue-100 bg-blue-50 text-blue-800`;
   return `${base} border-slate-200 bg-slate-50 text-slate-700`;
+}
+
+function _socialProofQualityLabel(value: string, isRu: boolean): string {
+  const normalized = String(value || '').trim();
+  if (normalized === 'url') return isRu ? 'ссылка' : 'URL';
+  if (normalized === 'provider_id') return 'provider ID';
+  if (normalized === 'published_without_provider_ref') return isRu ? 'без ссылки/ID' : 'no URL/ID';
+  if (normalized === 'supervised_task') return 'supervised task';
+  if (normalized === 'error') return isRu ? 'ошибка' : 'error';
+  if (normalized === 'pending') return isRu ? 'ожидает результата' : 'pending';
+  return normalized || (isRu ? 'неизвестно' : 'unknown');
 }
 
 function _socialLearningReadinessClassName(confidence: string): string {

@@ -7422,6 +7422,8 @@ def _social_publish_evidence(post: dict[str, Any]) -> dict[str, Any]:
     last_error = str(post.get("last_error") or "").strip()
     metadata = _json_dict(post.get("metadata_json"))
     provider_status = str(metadata.get("provider_status") or metadata.get("queue_preflight_status") or "").strip()
+    proof_source = _social_publish_proof_source(provider_status, metadata)
+    proof_quality = _social_publish_proof_quality(status, provider_post_url, provider_post_id, automation_task_id, last_error)
 
     base: dict[str, Any] = {
         "schema": "localos_social_publish_evidence_v1",
@@ -7434,6 +7436,12 @@ def _social_publish_evidence(post: dict[str, Any]) -> dict[str, Any]:
         "automation_task_id": automation_task_id,
         "last_error": last_error,
         "recoverable": status in {"failed", "needs_manual_publish", "needs_supervised_publish"},
+        "proof_source": proof_source,
+        "proof_quality": proof_quality,
+        "ready_for_metrics": status == "published",
+        "ready_for_attribution": status == "published",
+        "external_publish_proven": status == "published" and proof_quality in {"url", "provider_id"},
+        "manual_confirmation": proof_source == "manual_confirmation",
     }
 
     if status == "published":
@@ -7559,6 +7567,43 @@ def _social_publish_evidence(post: dict[str, Any]) -> dict[str, Any]:
         "next_action_ru": "Подготовьте preview и подтвердите публикацию.",
         "next_action_en": "Prepare the preview and approve the post.",
     }
+
+
+def _social_publish_proof_source(provider_status: str, metadata: dict[str, Any]) -> str:
+    normalized = str(provider_status or "").strip()
+    if normalized.startswith("telegram_"):
+        return "telegram_bot_api"
+    if normalized.startswith("vk_"):
+        return "vk_api"
+    if normalized.startswith("google_"):
+        return "google_business_api"
+    if normalized.startswith("meta_"):
+        return "meta_graph_api"
+    if str(metadata.get("published_source") or "").strip() == "manual_confirmation":
+        return "manual_confirmation"
+    if normalized:
+        return normalized
+    return "not_published_yet"
+
+
+def _social_publish_proof_quality(
+    status: str,
+    provider_post_url: str,
+    provider_post_id: str,
+    automation_task_id: str,
+    last_error: str,
+) -> str:
+    if str(status or "").strip() == "published":
+        if str(provider_post_url or "").strip():
+            return "url"
+        if str(provider_post_id or "").strip():
+            return "provider_id"
+        return "published_without_provider_ref"
+    if str(status or "").strip() == "needs_supervised_publish" and str(automation_task_id or "").strip():
+        return "supervised_task"
+    if str(last_error or "").strip():
+        return "error"
+    return "pending"
 
 
 def _row_to_dict(cursor: Any, row: Any) -> dict[str, Any]:

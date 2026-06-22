@@ -165,6 +165,9 @@ REQUIRED_COPY = {
     "view attribution": "Просмотр",
     "result nudge": "Есть заявки/обращения",
     "stale recommendation guard": "Рекомендации сброшены",
+    "provider proof quality": "social-provider-proof-quality",
+    "provider proof external proven": "внешняя публикация подтверждена",
+    "provider proof ready metrics": "готово к метрикам",
 }
 
 

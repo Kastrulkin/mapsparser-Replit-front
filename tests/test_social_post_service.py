@@ -3101,6 +3101,11 @@ def test_social_publish_evidence_explains_published_api_result():
     assert evidence["proof_url"] == "https://vk.com/wall-12345_678"
     assert evidence["proof_id"] == "678"
     assert evidence["provider_status"] == "vk_published"
+    assert evidence["proof_source"] == "vk_api"
+    assert evidence["proof_quality"] == "url"
+    assert evidence["external_publish_proven"] is True
+    assert evidence["ready_for_metrics"] is True
+    assert evidence["ready_for_attribution"] is True
     assert "заявки" in evidence["next_action_ru"]
 
 
@@ -3117,6 +3122,9 @@ def test_social_publish_evidence_explains_recoverable_failure():
     assert evidence["tone"] == "warning"
     assert evidence["recoverable"] is True
     assert evidence["provider_status"] == "missing_keys"
+    assert evidence["proof_quality"] == "error"
+    assert evidence["ready_for_metrics"] is False
+    assert evidence["external_publish_proven"] is False
     assert "telegram_bot_token" in evidence["summary_ru"]
     assert "ссылку/ID" in evidence["next_action_ru"]
 
@@ -3146,6 +3154,8 @@ def test_social_publish_evidence_keeps_supervised_maps_human_controlled():
 
     assert evidence["tone"] == "warning"
     assert evidence["automation_task_id"] == "task-1"
+    assert evidence["proof_quality"] == "supervised_task"
+    assert evidence["external_publish_proven"] is False
     assert "финальный клик" in evidence["summary_ru"]
     assert "контролируемое или ручное размещение" in evidence["summary_ru"]
     assert evidence["target_url"] == "https://yandex.ru/maps/org/1"
