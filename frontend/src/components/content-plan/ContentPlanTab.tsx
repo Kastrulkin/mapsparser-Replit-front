@@ -4975,15 +4975,78 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       : 'Move from a content-plan topic to publishing, results, and next-week correction. Maps stay supervised; API channels run only after approval.'}
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="bg-white"
-                  onClick={() => setActiveZone('queue')}
-                >
-                  {isRu ? 'Открыть очередь' : 'Open queue'}
-                </Button>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start lg:max-w-[520px]">
+                  <div
+                    data-testid="social-goal-current-step"
+                    className={[
+                      'rounded-xl border bg-white px-3 py-2 text-xs leading-5',
+                      socialLaunchChecklistSummary.attention > 0
+                        ? 'border-red-100 text-red-800'
+                        : socialLaunchChecklistSummary.current?.status === 'current'
+                          ? 'border-sky-100 text-sky-800'
+                          : 'border-slate-200 text-slate-600',
+                    ].join(' ')}
+                  >
+                    <div className="font-semibold text-slate-950">
+                      {isRu
+                        ? `Этап ${Math.max(1, socialLaunchChecklistSummary.done + 1)} из ${socialLaunchChecklistSummary.total || socialLaunchStages.length}`
+                        : `Step ${Math.max(1, socialLaunchChecklistSummary.done + 1)} of ${socialLaunchChecklistSummary.total || socialLaunchStages.length}`}
+                    </div>
+                    <div className="mt-0.5">
+                      {socialLaunchChecklistSummary.current
+                        ? (isRu
+                          ? socialLaunchChecklistSummary.current.detailRu
+                          : socialLaunchChecklistSummary.current.detailEn)
+                        : (isRu
+                          ? 'Откройте очередь публикаций и подготовьте первый канал.'
+                          : 'Open the publishing queue and prepare the first channel.')}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="bg-white"
+                    onClick={() => setActiveZone('queue')}
+                  >
+                    {isRu ? 'Открыть очередь' : 'Open queue'}
+                  </Button>
+                </div>
+              </div>
+              <div
+                data-testid="social-goal-remaining-work"
+                className="mt-3 grid gap-2 text-xs leading-5 sm:grid-cols-3"
+              >
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-600">
+                  <div className="font-semibold text-slate-950">
+                    {isRu ? '1. Подготовить и утвердить' : '1. Prepare and approve'}
+                  </div>
+                  <div className="mt-1">
+                    {isRu
+                      ? 'Посты появляются из LocalOS content plan, проходят preview и approval.'
+                      : 'Posts come from the LocalOS content plan, then pass preview and approval.'}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-600">
+                  <div className="font-semibold text-slate-950">
+                    {isRu ? '2. Исполнить безопасно' : '2. Execute safely'}
+                  </div>
+                  <div className="mt-1">
+                    {isRu
+                      ? 'API-каналы идут по расписанию; Яндекс/2ГИС остаются контролируемыми или ручными.'
+                      : 'API channels run on schedule; Yandex/2GIS stay supervised or manual.'}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-600">
+                  <div className="font-semibold text-slate-950">
+                    {isRu ? '3. Улучшить следующий план' : '3. Improve the next plan'}
+                  </div>
+                  <div className="mt-1">
+                    {isRu
+                      ? 'Система ранжирует заявки и обращения выше охватов и ждёт подтверждения перед применением.'
+                      : 'The system ranks leads and inquiries above reach and waits for confirmation before applying changes.'}
+                  </div>
+                </div>
               </div>
               <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                 {socialLaunchStages.map((stage) => (

@@ -178,6 +178,8 @@ REQUIRED_DATA_CONTRACT = {
     "launch checklist compact test id": "social-launch-checklist-compact",
     "publishing next step test id": 'data-testid="social-publishing-next-step"',
     "launch readiness test id": 'data-testid="social-launch-readiness"',
+    "goal current step test id": 'data-testid="social-goal-current-step"',
+    "goal remaining work test id": 'data-testid="social-goal-remaining-work"',
     "channel queue test id": 'data-testid="social-channel-queue"',
     "first api publish readiness test id": 'data-testid="social-first-api-publish-readiness"',
     "next plan recommendation test id": 'data-testid="social-next-plan-recommendation"',
