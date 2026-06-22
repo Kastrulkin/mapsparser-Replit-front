@@ -1288,6 +1288,61 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   ), [visibleSocialPosts]);
   const socialPrimaryResultCount = socialResultSummary.leads + socialResultSummary.inquiries;
   const socialEarlySignalCount = socialResultSummary.comments + socialResultSummary.shares + socialResultSummary.clicks + socialResultSummary.likes + socialResultSummary.views;
+  const socialLearningLoopStatus = useMemo(() => {
+    const published = Number(socialSummary?.published || 0);
+    const pending = Number(socialSummary?.needs_supervised_publish || 0) + Number(socialSummary?.needs_manual_publish || 0);
+    const failed = Number(socialSummary?.failed || 0);
+    if (failed > 0 || pending > 0) {
+      return {
+        tone: 'warning',
+        titleRu: 'Сначала закрыть публикации',
+        titleEn: 'Finish publishing first',
+        textRu: `Нужно закрыть ручное/контролируемое размещение или ошибки: ${pending + failed}. После этого LocalOS сможет честно сравнить результат.`,
+        textEn: `Manual/supervised placement or failures still need action: ${pending + failed}. After that, LocalOS can compare results honestly.`,
+      };
+    }
+    if (socialPrimaryResultCount > 0) {
+      return {
+        tone: 'success',
+        titleRu: 'Есть главный результат',
+        titleEn: 'Primary results recorded',
+        textRu: `Заявки и обращения: ${socialPrimaryResultCount}. Можно предлагать изменения следующего плана, но применять только после подтверждения.`,
+        textEn: `Leads and inquiries: ${socialPrimaryResultCount}. You can suggest next-plan changes, but apply only after approval.`,
+      };
+    }
+    if (socialEarlySignalCount > 0) {
+      return {
+        tone: 'caution',
+        titleRu: 'Есть ранние сигналы',
+        titleEn: 'Early signals recorded',
+        textRu: `Ранние сигналы: ${socialEarlySignalCount}. Перед применением изменений отметьте заявки/обращения, если они были.`,
+        textEn: `Early signals: ${socialEarlySignalCount}. Before applying changes, record leads/inquiries if any happened.`,
+      };
+    }
+    if (published > 0) {
+      return {
+        tone: 'caution',
+        titleRu: 'Нужно собрать реакции',
+        titleEn: 'Collect reactions next',
+        textRu: `Опубликовано: ${published}. Соберите реакции или отметьте заявки вручную, затем предложите изменения следующего плана.`,
+        textEn: `Published: ${published}. Collect reactions or record leads manually, then suggest next-plan changes.`,
+      };
+    }
+    return {
+      tone: 'neutral',
+      titleRu: 'Результаты появятся после публикаций',
+      titleEn: 'Results appear after publishing',
+      textRu: 'Сначала подготовьте, утвердите и поставьте посты в расписание. После публикаций здесь появятся реакции, заявки и следующий шаг.',
+      textEn: 'Prepare, approve, and queue posts first. After publishing, reactions, leads, and the next action will appear here.',
+    };
+  }, [
+    socialEarlySignalCount,
+    socialPrimaryResultCount,
+    socialSummary?.failed,
+    socialSummary?.needs_manual_publish,
+    socialSummary?.needs_supervised_publish,
+    socialSummary?.published,
+  ]);
   const socialDispatchEnabled = Boolean(socialRuntimeStatus?.dispatch?.enabled);
   const socialDispatchBlockedWithoutScope = Boolean(socialRuntimeStatus?.dispatch?.blocked_without_scope);
   const socialDispatchScopeMismatch = Boolean(
@@ -7507,6 +7562,39 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           {isRu
                             ? String(socialRecommendation?.recommendation?.text_ru || 'После публикаций LocalOS будет ранжировать темы по заявкам и обращениям, затем по комментариям и охвату.')
                             : String(socialRecommendation?.recommendation?.text_en || 'After publishing, LocalOS will rank topics by leads and inquiries first, then comments and reach.')}
+                        </div>
+                        <div
+                          data-testid="social-learning-loop-status"
+                          className={[
+                            'mt-3 rounded-lg border px-3 py-2 text-xs leading-5',
+                            socialLearningLoopStatus.tone === 'success'
+                              ? 'border-emerald-200 bg-white text-emerald-900'
+                              : socialLearningLoopStatus.tone === 'warning'
+                                ? 'border-amber-200 bg-amber-50 text-amber-900'
+                                : socialLearningLoopStatus.tone === 'caution'
+                                  ? 'border-sky-200 bg-sky-50 text-sky-900'
+                                  : 'border-slate-200 bg-white text-slate-700',
+                          ].join(' ')}
+                        >
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <div className="font-semibold">
+                                {isRu ? 'Статус learning loop' : 'Learning loop status'} · {isRu ? socialLearningLoopStatus.titleRu : socialLearningLoopStatus.titleEn}
+                              </div>
+                              <div className="mt-1">
+                                {isRu ? socialLearningLoopStatus.textRu : socialLearningLoopStatus.textEn}
+                              </div>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium">
+                              {socialPrimaryResultCount > 0
+                                ? (isRu ? 'заявки главнее' : 'leads first')
+                                : socialEarlySignalCount > 0
+                                  ? (isRu ? 'ранний сигнал' : 'early signal')
+                                  : Number(socialSummary?.published || 0) > 0
+                                    ? (isRu ? 'ждём реакции' : 'needs reactions')
+                                    : (isRu ? 'после publish' : 'after publish')}
+                            </span>
+                          </div>
                         </div>
                         {socialRecommendation?.learning_readiness ? (
                           <div className={_socialLearningReadinessClassName(socialRecommendation.learning_readiness.confidence || '')}>
