@@ -701,6 +701,26 @@ def test_social_openclaw_browser_readiness_explains_ready_and_manual_fallback():
     assert any("openclaw_catalog_not_configured" in item for item in fallback["diagnostics_ru"])
 
 
+def test_social_openclaw_browser_readiness_explains_catalog_route_error():
+    readiness = _social_openclaw_browser_readiness(
+        {
+            "ready": False,
+            "source": "catalog_error",
+            "status": "error",
+            "reason": "openclaw_catalog_error",
+            "error": "OpenClaw catalog request failed",
+            "action_ref": "",
+        }
+    )
+
+    assert readiness["ready"] is False
+    assert readiness["status"] == "manual_fallback"
+    assert "не смог прочитать capability catalog" in readiness["message_ru"]
+    assert "production VPS" in readiness["next_action_ru"]
+    assert any("Ошибка каталога OpenClaw" in item for item in readiness["diagnostics_ru"])
+    assert any("OpenClaw catalog error" in item for item in readiness["diagnostics_en"])
+
+
 def test_check_social_openclaw_browser_readiness_is_read_only_and_scoped(monkeypatch):
     captured = {}
     monkeypatch.setattr(social_post_service, "DatabaseManager", FakeQueueFallbackDB)

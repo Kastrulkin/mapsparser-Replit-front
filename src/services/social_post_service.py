@@ -2695,6 +2695,22 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None) -> 
     ready = bool(capability_status.get("ready"))
     safety_contract = _social_supervised_safety_contract()
     missing_reason = str(capability_status.get("reason") or "").strip()
+    catalog_error = missing_reason == "openclaw_catalog_error" or str(capability_status.get("source") or "").strip() == "catalog_error"
+    if ready:
+        message_ru = "OpenClaw browser-use готов: Яндекс/2ГИС можно вести как контролируемое размещение без финального клика."
+        message_en = "OpenClaw browser-use is ready: Yandex/2GIS can use supervised placement without the final click."
+        next_action_ru = "Подготовьте контролируемое размещение у поста карты и проверьте preview перед финальным размещением."
+        next_action_en = "Create supervised placement on the map post and review the preview before final placement."
+    elif catalog_error:
+        message_ru = "OpenClaw browser-use не подтверждён: LocalOS не смог прочитать capability catalog, поэтому Яндекс/2ГИС останутся в ручном fallback."
+        message_en = "OpenClaw browser-use is not confirmed: LocalOS could not read the capability catalog, so Yandex/2GIS will stay in manual fallback."
+        next_action_ru = "Проверьте доступность OPENCLAW_BASE_URL или OPENCLAW_SANDBOX_BRIDGE_URL с production VPS; до этого используйте ручное размещение."
+        next_action_en = "Check that OPENCLAW_BASE_URL or OPENCLAW_SANDBOX_BRIDGE_URL is reachable from the production VPS; use manual placement until then."
+    else:
+        message_ru = "OpenClaw browser-use не подтверждён: Яндекс/2ГИС останутся в ручном fallback."
+        message_en = "OpenClaw browser-use is not confirmed: Yandex/2GIS will stay in manual fallback."
+        next_action_ru = "Проверьте capability catalog/OpenClaw настройки или используйте ручное размещение."
+        next_action_en = "Check the capability catalog/OpenClaw settings or use manual placement."
     return {
         "ready": ready,
         "status": "ready" if ready else "manual_fallback",
@@ -2716,26 +2732,10 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None) -> 
         "manual_fallback_triggers": safety_contract.get("manual_fallback_triggers") if isinstance(safety_contract.get("manual_fallback_triggers"), list) else [],
         "diagnostics_ru": _social_openclaw_browser_diagnostics(capability_status, True),
         "diagnostics_en": _social_openclaw_browser_diagnostics(capability_status, False),
-        "message_ru": (
-            "OpenClaw browser-use готов: Яндекс/2ГИС можно вести как контролируемое размещение без финального клика."
-            if ready
-            else "OpenClaw browser-use не подтверждён: Яндекс/2ГИС останутся в ручном fallback."
-        ),
-        "message_en": (
-            "OpenClaw browser-use is ready: Yandex/2GIS can use supervised placement without the final click."
-            if ready
-            else "OpenClaw browser-use is not confirmed: Yandex/2GIS will stay in manual fallback."
-        ),
-        "next_action_ru": (
-            "Подготовьте контролируемое размещение у поста карты и проверьте preview перед финальным размещением."
-            if ready
-            else "Проверьте capability catalog/OpenClaw настройки или используйте ручное размещение."
-        ),
-        "next_action_en": (
-            "Create supervised placement on the map post and review the preview before final placement."
-            if ready
-            else "Check the capability catalog/OpenClaw settings or use manual placement."
-        ),
+        "message_ru": message_ru,
+        "message_en": message_en,
+        "next_action_ru": next_action_ru,
+        "next_action_en": next_action_en,
     }
 
 
@@ -2744,6 +2744,7 @@ def _social_openclaw_browser_diagnostics(capability_status: dict[str, Any], is_r
     provider_status = str(capability_status.get("status") or "").strip()
     reason = str(capability_status.get("reason") or "").strip()
     action_ref = str(capability_status.get("action_ref") or "").strip()
+    error = str(capability_status.get("error") or "").strip()
     ready = bool(capability_status.get("ready"))
     if is_ru:
         lines = [
@@ -2759,8 +2760,12 @@ def _social_openclaw_browser_diagnostics(capability_status: dict[str, Any], is_r
             lines.append(f"Действие OpenClaw: {action_ref}.")
         if reason and not ready:
             lines.append(f"Причина ручного fallback: {reason}.")
+        if error and not ready:
+            lines.append(f"Ошибка каталога OpenClaw: {error}.")
         if ready:
             lines.append("Следующий шаг: создать контролируемую задачу у поста Яндекс/2ГИС и проверить предпросмотр.")
+        elif reason == "openclaw_catalog_error" or source == "catalog_error":
+            lines.append("Следующий шаг: сделать OpenClaw catalog доступным с production VPS или оставить ручной fallback.")
         else:
             lines.append("Следующий шаг: проверить OPENCLAW_BASE_URL/catalog или использовать ручной fallback.")
         return lines
@@ -2777,8 +2782,12 @@ def _social_openclaw_browser_diagnostics(capability_status: dict[str, Any], is_r
         lines.append(f"OpenClaw action: {action_ref}.")
     if reason and not ready:
         lines.append(f"Fallback reason: {reason}.")
+    if error and not ready:
+        lines.append(f"OpenClaw catalog error: {error}.")
     if ready:
         lines.append("Next step: create supervised Yandex/2GIS placement and review the preview.")
+    elif reason == "openclaw_catalog_error" or source == "catalog_error":
+        lines.append("Next step: make the OpenClaw catalog reachable from the production VPS or keep manual fallback.")
     else:
         lines.append("Next step: check OPENCLAW_BASE_URL/catalog or use manual fallback.")
     return lines

@@ -42,6 +42,8 @@ REQUIRED_SERVICE_CONTRACT = {
     "openclaw outbox schema": "localos_social_supervised_openclaw_request_v1",
     "openclaw callback env": "OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL",
     "legacy openclaw callback env": "OPENCLAW_SUPERVISED_CALLBACK_URL",
+    "openclaw catalog route error": "не смог прочитать capability catalog",
+    "openclaw production vps next action": "production VPS",
     "outbox table": "action_callback_outbox",
     "stop before final publish": "stop_before_final_publish",
     "final click policy": "human_final_click_required",
