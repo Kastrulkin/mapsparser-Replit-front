@@ -175,6 +175,15 @@ type SocialOpenClawReadiness = {
   provider_status?: string;
   reason?: string;
   browser_final_click_allowed?: boolean;
+  stop_before_final_publish?: boolean;
+  requires_final_human_confirmation?: boolean;
+  side_effect_policy?: string;
+  final_publish_policy?: string;
+  allowed_actions?: string[];
+  forbidden_actions?: string[];
+  manual_fallback_triggers?: string[];
+  diagnostics_ru?: string[];
+  diagnostics_en?: string[];
   message_ru?: string;
   message_en?: string;
   next_action_ru?: string;
@@ -2632,6 +2641,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         text_en: readiness?.ready
           ? 'OpenClaw browser-use is confirmed. Yandex/2GIS can use supervised placement without the final click.'
           : 'OpenClaw browser-use is not confirmed. Yandex/2GIS will stay in manual fallback, and the plan will not be blocked.',
+        details_ru: _socialOpenClawReadinessDetails(readiness, true),
+        details_en: _socialOpenClawReadinessDetails(readiness, false),
       });
     } catch (checkError) {
       const message = checkError instanceof Error ? checkError.message : (isRu ? 'Не удалось проверить OpenClaw browser-use' : 'Could not check OpenClaw browser-use');
@@ -6406,6 +6417,16 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               <div className="mt-1 font-medium">
                                 {isRu ? socialOpenClawReadiness.next_action_ru : socialOpenClawReadiness.next_action_en}
                               </div>
+                              {_socialOpenClawReadinessDetails(socialOpenClawReadiness, isRu).length > 0 ? (
+                                <ul className="mt-2 space-y-1">
+                                  {_socialOpenClawReadinessDetails(socialOpenClawReadiness, isRu).slice(0, 4).map((detail) => (
+                                    <li key={`openclaw-readiness:${detail}`} className="flex gap-2">
+                                      <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-current opacity-70" />
+                                      <span>{detail}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : null}
                               <div className="mt-1 flex flex-wrap gap-2 font-mono text-[11px] opacity-80">
                                 {socialOpenClawReadiness.source ? <span>source: {socialOpenClawReadiness.source}</span> : null}
                                 {socialOpenClawReadiness.provider_status ? <span>status: {socialOpenClawReadiness.provider_status}</span> : null}
@@ -8261,6 +8282,43 @@ function _isSocialPostTextLocked(status: string): boolean {
 
 function _socialSupervisedPayload(post: SocialPost) {
   return post.metadata_json?.supervised_publish || null;
+}
+
+function _socialOpenClawReadinessDetails(
+  readiness: SocialOpenClawReadiness | null,
+  isRu: boolean,
+): string[] {
+  if (!readiness) return [];
+  const diagnosticsSource = isRu ? readiness.diagnostics_ru : readiness.diagnostics_en;
+  const diagnostics = Array.isArray(diagnosticsSource)
+    ? diagnosticsSource.map(String).map((item) => item.trim()).filter(Boolean)
+    : [];
+  const details = diagnostics.length > 0 ? diagnostics : [
+    isRu
+      ? 'Безопасная проверка: LocalOS ничего не публикует и только проверяет готовность OpenClaw.'
+      : 'Safe check: LocalOS publishes nothing and only checks OpenClaw readiness.',
+    readiness.ready
+      ? (isRu ? 'Следующий шаг: подготовить контролируемое размещение и проверить предпросмотр.' : 'Next step: prepare supervised placement and review the preview.')
+      : (isRu ? 'Следующий шаг: использовать ручной fallback или проверить настройки OpenClaw.' : 'Next step: use manual fallback or check OpenClaw settings.'),
+  ];
+  if (readiness.browser_final_click_allowed === false || readiness.stop_before_final_publish) {
+    details.push(
+      isRu
+        ? 'Финальная публикация остаётся за человеком.'
+        : 'Final publishing stays human-controlled.',
+    );
+  }
+  const forbidden = Array.isArray(readiness.forbidden_actions)
+    ? readiness.forbidden_actions.map(String).filter(Boolean)
+    : [];
+  if (forbidden.includes('click_final_publish')) {
+    details.push(
+      isRu
+        ? 'OpenClaw не нажимает финальную кнопку публикации.'
+        : 'OpenClaw does not click the final publish button.',
+    );
+  }
+  return Array.from(new Set(details)).slice(0, 6);
 }
 
 function _socialOpenClawCapabilityLine(

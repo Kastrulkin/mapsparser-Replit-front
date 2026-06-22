@@ -102,6 +102,9 @@ REQUIRED_DATA_CONTRACT = {
     "supervised task id": "automation_task_id",
     "supervised ledger id": "agent_action_ledger_id",
     "openclaw capability status": "openclaw_capability_status",
+    "openclaw readiness diagnostics": "diagnostics_ru",
+    "openclaw final click guard": "OpenClaw не нажимает финальную кнопку публикации",
+    "openclaw safe readiness check": "Безопасная проверка: LocalOS ничего не публикует",
     "plan recommendation signal priority": "signal_priority",
 }
 
