@@ -478,6 +478,30 @@ type SocialLaunchPreflight = {
   next_action_ru?: string;
   next_action_en?: string;
   first_cycle_verification?: SocialFirstCycleVerification;
+  runtime_alignment?: {
+    schema?: string;
+    business_id?: string;
+    dispatch?: {
+      enabled?: boolean;
+      business_scope?: string;
+      allow_unscoped?: boolean;
+      status?: string;
+      can_process_this_business?: boolean;
+      message_ru?: string;
+      message_en?: string;
+    };
+    metrics?: {
+      enabled?: boolean;
+      business_scope?: string;
+      allow_unscoped?: boolean;
+      status?: string;
+      can_collect_this_business?: boolean;
+      message_ru?: string;
+      message_en?: string;
+    };
+    next_action_ru?: string;
+    next_action_en?: string;
+  };
   launch_runbook?: SocialLaunchRunbook;
 };
 
@@ -3007,6 +3031,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         next_action_ru: String(response.next_action_ru || ''),
         next_action_en: String(response.next_action_en || ''),
         launch_runbook: response.launch_runbook && typeof response.launch_runbook === 'object' ? response.launch_runbook : undefined,
+        runtime_alignment: response.runtime_alignment && typeof response.runtime_alignment === 'object' ? response.runtime_alignment : undefined,
       };
       setSocialLaunchPreflight(preflight);
       if (dispatchPreview) {
@@ -5745,6 +5770,44 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ? `Рекомендованный scope: SOCIAL_POST_DISPATCH_BUSINESS_ID=${String(socialLaunchPreflight.recommended_env?.dispatch?.SOCIAL_POST_DISPATCH_BUSINESS_ID || businessId || '')}`
                               : `Recommended scope: SOCIAL_POST_DISPATCH_BUSINESS_ID=${String(socialLaunchPreflight.recommended_env?.dispatch?.SOCIAL_POST_DISPATCH_BUSINESS_ID || businessId || '')}`}
                           </div>
+                          {socialLaunchPreflight.runtime_alignment ? (
+                            <div className="mt-2 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] leading-5 text-slate-200">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-semibold text-white">
+                                  {isRu ? 'Runtime этого бизнеса' : 'This business runtime'}
+                                </span>
+                                <span
+                                  className={[
+                                    'rounded-full px-2 py-0.5 font-semibold',
+                                    socialLaunchPreflight.runtime_alignment.dispatch?.can_process_this_business
+                                      ? 'bg-emerald-400/20 text-emerald-100'
+                                      : 'bg-amber-400/20 text-amber-100',
+                                  ].join(' ')}
+                                >
+                                  {socialLaunchPreflight.runtime_alignment.dispatch?.can_process_this_business
+                                    ? (isRu ? 'совпадает' : 'matches')
+                                    : (isRu ? 'нужно настроить' : 'needs setup')}
+                                </span>
+                              </div>
+                              <div className="mt-1">
+                                {isRu
+                                  ? String(socialLaunchPreflight.runtime_alignment.dispatch?.message_ru || '')
+                                  : String(socialLaunchPreflight.runtime_alignment.dispatch?.message_en || '')}
+                              </div>
+                              <div className="mt-1">
+                                {isRu
+                                  ? String(socialLaunchPreflight.runtime_alignment.metrics?.message_ru || '')
+                                  : String(socialLaunchPreflight.runtime_alignment.metrics?.message_en || '')}
+                              </div>
+                              {(socialLaunchPreflight.runtime_alignment.next_action_ru || socialLaunchPreflight.runtime_alignment.next_action_en) ? (
+                                <div className="mt-1 font-medium text-white">
+                                  {isRu
+                                    ? String(socialLaunchPreflight.runtime_alignment.next_action_ru || '')
+                                    : String(socialLaunchPreflight.runtime_alignment.next_action_en || '')}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
                           <Button
                             type="button"
                             size="sm"

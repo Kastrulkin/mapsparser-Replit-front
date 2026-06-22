@@ -1873,7 +1873,10 @@ def test_dispatch_preview_readiness_marks_no_due_posts_as_safe_noop():
     assert readiness["next_action_ru"]
 
 
-def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_invariants():
+def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_invariants(monkeypatch):
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_ENABLED", raising=False)
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_BUSINESS_ID", raising=False)
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED", raising=False)
     payload = _build_social_launch_preflight_payload(
         "biz-1",
         [
@@ -1918,6 +1921,8 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert "SOCIAL_POST_DISPATCH_BUSINESS_ID=biz-1" in payload["launch_runbook"]["steps_ru"][0]
     assert "provider_post_id" in payload["launch_runbook"]["steps_ru"][3]
     assert "needs_supervised_publish" in payload["launch_runbook"]["success_criteria_ru"][1]
+    assert payload["runtime_alignment"]["dispatch"]["status"]
+    assert payload["runtime_alignment"]["dispatch"]["can_process_this_business"] is False
 
 
 def test_social_launch_preflight_payload_handles_no_due_posts_as_next_ui_work():
@@ -1947,6 +1952,55 @@ def test_social_launch_preflight_payload_handles_no_due_posts_as_next_ui_work():
     assert payload["launch_runbook"]["ready"] is False
     assert "Нет due-постов" in payload["launch_runbook"]["blocked_reason_ru"]
     assert "Подготовьте" in payload["launch_runbook"]["steps_ru"][0]
+
+
+def test_social_launch_runtime_alignment_explains_disabled_and_matching_scope(monkeypatch):
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_ENABLED", raising=False)
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_BUSINESS_ID", raising=False)
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED", raising=False)
+    monkeypatch.setenv("SOCIAL_POST_METRICS_ENABLED", "true")
+    monkeypatch.setenv("SOCIAL_POST_METRICS_BUSINESS_ID", "biz-1")
+
+    disabled = social_post_service._social_launch_runtime_alignment("biz-1")
+
+    assert disabled["dispatch"]["status"] == "dispatch_disabled"
+    assert disabled["dispatch"]["can_process_this_business"] is False
+    assert disabled["metrics"]["status"] == "ready"
+    assert "SOCIAL_POST_DISPATCH_ENABLED=true" in disabled["next_action_ru"]
+
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_ENABLED", "true")
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_BUSINESS_ID", "biz-1")
+
+    ready = social_post_service._social_launch_runtime_alignment("biz-1")
+
+    assert ready["dispatch"]["status"] == "ready"
+    assert ready["dispatch"]["can_process_this_business"] is True
+    assert ready["metrics"]["can_collect_this_business"] is True
+    assert "первый цикл" in ready["next_action_ru"]
+
+
+def test_social_launch_runtime_alignment_explains_scope_mismatch_and_guard(monkeypatch):
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_ENABLED", "true")
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_BUSINESS_ID", "biz-other")
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED", raising=False)
+    monkeypatch.setenv("SOCIAL_POST_METRICS_ENABLED", "true")
+    monkeypatch.delenv("SOCIAL_POST_METRICS_BUSINESS_ID", raising=False)
+    monkeypatch.delenv("SOCIAL_POST_METRICS_ALLOW_UNSCOPED", raising=False)
+
+    mismatch = social_post_service._social_launch_runtime_alignment("biz-1")
+
+    assert mismatch["dispatch"]["status"] == "scope_mismatch"
+    assert mismatch["dispatch"]["can_process_this_business"] is False
+    assert mismatch["metrics"]["status"] == "blocked_without_scope"
+    assert "biz-1" in mismatch["next_action_ru"]
+
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_BUSINESS_ID", raising=False)
+
+    guarded = social_post_service._social_launch_runtime_alignment("biz-1")
+
+    assert guarded["dispatch"]["status"] == "blocked_without_scope"
+    assert guarded["dispatch"]["can_process_this_business"] is False
+    assert "business scope" in guarded["dispatch"]["message_en"]
 
 
 def test_supervised_handoff_writes_agent_action_ledger_when_available():

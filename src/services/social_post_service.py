@@ -326,6 +326,7 @@ def _build_social_launch_preflight_payload(
         skipped_no_access,
         scope,
     )
+    runtime_alignment = _social_launch_runtime_alignment(scope)
     return {
         "business_id": scope,
         "status": status,
@@ -357,6 +358,7 @@ def _build_social_launch_preflight_payload(
             "skipped_no_access": skipped_no_access,
         },
         "first_cycle_verification": first_cycle_verification,
+        "runtime_alignment": runtime_alignment,
         "launch_runbook": _social_launch_runbook(
             status,
             scope,
@@ -1143,6 +1145,142 @@ def _social_metrics_allow_unscoped() -> bool:
         "on",
         "enabled",
     }
+
+
+def _social_bool_env(name: str) -> bool:
+    return str(os.getenv(name) or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+        "enabled",
+    }
+
+
+def _social_launch_runtime_alignment(business_id: str) -> dict[str, Any]:
+    scope = str(business_id or "").strip()
+    dispatch_scope = str(os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
+    dispatch_enabled = _social_bool_env("SOCIAL_POST_DISPATCH_ENABLED")
+    dispatch_allow_unscoped = _social_dispatch_allow_unscoped()
+    metrics_scope = str(os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
+    metrics_enabled = _social_bool_env("SOCIAL_POST_METRICS_ENABLED")
+    metrics_allow_unscoped = _social_metrics_allow_unscoped()
+
+    if not dispatch_enabled:
+        dispatch_status = "dispatch_disabled"
+    elif dispatch_scope and dispatch_scope == scope:
+        dispatch_status = "ready"
+    elif dispatch_scope and dispatch_scope != scope:
+        dispatch_status = "scope_mismatch"
+    elif dispatch_allow_unscoped:
+        dispatch_status = "unscoped_allowed"
+    else:
+        dispatch_status = "blocked_without_scope"
+
+    if not metrics_enabled:
+        metrics_status = "metrics_disabled"
+    elif metrics_scope and metrics_scope == scope:
+        metrics_status = "ready"
+    elif metrics_scope and metrics_scope != scope:
+        metrics_status = "scope_mismatch"
+    elif metrics_allow_unscoped:
+        metrics_status = "unscoped_allowed"
+    else:
+        metrics_status = "blocked_without_scope"
+
+    dispatch_can_process_this_business = dispatch_status in {"ready", "unscoped_allowed"}
+    metrics_can_collect_this_business = metrics_status in {"ready", "unscoped_allowed"}
+    return {
+        "schema": "localos_social_launch_runtime_alignment_v1",
+        "business_id": scope,
+        "dispatch": {
+            "enabled": dispatch_enabled,
+            "business_scope": dispatch_scope,
+            "allow_unscoped": dispatch_allow_unscoped,
+            "status": dispatch_status,
+            "can_process_this_business": dispatch_can_process_this_business,
+            "message_ru": _social_launch_runtime_message("dispatch", dispatch_status, dispatch_scope, scope, True),
+            "message_en": _social_launch_runtime_message("dispatch", dispatch_status, dispatch_scope, scope, False),
+        },
+        "metrics": {
+            "enabled": metrics_enabled,
+            "business_scope": metrics_scope,
+            "allow_unscoped": metrics_allow_unscoped,
+            "status": metrics_status,
+            "can_collect_this_business": metrics_can_collect_this_business,
+            "message_ru": _social_launch_runtime_message("metrics", metrics_status, metrics_scope, scope, True),
+            "message_en": _social_launch_runtime_message("metrics", metrics_status, metrics_scope, scope, False),
+        },
+        "next_action_ru": _social_launch_runtime_next_action(dispatch_status, metrics_status, scope, True),
+        "next_action_en": _social_launch_runtime_next_action(dispatch_status, metrics_status, scope, False),
+    }
+
+
+def _social_launch_runtime_message(kind: str, status: str, runtime_scope: str, business_scope: str, is_ru: bool) -> str:
+    label_ru = "Dispatch" if kind == "dispatch" else "Сбор реакций"
+    label_en = "Dispatch" if kind == "dispatch" else "Metrics"
+    label = label_ru if is_ru else label_en
+    if status in {"dispatch_disabled", "metrics_disabled"}:
+        return (
+            f"{label} выключен: можно готовить и ставить посты в расписание, но внешний цикл сам не стартует."
+            if is_ru
+            else f"{label} is disabled: posts can be prepared and queued, but the external loop will not start by itself."
+        )
+    if status == "ready":
+        return (
+            f"{label} включён для этого бизнеса ({business_scope})."
+            if is_ru
+            else f"{label} is enabled for this business ({business_scope})."
+        )
+    if status == "scope_mismatch":
+        return (
+            f"{label} включён для другого бизнеса ({runtime_scope}); текущий бизнес {business_scope} не будет обработан."
+            if is_ru
+            else f"{label} is scoped to another business ({runtime_scope}); current business {business_scope} will not be processed."
+        )
+    if status == "unscoped_allowed":
+        return (
+            f"{label} включён без scope через явный allow-all; для первого запуска безопаснее указать business scope."
+            if is_ru
+            else f"{label} is enabled without a scope via explicit allow-all; a business scope is safer for the first launch."
+        )
+    return (
+        f"{label} включён, но заблокирован защитой: нужен business scope."
+        if is_ru
+        else f"{label} is enabled but guarded: a business scope is required."
+    )
+
+
+def _social_launch_runtime_next_action(dispatch_status: str, metrics_status: str, business_scope: str, is_ru: bool) -> str:
+    if dispatch_status == "dispatch_disabled":
+        return (
+            f"Для автозапуска включите SOCIAL_POST_DISPATCH_ENABLED=true и SOCIAL_POST_DISPATCH_BUSINESS_ID={business_scope}."
+            if is_ru
+            else f"To auto-run, enable SOCIAL_POST_DISPATCH_ENABLED=true and SOCIAL_POST_DISPATCH_BUSINESS_ID={business_scope}."
+        )
+    if dispatch_status == "blocked_without_scope":
+        return (
+            f"Добавьте SOCIAL_POST_DISPATCH_BUSINESS_ID={business_scope}, иначе worker не начнёт внешние действия."
+            if is_ru
+            else f"Add SOCIAL_POST_DISPATCH_BUSINESS_ID={business_scope}; otherwise the worker will not start external actions."
+        )
+    if dispatch_status == "scope_mismatch":
+        return (
+            f"Смените SOCIAL_POST_DISPATCH_BUSINESS_ID на {business_scope} или запускайте другой бизнес."
+            if is_ru
+            else f"Change SOCIAL_POST_DISPATCH_BUSINESS_ID to {business_scope} or run the other business."
+        )
+    if metrics_status in {"metrics_disabled", "blocked_without_scope", "scope_mismatch"}:
+        return (
+            "Публикации можно исполнять, но для learning loop отдельно включите сбор реакций с тем же business scope."
+            if is_ru
+            else "Publishing can run, but enable metrics with the same business scope to close the learning loop."
+        )
+    return (
+        "Runtime совпадает с текущим бизнесом: после approval и расписания worker может выполнить первый цикл."
+        if is_ru
+        else "Runtime matches this business: after approval and queueing, the worker can run the first cycle."
+    )
 
 
 def dispatch_due_social_posts(batch_size: int = 20, business_id: str = "") -> dict[str, Any]:
