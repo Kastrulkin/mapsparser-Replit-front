@@ -5509,7 +5509,14 @@ def _maps_connection_checks(browser_ready: bool, target: dict[str, Any]) -> list
 
 def _channel_readiness_message(platform: str, status: str, is_ru: bool) -> str:
     label = platform_label(platform)
+    platform_key = str(platform or "").strip()
     if status == "ready":
+        if platform_key in {"telegram", "vk"}:
+            return (
+                f"{label}: ключи заполнены; перед первым API-постом запустите live API-проверку без публикации."
+                if is_ru
+                else f"{label}: keys are set; run the live API check before the first API post."
+            )
         return f"{label}: готов к публикации после approval." if is_ru else f"{label}: ready to publish after approval."
     if status == "supervised_ready":
         return (
@@ -5550,6 +5557,12 @@ def _channel_readiness_next_action(platform: str, status: str, is_ru: bool) -> s
     platform_key = str(platform or "").strip()
     status_key = str(status or "").strip()
     if status_key == "ready":
+        if platform_key in {"telegram", "vk"}:
+            return (
+                "Перед расписанием нажмите «Проверить API-каналы», затем проверьте preview и утвердите текст."
+                if is_ru
+                else "Before queueing, click Check API channels, then review the preview and approve the copy."
+            )
         return (
             "После проверки текста поставьте пост в расписание."
             if is_ru
@@ -5634,6 +5647,12 @@ def _channel_readiness_setup_summary(platform: str, status: str, is_ru: bool) ->
     platform_key = str(platform or "").strip()
     status_key = str(status or "").strip()
     if status_key == "ready":
+        if platform_key in {"telegram", "vk"}:
+            return (
+                "Ключи заполнены: перед первым реальным API-постом выполните live API-проверку без публикации, затем approval и расписание."
+                if is_ru
+                else "Keys are set: before the first real API post, run the live API check without publishing, then approve and queue."
+            )
         return (
             "Канал готов: проверьте preview, утвердите текст и ставьте пост в расписание."
             if is_ru
@@ -5718,6 +5737,16 @@ def _channel_readiness_setup_steps(platform: str, status: str, is_ru: bool) -> l
     platform_key = str(platform or "").strip()
     status_key = str(status or "").strip()
     if status_key == "ready":
+        if platform_key in {"telegram", "vk"}:
+            return [
+                "Запустите live API-проверку без публикации.",
+                "Проверьте preview поста.",
+                "Утвердите текст и поставьте в расписание.",
+            ] if is_ru else [
+                "Run the live API check without publishing.",
+                "Review the post preview.",
+                "Approve the copy and queue it on schedule.",
+            ]
         return [
             "Проверьте preview поста.",
             "Утвердите текст.",

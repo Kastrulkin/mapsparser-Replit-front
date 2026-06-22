@@ -2126,11 +2126,26 @@ def test_channel_readiness_setup_steps_are_actionable_for_ready_and_meta():
     ready_channel = _channel_readiness("telegram", "api", True, "ready")
     meta_steps = _channel_readiness("facebook", "api", False, "missing_permissions")
 
-    assert ready_steps == ["Проверьте preview поста.", "Утвердите текст.", "Поставьте в расписание."]
-    assert "Канал готов" in ready_channel["setup_summary_ru"]
+    assert ready_steps == [
+        "Запустите live API-проверку без публикации.",
+        "Проверьте preview поста.",
+        "Утвердите текст и поставьте в расписание.",
+    ]
+    assert "live API-проверку без публикации" in ready_channel["setup_summary_ru"]
+    assert "Проверить API-каналы" in ready_channel["next_action_ru"]
+    assert "live API-проверку" in ready_channel["message_ru"]
     assert meta_steps["missing_fields"] == ["meta_permissions.pages_manage_posts"]
     assert "permissions" in meta_steps["setup_steps_en"][2]
     assert "permissions" in meta_steps["setup_summary_en"]
+
+
+def test_vk_ready_readiness_requires_live_api_check_before_first_post():
+    ready_channel = _channel_readiness("vk", "api", True, "ready")
+
+    assert "live API-проверку без публикации" in ready_channel["setup_summary_ru"]
+    assert "Проверить API-каналы" in ready_channel["next_action_ru"]
+    assert "first API post" in ready_channel["message_en"]
+    assert ready_channel["setup_steps_en"][0] == "Run the live API check without publishing."
 
 
 def test_external_account_preflight_does_not_requeue_without_native_publish(monkeypatch):
