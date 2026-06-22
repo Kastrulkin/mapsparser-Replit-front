@@ -1594,7 +1594,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     },
     {
       key: 'ready',
-      label: isRu ? 'Готово к публикации' : 'Ready to publish',
+      label: isRu ? 'Тексты готовы' : 'Drafts ready',
     },
     {
       key: 'urgent',
@@ -4077,14 +4077,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   ? (planOperationalSummary.needsDraft > 0
                     ? (isRu ? 'Сначала допишите пустые темы' : 'Start by filling empty topics')
                     : planOperationalSummary.readyToPublish > 0
-                      ? (isRu ? 'Готовые тексты можно превратить в публикации' : 'Ready texts can become publications')
+                      ? (isRu ? 'Готовые тексты можно разложить по каналам' : 'Ready drafts can become channel posts')
                       : (isRu ? 'План выглядит спокойно' : 'The plan looks calm'))
                   : (isRu ? 'Соберите первый план публикаций' : 'Build the first content plan')}
               </div>
             <div className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
               {isRu
-                ? 'Здесь короткая сводка: сколько тем уже есть, сколько текстов готово к публикации, сколько ещё надо дописать и что делать следующим шагом.'
-                : 'A short summary: how many topics exist, how many drafts are ready to publish, how many still need text, and the next step.'}
+                ? 'Здесь короткая сводка: сколько тем уже есть, сколько текстов готово, сколько ещё надо дописать и что делать следующим шагом.'
+                : 'A short summary: how many topics exist, how many drafts are ready, how many still need text, and the next step.'}
             </div>
             </div>
             {!currentPlan?.items?.length ? (
@@ -4098,7 +4098,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               </Button>
             ) : planOperationalSummary.readyToPublish > 0 ? (
               <Button onClick={() => { applyViewPreset('ready'); setActiveZone('queue'); }}>
-                {isRu ? 'Открыть готовые к публикации' : 'Open ready to publish'}
+                {isRu ? 'Открыть готовые тексты' : 'Open ready drafts'}
               </Button>
             ) : (
               <Button onClick={() => setActiveZone('plan')}>
@@ -4114,7 +4114,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             </div>
             <div className="rounded-2xl bg-emerald-50 px-4 py-4">
               <div className="text-2xl font-semibold text-emerald-950">{planOperationalSummary.readyToPublish}</div>
-              <div className="mt-1 text-sm text-emerald-800">{isRu ? 'Готово к публикации' : 'Ready to publish'}</div>
+              <div className="mt-1 text-sm text-emerald-800">{isRu ? 'Текст готов' : 'Draft ready'}</div>
             </div>
             <div className="rounded-2xl bg-amber-50 px-4 py-4">
               <div className="text-2xl font-semibold text-amber-950">{planOperationalSummary.needsDraft}</div>
@@ -4122,7 +4122,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             </div>
             <div className="rounded-2xl bg-slate-50 px-4 py-4">
               <div className="text-2xl font-semibold text-slate-950">{planOperationalSummary.published}</div>
-              <div className="mt-1 text-sm text-slate-600">{isRu ? 'Создано' : 'Created'}</div>
+              <div className="mt-1 text-sm text-slate-600">{isRu ? 'Новости созданы' : 'News created'}</div>
             </div>
             <div className="rounded-2xl bg-rose-50 px-4 py-4">
               <div className="text-2xl font-semibold text-rose-950">{Number(overviewRiskScore || 0).toFixed(0)}</div>
@@ -4344,8 +4344,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           </div>
           <div className="mt-1 leading-6 text-emerald-900/90">
             {isRu
-              ? `Сейчас активен план «${currentPlan.title || 'Контент-план'}»: ${planOperationalSummary.total} тем, ${planOperationalSummary.readyToPublish} готово к публикации, ${planOperationalSummary.needsDraft} без текста. Работать с ним нужно во вкладке «Готовая очередь по плану».`
-              : `The active plan is "${currentPlan.title || 'Content plan'}": ${planOperationalSummary.total} topics, ${planOperationalSummary.readyToPublish} ready to publish, ${planOperationalSummary.needsDraft} without text. Work with it in the Plan queue tab.`}
+              ? `Сейчас активен план «${currentPlan.title || 'Контент-план'}»: ${planOperationalSummary.total} тем, ${planOperationalSummary.readyToPublish} текстов готово, ${planOperationalSummary.needsDraft} без текста. Работать с ним нужно во вкладке «Готовая очередь по плану».`
+              : `The active plan is "${currentPlan.title || 'Content plan'}": ${planOperationalSummary.total} topics, ${planOperationalSummary.readyToPublish} drafts ready, ${planOperationalSummary.needsDraft} without text. Work with it in the Plan queue tab.`}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button type="button" size="sm" onClick={() => setActiveZone('queue')}>
@@ -8451,7 +8451,7 @@ function _networkOperatingRecommendation(reasons: string[], isRu: boolean): stri
 
 function _itemFilterLabel(filterKey: ItemFilterKey, isRu: boolean): string {
   if (filterKey === 'urgent') return isRu ? 'Срочное' : 'Urgent';
-  if (filterKey === 'has_draft') return isRu ? 'Готово к публикации' : 'Ready to publish';
+  if (filterKey === 'has_draft') return isRu ? 'Текст готов' : 'Draft ready';
   return isRu ? 'Все' : 'All';
 }
 
@@ -8468,13 +8468,13 @@ function _planItemStatus(item: Pick<PlanItem, 'draft_text' | 'usernews_id' | 'st
   }
   if (hasNews) {
     return {
-      label: isRu ? 'Опубликовано' : 'Published',
+      label: isRu ? 'Новость создана' : 'News created',
       className: `${baseClassName} bg-emerald-100 text-emerald-800`,
     };
   }
   if (hasDraft) {
     return {
-      label: isRu ? 'Готово к публикации' : 'Ready',
+      label: isRu ? 'Текст готов' : 'Draft ready',
       className: `${baseClassName} bg-sky-100 text-sky-800`,
     };
   }
