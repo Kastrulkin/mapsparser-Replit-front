@@ -1405,6 +1405,12 @@ def dispatch_due_social_posts(batch_size: int = 20, business_id: str = "") -> di
         "errors": errors,
         "posts": posts,
         "business_scope": business_scope,
+        "followup_actions_ru": _social_dispatch_followup_actions(
+            len(picked), published, supervised, manual, failed, errors, True
+        ),
+        "followup_actions_en": _social_dispatch_followup_actions(
+            len(picked), published, supervised, manual, failed, errors, False
+        ),
     }
 
 
@@ -1497,6 +1503,71 @@ def _social_dispatch_once_message(result: dict[str, Any], is_ru: bool) -> str:
         f"First scoped cycle finished: picked {picked}, published {published}, "
         f"controlled {supervised}, manual {manual}, failed {failed}."
     )
+
+
+def _social_dispatch_followup_actions(
+    picked: int,
+    published: int,
+    supervised: int,
+    manual: int,
+    failed: int,
+    errors: list[dict[str, str]] | None,
+    is_ru: bool,
+) -> list[str]:
+    if picked <= 0:
+        return [
+            "Due-постов нет: сначала подготовьте, подтвердите и поставьте публикации в расписание."
+            if is_ru
+            else "No due posts: prepare, approve, and queue posts first."
+        ]
+
+    actions: list[str] = []
+    if published > 0:
+        actions.append(
+            "Проверьте опубликованные API-посты: в карточке должны быть ссылка или provider ID."
+            if is_ru
+            else "Check published API posts: each card should have a URL or provider ID."
+        )
+    if supervised > 0:
+        actions.append(
+            "Завершите controlled-размещение для Яндекс/2ГИС: финальный клик остаётся за человеком."
+            if is_ru
+            else "Finish supervised placement for Yandex/2GIS: the final click stays with a human."
+        )
+    if manual > 0:
+        actions.append(
+            "Откройте manual-посты: подключите ключи/права или разместите вручную и сохраните ссылку."
+            if is_ru
+            else "Open manual posts: connect keys/permissions or publish manually and save the URL."
+        )
+    if failed > 0:
+        sample_error = ""
+        if errors:
+            sample_error = str((errors[0] or {}).get("error") or "").strip()
+        if sample_error:
+            actions.append(
+                f"Есть ошибки dispatch: {sample_error[:180]}. Исправьте причину и повторите scoped цикл."
+                if is_ru
+                else f"Dispatch has failures: {sample_error[:180]}. Fix the cause and rerun the scoped cycle."
+            )
+        else:
+            actions.append(
+                "Есть ошибки dispatch: откройте карточки с failed и выберите повтор или manual fallback."
+                if is_ru
+                else "Dispatch has failures: open failed cards and choose retry or manual fallback."
+            )
+    if not actions:
+        actions.append(
+            "Цикл завершён без внешних изменений: обновите очередь и проверьте due-даты."
+            if is_ru
+            else "The cycle finished without external changes: refresh the queue and check due dates."
+        )
+    actions.append(
+        "После публикаций соберите реакции и отметьте заявки/обращения для корректировки следующего плана."
+        if is_ru
+        else "After publishing, collect reactions and mark leads/inquiries for next-plan correction."
+    )
+    return actions[:5]
 
 
 def _social_metrics_once_message(result: dict[str, Any], is_ru: bool) -> str:

@@ -12,6 +12,7 @@ from services.social_post_service import (
     _build_social_launch_preflight_payload,
     _channel_readiness_message,
     _dispatch_action_for_status,
+    _social_dispatch_followup_actions,
     _dispatch_preview_readiness,
     _merge_metric_totals_into_posts,
     _meta_channel_readiness,
@@ -801,6 +802,40 @@ def test_dispatch_action_for_status_matches_worker_log_buckets():
     assert _dispatch_action_for_status("needs_manual_publish") == "manual"
     assert _dispatch_action_for_status("failed") == "failed"
     assert _dispatch_action_for_status("queued") == "other"
+
+
+def test_social_dispatch_followup_actions_explain_no_due_posts():
+    actions = _social_dispatch_followup_actions(
+        picked=0,
+        published=0,
+        supervised=0,
+        manual=0,
+        failed=0,
+        errors=[],
+        is_ru=True,
+    )
+
+    assert len(actions) == 1
+    assert "Due-постов нет" in actions[0]
+    assert "подтвердите" in actions[0]
+
+
+def test_social_dispatch_followup_actions_prioritize_real_outcomes():
+    actions = _social_dispatch_followup_actions(
+        picked=4,
+        published=1,
+        supervised=1,
+        manual=1,
+        failed=1,
+        errors=[{"id": "post-4", "error": "VK token expired"}],
+        is_ru=False,
+    )
+
+    assert any("URL or provider ID" in item for item in actions)
+    assert any("Yandex/2GIS" in item and "final click" in item for item in actions)
+    assert any("connect keys/permissions" in item for item in actions)
+    assert any("VK token expired" in item for item in actions)
+    assert "leads/inquiries" in actions[-1]
 
 
 def test_dispatch_due_social_posts_blocks_unscoped_by_default(monkeypatch):
