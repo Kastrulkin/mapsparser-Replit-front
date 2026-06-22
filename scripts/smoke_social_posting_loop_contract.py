@@ -17,6 +17,7 @@ CONTENT_PLAN_TAB = ROOT / "frontend" / "src" / "components" / "content-plan" / "
 SOCIAL_POSTS_API = ROOT / "src" / "api" / "social_posts_api.py"
 SOCIAL_POST_SERVICE = ROOT / "src" / "services" / "social_post_service.py"
 WORKER = ROOT / "src" / "worker.py"
+RUNTIME_SMOKE = ROOT / "scripts" / "smoke_social_posting_runtime.sh"
 
 
 REQUIRED_UI_MARKERS = {
@@ -80,6 +81,19 @@ REQUIRED_WORKER_MARKERS = {
 }
 
 
+REQUIRED_RUNTIME_SMOKE_MARKERS = {
+    "production mode": "server)",
+    "auth guard": "/api/social-posts/runtime-status",
+    "scope safety": "SOCIAL_SMOKE_ALLOW_UNSCOPED",
+    "approval invariant": "approval_required invariant failed",
+    "browser final click invariant": "browser_final_click_allowed invariant failed",
+    "dispatch worker logs": "[SOCIAL_POST_DISPATCH]",
+    "metrics worker logs": "[SOCIAL_POST_METRICS]",
+    "live cockpit copy": "Быстрый запуск публикаций",
+    "old copy guard": "Яндекс/2ГИС controlled/manual",
+}
+
+
 FORBIDDEN_UI_MARKERS = {
     "maps autopublish claim ru": "Яндекс/2ГИС автопубликация",
     "maps autopublish claim en": "Yandex/2GIS autopublish",
@@ -106,6 +120,7 @@ def main() -> int:
         api = _read(SOCIAL_POSTS_API)
         service = _read(SOCIAL_POST_SERVICE)
         worker = _read(WORKER)
+        runtime_smoke = _read(RUNTIME_SMOKE)
     except FileNotFoundError as exc:
         print(f"Missing source file: {exc}", file=sys.stderr)
         return 1
@@ -115,6 +130,7 @@ def main() -> int:
     errors.extend(f"API missing {item}" for item in _missing(api, REQUIRED_API_MARKERS))
     errors.extend(f"service missing {item}" for item in _missing(service, REQUIRED_SERVICE_MARKERS))
     errors.extend(f"worker missing {item}" for item in _missing(worker, REQUIRED_WORKER_MARKERS))
+    errors.extend(f"runtime smoke missing {item}" for item in _missing(runtime_smoke, REQUIRED_RUNTIME_SMOKE_MARKERS))
     errors.extend(f"UI forbidden {item}" for item in _present(ui, FORBIDDEN_UI_MARKERS))
 
     if errors:

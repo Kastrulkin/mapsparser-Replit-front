@@ -660,7 +660,7 @@ def _create_supervised_publish_task(cursor: Any, post: dict[str, Any]) -> dict[s
     platform = str(post.get("platform") or "").strip()
     status = str(post.get("status") or "").strip()
     if platform not in BROWSER_OR_MANUAL_PLATFORMS:
-        raise ValueError("Controlled-задача доступна только для Яндекс/2ГИС")
+        raise ValueError("Контролируемое размещение доступно только для Яндекс/2ГИС")
     if status == "published":
         raise ValueError("Публикация уже опубликована")
     if not post.get("approved_at") and status not in {"approved", "queued", "needs_supervised_publish", "needs_manual_publish"}:
