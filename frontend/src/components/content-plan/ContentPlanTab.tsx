@@ -5657,6 +5657,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       <Button
                         type="button"
                         variant="outline"
+                        onClick={() => document.getElementById('content-plan-topic-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                        className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                      >
+                        {isRu ? 'К списку тем' : 'Go to topic list'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
                         onClick={() => { void previewSocialDispatch(); }}
                         disabled={Boolean(bulkBusyAction) || Boolean(socialBusyAction)}
                         className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
@@ -6913,7 +6921,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             </div>
             {visibleItems.length > 0 ? (
               <div className="grid gap-4">
-                <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-3">
+                <div id="content-plan-topic-queue" className="scroll-mt-6 rounded-[28px] border border-slate-200 bg-slate-50 p-3">
                   <div className="px-2 pb-3">
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                       {isRu ? 'Очередь тем' : 'Topic queue'}
