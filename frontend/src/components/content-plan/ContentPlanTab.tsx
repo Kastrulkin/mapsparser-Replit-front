@@ -541,6 +541,27 @@ type SocialLaunchPreflight = {
     browser_final_click_allowed?: boolean;
     maps_are_supervised_or_manual?: boolean;
   };
+  launch_gate?: {
+    schema?: string;
+    status?: string;
+    allowed?: boolean;
+    requires_human_confirmation?: boolean;
+    dry_run_completed?: boolean;
+    external_publish_requires_approval?: boolean;
+    browser_final_click_allowed?: boolean;
+    maps_are_supervised_or_manual?: boolean;
+    due_posts?: number;
+    api_posts?: number;
+    supervised_posts?: number;
+    manual_posts?: number;
+    blocked_posts?: number;
+    title_ru?: string;
+    title_en?: string;
+    summary_ru?: string;
+    summary_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+  };
   channel_summary?: {
     api_ready?: number;
     api_needs_attention?: number;
@@ -3542,6 +3563,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         safe_to_enable_scoped_dispatch: Boolean(response.safe_to_enable_scoped_dispatch),
         production_readiness: response.production_readiness && typeof response.production_readiness === 'object'
           ? response.production_readiness
+          : undefined,
+        launch_gate: response.launch_gate && typeof response.launch_gate === 'object'
+          ? response.launch_gate
           : undefined,
         channel_summary: response.channel_summary && typeof response.channel_summary === 'object' ? response.channel_summary : {},
         dispatch_preview: dispatchPreview || undefined,
@@ -7307,6 +7331,72 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ) : null}
                             </div>
                           ) : null}
+                          {socialLaunchPreflight.launch_gate ? (
+                            <div
+                              data-testid="social-first-cycle-launch-gate"
+                              className={[
+                                'mt-2 rounded-lg border px-2 py-2 text-[11px] leading-5',
+                                socialLaunchPreflight.launch_gate.allowed
+                                  ? 'border-emerald-200/30 bg-emerald-400/10 text-emerald-50'
+                                  : 'border-amber-200/30 bg-amber-950/20 text-amber-50',
+                              ].join(' ')}
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Можно ли запускать сейчас' : 'Can run now'}
+                                    {' · '}
+                                    {isRu
+                                      ? String(socialLaunchPreflight.launch_gate.title_ru || '')
+                                      : String(socialLaunchPreflight.launch_gate.title_en || '')}
+                                  </div>
+                                  <div className="mt-1">
+                                    {isRu
+                                      ? String(socialLaunchPreflight.launch_gate.summary_ru || '')
+                                      : String(socialLaunchPreflight.launch_gate.summary_en || '')}
+                                  </div>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white">
+                                  {socialLaunchPreflight.launch_gate.allowed
+                                    ? (isRu ? 'разрешено' : 'allowed')
+                                    : (isRu ? 'стоп' : 'blocked')}
+                                </span>
+                              </div>
+                              <div className="mt-2 grid gap-1 sm:grid-cols-4">
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">{Number(socialLaunchPreflight.launch_gate.api_posts || 0)}</span>
+                                  {' '}
+                                  {isRu ? 'API' : 'API'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">{Number(socialLaunchPreflight.launch_gate.supervised_posts || 0)}</span>
+                                  {' '}
+                                  {isRu ? 'контроль' : 'supervised'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">{Number(socialLaunchPreflight.launch_gate.manual_posts || 0)}</span>
+                                  {' '}
+                                  {isRu ? 'вручную' : 'manual'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">{Number(socialLaunchPreflight.launch_gate.blocked_posts || 0)}</span>
+                                  {' '}
+                                  {isRu ? 'блокеры' : 'blocked'}
+                                </div>
+                              </div>
+                              <div className="mt-2 font-medium text-white">
+                                {isRu ? 'Следующий шаг: ' : 'Next step: '}
+                                {isRu
+                                  ? String(socialLaunchPreflight.launch_gate.next_action_ru || '')
+                                  : String(socialLaunchPreflight.launch_gate.next_action_en || '')}
+                              </div>
+                              <div className="mt-1 text-slate-200">
+                                {isRu
+                                  ? 'Нажатие запуска всё равно требует подтверждения; Яндекс/2ГИС без финального клика.'
+                                  : 'Running still requires confirmation; Yandex/2GIS keep the final click disabled.'}
+                              </div>
+                            </div>
+                          ) : null}
                           <Button
                             type="button"
                             size="sm"
@@ -7314,7 +7404,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             disabled={
                               Boolean(bulkBusyAction)
                               || Boolean(socialBusyAction)
-                              || !socialLaunchPreflight.safe_to_enable_scoped_dispatch
+                              || !(socialLaunchPreflight.launch_gate?.allowed ?? socialLaunchPreflight.safe_to_enable_scoped_dispatch)
                             }
                             className="mt-2 h-8 bg-white text-slate-950 hover:bg-slate-100"
                           >

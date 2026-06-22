@@ -409,11 +409,20 @@ def _build_social_launch_preflight_payload(
         first_api_publish_readiness,
         runtime_alignment,
     )
+    launch_gate = _social_first_cycle_launch_gate(
+        production_readiness,
+        due_count,
+        external_publish_count,
+        controlled_count,
+        manual_count,
+        skipped_no_access,
+    )
     return {
         "business_id": scope,
         "status": status,
         "safe_to_enable_scoped_dispatch": safe_to_enable,
         "production_readiness": production_readiness,
+        "launch_gate": launch_gate,
         "channel_readiness": channel_readiness,
         "channel_summary": channel_summary,
         "dispatch_preview": dispatch_preview,
@@ -465,6 +474,128 @@ def _build_social_launch_preflight_payload(
         "next_action_ru": _social_launch_preflight_next_action(status, scope, True),
         "next_action_en": _social_launch_preflight_next_action(status, scope, False),
     }
+
+
+def _social_first_cycle_launch_gate(
+    production_readiness: dict[str, Any],
+    due_count: int,
+    external_publish_count: int,
+    controlled_count: int,
+    manual_count: int,
+    skipped_no_access: int,
+) -> dict[str, Any]:
+    blockers = production_readiness.get("blockers") if isinstance(production_readiness.get("blockers"), list) else []
+    allowed = int(due_count or 0) > 0 and int(skipped_no_access or 0) == 0 and not blockers
+    if allowed and int(external_publish_count or 0) > 0:
+        status = "ready_with_api_publish"
+    elif allowed and int(controlled_count or 0) > 0:
+        status = "ready_for_supervised_only"
+    elif allowed and int(manual_count or 0) > 0:
+        status = "ready_for_manual_only"
+    elif int(due_count or 0) <= 0:
+        status = "no_due_posts"
+    else:
+        status = "blocked"
+    return {
+        "schema": "localos_social_first_cycle_launch_gate_v1",
+        "status": status,
+        "allowed": bool(allowed),
+        "requires_human_confirmation": True,
+        "dry_run_completed": True,
+        "external_publish_requires_approval": True,
+        "browser_final_click_allowed": False,
+        "maps_are_supervised_or_manual": True,
+        "due_posts": int(due_count or 0),
+        "api_posts": int(external_publish_count or 0),
+        "supervised_posts": int(controlled_count or 0),
+        "manual_posts": int(manual_count or 0),
+        "blocked_posts": len(blockers) + int(skipped_no_access or 0),
+        "title_ru": _social_first_cycle_launch_gate_title(status, True),
+        "title_en": _social_first_cycle_launch_gate_title(status, False),
+        "summary_ru": _social_first_cycle_launch_gate_summary(
+            status,
+            external_publish_count,
+            controlled_count,
+            manual_count,
+            True,
+        ),
+        "summary_en": _social_first_cycle_launch_gate_summary(
+            status,
+            external_publish_count,
+            controlled_count,
+            manual_count,
+            False,
+        ),
+        "next_action_ru": _social_first_cycle_launch_gate_next_action(status, blockers, True),
+        "next_action_en": _social_first_cycle_launch_gate_next_action(status, blockers, False),
+    }
+
+
+def _social_first_cycle_launch_gate_title(status: str, is_ru: bool) -> str:
+    if status == "ready_with_api_publish":
+        return "Можно запускать: есть API-публикации" if is_ru else "Ready to run: API posts included"
+    if status == "ready_for_supervised_only":
+        return "Можно запускать: только контролируемые задачи" if is_ru else "Ready to run: supervised tasks only"
+    if status == "ready_for_manual_only":
+        return "Можно запускать: только ручной fallback" if is_ru else "Ready to run: manual fallback only"
+    if status == "no_due_posts":
+        return "Нет due-постов для запуска" if is_ru else "No due posts to run"
+    return "Запуск пока заблокирован" if is_ru else "Launch is blocked"
+
+
+def _social_first_cycle_launch_gate_summary(
+    status: str,
+    external_publish_count: int,
+    controlled_count: int,
+    manual_count: int,
+    is_ru: bool,
+) -> str:
+    if status == "ready_with_api_publish":
+        return (
+            f"После подтверждения один scoped цикл может опубликовать API-посты: {int(external_publish_count or 0)}; карты останутся supervised/manual."
+            if is_ru
+            else f"After confirmation, one scoped cycle may publish API posts: {int(external_publish_count or 0)}; maps stay supervised/manual."
+        )
+    if status == "ready_for_supervised_only":
+        return (
+            f"API-публикаций нет; цикл создаст контролируемые задачи: {int(controlled_count or 0)}."
+            if is_ru
+            else f"No API publishing; the cycle will create supervised tasks: {int(controlled_count or 0)}."
+        )
+    if status == "ready_for_manual_only":
+        return (
+            f"API и browser-use не готовы; цикл переведёт посты в ручной fallback: {int(manual_count or 0)}."
+            if is_ru
+            else f"API and browser-use are not ready; the cycle will move posts to manual fallback: {int(manual_count or 0)}."
+        )
+    if status == "no_due_posts":
+        return (
+            "Сначала утвердите посты, поставьте их в расписание и дождитесь due-даты."
+            if is_ru
+            else "Approve posts, queue them, and wait for the due date first."
+        )
+    return (
+        "Снимите блокеры preflight: запуск не должен обходить ключи, права или business scope."
+        if is_ru
+        else "Resolve preflight blockers: launch must not bypass keys, permissions, or business scope."
+    )
+
+
+def _social_first_cycle_launch_gate_next_action(status: str, blockers: list[Any], is_ru: bool) -> str:
+    if status in {"ready_with_api_publish", "ready_for_supervised_only", "ready_for_manual_only"}:
+        return (
+            "Нажимайте запуск только после проверки dry-run; затем сверяйте логи и статусы постов."
+            if is_ru
+            else "Run only after checking the dry-run; then verify logs and post statuses."
+        )
+    if blockers:
+        first = blockers[0] if isinstance(blockers[0], dict) else {}
+        return str(first.get("action_ru" if is_ru else "action_en") or "").strip()
+    return (
+        "Подготовьте, подтвердите и поставьте хотя бы один пост в расписание."
+        if is_ru
+        else "Prepare, approve, and queue at least one post."
+    )
 
 
 def _social_production_readiness(
@@ -2127,6 +2258,12 @@ def run_scoped_social_dispatch_once(
         raise ValueError("Бизнес не выбран")
     clean_batch_size = max(1, min(int(batch_size or 10), 50))
     preflight = get_social_launch_preflight(user_id, normalized_business_id, batch_size=clean_batch_size)
+    launch_gate = preflight.get("launch_gate") if isinstance(preflight.get("launch_gate"), dict) else {}
+    if launch_gate and not bool(launch_gate.get("allowed")):
+        raise PermissionError(
+            str(launch_gate.get("next_action_ru") or "").strip()
+            or "Preflight не разрешил запуск первого scoped цикла"
+        )
     summary = preflight.get("summary") if isinstance(preflight.get("summary"), dict) else {}
     if int(summary.get("skipped_no_access") or 0) > 0:
         raise PermissionError("Есть due-посты вне доступа текущего пользователя; проверьте business scope")

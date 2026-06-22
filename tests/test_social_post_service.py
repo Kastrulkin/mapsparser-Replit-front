@@ -1405,6 +1405,33 @@ def test_run_scoped_social_dispatch_once_rejects_live_api_preflight_block(monkey
     assert "Live API-preflight" in str(error)
 
 
+def test_run_scoped_social_dispatch_once_respects_launch_gate(monkeypatch):
+    def fake_preflight(user_id, business_id, batch_size=10):
+        return {
+            "business_id": business_id,
+            "launch_gate": {
+                "allowed": False,
+                "next_action_ru": "Подготовьте, подтвердите и поставьте хотя бы один пост в расписание.",
+            },
+            "summary": {"due_posts": 0, "skipped_no_access": 0, "api_preflight_blocked_due_posts": 0},
+        }
+
+    def fail_dispatch(*args, **kwargs):
+        raise AssertionError("dispatch must not run when launch gate is closed")
+
+    monkeypatch.setattr(social_post_service, "get_social_launch_preflight", fake_preflight)
+    monkeypatch.setattr(social_post_service, "dispatch_due_social_posts", fail_dispatch)
+
+    error = None
+    try:
+        run_scoped_social_dispatch_once("user-1", "biz-1", approved=True)
+    except PermissionError:
+        error = sys.exc_info()[1]
+
+    assert error is not None
+    assert "поставьте хотя бы один пост" in str(error)
+
+
 def test_create_supervised_publish_task_requires_explicit_approval_before_db(monkeypatch):
     def fail_if_called(*args, **kwargs):
         raise AssertionError("supervised task must not touch DB without approval")
@@ -2723,6 +2750,15 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert payload["production_readiness"]["controlled_due_posts"] == 1
     assert payload["production_readiness"]["maps_are_supervised_or_manual"] is True
     assert payload["production_readiness"]["browser_final_click_allowed"] is False
+    assert payload["launch_gate"]["schema"] == "localos_social_first_cycle_launch_gate_v1"
+    assert payload["launch_gate"]["status"] == "ready_with_api_publish"
+    assert payload["launch_gate"]["allowed"] is True
+    assert payload["launch_gate"]["api_posts"] == 1
+    assert payload["launch_gate"]["supervised_posts"] == 1
+    assert payload["launch_gate"]["manual_posts"] == 0
+    assert payload["launch_gate"]["requires_human_confirmation"] is True
+    assert payload["launch_gate"]["browser_final_click_allowed"] is False
+    assert "API-посты" in payload["launch_gate"]["summary_ru"]
     warning_keys = [item["key"] for item in payload["production_readiness"]["warnings"]]
     assert "dispatch_runtime_not_aligned" in warning_keys
     assert "maps_supervised_required" in warning_keys
