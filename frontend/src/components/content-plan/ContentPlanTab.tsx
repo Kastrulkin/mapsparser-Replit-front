@@ -761,6 +761,24 @@ type BulkActionReview = {
   focusWeekKey?: string;
 };
 
+type SocialPreparePreview = {
+  key: string;
+  items: PlanItem[];
+  itemIds: string[];
+  busyAction: string;
+  source: 'selected' | 'suggested';
+  previewItemTitle: string;
+  preview: {
+    read_only?: boolean;
+    database_write_performed?: boolean;
+    external_publish_performed?: boolean;
+    summary?: Record<string, unknown>;
+    posts?: Array<Record<string, unknown>>;
+    next_action_ru?: string;
+    next_action_en?: string;
+  };
+};
+
 type NetworkOperatingSlice = {
   key: string;
   label: string;
@@ -893,6 +911,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialRuntimeStatus, setSocialRuntimeStatus] = useState<SocialRuntimeStatus | null>(null);
   const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
   const [manualPublishRefs, setManualPublishRefs] = useState<Record<string, { url: string; id: string }>>({});
+  const [socialPreparePreview, setSocialPreparePreview] = useState<SocialPreparePreview | null>(null);
   const [socialBusyAction, setSocialBusyAction] = useState('');
   const [activeZone, setActiveZone] = useState<ContentPlanZone>('overview');
   const [contentMode, setContentMode] = useState<ContentPlanMode>('point');
@@ -2861,114 +2880,103 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
-  const prepareSelectedSocialPosts = async () => {
-    if (!selectedItems.length) return;
-    setBulkBusyAction('selected-social-prepare');
+  const openSocialPreparePreview = async (
+    itemsToPrepare: PlanItem[],
+    source: 'selected' | 'suggested',
+    busyAction: string,
+  ) => {
+    const firstItem = itemsToPrepare[0];
+    if (!firstItem) return false;
+    setBulkBusyAction(busyAction);
     setError('');
     setActionSummary(null);
     try {
-      const itemIds = selectedItems.map((item) => item.id);
-      const confirmed = await confirmSocialPreparePreview(selectedItems);
-      if (!confirmed) return;
-      await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
-        method: 'POST',
-        body: JSON.stringify({ item_ids: itemIds }),
+    const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(firstItem.id)}/social-posts/prepare-preview`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    const item = response.item && typeof response.item === 'object' ? response.item : {};
+    const fallbackTitle = isRu ? 'выбранная тема' : 'selected topic';
+    const title = String(item.theme || firstItem.theme || firstItem.goal || fallbackTitle).trim();
+      setSocialPreparePreview({
+        key: `${source}:${firstItem.id}:${Date.now()}`,
+        items: itemsToPrepare,
+        itemIds: itemsToPrepare.map((prepareItem) => prepareItem.id),
+        busyAction,
+        source,
+        previewItemTitle: title,
+        preview: {
+          read_only: Boolean(response.read_only),
+          database_write_performed: Boolean(response.database_write_performed),
+          external_publish_performed: Boolean(response.external_publish_performed),
+          summary: response.summary && typeof response.summary === 'object' ? response.summary : {},
+          posts: Array.isArray(response.posts) ? response.posts : [],
+          next_action_ru: String(response.next_action_ru || ''),
+          next_action_en: String(response.next_action_en || ''),
+        },
       });
-      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
       setActionSummary({
-        tone: 'success',
-        text_ru: 'Каналы подготовлены для выбранных тем. Следующий шаг - проверить тексты.',
-        text_en: 'Channels prepared for selected items. Next step: review copy.',
-        details_ru: [
-          'Выбранные темы остались отмечены. В панели ниже откройте preview, сохраните правки и нажмите “Подтвердить посты”.',
-          'Наружу ничего не отправлено: approval и постановка в расписание идут отдельными шагами.',
-        ],
-        details_en: [
-          'Selected topics stayed checked. In the panel below, open preview, save edits, and click “Approve posts”.',
-          'Nothing was sent externally: approval and queueing stay separate steps.',
-        ],
+        tone: 'neutral',
+        text_ru: 'Preview подготовки каналов готов. Проверьте сводку и подтвердите создание drafts отдельной кнопкой.',
+        text_en: 'Channel preparation preview is ready. Review the summary and confirm draft creation with a separate button.',
       });
-    } catch (bulkError) {
-      const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось подготовить выбранные каналы' : 'Could not prepare selected channels');
+      return false;
+    } catch (previewError) {
+      const message = previewError instanceof Error ? previewError.message : (isRu ? 'Не удалось открыть preview подготовки каналов' : 'Could not open channel preparation preview');
       setError(message);
+      return false;
     } finally {
       setBulkBusyAction('');
     }
   };
 
-  const confirmSocialPreparePreview = async (itemsToPrepare: PlanItem[]) => {
-    const firstItem = itemsToPrepare[0];
-    if (!firstItem) return false;
-    const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(firstItem.id)}/social-posts/prepare-preview`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-    const summary = response.summary && typeof response.summary === 'object' ? response.summary : {};
-    const item = response.item && typeof response.item === 'object' ? response.item : {};
-    const total = Number(summary.total || 0);
-    const wouldCreate = Number(summary.would_create || 0);
-    const wouldUpdate = Number(summary.would_update || 0);
-    const wouldPreserve = Number(summary.would_preserve || 0);
-    const fallbackTitle = isRu ? 'выбранная тема' : 'selected topic';
-    const title = String(item.theme || firstItem.theme || firstItem.goal || fallbackTitle).trim();
-    const message = isRu
-      ? [
-        'Preview подготовки каналов',
-        '',
-        `Тема: ${title}`,
-        `Каналов в preview: ${total}`,
-        `Будет создано drafts: ${wouldCreate}`,
-        `Будет обновлено drafts: ${wouldUpdate}`,
-        `Будет сохранено без перезаписи: ${wouldPreserve}`,
-        itemsToPrepare.length > 1 ? `Всего выбранных тем: ${itemsToPrepare.length}. Preview показан по первой теме.` : '',
-        '',
-        'Наружу ничего не публикуется. Продолжить подготовку каналов?',
-      ].filter(Boolean).join('\n')
-      : [
-        'Channel preparation preview',
-        '',
-        `Topic: ${title}`,
-        `Preview channels: ${total}`,
-        `Drafts to create: ${wouldCreate}`,
-        `Drafts to update: ${wouldUpdate}`,
-        `Preserved without overwrite: ${wouldPreserve}`,
-        itemsToPrepare.length > 1 ? `Selected topics: ${itemsToPrepare.length}. Preview is shown for the first topic.` : '',
-        '',
-        'Nothing will be published externally. Continue preparing channels?',
-      ].filter(Boolean).join('\n');
-    if (typeof window === 'undefined') return true;
-    return window.confirm(message);
+  const prepareSelectedSocialPosts = async () => {
+    if (!selectedItems.length) return;
+    await openSocialPreparePreview(selectedItems, 'selected', 'selected-social-prepare');
   };
 
   const prepareSuggestedSocialPosts = async () => {
     const itemsToPrepare = selectedItems.length > 0 ? selectedItems : visibleItems.slice(0, 5);
     if (itemsToPrepare.length === 0) return;
-    setBulkBusyAction('suggested-social-prepare');
+    await openSocialPreparePreview(itemsToPrepare, selectedItems.length > 0 ? 'selected' : 'suggested', 'suggested-social-prepare');
+  };
+
+  const executeSocialPreparePreview = async () => {
+    const preview = socialPreparePreview;
+    if (!preview || preview.itemIds.length === 0) return;
+    setBulkBusyAction(preview.busyAction);
     setError('');
     setActionSummary(null);
     try {
-      const confirmed = await confirmSocialPreparePreview(itemsToPrepare);
-      if (!confirmed) return;
       await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
         method: 'POST',
-        body: JSON.stringify({ item_ids: itemsToPrepare.map((item) => item.id) }),
+        body: JSON.stringify({ item_ids: preview.itemIds }),
       });
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
-      setSelectedItemIds(itemsToPrepare.reduce<Record<string, boolean>>((acc, item) => {
+      setSelectedItemIds(preview.items.reduce<Record<string, boolean>>((acc, item) => {
         acc[item.id] = true;
         return acc;
       }, {}));
+      setSocialPreparePreview(null);
       setActionSummary({
         tone: 'success',
-        text_ru: 'Каналы подготовлены. Следующий безопасный шаг - открыть preview и проверить тексты.',
-        text_en: 'Channels prepared. Next safe step: open preview and review copy.',
+        text_ru: preview.source === 'selected'
+          ? 'Каналы подготовлены для выбранных тем. Следующий шаг - проверить тексты.'
+          : 'Каналы подготовлены. Следующий безопасный шаг - открыть preview и проверить тексты.',
+        text_en: preview.source === 'selected'
+          ? 'Channels prepared for selected items. Next step: review copy.'
+          : 'Channels prepared. Next safe step: open preview and review copy.',
         details_ru: [
-          'LocalOS отметил подготовленные темы, чтобы bulk approval был виден сразу.',
-          'Откройте карточку темы ниже: там есть “Предпросмотр перед подтверждением” для каждого канала.',
+          preview.source === 'selected'
+            ? 'Выбранные темы остались отмечены. В панели ниже откройте preview, сохраните правки и нажмите “Подтвердить посты”.'
+            : 'LocalOS отметил подготовленные темы, чтобы bulk approval был виден сразу.',
+          'Наружу ничего не отправлено: approval и постановка в расписание идут отдельными шагами.',
         ],
         details_en: [
-          'LocalOS selected the prepared topics so bulk approval is visible immediately.',
-          'Open a topic card below: it contains “Preview before approval” for each channel.',
+          preview.source === 'selected'
+            ? 'Selected topics stayed checked. In the panel below, open preview, save edits, and click “Approve posts”.'
+            : 'LocalOS selected the prepared topics so bulk approval is visible immediately.',
+          'Nothing was sent externally: approval and queueing stay separate steps.',
         ],
       });
     } catch (bulkError) {
@@ -5838,6 +5846,83 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       {isRu ? 'Открыть срез' : 'Open slice'}
                     </Button>
                   ) : null}
+                </div>
+              </div>
+            ) : null}
+            {socialPreparePreview ? (
+              <div
+                data-testid="social-prepare-preview-panel"
+                className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-950"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-600">
+                      {isRu ? 'Preview подготовки каналов' : 'Channel preparation preview'}
+                    </div>
+                    <div className="mt-1 text-base font-semibold text-blue-950">
+                      {socialPreparePreview.previewItemTitle}
+                    </div>
+                    <div className="mt-1 text-xs leading-5 text-blue-800">
+                      {isRu
+                        ? 'Это отдельный безопасный шаг: LocalOS показал, что будет создано, но drafts ещё не записаны и наружу ничего не опубликовано.'
+                        : 'This is a separate safe step: LocalOS shows what will be created, but drafts are not written yet and nothing is published externally.'}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-blue-100">
+                      <div className="text-lg font-semibold text-blue-950">{Number(socialPreparePreview.preview.summary?.total || 0)}</div>
+                      <div>{isRu ? 'каналов' : 'channels'}</div>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-blue-100">
+                      <div className="text-lg font-semibold text-blue-950">{Number(socialPreparePreview.preview.summary?.would_create || 0)}</div>
+                      <div>{isRu ? 'создать' : 'create'}</div>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-blue-100">
+                      <div className="text-lg font-semibold text-blue-950">{Number(socialPreparePreview.preview.summary?.would_update || 0)}</div>
+                      <div>{isRu ? 'обновить' : 'update'}</div>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-blue-100">
+                      <div className="text-lg font-semibold text-blue-950">{Number(socialPreparePreview.preview.summary?.would_preserve || 0)}</div>
+                      <div>{isRu ? 'сохранить' : 'preserve'}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {(socialPreparePreview.preview.posts || []).slice(0, 8).map((post) => (
+                    <span
+                      key={`${String(post.platform || '')}:${String(post.prepare_action || '')}`}
+                      className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-100"
+                    >
+                      {String(post.platform_label || post.platform || '')}
+                      {' · '}
+                      {String(post.prepare_action || 'preview')}
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-3 rounded-xl bg-white px-3 py-2 text-xs leading-5 text-blue-800 ring-1 ring-blue-100">
+                  {isRu
+                    ? `Выбрано тем: ${socialPreparePreview.itemIds.length}. Preview детально показан по первой теме; при продолжении drafts будут созданы для всех выбранных тем.`
+                    : `Selected items: ${socialPreparePreview.itemIds.length}. The detailed preview is shown for the first item; continuing creates drafts for all selected items.`}
+                </div>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="bg-white"
+                    onClick={() => setSocialPreparePreview(null)}
+                    disabled={Boolean(bulkBusyAction)}
+                  >
+                    {isRu ? 'Отменить' : 'Cancel'}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => { void executeSocialPreparePreview(); }}
+                    disabled={Boolean(bulkBusyAction) || Boolean(socialBusyAction)}
+                  >
+                    {bulkBusyAction === socialPreparePreview.busyAction
+                      ? (isRu ? 'Создаём drafts...' : 'Creating drafts...')
+                      : (isRu ? 'Создать drafts для проверки' : 'Create drafts for review')}
+                  </Button>
                 </div>
               </div>
             ) : null}
