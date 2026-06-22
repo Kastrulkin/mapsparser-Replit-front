@@ -7049,11 +7049,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   ))}
                                 </ul>
                               ) : null}
-                              <div className="mt-1 flex flex-wrap gap-2 font-mono text-[11px] opacity-80">
-                                {socialOpenClawReadiness.source ? <span>source: {socialOpenClawReadiness.source}</span> : null}
-                                {socialOpenClawReadiness.provider_status ? <span>status: {socialOpenClawReadiness.provider_status}</span> : null}
-                                {socialOpenClawReadiness.action_ref ? <span>action: {socialOpenClawReadiness.action_ref}</span> : null}
-                                <span>final_click: human</span>
+                              <div className="mt-2 rounded-md bg-white/70 px-2 py-1.5 text-[11px] leading-4">
+                                {_socialOpenClawOwnerCheckSummary(socialOpenClawReadiness, isRu)}
                               </div>
                               <Button
                                 type="button"
@@ -9211,6 +9208,32 @@ function _socialOpenClawReadinessDetails(
     );
   }
   return Array.from(new Set(details)).slice(0, 6);
+}
+
+function _socialOpenClawOwnerCheckSummary(readiness: SocialOpenClawReadiness, isRu: boolean): string {
+  const hasActionRef = Boolean(String(readiness.action_ref || '').trim());
+  if (readiness.ready) {
+    return hasActionRef
+      ? (isRu
+        ? 'Проверка OpenClaw пройдена: можно создать контролируемую задачу, финальная публикация остаётся за человеком.'
+        : 'OpenClaw check passed: LocalOS can create a controlled task, and final publishing stays human-controlled.')
+      : (isRu
+        ? 'Проверка OpenClaw пройдена: можно готовить контролируемое размещение, финальная публикация остаётся за человеком.'
+        : 'OpenClaw check passed: supervised placement can be prepared, and final publishing stays human-controlled.');
+  }
+  if (readiness.provider_status === 'missing_catalog' || readiness.reason === 'openclaw_catalog_not_configured') {
+    return isRu
+      ? 'OpenClaw пока не подключён к этому экрану: LocalOS сохранит ручное размещение и не сорвёт план.'
+      : 'OpenClaw is not connected to this screen yet: LocalOS keeps manual placement and will not block the plan.';
+  }
+  if (readiness.provider_status === 'error' || readiness.reason === 'openclaw_catalog_error') {
+    return isRu
+      ? 'LocalOS не смог проверить OpenClaw: используйте ручное размещение, пока доступ не восстановлен.'
+      : 'LocalOS could not verify OpenClaw: use manual placement until access is restored.';
+  }
+  return isRu
+    ? 'OpenClaw не подтверждён: для Яндекс/2ГИС будет показан ручной или контролируемый fallback.'
+    : 'OpenClaw is not confirmed: Yandex/2GIS will use manual or supervised fallback.';
 }
 
 function _socialOpenClawCapabilityLine(

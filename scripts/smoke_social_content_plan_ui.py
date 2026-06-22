@@ -118,6 +118,9 @@ REQUIRED_COPY = {
     "primary result learning hint": "LocalOS считает их главным результатом",
     "early signal attribution group": "Ранние сигналы",
     "early signal learning hint": "Лайки и просмотры - только ранний сигнал",
+    "comment attribution": "Комментарий",
+    "share attribution": "Репост",
+    "click attribution": "Клик",
     "like attribution": "Лайк",
     "view attribution": "Просмотр",
     "result nudge": "Есть заявки/обращения",
@@ -164,6 +167,9 @@ REQUIRED_DATA_CONTRACT = {
     "openclaw readiness diagnostics": "diagnostics_ru",
     "openclaw final click guard": "OpenClaw не нажимает финальную кнопку публикации",
     "openclaw safe readiness check": "Безопасная проверка: LocalOS ничего не публикует",
+    "openclaw owner-ready summary": "Проверка OpenClaw пройдена: можно создать контролируемую задачу",
+    "openclaw owner-manual summary": "OpenClaw пока не подключён к этому экрану",
+    "openclaw owner-error summary": "LocalOS не смог проверить OpenClaw",
     "plan recommendation signal priority": "signal_priority",
 }
 
@@ -243,6 +249,7 @@ FORBIDDEN_COPY = {
     "owner-facing controlled launch en": "Controlled launch env",
     "owner-facing controlled mode ru": "Controlled-режим",
     "owner-facing controlled finish en": "manual or controlled finish",
+    "owner-facing raw final click": "final_click: human",
 }
 
 
