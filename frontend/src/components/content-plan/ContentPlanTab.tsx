@@ -5801,6 +5801,26 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 ? 'Это не создаёт новый план. Здесь вы работаете с уже выбранным планом: дописываете тексты, находите нужную тему и создаёте публикации.'
                                 : 'This does not create a new plan. Here you work with the selected plan: fill text, find topics, and create publications.')}
                   </div>
+                  {Number(socialSummary?.total || 0) > 0 ? (
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={runSocialPlanNextStep}
+                        disabled={Boolean(bulkBusyAction) || Boolean(socialBusyAction) || Boolean(socialPlanNextStep.disabled)}
+                        className="shrink-0 bg-white text-slate-950 hover:bg-slate-100"
+                      >
+                        {bulkBusyAction || socialBusyAction
+                          ? (isRu ? 'Выполняем...' : 'Working...')
+                          : `${isRu ? socialPlanNextStep.ctaRu : socialPlanNextStep.ctaEn} · ${socialPlanNextStep.count}`}
+                      </Button>
+                      <div className="text-xs leading-5 text-slate-300">
+                        {isRu
+                          ? 'Кнопка ведёт к безопасному шагу: preview, approval, queue, контролируемое размещение или сбор результата.'
+                          : 'This button opens the safe next step: preview, approval, queueing, supervised placement, or result collection.'}
+                      </div>
+                    </div>
+                  ) : null}
                   {Number(socialSummary?.total || 0) === 0 ? (
                     <div className="mt-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-4">
                       <div className="text-sm font-semibold text-white">

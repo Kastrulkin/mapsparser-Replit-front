@@ -111,6 +111,8 @@ REQUIRED_COPY = {
     "approved posts next action": "Поставьте утверждённые посты в расписание",
     "supervised posts next action": "Откройте контролируемое размещение",
     "published posts learning action": "Соберите результат и улучшите план",
+    "queue hero cta safe next step": "Кнопка ведёт к безопасному шагу",
+    "queue hero cta safe flow": "preview, approval, queue, контролируемое размещение или сбор результата",
     "queue saved guard feedback": "Queue сохранена, но LocalOS не запустит внешний worker",
     "queue saved scope feedback": "текущий worker смотрит другой business scope",
     "supervised placement state": "Контролируемое размещение",
