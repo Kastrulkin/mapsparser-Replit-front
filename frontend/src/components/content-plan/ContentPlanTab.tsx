@@ -7971,6 +7971,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                     ) : null}
                                     {canRecordResult ? (
                                       <div className="mt-1 flex w-full flex-col gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                                        <div className="text-xs leading-5 text-emerald-900">
+                                          {isRu
+                                            ? 'Отмечайте заявки и обращения в первую очередь: LocalOS считает их главным результатом и по ним предлагает изменения следующего плана. Лайки и просмотры - только ранний сигнал.'
+                                            : 'Record leads and inquiries first: LocalOS treats them as the main result and uses them to suggest next-plan changes. Likes and views are only early signals.'}
+                                        </div>
                                         <div className="flex flex-wrap items-center gap-2">
                                           <span className="text-xs font-semibold uppercase text-emerald-800">
                                             {isRu ? 'Главный результат' : 'Primary result'}
