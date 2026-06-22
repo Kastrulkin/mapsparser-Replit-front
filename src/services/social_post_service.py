@@ -4319,6 +4319,8 @@ def _channel_readiness(
         "message_en": _channel_readiness_message(platform, status, False),
         "next_action_ru": _channel_readiness_next_action(platform, status, True),
         "next_action_en": _channel_readiness_next_action(platform, status, False),
+        "setup_summary_ru": _channel_readiness_setup_summary(platform, status, True),
+        "setup_summary_en": _channel_readiness_setup_summary(platform, status, False),
         "setup_steps_ru": _channel_readiness_setup_steps(platform, status, True),
         "setup_steps_en": _channel_readiness_setup_steps(platform, status, False),
         "missing_fields": _channel_readiness_missing_fields(platform, status),
@@ -4668,6 +4670,90 @@ def _channel_readiness_next_action(platform: str, status: str, is_ru: bool) -> s
     if status_key == "missing_connection":
         return "Подключите аккаунт канала." if is_ru else "Connect the channel account."
     return "Проверьте ключи и настройки канала." if is_ru else "Check channel keys and settings."
+
+
+def _channel_readiness_setup_summary(platform: str, status: str, is_ru: bool) -> str:
+    platform_key = str(platform or "").strip()
+    status_key = str(status or "").strip()
+    if status_key == "ready":
+        return (
+            "Канал готов: проверьте preview, утвердите текст и ставьте пост в расписание."
+            if is_ru
+            else "Channel is ready: review the preview, approve the copy, and queue the post."
+        )
+    if status_key == "supervised_ready":
+        return (
+            "Controlled-режим готов: LocalOS создаст задачу, а финальный клик останется за человеком."
+            if is_ru
+            else "Controlled mode is ready: LocalOS will create a task and the final click remains human-owned."
+        )
+    if status_key == "manual_fallback":
+        return (
+            "Автопубликации нет: используйте готовый текст, разместите вручную и отметьте результат."
+            if is_ru
+            else "No autopublish: use the prepared copy, publish manually, and record the result."
+        )
+    if platform_key == "telegram":
+        return (
+            "Чтобы включить Telegram, добавьте bot token, chat_id и право бота писать в канал."
+            if is_ru
+            else "To enable Telegram, add the bot token, chat_id, and bot posting permission."
+        )
+    if platform_key == "vk":
+        if status_key == "missing_permissions":
+            return (
+                "VK почти готов: обновите token с правом wall.post и проверьте группу."
+                if is_ru
+                else "VK is almost ready: refresh the token with wall.post and verify the group."
+            )
+        if status_key == "missing_binding":
+            return (
+                "Для VK выберите group_id или owner_id, откуда LocalOS будет публиковать."
+                if is_ru
+                else "For VK, choose the group_id or owner_id LocalOS will post from."
+            )
+        return (
+            "Чтобы включить VK, подключите token, группу и право wall.post."
+            if is_ru
+            else "To enable VK, connect the token, group, and wall.post permission."
+        )
+    if platform_key == "google_business":
+        return (
+            "Чтобы включить Google, подключите Business Profile и выберите location."
+            if is_ru
+            else "To enable Google, connect Business Profile and select the location."
+        )
+    if platform_key in {"instagram", "facebook"}:
+        if status_key == "adapter_pending":
+            return (
+                "Meta пока в ручном режиме: API включается только после проверки Page/IG permissions."
+                if is_ru
+                else "Meta stays manual for now: API is enabled only after Page/IG permissions are verified."
+            )
+        if status_key == "missing_permissions":
+            return (
+                "Meta почти готов: проверьте permissions для публикации и Page/IG binding."
+                if is_ru
+                else "Meta is almost ready: verify publishing permissions and Page/IG binding."
+            )
+        if status_key == "missing_binding":
+            return (
+                "Для Meta выберите Facebook Page или Instagram business account."
+                if is_ru
+                else "For Meta, choose the Facebook Page or Instagram business account."
+            )
+        return (
+            "Чтобы включить Meta, подключите account, Page/IG asset и publish permissions."
+            if is_ru
+            else "To enable Meta, connect the account, Page/IG asset, and publish permissions."
+        )
+    if status_key == "missing_permissions":
+        return "Обновите права подключения перед расписанием." if is_ru else "Update connection permissions before queueing."
+    if status_key == "missing_binding":
+        return "Выберите аккаунт или страницу перед расписанием." if is_ru else "Choose the account or page before queueing."
+    if status_key == "missing_connection":
+        return "Подключите аккаунт канала перед расписанием." if is_ru else "Connect the channel account before queueing."
+    return "Проверьте настройки канала перед расписанием." if is_ru else "Check channel settings before queueing."
 
 
 def _channel_readiness_setup_steps(platform: str, status: str, is_ru: bool) -> list[str]:

@@ -540,6 +540,8 @@ type SocialChannelReadiness = {
   message_en?: string;
   next_action_ru?: string;
   next_action_en?: string;
+  setup_summary_ru?: string;
+  setup_summary_en?: string;
   setup_steps_ru?: string[];
   setup_steps_en?: string[];
   missing_fields?: string[];
@@ -6311,7 +6313,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         <div className="mt-3 flex flex-wrap gap-2">
                           {socialReadinessSummary.blockedApiChannels.slice(0, 4).map((channel) => (
                             <span key={channel.platform} className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
-                              {channel.platform_label || _socialPlatformLabel(channel.platform, isRu)} · {isRu ? channel.next_action_ru || channel.message_ru : channel.next_action_en || channel.message_en}
+                              {channel.platform_label || _socialPlatformLabel(channel.platform, isRu)} · {isRu ? channel.setup_summary_ru || channel.next_action_ru || channel.message_ru : channel.setup_summary_en || channel.next_action_en || channel.message_en}
                             </span>
                           ))}
                         </div>
@@ -6342,6 +6344,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           <div className={channel.ready ? 'mt-2 text-[11px] font-medium text-emerald-700' : 'mt-2 text-[11px] font-medium text-amber-700'}>
                             {_socialPublishModeLabel(channel.publish_mode || '', isRu)}
                           </div>
+                          {channel.setup_summary_ru || channel.setup_summary_en ? (
+                            <div className={channel.ready ? 'mt-2 rounded-lg bg-white/80 px-2 py-1.5 text-[11px] leading-4 text-emerald-900' : 'mt-2 rounded-lg bg-white/80 px-2 py-1.5 text-[11px] leading-4 text-amber-900'}>
+                              <span className="font-semibold">
+                                {isRu ? 'Сейчас: ' : 'Now: '}
+                              </span>
+                              {isRu ? channel.setup_summary_ru : channel.setup_summary_en}
+                            </div>
+                          ) : null}
                           {channel.next_action_ru || channel.next_action_en ? (
                             <div className={channel.ready ? 'mt-2 rounded-lg bg-white/70 px-2 py-1.5 text-[11px] leading-4 text-emerald-900' : 'mt-2 rounded-lg bg-white/70 px-2 py-1.5 text-[11px] leading-4 text-amber-900'}>
                               <span className="font-semibold">

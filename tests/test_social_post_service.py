@@ -1488,6 +1488,10 @@ def test_channel_readiness_exposes_owner_next_action():
     assert "wall.post" in vk["next_action_en"]
     assert "Instagram business account" in meta["next_action_en"]
     assert "ручного действия" in maps["next_action_ru"]
+    assert "bot token" in telegram["setup_summary_en"]
+    assert "wall.post" in vk["setup_summary_en"]
+    assert "Instagram business account" in meta["setup_summary_en"]
+    assert "Автопубликации нет" in maps["setup_summary_ru"]
     assert telegram["missing_fields"] == ["telegram_bot_token", "telegram_chat_id"]
     assert "Telegram-бота" in telegram["setup_steps_ru"][0]
     assert vk["missing_fields"] == ["vk_access_token.wall_post_scope"]
@@ -1548,11 +1552,14 @@ def test_channel_readiness_next_action_distinguishes_ready_and_supervised():
 
 def test_channel_readiness_setup_steps_are_actionable_for_ready_and_meta():
     ready_steps = _channel_readiness_setup_steps("telegram", "ready", True)
+    ready_channel = _channel_readiness("telegram", "api", True, "ready")
     meta_steps = _channel_readiness("facebook", "api", False, "missing_permissions")
 
     assert ready_steps == ["Проверьте preview поста.", "Утвердите текст.", "Поставьте в расписание."]
+    assert "Канал готов" in ready_channel["setup_summary_ru"]
     assert meta_steps["missing_fields"] == ["meta_permissions.pages_manage_posts"]
     assert "permissions" in meta_steps["setup_steps_en"][2]
+    assert "permissions" in meta_steps["setup_summary_en"]
 
 
 def test_external_account_preflight_does_not_requeue_without_native_publish(monkeypatch):
