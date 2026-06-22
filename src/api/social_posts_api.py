@@ -53,6 +53,14 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _bounded_int_payload(data: dict, key: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(data.get(key) or default)
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(value, maximum))
+
+
 def _bool_env(name: str, default: bool = False) -> bool:
     raw = (os.getenv(name) or "").strip().lower()
     if not raw:
@@ -417,7 +425,7 @@ def social_posts_dispatch_preview():
     try:
         payload = preview_due_social_post_dispatch(
             str(user_data.get("user_id") or ""),
-            batch_size=int(data.get("batch_size") or 20),
+            batch_size=_bounded_int_payload(data, "batch_size", 20, 1, 50),
             business_id=str(data.get("business_id") or ""),
         )
         return jsonify({"success": True, **payload})
@@ -444,7 +452,7 @@ def social_posts_dispatch_run_once():
         payload = run_scoped_social_dispatch_once(
             str(user_data.get("user_id") or ""),
             business_id=str(data.get("business_id") or ""),
-            batch_size=int(data.get("batch_size") or 10),
+            batch_size=_bounded_int_payload(data, "batch_size", 10, 1, 50),
             approved=bool(data.get("approved")),
         )
         return jsonify({"success": True, **payload})
@@ -686,7 +694,7 @@ def social_posts_metrics_run_once():
         payload = run_scoped_social_metrics_once(
             str(user_data.get("user_id") or ""),
             business_id=str(data.get("business_id") or ""),
-            batch_size=int(data.get("batch_size") or 25),
+            batch_size=_bounded_int_payload(data, "batch_size", 25, 1, 100),
             approved=bool(data.get("approved")),
         )
         return jsonify({"success": True, **payload})

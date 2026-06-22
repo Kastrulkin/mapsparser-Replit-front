@@ -343,7 +343,7 @@ def test_social_post_dispatch_run_once_runs_scoped_first_cycle(monkeypatch):
     assert payload["success"] is True
     assert payload["dispatch_result"]["published"] == 1
     assert payload["browser_final_click_allowed"] is False
-    assert captured == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 500, "approved": True}
+    assert captured == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 50, "approved": True}
 
 
 def test_social_post_metrics_run_once_requires_explicit_approval(monkeypatch):
@@ -407,7 +407,7 @@ def test_social_post_metrics_run_once_collects_scoped_business(monkeypatch):
     assert payload["external_publish_performed"] is False
     assert payload["metrics_result"]["collected"] == 2
     assert payload["metrics_result"]["result_summaries_ru"][0].startswith("VK: API-снимок")
-    assert captured == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 500, "approved": True}
+    assert captured == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 100, "approved": True}
 
 
 def test_social_post_mark_supervised_blocked_endpoint_records_manual_fallback(monkeypatch):
