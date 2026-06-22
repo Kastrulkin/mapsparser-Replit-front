@@ -181,6 +181,7 @@ REQUIRED_DATA_CONTRACT = {
     "openclaw callback outbox fallback": "callback/outbox для задачи не готов",
     "openclaw callback env action": "OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL",
     "openclaw callback receiver path": "/m2m/localos/callbacks",
+    "openclaw sandbox bridge blocked copy": "sandbox bridge не подходит для production callback",
     "plan recommendation signal priority": "signal_priority",
 }
 

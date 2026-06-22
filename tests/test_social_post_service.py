@@ -707,7 +707,10 @@ def test_social_openclaw_browser_readiness_explains_ready_and_manual_fallback(mo
 def test_social_openclaw_browser_readiness_blocks_handoff_without_callback(monkeypatch):
     monkeypatch.delenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL", raising=False)
     monkeypatch.delenv("OPENCLAW_SUPERVISED_CALLBACK_URL", raising=False)
-    monkeypatch.setenv("OPENCLAW_SANDBOX_BRIDGE_URL", "http://openclaw.local:8091/capabilities")
+    monkeypatch.delenv("OPENCLAW_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_CAPABILITY_CATALOG_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_SOCIAL_SUPERVISED_ALLOW_SANDBOX_CALLBACK", raising=False)
+    monkeypatch.setenv("OPENCLAW_SANDBOX_BRIDGE_URL", "http://192.168.0.177:8091/capabilities")
 
     readiness = _social_openclaw_browser_readiness(
         {
@@ -725,9 +728,10 @@ def test_social_openclaw_browser_readiness_blocks_handoff_without_callback(monke
     assert readiness["status"] == "manual_fallback"
     assert readiness["delivery_readiness"]["status"] == "callback_missing"
     assert readiness["delivery_readiness"]["callback_env_var"] == "OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL"
-    assert readiness["delivery_readiness"]["suggested_callback_url"] == "http://openclaw.local:8091/m2m/localos/callbacks"
+    assert readiness["delivery_readiness"]["suggested_callback_url"] == ""
+    assert readiness["delivery_readiness"]["suggested_callback_blocked_reason"] == "sandbox_bridge_private_host"
     assert "Callback" in readiness["delivery_readiness"]["message_ru"]
-    assert "OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL=http://openclaw.local:8091/m2m/localos/callbacks" in readiness["delivery_readiness"]["next_action_ru"]
+    assert "публичный/доступный OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL" in readiness["delivery_readiness"]["next_action_ru"]
     assert "ручной fallback" in readiness["message_ru"]
 
 
@@ -741,6 +745,28 @@ def test_social_openclaw_suggested_callback_prefers_base_url(monkeypatch):
         social_post_service._social_supervised_openclaw_suggested_callback_url()
         == "https://openclaw.example/m2m/localos/callbacks"
     )
+
+
+def test_social_openclaw_suggested_callback_allows_private_sandbox_only_with_flag(monkeypatch):
+    monkeypatch.delenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_SUPERVISED_CALLBACK_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_CAPABILITY_CATALOG_URL", raising=False)
+    monkeypatch.setenv("OPENCLAW_SANDBOX_BRIDGE_URL", "http://192.168.0.177:8091/capabilities")
+
+    assert social_post_service._social_supervised_openclaw_suggested_callback_url() == ""
+    assert (
+        social_post_service._social_supervised_openclaw_suggested_callback_blocked_reason()
+        == "sandbox_bridge_private_host"
+    )
+
+    monkeypatch.setenv("OPENCLAW_SOCIAL_SUPERVISED_ALLOW_SANDBOX_CALLBACK", "true")
+
+    assert (
+        social_post_service._social_supervised_openclaw_suggested_callback_url()
+        == "http://192.168.0.177:8091/m2m/localos/callbacks"
+    )
+    assert social_post_service._social_supervised_openclaw_suggested_callback_blocked_reason() == ""
 
 
 def test_social_openclaw_browser_readiness_explains_catalog_route_error():

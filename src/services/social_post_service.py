@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import ipaddress
 import urllib.error
 import urllib.request
 import urllib.parse
@@ -2752,6 +2753,7 @@ def _social_openclaw_handoff_delivery_readiness(cursor: Any | None = None) -> di
     callback_url = _social_supervised_openclaw_callback_url()
     callback_configured = bool(callback_url)
     suggested_callback_url = _social_supervised_openclaw_suggested_callback_url()
+    suggestion_blocked_reason = _social_supervised_openclaw_suggested_callback_blocked_reason()
     outbox_available: bool | None = None
     if cursor is not None:
         try:
@@ -2772,6 +2774,15 @@ def _social_openclaw_handoff_delivery_readiness(cursor: Any | None = None) -> di
         if suggested_callback_url:
             next_action_ru = f"Добавьте OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL={suggested_callback_url} или используйте ручное размещение."
             next_action_en = f"Set OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL={suggested_callback_url} or use manual placement."
+        elif suggestion_blocked_reason:
+            next_action_ru = (
+                "Укажите публичный/доступный OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL или OPENCLAW_BASE_URL; "
+                "текущий sandbox bridge не годится для доставки task из production."
+            )
+            next_action_en = (
+                "Set a public/reachable OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL or OPENCLAW_BASE_URL; "
+                "the current sandbox bridge is not suitable for production task delivery."
+            )
         else:
             next_action_ru = "Добавьте OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL или используйте ручное размещение."
             next_action_en = "Set OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL or use manual placement."
@@ -2788,6 +2799,7 @@ def _social_openclaw_handoff_delivery_readiness(cursor: Any | None = None) -> di
         "callback_url_configured": callback_configured,
         "callback_env_var": "OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL",
         "suggested_callback_url": suggested_callback_url,
+        "suggested_callback_blocked_reason": suggestion_blocked_reason,
         "outbox_available": outbox_available,
         "read_only": True,
         "external_publish_performed": False,
@@ -3786,12 +3798,26 @@ def _social_supervised_openclaw_suggested_callback_url() -> str:
     if explicit:
         return explicit
     base_url = str(os.getenv("OPENCLAW_BASE_URL") or "").strip()
-    if not base_url:
-        base_url = str(os.getenv("OPENCLAW_SANDBOX_BRIDGE_URL") or "").strip()
+    source = "base_url" if base_url else ""
     if not base_url:
         catalog_url = str(os.getenv("OPENCLAW_CAPABILITY_CATALOG_URL") or "").strip()
         base_url = catalog_url
+        source = "catalog_url" if catalog_url else ""
     if not base_url:
+        sandbox_url = str(os.getenv("OPENCLAW_SANDBOX_BRIDGE_URL") or "").strip()
+        if sandbox_url and (
+            _env_flag_enabled("OPENCLAW_SOCIAL_SUPERVISED_ALLOW_SANDBOX_CALLBACK")
+            or not _url_uses_private_or_local_host(sandbox_url)
+        ):
+            base_url = sandbox_url
+            source = "sandbox_bridge"
+    if not base_url:
+        return ""
+    if (
+        source == "sandbox_bridge"
+        and _url_uses_private_or_local_host(base_url)
+        and not _env_flag_enabled("OPENCLAW_SOCIAL_SUPERVISED_ALLOW_SANDBOX_CALLBACK")
+    ):
         return ""
     try:
         parsed = urllib.parse.urlsplit(base_url)
@@ -3800,6 +3826,41 @@ def _social_supervised_openclaw_suggested_callback_url() -> str:
         return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "/m2m/localos/callbacks", "", ""))
     except Exception:
         return ""
+
+
+def _social_supervised_openclaw_suggested_callback_blocked_reason() -> str:
+    if _social_supervised_openclaw_callback_url():
+        return ""
+    if os.getenv("OPENCLAW_BASE_URL") or os.getenv("OPENCLAW_CAPABILITY_CATALOG_URL"):
+        return ""
+    sandbox_url = str(os.getenv("OPENCLAW_SANDBOX_BRIDGE_URL") or "").strip()
+    if not sandbox_url:
+        return ""
+    if _env_flag_enabled("OPENCLAW_SOCIAL_SUPERVISED_ALLOW_SANDBOX_CALLBACK"):
+        return ""
+    if _url_uses_private_or_local_host(sandbox_url):
+        return "sandbox_bridge_private_host"
+    return ""
+
+
+def _url_uses_private_or_local_host(url: str) -> bool:
+    try:
+        parsed = urllib.parse.urlsplit(str(url or "").strip())
+        host = str(parsed.hostname or "").strip().lower()
+        if not host:
+            return False
+        if host in {"localhost", "127.0.0.1", "::1"}:
+            return True
+        ip = ipaddress.ip_address(host)
+        return bool(ip.is_private or ip.is_loopback or ip.is_link_local)
+    except ValueError:
+        return False
+    except Exception:
+        return False
+
+
+def _env_flag_enabled(name: str) -> bool:
+    return str(os.getenv(name) or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _social_supervised_openclaw_max_attempts() -> int:

@@ -192,6 +192,7 @@ type SocialOpenClawReadiness = {
     callback_url_configured?: boolean;
     callback_env_var?: string;
     suggested_callback_url?: string;
+    suggested_callback_blocked_reason?: string;
     outbox_available?: boolean | null;
     message_ru?: string;
     message_en?: string;
@@ -9330,6 +9331,7 @@ function _socialOpenClawReadinessDetails(
   }
   const suggestedCallback = String(delivery.suggested_callback_url || '').trim();
   const callbackEnvVar = String(delivery.callback_env_var || 'OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL').trim();
+  const blockedCallbackReason = String(delivery.suggested_callback_blocked_reason || '').trim();
   if (suggestedCallback && !delivery.callback_configured) {
     details.push(
       isRu
@@ -9340,6 +9342,13 @@ function _socialOpenClawReadinessDetails(
       isRu
         ? 'Стандартный receiver OpenClaw: /m2m/localos/callbacks'
         : 'Standard OpenClaw receiver: /m2m/localos/callbacks',
+    );
+  }
+  if (!suggestedCallback && blockedCallbackReason === 'sandbox_bridge_private_host') {
+    details.push(
+      isRu
+        ? 'Текущий sandbox bridge не подходит для production callback; нужен доступный OpenClaw receiver.'
+        : 'The current sandbox bridge is not suitable for the production callback; use a reachable OpenClaw receiver.',
     );
   }
   if (delivery.outbox_available === true) {
