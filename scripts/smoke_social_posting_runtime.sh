@@ -8,6 +8,7 @@ SERVER_HOST="${DEPLOY_HOST:-root@80.78.242.105}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/localos_prod}"
 PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-https://localos.pro}"
 SMOKE_ALLOW_UNSCOPED="${SOCIAL_SMOKE_ALLOW_UNSCOPED:-0}"
+SMOKE_BUSINESS_ID="${SOCIAL_RUNTIME_SMOKE_BUSINESS_ID:-}"
 SSH_OPTS=(
   -i "$SSH_KEY"
   -o BatchMode=yes
@@ -70,6 +71,72 @@ for key in ("dispatch", "metrics"):
         sys.exit(1)
 PY
 
+  if [[ -n "${SMOKE_BUSINESS_ID}" ]]; then
+    echo
+    echo "[social-runtime] scoped launch preflight dry-run"
+    SOCIAL_RUNTIME_SMOKE_BUSINESS_ID="${SMOKE_BUSINESS_ID}" docker compose exec -T app python3 - <<'PY'
+import json
+import os
+import sys
+
+from core.helpers import get_business_owner_id
+from database_manager import DatabaseManager
+from services.social_post_service import get_social_launch_preflight
+
+business_id = str(os.getenv("SOCIAL_RUNTIME_SMOKE_BUSINESS_ID") or "").strip()
+if not business_id:
+    print("SOCIAL_RUNTIME_SMOKE_BUSINESS_ID is empty", file=sys.stderr)
+    sys.exit(1)
+
+db = DatabaseManager()
+cursor = db.conn.cursor()
+try:
+    owner_id = str(get_business_owner_id(cursor, business_id) or "").strip()
+finally:
+    db.close()
+
+if not owner_id:
+    print(f"Could not resolve owner for business {business_id}", file=sys.stderr)
+    sys.exit(1)
+
+payload = get_social_launch_preflight(owner_id, business_id, batch_size=10)
+summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+safety = payload.get("safety") if isinstance(payload.get("safety"), dict) else {}
+runbook = payload.get("launch_runbook") if isinstance(payload.get("launch_runbook"), dict) else {}
+preview = payload.get("dispatch_preview") if isinstance(payload.get("dispatch_preview"), dict) else {}
+
+print(json.dumps({
+    "business_id": payload.get("business_id"),
+    "status": payload.get("status"),
+    "safe_to_enable_scoped_dispatch": payload.get("safe_to_enable_scoped_dispatch"),
+    "summary": summary,
+    "runbook_ready": runbook.get("ready"),
+    "dry_run": preview.get("dry_run"),
+    "next_action_ru": payload.get("next_action_ru"),
+}, ensure_ascii=False, sort_keys=True))
+
+if preview.get("dry_run") is not True:
+    print("launch preflight must be dry-run", file=sys.stderr)
+    sys.exit(1)
+if safety.get("approval_required") is not True:
+    print("launch preflight approval invariant failed", file=sys.stderr)
+    sys.exit(1)
+if safety.get("browser_final_click_allowed") is not False:
+    print("launch preflight browser final click invariant failed", file=sys.stderr)
+    sys.exit(1)
+if safety.get("maps_are_supervised_or_manual") is not True:
+    print("launch preflight maps supervision invariant failed", file=sys.stderr)
+    sys.exit(1)
+if int(summary.get("skipped_no_access") or 0) != 0:
+    print("launch preflight skipped_no_access must be 0 for resolved owner", file=sys.stderr)
+    sys.exit(1)
+PY
+  else
+    echo
+    echo "[social-runtime] scoped launch preflight dry-run"
+    echo "Skipped: set SOCIAL_RUNTIME_SMOKE_BUSINESS_ID to verify a concrete business without publishing."
+  fi
+
   echo
   echo "[social-runtime] runtime source markers"
   docker compose exec -T app sh -lc \
@@ -121,6 +188,7 @@ run_server() {
     SMOKE_SINCE='${SINCE}' \
     PUBLIC_DOMAIN='${PUBLIC_DOMAIN}' \
     SOCIAL_SMOKE_ALLOW_UNSCOPED='${SMOKE_ALLOW_UNSCOPED}' \
+    SOCIAL_RUNTIME_SMOKE_BUSINESS_ID='${SMOKE_BUSINESS_ID}' \
     SOCIAL_RUNTIME_SMOKE_ROOT='/opt/seo-app' \
     bash -s local
   " < "$ROOT_DIR/scripts/smoke_social_posting_runtime.sh"

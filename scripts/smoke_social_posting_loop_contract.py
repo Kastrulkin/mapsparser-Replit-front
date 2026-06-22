@@ -89,7 +89,11 @@ REQUIRED_RUNTIME_SMOKE_MARKERS = {
     "browser final click invariant": "browser_final_click_allowed invariant failed",
     "dispatch worker logs": "[SOCIAL_POST_DISPATCH]",
     "metrics worker logs": "[SOCIAL_POST_METRICS]",
-    "live cockpit copy": "Быстрый запуск публикаций",
+    "scoped business smoke": "SOCIAL_RUNTIME_SMOKE_BUSINESS_ID",
+    "scoped dry-run": "scoped launch preflight dry-run",
+    "launch preflight dry-run invariant": "launch preflight must be dry-run",
+    "launch preflight maps invariant": "launch preflight maps supervision invariant failed",
+    "live cockpit copy": "OpenClaw не нажимает финальную кнопку публикации",
     "old copy guard": "Яндекс/2ГИС controlled/manual",
 }
 
