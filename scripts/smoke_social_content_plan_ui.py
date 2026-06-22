@@ -127,6 +127,7 @@ REQUIRED_DATA_CONTRACT = {
     "next plan recommendation test id": 'data-testid="social-next-plan-recommendation"',
     "preview before approval test id": 'data-testid="social-preview-before-approval"',
     "prepare preview panel test id": 'data-testid="social-prepare-preview-panel"',
+    "item prepare preview action": "single-social-prepare",
     "supervised handoff test id": 'data-testid="social-supervised-handoff"',
     "runtime status": "socialRuntimeStatus",
     "dispatch blocked without scope": "blocked_without_scope",

@@ -2491,21 +2491,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setActionSummary(null);
     try {
       await persistItemEdits(itemId);
-      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}/social-posts/prepare`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      });
-      const posts = Array.isArray(response.posts) ? response.posts : [];
-      setSocialPostsByItem((prev) => ({
-        ...prev,
-        [itemId]: posts,
-      }));
-      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
-      setActionSummary({
-        tone: 'success',
-        text_ru: 'Каналы подготовлены. Проверьте тексты перед внешней публикацией.',
-        text_en: 'Channels prepared. Review texts before external publishing.',
-      });
+      const item = visibleItems.find((planItem) => planItem.id === itemId)
+        || currentPlan?.items?.find((planItem) => planItem.id === itemId);
+      if (!item) {
+        throw new Error(isRu ? 'Тема плана не найдена' : 'Plan item not found');
+      }
+      await openSocialPreparePreview([item], 'selected', `single-social-prepare:${itemId}`);
     } catch (socialError) {
       const message = socialError instanceof Error ? socialError.message : (isRu ? 'Не удалось подготовить каналы' : 'Could not prepare channels');
       setError(message);
