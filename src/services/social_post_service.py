@@ -69,7 +69,7 @@ SOCIAL_QUEUE_GROUPS = (
         "label_ru": "Запланировано",
         "label_en": "Scheduled",
         "next_action_ru": "Ждёт даты публикации. Worker выполнит API publish или создаст контролируемое размещение.",
-        "next_action_en": "Waiting for schedule. The worker will publish via API or create a controlled task.",
+        "next_action_en": "Waiting for schedule. The worker will publish via API or create supervised placement.",
     },
     {
         "key": "needs_supervised_publish",
@@ -266,7 +266,7 @@ def check_social_openclaw_browser_readiness(user_id: str, business_id: str) -> d
             "capability_checked": "social.post.publish_supervised_browser",
             "safety_contract": _social_supervised_safety_contract(),
             "owner_next_action_ru": "Если статус готов, подготовьте контролируемое размещение у поста карты. Если нет, используйте ручное размещение с готовым текстом и чеклистом.",
-            "owner_next_action_en": "If the check is ready, create a controlled placement task on the map post. If not, use manual placement with the prepared copy and checklist.",
+            "owner_next_action_en": "If the check is ready, create supervised placement on the map post. If not, use manual placement with the prepared copy and checklist.",
         }
     finally:
         db.close()
@@ -391,7 +391,7 @@ def _social_launch_preflight_message(status: str, is_ru: bool) -> str:
         return (
             "Есть due публикации для карт: worker создаст контролируемое или ручное размещение без финального клика."
             if is_ru
-            else "Due map posts exist: the worker will create controlled/manual tasks without the final click."
+            else "Due map posts exist: the worker will create supervised placement or manual handoff without the final click."
         )
     if status == "manual_or_connection_needed":
         return (
@@ -1526,7 +1526,7 @@ def _social_dispatch_once_message(result: dict[str, Any], is_ru: bool) -> str:
         )
     return (
         f"First scoped cycle finished: picked {picked}, published {published}, "
-        f"controlled {supervised}, manual {manual}, failed {failed}."
+        f"supervised {supervised}, manual {manual}, failed {failed}."
     )
 
 
@@ -1616,7 +1616,7 @@ def _social_dispatch_result_summaries(details: list[dict[str, Any]], is_ru: bool
             summaries.append(
                 f"{label}: контролируемое размещение готово" + (f" ({automation_task_id})." if automation_task_id else ".")
                 if is_ru
-                else f"{label}: controlled task is ready" + (f" ({automation_task_id})." if automation_task_id else ".")
+                else f"{label}: supervised placement is ready" + (f" ({automation_task_id})." if automation_task_id else ".")
             )
         elif status == "needs_manual_publish":
             reason = f": {last_error}" if last_error else ""
@@ -1866,7 +1866,7 @@ def _dispatch_preview_readiness(
         ],
         "safety_notes_en": [
             "External publishing runs only for approved/queued posts.",
-            "Yandex/2GIS stay controlled/manual: the worker does not perform the final publish click.",
+            "Yandex/2GIS stay supervised/manual: the worker does not perform the final publish click.",
             "Dry-run sends nothing externally and exists to verify the first cycle.",
         ],
     }
@@ -1895,7 +1895,7 @@ def _dispatch_preview_first_cycle_steps(
         {
             "key": "maps_controlled_without_final_click",
             "label_ru": "Карты: контроль/вручную без финального клика",
-            "label_en": "Maps: controlled/manual without final click",
+            "label_en": "Maps: supervised/manual without final click",
             "count": int(controlled_count or 0),
             "external_publish": False,
             "requires_approval": True,
@@ -2027,7 +2027,7 @@ def _dispatch_preview_readiness_message(status: str, is_ru: bool) -> str:
         return (
             "Есть due карты: worker создаст контролируемое или ручное размещение, финальная публикация остаётся за человеком."
             if is_ru
-            else "Due map posts exist: the worker will create controlled/manual tasks, while final publishing stays human-controlled."
+            else "Due map posts exist: the worker will create supervised placement or manual handoff, while final publishing stays human-controlled."
         )
     if status == "manual_only":
         return (
@@ -2066,7 +2066,7 @@ def _dispatch_preview_next_action(status: str, business_scope: str, is_ru: bool)
         return (
             "Можно запускать scoped dispatch: карты перейдут в контролируемое или ручное размещение без финального клика."
             if is_ru
-            else "Scoped dispatch can run: map posts will move to controlled/manual tasks without a final click."
+            else "Scoped dispatch can run: map posts will move to supervised placement or manual handoff without a final click."
         )
     if status == "manual_only":
         return (
@@ -2116,7 +2116,7 @@ def _social_launch_runbook(
             f"Scope: {scope or 'не задан'}."
         ),
         "summary_en": (
-            f"Due {due}: API {external}, controlled {controlled}, manual {manual}. "
+            f"Due {due}: API {external}, supervised {controlled}, manual {manual}. "
             f"Scope: {scope or 'not set'}."
         ),
         "steps_ru": _social_launch_runbook_steps(
@@ -2496,7 +2496,7 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None) -> 
             else "OpenClaw browser-use не подтверждён: Яндекс/2ГИС останутся в ручном fallback."
         ),
         "message_en": (
-            "OpenClaw browser-use is ready: Yandex/2GIS can use controlled tasks without the final click."
+            "OpenClaw browser-use is ready: Yandex/2GIS can use supervised placement without the final click."
             if ready
             else "OpenClaw browser-use is not confirmed: Yandex/2GIS will stay in manual fallback."
         ),
@@ -2506,7 +2506,7 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None) -> 
             else "Проверьте capability catalog/OpenClaw настройки или используйте ручное размещение."
         ),
         "next_action_en": (
-            "Create a controlled task on the map post and review the preview before final placement."
+            "Create supervised placement on the map post and review the preview before final placement."
             if ready
             else "Check the capability catalog/OpenClaw settings or use manual placement."
         ),
@@ -2875,7 +2875,7 @@ def _dispatch_preview_safety_summary(action: str, would_status: str, external_pu
         return (
             "Worker создаст контролируемое размещение и не нажмёт финальную кнопку публикации."
             if is_ru
-            else "The worker will create a controlled task and will not click the final publish button."
+            else "The worker will create supervised placement and will not click the final publish button."
         )
     if clean_status == "needs_review":
         return (
@@ -4869,7 +4869,7 @@ def _channel_readiness_next_action(platform: str, status: str, is_ru: bool) -> s
         return (
             "Поставьте пост в расписание: LocalOS создаст контролируемое размещение, финальная кнопка останется за человеком."
             if is_ru
-            else "Queue the post: LocalOS will create a controlled task and the final click remains human-owned."
+            else "Queue the post: LocalOS will create supervised placement and the final click remains human-owned."
         )
     if status_key == "manual_fallback":
         return (
@@ -5045,7 +5045,7 @@ def _channel_readiness_setup_steps(platform: str, status: str, is_ru: bool) -> l
         ] if is_ru else [
             "Review copy and media.",
             "Queue the post on schedule.",
-            "Open the controlled task and confirm the final step manually.",
+            "Open supervised placement and confirm the final step manually.",
         ]
     if status_key == "manual_fallback":
         return [
@@ -5892,7 +5892,7 @@ def _social_publish_evidence(post: dict[str, Any]) -> dict[str, Any]:
                 "title_ru": f"{provider_label}: нужно контролируемое размещение",
                 "title_en": f"{provider_label}: supervised placement needed",
                 "summary_ru": "LocalOS подготовил контролируемое или ручное размещение; финальный клик публикации остаётся за человеком.",
-                "summary_en": "LocalOS prepared a controlled/manual task; the final publish click stays with a human.",
+                "summary_en": "LocalOS prepared supervised/manual placement; the final publish click stays with a human.",
                 "next_action_ru": "Откройте контролируемое размещение, проверьте предпросмотр и отметьте результат.",
                 "next_action_en": "Open supervised placement, review the preview, and record the result.",
                 "target_url": target_url,

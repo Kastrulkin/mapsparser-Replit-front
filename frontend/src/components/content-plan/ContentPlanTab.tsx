@@ -4357,7 +4357,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 <div className="mt-3 rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200">
                   {isRu
                     ? 'Внешние публикации идут только после preview и approval. Для Яндекс/2ГИС LocalOS готовит контролируемое размещение, а не скрытую автопубликацию.'
-                    : 'External publishing runs only after preview and approval. For Yandex/2GIS, LocalOS prepares controlled placement, not hidden autopublish.'}
+                    : 'External publishing runs only after preview and approval. For Yandex/2GIS, LocalOS prepares supervised placement, not hidden autopublish.'}
                 </div>
               </div>
               <div className="flex flex-col gap-2 sm:min-w-[260px]">
@@ -7081,7 +7081,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     <div className="mt-1">
                       {isRu
                         ? `Проверить preview: ${selectedSocialNeedsReview.length} · поставить в расписание: ${selectedSocialCanQueue.length} · ручное/контролируемое размещение: ${selectedSocialCanMarkPublished.length}.`
-                        : `Review preview: ${selectedSocialNeedsReview.length} · queue on schedule: ${selectedSocialCanQueue.length} · manual/controlled placement: ${selectedSocialCanMarkPublished.length}.`}
+                        : `Review preview: ${selectedSocialNeedsReview.length} · queue on schedule: ${selectedSocialCanQueue.length} · manual/supervised placement: ${selectedSocialCanMarkPublished.length}.`}
                     </div>
                     <div className="mt-1 text-blue-800">
                       {selectedSocialNeedsReview.length > 0

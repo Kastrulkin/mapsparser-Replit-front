@@ -183,6 +183,8 @@ FORBIDDEN_COPY = {
     "owner-facing mixed controlled/manual ru": "Яндекс/2ГИС controlled/manual",
     "owner-facing maps mixed mode ru": "Карты идут через controlled/manual",
     "owner-facing manual controlled mix ru": "ручное/controlled",
+    "owner-facing manual controlled mix en": "manual/controlled placement",
+    "owner-facing controlled placement en": "controlled placement, not hidden autopublish",
     "owner-facing controlled task ru": "controlled-задач",
     "owner-facing controlled launch ru": "Команды для controlled launch",
 }

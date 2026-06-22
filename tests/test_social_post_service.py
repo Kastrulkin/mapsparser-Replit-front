@@ -2015,6 +2015,7 @@ def test_dispatch_preview_readiness_explains_external_controlled_and_manual_work
     assert readiness["first_cycle_steps"][0]["key"] == "api_publish_after_approval"
     assert readiness["first_cycle_steps"][0]["external_publish"] is True
     assert readiness["first_cycle_steps"][1]["key"] == "maps_controlled_without_final_click"
+    assert readiness["first_cycle_steps"][1]["label_en"] == "Maps: supervised/manual without final click"
     assert readiness["first_cycle_steps"][1]["stop_before_final_publish"] is True
     assert readiness["first_cycle_steps"][2]["key"] == "manual_handoff_or_connection"
     assert readiness["first_cycle_steps"][3]["key"] == "skipped_no_access"
@@ -2025,6 +2026,10 @@ def test_dispatch_preview_readiness_explains_external_controlled_and_manual_work
     assert verification["expected_statuses"][1]["key"] == "maps_controlled"
     assert "picked/published" in verification["checks_en"][1]
     assert "Dry-run" in readiness["safety_notes_ru"][2]
+    readiness_json = json.dumps(readiness, ensure_ascii=False)
+    assert "controlled/manual" not in readiness_json
+    assert "controlled task" not in readiness_json
+    assert "supervised/manual" in readiness_json
 
 
 def test_dispatch_preview_first_cycle_steps_keep_owner_safe_before_worker_launch():
@@ -2035,6 +2040,7 @@ def test_dispatch_preview_first_cycle_steps_keep_owner_safe_before_worker_launch
     assert steps[0]["external_publish"] is True
     assert steps[0]["requires_approval"] is True
     assert steps[1]["label_ru"] == "Карты: контроль/вручную без финального клика"
+    assert steps[1]["label_en"] == "Maps: supervised/manual without final click"
     assert steps[1]["external_publish"] is False
     assert steps[1]["stop_before_final_publish"] is True
     assert steps[2]["label_ru"] == "Ручной fallback или подключение канала"
@@ -2101,6 +2107,10 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert "needs_supervised_publish" in payload["launch_runbook"]["success_criteria_ru"][1]
     assert payload["runtime_alignment"]["dispatch"]["status"]
     assert payload["runtime_alignment"]["dispatch"]["can_process_this_business"] is False
+    payload_json = json.dumps(payload, ensure_ascii=False)
+    assert "controlled/manual" not in payload_json
+    assert "controlled task" not in payload_json
+    assert "supervised/manual" in payload_json
 
 
 def test_social_launch_preflight_payload_handles_no_due_posts_as_next_ui_work():
