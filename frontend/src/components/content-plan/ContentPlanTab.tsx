@@ -168,6 +168,7 @@ type SocialOpenClawCapabilityStatus = {
 
 type SocialOpenClawReadiness = {
   ready?: boolean;
+  handoff_ready?: boolean;
   status?: string;
   capability?: string;
   action_ref?: string;
@@ -184,6 +185,17 @@ type SocialOpenClawReadiness = {
   manual_fallback_triggers?: string[];
   diagnostics_ru?: string[];
   diagnostics_en?: string[];
+  delivery_readiness?: {
+    ready?: boolean;
+    status?: string;
+    callback_configured?: boolean;
+    callback_url_configured?: boolean;
+    outbox_available?: boolean | null;
+    message_ru?: string;
+    message_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+  };
   message_ru?: string;
   message_en?: string;
   next_action_ru?: string;
@@ -7021,50 +7033,53 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 : 'API channels are ready to publish after approval. Maps use supervised placement.')}
                           </div>
                           {socialOpenClawReadiness ? (
-                            <div className={[
-                              'mt-3 rounded-lg border px-3 py-2 text-xs leading-5',
-                              socialOpenClawReadiness.ready
-                                ? 'border-sky-100 bg-sky-50 text-sky-800'
-                                : 'border-amber-100 bg-amber-50 text-amber-800',
-                            ].join(' ')}
-                            >
-                              <div className={socialOpenClawReadiness.ready ? 'font-semibold text-sky-950' : 'font-semibold text-amber-950'}>
-                                {socialOpenClawReadiness.ready
-                                  ? (isRu ? 'OpenClaw browser-use готов' : 'OpenClaw browser-use ready')
-                                  : (isRu ? 'OpenClaw browser-use не подтверждён' : 'OpenClaw browser-use not confirmed')}
-                              </div>
-                              <div className="mt-1">
-                                {isRu ? socialOpenClawReadiness.message_ru : socialOpenClawReadiness.message_en}
-                              </div>
-                              <div className="mt-1 font-medium">
-                                {isRu ? socialOpenClawReadiness.next_action_ru : socialOpenClawReadiness.next_action_en}
-                              </div>
-                              {_socialOpenClawReadinessDetails(socialOpenClawReadiness, isRu).length > 0 ? (
-                                <ul className="mt-2 space-y-1">
-                                  {_socialOpenClawReadinessDetails(socialOpenClawReadiness, isRu).slice(0, 4).map((detail) => (
-                                    <li key={`openclaw-readiness:${detail}`} className="flex gap-2">
-                                      <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-current opacity-70" />
-                                      <span>{detail}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : null}
-                              <div className="mt-2 rounded-md bg-white/70 px-2 py-1.5 text-[11px] leading-4">
-                                {_socialOpenClawOwnerCheckSummary(socialOpenClawReadiness, isRu)}
-                              </div>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="mt-2 h-7 rounded-lg bg-white/80 px-2 text-[11px]"
-                                onClick={() => { void checkOpenClawBrowserReadiness(); }}
-                                disabled={socialBusyAction === 'openclaw-check'}
-                              >
-                                {socialBusyAction === 'openclaw-check'
-                                  ? (isRu ? 'Проверяем...' : 'Checking...')
-                                  : (isRu ? 'Проверить OpenClaw сейчас' : 'Check OpenClaw now')}
-                              </Button>
-                            </div>
+                            (() => {
+                              const openClawOperational = _socialOpenClawReadinessOperational(socialOpenClawReadiness);
+                              return (
+                                <div className={[
+                                  'mt-3 rounded-lg border px-3 py-2 text-xs leading-5',
+                                  openClawOperational
+                                    ? 'border-sky-100 bg-sky-50 text-sky-800'
+                                    : 'border-amber-100 bg-amber-50 text-amber-800',
+                                ].join(' ')}
+                                >
+                                  <div className={openClawOperational ? 'font-semibold text-sky-950' : 'font-semibold text-amber-950'}>
+                                    {_socialOpenClawReadinessTitle(socialOpenClawReadiness, isRu)}
+                                  </div>
+                                  <div className="mt-1">
+                                    {isRu ? socialOpenClawReadiness.message_ru : socialOpenClawReadiness.message_en}
+                                  </div>
+                                  <div className="mt-1 font-medium">
+                                    {isRu ? socialOpenClawReadiness.next_action_ru : socialOpenClawReadiness.next_action_en}
+                                  </div>
+                                  {_socialOpenClawReadinessDetails(socialOpenClawReadiness, isRu).length > 0 ? (
+                                    <ul className="mt-2 space-y-1">
+                                      {_socialOpenClawReadinessDetails(socialOpenClawReadiness, isRu).slice(0, 4).map((detail) => (
+                                        <li key={`openclaw-readiness:${detail}`} className="flex gap-2">
+                                          <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-current opacity-70" />
+                                          <span>{detail}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : null}
+                                  <div className="mt-2 rounded-md bg-white/70 px-2 py-1.5 text-[11px] leading-4">
+                                    {_socialOpenClawOwnerCheckSummary(socialOpenClawReadiness, isRu)}
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="mt-2 h-7 rounded-lg bg-white/80 px-2 text-[11px]"
+                                    onClick={() => { void checkOpenClawBrowserReadiness(); }}
+                                    disabled={socialBusyAction === 'openclaw-check'}
+                                  >
+                                    {socialBusyAction === 'openclaw-check'
+                                      ? (isRu ? 'Проверяем...' : 'Checking...')
+                                      : (isRu ? 'Проверить OpenClaw сейчас' : 'Check OpenClaw now')}
+                                  </Button>
+                                </div>
+                              );
+                            })()
                           ) : null}
                           {socialReadinessSummary.blockedApiChannels.length > 0 ? (
                             <div className="mt-3 flex flex-wrap gap-2">
@@ -9215,9 +9230,27 @@ function _socialOpenClawReadinessDetails(
   return Array.from(new Set(details)).slice(0, 6);
 }
 
+function _socialOpenClawReadinessOperational(readiness: SocialOpenClawReadiness): boolean {
+  if (typeof readiness.handoff_ready === 'boolean') return readiness.handoff_ready;
+  if (readiness.delivery_readiness && typeof readiness.delivery_readiness.ready === 'boolean') {
+    return Boolean(readiness.ready) && Boolean(readiness.delivery_readiness.ready);
+  }
+  return Boolean(readiness.ready);
+}
+
+function _socialOpenClawReadinessTitle(readiness: SocialOpenClawReadiness, isRu: boolean): string {
+  if (_socialOpenClawReadinessOperational(readiness)) {
+    return isRu ? 'OpenClaw browser-use готов' : 'OpenClaw browser-use ready';
+  }
+  if (readiness.ready && readiness.delivery_readiness && !readiness.delivery_readiness.ready) {
+    return isRu ? 'Доставка OpenClaw task не готова' : 'OpenClaw task delivery is not ready';
+  }
+  return isRu ? 'OpenClaw browser-use не подтверждён' : 'OpenClaw browser-use not confirmed';
+}
+
 function _socialOpenClawOwnerCheckSummary(readiness: SocialOpenClawReadiness, isRu: boolean): string {
   const hasActionRef = Boolean(String(readiness.action_ref || '').trim());
-  if (readiness.ready) {
+  if (_socialOpenClawReadinessOperational(readiness)) {
     return hasActionRef
       ? (isRu
         ? 'Проверка OpenClaw пройдена: можно создать контролируемую задачу, финальная публикация остаётся за человеком.'
@@ -9225,6 +9258,11 @@ function _socialOpenClawOwnerCheckSummary(readiness: SocialOpenClawReadiness, is
       : (isRu
         ? 'Проверка OpenClaw пройдена: можно готовить контролируемое размещение, финальная публикация остаётся за человеком.'
         : 'OpenClaw check passed: supervised placement can be prepared, and final publishing stays human-controlled.');
+  }
+  if (readiness.ready && readiness.delivery_readiness && !readiness.delivery_readiness.ready) {
+    return isRu
+      ? 'OpenClaw browser-use найден, но callback/outbox для задачи не готов: LocalOS сохранит ручной fallback.'
+      : 'OpenClaw browser-use is available, but callback/outbox delivery is not ready: LocalOS keeps manual fallback.';
   }
   if (readiness.provider_status === 'missing_catalog' || readiness.reason === 'openclaw_catalog_not_configured') {
     return isRu

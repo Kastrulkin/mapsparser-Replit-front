@@ -659,7 +659,8 @@ def test_openclaw_browser_capability_status_preserves_catalog_request_error(monk
     assert "OpenClaw catalog request failed" in status["error"]
 
 
-def test_social_openclaw_browser_readiness_explains_ready_and_manual_fallback():
+def test_social_openclaw_browser_readiness_explains_ready_and_manual_fallback(monkeypatch):
+    monkeypatch.setenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL", "https://openclaw.example/localos/social")
     ready = _social_openclaw_browser_readiness(
         {
             "ready": True,
@@ -681,7 +682,9 @@ def test_social_openclaw_browser_readiness_explains_ready_and_manual_fallback():
     )
 
     assert ready["ready"] is True
+    assert ready["handoff_ready"] is True
     assert ready["status"] == "ready"
+    assert ready["delivery_readiness"]["ready"] is True
     assert ready["action_ref"] == "openclaw.browser.fill_form"
     assert ready["browser_final_click_allowed"] is False
     assert ready["read_only"] is True
@@ -699,6 +702,29 @@ def test_social_openclaw_browser_readiness_explains_ready_and_manual_fallback():
     assert "ручном fallback" in fallback["message_ru"]
     assert "capability catalog" in fallback["next_action_ru"]
     assert any("openclaw_catalog_not_configured" in item for item in fallback["diagnostics_ru"])
+
+
+def test_social_openclaw_browser_readiness_blocks_handoff_without_callback(monkeypatch):
+    monkeypatch.delenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_SUPERVISED_CALLBACK_URL", raising=False)
+
+    readiness = _social_openclaw_browser_readiness(
+        {
+            "ready": True,
+            "source": "openclaw",
+            "status": "available",
+            "reason": "openclaw_supervised_browser_available",
+            "action_ref": "openclaw.browser.fill_form",
+            "capability": "social.post.publish_supervised_browser",
+        }
+    )
+
+    assert readiness["ready"] is True
+    assert readiness["handoff_ready"] is False
+    assert readiness["status"] == "manual_fallback"
+    assert readiness["delivery_readiness"]["status"] == "callback_missing"
+    assert "Callback" in readiness["delivery_readiness"]["message_ru"]
+    assert "ручной fallback" in readiness["message_ru"]
 
 
 def test_social_openclaw_browser_readiness_explains_catalog_route_error():
@@ -735,7 +761,7 @@ def test_check_social_openclaw_browser_readiness_is_read_only_and_scoped(monkeyp
     monkeypatch.setattr(
         social_post_service,
         "_social_openclaw_browser_readiness",
-        lambda: {
+        lambda **kwargs: {
             "ready": True,
             "status": "ready",
             "browser_final_click_allowed": False,
@@ -1748,6 +1774,7 @@ def test_preview_dispatch_decision_blocks_api_when_preflight_missing(monkeypatch
 
 def test_preview_dispatch_decision_maps_never_autopublishes(monkeypatch):
     monkeypatch.setattr(social_post_service, "openclaw_browser_available", lambda: True)
+    monkeypatch.setenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL", "https://openclaw.example/localos/social")
     preview = _preview_dispatch_decision(
         None,
         {
@@ -1914,11 +1941,23 @@ def test_supervised_publish_state_uses_manual_fallback_without_browser(monkeypat
 
 def test_supervised_publish_state_uses_openclaw_when_available(monkeypatch):
     monkeypatch.setattr(social_post_service, "openclaw_browser_available", lambda: True)
+    monkeypatch.setenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL", "https://openclaw.example/localos/social")
 
     state = _supervised_publish_state({"publish_mode": "openclaw_browser"})
 
     assert state["status"] == "needs_supervised_publish"
     assert state["last_error"] is None
+
+
+def test_supervised_publish_state_uses_manual_fallback_without_delivery(monkeypatch):
+    monkeypatch.setattr(social_post_service, "openclaw_browser_available", lambda: True)
+    monkeypatch.delenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_SUPERVISED_CALLBACK_URL", raising=False)
+
+    state = _supervised_publish_state({"publish_mode": "openclaw_browser"})
+
+    assert state["status"] == "needs_manual_publish"
+    assert "OpenClaw browser-use" in str(state["last_error"])
 
 
 def test_vk_post_url_uses_owner_and_post_id():

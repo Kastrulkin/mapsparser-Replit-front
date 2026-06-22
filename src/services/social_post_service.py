@@ -251,7 +251,7 @@ def get_social_channel_readiness(user_id: str, business_id: str) -> dict[str, An
         api_channels = [item for item in readiness if str(item.get("publish_mode") or "") == "api"]
         return {
             "channel_readiness": readiness,
-            "openclaw_browser_readiness": _social_openclaw_browser_readiness(),
+            "openclaw_browser_readiness": _social_openclaw_browser_readiness(cursor=cursor),
             "summary": {
                 "total": len(readiness),
                 "api_total": len(api_channels),
@@ -305,7 +305,7 @@ def check_social_openclaw_browser_readiness(user_id: str, business_id: str) -> d
         _require_business_access(cursor, user_id, normalized_business_id)
         return {
             "business_id": normalized_business_id,
-            "openclaw_browser_readiness": _social_openclaw_browser_readiness(),
+            "openclaw_browser_readiness": _social_openclaw_browser_readiness(cursor=cursor),
             "read_only": True,
             "external_publish_performed": False,
             "browser_final_click_allowed": False,
@@ -784,7 +784,7 @@ def _create_supervised_publish_task(cursor: Any, post: dict[str, Any]) -> dict[s
     automation_task_id = str(post.get("automation_task_id") or "").strip() or _new_id()
     metadata = _json_dict(post.get("metadata_json"))
     metadata.update(_supervised_publish_metadata(cursor, post, automation_task_id))
-    supervised_state = _supervised_publish_state(post)
+    supervised_state = _supervised_publish_state(post, cursor)
     cursor.execute(
         """
         UPDATE social_posts
@@ -2690,17 +2690,24 @@ def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool 
         db.close()
 
 
-def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None) -> dict[str, Any]:
+def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None, cursor: Any | None = None) -> dict[str, Any]:
     capability_status = status if isinstance(status, dict) else openclaw_browser_capability_status()
     ready = bool(capability_status.get("ready"))
+    delivery_readiness = _social_openclaw_handoff_delivery_readiness(cursor)
+    handoff_ready = ready and bool(delivery_readiness.get("ready"))
     safety_contract = _social_supervised_safety_contract()
     missing_reason = str(capability_status.get("reason") or "").strip()
     catalog_error = missing_reason == "openclaw_catalog_error" or str(capability_status.get("source") or "").strip() == "catalog_error"
-    if ready:
+    if ready and handoff_ready:
         message_ru = "OpenClaw browser-use готов: Яндекс/2ГИС можно вести как контролируемое размещение без финального клика."
         message_en = "OpenClaw browser-use is ready: Yandex/2GIS can use supervised placement without the final click."
         next_action_ru = "Подготовьте контролируемое размещение у поста карты и проверьте preview перед финальным размещением."
         next_action_en = "Create supervised placement on the map post and review the preview before final placement."
+    elif ready:
+        message_ru = "OpenClaw browser-use найден, но доставка supervised task не готова: LocalOS подготовит ручной fallback вместо внешней задачи."
+        message_en = "OpenClaw browser-use is available, but supervised task delivery is not ready: LocalOS will prepare manual fallback instead of an external task."
+        next_action_ru = str(delivery_readiness.get("next_action_ru") or "Настройте OpenClaw callback/outbox или используйте ручное размещение.").strip()
+        next_action_en = str(delivery_readiness.get("next_action_en") or "Configure the OpenClaw callback/outbox or use manual placement.").strip()
     elif catalog_error:
         message_ru = "OpenClaw browser-use не подтверждён: LocalOS не смог прочитать capability catalog, поэтому Яндекс/2ГИС останутся в ручном fallback."
         message_en = "OpenClaw browser-use is not confirmed: LocalOS could not read the capability catalog, so Yandex/2GIS will stay in manual fallback."
@@ -2713,7 +2720,9 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None) -> 
         next_action_en = "Check the capability catalog/OpenClaw settings or use manual placement."
     return {
         "ready": ready,
-        "status": "ready" if ready else "manual_fallback",
+        "handoff_ready": handoff_ready,
+        "status": "ready" if handoff_ready else "manual_fallback",
+        "delivery_readiness": delivery_readiness,
         "capability": str(capability_status.get("capability") or "social.post.publish_supervised_browser").strip(),
         "action_ref": str(capability_status.get("action_ref") or "").strip(),
         "source": str(capability_status.get("source") or "").strip(),
@@ -2732,6 +2741,49 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None) -> 
         "manual_fallback_triggers": safety_contract.get("manual_fallback_triggers") if isinstance(safety_contract.get("manual_fallback_triggers"), list) else [],
         "diagnostics_ru": _social_openclaw_browser_diagnostics(capability_status, True),
         "diagnostics_en": _social_openclaw_browser_diagnostics(capability_status, False),
+        "message_ru": message_ru,
+        "message_en": message_en,
+        "next_action_ru": next_action_ru,
+        "next_action_en": next_action_en,
+    }
+
+
+def _social_openclaw_handoff_delivery_readiness(cursor: Any | None = None) -> dict[str, Any]:
+    callback_url = _social_supervised_openclaw_callback_url()
+    callback_configured = bool(callback_url)
+    outbox_available: bool | None = None
+    if cursor is not None:
+        try:
+            outbox_available = _table_exists(cursor, "action_callback_outbox")
+        except Exception:
+            outbox_available = False
+    ready = callback_configured and outbox_available is not False
+    if ready:
+        status = "ready"
+        message_ru = "Доставка OpenClaw task готова: LocalOS сможет поставить controlled task в outbox."
+        message_en = "OpenClaw task delivery is ready: LocalOS can enqueue a controlled task in the outbox."
+        next_action_ru = "После approval создайте контролируемое размещение у поста Яндекс/2ГИС."
+        next_action_en = "After approval, create supervised placement for the Yandex/2GIS post."
+    elif not callback_configured:
+        status = "callback_missing"
+        message_ru = "Callback для OpenClaw supervised task не настроен; внешняя задача не будет отправлена."
+        message_en = "The OpenClaw supervised task callback is not configured; no external task will be sent."
+        next_action_ru = "Добавьте OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL или используйте ручное размещение."
+        next_action_en = "Set OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL or use manual placement."
+    else:
+        status = "outbox_missing"
+        message_ru = "Callback настроен, но action_callback_outbox недоступен; task не будет поставлена на доставку."
+        message_en = "The callback is configured, but action_callback_outbox is unavailable; the task will not be queued for delivery."
+        next_action_ru = "Проверьте миграции/outbox таблицу или используйте ручное размещение."
+        next_action_en = "Check migrations/the outbox table or use manual placement."
+    return {
+        "ready": ready,
+        "status": status,
+        "callback_configured": callback_configured,
+        "callback_url_configured": callback_configured,
+        "outbox_available": outbox_available,
+        "read_only": True,
+        "external_publish_performed": False,
         "message_ru": message_ru,
         "message_en": message_en,
         "next_action_ru": next_action_ru,
@@ -3011,7 +3063,11 @@ def _preview_dispatch_decision(cursor: Any, post: dict[str, Any]) -> dict[str, A
                     "stop_before_final_publish": True,
                 }
             )
-        browser_ready = publish_mode == "openclaw_browser" and openclaw_browser_available()
+        browser_ready = (
+            publish_mode == "openclaw_browser"
+            and openclaw_browser_available()
+            and bool(_social_openclaw_handoff_delivery_readiness(cursor).get("ready"))
+        )
         return _with_dispatch_preview_labels(
             {
                 **item,
@@ -3357,12 +3413,16 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
     }
 
 
-def _supervised_publish_state(post: dict[str, Any]) -> dict[str, str | None]:
+def _supervised_publish_state(post: dict[str, Any], cursor: Any | None = None) -> dict[str, str | None]:
     publish_mode = str(post.get("publish_mode") or "").strip()
-    browser_ready = publish_mode == "openclaw_browser" and openclaw_browser_available()
+    browser_ready = (
+        publish_mode == "openclaw_browser"
+        and openclaw_browser_available()
+        and bool(_social_openclaw_handoff_delivery_readiness(cursor).get("ready"))
+    )
     return {
         "status": "needs_supervised_publish" if browser_ready else "needs_manual_publish",
-        "last_error": None if browser_ready else "OpenClaw browser-use недоступен; используйте ручное контролируемое размещение.",
+        "last_error": None if browser_ready else "OpenClaw browser-use или доставка supervised task недоступны; используйте ручное контролируемое размещение.",
     }
 
 

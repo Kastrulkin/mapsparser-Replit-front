@@ -172,6 +172,8 @@ REQUIRED_DATA_CONTRACT = {
     "openclaw owner-ready summary": "Проверка OpenClaw пройдена: можно создать контролируемую задачу",
     "openclaw owner-manual summary": "OpenClaw пока не подключён к этому экрану",
     "openclaw owner-error summary": "LocalOS не смог проверить OpenClaw",
+    "openclaw delivery title": "Доставка OpenClaw task не готова",
+    "openclaw callback outbox fallback": "callback/outbox для задачи не готов",
     "plan recommendation signal priority": "signal_priority",
 }
 
