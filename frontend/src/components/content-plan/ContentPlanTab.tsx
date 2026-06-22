@@ -6926,6 +6926,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     {visibleItems.map((item) => {
                       const status = _planItemStatus(item, isRu);
                       const isSelected = selectedQueueItem?.id === item.id;
+                      const itemSocialPosts = socialPostsByItem[item.id] || [];
+                      const itemSocialSummary = _socialItemQueueSummary(itemSocialPosts, isRu);
                       return (
                         <button
                           key={item.id}
@@ -6986,6 +6988,27 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               </>
                             ) : null}
                           </div>
+                          {itemSocialPosts.length > 0 ? (
+                            <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className={itemSocialSummary.className}>
+                                  {itemSocialSummary.label}
+                                </span>
+                                <span className="text-[11px] font-medium text-slate-500">
+                                  {itemSocialSummary.totalLabel}
+                                </span>
+                              </div>
+                              <div className="mt-1 text-xs leading-5 text-slate-600">
+                                {itemSocialSummary.detail}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">
+                              {isRu
+                                ? 'Каналы ещё не подготовлены: откройте тему и нажмите “Подготовить каналы”.'
+                                : 'Channels are not prepared yet: open the topic and click “Prepare channels”.'}
+                            </div>
+                          )}
                         </button>
                       );
                     })}
@@ -8422,6 +8445,81 @@ function _socialNextActionLabel(action: string, isRu: boolean): string {
   if (normalized === 'retry_or_manual') return isRu ? 'следующий шаг: повторить или вручную' : 'next: retry or manual';
   if (normalized === 'collect_metrics') return isRu ? 'следующий шаг: собрать реакции' : 'next: collect reactions';
   return isRu ? 'следующий шаг не требуется' : 'no next action';
+}
+
+function _socialItemQueueSummary(posts: SocialPost[], isRu: boolean): {
+  label: string;
+  detail: string;
+  totalLabel: string;
+  className: string;
+} {
+  const counts = posts.reduce((acc, post) => {
+    const status = String(post.status || '').trim();
+    if (status === 'draft' || status === 'needs_review') acc.review += 1;
+    else if (status === 'approved') acc.approved += 1;
+    else if (status === 'queued' || status === 'publishing') acc.queued += 1;
+    else if (status === 'needs_supervised_publish') acc.supervised += 1;
+    else if (status === 'needs_manual_publish') acc.manual += 1;
+    else if (status === 'failed') acc.failed += 1;
+    else if (status === 'published') acc.published += 1;
+    if (_isSupervisedPlatform(String(post.platform || ''))) acc.maps += 1;
+    else acc.api += 1;
+    return acc;
+  }, {
+    review: 0,
+    approved: 0,
+    queued: 0,
+    supervised: 0,
+    manual: 0,
+    failed: 0,
+    published: 0,
+    api: 0,
+    maps: 0,
+  });
+  const total = posts.length;
+  const base = 'rounded-full px-2.5 py-1 text-[11px] font-semibold';
+  let label = isRu ? 'Каналы готовы' : 'Channels ready';
+  let className = `${base} bg-slate-100 text-slate-700`;
+
+  if (counts.review > 0) {
+    label = isRu ? `Проверить тексты: ${counts.review}` : `Review copy: ${counts.review}`;
+    className = `${base} bg-sky-100 text-sky-800`;
+  } else if (counts.approved > 0) {
+    label = isRu ? `Можно в расписание: ${counts.approved}` : `Ready to queue: ${counts.approved}`;
+    className = `${base} bg-blue-100 text-blue-800`;
+  } else if (counts.failed > 0 || counts.manual > 0) {
+    const attention = counts.failed + counts.manual;
+    label = isRu ? `Нужно внимание: ${attention}` : `Needs attention: ${attention}`;
+    className = `${base} bg-red-100 text-red-700`;
+  } else if (counts.supervised > 0) {
+    label = isRu ? `Controlled размещение: ${counts.supervised}` : `Supervised placement: ${counts.supervised}`;
+    className = `${base} bg-amber-100 text-amber-800`;
+  } else if (counts.queued > 0) {
+    label = isRu ? `В расписании: ${counts.queued}` : `Queued: ${counts.queued}`;
+    className = `${base} bg-blue-100 text-blue-800`;
+  } else if (counts.published > 0) {
+    label = isRu ? `Опубликовано: ${counts.published}` : `Published: ${counts.published}`;
+    className = `${base} bg-emerald-100 text-emerald-800`;
+  }
+
+  const detailParts = [
+    isRu ? `API ${counts.api}` : `API ${counts.api}`,
+    isRu ? `карты ${counts.maps}` : `maps ${counts.maps}`,
+  ];
+  if (counts.review > 0) detailParts.push(isRu ? `проверка ${counts.review}` : `review ${counts.review}`);
+  if (counts.approved > 0) detailParts.push(isRu ? `утверждено ${counts.approved}` : `approved ${counts.approved}`);
+  if (counts.queued > 0) detailParts.push(isRu ? `расписание ${counts.queued}` : `queued ${counts.queued}`);
+  if (counts.supervised > 0) detailParts.push(isRu ? `controlled ${counts.supervised}` : `supervised ${counts.supervised}`);
+  if (counts.manual > 0) detailParts.push(isRu ? `вручную ${counts.manual}` : `manual ${counts.manual}`);
+  if (counts.failed > 0) detailParts.push(isRu ? `ошибки ${counts.failed}` : `failed ${counts.failed}`);
+  if (counts.published > 0) detailParts.push(isRu ? `вышло ${counts.published}` : `published ${counts.published}`);
+
+  return {
+    label,
+    className,
+    detail: detailParts.join(' · '),
+    totalLabel: isRu ? `каналов: ${total}` : `channels: ${total}`,
+  };
 }
 
 function _socialDispatchActionLabel(action: string, isRu: boolean): string {
