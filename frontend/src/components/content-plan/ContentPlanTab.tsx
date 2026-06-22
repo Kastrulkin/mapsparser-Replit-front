@@ -7607,10 +7607,47 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             })}
                           </div>
                         ) : (
-                          <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-600">
-                            {isRu
-                              ? 'Нажмите «Подготовить каналы», чтобы создать черновики для Яндекс Карт, 2ГИС, Google, Telegram, VK, Instagram и Facebook.'
-                              : 'Click “Prepare channels” to create drafts for Yandex Maps, 2GIS, Google, Telegram, VK, Instagram, and Facebook.'}
+                          <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-white px-3 py-3">
+                            <div className="text-sm font-semibold text-slate-950">
+                              {isRu ? 'Сначала подготовьте варианты по каналам' : 'First prepare channel variants'}
+                            </div>
+                            <div className="mt-1 text-sm leading-6 text-slate-600">
+                              {isRu
+                                ? 'LocalOS создаст отдельные черновики для карт и соцсетей. Это безопасный шаг: посты не подтверждаются, не ставятся в расписание и не публикуются.'
+                                : 'LocalOS creates separate drafts for maps and social channels. This is a safe step: posts are not approved, queued, or published.'}
+                            </div>
+                            <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-600 md:grid-cols-3">
+                              <div className="rounded-lg bg-slate-50 px-3 py-2">
+                                <div className="font-semibold text-slate-950">
+                                  1. {isRu ? 'Подготовка' : 'Prepare'}
+                                </div>
+                                <div>
+                                  {isRu
+                                    ? 'Создаём тексты под Яндекс, 2ГИС, Google, Telegram, VK и Meta.'
+                                    : 'Create copy for Yandex, 2GIS, Google, Telegram, VK, and Meta.'}
+                                </div>
+                              </div>
+                              <div className="rounded-lg bg-slate-50 px-3 py-2">
+                                <div className="font-semibold text-slate-950">
+                                  2. {isRu ? 'Preview и approval' : 'Preview and approval'}
+                                </div>
+                                <div>
+                                  {isRu
+                                    ? 'Вы проверяете каждый текст и отдельно нажимаете «Подтвердить».'
+                                    : 'You review each copy and explicitly click “Approve”.'}
+                                </div>
+                              </div>
+                              <div className="rounded-lg bg-slate-50 px-3 py-2">
+                                <div className="font-semibold text-slate-950">
+                                  3. {isRu ? 'Расписание' : 'Queue'}
+                                </div>
+                                <div>
+                                  {isRu
+                                    ? 'Только после approval можно поставить API-каналы в очередь; карты останутся controlled/manual.'
+                                    : 'Only after approval can API channels be queued; maps remain controlled/manual.'}
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
