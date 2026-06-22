@@ -696,6 +696,41 @@ type SocialPlanNextStep = {
   disabled?: boolean;
 };
 
+type SocialGoalStage = {
+  key?: string;
+  label_ru?: string;
+  label_en?: string;
+  labelRu?: string;
+  labelEn?: string;
+  status?: 'done' | 'current' | 'attention' | 'pending' | string;
+  detail_ru?: string;
+  detail_en?: string;
+  detailRu?: string;
+  detailEn?: string;
+  count?: number;
+};
+
+type SocialGoalProgress = {
+  schema?: string;
+  goal_ru?: string;
+  goal_en?: string;
+  stages?: SocialGoalStage[];
+  summary?: {
+    done?: number;
+    total?: number;
+    attention?: number;
+    current_key?: string;
+    current_label_ru?: string;
+    current_label_en?: string;
+  };
+  next_action_ru?: string;
+  next_action_en?: string;
+  primary_metric_ru?: string;
+  primary_metric_en?: string;
+  approval_required?: boolean;
+  maps_are_supervised_or_manual?: boolean;
+};
+
 type SocialLaunchStage = {
   key: string;
   labelRu: string;
@@ -992,6 +1027,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialApiPreflight, setSocialApiPreflight] = useState<SocialApiChannelPreflight[]>([]);
   const [socialOpenClawReadiness, setSocialOpenClawReadiness] = useState<SocialOpenClawReadiness | null>(null);
   const [socialRecommendation, setSocialRecommendation] = useState<SocialRecommendationPayload | null>(null);
+  const [socialGoalProgress, setSocialGoalProgress] = useState<SocialGoalProgress | null>(null);
   const [socialRecommendationApproved, setSocialRecommendationApproved] = useState(false);
   const [socialDispatchPreview, setSocialDispatchPreview] = useState<SocialDispatchPreview | null>(null);
   const [socialLaunchPreflight, setSocialLaunchPreflight] = useState<SocialLaunchPreflight | null>(null);
@@ -1716,7 +1752,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (!socialQueuePreview) return null;
     return _socialQueueSummary(socialQueuePreview.posts, socialApiPreflightByPlatform, socialChannelReadinessByPlatform, isRu);
   }, [isRu, socialApiPreflightByPlatform, socialQueuePreview, socialChannelReadinessByPlatform]);
-  const socialLaunchStages = useMemo<SocialLaunchStage[]>(() => {
+  const localSocialLaunchStages = useMemo<SocialLaunchStage[]>(() => {
     const totalPosts = Number(socialSummary?.total || 0);
     const needsReview = visibleSocialNeedsReview.length;
     const canQueue = visibleSocialCanQueue.length;
@@ -1862,6 +1898,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     visibleSocialNeedsReview.length,
     visibleSocialNeedsSupervised.length,
   ]);
+  const socialLaunchStages = useMemo<SocialLaunchStage[]>(() => {
+    const apiStages = Array.isArray(socialGoalProgress?.stages) ? socialGoalProgress?.stages || [] : [];
+    const normalizedStages = apiStages
+      .map((stage) => _normalizeSocialGoalStage(stage))
+      .filter((stage): stage is SocialLaunchStage => Boolean(stage));
+    return normalizedStages.length > 0 ? normalizedStages : localSocialLaunchStages;
+  }, [localSocialLaunchStages, socialGoalProgress?.stages]);
   const socialLaunchChecklistSummary = useMemo(() => {
     const done = socialLaunchStages.filter((stage) => stage.status === 'done').length;
     const attention = socialLaunchStages.filter((stage) => stage.status === 'attention').length;
@@ -2337,6 +2380,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSocialSummary(response.summary || null);
       setSocialQueueGroups(Array.isArray(response.queue_groups) ? response.queue_groups : []);
       setSocialChannelReadiness(Array.isArray(response.channel_readiness) ? response.channel_readiness : []);
+      setSocialGoalProgress(response.goal_progress && typeof response.goal_progress === 'object'
+        ? response.goal_progress
+        : null);
       setSocialOpenClawReadiness(response.openclaw_browser_readiness && typeof response.openclaw_browser_readiness === 'object'
         ? response.openclaw_browser_readiness
         : null);
@@ -2350,6 +2396,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSocialSummary(null);
       setSocialQueueGroups([]);
       setSocialChannelReadiness([]);
+      setSocialGoalProgress(null);
       setSocialOpenClawReadiness(null);
       setSocialRecommendation(null);
       setSocialRecommendationApproved(false);
@@ -9770,6 +9817,33 @@ function _socialLaunchStageStatusLabel(status: SocialLaunchStage['status'], isRu
   if (status === 'current') return isRu ? 'сейчас' : 'now';
   if (status === 'attention') return isRu ? 'внимание' : 'attention';
   return isRu ? 'позже' : 'later';
+}
+
+function _normalizeSocialGoalStage(stage: SocialGoalStage): SocialLaunchStage | null {
+  const key = String(stage?.key || '').trim();
+  const labelRu = String(stage?.labelRu || stage?.label_ru || '').trim();
+  const labelEn = String(stage?.labelEn || stage?.label_en || '').trim();
+  const detailRu = String(stage?.detailRu || stage?.detail_ru || '').trim();
+  const detailEn = String(stage?.detailEn || stage?.detail_en || '').trim();
+  const status = _normalizeSocialGoalStageStatus(stage?.status);
+  if (!key || !labelRu || !labelEn) return null;
+  return {
+    key,
+    labelRu,
+    labelEn,
+    status,
+    detailRu,
+    detailEn,
+    count: Number(stage?.count || 0),
+  };
+}
+
+function _normalizeSocialGoalStageStatus(status: SocialGoalStage['status']): SocialLaunchStage['status'] {
+  const normalized = String(status || '').trim();
+  if (normalized === 'done' || normalized === 'current' || normalized === 'attention' || normalized === 'pending') {
+    return normalized;
+  }
+  return 'pending';
 }
 
 function _socialLaunchStageTone(status: SocialLaunchStage['status']): { dot: string; badge: string } {

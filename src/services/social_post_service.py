@@ -227,12 +227,14 @@ def list_social_posts_for_plan(user_id: str, plan_id: str) -> dict[str, Any]:
             (plan_id,),
         )
         posts = [_serialize_social_post(cursor, row) for row in cursor.fetchall() or []]
+        plan_item_count = _content_plan_item_count(cursor, plan_id)
         return {
             "posts": posts,
             "summary": _summary_for_posts(posts),
             "queue_groups": build_social_queue_groups(posts),
             "recommendation": _build_plan_recommendation(posts),
             "learning_readiness": _social_learning_readiness(posts),
+            "goal_progress": _social_goal_progress(posts, plan_item_count),
             "channel_readiness": _build_channel_readiness(cursor, str(plan.get("business_id") or "")),
             "openclaw_browser_readiness": _social_openclaw_browser_readiness(),
         }
@@ -3468,6 +3470,12 @@ def _load_plan_for_user(cursor: Any, user_id: str, plan_id: str) -> dict[str, An
     return plan
 
 
+def _content_plan_item_count(cursor: Any, plan_id: str) -> int:
+    cursor.execute("SELECT COUNT(*) AS item_count FROM contentplanitems WHERE plan_id = %s", (plan_id,))
+    row = cursor.fetchone()
+    return int(_row_get(row, "item_count", 0, 0) or 0)
+
+
 def _load_post_for_user(cursor: Any, user_id: str, post_id: str) -> dict[str, Any]:
     cursor.execute("SELECT * FROM social_posts WHERE id = %s", (post_id,))
     post = _serialize_social_post(cursor, cursor.fetchone())
@@ -5372,6 +5380,206 @@ def _summary_for_posts(posts: list[dict[str, Any]]) -> dict[str, Any]:
         "published": by_status.get("published", 0),
         "failed": by_status.get("failed", 0),
     }
+
+
+def _social_goal_progress(posts: list[dict[str, Any]], plan_item_count: int = 0) -> dict[str, Any]:
+    summary = _summary_for_posts(posts)
+    by_status = summary.get("by_status") if isinstance(summary.get("by_status"), dict) else {}
+    total_posts = int(summary.get("total") or 0)
+    needs_review = int(summary.get("needs_review") or 0)
+    approved = int(by_status.get("approved", 0) or 0)
+    scheduled = int(summary.get("scheduled") or 0)
+    supervised = int(summary.get("needs_supervised_publish") or 0)
+    manual = int(summary.get("needs_manual_publish") or 0)
+    published = int(summary.get("published") or 0)
+    failed = int(summary.get("failed") or 0)
+    learning = _social_learning_readiness(posts)
+    has_plan = int(plan_item_count or 0) > 0
+    has_learning_signal = int(learning.get("posts_with_primary_result") or 0) > 0 or int(
+        learning.get("posts_with_early_signal") or 0
+    ) > 0
+    learning_ready = str(learning.get("status") or "").strip() in {"ready_from_leads", "early_signals_only"}
+
+    stages = [
+        _social_goal_stage(
+            "content_plan",
+            "Контент-план",
+            "Content plan",
+            "done" if has_plan else "current",
+            f"Тем в плане: {int(plan_item_count or 0)}." if has_plan else "Сначала создайте или откройте контент-план.",
+            f"Plan topics: {int(plan_item_count or 0)}." if has_plan else "Create or open a content plan first.",
+            int(plan_item_count or 0),
+        ),
+        _social_goal_stage(
+            "channel_posts",
+            "Посты по каналам",
+            "Channel posts",
+            "done" if total_posts > 0 else ("current" if has_plan else "pending"),
+            f"Подготовлено публикаций: {total_posts}." if total_posts > 0 else "Подготовьте каналы из тем плана.",
+            f"Prepared posts: {total_posts}." if total_posts > 0 else "Prepare channel posts from plan topics.",
+            total_posts,
+        ),
+        _social_goal_stage(
+            "review_approval",
+            "Проверка и approval",
+            "Review and approval",
+            "pending" if total_posts == 0 else ("current" if needs_review > 0 else "done"),
+            (
+                f"Нужно проверить перед исполнением: {needs_review}."
+                if needs_review > 0
+                else "Тексты готовы к расписанию: approval отделён от публикации."
+            ),
+            (
+                f"Needs review before execution: {needs_review}."
+                if needs_review > 0
+                else "Copy is ready for queueing: approval is separate from publishing."
+            ),
+            needs_review,
+        ),
+        _social_goal_stage(
+            "schedule",
+            "Расписание",
+            "Schedule",
+            "current" if approved > 0 else ("done" if scheduled > 0 or published > 0 or supervised > 0 or manual > 0 else "pending"),
+            (
+                f"Утверждено, но ещё не в очереди: {approved}."
+                if approved > 0
+                else (
+                    f"В расписании: {scheduled}."
+                    if scheduled > 0
+                    else "После approval поставьте публикации в расписание."
+                )
+            ),
+            (
+                f"Approved but not queued: {approved}."
+                if approved > 0
+                else (
+                    f"Queued: {scheduled}."
+                    if scheduled > 0
+                    else "After approval, queue posts on schedule."
+                )
+            ),
+            approved or scheduled,
+        ),
+        _social_goal_stage(
+            "execution",
+            "Исполнение",
+            "Execution",
+            (
+                "attention"
+                if failed > 0
+                else (
+                    "current"
+                    if scheduled > 0 or supervised > 0 or manual > 0
+                    else ("done" if published > 0 else "pending")
+                )
+            ),
+            _social_goal_execution_detail(failed, scheduled, supervised, manual, published, True),
+            _social_goal_execution_detail(failed, scheduled, supervised, manual, published, False),
+            failed or scheduled or supervised or manual or published,
+        ),
+        _social_goal_stage(
+            "learning",
+            "Результаты и следующий план",
+            "Results and next plan",
+            "done" if learning_ready else ("current" if published > 0 or has_learning_signal else "pending"),
+            str(learning.get("next_action_ru") or "").strip(),
+            str(learning.get("next_action_en") or "").strip(),
+            int(learning.get("primary_signal_total") or 0) + int(learning.get("secondary_signal_total") or 0),
+        ),
+    ]
+    done = sum(1 for stage in stages if stage.get("status") == "done")
+    attention = sum(1 for stage in stages if stage.get("status") == "attention")
+    current = next((stage for stage in stages if stage.get("status") == "attention"), None)
+    if not current:
+        current = next((stage for stage in stages if stage.get("status") == "current"), None)
+    if not current:
+        current = next((stage for stage in stages if stage.get("status") == "pending"), stages[-1])
+    return {
+        "schema": "localos_social_goal_progress_v1",
+        "goal_ru": "Контент-план → посты → approval → расписание → исполнение → реакции → корректировка следующего плана.",
+        "goal_en": "Content plan → posts → approval → schedule → execution → reactions → next-plan correction.",
+        "stages": stages,
+        "summary": {
+            "done": done,
+            "total": len(stages),
+            "attention": attention,
+            "current_key": str(current.get("key") or "").strip(),
+            "current_label_ru": str(current.get("label_ru") or "").strip(),
+            "current_label_en": str(current.get("label_en") or "").strip(),
+        },
+        "next_action_ru": str(current.get("detail_ru") or "").strip(),
+        "next_action_en": str(current.get("detail_en") or "").strip(),
+        "primary_metric_ru": "Заявки и обращения",
+        "primary_metric_en": "Leads and inquiries",
+        "approval_required": True,
+        "maps_are_supervised_or_manual": True,
+    }
+
+
+def _social_goal_stage(
+    key: str,
+    label_ru: str,
+    label_en: str,
+    status: str,
+    detail_ru: str,
+    detail_en: str,
+    count: int = 0,
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "label_ru": label_ru,
+        "label_en": label_en,
+        "status": status,
+        "detail_ru": detail_ru,
+        "detail_en": detail_en,
+        "count": int(count or 0),
+    }
+
+
+def _social_goal_execution_detail(
+    failed: int,
+    scheduled: int,
+    supervised: int,
+    manual: int,
+    published: int,
+    is_ru: bool,
+) -> str:
+    if int(failed or 0) > 0:
+        return (
+            f"Есть ошибки публикации: {int(failed or 0)}. Исправьте канал, повторите или переведите в ручной режим."
+            if is_ru
+            else f"Publish failures: {int(failed or 0)}. Fix the channel, retry, or move to manual mode."
+        )
+    if int(supervised or 0) > 0:
+        return (
+            f"Контролируемое размещение Яндекс/2ГИС: {int(supervised or 0)}."
+            if is_ru
+            else f"Supervised Yandex/2GIS placement: {int(supervised or 0)}."
+        )
+    if int(manual or 0) > 0:
+        return (
+            f"Нужен ручной fallback или подключение: {int(manual or 0)}."
+            if is_ru
+            else f"Manual fallback or connection needed: {int(manual or 0)}."
+        )
+    if int(scheduled or 0) > 0:
+        return (
+            f"Ждёт due-даты или scoped worker cycle: {int(scheduled or 0)}."
+            if is_ru
+            else f"Waiting for the due date or scoped worker cycle: {int(scheduled or 0)}."
+        )
+    if int(published or 0) > 0:
+        return (
+            f"Опубликовано: {int(published or 0)}. Соберите реакции и заявки."
+            if is_ru
+            else f"Published: {int(published or 0)}. Collect reactions and leads."
+        )
+    return (
+        "API публикуются только после approval и расписания; карты остаются supervised/manual."
+        if is_ru
+        else "API publishes only after approval and queueing; maps stay supervised/manual."
+    )
 
 
 def _queue_preflight_block(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:

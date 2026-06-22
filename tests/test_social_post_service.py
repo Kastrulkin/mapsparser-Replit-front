@@ -33,6 +33,7 @@ from services.social_post_service import (
     _social_supervised_blocked_metadata,
     _social_publish_evidence,
     _social_learning_readiness,
+    _social_goal_progress,
     _social_openclaw_browser_readiness,
     _status_after_social_text_edit,
     _channel_readiness,
@@ -2717,6 +2718,55 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert "controlled/manual" not in payload_json
     assert "controlled task" not in payload_json
     assert "supervised/manual" in payload_json
+
+
+def test_social_goal_progress_maps_owner_loop_from_plan_to_learning():
+    progress = _social_goal_progress(
+        [
+            {
+                "id": "post-review",
+                "platform": "telegram",
+                "status": "needs_review",
+            },
+            {
+                "id": "post-approved",
+                "platform": "vk",
+                "status": "approved",
+            },
+            {
+                "id": "post-queued",
+                "platform": "google_business",
+                "status": "queued",
+            },
+            {
+                "id": "post-map",
+                "platform": "yandex_maps",
+                "status": "needs_supervised_publish",
+            },
+            {
+                "id": "post-result",
+                "platform": "telegram",
+                "status": "published",
+                "leads": 1,
+                "inquiries": 2,
+            },
+        ],
+        plan_item_count=3,
+    )
+
+    assert progress["schema"] == "localos_social_goal_progress_v1"
+    assert progress["approval_required"] is True
+    assert progress["maps_are_supervised_or_manual"] is True
+    assert progress["summary"]["total"] == 6
+    assert progress["summary"]["current_key"] == "review_approval"
+    stages = {stage["key"]: stage for stage in progress["stages"]}
+    assert stages["content_plan"]["status"] == "done"
+    assert stages["channel_posts"]["count"] == 5
+    assert stages["review_approval"]["status"] == "current"
+    assert stages["schedule"]["status"] == "current"
+    assert stages["execution"]["status"] == "current"
+    assert stages["learning"]["status"] == "done"
+    assert "Заявки и обращения" in progress["primary_metric_ru"]
 
 
 def test_social_launch_preflight_blocks_due_api_posts_when_live_preflight_fails(monkeypatch):

@@ -28,6 +28,8 @@ REQUIRED_COPY = {
     "overview channel next actions": "Каналы: что сделать",
     "overview learning loop": "social-overview-learning-loop-status",
     "overview learning loop action": "Открыть результаты",
+    "goal progress contract": "goal_progress",
+    "goal progress maps safety": "maps_are_supervised_or_manual",
     "launch checklist": "До рабочего запуска",
     "launch checklist progress": "Готово ${summary.done} из ${summary.total}",
     "launch checklist current": "Сейчас: ",
@@ -270,6 +272,14 @@ REQUIRED_BACKEND_DISPATCH_COPY = {
 }
 
 
+REQUIRED_BACKEND_GOAL_PROGRESS_COPY = {
+    "goal progress schema": "localos_social_goal_progress_v1",
+    "goal progress review stage": "review_approval",
+    "goal progress plan path": "Контент-план → посты → approval → расписание → исполнение → реакции → корректировка следующего плана.",
+    "goal progress primary metric": "Заявки и обращения",
+}
+
+
 REQUIRED_TELEGRAM_SETTINGS_DATA_CONTRACT = {
     "telegram status endpoint": "/api/business/telegram-bot/status",
     "telegram profile endpoint": "/api/business/profile",
@@ -345,6 +355,7 @@ def main() -> int:
     missing.extend(_assert_contains(telegram_settings_source, REQUIRED_TELEGRAM_SETTINGS_DATA_CONTRACT))
     missing.extend(_assert_contains(settings_page_source, REQUIRED_SETTINGS_PAGE_COPY))
     missing.extend(_assert_contains(service_source, REQUIRED_BACKEND_DISPATCH_COPY))
+    missing.extend(_assert_contains(service_source, REQUIRED_BACKEND_GOAL_PROGRESS_COPY))
     forbidden = _assert_absent(source, FORBIDDEN_COPY)
     forbidden.extend(_assert_absent(settings_source, FORBIDDEN_COPY))
     forbidden.extend(_assert_absent(service_source, FORBIDDEN_COPY))
