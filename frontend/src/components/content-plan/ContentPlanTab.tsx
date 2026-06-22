@@ -779,6 +779,23 @@ type SocialPreparePreview = {
   };
 };
 
+type SocialApprovalPreview = {
+  key: string;
+  posts: SocialPost[];
+  postIds: string[];
+  busyAction: string;
+  source: 'selected' | 'single';
+};
+
+type SocialApprovalPreviewSummary = {
+  total: number;
+  api: number;
+  supervised: number;
+  emptyText: number;
+  blockedApiWarnings: Array<{ postId: string; platform: string; label: string; status: string }>;
+  platformLabels: string[];
+};
+
 type NetworkOperatingSlice = {
   key: string;
   label: string;
@@ -912,6 +929,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
   const [manualPublishRefs, setManualPublishRefs] = useState<Record<string, { url: string; id: string }>>({});
   const [socialPreparePreview, setSocialPreparePreview] = useState<SocialPreparePreview | null>(null);
+  const [socialApprovalPreview, setSocialApprovalPreview] = useState<SocialApprovalPreview | null>(null);
   const [socialBusyAction, setSocialBusyAction] = useState('');
   const [activeZone, setActiveZone] = useState<ContentPlanZone>('overview');
   const [contentMode, setContentMode] = useState<ContentPlanMode>('point');
@@ -1529,6 +1547,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const selectedSocialQueueApiWarnings = useMemo(() => (
     _socialApiQueueWarnings(selectedSocialCanQueue, socialApiPreflightByPlatform, isRu)
   ), [isRu, selectedSocialCanQueue, socialApiPreflightByPlatform]);
+  const socialApprovalPreviewSummary = useMemo(() => {
+    if (!socialApprovalPreview) return null;
+    return _socialApprovalSummary(socialApprovalPreview.posts, socialApiPreflightByPlatform, isRu);
+  }, [isRu, socialApiPreflightByPlatform, socialApprovalPreview]);
   const socialLaunchStages = useMemo<SocialLaunchStage[]>(() => {
     const totalPosts = Number(socialSummary?.total || 0);
     const needsReview = visibleSocialNeedsReview.length;
@@ -2505,26 +2527,76 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
-  const approveSocialPostItem = async (post: SocialPost) => {
-    setSocialBusyAction(`approve:${post.id}`);
+  const openSocialApprovalPreview = (posts: SocialPost[], source: 'selected' | 'single', busyAction: string) => {
+    const postIds = posts
+      .map((post) => String(post.id || '').trim())
+      .filter(Boolean);
+    if (postIds.length === 0) return;
+    setSocialPreparePreview(null);
+    setSocialApprovalPreview({
+      key: `${source}:${postIds.join(':')}`,
+      posts,
+      postIds,
+      busyAction,
+      source,
+    });
+    setActionSummary({
+      tone: 'neutral',
+      text_ru: 'Approval preview готов. Проверьте, что именно подтверждаете: это только проверка текста, без внешней публикации.',
+      text_en: 'Approval preview is ready. Review exactly what you approve: this only confirms copy, without external publishing.',
+    });
+  };
+
+  const approveSocialPostItem = (post: SocialPost) => {
+    openSocialApprovalPreview([post], 'single', `approve:${post.id}`);
+  };
+
+  const executeSocialApprovalPreview = async () => {
+    const preview = socialApprovalPreview;
+    if (!preview || preview.postIds.length === 0) return;
+    const summary = _socialApprovalSummary(preview.posts, socialApiPreflightByPlatform, isRu);
+    if (summary.emptyText > 0) {
+      setActionSummary({
+        tone: 'warning',
+        text_ru: `Перед approval заполните текст: ${summary.emptyText}. Пустой post нельзя подтверждать к исполнению.`,
+        text_en: `Add copy before approval: ${summary.emptyText}. Empty posts cannot be approved for execution.`,
+      });
+      return;
+    }
+    setBulkBusyAction(preview.busyAction);
     setError('');
     setActionSummary(null);
     try {
-      await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/approve`, {
+      await newAuth.makeRequest('/social-posts/bulk-approve', {
         method: 'POST',
-        body: JSON.stringify({}),
+        body: JSON.stringify({ post_ids: preview.postIds }),
       });
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
+      setSocialApprovalPreview(null);
       setActionSummary({
         tone: 'success',
-        text_ru: 'Публикация подтверждена человеком.',
-        text_en: 'Post approved by a human.',
+        text_ru: preview.source === 'single'
+          ? 'Пост подтверждён человеком. Внешняя публикация ещё не запускалась.'
+          : 'Выбранные публикации подтверждены. Внешняя публикация ещё не запускалась.',
+        text_en: preview.source === 'single'
+          ? 'Post approved by a human. External publishing has not started yet.'
+          : 'Selected posts approved. External publishing has not started yet.',
+        details_ru: [
+          'Следующий шаг - “Поставить в расписание”.',
+          'API-каналы пойдут в worker только после queue и даты публикации.',
+          'Яндекс/2ГИС после queue останутся контролируемым или ручным размещением.',
+        ],
+        details_en: [
+          'Next step: “Queue on schedule”.',
+          'API channels go to the worker only after queueing and the scheduled date.',
+          'Yandex/2GIS stay supervised or manual after queueing.',
+        ],
       });
     } catch (approveError) {
       const message = approveError instanceof Error ? approveError.message : (isRu ? 'Не удалось подтвердить публикацию' : 'Could not approve post');
       setError(message);
     } finally {
-      setSocialBusyAction('');
+      setBulkBusyAction('');
     }
   };
 
@@ -2988,26 +3060,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
       return;
     }
-    setBulkBusyAction('selected-social-approve');
-    setError('');
-    setActionSummary(null);
-    try {
-      await newAuth.makeRequest('/social-posts/bulk-approve', {
-        method: 'POST',
-        body: JSON.stringify({ post_ids: selectedSocialNeedsReview.map((post) => post.id) }),
-      });
-      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
-      setActionSummary({
-        tone: 'success',
-        text_ru: 'Выбранные публикации подтверждены. Внешняя публикация ещё не запускалась.',
-        text_en: 'Selected posts approved. External publishing has not started yet.',
-      });
-    } catch (bulkError) {
-      const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось подтвердить выбранные публикации' : 'Could not approve selected posts');
-      setError(message);
-    } finally {
-      setBulkBusyAction('');
-    }
+    openSocialApprovalPreview(selectedSocialNeedsReview, 'selected', 'selected-social-approve');
   };
 
   const queueVisibleApprovedSocialPosts = async () => {
@@ -5913,6 +5966,129 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     {bulkBusyAction === socialPreparePreview.busyAction
                       ? (isRu ? 'Создаём drafts...' : 'Creating drafts...')
                       : (isRu ? 'Создать drafts для проверки' : 'Create drafts for review')}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            {socialApprovalPreview && socialApprovalPreviewSummary ? (
+              <div
+                data-testid="social-approval-preview-panel"
+                className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4 text-sm text-sky-950"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-600">
+                      {isRu ? 'Preview перед approval' : 'Preview before approval'}
+                    </div>
+                    <div className="mt-1 text-base font-semibold text-sky-950">
+                      {isRu
+                        ? `Подтвердить тексты: ${socialApprovalPreviewSummary.total}`
+                        : `Approve copy: ${socialApprovalPreviewSummary.total}`}
+                    </div>
+                    <div className="mt-1 text-xs leading-5 text-sky-800">
+                      {isRu
+                        ? 'Approval только фиксирует проверку текста. Наружу ничего не публикуется: после этого отдельный шаг - “Поставить в расписание”.'
+                        : 'Approval only records copy review. Nothing is published externally: the separate next step is “Queue on schedule”.'}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-sky-100">
+                      <div className="text-lg font-semibold text-sky-950">{socialApprovalPreviewSummary.total}</div>
+                      <div>{isRu ? 'всего' : 'total'}</div>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-sky-100">
+                      <div className="text-lg font-semibold text-sky-950">{socialApprovalPreviewSummary.api}</div>
+                      <div>{isRu ? 'API' : 'API'}</div>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-sky-100">
+                      <div className="text-lg font-semibold text-sky-950">{socialApprovalPreviewSummary.supervised}</div>
+                      <div>{isRu ? 'карты' : 'maps'}</div>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-sky-100">
+                      <div className="text-lg font-semibold text-sky-950">{socialApprovalPreviewSummary.emptyText}</div>
+                      <div>{isRu ? 'без текста' : 'empty'}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {socialApprovalPreviewSummary.platformLabels.slice(0, 10).map((label) => (
+                    <span
+                      key={`approval-preview-platform:${label}`}
+                      className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-sky-800 ring-1 ring-sky-100"
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  <div className="rounded-xl bg-white px-3 py-2 text-xs leading-5 text-sky-800 ring-1 ring-sky-100">
+                    <div className="font-semibold text-sky-950">
+                      {isRu ? 'Что произойдёт сейчас' : 'What happens now'}
+                    </div>
+                    <div className="mt-1">
+                      {isRu
+                        ? 'LocalOS сохранит human approval. API-публикация не начнётся, пока вы отдельно не поставите посты в расписание.'
+                        : 'LocalOS will save human approval. API publishing will not start until you separately queue posts on schedule.'}
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2 text-xs leading-5 text-sky-800 ring-1 ring-sky-100">
+                    <div className="font-semibold text-sky-950">
+                      {isRu ? 'Яндекс/2ГИС' : 'Yandex/2GIS'}
+                    </div>
+                    <div className="mt-1">
+                      {isRu
+                        ? 'Для карт approval не означает автопубликацию: после queue LocalOS создаст контролируемую или ручную задачу, финальный клик остаётся за человеком.'
+                        : 'For map platforms, approval does not mean autopublish: after queueing, LocalOS creates a supervised or manual task, and the final click stays human-controlled.'}
+                    </div>
+                  </div>
+                </div>
+                {socialApprovalPreviewSummary.blockedApiWarnings.length > 0 ? (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                    <div className="font-semibold text-amber-950">
+                      {isRu ? 'API-каналы можно подтвердить, но они ещё не готовы к публикации' : 'API channels can be approved, but are not ready to publish yet'}
+                    </div>
+                    <div className="mt-1">
+                      {isRu
+                        ? 'Подтверждение текста разрешено, но worker не опубликует эти каналы без ключей, прав или привязки аккаунта.'
+                        : 'Copy approval is allowed, but the worker will not publish these channels without keys, permissions, or account binding.'}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {socialApprovalPreviewSummary.blockedApiWarnings.slice(0, 6).map((warning) => (
+                        <span
+                          key={`approval-api-warning:${warning.postId}:${warning.platform}`}
+                          className="rounded-full bg-white px-2.5 py-1 font-medium text-amber-800"
+                        >
+                          {warning.label} · {warning.status}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {socialApprovalPreviewSummary.emptyText > 0 ? (
+                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-800">
+                    {isRu
+                      ? `Перед approval заполните и сохраните текст: ${socialApprovalPreviewSummary.emptyText}.`
+                      : `Add and save copy before approval: ${socialApprovalPreviewSummary.emptyText}.`}
+                  </div>
+                ) : null}
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="bg-white"
+                    onClick={() => setSocialApprovalPreview(null)}
+                    disabled={Boolean(bulkBusyAction)}
+                  >
+                    {isRu ? 'Отменить' : 'Cancel'}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => { void executeSocialApprovalPreview(); }}
+                    disabled={Boolean(bulkBusyAction) || socialApprovalPreviewSummary.emptyText > 0}
+                  >
+                    {bulkBusyAction === socialApprovalPreview.busyAction
+                      ? (isRu ? 'Подтверждаем тексты...' : 'Approving copy...')
+                      : (isRu ? 'Подтвердить тексты' : 'Approve copy')}
                   </Button>
                 </div>
               </div>
@@ -8830,6 +9006,45 @@ function _socialApiQueueWarnings(
     });
   }
   return warnings;
+}
+
+function _socialApprovalPostText(post: SocialPost): string {
+  return String(post.platform_text || post.base_text || '').trim();
+}
+
+function _socialApprovalSummary(
+  posts: SocialPost[],
+  preflightByPlatform: Record<string, SocialApiChannelPreflight>,
+  isRu: boolean,
+): SocialApprovalPreviewSummary {
+  let api = 0;
+  let supervised = 0;
+  let emptyText = 0;
+  const labels: string[] = [];
+  const seenLabels = new Set<string>();
+  for (const post of posts) {
+    if (_isSupervisedPlatform(String(post.platform || ''))) {
+      supervised += 1;
+    } else {
+      api += 1;
+    }
+    if (!_socialApprovalPostText(post)) {
+      emptyText += 1;
+    }
+    const label = String(post.platform_label || _socialPlatformLabel(String(post.platform || ''), isRu));
+    if (label && !seenLabels.has(label)) {
+      seenLabels.add(label);
+      labels.push(label);
+    }
+  }
+  return {
+    total: posts.length,
+    api,
+    supervised,
+    emptyText,
+    blockedApiWarnings: _socialApiQueueWarnings(posts, preflightByPlatform, isRu),
+    platformLabels: labels,
+  };
 }
 
 function _socialSupervisedSafetySummary(
