@@ -24,6 +24,9 @@ REQUIRED_COPY = {
     "overview quick launch": "Быстрый запуск публикаций",
     "overview controlled placement": "LocalOS готовит контролируемое размещение",
     "overview channel next actions": "Каналы: что сделать",
+    "launch checklist": "До рабочего запуска",
+    "launch checklist progress": "Готово ${summary.done} из ${summary.total}",
+    "launch checklist current": "Сейчас: ",
     "launch readiness": "Готовность к рабочему запуску",
     "launch loop path": "Короткий путь до полного цикла",
     "launch primary signal": "заявки и обращения важнее охватов",
@@ -140,6 +143,8 @@ REQUIRED_SAFETY_COPY = {
 
 REQUIRED_DATA_CONTRACT = {
     "quick launch test id": 'data-testid="social-quick-launch"',
+    "launch checklist test id": "social-launch-checklist",
+    "launch checklist compact test id": "social-launch-checklist-compact",
     "publishing next step test id": 'data-testid="social-publishing-next-step"',
     "launch readiness test id": 'data-testid="social-launch-readiness"',
     "channel queue test id": 'data-testid="social-channel-queue"',

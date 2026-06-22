@@ -1759,6 +1759,20 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     visibleSocialNeedsReview.length,
     visibleSocialNeedsSupervised.length,
   ]);
+  const socialLaunchChecklistSummary = useMemo(() => {
+    const done = socialLaunchStages.filter((stage) => stage.status === 'done').length;
+    const attention = socialLaunchStages.filter((stage) => stage.status === 'attention').length;
+    const current = socialLaunchStages.find((stage) => stage.status === 'attention')
+      || socialLaunchStages.find((stage) => stage.status === 'current')
+      || socialLaunchStages.find((stage) => stage.status === 'pending')
+      || socialLaunchStages[socialLaunchStages.length - 1];
+    return {
+      done,
+      total: socialLaunchStages.length,
+      attention,
+      current,
+    };
+  }, [socialLaunchStages]);
   const missingDateCandidates = useMemo(() => (
     visibleItems.filter((item) => !_inputDateValue(item.scheduled_for) && !String(item.usernews_id || '').trim())
   ), [visibleItems]);
@@ -4524,6 +4538,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     <div>{isRu ? 'нужны ключи или права' : 'need keys or rights'}</div>
                   </div>
                 </div>
+                <SocialLaunchChecklist
+                  isRu={isRu}
+                  stages={socialLaunchStages}
+                  summary={socialLaunchChecklistSummary}
+                />
                 {socialOverviewChannelHighlights.length > 0 ? (
                   <div className="mt-3 rounded-xl bg-white/10 px-3 py-3">
                     <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
@@ -6491,6 +6510,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           <div>{isRu ? 'ключи/права' : 'keys/rights'}</div>
                         </div>
                       </div>
+                      <SocialLaunchChecklist
+                        isRu={isRu}
+                        stages={socialLaunchStages}
+                        summary={socialLaunchChecklistSummary}
+                        compact
+                      />
                       {socialRuntimeStatus ? (
                         <div className="rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200">
                           <div className="font-semibold text-white">
@@ -9181,6 +9206,79 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   );
 }
 
+function SocialLaunchChecklist({
+  stages,
+  summary,
+  isRu,
+  compact = false,
+}: {
+  stages: SocialLaunchStage[];
+  summary: {
+    done: number;
+    total: number;
+    attention: number;
+    current?: SocialLaunchStage;
+  };
+  isRu: boolean;
+  compact?: boolean;
+}) {
+  if (!stages.length) return null;
+  const current = summary.current;
+  return (
+    <div
+      data-testid={compact ? 'social-launch-checklist-compact' : 'social-launch-checklist'}
+      className="mt-3 rounded-xl bg-white/10 px-3 py-3 text-xs leading-5 text-slate-200"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="font-semibold text-white">
+            {isRu ? 'До рабочего запуска' : 'Before launch'}
+          </div>
+          <div className="mt-1 text-slate-300">
+            {isRu
+              ? `Готово ${summary.done} из ${summary.total}. ${summary.attention > 0 ? 'Есть блокер, его нужно снять перед исполнением.' : 'Следующий шаг ниже.'}`
+              : `${summary.done} of ${summary.total} ready. ${summary.attention > 0 ? 'A blocker needs attention before execution.' : 'Next step is below.'}`}
+          </div>
+        </div>
+        {current ? (
+          <div className="rounded-lg bg-white/10 px-2 py-1.5 text-slate-200 sm:max-w-[260px]">
+            <span className="font-semibold text-white">
+              {isRu ? 'Сейчас: ' : 'Now: '}
+            </span>
+            {isRu ? current.labelRu : current.labelEn}
+          </div>
+        ) : null}
+      </div>
+      <div className={compact ? 'mt-3 grid gap-1' : 'mt-3 grid gap-1 sm:grid-cols-2'}>
+        {stages.map((stage) => {
+          const tone = _socialLaunchStageTone(stage.status);
+          return (
+            <div
+              key={`launch-checklist-${compact ? 'compact' : 'full'}-${stage.key}`}
+              className="flex items-start gap-2 rounded-lg bg-white/10 px-2 py-2"
+            >
+              <span className={['mt-1 h-2 w-2 shrink-0 rounded-full', tone.dot].join(' ')} />
+              <span className="min-w-0 flex-1">
+                <span className="font-semibold text-white">
+                  {isRu ? stage.labelRu : stage.labelEn}
+                </span>
+                {!compact ? (
+                  <span className="block text-slate-300">
+                    {isRu ? stage.detailRu : stage.detailEn}
+                  </span>
+                ) : null}
+              </span>
+              <span className={['shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold', tone.badge].join(' ')}>
+                {_socialLaunchStageStatusLabel(stage.status, isRu)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function _isSupervisedPlatform(platform: string): boolean {
   return platform === 'yandex_maps' || platform === 'two_gis';
 }
@@ -9228,6 +9326,20 @@ function _socialOpenClawReadinessDetails(
     );
   }
   return Array.from(new Set(details)).slice(0, 6);
+}
+
+function _socialLaunchStageStatusLabel(status: SocialLaunchStage['status'], isRu: boolean): string {
+  if (status === 'done') return isRu ? 'готово' : 'done';
+  if (status === 'current') return isRu ? 'сейчас' : 'now';
+  if (status === 'attention') return isRu ? 'внимание' : 'attention';
+  return isRu ? 'позже' : 'later';
+}
+
+function _socialLaunchStageTone(status: SocialLaunchStage['status']): { dot: string; badge: string } {
+  if (status === 'done') return { dot: 'bg-emerald-300', badge: 'bg-emerald-100 text-emerald-800' };
+  if (status === 'current') return { dot: 'bg-sky-300', badge: 'bg-sky-100 text-sky-800' };
+  if (status === 'attention') return { dot: 'bg-red-300', badge: 'bg-red-100 text-red-800' };
+  return { dot: 'bg-slate-400', badge: 'bg-slate-100 text-slate-600' };
 }
 
 function _socialOpenClawReadinessOperational(readiness: SocialOpenClawReadiness): boolean {
