@@ -5,6 +5,10 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 src_dir="${repo_root}/src"
 migrations_dir="${repo_root}/alembic_migrations"
 entrypoint_file="${repo_root}/entrypoint.sh"
+runtime_script_files=(
+  "scripts/social_posting_acceptance_probe.py"
+  "scripts/smoke_social_production_readiness.py"
+)
 
 server_host="${DEPLOY_HOST:-root@80.78.242.105}"
 ssh_options=(
@@ -104,18 +108,31 @@ retry_command "remote temp dir prepare" remote_exec "rm -rf ${remote_tmp} && mkd
 retry_command "upload src" rsync -a --delete -e "${server_rsync_ssh}" "${local_bundle_dir}/src/" "${server_host}:${remote_tmp}/src/"
 retry_command "upload alembic migrations" rsync -a --delete -e "${server_rsync_ssh}" "${local_bundle_dir}/alembic_migrations/" "${server_host}:${remote_tmp}/alembic_migrations/"
 retry_command "upload entrypoint" "${server_scp_prefix[@]}" "${local_bundle_dir}/entrypoint.sh" "${server_host}:${remote_tmp}/entrypoint.sh"
+retry_command "prepare runtime social scripts" remote_exec "mkdir -p ${remote_tmp}/scripts"
+for runtime_script in "${runtime_script_files[@]}"; do
+  retry_command "upload ${runtime_script}" "${server_scp_prefix[@]}" "${repo_root}/${runtime_script}" "${server_host}:${remote_tmp}/${runtime_script}"
+done
 
 retry_command "sync backend source on server" remote_exec "\
   command -v rsync >/dev/null 2>&1 && \
-  mkdir -p src alembic_migrations && \
+  mkdir -p src alembic_migrations scripts && \
   rsync -a --delete ${remote_tmp}/src/ src/ && \
   rsync -a --delete ${remote_tmp}/alembic_migrations/ alembic_migrations/ && \
+  rsync -a ${remote_tmp}/scripts/ scripts/ && \
   install -m 755 ${remote_tmp}/entrypoint.sh entrypoint.sh"
 
 if [[ "${restart_services}" -eq 1 ]]; then
   echo "Recreating affected services to apply compose/runtime source mounts..."
   retry_command "docker compose up -d --force-recreate app worker" remote_exec "docker compose up -d --force-recreate app worker"
 fi
+
+echo "Syncing runtime social smoke scripts into app and worker containers..."
+retry_command "runtime social scripts in app container" remote_exec "\
+  docker compose exec -T app sh -lc 'mkdir -p /app/scripts' && \
+  docker compose cp ${remote_tmp}/scripts/. app:/app/scripts/"
+retry_command "runtime social scripts in worker container" remote_exec "\
+  docker compose exec -T worker sh -lc 'mkdir -p /app/scripts' && \
+  docker compose cp ${remote_tmp}/scripts/. worker:/app/scripts/"
 
 echo "Verification:"
 echo "1) docker compose ps"
@@ -128,6 +145,7 @@ echo "4) curl -I http://localhost:8000"
 retry_command "localhost health check" remote_exec "curl -I http://localhost:8000"
 echo "5) targeted runtime source check"
 retry_command "runtime source check" remote_exec "docker compose exec -T app sh -lc 'test -f /app/src/core/card_automation.py && python3 -c \"import core.card_automation; print(\\\"APP_CORE_OK\\\")\"'"
+retry_command "runtime social probe script check" remote_exec "docker compose exec -T app sh -lc 'test -f /app/scripts/social_posting_acceptance_probe.py && python3 -m py_compile /app/scripts/social_posting_acceptance_probe.py'"
 retry_command "live html check" remote_exec "curl -s ${public_domain}/ | grep -n \"/assets/index-\" | head -n 1"
 
 echo "Backend source deployed to ${server_project_dir}/src with runtime bind-mount protection."
