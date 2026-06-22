@@ -1826,8 +1826,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (planOperationalSummary.readyToPublish > 0) {
       insights.push({
         key: 'plan:ready',
-        textRu: `${planOperationalSummary.readyToPublish} черновиков уже готовы к новости. Это самый быстрый путь к видимой активности в карточках.`,
-        textEn: `${planOperationalSummary.readyToPublish} drafts are ready to become news. This is the fastest path to visible listing activity.`,
+        textRu: `${planOperationalSummary.readyToPublish} черновиков уже готовы как текст. Следующий шаг — разложить их по каналам и проверить preview.`,
+        textEn: `${planOperationalSummary.readyToPublish} drafts are ready as copy. Next, turn them into channel posts and review the preview.`,
       });
     }
     if (Number(learningMetrics?.summary?.edited_before_accept_pct || 0) >= 35) {
@@ -5041,11 +5041,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   </div>
                   <div className="rounded-2xl bg-white/10 px-3 py-3">
                     <div className="text-lg font-semibold text-white">{planOperationalSummary.readyToPublish}</div>
-                    <div>{isRu ? 'к публикации' : 'ready'}</div>
+                    <div>{isRu ? 'текст готов' : 'draft ready'}</div>
                   </div>
                   <div className="rounded-2xl bg-white/10 px-3 py-3">
                     <div className="text-lg font-semibold text-white">{planOperationalSummary.published}</div>
-                    <div>{isRu ? 'создано' : 'created'}</div>
+                    <div>{isRu ? 'новости' : 'news'}</div>
                   </div>
                 </div>
               </div>
@@ -5151,11 +5151,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         </div>
                         <div className="rounded-xl bg-white px-3 py-2">
                           <div className="font-semibold text-slate-950">{slice.readyToPublish}</div>
-                          <div className="text-slate-500">{isRu ? 'к публикации' : 'ready'}</div>
+                          <div className="text-slate-500">{isRu ? 'текст готов' : 'draft ready'}</div>
                         </div>
                         <div className="rounded-xl bg-white px-3 py-2">
                           <div className="font-semibold text-slate-950">{slice.published}</div>
-                          <div className="text-slate-500">{isRu ? 'создано' : 'created'}</div>
+                          <div className="text-slate-500">{isRu ? 'новости' : 'news'}</div>
                         </div>
                         <div className="rounded-xl bg-white px-3 py-2">
                           <div className="font-semibold text-slate-950">{slice.skipped}</div>
