@@ -4601,6 +4601,39 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   stages={socialLaunchStages}
                   summary={socialLaunchChecklistSummary}
                 />
+                <div
+                  data-testid="social-overview-learning-loop-status"
+                  className={[
+                    'mt-3 rounded-xl border px-3 py-3 text-xs leading-5',
+                    socialLearningLoopStatus.tone === 'success'
+                      ? 'border-emerald-300/40 bg-emerald-400/10 text-emerald-50'
+                      : socialLearningLoopStatus.tone === 'warning'
+                        ? 'border-amber-300/40 bg-amber-400/10 text-amber-50'
+                        : socialLearningLoopStatus.tone === 'caution'
+                          ? 'border-sky-300/40 bg-sky-400/10 text-sky-50'
+                          : 'border-white/10 bg-white/10 text-slate-200',
+                  ].join(' ')}
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="font-semibold text-white">
+                        {isRu ? 'Learning loop' : 'Learning loop'} · {isRu ? socialLearningLoopStatus.titleRu : socialLearningLoopStatus.titleEn}
+                      </div>
+                      <div className="mt-1 text-slate-200">
+                        {isRu ? socialLearningLoopStatus.textRu : socialLearningLoopStatus.textEn}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActiveZone('queue')}
+                      className="h-8 shrink-0 border-white/20 bg-white/10 px-3 text-xs text-white hover:bg-white/20 hover:text-white"
+                    >
+                      {isRu ? 'Открыть результаты' : 'Open results'}
+                    </Button>
+                  </div>
+                </div>
                 {socialOverviewChannelHighlights.length > 0 ? (
                   <div className="mt-3 rounded-xl bg-white/10 px-3 py-3">
                     <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">

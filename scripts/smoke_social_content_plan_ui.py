@@ -26,6 +26,8 @@ REQUIRED_COPY = {
     "overview openclaw readiness": "OpenClaw readiness для Яндекс/2ГИС проверяется отдельно",
     "overview openclaw check action": "Проверить OpenClaw",
     "overview channel next actions": "Каналы: что сделать",
+    "overview learning loop": "social-overview-learning-loop-status",
+    "overview learning loop action": "Открыть результаты",
     "launch checklist": "До рабочего запуска",
     "launch checklist progress": "Готово ${summary.done} из ${summary.total}",
     "launch checklist current": "Сейчас: ",
