@@ -59,6 +59,7 @@ from services.social_post_service import (
     next_action_for_social_post,
     openclaw_browser_available,
     preview_due_social_post_dispatch,
+    preview_social_posts_for_item,
     publish_social_post,
     queue_social_post,
     record_social_post_attribution_event,
@@ -321,6 +322,27 @@ class FakeSocialLedgerCursor:
         return getattr(self, "next_row", None)
 
 
+class FakeSocialOutboxCursor:
+    def __init__(self, table_exists=True):
+        self.table_exists = table_exists
+        self.inserted = []
+        self.last_query = ""
+
+    def execute(self, query, params=None):
+        self.last_query = " ".join(str(query).split()).lower()
+        if "to_regclass" in self.last_query:
+            self.next_row = ("action_callback_outbox",) if self.table_exists else (None,)
+            return
+        if "insert into action_callback_outbox" in self.last_query:
+            self.inserted.append(params)
+            self.next_row = {"id": "outbox-1"}
+            return
+        raise AssertionError(f"unexpected SQL: {query}")
+
+    def fetchone(self):
+        return getattr(self, "next_row", None)
+
+
 class FakeQueueFallbackConn:
     def __init__(self):
         self.committed = False
@@ -368,6 +390,54 @@ class FakeQueueFallbackDB:
     def __init__(self):
         self.conn = FakeQueueFallbackConn()
         FakeQueueFallbackDB.last_conn = self.conn
+
+    def close(self):
+        pass
+
+
+class FakePreparePreviewConn:
+    def __init__(self):
+        self.committed = False
+        self.rolled_back = False
+        self.cursor_obj = FakePreparePreviewCursor()
+
+    def cursor(self):
+        return self.cursor_obj
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+
+class FakePreparePreviewCursor:
+    description = (
+        ("id",),
+        ("platform",),
+        ("status",),
+        ("base_text",),
+        ("platform_text",),
+        ("media_json",),
+    )
+
+    def execute(self, query, params=None):
+        self.last_query = str(query)
+        self.last_params = tuple(params or ())
+
+    def fetchall(self):
+        return []
+
+    def fetchone(self):
+        return None
+
+
+class FakePreparePreviewDB:
+    last_conn = None
+
+    def __init__(self):
+        self.conn = FakePreparePreviewConn()
+        FakePreparePreviewDB.last_conn = self.conn
 
     def close(self):
         pass
@@ -639,6 +709,38 @@ def test_approve_social_post_rejects_empty_copy(monkeypatch):
     assert FakeApproveGuardDB.last_conn.rolled_back is True
 
 
+def test_preview_social_posts_for_item_is_read_only(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakePreparePreviewDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_plan_item_for_user",
+        lambda cursor, user_id, item_id: {
+            "id": item_id,
+            "plan_id": "plan-1",
+            "business_id": "biz-1",
+            "scheduled_for": date.today(),
+            "theme": "Тема",
+            "goal": "Цель",
+            "draft_text": "Готовый текст",
+        },
+    )
+
+    payload = preview_social_posts_for_item("user-1", "item-1", ["telegram", "yandex_maps"])
+
+    assert payload["read_only"] is True
+    assert payload["database_write_performed"] is False
+    assert payload["external_publish_performed"] is False
+    assert payload["summary"]["total"] == 2
+    assert payload["summary"]["would_create"] == 2
+    assert payload["summary"]["needs_review"] == 2
+    assert [post["platform"] for post in payload["posts"]] == ["telegram", "yandex_maps"]
+    assert payload["posts"][0]["platform_text"] == "Готовый текст"
+    assert payload["posts"][1]["publish_mode"] in {"openclaw_browser", "local_supervised_browser", "manual"}
+    assert FakePreparePreviewDB.last_conn.committed is False
+    assert FakePreparePreviewDB.last_conn.rolled_back is False
+
+
 def test_next_action_separates_review_api_and_supervised_states():
     assert next_action_for_social_post({"status": "needs_review", "platform": "telegram"}) == "review_required"
     assert next_action_for_social_post({"status": "approved", "platform": "telegram"}) == "wait_for_api_publish"
@@ -731,6 +833,12 @@ def test_social_learning_readiness_prefers_primary_business_results():
     assert readiness["status"] == "ready_from_leads"
     assert readiness["confidence"] == "high"
     assert readiness["posts_with_primary_result"] == 1
+    assert readiness["primary_signal_total"] == 1
+    assert readiness["secondary_signal_total"] == 0
+    assert readiness["early_signal_total"] == 905
+    assert readiness["leads"] == 1
+    assert readiness["inquiries"] == 0
+    assert readiness["reach"] == 905
     assert readiness["safe_to_apply_recommendation"] is True
     assert readiness["apply_blocked_reason_ru"] == ""
     assert readiness["apply_blocked_reason_en"] == ""
@@ -1009,6 +1117,67 @@ def test_dispatch_due_social_posts_can_scope_to_one_business(monkeypatch):
     assert FakeDispatchScopeCursor.last_params == ("biz-test", 200)
 
 
+def test_dispatch_due_social_posts_uses_live_api_preflight_before_provider_publish(monkeypatch):
+    class FakePickedCursor:
+        def execute(self, query, params=None):
+            self.query = str(query)
+            self.params = tuple(params or ())
+
+        def fetchall(self):
+            return [
+                {
+                    "id": "post-live-block",
+                    "business_id": "biz-1",
+                    "platform": "telegram",
+                    "status": "queued",
+                }
+            ]
+
+    class FakePickedConn:
+        def __init__(self):
+            self.cursor_obj = FakePickedCursor()
+
+        def cursor(self):
+            return self.cursor_obj
+
+    class FakePickedDB:
+        def __init__(self):
+            self.conn = FakePickedConn()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakePickedDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(social_post_service, "_owner_id_for_business", lambda business_id: "owner-1")
+    monkeypatch.setattr(
+        social_post_service,
+        "_dispatch_live_api_preflight_block",
+        lambda user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "telegram",
+            "status": "needs_manual_publish",
+            "last_error": "Telegram: live API-preflight не готов.",
+        },
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "publish_social_post",
+        lambda user_id, post_id: (_ for _ in ()).throw(AssertionError("provider publish must not run")),
+    )
+
+    result = dispatch_due_social_posts(batch_size=10, business_id="biz-1")
+
+    assert result["picked"] == 1
+    assert result["manual"] == 1
+    assert result["failed"] == 0
+    assert result["errors"] == []
+    assert result["by_action"]["manual"] == 1
+    assert result["details"][0]["status"] == "needs_manual_publish"
+    assert result["details"][0]["last_error"] == "Telegram: live API-preflight не готов."
+
+
 def test_preview_due_social_post_dispatch_can_scope_to_one_business(monkeypatch):
     monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
     monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
@@ -1072,6 +1241,29 @@ def test_run_scoped_social_dispatch_once_runs_only_requested_business(monkeypatc
     assert result["external_publish_only_after_approval"] is True
     assert captured["preflight"] == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 50}
     assert captured["dispatch"] == {"business_id": "biz-1", "batch_size": 50}
+
+
+def test_run_scoped_social_dispatch_once_rejects_live_api_preflight_block(monkeypatch):
+    def fake_preflight(user_id, business_id, batch_size=10):
+        return {
+            "business_id": business_id,
+            "summary": {"due_posts": 1, "skipped_no_access": 0, "api_preflight_blocked_due_posts": 1},
+        }
+
+    def fail_dispatch(*args, **kwargs):
+        raise AssertionError("dispatch must not run when live API preflight blocks due posts")
+
+    monkeypatch.setattr(social_post_service, "get_social_launch_preflight", fake_preflight)
+    monkeypatch.setattr(social_post_service, "dispatch_due_social_posts", fail_dispatch)
+
+    error = None
+    try:
+        run_scoped_social_dispatch_once("user-1", "biz-1", approved=True)
+    except PermissionError:
+        error = sys.exc_info()[1]
+
+    assert error is not None
+    assert "Live API-preflight" in str(error)
 
 
 def test_create_supervised_publish_task_requires_explicit_approval_before_db(monkeypatch):
@@ -1335,6 +1527,93 @@ def test_vk_api_channel_preflight_uses_read_only_wall_get(monkeypatch):
     assert "wall.get" in requested_urls[0]
     assert "wall.post" not in requested_urls[0]
     assert result["connection_checks"][-1]["key"] == "vk_wall_read_probe"
+
+
+def test_api_channel_preflight_covers_all_api_channels_without_publish(monkeypatch):
+    class FakeConn:
+        def cursor(self):
+            return object()
+
+    class FakeDB:
+        conn = FakeConn()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDB)
+    monkeypatch.setattr(social_post_service, "_require_business_access", lambda cursor, user_id, business_id: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_telegram_api_channel_preflight",
+        lambda cursor, business_id: {"platform": "telegram", "ready": True},
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_vk_api_channel_preflight",
+        lambda cursor, business_id: {"platform": "vk", "ready": True},
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_google_business_api_channel_preflight",
+        lambda cursor, business_id: {"platform": "google_business", "ready": False, "status": "missing_binding"},
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_meta_api_channel_preflight",
+        lambda cursor, business_id, platform: {"platform": platform, "ready": False, "status": "adapter_pending"},
+    )
+
+    result = social_post_service.check_social_api_channel_preflight("user-1", "biz-1")
+
+    assert [item["platform"] for item in result["api_preflight"]] == [
+        "telegram",
+        "vk",
+        "google_business",
+        "instagram",
+        "facebook",
+    ]
+    assert result["summary"] == {"checked": 5, "ready": 2, "needs_attention": 3}
+    assert result["read_only"] is True
+    assert result["external_publish_performed"] is False
+
+
+def test_google_business_api_channel_preflight_requires_location(monkeypatch):
+    monkeypatch.setattr(
+        social_post_service,
+        "_find_active_external_account",
+        lambda cursor, business_id, sources: {"id": "google-1", "external_id": ""},
+    )
+
+    missing_location = social_post_service._google_business_api_channel_preflight(
+        object(),
+        "biz-1",
+    )
+
+    assert missing_location["ready"] is False
+    assert missing_location["platform"] == "google_business"
+    assert missing_location["status"] == "missing_binding"
+
+
+def test_meta_api_channel_preflight_is_blocked_until_native_publish(monkeypatch):
+    monkeypatch.setattr(
+        social_post_service,
+        "_find_active_external_account",
+        lambda cursor, business_id, sources: {"id": "meta-1", "external_id": "page-1", "auth_data_encrypted": "x"},
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_external_account_auth_data",
+        lambda account: {"access_token": "token", "scope": "pages_manage_posts"},
+    )
+
+    result = social_post_service._meta_api_channel_preflight(object(), "biz-1", "facebook")
+
+    assert result["platform"] == "facebook"
+    assert result["ready"] is False
+    assert result["status"] == "adapter_pending"
+    assert result["read_only"] is True
+    assert result["external_publish_performed"] is False
+    assert "manual fallback" in result["message_en"]
 
 
 def test_preview_dispatch_decision_publish_api_when_channel_ready(monkeypatch):
@@ -1836,6 +2115,30 @@ def test_supervised_publish_metadata_exposes_user_visible_contract(monkeypatch):
     assert "Mark published" in supervised["manual_checklist_en"][-1]
     assert "captcha" in supervised["fallback_reasons"]
     assert supervised["openclaw_capability_status"]["ready"] is True
+    assert supervised["handoff_state"]["schema"] == "localos_social_supervised_handoff_state_v1"
+    assert supervised["handoff_state"]["state"] == "ready_for_openclaw_handoff"
+    assert supervised["handoff_state"]["task_payload_ready"] is True
+    assert supervised["handoff_state"]["openclaw_task_requested"] is False
+    assert supervised["handoff_state"]["ledger_recorded"] is False
+    assert supervised["handoff_state"]["browser_final_click_allowed"] is False
+    assert "предпросмотр" in supervised["handoff_state"]["owner_next_action_ru"]
+
+
+def test_supervised_handoff_state_explains_manual_fallback():
+    state = social_post_service._social_supervised_handoff_state(
+        {"publish_mode": "manual"},
+        {"task_id": "task-1"},
+        {"ready": False, "reason": "openclaw_catalog_not_configured"},
+    )
+
+    assert state["state"] == "manual_fallback_required"
+    assert state["openclaw_ready"] is False
+    assert state["task_payload_ready"] is True
+    assert state["openclaw_task_requested"] is False
+    assert state["ledger_recorded"] is False
+    assert state["browser_final_click_allowed"] is False
+    assert "ручной fallback" in state["owner_status_ru"]
+    assert "Отметьте" in state["owner_next_action_ru"] or "отметьте" in state["owner_next_action_ru"]
 
 
 def test_next_plan_changes_prioritize_leads_before_reach():
@@ -2118,6 +2421,57 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert "supervised/manual" in payload_json
 
 
+def test_social_launch_preflight_blocks_due_api_posts_when_live_preflight_fails(monkeypatch):
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_ENABLED", raising=False)
+    payload = _build_social_launch_preflight_payload(
+        "biz-1",
+        [_channel_readiness("google_business", "api", True, "ready")],
+        {"api_ready": 1, "api_needs_attention": 0},
+        {
+            "dry_run": True,
+            "picked": 1,
+            "skipped_no_access": 0,
+            "readiness": {
+                "status": "external_publish_ready",
+                "due_count": 1,
+                "external_publish_count": 1,
+                "controlled_count": 0,
+                "manual_count": 0,
+                "skipped_no_access": 0,
+            },
+            "items": [
+                {
+                    "id": "post-google",
+                    "platform": "google_business",
+                    "platform_label": "Google Business",
+                    "dispatch_action": "publish_api",
+                }
+            ],
+        },
+        [
+            {
+                "platform": "google_business",
+                "platform_label": "Google Business",
+                "ready": False,
+                "status": "missing_binding",
+                "message_ru": "Google Business Profile подключен, но location для публикации не выбран.",
+                "message_en": "Google Business Profile is connected, but publishing location is missing.",
+            }
+        ],
+        {"checked": 1, "ready": 0, "needs_attention": 1},
+    )
+
+    assert payload["status"] == "api_preflight_blocked"
+    assert payload["safe_to_enable_scoped_dispatch"] is False
+    assert payload["summary"]["api_preflight_blocked_due_posts"] == 1
+    assert payload["api_preflight_blocked_due_posts"][0]["id"] == "post-google"
+    assert payload["api_preflight_blocked_due_posts"][0]["status"] == "missing_binding"
+    assert payload["launch_runbook"]["ready"] is False
+    assert "Live API-preflight" in payload["launch_runbook"]["blocked_reason_ru"]
+    assert "повторите preflight" in payload["launch_runbook"]["steps_ru"][1]
+    assert "исправьте" in payload["next_action_ru"].lower()
+
+
 def test_social_launch_preflight_payload_handles_no_due_posts_as_next_ui_work():
     payload = _build_social_launch_preflight_payload(
         "biz-1",
@@ -2251,6 +2605,75 @@ def test_supervised_handoff_ledger_is_optional_when_table_missing():
     )
 
     assert ledger_id == ""
+    assert cursor.inserted == []
+
+
+def test_supervised_openclaw_outbox_enqueues_when_callback_is_configured(monkeypatch):
+    monkeypatch.setenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL", "https://openclaw.example/localos/social")
+    cursor = FakeSocialOutboxCursor(table_exists=True)
+    updated = {
+        "id": "post-1",
+        "business_id": "biz-1",
+        "content_plan_id": "plan-1",
+        "content_plan_item_id": "item-1",
+        "platform": "yandex_maps",
+        "status": "needs_supervised_publish",
+        "metadata_json": {
+            "openclaw_task": {
+                "task_id": "task-1",
+                "capability": "social.post.publish_supervised_browser",
+                "target": {"url": "https://yandex.ru/maps/org/1"},
+            },
+            "supervised_publish": {
+                "target_url": "https://yandex.ru/maps/org/1",
+                "handoff_state": {"state": "ready_for_openclaw_handoff"},
+                "safety_contract": {
+                    "side_effect_policy": "fill_preview_only",
+                    "final_publish_policy": "human_final_click_required",
+                },
+            },
+        },
+    }
+
+    outbox_id = social_post_service._enqueue_social_supervised_openclaw_outbox(
+        cursor,
+        updated,
+        "task-1",
+        "ledger-1",
+    )
+
+    assert outbox_id == "outbox-1"
+    assert len(cursor.inserted) == 1
+    params = cursor.inserted[0]
+    assert params[1] == "task-1"
+    assert params[2] == "biz-1"
+    assert params[3] == "https://openclaw.example/localos/social"
+    assert params[4] == "social.post.publish_supervised_browser.requested"
+    payload = json.loads(params[5])
+    assert payload["schema"] == "localos_social_supervised_openclaw_request_v1"
+    assert payload["social_post_id"] == "post-1"
+    assert payload["agent_action_ledger_id"] == "ledger-1"
+    assert payload["openclaw_task"]["capability"] == "social.post.publish_supervised_browser"
+    assert payload["external_publish_performed"] is False
+    assert payload["provider_write_performed"] is False
+    assert payload["browser_final_click_allowed"] is False
+    assert payload["final_publish_policy"] == "human_final_click_required"
+    assert params[7] == "social-supervised:post-1:task-1"
+
+
+def test_supervised_openclaw_outbox_is_optional_without_callback(monkeypatch):
+    monkeypatch.delenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_SUPERVISED_CALLBACK_URL", raising=False)
+    cursor = FakeSocialOutboxCursor(table_exists=True)
+
+    outbox_id = social_post_service._enqueue_social_supervised_openclaw_outbox(
+        cursor,
+        {"id": "post-1", "business_id": "biz-1", "metadata_json": {}},
+        "task-1",
+        "",
+    )
+
+    assert outbox_id == ""
     assert cursor.inserted == []
 
 
@@ -2411,5 +2834,12 @@ def test_apply_social_post_recommendation_changes_only_future_unpublished_items(
     assert conn.committed is True
     assert edited_plan["existing_note"] == "keep me"
     assert edited_plan["last_social_recommendation_apply"]["approved_by"] == "user-1"
+    assert edited_plan["last_social_recommendation_apply"]["human_approved"] is True
+    assert edited_plan["last_social_recommendation_apply"]["scope"] == "future_unpublished_content_plan_items"
+    assert edited_plan["last_social_recommendation_apply"]["proposed_count"] == 4
     assert edited_plan["last_social_recommendation_apply"]["applied_count"] == 1
     assert len(edited_plan["social_recommendation_history"]) == 2
+    assert result["approval_record"]["approved_by"] == "user-1"
+    assert result["approval_record"]["human_approved"] is True
+    assert result["approval_record"]["scope"] == "future_unpublished_content_plan_items"
+    assert result["applies_automatically"] is False

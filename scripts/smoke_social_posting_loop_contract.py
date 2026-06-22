@@ -36,6 +36,7 @@ REQUIRED_UI_MARKERS = {
 
 REQUIRED_API_MARKERS = {
     "prepare endpoint": "/api/content-plans/items/<item_id>/social-posts/prepare",
+    "prepare preview endpoint": "/api/content-plans/items/<item_id>/social-posts/prepare-preview",
     "list endpoint": "/api/content-plans/<plan_id>/social-posts",
     "approve endpoint": "/api/social-posts/<post_id>/approve",
     "queue endpoint": "/api/social-posts/<post_id>/queue",
@@ -55,17 +56,29 @@ REQUIRED_API_MARKERS = {
 
 REQUIRED_SERVICE_MARKERS = {
     "telegram publish adapter": "https://api.telegram.org/bot{bot_token}/sendMessage",
+    "prepare preview service": "preview_social_posts_for_item",
+    "prepare preview read only": "database_write_performed",
     "vk publish adapter": "https://api.vk.com/method/wall.post",
     "vk metrics adapter": "https://api.vk.com/method/wall.getById",
     "telegram metrics limit status": "telegram_bot_api_metrics_unavailable",
+    "google api channel preflight": "_google_business_api_channel_preflight",
+    "meta api channel preflight": "_meta_api_channel_preflight",
+    "dispatch live api preflight guard": "_dispatch_live_api_preflight_block",
+    "dispatch live preflight source": "worker_dispatch_live_api_preflight",
     "google metrics explicit boundary": "google_business_metrics_not_enabled",
     "meta metrics explicit boundary": "meta_graph_metrics_permissions_required",
     "maps metrics explicit boundary": "map_metrics_manual_input_required",
     "supervised task capability": "social.post.publish_supervised_browser",
+    "supervised handoff state": "localos_social_supervised_handoff_state_v1",
+    "supervised external task request truth": "openclaw_task_requested",
+    "supervised openclaw outbox request": "localos_social_supervised_openclaw_request_v1",
+    "supervised outbox table": "action_callback_outbox",
     "stop before final publish": "stop_before_final_publish",
     "human final click policy": "human_final_click_required",
     "no approval no queue": "Перед постановкой в расписание нужно подтверждение человека",
     "recommendation approval": "approved_at",
+    "recommendation approval record": "approval_record",
+    "recommendation future-only scope": "future_unpublished_content_plan_items",
 }
 
 

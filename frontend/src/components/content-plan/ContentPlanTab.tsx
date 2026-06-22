@@ -198,6 +198,21 @@ type SocialSupervisedSafetyContract = {
 
 type SocialPostMetadata = {
   supervised_publish?: {
+    handoff_state?: {
+      state?: string;
+      openclaw_ready?: boolean;
+      task_payload_ready?: boolean;
+      openclaw_task_requested?: boolean;
+      openclaw_outbox_id?: string;
+      ledger_recorded?: boolean;
+      ledger_id?: string;
+      owner_status_ru?: string;
+      owner_status_en?: string;
+      owner_next_action_ru?: string;
+      owner_next_action_en?: string;
+      final_publish_policy?: string;
+      browser_final_click_allowed?: boolean;
+    };
     instruction_ru?: string;
     instruction_en?: string;
     manual_instruction_ru?: string;
@@ -305,6 +320,16 @@ type SocialLearningReadiness = {
   published_posts?: number;
   posts_with_primary_result?: number;
   posts_with_early_signal?: number;
+  primary_signal_total?: number;
+  secondary_signal_total?: number;
+  early_signal_total?: number;
+  leads?: number;
+  inquiries?: number;
+  comments?: number;
+  shares?: number;
+  clicks?: number;
+  likes?: number;
+  reach?: number;
   pending_manual_or_supervised_posts?: number;
   failed_posts?: number;
   primary_metric_ru?: string;
@@ -471,6 +496,20 @@ type SocialLaunchPreflight = {
   };
   dispatch_preview?: SocialDispatchPreview;
   dispatch_readiness?: SocialDispatchPreview['readiness'];
+  api_preflight?: SocialApiChannelPreflight[];
+  api_preflight_summary?: {
+    checked?: number;
+    ready?: number;
+    needs_attention?: number;
+  };
+  api_preflight_blocked_due_posts?: Array<{
+    id?: string;
+    platform?: string;
+    platform_label?: string;
+    status?: string;
+    message_ru?: string;
+    message_en?: string;
+  }>;
   recommended_env?: {
     dispatch?: Record<string, string>;
     metrics?: Record<string, string>;
@@ -488,6 +527,7 @@ type SocialLaunchPreflight = {
     controlled_due_posts?: number;
     manual_due_posts?: number;
     blocked_api_channels?: number;
+    api_preflight_blocked_due_posts?: number;
     controlled_channels?: number;
     skipped_no_access?: number;
   };
@@ -1458,6 +1498,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
     return byPlatform;
   }, [socialApiPreflight]);
+  const socialApiPreflightSummary = useMemo(() => {
+    const ready = socialApiPreflight.filter((item) => Boolean(item.ready));
+    const needsAttention = socialApiPreflight.filter((item) => !Boolean(item.ready));
+    return {
+      checked: socialApiPreflight.length,
+      ready,
+      needsAttention,
+    };
+  }, [socialApiPreflight]);
+  const selectedSocialQueueApiWarnings = useMemo(() => (
+    _socialApiQueueWarnings(selectedSocialCanQueue, socialApiPreflightByPlatform, isRu)
+  ), [isRu, selectedSocialCanQueue, socialApiPreflightByPlatform]);
   const socialLaunchStages = useMemo<SocialLaunchStage[]>(() => {
     const totalPosts = Number(socialSummary?.total || 0);
     const needsReview = visibleSocialNeedsReview.length;
@@ -2816,6 +2868,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setActionSummary(null);
     try {
       const itemIds = selectedItems.map((item) => item.id);
+      const confirmed = await confirmSocialPreparePreview(selectedItems);
+      if (!confirmed) return;
       await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
         method: 'POST',
         body: JSON.stringify({ item_ids: itemIds }),
@@ -2842,6 +2896,50 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const confirmSocialPreparePreview = async (itemsToPrepare: PlanItem[]) => {
+    const firstItem = itemsToPrepare[0];
+    if (!firstItem) return false;
+    const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(firstItem.id)}/social-posts/prepare-preview`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    const summary = response.summary && typeof response.summary === 'object' ? response.summary : {};
+    const item = response.item && typeof response.item === 'object' ? response.item : {};
+    const total = Number(summary.total || 0);
+    const wouldCreate = Number(summary.would_create || 0);
+    const wouldUpdate = Number(summary.would_update || 0);
+    const wouldPreserve = Number(summary.would_preserve || 0);
+    const fallbackTitle = isRu ? 'выбранная тема' : 'selected topic';
+    const title = String(item.theme || firstItem.theme || firstItem.goal || fallbackTitle).trim();
+    const message = isRu
+      ? [
+        'Preview подготовки каналов',
+        '',
+        `Тема: ${title}`,
+        `Каналов в preview: ${total}`,
+        `Будет создано drafts: ${wouldCreate}`,
+        `Будет обновлено drafts: ${wouldUpdate}`,
+        `Будет сохранено без перезаписи: ${wouldPreserve}`,
+        itemsToPrepare.length > 1 ? `Всего выбранных тем: ${itemsToPrepare.length}. Preview показан по первой теме.` : '',
+        '',
+        'Наружу ничего не публикуется. Продолжить подготовку каналов?',
+      ].filter(Boolean).join('\n')
+      : [
+        'Channel preparation preview',
+        '',
+        `Topic: ${title}`,
+        `Preview channels: ${total}`,
+        `Drafts to create: ${wouldCreate}`,
+        `Drafts to update: ${wouldUpdate}`,
+        `Preserved without overwrite: ${wouldPreserve}`,
+        itemsToPrepare.length > 1 ? `Selected topics: ${itemsToPrepare.length}. Preview is shown for the first topic.` : '',
+        '',
+        'Nothing will be published externally. Continue preparing channels?',
+      ].filter(Boolean).join('\n');
+    if (typeof window === 'undefined') return true;
+    return window.confirm(message);
+  };
+
   const prepareSuggestedSocialPosts = async () => {
     const itemsToPrepare = selectedItems.length > 0 ? selectedItems : visibleItems.slice(0, 5);
     if (itemsToPrepare.length === 0) return;
@@ -2849,6 +2947,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setError('');
     setActionSummary(null);
     try {
+      const confirmed = await confirmSocialPreparePreview(itemsToPrepare);
+      if (!confirmed) return;
       await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
         method: 'POST',
         body: JSON.stringify({ item_ids: itemsToPrepare.map((item) => item.id) }),
@@ -3135,6 +3235,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         channel_summary: response.channel_summary && typeof response.channel_summary === 'object' ? response.channel_summary : {},
         dispatch_preview: dispatchPreview || undefined,
         dispatch_readiness: response.dispatch_readiness && typeof response.dispatch_readiness === 'object' ? response.dispatch_readiness : {},
+        api_preflight: Array.isArray(response.api_preflight) ? response.api_preflight : [],
+        api_preflight_summary: response.api_preflight_summary && typeof response.api_preflight_summary === 'object' ? response.api_preflight_summary : {},
+        api_preflight_blocked_due_posts: Array.isArray(response.api_preflight_blocked_due_posts) ? response.api_preflight_blocked_due_posts : [],
         recommended_env: response.recommended_env && typeof response.recommended_env === 'object' ? response.recommended_env : {},
         safety: response.safety && typeof response.safety === 'object' ? response.safety : {},
         summary: response.summary && typeof response.summary === 'object' ? response.summary : {},
@@ -3277,10 +3380,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         setCurrentPlan(planResponse.plan || currentPlan);
         await loadSocialPosts(currentPlan.id);
       }
+      const approvalRecord = response.approval_record && typeof response.approval_record === 'object'
+        ? response.approval_record
+        : {};
+      const approvedAt = String(approvalRecord.approved_at || '').trim();
       setActionSummary({
         tone: 'success',
-        text_ru: `Корректировка применена: ${Number(response.applied_count || 0)} пунктов плана.`,
-        text_en: `Recommendation applied: ${Number(response.applied_count || 0)} plan items.`,
+        text_ru: `Корректировка применена после подтверждения: ${Number(response.applied_count || 0)} пунктов плана. Изменялись только будущие неопубликованные пункты${approvedAt ? ` · ${approvedAt}` : ''}.`,
+        text_en: `Recommendation applied after approval: ${Number(response.applied_count || 0)} plan items. Only future unpublished items were changed${approvedAt ? ` · ${approvedAt}` : ''}.`,
       });
       setSocialRecommendationApproved(false);
     } catch (applyError) {
@@ -4281,7 +4388,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-slate-900 bg-slate-950 px-4 py-4 text-white">
+          <div
+            data-testid="social-quick-launch"
+            className="mt-5 rounded-2xl border border-slate-900 bg-slate-950 px-4 py-4 text-white"
+          >
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
@@ -5864,7 +5974,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   : ` · ${isRu ? 'все даты' : 'all dates'}`}
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
-                <div className="rounded-2xl border border-slate-200 bg-slate-950 px-4 py-4 text-white">
+                <div
+                  data-testid="social-publishing-next-step"
+                  className="rounded-2xl border border-slate-200 bg-slate-950 px-4 py-4 text-white"
+                >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
@@ -6055,6 +6168,30 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               {isRu
                                 ? String(socialLaunchPreflight.next_action_ru || '')
                                 : String(socialLaunchPreflight.next_action_en || '')}
+                            </div>
+                          ) : null}
+                          {Number(socialLaunchPreflight.api_preflight_blocked_due_posts?.length || 0) > 0 ? (
+                            <div className="mt-2 rounded-lg border border-amber-200/30 bg-amber-950/20 px-2 py-2 text-[11px] leading-5 text-amber-50">
+                              <div className="font-semibold text-white">
+                                {isRu ? 'Live API-preflight остановил запуск' : 'Live API preflight blocked launch'}
+                              </div>
+                              <div className="mt-1">
+                                {isRu
+                                  ? 'Worker не будет запущен, пока due API-посты смотрят в канал без готовых ключей, прав, location или adapter.'
+                                  : 'The worker will not run while due API posts target a channel without ready keys, permissions, location, or adapter.'}
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {(socialLaunchPreflight.api_preflight_blocked_due_posts || []).slice(0, 4).map((item) => (
+                                  <span
+                                    key={`launch-api-block:${String(item.id || '')}:${String(item.platform || '')}`}
+                                    className="rounded-full bg-white/10 px-2 py-0.5 font-medium text-amber-50"
+                                  >
+                                    {item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)}
+                                    {' · '}
+                                    {String(item.status || 'not_ready')}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           ) : null}
                           <div className="mt-2 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] text-slate-200">
@@ -6292,7 +6429,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                   </div>
                 </div>
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                <div
+                  data-testid="social-launch-readiness"
+                  className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-4"
+                >
                   <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="text-sm font-semibold text-slate-950">
@@ -6384,7 +6524,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     ))}
                   </div>
                 </div>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div
+                  data-testid="social-channel-queue"
+                  className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
+                >
                   <div>
                     <div className="text-sm font-semibold text-slate-950">
                       {isRu ? 'Очередь публикаций по каналам' : 'Channel publishing queue'}
@@ -6552,6 +6695,48 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               {channel.platform_label || _socialPlatformLabel(channel.platform, isRu)} · {isRu ? channel.setup_summary_ru || channel.next_action_ru || channel.message_ru : channel.setup_summary_en || channel.next_action_en || channel.message_en}
                             </span>
                           ))}
+                        </div>
+                      ) : null}
+                      {socialApiPreflightSummary.checked > 0 ? (
+                        <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-900">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <div className="font-semibold text-sky-950">
+                                {isRu ? 'Live API-проверка каналов' : 'Live API channel check'}
+                              </div>
+                              <div className="mt-1 text-sky-800">
+                                {isRu
+                                  ? `Проверено без публикации: ${socialApiPreflightSummary.checked}. Готово: ${socialApiPreflightSummary.ready.length}. Нужно внимание: ${socialApiPreflightSummary.needsAttention.length}.`
+                                  : `Checked without publishing: ${socialApiPreflightSummary.checked}. Ready: ${socialApiPreflightSummary.ready.length}. Needs attention: ${socialApiPreflightSummary.needsAttention.length}.`}
+                              </div>
+                            </div>
+                            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-sky-800">
+                              {isRu ? 'publish только после approval' : 'publish only after approval'}
+                            </span>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {socialApiPreflight.map((item) => (
+                              <span
+                                key={`api-preflight-summary:${String(item.platform || '')}`}
+                                className={
+                                  item.ready
+                                    ? 'rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-800'
+                                    : 'rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-amber-800'
+                                }
+                              >
+                                {item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)}
+                                {' · '}
+                                {item.ready ? (isRu ? 'готов' : 'ready') : String(item.status || (isRu ? 'нужно внимание' : 'needs attention'))}
+                              </span>
+                            ))}
+                          </div>
+                          {socialApiPreflightSummary.needsAttention.length > 0 ? (
+                            <div className="mt-2 text-sky-800">
+                              {isRu
+                                ? 'Перед расписанием исправьте ключи, права или используйте ручной fallback для заблокированных каналов.'
+                                : 'Before queueing, fix keys, permissions, or use manual fallback for blocked channels.'}
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
@@ -6733,7 +6918,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </button>
                   ))}
                 </div>
-                <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-3">
+                <div
+                  data-testid="social-next-plan-recommendation"
+                  className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-3"
+                >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="text-sm font-semibold text-emerald-950">
@@ -6773,6 +6961,28 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               <div>
                                 <span className="font-semibold">{isRu ? 'Нужно закрыть: ' : 'Need action: '}</span>
                                 {Number(socialRecommendation.learning_readiness.pending_manual_or_supervised_posts || 0) + Number(socialRecommendation.learning_readiness.failed_posts || 0)}
+                              </div>
+                            </div>
+                            <div className="mt-2 rounded-lg bg-white px-2.5 py-2 text-[11px] leading-5">
+                              <div className="font-semibold">
+                                {isRu ? 'Факты для следующего плана' : 'Facts for the next plan'}
+                              </div>
+                              <div className="mt-1 grid gap-1 sm:grid-cols-3">
+                                <div>
+                                  {isRu
+                                    ? `заявки ${Number(socialRecommendation.learning_readiness.leads || 0)}, обращения ${Number(socialRecommendation.learning_readiness.inquiries || 0)}`
+                                    : `leads ${Number(socialRecommendation.learning_readiness.leads || 0)}, inquiries ${Number(socialRecommendation.learning_readiness.inquiries || 0)}`}
+                                </div>
+                                <div>
+                                  {isRu
+                                    ? `комментарии ${Number(socialRecommendation.learning_readiness.comments || 0)}, репосты ${Number(socialRecommendation.learning_readiness.shares || 0)}, клики ${Number(socialRecommendation.learning_readiness.clicks || 0)}`
+                                    : `comments ${Number(socialRecommendation.learning_readiness.comments || 0)}, shares ${Number(socialRecommendation.learning_readiness.shares || 0)}, clicks ${Number(socialRecommendation.learning_readiness.clicks || 0)}`}
+                                </div>
+                                <div>
+                                  {isRu
+                                    ? `лайки ${Number(socialRecommendation.learning_readiness.likes || 0)}, охват/просмотры ${Number(socialRecommendation.learning_readiness.reach || 0)}`
+                                    : `likes ${Number(socialRecommendation.learning_readiness.likes || 0)}, reach/views ${Number(socialRecommendation.learning_readiness.reach || 0)}`}
+                                </div>
                               </div>
                             </div>
                             <div className="mt-2 text-[11px] leading-5">
@@ -7115,6 +7325,28 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               : 'If the buttons below show 0, prepare channels for the selected topics first.')}
                     </div>
                   </div>
+                  {selectedSocialQueueApiWarnings.length > 0 ? (
+                    <div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                      <div className="font-semibold text-amber-950">
+                        {isRu ? 'Перед расписанием эти API-каналы не готовы' : 'These API channels are not ready before queueing'}
+                      </div>
+                      <div className="mt-1">
+                        {isRu
+                          ? 'Queue можно сохранить, но worker не будет публиковать эти каналы, пока не появятся ключи, права, location или adapter.'
+                          : 'Queue can still be saved, but the worker will not publish these channels until keys, permissions, location, or adapter are ready.'}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {selectedSocialQueueApiWarnings.slice(0, 6).map((warning) => (
+                          <span
+                            key={`selected-api-warning:${warning.postId}:${warning.platform}`}
+                            className="rounded-full bg-white px-2.5 py-1 font-medium text-amber-800"
+                          >
+                            {warning.label} · {warning.status}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <Button
                     variant="outline"
                     onClick={() => { void runSelectedGenerateDrafts(); }}
@@ -7436,6 +7668,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 && (post.status === 'approved' || post.status === 'queued' || post.status === 'needs_manual_publish');
                               const publishEvidence = post.publish_evidence || null;
                               const supervisedPayload = _socialSupervisedPayload(post);
+                              const supervisedHandoffState = supervisedPayload?.handoff_state || null;
                               const manualRefs = manualPublishRefs[post.id] || {
                                 url: String(post.provider_post_url || ''),
                                 id: String(post.provider_post_id || ''),
@@ -7467,6 +7700,20 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 ? supervisedPayload.fallback_reasons.filter(Boolean).map(String)
                                 : [];
                               const supervisedSafety = _socialSupervisedSafetySummary(supervisedPayload?.safety_contract, isRu);
+                              const supervisedHandoffStatus = String(
+                                isRu
+                                  ? supervisedHandoffState?.owner_status_ru || ''
+                                  : supervisedHandoffState?.owner_status_en || ''
+                              ).trim();
+                              const supervisedHandoffNextAction = String(
+                                isRu
+                                  ? supervisedHandoffState?.owner_next_action_ru || ''
+                                  : supervisedHandoffState?.owner_next_action_en || ''
+                              ).trim();
+                              const supervisedHandoffStateLabel = _socialSupervisedHandoffStateLabel(
+                                String(supervisedHandoffState?.state || ''),
+                                isRu,
+                              );
                               const preflightStatus = String(post.metadata_json?.queue_preflight_status || post.metadata_json?.provider_status || '').trim();
                                 const preflightMessage = String(
                                   isRu
@@ -7583,7 +7830,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                     ) : null}
                                   </div>
                                   {isSupervisedPost ? (
-                                    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                                    <div
+                                      data-testid="social-supervised-handoff"
+                                      className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800"
+                                    >
                                       <div className="font-semibold text-amber-950">
                                         {isRu ? 'Контролируемое размещение' : 'Supervised placement'}
                                       </div>
@@ -7592,6 +7842,73 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                           ? 'Для этого канала LocalOS готовит задачу для OpenClaw/manual handoff, а не делает вид стабильной API-автопубликации.'
                                           : 'For this channel LocalOS prepares an OpenClaw/manual handoff task instead of pretending stable API autopublishing exists.'}
                                       </div>
+                                      {supervisedHandoffState ? (
+                                        <div className="mt-3 rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-950">
+                                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                            <div>
+                                              <div className="font-semibold">
+                                                {isRu ? 'Состояние handoff' : 'Handoff state'}
+                                              </div>
+                                              <div className="mt-1 text-[11px] leading-5 text-amber-900">
+                                                {supervisedHandoffStatus || supervisedHandoffStateLabel}
+                                              </div>
+                                              {supervisedHandoffNextAction ? (
+                                                <div className="mt-1 text-[11px] leading-5 text-amber-900">
+                                                  <span className="font-semibold">
+                                                    {isRu ? 'Что сделать: ' : 'Next: '}
+                                                  </span>
+                                                  {supervisedHandoffNextAction}
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                            {supervisedHandoffStateLabel ? (
+                                              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+                                                {supervisedHandoffStateLabel}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                          <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                                            {supervisedHandoffState.task_payload_ready ? (
+                                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-800">
+                                                {isRu ? 'payload готов' : 'payload ready'}
+                                              </span>
+                                            ) : null}
+                                            {supervisedHandoffState.openclaw_ready ? (
+                                              <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium text-sky-800">
+                                                {isRu ? 'OpenClaw готов' : 'OpenClaw ready'}
+                                              </span>
+                                            ) : (
+                                              <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">
+                                                {isRu ? 'ручной fallback' : 'manual fallback'}
+                                              </span>
+                                            )}
+                                            {supervisedHandoffState.openclaw_task_requested ? (
+                                              <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium text-sky-800">
+                                                {isRu ? 'task отправлен' : 'task requested'}
+                                              </span>
+                                            ) : (
+                                              <span className="rounded-full bg-white px-2 py-0.5 font-medium text-amber-800">
+                                                {isRu ? 'task не отправлен во внешний runtime' : 'task not sent to external runtime'}
+                                              </span>
+                                            )}
+                                            {supervisedHandoffState.ledger_recorded ? (
+                                              <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
+                                                {isRu ? 'журнал записан' : 'ledger recorded'}
+                                              </span>
+                                            ) : null}
+                                            {supervisedHandoffState.browser_final_click_allowed === false ? (
+                                              <span className="rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700">
+                                                {isRu ? 'финальный клик запрещён' : 'final click forbidden'}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                          {supervisedHandoffState.openclaw_outbox_id ? (
+                                            <div className="mt-2 font-mono text-[11px] text-amber-900">
+                                              outbox: {supervisedHandoffState.openclaw_outbox_id}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      ) : null}
                                       {supervisedPayload?.instruction_ru || supervisedPayload?.instruction_en ? (
                                         <div className="mt-2 text-amber-900">
                                           {isRu
@@ -7772,7 +8089,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                     </div>
                                   ) : null}
                                   {!canRecordResult ? (
-                                    <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-900">
+                                    <div
+                                      data-testid="social-preview-before-approval"
+                                      className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-900"
+                                    >
                                       <div className="flex flex-wrap items-center justify-between gap-2">
                                         <div className="font-semibold text-sky-950">
                                           {isRu ? 'Предпросмотр перед подтверждением' : 'Preview before approval'}
@@ -8402,6 +8722,38 @@ function _socialOpenClawCapabilityLine(
     status.error,
   ].map((item) => String(item || '').trim()).filter(Boolean);
   return `OpenClaw browser-use: ${state}${details.length ? ` · ${details.join(' · ')}` : ''}`;
+}
+
+function _socialSupervisedHandoffStateLabel(state: string, isRu: boolean): string {
+  const normalized = String(state || '').trim();
+  if (normalized === 'ready_for_openclaw_handoff') {
+    return isRu ? 'готово к OpenClaw' : 'ready for OpenClaw';
+  }
+  if (normalized === 'manual_fallback_required') {
+    return isRu ? 'нужно вручную' : 'manual fallback';
+  }
+  return normalized;
+}
+
+function _socialApiQueueWarnings(
+  posts: SocialPost[],
+  preflightByPlatform: Record<string, SocialApiChannelPreflight>,
+  isRu: boolean,
+): Array<{ postId: string; platform: string; label: string; status: string }> {
+  const warnings: Array<{ postId: string; platform: string; label: string; status: string }> = [];
+  for (const post of posts) {
+    if (String(post.publish_mode || '').trim() !== 'api') continue;
+    const platform = String(post.platform || '').trim();
+    const preflight = preflightByPlatform[platform];
+    if (!preflight || Boolean(preflight.ready)) continue;
+    warnings.push({
+      postId: post.id,
+      platform,
+      label: String(preflight.platform_label || post.platform_label || _socialPlatformLabel(platform, isRu)),
+      status: String(preflight.status || (isRu ? 'нужно внимание' : 'needs attention')),
+    });
+  }
+  return warnings;
 }
 
 function _socialSupervisedSafetySummary(

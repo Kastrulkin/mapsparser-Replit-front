@@ -25,6 +25,7 @@ from services.social_post_service import (
     mark_supervised_publish_blocked,
     prepare_social_posts_for_item,
     prepare_social_posts_for_items,
+    preview_social_posts_for_item,
     preview_due_social_post_dispatch,
     publish_social_post,
     publish_social_posts,
@@ -137,6 +138,24 @@ def social_posts_prepare(item_id: str):
     platforms = data.get("platforms") if isinstance(data.get("platforms"), list) else None
     try:
         payload = prepare_social_posts_for_item(str(user_data.get("user_id") or ""), item_id, platforms)
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/content-plans/items/<item_id>/social-posts/prepare-preview", methods=["POST"])
+def social_posts_prepare_preview(item_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    data = request.get_json(silent=True) or {}
+    platforms = data.get("platforms") if isinstance(data.get("platforms"), list) else None
+    try:
+        payload = preview_social_posts_for_item(str(user_data.get("user_id") or ""), item_id, platforms)
         return jsonify({"success": True, **payload})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403

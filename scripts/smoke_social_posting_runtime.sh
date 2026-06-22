@@ -71,10 +71,54 @@ for key in ("dispatch", "metrics"):
         sys.exit(1)
 PY
 
+  echo
+  echo "[social-runtime] app/worker social env alignment"
+  social_env_json() {
+    docker compose exec -T "$1" python3 - <<'PY'
+import json
+import os
+
+keys = [
+    "SOCIAL_POST_DISPATCH_ENABLED",
+    "SOCIAL_POST_DISPATCH_INTERVAL_SEC",
+    "SOCIAL_POST_DISPATCH_BATCH_SIZE",
+    "SOCIAL_POST_DISPATCH_BUSINESS_ID",
+    "SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED",
+    "SOCIAL_POST_METRICS_ENABLED",
+    "SOCIAL_POST_METRICS_INTERVAL_SEC",
+    "SOCIAL_POST_METRICS_BATCH_SIZE",
+    "SOCIAL_POST_METRICS_BUSINESS_ID",
+    "SOCIAL_POST_METRICS_ALLOW_UNSCOPED",
+]
+print(json.dumps({key: os.getenv(key, "") for key in keys}, sort_keys=True))
+PY
+  }
+  app_social_env_json="$(social_env_json app)"
+  worker_social_env_json="$(social_env_json worker)"
+  echo "app_social_env=${app_social_env_json}"
+  echo "worker_social_env=${worker_social_env_json}"
+  APP_SOCIAL_ENV_JSON="$app_social_env_json" WORKER_SOCIAL_ENV_JSON="$worker_social_env_json" python3 - <<'PY'
+import json
+import os
+import sys
+
+app_env = json.loads(os.environ["APP_SOCIAL_ENV_JSON"])
+worker_env = json.loads(os.environ["WORKER_SOCIAL_ENV_JSON"])
+keys = sorted(set(app_env) | set(worker_env))
+mismatches = [
+    key
+    for key in keys
+    if str(app_env.get(key, "")) != str(worker_env.get(key, ""))
+]
+if mismatches:
+    print("app/worker social env mismatch:", ", ".join(mismatches), file=sys.stderr)
+    sys.exit(1)
+PY
+
   if [[ -n "${SMOKE_BUSINESS_ID}" ]]; then
     echo
     echo "[social-runtime] scoped launch preflight dry-run"
-    SOCIAL_RUNTIME_SMOKE_BUSINESS_ID="${SMOKE_BUSINESS_ID}" docker compose exec -T app python3 - <<'PY'
+    docker compose exec -e SOCIAL_RUNTIME_SMOKE_BUSINESS_ID="${SMOKE_BUSINESS_ID}" -T app python3 - <<'PY'
 import json
 import os
 import sys
@@ -147,7 +191,15 @@ PY
   worker_logs="$(docker compose logs --since "$SINCE" worker || true)"
   if echo "$worker_logs" | grep -F "[SOCIAL_POST_DISPATCH]" >/dev/null; then
     echo "$worker_logs" | grep -F "[SOCIAL_POST_DISPATCH]" | tail -n 3
+    if [[ -n "${SMOKE_BUSINESS_ID}" ]] && ! echo "$worker_logs" | grep -F "[SOCIAL_POST_DISPATCH] picked=" >/dev/null; then
+      echo "Expected a scoped [SOCIAL_POST_DISPATCH] picked summary in worker logs" >&2
+      exit 1
+    fi
   else
+    if [[ -n "${SMOKE_BUSINESS_ID}" ]]; then
+      echo "Expected scoped [SOCIAL_POST_DISPATCH] worker log for ${SMOKE_BUSINESS_ID}" >&2
+      exit 1
+    fi
     echo "No [SOCIAL_POST_DISPATCH] line in worker logs since ${SINCE}; acceptable when dispatch is disabled or interval has not elapsed."
   fi
   if echo "$worker_logs" | grep -F "[SOCIAL_POST_METRICS]" >/dev/null; then

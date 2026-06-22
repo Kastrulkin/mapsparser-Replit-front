@@ -1515,7 +1515,7 @@ def _dispatch_social_posts_if_due() -> None:
             return
         picked = int(result.get("picked") or 0)
         failed = int(result.get("failed") or 0)
-        if picked > 0 or failed > 0:
+        if picked > 0 or failed > 0 or business_scope:
             by_action = result.get("by_action") if isinstance(result.get("by_action"), dict) else {}
             by_status = result.get("by_status") if isinstance(result.get("by_status"), dict) else {}
             print(
@@ -1560,7 +1560,7 @@ def _collect_social_post_metrics_if_due() -> None:
             return
         picked = int(result.get("picked") or 0)
         failed = int(result.get("failed") or 0)
-        if picked > 0 or failed > 0:
+        if picked > 0 or failed > 0 or business_scope:
             print(
                 "[SOCIAL_POST_METRICS] "
                 f"picked={picked} collected={int(result.get('collected') or 0)} failed={failed} "

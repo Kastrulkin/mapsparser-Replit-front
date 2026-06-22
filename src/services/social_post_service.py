@@ -142,6 +142,49 @@ def prepare_social_posts_for_item(user_id: str, item_id: str, platforms: list[st
         db.close()
 
 
+def preview_social_posts_for_item(user_id: str, item_id: str, platforms: list[str] | None = None) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        item = _load_plan_item_for_user(cursor, user_id, item_id)
+        requested_platforms = _normalize_platforms(platforms)
+        base_text = _base_text_from_item(item)
+        existing_by_platform = _existing_social_posts_for_item(cursor, item_id)
+        previews = [
+            _preview_social_post_for_platform(item, platform, base_text, existing_by_platform.get(platform))
+            for platform in requested_platforms
+        ]
+        summary = _summary_for_posts(previews)
+        summary["would_create"] = sum(1 for post in previews if post.get("prepare_action") == "would_create")
+        summary["would_update"] = sum(1 for post in previews if post.get("prepare_action") == "would_update")
+        summary["would_preserve"] = sum(1 for post in previews if str(post.get("prepare_action") or "").startswith("preserve_"))
+        return {
+            "read_only": True,
+            "database_write_performed": False,
+            "external_publish_performed": False,
+            "item": {
+                "id": str(item.get("id") or "").strip(),
+                "content_plan_id": str(item.get("plan_id") or item.get("parent_plan_id") or "").strip(),
+                "business_id": str(item.get("business_id") or item.get("plan_business_id") or "").strip(),
+                "scheduled_for": item.get("scheduled_for"),
+                "theme": str(item.get("theme") or "").strip(),
+                "goal": str(item.get("goal") or "").strip(),
+            },
+            "base_text": base_text,
+            "posts": previews,
+            "summary": summary,
+            "next_action_ru": (
+                "Если preview устраивает, нажмите “Подготовить каналы”. Это создаст drafts, но не опубликует наружу."
+            ),
+            "next_action_en": (
+                "If the preview looks right, click Prepare channels. This creates drafts but does not publish externally."
+            ),
+        }
+    finally:
+        db.close()
+
+
 def list_social_posts_for_plan(user_id: str, plan_id: str) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -232,6 +275,9 @@ def check_social_api_channel_preflight(user_id: str, business_id: str) -> dict[s
         api_preflight = [
             _telegram_api_channel_preflight(cursor, normalized_business_id),
             _vk_api_channel_preflight(cursor, normalized_business_id),
+            _google_business_api_channel_preflight(cursor, normalized_business_id),
+            _meta_api_channel_preflight(cursor, normalized_business_id, "instagram"),
+            _meta_api_channel_preflight(cursor, normalized_business_id, "facebook"),
         ]
         return {
             "business_id": normalized_business_id,
@@ -282,6 +328,7 @@ def get_social_launch_preflight(user_id: str, business_id: str, batch_size: int 
         batch_size=max(1, min(int(batch_size or 10), 50)),
         business_id=normalized_business_id,
     )
+    api_preflight_payload = check_social_api_channel_preflight(user_id, normalized_business_id)
     channel_readiness = channel_payload.get("channel_readiness")
     channel_summary = channel_payload.get("summary")
     return _build_social_launch_preflight_payload(
@@ -289,6 +336,8 @@ def get_social_launch_preflight(user_id: str, business_id: str, batch_size: int 
         channel_readiness if isinstance(channel_readiness, list) else [],
         channel_summary if isinstance(channel_summary, dict) else {},
         dispatch_preview,
+        api_preflight_payload.get("api_preflight") if isinstance(api_preflight_payload.get("api_preflight"), list) else [],
+        api_preflight_payload.get("summary") if isinstance(api_preflight_payload.get("summary"), dict) else {},
     )
 
 
@@ -297,13 +346,19 @@ def _build_social_launch_preflight_payload(
     channel_readiness: list[dict[str, Any]],
     channel_summary: dict[str, Any],
     dispatch_preview: dict[str, Any],
+    api_preflight: list[dict[str, Any]] | None = None,
+    api_preflight_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     readiness = dispatch_preview.get("readiness") if isinstance(dispatch_preview.get("readiness"), dict) else {}
+    dispatch_items = dispatch_preview.get("items") if isinstance(dispatch_preview.get("items"), list) else []
     due_count = int(readiness.get("due_count") or dispatch_preview.get("picked") or 0)
     external_publish_count = int(readiness.get("external_publish_count") or 0)
     controlled_count = int(readiness.get("controlled_count") or 0)
     manual_count = int(readiness.get("manual_count") or 0)
     skipped_no_access = int(readiness.get("skipped_no_access") or dispatch_preview.get("skipped_no_access") or 0)
+    api_preflight_items = api_preflight if isinstance(api_preflight, list) else []
+    api_preflight_summary_payload = api_preflight_summary if isinstance(api_preflight_summary, dict) else {}
+    api_preflight_blocked_due_posts = _api_preflight_blocked_due_posts(dispatch_items, api_preflight_items)
     blocked_api_channels = [
         item for item in channel_readiness
         if str(item.get("publish_mode") or "") == "api" and not bool(item.get("ready"))
@@ -321,7 +376,14 @@ def _build_social_launch_preflight_payload(
         status = "manual_or_connection_needed"
     elif skipped_no_access > 0:
         status = "access_limited"
-    safe_to_enable = bool(str(business_id or "").strip()) and due_count > 0 and skipped_no_access == 0
+    if api_preflight_blocked_due_posts:
+        status = "api_preflight_blocked"
+    safe_to_enable = (
+        bool(str(business_id or "").strip())
+        and due_count > 0
+        and skipped_no_access == 0
+        and not api_preflight_blocked_due_posts
+    )
     scope = str(business_id or "").strip()
     first_cycle_verification = _social_worker_first_cycle_verification(
         external_publish_count,
@@ -339,6 +401,9 @@ def _build_social_launch_preflight_payload(
         "channel_summary": channel_summary,
         "dispatch_preview": dispatch_preview,
         "dispatch_readiness": readiness,
+        "api_preflight": api_preflight_items,
+        "api_preflight_summary": api_preflight_summary_payload,
+        "api_preflight_blocked_due_posts": api_preflight_blocked_due_posts,
         "blocked_api_channels": blocked_api_channels,
         "controlled_channels": controlled_channels,
         "recommended_env": {
@@ -351,6 +416,7 @@ def _build_social_launch_preflight_payload(
             "external_publish_only_after_approval": True,
             "browser_final_click_allowed": False,
             "maps_are_supervised_or_manual": True,
+            "api_preflight_required_before_first_cycle": True,
         },
         "summary": {
             "due_posts": due_count,
@@ -358,6 +424,7 @@ def _build_social_launch_preflight_payload(
             "controlled_due_posts": controlled_count,
             "manual_due_posts": manual_count,
             "blocked_api_channels": len(blocked_api_channels),
+            "api_preflight_blocked_due_posts": len(api_preflight_blocked_due_posts),
             "controlled_channels": len(controlled_channels),
             "skipped_no_access": skipped_no_access,
         },
@@ -380,7 +447,43 @@ def _build_social_launch_preflight_payload(
     }
 
 
+def _api_preflight_blocked_due_posts(
+    dispatch_items: list[dict[str, Any]],
+    api_preflight: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    readiness_by_platform = {
+        str(item.get("platform") or "").strip(): item
+        for item in api_preflight or []
+        if str(item.get("platform") or "").strip()
+    }
+    blocked: list[dict[str, Any]] = []
+    for item in dispatch_items or []:
+        if str(item.get("dispatch_action") or "").strip() != "publish_api":
+            continue
+        platform = str(item.get("platform") or "").strip()
+        preflight = readiness_by_platform.get(platform)
+        if not preflight or bool(preflight.get("ready")):
+            continue
+        blocked.append(
+            {
+                "id": str(item.get("id") or "").strip(),
+                "platform": platform,
+                "platform_label": item.get("platform_label") or platform_label(platform),
+                "status": str(preflight.get("status") or "not_ready").strip(),
+                "message_ru": str(preflight.get("message_ru") or "").strip(),
+                "message_en": str(preflight.get("message_en") or "").strip(),
+            }
+        )
+    return blocked
+
+
 def _social_launch_preflight_message(status: str, is_ru: bool) -> str:
+    if status == "api_preflight_blocked":
+        return (
+            "Due API-посты есть, но live API-проверка нашла канал без ключей, прав или готового adapter. Сначала исправьте канал или переведите пост в ручной fallback."
+            if is_ru
+            else "Due API posts exist, but live API preflight found a channel without keys, permissions, or a ready adapter. Fix the channel or move the post to manual fallback first."
+        )
     if status == "ready_for_api_dispatch":
         return (
             "Есть due API-публикации: scoped worker сможет отправить их только после уже полученного approval."
@@ -413,6 +516,12 @@ def _social_launch_preflight_message(status: str, is_ru: bool) -> str:
 
 
 def _social_launch_preflight_next_action(status: str, business_id: str, is_ru: bool) -> str:
+    if status == "api_preflight_blocked":
+        return (
+            "Откройте готовность каналов, исправьте ключи/permissions или используйте ручное размещение для заблокированного поста; затем повторите preflight."
+            if is_ru
+            else "Open channel readiness, fix keys/permissions, or use manual placement for the blocked post; then run preflight again."
+        )
     if status in {"ready_for_api_dispatch", "ready_for_controlled_handoff", "manual_or_connection_needed"}:
         return (
             f"Для первого запуска включайте worker только с SOCIAL_POST_DISPATCH_BUSINESS_ID={business_id} и проверьте логи после одного цикла."
@@ -697,9 +806,42 @@ def _create_supervised_publish_task(cursor: Any, post: dict[str, Any]) -> dict[s
     )
     updated = _serialize_social_post(cursor, cursor.fetchone())
     ledger_id = _record_social_supervised_handoff_ledger(cursor, post, updated, automation_task_id)
+    outbox_id = ""
     if ledger_id:
         metadata = _json_dict(updated.get("metadata_json"))
         metadata["agent_action_ledger_id"] = ledger_id
+        supervised_payload = _json_dict(metadata.get("supervised_publish"))
+        handoff_state = _json_dict(supervised_payload.get("handoff_state"))
+        handoff_state["ledger_recorded"] = True
+        handoff_state["ledger_id"] = ledger_id
+        supervised_payload["handoff_state"] = handoff_state
+        metadata["supervised_publish"] = supervised_payload
+        cursor.execute(
+            """
+            UPDATE social_posts
+            SET metadata_json = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (_json_dumps(metadata), post_id),
+        )
+        updated = _serialize_social_post(cursor, cursor.fetchone())
+    if str(updated.get("status") or "").strip() == "needs_supervised_publish":
+        outbox_id = _enqueue_social_supervised_openclaw_outbox(cursor, updated, automation_task_id, ledger_id)
+    if outbox_id:
+        metadata = _json_dict(updated.get("metadata_json"))
+        supervised_payload = _json_dict(metadata.get("supervised_publish"))
+        handoff_state = _json_dict(supervised_payload.get("handoff_state"))
+        handoff_state["openclaw_task_requested"] = True
+        handoff_state["openclaw_outbox_id"] = outbox_id
+        handoff_state["owner_status_ru"] = "Задача передана в outbox для контролируемого OpenClaw browser-use."
+        handoff_state["owner_status_en"] = "Task was queued in the outbox for supervised OpenClaw browser-use."
+        handoff_state["owner_next_action_ru"] = "Проверьте задачу OpenClaw, дождитесь предпросмотра и подтвердите финальное действие человеком."
+        handoff_state["owner_next_action_en"] = "Check the OpenClaw task, wait for preview, and let a human confirm the final action."
+        supervised_payload["handoff_state"] = handoff_state
+        supervised_payload["openclaw_outbox_id"] = outbox_id
+        metadata["supervised_publish"] = supervised_payload
         cursor.execute(
             """
             UPDATE social_posts
@@ -1369,7 +1511,7 @@ def dispatch_due_social_posts(batch_size: int = 20, business_id: str = "") -> di
             owner_id = _owner_id_for_business(business_id)
             if not owner_id:
                 raise RuntimeError("business owner not found")
-            post = publish_social_post(owner_id, post_id)
+            post = _dispatch_live_api_preflight_block(owner_id, post_id) or publish_social_post(owner_id, post_id)
             posts.append(post)
             status = str(post.get("status") or "").strip()
             action = _dispatch_action_for_status(status)
@@ -1439,6 +1581,58 @@ def dispatch_due_social_posts(batch_size: int = 20, business_id: str = "") -> di
     }
 
 
+def _dispatch_live_api_preflight_block(user_id: str, post_id: str) -> dict[str, Any] | None:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        post = _load_post_for_user(cursor, user_id, post_id)
+        platform = str(post.get("platform") or "").strip()
+        publish_mode = str(post.get("publish_mode") or "").strip()
+        if platform not in API_PLATFORMS or publish_mode != "api":
+            return None
+        preflight = _api_channel_preflight_for_platform(cursor, str(post.get("business_id") or ""), platform)
+        if bool(preflight.get("ready")):
+            return None
+        status = str(preflight.get("status") or "not_ready").strip()
+        metadata = _json_dict(post.get("metadata_json"))
+        metadata.update(
+            {
+                "provider_status": status,
+                "queue_preflight_status": status,
+                "queue_preflight_ready": False,
+                "queue_preflight_live_checked_at": datetime.now(timezone.utc).isoformat(),
+                "queue_preflight_source": "worker_dispatch_live_api_preflight",
+                "queue_preflight_message_ru": str(preflight.get("message_ru") or "").strip(),
+                "queue_preflight_message_en": str(preflight.get("message_en") or "").strip(),
+            }
+        )
+        cursor.execute(
+            """
+            UPDATE social_posts
+            SET status = 'needs_manual_publish',
+                metadata_json = %s,
+                last_error = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (
+                _json_dumps(metadata),
+                _queue_preflight_error(platform, status),
+                post_id,
+            ),
+        )
+        updated = _serialize_social_post(cursor, cursor.fetchone())
+        db.conn.commit()
+        return updated
+    except Exception:
+        db.conn.rollback()
+        raise sys.exc_info()[1]
+    finally:
+        db.close()
+
+
 def run_scoped_social_dispatch_once(
     user_id: str,
     business_id: str,
@@ -1455,6 +1649,8 @@ def run_scoped_social_dispatch_once(
     summary = preflight.get("summary") if isinstance(preflight.get("summary"), dict) else {}
     if int(summary.get("skipped_no_access") or 0) > 0:
         raise PermissionError("Есть due-посты вне доступа текущего пользователя; проверьте business scope")
+    if int(summary.get("api_preflight_blocked_due_posts") or 0) > 0:
+        raise PermissionError("Live API-preflight нашёл неготовый канал; исправьте ключи/права или переведите пост в ручной fallback")
     dispatch_result = dispatch_due_social_posts(
         batch_size=clean_batch_size,
         business_id=normalized_business_id,
@@ -2104,11 +2300,12 @@ def _social_launch_runbook(
     controlled = int(controlled_count or 0)
     manual = int(manual_count or 0)
     skipped = int(skipped_no_access or 0)
-    can_launch = bool(scope) and due > 0 and skipped == 0
+    normalized_status = str(status or "").strip()
+    can_launch = bool(scope) and due > 0 and skipped == 0 and normalized_status != "api_preflight_blocked"
     return {
         "ready": can_launch,
         "scope": scope,
-        "status": str(status or "").strip(),
+        "status": normalized_status,
         "title_ru": "Runbook первого цикла dispatch",
         "title_en": "First-cycle dispatch runbook",
         "summary_ru": (
@@ -2127,6 +2324,7 @@ def _social_launch_runbook(
             manual,
             skipped,
             log_filter,
+            normalized_status,
             True,
         ),
         "steps_en": _social_launch_runbook_steps(
@@ -2137,12 +2335,13 @@ def _social_launch_runbook(
             manual,
             skipped,
             log_filter,
+            normalized_status,
             False,
         ),
         "success_criteria_ru": _social_launch_runbook_success_criteria(external, controlled, manual, skipped, True),
         "success_criteria_en": _social_launch_runbook_success_criteria(external, controlled, manual, skipped, False),
-        "blocked_reason_ru": _social_launch_runbook_blocked_reason(scope, due, skipped, True),
-        "blocked_reason_en": _social_launch_runbook_blocked_reason(scope, due, skipped, False),
+        "blocked_reason_ru": _social_launch_runbook_blocked_reason(scope, due, skipped, normalized_status, True),
+        "blocked_reason_en": _social_launch_runbook_blocked_reason(scope, due, skipped, normalized_status, False),
     }
 
 
@@ -2154,8 +2353,18 @@ def _social_launch_runbook_steps(
     manual_count: int,
     skipped_no_access: int,
     log_filter: str,
+    status: str,
     is_ru: bool,
 ) -> list[str]:
+    if str(status or "").strip() == "api_preflight_blocked":
+        return [
+            "Исправьте live API-preflight: ключи, permissions, location или native adapter для заблокированного канала."
+            if is_ru
+            else "Fix live API preflight first: keys, permissions, location, or native adapter for the blocked channel.",
+            "Если канал пока нельзя подключить, переведите конкретный пост в ручной fallback и повторите preflight."
+            if is_ru
+            else "If the channel cannot be connected yet, move that specific post to manual fallback and run preflight again.",
+        ]
     if int(due_count or 0) <= 0:
         return [
             "Подготовьте посты, утвердите их и поставьте в расписание."
@@ -2256,7 +2465,19 @@ def _social_launch_runbook_success_criteria(
     return criteria
 
 
-def _social_launch_runbook_blocked_reason(scope: str, due_count: int, skipped_no_access: int, is_ru: bool) -> str:
+def _social_launch_runbook_blocked_reason(
+    scope: str,
+    due_count: int,
+    skipped_no_access: int,
+    status: str,
+    is_ru: bool,
+) -> str:
+    if str(status or "").strip() == "api_preflight_blocked":
+        return (
+            "Live API-preflight заблокировал первый цикл: есть due API-пост по каналу без готового подключения."
+            if is_ru
+            else "Live API preflight blocked the first cycle: a due API post targets a channel without a ready connection."
+        )
     if not str(scope or "").strip():
         return (
             "Нельзя включать production dispatch без SOCIAL_POST_DISPATCH_BUSINESS_ID."
@@ -2435,7 +2656,10 @@ def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool 
             "source": "social_post_recommendation",
             "approved_by": user_id,
             "approved_at": datetime.now(timezone.utc).isoformat(),
+            "human_approved": True,
+            "scope": "future_unpublished_content_plan_items",
             "recommendation": recommendation_payload,
+            "proposed_count": len(proposed_changes),
             "applied_item_ids": [str(item.get("id") or "") for item in applied],
             "applied_count": len(applied),
         }
@@ -2454,6 +2678,8 @@ def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool 
         return {
             "applied_count": len(applied),
             "applied_items": applied,
+            "approval_record": approval_record,
+            "applies_automatically": False,
             "recommendation": recommendation_payload.get("recommendation") or {},
             "proposed_changes": proposed_changes,
         }
@@ -2988,6 +3214,73 @@ def _upsert_social_post(cursor: Any, user_id: str, item: dict[str, Any], platfor
     return _serialize_social_post(cursor, cursor.fetchone())
 
 
+def _existing_social_posts_for_item(cursor: Any, item_id: str) -> dict[str, dict[str, Any]]:
+    cursor.execute(
+        """
+        SELECT *
+        FROM social_posts
+        WHERE content_plan_item_id = %s
+        """,
+        (item_id,),
+    )
+    result: dict[str, dict[str, Any]] = {}
+    for row in cursor.fetchall() or []:
+        post = _serialize_social_post(cursor, row)
+        platform = str(post.get("platform") or "").strip()
+        if platform:
+            result[platform] = post
+    return result
+
+
+def _preview_social_post_for_platform(
+    item: dict[str, Any],
+    platform: str,
+    base_text: str,
+    existing: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    item_id = str(item.get("id") or "").strip()
+    plan_id = str(item.get("plan_id") or item.get("parent_plan_id") or "").strip()
+    business_id = str(item.get("business_id") or item.get("plan_business_id") or "").strip()
+    publish_mode = default_publish_mode(platform)
+    platform_text = _platform_text(platform, base_text)
+    status = "needs_review" if platform_text.strip() else "draft"
+    existing_post = existing if isinstance(existing, dict) else {}
+    existing_status = str(existing_post.get("status") or "").strip()
+    prepare_action = "would_create"
+    preview_status = status
+    preview_base_text = base_text
+    preview_platform_text = platform_text
+    if existing_post:
+        prepare_action = "would_update"
+        if existing_status in {"published", "queued", "publishing"}:
+            prepare_action = f"preserve_{existing_status}"
+            preview_status = existing_status
+            preview_base_text = str(existing_post.get("base_text") or base_text or "").strip()
+            preview_platform_text = str(existing_post.get("platform_text") or platform_text or "").strip()
+    metadata = _initial_metadata(platform, publish_mode)
+    metadata["prepare_preview"] = True
+    metadata["read_only"] = True
+    return {
+        "id": str(existing_post.get("id") or "").strip(),
+        "business_id": business_id,
+        "content_plan_id": plan_id,
+        "content_plan_item_id": item_id,
+        "platform": platform,
+        "platform_label": platform_label(platform),
+        "publish_mode": publish_mode,
+        "status": preview_status,
+        "scheduled_for": item.get("scheduled_for"),
+        "base_text": preview_base_text,
+        "platform_text": preview_platform_text,
+        "media_json": existing_post.get("media_json") if existing_post else [],
+        "metadata_json": metadata,
+        "prepare_action": prepare_action,
+        "existing_status": existing_status,
+        "read_only": True,
+        "external_publish_performed": False,
+    }
+
+
 def _initial_metadata(platform: str, publish_mode: str) -> dict[str, Any]:
     data = {
         "platform_label": platform_label(platform),
@@ -3009,6 +3302,7 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
     capability_status = openclaw_browser_capability_status()
     manual_handoff = _manual_publish_handoff_payload(post, target, "browser_capability_unavailable")
     safety_contract = _social_supervised_safety_contract()
+    handoff_state = _social_supervised_handoff_state(post, task_payload, capability_status)
     return {
         "automation_task_id": automation_task_id,
         "openclaw_task": task_payload,
@@ -3032,6 +3326,7 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
             "manual_handoff": manual_handoff,
             "stop_before_final_publish": True,
             "final_publish_policy": "human_final_click_required",
+            "handoff_state": handoff_state,
             "safety_contract": safety_contract,
             "fallback_reasons": ["captcha", "login_required", "changed_ui", "browser_capability_unavailable"],
             "openclaw_capability_status": capability_status,
@@ -3045,6 +3340,44 @@ def _supervised_publish_state(post: dict[str, Any]) -> dict[str, str | None]:
     return {
         "status": "needs_supervised_publish" if browser_ready else "needs_manual_publish",
         "last_error": None if browser_ready else "OpenClaw browser-use недоступен; используйте ручное контролируемое размещение.",
+    }
+
+
+def _social_supervised_handoff_state(
+    post: dict[str, Any],
+    task_payload: dict[str, Any],
+    capability_status: dict[str, Any],
+    ledger_id: str = "",
+) -> dict[str, Any]:
+    publish_mode = str(post.get("publish_mode") or "").strip()
+    openclaw_ready = publish_mode == "openclaw_browser" and bool(capability_status.get("ready"))
+    state = "ready_for_openclaw_handoff" if openclaw_ready else "manual_fallback_required"
+    if openclaw_ready:
+        owner_status_ru = "Задача готова для контролируемого OpenClaw browser-use."
+        owner_status_en = "Task is ready for supervised OpenClaw browser-use."
+        owner_next_action_ru = "Откройте контролируемое размещение, проверьте предпросмотр и подтвердите финальное действие человеком."
+        owner_next_action_en = "Open supervised placement, review the preview, and let a human confirm the final action."
+    else:
+        owner_status_ru = "OpenClaw browser-use не подтверждён; включён ручной fallback."
+        owner_status_en = "OpenClaw browser-use is not confirmed; manual fallback is active."
+        owner_next_action_ru = "Скопируйте готовый текст, разместите пост вручную и отметьте публикацию размещённой."
+        owner_next_action_en = "Copy the prepared text, publish it manually, and mark the post as published."
+    return {
+        "schema": "localos_social_supervised_handoff_state_v1",
+        "state": state,
+        "publish_mode": publish_mode,
+        "openclaw_ready": openclaw_ready,
+        "task_payload_ready": bool(task_payload.get("task_id")),
+        "openclaw_task_requested": False,
+        "ledger_recorded": bool(str(ledger_id or "").strip()),
+        "ledger_id": str(ledger_id or "").strip(),
+        "owner_status_ru": owner_status_ru,
+        "owner_status_en": owner_status_en,
+        "owner_next_action_ru": owner_next_action_ru,
+        "owner_next_action_en": owner_next_action_en,
+        "stop_before_final_publish": True,
+        "final_publish_policy": "human_final_click_required",
+        "browser_final_click_allowed": False,
     }
 
 
@@ -3281,6 +3614,88 @@ def _record_social_supervised_handoff_ledger(
         return ledger_id
     except Exception:
         return ""
+
+
+def _enqueue_social_supervised_openclaw_outbox(
+    cursor: Any,
+    updated_post: dict[str, Any],
+    automation_task_id: str,
+    ledger_id: str = "",
+) -> str:
+    try:
+        callback_url = _social_supervised_openclaw_callback_url()
+        if not callback_url:
+            return ""
+        if not _table_exists(cursor, "action_callback_outbox"):
+            return ""
+        metadata = _json_dict(updated_post.get("metadata_json"))
+        task_payload = _json_dict(metadata.get("openclaw_task"))
+        supervised_payload = _json_dict(metadata.get("supervised_publish"))
+        handoff_state = _json_dict(supervised_payload.get("handoff_state"))
+        safety_contract = _json_dict(
+            supervised_payload.get("safety_contract")
+            or task_payload.get("safety_contract")
+            or _social_supervised_safety_contract()
+        )
+        post_id = str(updated_post.get("id") or "").strip()
+        business_id = str(updated_post.get("business_id") or "").strip()
+        outbox_id = _new_id()
+        event_type = "social.post.publish_supervised_browser.requested"
+        payload = {
+            "schema": "localos_social_supervised_openclaw_request_v1",
+            "event_type": event_type,
+            "social_post_id": post_id,
+            "business_id": business_id,
+            "automation_task_id": str(automation_task_id or "").strip(),
+            "agent_action_ledger_id": str(ledger_id or "").strip(),
+            "openclaw_task": task_payload,
+            "handoff_state": handoff_state,
+            "safety_contract": safety_contract,
+            "external_publish_performed": False,
+            "provider_write_performed": False,
+            "browser_final_click_allowed": False,
+            "stop_before_final_publish": True,
+            "final_publish_policy": "human_final_click_required",
+        }
+        dedupe_key = f"social-supervised:{post_id}:{automation_task_id}"
+        cursor.execute(
+            """
+            INSERT INTO action_callback_outbox
+                (id, action_id, tenant_id, callback_url, event_type, payload_json, status, attempts, max_attempts, next_attempt_at, dedupe_key)
+            VALUES (%s, %s, %s, %s, %s, %s, 'pending', 0, %s, NOW(), %s)
+            ON CONFLICT (dedupe_key) DO NOTHING
+            RETURNING id
+            """,
+            (
+                outbox_id,
+                str(automation_task_id or post_id or outbox_id).strip(),
+                business_id,
+                callback_url,
+                event_type,
+                _json_dumps(payload),
+                _social_supervised_openclaw_max_attempts(),
+                dedupe_key,
+            ),
+        )
+        row = cursor.fetchone()
+        return str(_row_get(row, "id", 0, "") or "").strip()
+    except Exception:
+        return ""
+
+
+def _social_supervised_openclaw_callback_url() -> str:
+    return str(
+        os.getenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL")
+        or os.getenv("OPENCLAW_SUPERVISED_CALLBACK_URL")
+        or ""
+    ).strip()
+
+
+def _social_supervised_openclaw_max_attempts() -> int:
+    try:
+        return max(1, min(int(os.getenv("OPENCLAW_SOCIAL_SUPERVISED_MAX_ATTEMPTS") or 5), 20))
+    except Exception:
+        return 5
 
 
 def _publish_api_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
@@ -3732,6 +4147,59 @@ def _vk_safe_wall_read_probe(token: str, owner_id: str, api_version: str) -> dic
     return {"ok": True, "status": "ok"}
 
 
+def _api_channel_preflight_for_platform(cursor: Any, business_id: str, platform: str) -> dict[str, Any]:
+    normalized = str(platform or "").strip()
+    if normalized == "telegram":
+        return _telegram_api_channel_preflight(cursor, business_id)
+    if normalized == "vk":
+        return _vk_api_channel_preflight(cursor, business_id)
+    if normalized == "google_business":
+        return _google_business_api_channel_preflight(cursor, business_id)
+    if normalized in {"instagram", "facebook"}:
+        return _meta_api_channel_preflight(cursor, business_id, normalized)
+    return _api_channel_preflight_result(
+        normalized,
+        False,
+        "unsupported_api_platform",
+        [],
+        "Для канала нет live API-preflight.",
+        "This channel has no live API preflight.",
+    )
+
+
+def _google_business_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, Any]:
+    account = _find_active_external_account(cursor, business_id, ("google_business",))
+    checks = _google_business_connection_checks(account)
+    has_account = bool(account)
+    has_location = bool(str(account.get("external_id") or "").strip()) if account else False
+    ready = has_account and has_location
+    status = "ready" if ready else ("missing_binding" if has_account else "missing_connection")
+    return _api_channel_preflight_result(
+        "google_business",
+        ready,
+        status,
+        checks,
+        "Google Business Profile готов к API-публикации после approval." if ready else _google_business_readiness_error(status),
+        "Google Business Profile is ready for API publishing after approval." if ready else _google_business_readiness_error(status),
+    )
+
+
+def _meta_api_channel_preflight(cursor: Any, business_id: str, platform: str) -> dict[str, Any]:
+    account = _find_active_external_account(cursor, business_id, ("meta", "facebook", "instagram"))
+    auth_data = _external_account_auth_data(account)
+    readiness = _meta_channel_readiness(account, auth_data, platform)
+    status = str(readiness.get("status") or "missing_connection").strip()
+    checks = _meta_connection_checks(account, auth_data, platform, status)
+    return _api_channel_preflight_result(
+        platform,
+        bool(readiness.get("ready")),
+        status,
+        checks,
+        _meta_readiness_error(platform, status, True),
+        _meta_readiness_error(platform, status, False),
+    )
+
+
 def _api_channel_preflight_result(
     platform: str,
     ready: bool,
@@ -4089,6 +4557,49 @@ def _vk_readiness_error(status: str) -> str:
     if normalized == "missing_connection":
         return "VK аккаунт/группа не подключены."
     return "Для VK нужны access_token и group_id/owner_id с правом wall.post."
+
+
+def _google_business_readiness_error(status: str) -> str:
+    normalized = str(status or "").strip()
+    if normalized == "missing_binding":
+        return "Google Business Profile подключен, но location для публикации не выбран."
+    if normalized == "missing_connection":
+        return "Google Business Profile не подключен."
+    return "Проверьте Google Business Profile OAuth, location и разрешения."
+
+
+def _meta_readiness_error(platform: str, status: str, is_ru: bool) -> str:
+    label = platform_label(platform)
+    normalized = str(status or "").strip()
+    if normalized == "adapter_pending":
+        return (
+            f"{label}: подключение выглядит готовым, но native Meta publish ещё не включён; используйте ручной fallback."
+            if is_ru
+            else f"{label}: connection looks ready, but native Meta publish is not enabled yet; use manual fallback."
+        )
+    if normalized == "missing_permissions":
+        return (
+            f"{label}: не хватает Meta permissions для публикации."
+            if is_ru
+            else f"{label}: Meta publishing permissions are missing."
+        )
+    if normalized == "missing_binding":
+        return (
+            f"{label}: выберите Facebook Page или Instagram business account."
+            if is_ru
+            else f"{label}: choose a Facebook Page or Instagram business account."
+        )
+    if normalized == "missing_keys":
+        return (
+            f"{label}: нужен Meta access token."
+            if is_ru
+            else f"{label}: Meta access token is required."
+        )
+    return (
+        f"{label}: Meta account не подключён."
+        if is_ru
+        else f"{label}: Meta account is not connected."
+    )
 
 
 def _collect_provider_metrics_for_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
@@ -5210,6 +5721,15 @@ def _social_learning_readiness(posts: list[dict[str, Any]]) -> dict[str, Any]:
         or int(post.get("clicks") or 0) > 0
         or int(post.get("reach") or post.get("views") or 0) > 0
     )
+    total_leads = sum(int(post.get("leads") or 0) for post in posts)
+    total_inquiries = sum(int(post.get("inquiries") or 0) for post in posts)
+    total_comments = sum(int(post.get("comments") or 0) for post in posts)
+    total_shares = sum(int(post.get("shares") or 0) for post in posts)
+    total_clicks = sum(int(post.get("clicks") or 0) for post in posts)
+    total_likes = sum(int(post.get("likes") or 0) for post in posts)
+    total_reach = sum(int(post.get("reach") or post.get("views") or 0) for post in posts)
+    primary_signal_total = total_leads + total_inquiries
+    secondary_signal_total = total_comments + total_shares + total_clicks
 
     if posts_with_primary_result:
         status = "ready_from_leads"
@@ -5235,6 +5755,16 @@ def _social_learning_readiness(posts: list[dict[str, Any]]) -> dict[str, Any]:
         "published_posts": published_posts,
         "posts_with_primary_result": posts_with_primary_result,
         "posts_with_early_signal": posts_with_early_signal,
+        "primary_signal_total": primary_signal_total,
+        "secondary_signal_total": secondary_signal_total,
+        "early_signal_total": total_likes + total_reach,
+        "leads": total_leads,
+        "inquiries": total_inquiries,
+        "comments": total_comments,
+        "shares": total_shares,
+        "clicks": total_clicks,
+        "likes": total_likes,
+        "reach": total_reach,
         "pending_manual_or_supervised_posts": manual_posts,
         "failed_posts": failed_posts,
         "primary_metric_ru": "Заявки и обращения",
