@@ -58,6 +58,8 @@ REQUIRED_COPY = {
     "first api post blocked channels": "Сначала исправить:",
     "first api post preflight action": "Проверить API",
     "readiness next action": "Что сделать:",
+    "channel checks owner heading": "Что проверить",
+    "channel check needed label": "Нужно",
     "channel-specific setup action": "Открыть настройку канала",
     "telegram setup focus path": "/dashboard/settings?focus=channels",
     "integrations setup focus path": "/dashboard/settings?focus=integrations",

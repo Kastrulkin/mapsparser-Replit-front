@@ -7291,24 +7291,29 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           {(channel.connection_checks || []).length > 0 ? (
                             <div className={channel.ready ? 'mt-2 rounded-lg border border-emerald-100 bg-white/70 px-2 py-1.5' : 'mt-2 rounded-lg border border-amber-100 bg-white/70 px-2 py-1.5'}>
                               <div className={channel.ready ? 'text-[11px] font-semibold text-emerald-950' : 'text-[11px] font-semibold text-amber-950'}>
-                                {isRu ? 'Диагностика' : 'Diagnostics'}
+                                {isRu ? 'Что проверить' : 'What to check'}
                               </div>
                               <div className="mt-1 space-y-1">
                                 {(channel.connection_checks || []).slice(0, 4).map((check) => {
                                   const checkOk = Boolean(check.ok);
                                   const state = String(check.state || '').trim();
                                   const neutral = state === 'deferred' || state === 'manual' || state === 'recommended' || state === 'human_approval';
+                                  const checkStateLabel = checkOk
+                                    ? (isRu ? 'Готово' : 'Ready')
+                                    : neutral
+                                      ? (isRu ? 'Инфо' : 'Info')
+                                      : (isRu ? 'Нужно' : 'Needed');
                                   return (
                                     <div
                                       key={`${channel.platform}-check-${String(check.key || check.label_en || check.label_ru || '')}`}
-                                      className="flex gap-1.5 text-[11px] leading-4"
+                                      className="flex gap-2 text-[11px] leading-4"
                                     >
                                       <span className={[
-                                        'mt-[1px] shrink-0 font-semibold',
-                                        checkOk ? 'text-emerald-700' : neutral ? 'text-sky-700' : 'text-amber-700',
+                                        'mt-[1px] shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+                                        checkOk ? 'bg-emerald-50 text-emerald-700' : neutral ? 'bg-sky-50 text-sky-700' : 'bg-amber-50 text-amber-700',
                                       ].join(' ')}
                                       >
-                                        {checkOk ? '✓' : neutral ? '•' : '!'}
+                                        {checkStateLabel}
                                       </span>
                                       <span className={checkOk ? 'text-emerald-800' : neutral ? 'text-sky-800' : 'text-amber-800'}>
                                         <span className="font-medium">
