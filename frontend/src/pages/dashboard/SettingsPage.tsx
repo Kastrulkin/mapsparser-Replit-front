@@ -1,5 +1,5 @@
 import { Link, useLocation, useOutletContext } from 'react-router-dom';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import TelegramConnection from '@/components/TelegramConnection';
 import WhatsAppConnection from '@/components/WhatsAppConnection';
@@ -29,6 +29,7 @@ export const SettingsPage = () => {
   const location = useLocation();
   const channelsRef = useRef<HTMLElement | null>(null);
   const integrationsRef = useRef<HTMLElement | null>(null);
+  const [socialReadinessRefreshKey, setSocialReadinessRefreshKey] = useState(0);
   const { currentBusinessId, currentBusiness } = useOutletContext<{
     currentBusinessId?: string | null;
     currentBusiness?: SettingsBusiness | null;
@@ -115,7 +116,7 @@ export const SettingsPage = () => {
       >
         {channelsFocused ? (
           <div className="mb-5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-900">
-            Для публикаций в Telegram заполните bot token и канал/чат для публикаций. После сохранения вернитесь в контент-план и обновите готовность каналов.
+            Для публикаций в Telegram заполните bot token и канал/чат для публикаций. После сохранения LocalOS обновит готовность каналов для контент-плана.
           </div>
         ) : null}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -124,7 +125,11 @@ export const SettingsPage = () => {
         </div>
         <div className="mt-5 grid grid-cols-1 gap-5 border-t border-slate-100 pt-5 lg:grid-cols-2">
           <WABACredentials businessId={currentBusinessId} business={currentBusiness} />
-          <TelegramBotCredentials businessId={currentBusinessId} business={currentBusiness} />
+          <TelegramBotCredentials
+            businessId={currentBusinessId}
+            business={currentBusiness}
+            onSaved={() => setSocialReadinessRefreshKey((value) => value + 1)}
+          />
         </div>
       </DashboardSection>
 
@@ -142,7 +147,7 @@ export const SettingsPage = () => {
           </div>
         ) : null}
         <div className="space-y-5">
-          <ExternalIntegrations currentBusinessId={currentBusinessId} />
+          <ExternalIntegrations currentBusinessId={currentBusinessId} readinessRefreshKey={socialReadinessRefreshKey} />
           <FinanceCrmPanel currentBusinessId={currentBusinessId} surface="embedded" />
         </div>
       </DashboardSection>

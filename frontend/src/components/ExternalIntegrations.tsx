@@ -37,13 +37,20 @@ interface SocialChannelReadiness {
   message_en?: string | null;
   next_action_ru?: string | null;
   next_action_en?: string | null;
+  setup_summary_ru?: string | null;
+  setup_summary_en?: string | null;
+  setup_steps_ru?: string[];
+  setup_steps_en?: string[];
+  missing_fields?: string[];
+  settings_path?: string | null;
 }
 
 interface ExternalIntegrationsProps {
   currentBusinessId: string | null;
+  readinessRefreshKey?: number;
 }
 
-export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ currentBusinessId }) => {
+export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ currentBusinessId, readinessRefreshKey = 0 }) => {
   const [accounts, setAccounts] = useState<ExternalAccount[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -268,7 +275,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
     loadAccounts();
     loadSocialReadiness();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentBusinessId]);
+  }, [currentBusinessId, readinessRefreshKey]);
 
 
   const handleDisconnect = async (accountId: string) => {
@@ -503,6 +510,8 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                   const isApi = channel.publish_mode === 'api';
                   const message = language === 'ru' ? channel.message_ru : channel.message_en;
                   const nextAction = language === 'ru' ? channel.next_action_ru : channel.next_action_en;
+                  const setupSummary = language === 'ru' ? channel.setup_summary_ru : channel.setup_summary_en;
+                  const setupSteps = language === 'ru' ? channel.setup_steps_ru : channel.setup_steps_en;
                   return (
                     <div
                       key={channel.platform}
@@ -540,10 +549,29 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                       <div className="mt-3 text-[11px] font-medium uppercase tracking-wide text-slate-500">
                         {isApi ? 'API publish после approval' : 'Ручное или контролируемое размещение'}
                       </div>
+                      {setupSummary ? (
+                        <div className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs leading-5 text-slate-700 ring-1 ring-slate-200">
+                          <span className="font-semibold text-slate-950">Сейчас: </span>
+                          {setupSummary}
+                        </div>
+                      ) : null}
                       {nextAction ? (
                         <div className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs leading-5 text-slate-700 ring-1 ring-slate-200">
                           <span className="font-semibold text-slate-950">Что сделать: </span>
                           {nextAction}
+                        </div>
+                      ) : null}
+                      {Array.isArray(setupSteps) && setupSteps.length > 0 ? (
+                        <div className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs leading-5 text-slate-700 ring-1 ring-slate-200">
+                          <div className="font-semibold text-slate-950">Шаги подключения</div>
+                          <ul className="mt-1 space-y-1">
+                            {setupSteps.slice(0, 3).map((step) => (
+                              <li key={`${channel.platform}-setup-${step}`} className="flex gap-2">
+                                <span className="text-slate-400">-</span>
+                                <span>{step}</span>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       ) : null}
                     </div>

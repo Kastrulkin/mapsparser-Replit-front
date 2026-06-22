@@ -11,9 +11,10 @@ import { Loader2, Bot, Eye, EyeOff } from 'lucide-react';
 interface TelegramBotCredentialsProps {
   businessId: string | null;
   business: any;
+  onSaved?: () => void;
 }
 
-export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCredentialsProps) => {
+export const TelegramBotCredentials = ({ businessId, business, onSaved }: TelegramBotCredentialsProps) => {
   const { t } = useLanguage();
   const [botToken, setBotToken] = useState('');
   const [chatId, setChatId] = useState('');
@@ -124,6 +125,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
           title: t.common.success,
           description: 'Telegram подключён для публикаций из контент-плана.',
         });
+        onSaved?.();
       } else {
         toast({
           title: t.common.error,
@@ -161,6 +163,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
             ? `Telegram bot token подключён (${data.masked_token || 'скрыт'}), chat_id сохранён.`
             : 'Telegram bot token подключён, но для публикаций нужен telegram_chat_id.',
         });
+        onSaved?.();
       } else {
         toast({
           title: t.common.error,
@@ -248,6 +251,9 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
           />
           <p className="text-xs text-slate-500">
             Для канала добавьте бота администратором и укажите username канала или числовой chat_id. Без этого LocalOS подготовит пост, но не сможет отправить его по API.
+          </p>
+          <p className="text-xs font-medium text-slate-700">
+            После сохранения LocalOS сразу обновит готовность каналов для постов из контент-плана.
           </p>
         </div>
 

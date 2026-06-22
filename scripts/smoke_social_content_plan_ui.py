@@ -213,6 +213,8 @@ REQUIRED_SETTINGS_COPY = {
     "settings google requirements": "Business Profile + location",
     "settings meta requirements": "Page/IG business + permissions",
     "settings next action": "Что сделать: ",
+    "settings setup steps": "Шаги подключения",
+    "settings setup steps contract": "setup_steps_ru",
     "settings maps controlled": "Яндекс/2ГИС остаются ручными или контролируемыми",
 }
 
@@ -234,13 +236,17 @@ REQUIRED_TELEGRAM_SETTINGS_COPY = {
     "telegram publish chat id placeholder": "@channelname или -1001234567890",
     "telegram publish api warning": "не сможет отправить его по API",
     "telegram publish save success": "Telegram подключён для публикаций из контент-плана.",
+    "telegram readiness refresh copy": "сразу обновит готовность каналов",
 }
 
 
 REQUIRED_SETTINGS_PAGE_COPY = {
-    "settings channels focus note": "вернитесь в контент-план и обновите готовность каналов",
+    "settings channels focus note": "После сохранения LocalOS обновит готовность каналов для контент-плана",
     "settings channels focus param": "focusTarget === 'channels'",
     "settings telegram focus param": "focusTarget === 'telegram'",
+    "settings readiness refresh key": "socialReadinessRefreshKey",
+    "settings telegram saved callback": "onSaved={() => setSocialReadinessRefreshKey",
+    "settings integrations refresh prop": "readinessRefreshKey={socialReadinessRefreshKey}",
 }
 
 
@@ -258,6 +264,7 @@ REQUIRED_TELEGRAM_SETTINGS_DATA_CONTRACT = {
     "telegram profile endpoint": "/api/business/profile",
     "telegram chat id payload": "telegram_chat_id",
     "telegram optional token payload": "telegram_bot_token",
+    "telegram saved callback": "onSaved?.()",
 }
 
 
