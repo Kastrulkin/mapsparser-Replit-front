@@ -2911,8 +2911,23 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const fetchSocialPlanRecommendation = async (planId: string) => {
+    const response = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(planId)}/social-posts/recommend-next-plan`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    const payload: SocialRecommendationPayload = {
+      recommendation: response.recommendation || {},
+      learning_readiness: response.learning_readiness || undefined,
+      proposed_changes: Array.isArray(response.proposed_changes) ? response.proposed_changes : [],
+    };
+    setSocialRecommendation(payload);
+    setSocialRecommendationApproved(false);
+    return payload;
+  };
+
   const collectSocialPostMetricsForBusiness = async () => {
-    if (!businessId) return;
+    if (!businessId || !currentPlan?.id) return;
     if (typeof window !== 'undefined') {
       const confirmed = window.confirm(
         isRu
@@ -2936,15 +2951,26 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       const collected = Number(result.collected || 0);
       const picked = Number(result.picked || 0);
       const failed = Number(result.failed || 0);
+      const recommendationPayload = await fetchSocialPlanRecommendation(currentPlan.id);
+      const proposedCount = Number(recommendationPayload.proposed_changes?.length || 0);
+      const readiness = recommendationPayload.learning_readiness;
+      const readinessSummaryRu = String(readiness?.summary_ru || '').trim();
+      const readinessSummaryEn = String(readiness?.summary_en || '').trim();
       setActionSummary({
         tone: failed > 0 ? 'warning' : 'success',
         text_ru: String(response.message_ru || `Сбор реакций выполнен: проверено ${picked}, обновлено ${collected}, ошибок ${failed}.`),
         text_en: String(response.message_en || `Metrics collection finished: checked ${picked}, updated ${collected}, failed ${failed}.`),
         details_ru: [
-          'Внешние публикации не запускались. Следующий шаг - нажать “Предложить изменения”, чтобы пересчитать план по заявкам и обращениям.',
+          proposedCount > 0
+            ? `LocalOS сразу подготовил предложения к следующему плану: ${proposedCount}. Они не применены автоматически.`
+            : 'LocalOS пересчитал рекомендации, но пока не нашёл изменений для применения.',
+          readinessSummaryRu || 'Главная метрика - заявки и обращения; изменения требуют отдельного подтверждения.',
         ],
         details_en: [
-          'No external publishing was started. Next step: click “Suggest changes” to recalculate the plan by leads and inquiries.',
+          proposedCount > 0
+            ? `LocalOS immediately prepared next-plan proposals: ${proposedCount}. They were not applied automatically.`
+            : 'LocalOS recalculated recommendations, but found no changes to apply yet.',
+          readinessSummaryEn || 'The main metric is leads and inquiries; changes require separate approval.',
         ],
       });
     } catch (collectError) {
@@ -3110,20 +3136,16 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setError('');
     setActionSummary(null);
     try {
-      const response = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(currentPlan.id)}/social-posts/recommend-next-plan`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      });
-      setSocialRecommendation({
-        recommendation: response.recommendation || {},
-        learning_readiness: response.learning_readiness || undefined,
-        proposed_changes: Array.isArray(response.proposed_changes) ? response.proposed_changes : [],
-      });
-      setSocialRecommendationApproved(false);
+      const recommendationPayload = await fetchSocialPlanRecommendation(currentPlan.id);
+      const proposedCount = Number(recommendationPayload.proposed_changes?.length || 0);
       setActionSummary({
         tone: 'success',
-        text_ru: 'LocalOS подготовил предложения для корректировки плана. Они не применены автоматически.',
-        text_en: 'LocalOS prepared plan adjustment proposals. They were not applied automatically.',
+        text_ru: proposedCount > 0
+          ? `LocalOS подготовил предложения для корректировки плана: ${proposedCount}. Они не применены автоматически.`
+          : 'LocalOS пересчитал рекомендации, но пока не нашёл изменений для применения.',
+        text_en: proposedCount > 0
+          ? `LocalOS prepared plan adjustment proposals: ${proposedCount}. They were not applied automatically.`
+          : 'LocalOS recalculated recommendations, but found no changes to apply yet.',
       });
     } catch (recommendError) {
       const message = recommendError instanceof Error ? recommendError.message : (isRu ? 'Не удалось подготовить рекомендации' : 'Could not prepare recommendations');
