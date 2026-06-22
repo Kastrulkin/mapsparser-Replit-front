@@ -14,6 +14,7 @@ from services.social_post_service import (
     _dispatch_action_for_status,
     _social_dispatch_followup_actions,
     _social_dispatch_result_summaries,
+    _social_metrics_result_summaries,
     _dispatch_preview_readiness,
     _merge_metric_totals_into_posts,
     _meta_channel_readiness,
@@ -21,7 +22,9 @@ from services.social_post_service import (
     openclaw_browser_capability_status,
     _publish_external_account_post,
     _build_social_learning_insights,
+    _collect_telegram_post_metrics,
     _collect_vk_post_metrics,
+    _provider_metrics_placeholder,
     _preview_dispatch_decision,
     _dispatch_preview_first_cycle_steps,
     _telegram_publish_error_state,
@@ -561,7 +564,7 @@ def test_social_openclaw_browser_readiness_explains_ready_and_manual_fallback():
     assert ready["status"] == "ready"
     assert ready["action_ref"] == "openclaw.browser.fill_form"
     assert ready["browser_final_click_allowed"] is False
-    assert "controlled-задачи" in ready["message_ru"]
+    assert "контролируемое размещение" in ready["message_ru"]
     assert fallback["ready"] is False
     assert fallback["status"] == "manual_fallback"
     assert "ручном fallback" in fallback["message_ru"]
@@ -797,6 +800,90 @@ def test_record_social_post_attribution_event_returns_updated_metrics(monkeypatc
     assert FakeAttributionEventDB.last_conn.committed is True
 
 
+def test_social_metrics_result_summaries_explain_api_manual_and_failed_results():
+    summaries = _social_metrics_result_summaries(
+        [
+            {
+                "platform": "vk",
+                "source": "vk_api",
+                "status": "vk_metrics_collected",
+                "views": 120,
+                "comments": 3,
+                "leads": 1,
+            },
+            {
+                "platform": "telegram",
+                "source": "telegram_bot_api",
+                "status": "telegram_bot_api_metrics_unavailable",
+                "inquiries": 2,
+            },
+            {
+                "platform": "google_business",
+                "source": "google_business_api",
+                "status": "google_business_metrics_not_enabled",
+                "leads": 1,
+            },
+            {
+                "platform": "instagram",
+                "source": "meta_graph_api",
+                "status": "meta_graph_metrics_permissions_required",
+            },
+            {
+                "platform": "yandex_maps",
+                "source": "manual_or_supervised_map",
+                "status": "map_metrics_manual_input_required",
+            },
+            {
+                "platform": "google_business",
+                "source": "collector_error",
+                "status": "failed",
+                "error": "temporary",
+            },
+        ],
+        True,
+    )
+
+    assert "VK: API-снимок обновлён" in summaries[0]
+    assert "заявки 1" in summaries[0]
+    assert "Telegram: Bot API опубликовал пост, но не отдаёт просмотры/реакции" in summaries[1]
+    assert "Google Business: публикация учтена, но сбор реакций через Google Business пока не включён" in summaries[2]
+    assert "Instagram: Meta Graph метрики требуют готовых permissions" in summaries[3]
+    assert "Яндекс Карты: реакции с карт собираются вручную" in summaries[4]
+    assert "Ещё 1 результатов смотрите" in summaries[5]
+
+
+def test_provider_metrics_placeholders_explain_non_vk_collector_boundaries():
+    google = _provider_metrics_placeholder(
+        "google_business",
+        "google_business_api",
+        "google_business_metrics_not_enabled",
+    )
+    assert google["source"] == "google_business_api"
+    assert google["status"] == "google_business_metrics_not_enabled"
+    assert google["views"] == 0
+
+    meta = _provider_metrics_placeholder(
+        "instagram",
+        "meta_graph_api",
+        "meta_graph_metrics_permissions_required",
+    )
+    assert meta["source"] == "meta_graph_api"
+    assert meta["provider"] == "instagram"
+
+
+def test_collect_telegram_post_metrics_is_explicit_about_bot_api_limits():
+    missing = _collect_telegram_post_metrics({"platform": "telegram"})
+    assert missing["source"] == "telegram_bot_api"
+    assert missing["status"] == "missing_provider_post_binding"
+
+    collected = _collect_telegram_post_metrics({"platform": "telegram", "provider_post_id": "42"})
+    assert collected["source"] == "telegram_bot_api"
+    assert collected["provider"] == "telegram"
+    assert collected["status"] == "telegram_bot_api_metrics_unavailable"
+    assert collected["provider_post_id"] == "42"
+    assert collected["views"] == 0
+
+
 def test_dispatch_action_for_status_matches_worker_log_buckets():
     assert _dispatch_action_for_status("published") == "published"
     assert _dispatch_action_for_status("needs_supervised_publish") == "supervised"
@@ -868,7 +955,7 @@ def test_social_dispatch_result_summaries_explain_each_channel_outcome():
 
     assert "Telegram: опубликовано" in summaries[0]
     assert "https://t.me/channel/10" in summaries[0]
-    assert summaries[1] == "Яндекс Карты: controlled-задача готова (task-1)."
+    assert summaries[1] == "Яндекс Карты: контролируемое размещение готово (task-1)."
     assert "missing wall.post" in summaries[2]
     assert summaries[3] == "Facebook: ошибка публикации: temporary."
 
@@ -1310,7 +1397,7 @@ def test_preview_dispatch_decision_maps_never_autopublishes(monkeypatch):
     assert preview["would_status"] == "needs_supervised_publish"
     assert preview["external_publish"] is False
     assert preview["stop_before_final_publish"] is True
-    assert preview["action_label_ru"] == "Controlled task"
+    assert preview["action_label_ru"] == "Контролируемое размещение"
     assert "не нажмёт финальную кнопку" in preview["safety_summary_ru"]
 
 
@@ -1581,7 +1668,7 @@ def test_channel_readiness_next_action_distinguishes_ready_and_supervised():
     assert "расписание" in _channel_readiness_next_action("telegram", "ready", True)
     supervised_next = _channel_readiness_next_action("two_gis", "supervised_ready", True)
 
-    assert "controlled" in supervised_next
+    assert "контролируемое размещение" in supervised_next
     assert "финальная кнопка" in supervised_next
 
 
@@ -1933,7 +2020,7 @@ def test_dispatch_preview_first_cycle_steps_keep_owner_safe_before_worker_launch
     assert steps[0]["count"] == 2
     assert steps[0]["external_publish"] is True
     assert steps[0]["requires_approval"] is True
-    assert steps[1]["label_ru"] == "Карты: controlled/manual без финального клика"
+    assert steps[1]["label_ru"] == "Карты: контроль/вручную без финального клика"
     assert steps[1]["external_publish"] is False
     assert steps[1]["stop_before_final_publish"] is True
     assert steps[2]["label_ru"] == "Ручной fallback или подключение канала"
@@ -2200,7 +2287,7 @@ def test_social_publish_evidence_keeps_supervised_maps_human_controlled():
     assert evidence["tone"] == "warning"
     assert evidence["automation_task_id"] == "task-1"
     assert "финальный клик" in evidence["summary_ru"]
-    assert "controlled/manual" in evidence["summary_ru"]
+    assert "контролируемое или ручное размещение" in evidence["summary_ru"]
     assert evidence["target_url"] == "https://yandex.ru/maps/org/1"
     assert evidence["profile_hint"] == "Riderra Tallinn"
     assert evidence["copy_ready_text"] == "Текст для карты"

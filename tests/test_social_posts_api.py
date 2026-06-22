@@ -379,7 +379,17 @@ def test_social_post_metrics_run_once_collects_scoped_business(monkeypatch):
             "business_id": business_id,
             "approved": approved,
             "external_publish_performed": False,
-            "metrics_result": {"picked": 2, "collected": 2, "failed": 0},
+            "metrics_result": {
+                "picked": 2,
+                "collected": 2,
+                "failed": 0,
+                "result_summaries_ru": [
+                    "VK: API-снимок обновлён; заявки 1, обращения 0, комментарии 3, охват 120.",
+                ],
+                "result_summaries_en": [
+                    "VK: API snapshot updated; leads 1, inquiries 0, comments 3, reach 120.",
+                ],
+            },
             "message_ru": "Сбор реакций выполнен.",
         }
 
@@ -395,6 +405,7 @@ def test_social_post_metrics_run_once_collects_scoped_business(monkeypatch):
     assert payload["success"] is True
     assert payload["external_publish_performed"] is False
     assert payload["metrics_result"]["collected"] == 2
+    assert payload["metrics_result"]["result_summaries_ru"][0].startswith("VK: API-снимок")
     assert captured == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 500, "approved": True}
 
 

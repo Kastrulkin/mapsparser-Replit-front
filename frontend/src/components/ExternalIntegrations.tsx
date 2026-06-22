@@ -452,7 +452,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
             <div>
               <h3 className="text-base font-semibold text-slate-950">Публикации из контент-плана</h3>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-                Перед постановкой постов в расписание проверьте, какие каналы готовы к API-публикации, а где нужен controlled/manual шаг. Внешняя публикация всё равно пойдёт только после preview и вашего подтверждения.
+                Перед постановкой постов в расписание проверьте, какие каналы готовы к API-публикации, а где нужен ручной или контролируемый шаг. Внешняя публикация всё равно пойдёт только после preview и вашего подтверждения.
               </p>
             </div>
             <div className="grid min-w-full gap-2 text-xs sm:grid-cols-3 lg:min-w-[360px]">
@@ -466,7 +466,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
               </div>
               <div className="rounded-2xl bg-sky-50 px-3 py-2 text-sky-800">
                 <div className="font-semibold text-sky-950">{Number(socialReadinessSummary.controlled_or_manual || 0)}</div>
-                <div>controlled/manual</div>
+                <div>контроль/вручную</div>
               </div>
             </div>
           </div>
@@ -480,7 +480,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
               <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <div className="text-sm font-semibold text-slate-950">Чеклист публикаций</div>
                 <div className="mt-1 text-xs leading-5 text-slate-600">
-                  Сначала подключите API-каналы для автопубликации по расписанию. Яндекс/2ГИС остаются controlled/manual: LocalOS готовит текст и задачу, финальный клик делает человек.
+                  Сначала подключите API-каналы для автопубликации по расписанию. Яндекс/2ГИС остаются ручными или контролируемыми: LocalOS готовит текст и задачу, финальный клик делает человек.
                 </div>
                 <div className="mt-3 grid gap-2 text-xs md:grid-cols-2 xl:grid-cols-4">
                   <div className="rounded-xl bg-white px-3 py-2 text-slate-700 ring-1 ring-slate-200">
@@ -534,7 +534,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                                 : 'bg-sky-100 text-sky-800',
                           ].join(' ')}
                         >
-                          {ready ? 'готов' : isApi ? 'настроить' : 'controlled'}
+                          {ready ? 'готов' : isApi ? 'настроить' : 'под контролем'}
                         </span>
                       </div>
                       <div className="mt-3 text-[11px] font-medium uppercase tracking-wide text-slate-500">

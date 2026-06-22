@@ -27,6 +27,10 @@ echo "== Focused pytest subset =="
   tests/test_social_post_service.py \
   tests/test_social_posts_api.py
 
+echo "== Social posting loop smokes =="
+"${PYTHON_BIN}" scripts/smoke_social_content_plan_ui.py
+"${PYTHON_BIN}" scripts/smoke_social_posting_loop_contract.py
+
 echo "== Python dependency audit =="
 if ! "${PYTHON_BIN}" -m pip_audit --version >/dev/null 2>&1; then
   echo "pip-audit is required; run: python3 -m pip install -r requirements.test.txt"

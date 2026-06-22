@@ -21,6 +21,9 @@ SOCIAL_POST_SERVICE = ROOT / "src" / "services" / "social_post_service.py"
 
 REQUIRED_COPY = {
     "main next action": "Следующий шаг публикаций",
+    "overview quick launch": "Быстрый запуск публикаций",
+    "overview controlled placement": "LocalOS готовит контролируемое размещение",
+    "overview channel next actions": "Каналы: что сделать",
     "launch readiness": "Готовность к рабочему запуску",
     "launch loop path": "Короткий путь до полного цикла",
     "launch primary signal": "заявки и обращения важнее охватов",
@@ -28,7 +31,7 @@ REQUIRED_COPY = {
     "worker launch preflight": "Проверить запуск worker",
     "worker launch preflight result": "Preflight запуска worker",
     "worker launch recommended scope": "Рекомендованный scope",
-    "worker controlled launch env": "Команды для controlled launch",
+    "worker controlled launch env": "Команды для безопасного запуска",
     "worker copy env action": "Скопировать env для worker",
     "worker dispatch env enabled": "SOCIAL_POST_DISPATCH_ENABLED",
     "worker metrics env scope": "SOCIAL_POST_METRICS_BUSINESS_ID",
@@ -58,6 +61,7 @@ REQUIRED_COPY = {
     "queue saved guard feedback": "Queue сохранена, но LocalOS не запустит внешний worker",
     "queue saved scope feedback": "текущий worker смотрит другой business scope",
     "supervised placement state": "Контролируемое размещение",
+    "supervised placement owner action": "Подготовить контролируемое размещение",
     "manual placement action": "Отметить размещённым",
     "copy-ready fallback": "Скопировать текст",
     "next-plan recommendations": "Что менять в следующем плане",
@@ -115,7 +119,7 @@ REQUIRED_SETTINGS_COPY = {
     "settings google requirements": "Business Profile + location",
     "settings meta requirements": "Page/IG business + permissions",
     "settings next action": "Что сделать: ",
-    "settings maps controlled": "Яндекс/2ГИС остаются controlled/manual",
+    "settings maps controlled": "Яндекс/2ГИС остаются ручными или контролируемыми",
 }
 
 
@@ -148,7 +152,7 @@ REQUIRED_SETTINGS_PAGE_COPY = {
 
 REQUIRED_BACKEND_DISPATCH_COPY = {
     "worker first cycle api step": "API: публикация после approval",
-    "worker first cycle maps step": "Карты: controlled/manual без финального клика",
+    "worker first cycle maps step": "Карты: контроль/вручную без финального клика",
     "worker first cycle manual step": "Ручной fallback или подключение канала",
     "worker first cycle safety notes": "Внешние публикации уходят только из approved/queued постов.",
     "worker first cycle final click guard": "финальный клик публикации не выполняется worker",
@@ -166,6 +170,11 @@ REQUIRED_TELEGRAM_SETTINGS_DATA_CONTRACT = {
 FORBIDDEN_COPY = {
     "silent maps autopublish ru": "Яндекс/2ГИС автопубликация",
     "silent maps autopublish en": "Yandex/2GIS autopublish",
+    "owner-facing mixed controlled/manual ru": "Яндекс/2ГИС controlled/manual",
+    "owner-facing maps mixed mode ru": "Карты идут через controlled/manual",
+    "owner-facing manual controlled mix ru": "ручное/controlled",
+    "owner-facing controlled task ru": "controlled-задач",
+    "owner-facing controlled launch ru": "Команды для controlled launch",
 }
 
 

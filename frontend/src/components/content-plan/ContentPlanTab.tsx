@@ -1198,7 +1198,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         tone: 'ok',
         titleRu: 'Worker публикаций включён',
         titleEn: 'Publishing worker is enabled',
-        textRu: 'Посты в расписании будут обработаны по дате: API-каналы уйдут через adapters, карты перейдут в controlled/manual state.',
+        textRu: 'Посты в расписании будут обработаны по дате: API-каналы уйдут через adapters, карты перейдут в контролируемое или ручное размещение.',
         textEn: 'Scheduled posts will be processed by date: API channels use adapters, maps move to controlled/manual state.',
       };
     }
@@ -1206,7 +1206,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       tone: 'warning',
       titleRu: 'Worker публикаций сейчас выключен',
       titleEn: 'Publishing worker is currently disabled',
-      textRu: 'Можно готовить, проверять и ставить посты в расписание, но автоматическое исполнение не начнётся до включения dispatch. Для Яндекс/2ГИС останется controlled/manual handoff.',
+      textRu: 'Можно готовить, проверять и ставить посты в расписание, но автоматическое исполнение не начнётся до включения dispatch. Для Яндекс/2ГИС останется контролируемое или ручное размещение.',
       textEn: 'You can prepare, review, and queue posts, but automatic execution will not start until dispatch is enabled. Yandex/2GIS remain controlled/manual handoff.',
     };
   }, [socialDispatchBlockedWithoutScope, socialDispatchEnabled, socialDispatchScopeMismatch, socialRuntimeStatus?.dispatch?.business_scope]);
@@ -1421,6 +1421,19 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       blockedApiChannels,
     };
   }, [socialChannelReadiness]);
+  const socialOverviewChannelHighlights = useMemo(() => {
+    return [...socialChannelReadiness]
+      .sort((a, b) => {
+        const aMode = String(a.publish_mode || '').trim();
+        const bMode = String(b.publish_mode || '').trim();
+        const aControlled = aMode === 'openclaw_browser' || aMode === 'local_supervised_browser' || aMode === 'manual';
+        const bControlled = bMode === 'openclaw_browser' || bMode === 'local_supervised_browser' || bMode === 'manual';
+        const aRank = !a.ready && aMode === 'api' ? 0 : aControlled ? 1 : a.ready ? 2 : 3;
+        const bRank = !b.ready && bMode === 'api' ? 0 : bControlled ? 1 : b.ready ? 2 : 3;
+        return aRank - bRank;
+      })
+      .slice(0, 4);
+  }, [socialChannelReadiness]);
   const socialReadinessSetupPath = useMemo(() => {
     const firstBlocked = socialReadinessSummary.blockedApiChannels[0];
     if (!firstBlocked) return '/dashboard/settings?focus=integrations';
@@ -1531,7 +1544,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               ? `Нужен ручной fallback или подключение: ${manual}`
               : published > 0
                 ? `Опубликовано: ${published}`
-                : 'API уйдут через worker; карты останутся supervised/manual.',
+                : 'API уйдут через worker; карты останутся в контролируемом или ручном режиме.',
         detailEn: failed > 0
           ? `Failures: ${failed}. Open the post and retry or switch to manual mode.`
           : supervised > 0
@@ -2565,8 +2578,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (typeof window !== 'undefined') {
       const confirmed = window.confirm(
         isRu
-          ? 'Создать controlled задачу для Яндекс/2ГИС? LocalOS подготовит текст, инструкцию и handoff для OpenClaw/manual. Финальную кнопку публикации он не нажимает.'
-          : 'Create a controlled Yandex/2GIS task? LocalOS will prepare copy, instructions, and OpenClaw/manual handoff. It will not click the final publish button.'
+          ? 'Подготовить контролируемое размещение для Яндекс/2ГИС? LocalOS соберёт текст, ссылку на площадку и инструкцию. Финальную кнопку публикации он не нажимает.'
+          : 'Prepare supervised placement for Yandex/2GIS? LocalOS will prepare copy, the platform link, and instructions. It will not click the final publish button.'
       );
       if (!confirmed) return;
     }
@@ -2584,14 +2597,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setActionSummary({
         tone: status === 'needs_manual_publish' ? 'warning' : 'success',
         text_ru: status === 'needs_manual_publish'
-          ? 'Controlled задача подготовлена как ручной fallback: OpenClaw browser-use сейчас недоступен или не подтверждён.'
-          : 'Controlled задача создана. Проверьте инструкцию, откройте площадку и завершите размещение только после проверки preview.',
+          ? 'Контролируемое размещение подготовлено как ручной fallback: OpenClaw browser-use сейчас недоступен или не подтверждён.'
+          : 'Контролируемое размещение подготовлено. Проверьте инструкцию, откройте площадку и завершите размещение только после проверки preview.',
         text_en: status === 'needs_manual_publish'
-          ? 'Controlled task was prepared as manual fallback: OpenClaw browser-use is unavailable or not confirmed.'
-          : 'Controlled task created. Review the instructions, open the platform, and finish placement only after preview review.',
+          ? 'Supervised placement was prepared as manual fallback: OpenClaw browser-use is unavailable or not confirmed.'
+          : 'Supervised placement prepared. Review the instructions, open the platform, and finish placement only after preview review.',
       });
     } catch (taskError) {
-      const message = taskError instanceof Error ? taskError.message : (isRu ? 'Не удалось создать controlled задачу' : 'Could not create controlled task');
+      const message = taskError instanceof Error ? taskError.message : (isRu ? 'Не удалось подготовить контролируемое размещение' : 'Could not prepare supervised placement');
       setError(message);
     } finally {
       setSocialBusyAction('');
@@ -2614,10 +2627,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setActionSummary({
         tone: readiness?.ready ? 'success' : 'warning',
         text_ru: readiness?.ready
-          ? 'OpenClaw browser-use подтверждён. Яндекс/2ГИС можно вести через controlled-задачи без финального клика.'
+          ? 'OpenClaw browser-use подтверждён. Яндекс/2ГИС можно вести через контролируемое размещение без финального клика.'
           : 'OpenClaw browser-use не подтверждён. Яндекс/2ГИС останутся в ручном fallback, план не будет сорван.',
         text_en: readiness?.ready
-          ? 'OpenClaw browser-use is confirmed. Yandex/2GIS can use controlled tasks without the final click.'
+          ? 'OpenClaw browser-use is confirmed. Yandex/2GIS can use supervised placement without the final click.'
           : 'OpenClaw browser-use is not confirmed. Yandex/2GIS will stay in manual fallback, and the plan will not be blocked.',
       });
     } catch (checkError) {
@@ -2759,7 +2772,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         details_ru: [
           `Итого по посту: заявки ${leads}, обращения ${inquiries}, комментарии ${comments}, охват ${reach}.`,
           recommendationError
-            ? `Результат сохранён, но рекомендации не пересчитались: ${recommendationError}`
+            ? `Рекомендации сброшены: результат сохранён, но новый preview не пересчитался: ${recommendationError}`
             : proposedCount > 0
               ? `LocalOS сразу подготовил предложения к следующему плану: ${proposedCount}. Они не применены автоматически.`
               : 'LocalOS пересчитал рекомендации, но пока не нашёл изменений для применения.',
@@ -2989,27 +3002,49 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       const collected = Number(result.collected || 0);
       const picked = Number(result.picked || 0);
       const failed = Number(result.failed || 0);
-      const recommendationPayload = await fetchSocialPlanRecommendation(currentPlan.id);
-      const proposedCount = Number(recommendationPayload.proposed_changes?.length || 0);
-      const readiness = recommendationPayload.learning_readiness;
+      const resultSummariesRu = Array.isArray(result.result_summaries_ru)
+        ? result.result_summaries_ru.map(String).filter(Boolean)
+        : [];
+      const resultSummariesEn = Array.isArray(result.result_summaries_en)
+        ? result.result_summaries_en.map(String).filter(Boolean)
+        : [];
+      let recommendationPayload: SocialRecommendationPayload | null = null;
+      let recommendationError = '';
+      try {
+        recommendationPayload = await fetchSocialPlanRecommendation(currentPlan.id);
+      } catch (recommendErrorCaught) {
+        recommendationError = recommendErrorCaught instanceof Error
+          ? recommendErrorCaught.message
+          : (isRu ? 'Не удалось пересчитать рекомендации' : 'Could not recalculate recommendations');
+        setSocialRecommendation(null);
+        setSocialRecommendationApproved(false);
+      }
+      const proposedCount = Number(recommendationPayload?.proposed_changes?.length || 0);
+      const readiness = recommendationPayload?.learning_readiness;
       const readinessSummaryRu = String(readiness?.summary_ru || '').trim();
       const readinessSummaryEn = String(readiness?.summary_en || '').trim();
       setActionSummary({
-        tone: failed > 0 ? 'warning' : 'success',
+        tone: failed > 0 || recommendationError ? 'warning' : 'success',
         text_ru: String(response.message_ru || `Сбор реакций выполнен: проверено ${picked}, обновлено ${collected}, ошибок ${failed}.`),
         text_en: String(response.message_en || `Metrics collection finished: checked ${picked}, updated ${collected}, failed ${failed}.`),
         details_ru: [
-          proposedCount > 0
-            ? `LocalOS сразу подготовил предложения к следующему плану: ${proposedCount}. Они не применены автоматически.`
-            : 'LocalOS пересчитал рекомендации, но пока не нашёл изменений для применения.',
+          ...resultSummariesRu,
+          recommendationError
+            ? `Рекомендации сброшены: реакции сохранены, но новый preview не пересчитался: ${recommendationError}`
+            : proposedCount > 0
+              ? `LocalOS сразу подготовил предложения к следующему плану: ${proposedCount}. Они не применены автоматически.`
+              : 'LocalOS пересчитал рекомендации, но пока не нашёл изменений для применения.',
           readinessSummaryRu || 'Главная метрика - заявки и обращения; изменения требуют отдельного подтверждения.',
-        ],
+        ].slice(0, 7),
         details_en: [
-          proposedCount > 0
-            ? `LocalOS immediately prepared next-plan proposals: ${proposedCount}. They were not applied automatically.`
-            : 'LocalOS recalculated recommendations, but found no changes to apply yet.',
+          ...resultSummariesEn,
+          recommendationError
+            ? `Recommendations were reset: reactions were saved, but the new preview was not recalculated: ${recommendationError}`
+            : proposedCount > 0
+              ? `LocalOS immediately prepared next-plan proposals: ${proposedCount}. They were not applied automatically.`
+              : 'LocalOS recalculated recommendations, but found no changes to apply yet.',
           readinessSummaryEn || 'The main metric is leads and inquiries; changes require separate approval.',
-        ],
+        ].slice(0, 7),
       });
     } catch (collectError) {
       const message = collectError instanceof Error ? collectError.message : (isRu ? 'Не удалось обновить реакции' : 'Could not update reactions');
@@ -3046,7 +3081,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       const dryRunMessageEn = String(preview.readiness?.message_en || '');
       setActionSummary({
         tone: manualCount > 0 || Number(preview.skipped_no_access || 0) > 0 ? 'warning' : 'success',
-        text_ru: `Dry-run расписания по текущему бизнесу: due-постов ${preview.picked || 0}, API ${apiCount}, controlled ${supervisedCount}, вручную ${manualCount}. Наружу ничего не отправлено.`,
+        text_ru: `Dry-run расписания по текущему бизнесу: due-постов ${preview.picked || 0}, API ${apiCount}, контролируемое размещение ${supervisedCount}, вручную ${manualCount}. Наружу ничего не отправлено.`,
         text_en: `Schedule dry-run for the current business: due posts ${preview.picked || 0}, API ${apiCount}, controlled ${supervisedCount}, manual ${manualCount}. Nothing was sent externally.`,
         details_ru: dryRunMessageRu ? [dryRunMessageRu] : [],
         details_en: dryRunMessageEn ? [dryRunMessageEn] : [],
@@ -3106,7 +3141,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         text_ru: preflight.message_ru || 'Preflight запуска worker готов.',
         text_en: preflight.message_en || 'Worker launch preflight is ready.',
         details_ru: [
-          `Due: ${Number(preflight.summary?.due_posts || 0)} · API: ${Number(preflight.summary?.api_due_posts || 0)} · controlled: ${Number(preflight.summary?.controlled_due_posts || 0)} · manual: ${Number(preflight.summary?.manual_due_posts || 0)}.`,
+          `Due: ${Number(preflight.summary?.due_posts || 0)} · API: ${Number(preflight.summary?.api_due_posts || 0)} · контролируемо: ${Number(preflight.summary?.controlled_due_posts || 0)} · вручную: ${Number(preflight.summary?.manual_due_posts || 0)}.`,
           preflight.next_action_ru || 'Следующий шаг появится в блоке запуска.',
         ],
         details_en: [
@@ -3127,7 +3162,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (typeof window !== 'undefined') {
       const confirmed = window.confirm(
         isRu
-          ? 'Запустить один scoped цикл публикаций для текущего бизнеса? API-каналы могут быть опубликованы, если посты уже утверждены и стоят в расписании. Яндекс/2ГИС перейдут в controlled/manual без финального клика.'
+          ? 'Запустить один scoped цикл публикаций для текущего бизнеса? API-каналы могут быть опубликованы, если посты уже утверждены и стоят в расписании. Яндекс/2ГИС перейдут в контролируемое или ручное размещение без финального клика.'
           : 'Run one scoped publishing cycle for the current business? API channels may publish if posts are already approved and queued. Yandex/2GIS will move to controlled/manual without the final click.'
       );
       if (!confirmed) return;
@@ -3157,12 +3192,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         : [];
       setActionSummary({
         tone: Number(result.failed || 0) > 0 || Number(result.manual || 0) > 0 ? 'warning' : 'success',
-        text_ru: String(response.message_ru || `Первый scoped цикл выполнен: взято ${Number(result.picked || 0)}, опубликовано ${Number(result.published || 0)}, controlled ${Number(result.supervised || 0)}, вручную ${Number(result.manual || 0)}, ошибок ${Number(result.failed || 0)}.`),
+        text_ru: String(response.message_ru || `Первый scoped цикл выполнен: взято ${Number(result.picked || 0)}, опубликовано ${Number(result.published || 0)}, контролируемое размещение ${Number(result.supervised || 0)}, вручную ${Number(result.manual || 0)}, ошибок ${Number(result.failed || 0)}.`),
         text_en: String(response.message_en || `First scoped cycle finished: picked ${Number(result.picked || 0)}, published ${Number(result.published || 0)}, controlled ${Number(result.supervised || 0)}, manual ${Number(result.manual || 0)}, failed ${Number(result.failed || 0)}.`),
         details_ru: [
           ...resultSummariesRu,
           ...(followupRu.length ? followupRu : [
-            'Проверьте карточки постов: API должны показать ссылку/ID или понятную ошибку, карты - controlled/manual задачу.',
+            'Проверьте карточки постов: API должны показать ссылку/ID или понятную ошибку, карты - контролируемое или ручное размещение.',
           ]),
         ].slice(0, 7),
         details_en: [
@@ -4233,6 +4268,121 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             </div>
           </div>
 
+          <div className="mt-5 rounded-2xl border border-slate-900 bg-slate-950 px-4 py-4 text-white">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  {isRu ? 'Быстрый запуск публикаций' : 'Quick publishing launch'}
+                </div>
+                <div className="mt-2 text-lg font-semibold">
+                  {isRu ? socialPlanNextStep.titleRu : socialPlanNextStep.titleEn}
+                </div>
+                <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+                  {isRu ? socialPlanNextStep.descriptionRu : socialPlanNextStep.descriptionEn}
+                </div>
+                <div className="mt-3 grid gap-2 text-xs text-slate-300 sm:grid-cols-3">
+                  <div className="rounded-xl bg-white/10 px-3 py-2">
+                    <div className="text-base font-semibold text-white">{socialReadinessSummary.apiReady}</div>
+                    <div>{isRu ? 'API-каналы готовы' : 'API channels ready'}</div>
+                  </div>
+                  <div className="rounded-xl bg-white/10 px-3 py-2">
+                    <div className="text-base font-semibold text-white">{socialReadinessSummary.supervisedOrManual}</div>
+                    <div>{isRu ? 'Яндекс/2ГИС под контролем' : 'Yandex/2GIS controlled/manual'}</div>
+                  </div>
+                  <div className="rounded-xl bg-white/10 px-3 py-2">
+                    <div className="text-base font-semibold text-white">{socialReadinessSummary.needsAttention}</div>
+                    <div>{isRu ? 'нужны ключи или права' : 'need keys or rights'}</div>
+                  </div>
+                </div>
+                {socialOverviewChannelHighlights.length > 0 ? (
+                  <div className="mt-3 rounded-xl bg-white/10 px-3 py-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                      {isRu ? 'Каналы: что сделать' : 'Channels: next actions'}
+                    </div>
+                    <div className="mt-2 grid gap-2 md:grid-cols-2">
+                      {socialOverviewChannelHighlights.map((channel) => {
+                        const mode = String(channel.publish_mode || '').trim();
+                        const isControlled = mode === 'openclaw_browser' || mode === 'local_supervised_browser' || mode === 'manual';
+                        const badge = channel.ready
+                          ? (isRu ? 'готов' : 'ready')
+                          : isControlled
+                            ? (isRu ? 'контроль' : 'supervised')
+                            : (isRu ? 'нужно внимание' : 'needs attention');
+                        const line = String(
+                          (isRu
+                            ? channel.setup_summary_ru || channel.next_action_ru || channel.message_ru
+                            : channel.setup_summary_en || channel.next_action_en || channel.message_en) || ''
+                        ).trim();
+                        return (
+                          <div key={`overview-channel-${channel.platform}`} className="rounded-lg bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-white">
+                                {channel.platform_label || _socialPlatformLabel(channel.platform, isRu)}
+                              </span>
+                              <span className={channel.ready || isControlled ? 'text-sky-200' : 'text-amber-200'}>
+                                {badge}
+                              </span>
+                            </div>
+                            <div className="mt-1 line-clamp-2 text-slate-300">
+                              {line || _socialPublishModeLabel(channel.publish_mode || '', isRu)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {socialReadinessSummary.blockedApiChannels.length > 0 ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(socialReadinessSetupPath)}
+                        className="mt-3 h-8 border-white/20 bg-white/10 px-3 text-xs text-white hover:bg-white/20 hover:text-white"
+                      >
+                        {isRu ? 'Открыть настройку канала' : 'Open channel setup'}
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="mt-3 rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200">
+                  {isRu
+                    ? 'Внешние публикации идут только после preview и approval. Для Яндекс/2ГИС LocalOS готовит контролируемое размещение, а не скрытую автопубликацию.'
+                    : 'External publishing runs only after preview and approval. For Yandex/2GIS, LocalOS prepares controlled placement, not hidden autopublish.'}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 sm:min-w-[260px]">
+                <Button
+                  type="button"
+                  onClick={runSocialPlanNextStep}
+                  disabled={Boolean(bulkBusyAction) || Boolean(socialBusyAction) || Boolean(socialPlanNextStep.disabled)}
+                  className="bg-white text-slate-950 hover:bg-slate-100"
+                >
+                  {Boolean(bulkBusyAction) || Boolean(socialBusyAction)
+                    ? (isRu ? 'Выполняем...' : 'Working...')
+                    : `${isRu ? socialPlanNextStep.ctaRu : socialPlanNextStep.ctaEn} · ${socialPlanNextStep.count}`}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setActiveZone('queue')}
+                  className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                >
+                  {isRu ? 'Открыть очередь и preview' : 'Open queue and preview'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { void previewSocialDispatch(); }}
+                  disabled={Boolean(bulkBusyAction) || Boolean(socialBusyAction)}
+                  className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                >
+                  {socialBusyAction === 'dispatch-preview'
+                    ? (isRu ? 'Проверяем...' : 'Checking...')
+                    : (isRu ? 'Проверить расписание' : 'Preview schedule')}
+                </Button>
+              </div>
+            </div>
+          </div>
+
           {socialLaunchStages.length > 0 ? (
             <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
@@ -4242,7 +4392,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   </div>
                   <div className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
                     {isRu
-                      ? 'Дойти от темы в контент-плане до публикации, результата и корректировки следующей недели. Карты идут через controlled/manual, API-каналы — только после approval.'
+                      ? 'Дойти от темы в контент-плане до публикации, результата и корректировки следующей недели. Карты идут через контролируемое или ручное размещение, API-каналы — только после approval.'
                       : 'Move from a content-plan topic to publishing, results, and next-week correction. Maps stay controlled/manual; API channels run only after approval.'}
                   </div>
                 </div>
@@ -5840,7 +5990,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           </div>
                           <div className="mt-1 text-[11px] text-slate-200">
                             {isRu
-                              ? `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · controlled ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · manual ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`
+                              ? `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · контролируемо ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · вручную ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`
                               : `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · controlled ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · manual ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`}
                           </div>
                           {socialLaunchPreflight.next_action_ru || socialLaunchPreflight.next_action_en ? (
@@ -5911,12 +6061,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           </Button>
                           <div className="mt-1 text-[11px] text-slate-300">
                             {isRu
-                              ? 'Запускает только due-посты текущего бизнеса. API может опубликовать approved/queued посты; Яндекс/2ГИС останутся controlled/manual.'
+                              ? 'Запускает только due-посты текущего бизнеса. API может опубликовать approved/queued посты; Яндекс/2ГИС останутся в контролируемом или ручном размещении.'
                               : 'Runs only due posts for the current business. API may publish approved/queued posts; Yandex/2GIS stay controlled/manual.'}
                           </div>
                           <div className="mt-2 rounded-lg bg-slate-950/30 px-2 py-2 text-[11px] text-slate-100 ring-1 ring-white/10">
                             <div className="font-semibold text-white">
-                              {isRu ? 'Команды для controlled launch' : 'Controlled launch env'}
+                              {isRu ? 'Команды для безопасного запуска' : 'Controlled launch env'}
                             </div>
                             <div className="mt-1 space-y-0.5 font-mono text-[10px] leading-4 text-slate-200">
                               {_socialWorkerEnvLines(
@@ -5933,14 +6083,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               className="mt-2 h-7 border-white/20 bg-white/10 px-2 text-[11px] text-white hover:bg-white/20"
                               onClick={() => { void copySocialWorkerEnv(); }}
                             >
-                              {isRu ? 'Скопировать env + runbook' : 'Copy env + runbook'}
+                              {isRu ? 'Скопировать env для worker' : 'Copy worker env'}
                             </Button>
                           </div>
                           {_socialFirstCycleVerificationBlock(socialLaunchPreflight.first_cycle_verification, isRu)}
                           {_socialLaunchRunbookBlock(socialLaunchPreflight.launch_runbook, isRu)}
                           <div className="mt-1 text-[11px] text-slate-300">
                             {isRu
-                              ? 'Preflight ничего не публикует: approval обязателен, карты остаются controlled/manual без финального клика.'
+                              ? 'Preflight ничего не публикует: approval обязателен, карты остаются контролируемыми или ручными без финального клика.'
                               : 'Preflight publishes nothing: approval is required, and maps stay controlled/manual without the final click.'}
                           </div>
                         </div>
@@ -5952,7 +6102,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           </div>
                           <div>
                             {isRu
-                              ? `Due: ${Number(socialDispatchPreview.picked || 0)} · API: ${Number(socialDispatchPreview.by_action?.publish_api || 0)} · controlled: ${Number(socialDispatchPreview.by_action?.create_supervised_task || 0)} · вручную: ${Number(socialDispatchPreview.by_action?.manual_handoff || 0)}`
+                              ? `Due: ${Number(socialDispatchPreview.picked || 0)} · API: ${Number(socialDispatchPreview.by_action?.publish_api || 0)} · контролируемо: ${Number(socialDispatchPreview.by_action?.create_supervised_task || 0)} · вручную: ${Number(socialDispatchPreview.by_action?.manual_handoff || 0)}`
                               : `Due: ${Number(socialDispatchPreview.picked || 0)} · API: ${Number(socialDispatchPreview.by_action?.publish_api || 0)} · controlled: ${Number(socialDispatchPreview.by_action?.create_supervised_task || 0)} · manual: ${Number(socialDispatchPreview.by_action?.manual_handoff || 0)}`}
                           </div>
                           <div className="text-[11px] text-slate-300">
@@ -5994,7 +6144,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ) : null}
                               <div className="mt-1 text-slate-300">
                                 {isRu
-                                  ? `external ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · controlled ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · manual ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`
+                                  ? `API ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · контролируемо ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · вручную ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`
                                   : `external ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · controlled ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · manual ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`}
                               </div>
                             </div>
@@ -6231,10 +6381,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           <div className="mt-1 text-xs leading-5 text-slate-600">
                             {socialReadinessSummary.blockedApiChannels.length > 0
                               ? (isRu
-                                ? 'Перед постановкой API-каналов в расписание подключите ключи или права. Карты останутся controlled/manual и не будут выглядеть как автопубликация.'
+                                ? 'Перед постановкой API-каналов в расписание подключите ключи или права. Карты останутся контролируемыми или ручными и не будут выглядеть как автопубликация.'
                                 : 'Connect keys or permissions before queueing API channels. Maps stay controlled/manual and are not shown as autopublish.')
                               : (isRu
-                                ? 'API-каналы готовы к публикации после approval. Карты идут через controlled/manual размещение.'
+                                ? 'API-каналы готовы к публикации после approval. Карты идут через контролируемое или ручное размещение.'
                                 : 'API channels are ready to publish after approval. Maps use controlled/manual placement.')}
                           </div>
                           {socialOpenClawReadiness ? (
@@ -6325,7 +6475,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           </div>
                           <div className="rounded-lg bg-sky-50 px-3 py-2 text-sky-800">
                             <div className="font-semibold text-sky-950">{socialReadinessSummary.supervisedOrManual}</div>
-                            <div>controlled/manual</div>
+                            <div>{isRu ? 'контроль/вручную' : 'controlled/manual'}</div>
                           </div>
                         </div>
                       </div>
@@ -6866,7 +7016,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                     <div className="mt-1">
                       {isRu
-                        ? `Проверить preview: ${selectedSocialNeedsReview.length} · поставить в расписание: ${selectedSocialCanQueue.length} · ручное/controlled размещение: ${selectedSocialCanMarkPublished.length}.`
+                        ? `Проверить preview: ${selectedSocialNeedsReview.length} · поставить в расписание: ${selectedSocialCanQueue.length} · ручное/контролируемое размещение: ${selectedSocialCanMarkPublished.length}.`
                         : `Review preview: ${selectedSocialNeedsReview.length} · queue on schedule: ${selectedSocialCanQueue.length} · manual/controlled placement: ${selectedSocialCanMarkPublished.length}.`}
                     </div>
                     <div className="mt-1 text-blue-800">
@@ -6880,7 +7030,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             : 'Posts are approved: the next safe step is “Queue on schedule”.')
                           : selectedSocialCanMarkPublished.length > 0
                             ? (isRu
-                              ? 'Для этих каналов нужен ручной или controlled финал: проверьте задачу и отметьте размещение.'
+                              ? 'Для этих каналов нужен ручной или контролируемый финал: проверьте задачу и отметьте размещение.'
                               : 'These channels need a manual or controlled finish: review the task and mark placement.')
                             : (isRu
                               ? 'Если кнопки ниже показывают 0, сначала подготовьте каналы для выбранных тем.'
@@ -7263,7 +7413,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                     ? {
                                       tone: 'queue',
                                       textRu: isSupervisedPost
-                                        ? 'Расписание зафиксирует дату. Для Яндекс/2ГИС LocalOS создаст controlled/manual размещение, не автопубликацию.'
+                                        ? 'Расписание зафиксирует дату. Для Яндекс/2ГИС LocalOS создаст контролируемое или ручное размещение, не автопубликацию.'
                                         : 'Расписание передаст пост worker-у: API-публикация начнётся только по дате и только при готовом канале.',
                                       textEn: isSupervisedPost
                                         ? 'Queueing records the date. For Yandex/2GIS, LocalOS creates controlled/manual placement, not autopublish.'
@@ -7273,7 +7423,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       ? {
                                         tone: 'queue',
                                         textRu: isSupervisedPost
-                                          ? 'Пост ждёт дату. Когда наступит время, он перейдёт в controlled/manual размещение.'
+                                          ? 'Пост ждёт дату. Когда наступит время, он перейдёт в контролируемое или ручное размещение.'
                                           : 'Пост ждёт дату. Worker обработает только due-публикации с подтверждённым текстом.',
                                         textEn: isSupervisedPost
                                           ? 'The post is waiting for its date. When due, it moves to controlled/manual placement.'
@@ -7282,14 +7432,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       : canCreateSupervisedTask
                                         ? {
                                           tone: 'controlled',
-                                          textRu: 'Controlled задача подготовит текст, ссылку и инструкцию. Финальную кнопку публикации нажимает человек.',
-                                          textEn: 'The controlled task prepares copy, link, and instructions. A human clicks the final publish button.',
+                                          textRu: 'Контролируемое размещение подготовит текст, ссылку и инструкцию. Финальную кнопку публикации нажимает человек.',
+                                          textEn: 'Supervised placement prepares copy, link, and instructions. A human clicks the final publish button.',
                                         }
                                         : canMarkPublished
                                           ? {
                                             tone: 'manual',
-                                            textRu: 'Используйте это, когда пост уже размещён вручную или через controlled-задачу, чтобы LocalOS смог собрать результат.',
-                                            textEn: 'Use this after manual or controlled placement so LocalOS can collect results.',
+                                            textRu: 'Используйте это, когда пост уже размещён вручную или через контролируемое размещение, чтобы LocalOS смог собрать результат.',
+                                            textEn: 'Use this after manual or supervised placement so LocalOS can collect results.',
                                           }
                                           : null;
                                 return (
@@ -7579,8 +7729,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       <div className="mt-2 text-[11px] text-sky-800">
                                         {isSupervisedPost
                                           ? (isRu
-                                            ? 'После подтверждения LocalOS создаст controlled/manual задачу; финальная публикация остаётся за человеком.'
-                                            : 'After approval, LocalOS creates a controlled/manual task; final publishing stays human-controlled.')
+                                            ? 'После подтверждения LocalOS подготовит контролируемое или ручное размещение; финальная публикация остаётся за человеком.'
+                                            : 'After approval, LocalOS prepares supervised or manual placement; final publishing stays human-controlled.')
                                           : (isRu
                                             ? 'После подтверждения можно поставить в расписание; API-публикация запустится только worker’ом и только по дате.'
                                             : 'After approval, you can queue it; API publishing starts only through the worker and only on schedule.')}
@@ -7677,7 +7827,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                         onClick={() => { void createSupervisedPostTask(post); }}
                                         disabled={postBusy || postTextDirty}
                                       >
-                                        {isRu ? 'Создать controlled задачу' : 'Create controlled task'}
+                                        {isRu ? 'Подготовить контролируемое размещение' : 'Prepare supervised placement'}
                                       </Button>
                                     ) : null}
                                     {canMarkPublished ? (
@@ -7879,7 +8029,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 </div>
                                 <div>
                                   {isRu
-                                    ? 'Только после approval можно поставить API-каналы в очередь; карты останутся controlled/manual.'
+                                    ? 'Только после approval можно поставить API-каналы в очередь; карты останутся контролируемыми или ручными.'
                                     : 'Only after approval can API channels be queued; maps remain controlled/manual.'}
                                 </div>
                               </div>
@@ -8225,7 +8375,7 @@ function _socialMetricsSourceText(platform: string, isRu: boolean): string {
   }
   if (normalized === 'yandex_maps' || normalized === 'two_gis') {
     return isRu
-      ? 'После controlled/manual размещения отметьте публикацию и заявки вручную; LocalOS не подставляет недоступные API-метрики.'
+      ? 'После контролируемого или ручного размещения отметьте публикацию и заявки вручную; LocalOS не подставляет недоступные API-метрики.'
       : 'After controlled/manual placement, mark publishing and leads manually; LocalOS does not invent unavailable API metrics.';
   }
   if (normalized === 'google_business') {
@@ -8554,7 +8704,7 @@ function _socialItemQueueSummary(posts: SocialPost[], isRu: boolean): {
   if (counts.review > 0) detailParts.push(isRu ? `проверка ${counts.review}` : `review ${counts.review}`);
   if (counts.approved > 0) detailParts.push(isRu ? `утверждено ${counts.approved}` : `approved ${counts.approved}`);
   if (counts.queued > 0) detailParts.push(isRu ? `расписание ${counts.queued}` : `queued ${counts.queued}`);
-  if (counts.supervised > 0) detailParts.push(isRu ? `controlled ${counts.supervised}` : `supervised ${counts.supervised}`);
+  if (counts.supervised > 0) detailParts.push(isRu ? `контролируемо ${counts.supervised}` : `supervised ${counts.supervised}`);
   if (counts.manual > 0) detailParts.push(isRu ? `вручную ${counts.manual}` : `manual ${counts.manual}`);
   if (counts.failed > 0) detailParts.push(isRu ? `ошибки ${counts.failed}` : `failed ${counts.failed}`);
   if (counts.published > 0) detailParts.push(isRu ? `вышло ${counts.published}` : `published ${counts.published}`);
@@ -8570,7 +8720,7 @@ function _socialItemQueueSummary(posts: SocialPost[], isRu: boolean): {
 function _socialDispatchActionLabel(action: string, isRu: boolean): string {
   const normalized = String(action || '').trim();
   if (normalized === 'publish_api') return isRu ? 'API publish' : 'API publish';
-  if (normalized === 'create_supervised_task') return isRu ? 'controlled task' : 'controlled task';
+  if (normalized === 'create_supervised_task') return isRu ? 'контролируемое размещение' : 'supervised placement';
   if (normalized === 'manual_handoff') return isRu ? 'ручной шаг' : 'manual step';
   return isRu ? 'проверить' : 'check';
 }
@@ -8579,7 +8729,7 @@ function _socialDispatchReasonLabel(reason: string, isRu: boolean): string {
   const normalized = String(reason || '').trim();
   if (normalized === 'channel_ready') return isRu ? 'Канал готов, после approval worker сможет выполнить API-публикацию.' : 'Channel is ready; after approval the worker can publish via API.';
   if (normalized === 'openclaw_browser_ready') return isRu ? 'OpenClaw browser-use готов, финальная кнопка публикации не нажимается без подтверждения.' : 'OpenClaw browser-use is ready; final publish is not clicked without approval.';
-  if (normalized === 'openclaw_browser_unavailable') return isRu ? 'Browser-use недоступен, нужен ручной/контролируемый fallback.' : 'Browser-use is unavailable, manual/supervised fallback is needed.';
+  if (normalized === 'openclaw_browser_unavailable') return isRu ? 'Browser-use недоступен, нужен ручной или контролируемый режим.' : 'Browser-use is unavailable, manual/supervised fallback is needed.';
   if (normalized === 'publish_mode_not_api') return isRu ? 'Для канала нет API-режима, нужен ручной шаг.' : 'This channel has no API mode, manual step is needed.';
   return normalized;
 }

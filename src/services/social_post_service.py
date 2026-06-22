@@ -68,14 +68,14 @@ SOCIAL_QUEUE_GROUPS = (
         "key": "scheduled",
         "label_ru": "Запланировано",
         "label_en": "Scheduled",
-        "next_action_ru": "Ждёт даты публикации. Worker выполнит API publish или создаст controlled task.",
+        "next_action_ru": "Ждёт даты публикации. Worker выполнит API publish или создаст контролируемое размещение.",
         "next_action_en": "Waiting for schedule. The worker will publish via API or create a controlled task.",
     },
     {
         "key": "needs_supervised_publish",
         "label_ru": "Нужно контролируемое размещение",
         "label_en": "Needs supervised placement",
-        "next_action_ru": "Открыть controlled-задачу для Яндекс/2ГИС и остановиться перед финальной публикацией.",
+        "next_action_ru": "Открыть контролируемое размещение для Яндекс/2ГИС и остановиться перед финальной публикацией.",
         "next_action_en": "Open the controlled Yandex/2GIS task and stop before final publishing.",
     },
     {
@@ -385,7 +385,7 @@ def _social_launch_preflight_message(status: str, is_ru: bool) -> str:
         )
     if status == "ready_for_controlled_handoff":
         return (
-            "Есть due публикации для карт: worker создаст controlled/manual задачи без финального клика."
+            "Есть due публикации для карт: worker создаст контролируемое или ручное размещение без финального клика."
             if is_ru
             else "Due map posts exist: the worker will create controlled/manual tasks without the final click."
         )
@@ -639,7 +639,7 @@ def queue_social_posts(user_id: str, post_ids: list[str]) -> dict[str, Any]:
 
 def create_supervised_publish_task(user_id: str, post_id: str, approved: bool = False) -> dict[str, Any]:
     if not approved:
-        raise PermissionError("Для создания controlled-задачи нужно явное подтверждение")
+        raise PermissionError("Для подготовки контролируемого размещения нужно явное подтверждение")
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -664,9 +664,9 @@ def _create_supervised_publish_task(cursor: Any, post: dict[str, Any]) -> dict[s
     if status == "published":
         raise ValueError("Публикация уже опубликована")
     if not post.get("approved_at") and status not in {"approved", "queued", "needs_supervised_publish", "needs_manual_publish"}:
-        raise PermissionError("Перед controlled-размещением нужно подтверждение человека")
+        raise PermissionError("Перед контролируемым размещением нужно подтверждение человека")
     if not _social_post_has_text(post):
-        raise ValueError("Перед controlled-размещением нужно заполнить текст")
+        raise ValueError("Перед контролируемым размещением нужно заполнить текст")
 
     automation_task_id = str(post.get("automation_task_id") or "").strip() or _new_id()
     metadata = _json_dict(post.get("metadata_json"))
@@ -873,9 +873,9 @@ def mark_supervised_publish_blocked(
         platform = str(post.get("platform") or "").strip()
         status = str(post.get("status") or "").strip()
         if platform not in BROWSER_OR_MANUAL_PLATFORMS and status != "needs_supervised_publish":
-            raise ValueError("Этот пост не является controlled/browser-use публикацией")
+            raise ValueError("Этот пост не является контролируемой browser-use публикацией")
         if status not in {"needs_supervised_publish", "needs_manual_publish", "queued"}:
-            raise ValueError("Controlled fallback доступен только для запланированных или controlled публикаций")
+            raise ValueError("Контролируемый fallback доступен только для запланированных или контролируемых публикаций")
 
         blocked_reason = str(reason or "").strip()
         if not blocked_reason:
@@ -1060,9 +1060,27 @@ def collect_social_post_metrics(user_id: str, business_id: str = "", post_id: st
         )
         posts = [_serialize_social_post(cursor, row) for row in cursor.fetchall() or []]
         today = date.today()
+        metric_details: list[dict[str, Any]] = []
         for post in posts:
             attribution_metrics = _attribution_metrics_for_post(cursor, str(post.get("id") or ""))
             provider_metrics = _collect_provider_metrics_for_post(cursor, post)
+            metric_details.append(
+                {
+                    "id": str(post.get("id") or "").strip(),
+                    "platform": str(post.get("platform") or "").strip(),
+                    "provider": str(provider_metrics.get("provider") or post.get("platform") or "").strip(),
+                    "source": str(provider_metrics.get("source") or "manual_attribution_only").strip(),
+                    "status": str(provider_metrics.get("status") or "manual_attribution_only").strip(),
+                    "views": max(int(attribution_metrics.get("views", 0) or 0), int(provider_metrics.get("views", 0) or 0)),
+                    "likes": max(int(attribution_metrics.get("likes", 0) or 0), int(provider_metrics.get("likes", 0) or 0)),
+                    "comments": max(int(attribution_metrics.get("comments", 0) or 0), int(provider_metrics.get("comments", 0) or 0)),
+                    "shares": max(int(attribution_metrics.get("shares", 0) or 0), int(provider_metrics.get("shares", 0) or 0)),
+                    "clicks": int(attribution_metrics.get("clicks", 0) or 0),
+                    "inquiries": int(attribution_metrics.get("inquiries", 0) or 0),
+                    "leads": int(attribution_metrics.get("leads", 0) or 0),
+                    "error": str(provider_metrics.get("error") or "").strip()[:500],
+                }
+            )
             cursor.execute(
                 """
                 INSERT INTO social_post_metrics (
@@ -1110,6 +1128,7 @@ def collect_social_post_metrics(user_id: str, business_id: str = "", post_id: st
         return {
             "collected": len(posts_with_metrics),
             "posts": posts_with_metrics,
+            "metric_details": metric_details,
             "recommendation": _build_plan_recommendation(posts_with_metrics),
         }
     except Exception:
@@ -1499,7 +1518,7 @@ def _social_dispatch_once_message(result: dict[str, Any], is_ru: bool) -> str:
     if is_ru:
         return (
             f"Первый scoped цикл выполнен: взято {picked}, опубликовано {published}, "
-            f"controlled {supervised}, вручную {manual}, ошибок {failed}."
+            f"контролируемое размещение {supervised}, вручную {manual}, ошибок {failed}."
         )
     return (
         f"First scoped cycle finished: picked {picked}, published {published}, "
@@ -1532,7 +1551,7 @@ def _social_dispatch_followup_actions(
         )
     if supervised > 0:
         actions.append(
-            "Завершите controlled-размещение для Яндекс/2ГИС: финальный клик остаётся за человеком."
+            "Завершите контролируемое размещение для Яндекс/2ГИС: финальный клик остаётся за человеком."
             if is_ru
             else "Finish supervised placement for Yandex/2GIS: the final click stays with a human."
         )
@@ -1591,7 +1610,7 @@ def _social_dispatch_result_summaries(details: list[dict[str, Any]], is_ru: bool
             )
         elif status == "needs_supervised_publish":
             summaries.append(
-                f"{label}: controlled-задача готова" + (f" ({automation_task_id})." if automation_task_id else ".")
+                f"{label}: контролируемое размещение готово" + (f" ({automation_task_id})." if automation_task_id else ".")
                 if is_ru
                 else f"{label}: controlled task is ready" + (f" ({automation_task_id})." if automation_task_id else ".")
             )
@@ -1644,6 +1663,76 @@ def _social_metrics_once_message(result: dict[str, Any], is_ru: bool) -> str:
     if is_ru:
         return f"Сбор реакций выполнен: проверено {picked}, обновлено {collected}, ошибок {failed}."
     return f"Metrics collection finished: checked {picked}, updated {collected}, failed {failed}."
+
+
+def _social_metrics_result_summaries(details: list[dict[str, Any]], is_ru: bool) -> list[str]:
+    summaries: list[str] = []
+    for item in (details or [])[:5]:
+        platform = str(item.get("platform") or "").strip()
+        label = platform_label(platform) if platform else ("Пост" if is_ru else "Post")
+        source = str(item.get("source") or "").strip()
+        status = str(item.get("status") or "").strip()
+        error = str(item.get("error") or "").strip()
+        leads = int(item.get("leads") or 0)
+        inquiries = int(item.get("inquiries") or 0)
+        comments = int(item.get("comments") or 0)
+        reach = int(item.get("views") or item.get("reach") or 0)
+        if status == "failed" or source == "collector_error":
+            summaries.append(
+                f"{label}: реакции не обновились" + (f": {error}." if error else ".")
+                if is_ru
+                else f"{label}: reactions were not updated" + (f": {error}." if error else ".")
+            )
+        elif source == "vk_api":
+            summaries.append(
+                f"{label}: API-снимок обновлён; заявки {leads}, обращения {inquiries}, комментарии {comments}, охват {reach}."
+                if is_ru
+                else f"{label}: API snapshot updated; leads {leads}, inquiries {inquiries}, comments {comments}, reach {reach}."
+            )
+        elif source == "telegram_bot_api":
+            summaries.append(
+                f"{label}: Bot API опубликовал пост, но не отдаёт просмотры/реакции; отмечайте заявки и обращения вручную. Заявки {leads}, обращения {inquiries}."
+                if is_ru
+                else f"{label}: Bot API published the post but does not expose views/reactions; mark leads and inquiries manually. Leads {leads}, inquiries {inquiries}."
+            )
+        elif source == "google_business_api":
+            summaries.append(
+                f"{label}: публикация учтена, но сбор реакций через Google Business пока не включён; заявки и обращения отмечаются вручную. Заявки {leads}, обращения {inquiries}."
+                if is_ru
+                else f"{label}: publishing is tracked, but Google Business reaction collection is not enabled yet; mark leads and inquiries manually. Leads {leads}, inquiries {inquiries}."
+            )
+        elif source == "meta_graph_api":
+            summaries.append(
+                f"{label}: Meta Graph метрики требуют готовых permissions; пока используйте ручную разметку заявок/обращений. Заявки {leads}, обращения {inquiries}."
+                if is_ru
+                else f"{label}: Meta Graph metrics require ready permissions; use manual lead/inquiry marking for now. Leads {leads}, inquiries {inquiries}."
+            )
+        elif source == "manual_or_supervised_map":
+            summaries.append(
+                f"{label}: реакции с карт собираются вручную после контролируемого размещения; заявки {leads}, обращения {inquiries}."
+                if is_ru
+                else f"{label}: map reactions are collected manually after supervised placement; leads {leads}, inquiries {inquiries}."
+            )
+        elif source == "manual_attribution_only":
+            summaries.append(
+                f"{label}: доступна ручная разметка; заявки {leads}, обращения {inquiries}, реакции {comments}, просмотры {reach}."
+                if is_ru
+                else f"{label}: manual result marking is available; leads {leads}, inquiries {inquiries}, reactions {comments}, views {reach}."
+            )
+        else:
+            summaries.append(
+                f"{label}: метрики обновлены из {source or status or 'collector'}; заявки {leads}, обращения {inquiries}."
+                if is_ru
+                else f"{label}: metrics updated from {source or status or 'collector'}; leads {leads}, inquiries {inquiries}."
+            )
+    if len(details or []) > 5:
+        remaining = len(details or []) - 5
+        summaries.append(
+            f"Ещё {remaining} результатов смотрите в карточках постов."
+            if is_ru
+            else f"See {remaining} more results in post cards."
+        )
+    return summaries
 
 
 def preview_due_social_post_dispatch(user_id: str, batch_size: int = 20, business_id: str = "") -> dict[str, Any]:
@@ -1768,7 +1857,7 @@ def _dispatch_preview_readiness(
         ),
         "safety_notes_ru": [
             "Внешние публикации уходят только из approved/queued постов.",
-            "Яндекс/2ГИС остаются controlled/manual: финальный клик публикации не выполняется worker.",
+            "Яндекс/2ГИС остаются контролируемыми или ручными: финальный клик публикации не выполняется worker.",
             "Dry-run ничего не отправляет наружу и нужен для проверки первого цикла.",
         ],
         "safety_notes_en": [
@@ -1801,7 +1890,7 @@ def _dispatch_preview_first_cycle_steps(
         },
         {
             "key": "maps_controlled_without_final_click",
-            "label_ru": "Карты: controlled/manual без финального клика",
+            "label_ru": "Карты: контроль/вручную без финального клика",
             "label_en": "Maps: controlled/manual without final click",
             "count": int(controlled_count or 0),
             "external_publish": False,
@@ -1912,7 +2001,7 @@ def _social_worker_first_cycle_verification(
             f"В логах worker найти строку {log_filter}.",
             "Сверить picked/published/supervised/manual/failed с dry-run перед запуском.",
             "Если есть failed: открыть карточку поста, last_error и readiness канала.",
-            "Если есть manual/supervised: завершить размещение из карточки поста и отметить ссылку/ID.",
+            "Если есть ручное или контролируемое размещение: завершить его из карточки поста и отметить ссылку/ID.",
         ],
         "checks_en": [
             f"Find the {log_filter} line in worker logs.",
@@ -1932,7 +2021,7 @@ def _dispatch_preview_readiness_message(status: str, is_ru: bool) -> str:
         )
     if status == "controlled_tasks_ready":
         return (
-            "Есть due карты: worker создаст controlled/manual задачи, финальная публикация остаётся за человеком."
+            "Есть due карты: worker создаст контролируемое или ручное размещение, финальная публикация остаётся за человеком."
             if is_ru
             else "Due map posts exist: the worker will create controlled/manual tasks, while final publishing stays human-controlled."
         )
@@ -1971,7 +2060,7 @@ def _dispatch_preview_next_action(status: str, business_scope: str, is_ru: bool)
         )
     if status == "controlled_tasks_ready":
         return (
-            "Можно запускать scoped dispatch: карты перейдут в controlled/manual задачи без финального клика."
+            "Можно запускать scoped dispatch: карты перейдут в контролируемое или ручное размещение без финального клика."
             if is_ru
             else "Scoped dispatch can run: map posts will move to controlled/manual tasks without a final click."
         )
@@ -2019,7 +2108,7 @@ def _social_launch_runbook(
         "title_ru": "Runbook первого цикла dispatch",
         "title_en": "First-cycle dispatch runbook",
         "summary_ru": (
-            f"Due {due}: API {external}, controlled {controlled}, manual {manual}. "
+            f"Due {due}: API {external}, контролируемо {controlled}, вручную {manual}. "
             f"Scope: {scope or 'не задан'}."
         ),
         "summary_en": (
@@ -2103,7 +2192,7 @@ def _social_launch_runbook_steps(
         )
     if int(controlled_count or 0) > 0:
         steps.append(
-            "Для Яндекс/2ГИС проверьте supervised/manual задачу: финальный клик не должен быть выполнен worker."
+            "Для Яндекс/2ГИС проверьте контролируемое или ручное размещение: финальный клик не должен быть выполнен worker."
             if is_ru
             else "For Yandex/2GIS, check the supervised/manual task: the worker must not perform the final click."
         )
@@ -2240,6 +2329,7 @@ def collect_due_social_post_metrics(batch_size: int = 50, business_id: str = "")
     collected = 0
     failed = 0
     errors: list[dict[str, str]] = []
+    details: list[dict[str, Any]] = []
     for item in picked:
         post_id = str(item.get("id") or "").strip()
         try:
@@ -2248,14 +2338,20 @@ def collect_due_social_post_metrics(batch_size: int = 50, business_id: str = "")
                 raise RuntimeError("business owner not found")
             payload = collect_social_post_metrics(owner_id, post_id=post_id)
             collected += int(payload.get("collected") or 0)
+            if isinstance(payload.get("metric_details"), list):
+                details.extend([detail for detail in payload.get("metric_details") or [] if isinstance(detail, dict)])
         except Exception:
             failed += 1
             errors.append({"id": post_id, "error": str(sys.exc_info()[1])})
+            details.append({"id": post_id, "status": "failed", "source": "collector_error", "error": str(sys.exc_info()[1])})
     return {
         "picked": len(picked),
         "collected": collected,
         "failed": failed,
         "errors": errors,
+        "details": details,
+        "result_summaries_ru": _social_metrics_result_summaries(details, True),
+        "result_summaries_en": _social_metrics_result_summaries(details, False),
         "business_scope": business_scope,
     }
 
@@ -2377,7 +2473,7 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None) -> 
         "reason": str(capability_status.get("reason") or "").strip(),
         "browser_final_click_allowed": False,
         "message_ru": (
-            "OpenClaw browser-use готов: Яндекс/2ГИС можно вести как controlled-задачи без финального клика."
+            "OpenClaw browser-use готов: Яндекс/2ГИС можно вести как контролируемое размещение без финального клика."
             if ready
             else "OpenClaw browser-use не подтверждён: Яндекс/2ГИС останутся в ручном fallback."
         ),
@@ -2387,7 +2483,7 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None) -> 
             else "OpenClaw browser-use is not confirmed: Yandex/2GIS will stay in manual fallback."
         ),
         "next_action_ru": (
-            "Создайте controlled задачу у поста карты и проверьте preview перед финальным размещением."
+            "Подготовьте контролируемое размещение у поста карты и проверьте preview перед финальным размещением."
             if ready
             else "Проверьте capability catalog/OpenClaw настройки или используйте ручное размещение."
         ),
@@ -2680,7 +2776,7 @@ def _dispatch_preview_action_label(action: str, is_ru: bool) -> str:
     if clean == "publish_api":
         return "API-публикация" if is_ru else "API publish"
     if clean == "create_supervised_task":
-        return "Controlled task" if is_ru else "Controlled task"
+        return "Контролируемое размещение" if is_ru else "Controlled task"
     if clean == "manual_handoff":
         return "Ручной fallback" if is_ru else "Manual fallback"
     return "Без действия" if is_ru else "No action"
@@ -2714,7 +2810,7 @@ def _dispatch_preview_safety_summary(action: str, would_status: str, external_pu
         )
     if clean_action == "create_supervised_task":
         return (
-            "Worker создаст controlled задачу и не нажмёт финальную кнопку публикации."
+            "Worker создаст контролируемое размещение и не нажмёт финальную кнопку публикации."
             if is_ru
             else "The worker will create a controlled task and will not click the final publish button."
         )
@@ -3934,9 +4030,63 @@ def _vk_readiness_error(status: str) -> str:
 
 def _collect_provider_metrics_for_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     platform = str(post.get("platform") or "").strip()
+    if platform == "telegram":
+        return _collect_telegram_post_metrics(post)
     if platform == "vk":
         return _collect_vk_post_metrics(cursor, post)
+    if platform == "google_business":
+        return _provider_metrics_placeholder(
+            platform,
+            "google_business_api",
+            "google_business_metrics_not_enabled",
+        )
+    if platform in {"instagram", "facebook"}:
+        return _provider_metrics_placeholder(
+            platform,
+            "meta_graph_api",
+            "meta_graph_metrics_permissions_required",
+        )
+    if platform in BROWSER_OR_MANUAL_PLATFORMS:
+        return _provider_metrics_placeholder(
+            platform,
+            "manual_or_supervised_map",
+            "map_metrics_manual_input_required",
+        )
     return {"source": "manual_attribution_only", "provider": platform or "unknown"}
+
+
+def _provider_metrics_placeholder(platform: str, source: str, status: str) -> dict[str, Any]:
+    return {
+        "source": str(source or "manual_attribution_only").strip(),
+        "provider": str(platform or "unknown").strip(),
+        "status": str(status or "manual_metrics_required").strip(),
+        "views": 0,
+        "likes": 0,
+        "comments": 0,
+        "shares": 0,
+        "clicks": 0,
+    }
+
+
+def _collect_telegram_post_metrics(post: dict[str, Any]) -> dict[str, Any]:
+    message_id = str(post.get("provider_post_id") or "").strip()
+    if not message_id:
+        return {
+            "source": "telegram_bot_api",
+            "provider": "telegram",
+            "status": "missing_provider_post_binding",
+        }
+    return {
+        "source": "telegram_bot_api",
+        "provider": "telegram",
+        "status": "telegram_bot_api_metrics_unavailable",
+        "provider_post_id": message_id,
+        "views": 0,
+        "likes": 0,
+        "comments": 0,
+        "shares": 0,
+        "clicks": 0,
+    }
 
 
 def _collect_vk_post_metrics(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
@@ -4654,7 +4804,7 @@ def _channel_readiness_next_action(platform: str, status: str, is_ru: bool) -> s
         )
     if status_key == "supervised_ready":
         return (
-            "Поставьте пост в расписание: LocalOS создаст controlled задачу, финальная кнопка останется за человеком."
+            "Поставьте пост в расписание: LocalOS создаст контролируемое размещение, финальная кнопка останется за человеком."
             if is_ru
             else "Queue the post: LocalOS will create a controlled task and the final click remains human-owned."
         )
@@ -4828,7 +4978,7 @@ def _channel_readiness_setup_steps(platform: str, status: str, is_ru: bool) -> l
         return [
             "Проверьте текст и медиа.",
             "Поставьте пост в расписание.",
-            "Откройте controlled task и подтвердите финальный шаг вручную.",
+            "Откройте контролируемое размещение и подтвердите финальный шаг вручную.",
         ] if is_ru else [
             "Review copy and media.",
             "Queue the post on schedule.",
@@ -5091,7 +5241,7 @@ def _social_learning_readiness_next_action(status: str, is_ru: bool) -> str:
         )
     if status == "finish_pending_publish":
         return (
-            "Сначала завершите manual/supervised публикации или исправьте failed-каналы."
+            "Сначала завершите ручные/контролируемые публикации или исправьте failed-каналы."
             if is_ru
             else "Finish manual/supervised posts or recover failed channels first."
         )
@@ -5678,7 +5828,7 @@ def _social_publish_evidence(post: dict[str, Any]) -> dict[str, Any]:
                 "tone": "warning",
                 "title_ru": f"{provider_label}: нужно контролируемое размещение",
                 "title_en": f"{provider_label}: supervised placement needed",
-                "summary_ru": "LocalOS подготовил controlled/manual задачу; финальный клик публикации остаётся за человеком.",
+                "summary_ru": "LocalOS подготовил контролируемое или ручное размещение; финальный клик публикации остаётся за человеком.",
                 "summary_en": "LocalOS prepared a controlled/manual task; the final publish click stays with a human.",
                 "next_action_ru": "Откройте контролируемое размещение, проверьте предпросмотр и отметьте результат.",
                 "next_action_en": "Open supervised placement, review the preview, and record the result.",
