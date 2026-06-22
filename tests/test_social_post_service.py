@@ -63,6 +63,7 @@ from services.social_post_service import (
     preview_social_posts_for_item,
     publish_social_post,
     queue_social_post,
+    rehearse_social_post_publish,
     record_social_post_attribution_event,
     run_scoped_social_dispatch_once,
     run_scoped_social_metrics_once,
@@ -1888,6 +1889,71 @@ def test_preview_dispatch_decision_blocks_empty_copy_before_worker_publish(monke
     assert preview["reason"] == "empty_post_copy"
     assert preview["external_publish"] is False
     assert "сначала нужен текст" in preview["safety_summary_ru"]
+
+
+def test_rehearse_social_post_publish_reports_api_ready_without_provider_write(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "telegram",
+            "publish_mode": "api",
+            "status": "queued",
+            "approved_at": "2026-06-19T10:00:00+00:00",
+            "platform_text": "Пост готов к публикации",
+            "base_text": "Пост готов к публикации",
+        },
+    )
+    monkeypatch.setattr(social_post_service, "_queue_preflight_block", lambda cursor, post: {})
+    monkeypatch.setattr(
+        social_post_service,
+        "_publish_api_post",
+        lambda cursor, post: (_ for _ in ()).throw(AssertionError("rehearsal must not call provider publish")),
+    )
+
+    rehearsal = rehearse_social_post_publish("user-1", "post-ready")
+
+    assert rehearsal["schema"] == "localos_social_publish_rehearsal_v1"
+    assert rehearsal["dry_run"] is True
+    assert rehearsal["ready_for_execution"] is True
+    assert rehearsal["external_publish_performed"] is False
+    assert rehearsal["provider_write_performed"] is False
+    assert rehearsal["would_external_publish"] is True
+    assert rehearsal["dispatch_decision"]["dispatch_action"] == "publish_api"
+    assert rehearsal["blockers"] == []
+    assert "канал готов" in rehearsal["summary_ru"]
+
+
+def test_rehearse_social_post_publish_blocks_missing_approval(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "vk",
+            "publish_mode": "api",
+            "status": "needs_review",
+            "approved_at": None,
+            "platform_text": "Текст есть, но approval нет",
+            "base_text": "Текст есть, но approval нет",
+        },
+    )
+    monkeypatch.setattr(social_post_service, "_queue_preflight_block", lambda cursor, post: {})
+
+    rehearsal = rehearse_social_post_publish("user-1", "post-needs-review")
+
+    assert rehearsal["ready_for_execution"] is False
+    assert rehearsal["external_publish_performed"] is False
+    assert rehearsal["provider_write_performed"] is False
+    assert rehearsal["blockers"][0]["code"] == "missing_approval"
+    assert "подтвердить" in rehearsal["summary_ru"]
 
 
 def test_publish_social_post_moves_empty_copy_back_to_review(monkeypatch):

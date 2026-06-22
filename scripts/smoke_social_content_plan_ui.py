@@ -97,6 +97,9 @@ REQUIRED_COPY = {
     "approval preview no publish": "Approval только фиксирует проверку текста",
     "approval preview next step": "после этого отдельный шаг - “Поставить в расписание”",
     "approval preview second action": "Подтвердить тексты",
+    "post publish rehearsal action": "Проверить запуск",
+    "post publish rehearsal panel": "Проверка запуска",
+    "post publish rehearsal no publish": "наружу ничего не отправлено",
     "approval empty text guard": "Перед approval заполните и сохраните текст",
     "bulk approval saved preview guard": "Сначала сохраните правки текста",
     "queue preview panel": "Preview постановки в расписание",
@@ -168,6 +171,7 @@ REQUIRED_COPY = {
     "provider proof quality": "social-provider-proof-quality",
     "provider proof external proven": "внешняя публикация подтверждена",
     "provider proof ready metrics": "готово к метрикам",
+    "post publish rehearsal endpoint": "/publish-rehearsal",
 }
 
 
@@ -191,6 +195,7 @@ REQUIRED_DATA_CONTRACT = {
     "first api publish readiness test id": 'data-testid="social-first-api-publish-readiness"',
     "next plan recommendation test id": 'data-testid="social-next-plan-recommendation"',
     "preview before approval test id": 'data-testid="social-preview-before-approval"',
+    "publish rehearsal test id": 'data-testid="social-publish-rehearsal"',
     "prepare preview panel test id": 'data-testid="social-prepare-preview-panel"',
     "approval preview panel test id": 'data-testid="social-approval-preview-panel"',
     "queue preview panel test id": 'data-testid="social-queue-preview-panel"',

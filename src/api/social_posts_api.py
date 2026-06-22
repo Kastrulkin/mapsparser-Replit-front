@@ -31,6 +31,7 @@ from services.social_post_service import (
     publish_social_posts,
     queue_social_post,
     queue_social_posts,
+    rehearse_social_post_publish,
     recommend_next_plan_from_social_posts,
     record_social_post_attribution_event,
     run_scoped_social_dispatch_once,
@@ -475,6 +476,25 @@ def social_posts_publish(post_id: str):
     try:
         post = publish_social_post(str(user_data.get("user_id") or ""), post_id)
         return jsonify({"success": True, "post": post})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/<post_id>/publish-rehearsal", methods=["POST"])
+def social_posts_publish_rehearsal(post_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "publish-rehearsal")
+    if rate_error:
+        return rate_error
+    try:
+        rehearsal = rehearse_social_post_publish(str(user_data.get("user_id") or ""), post_id)
+        return jsonify({"success": True, "rehearsal": rehearsal})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
     except ValueError:

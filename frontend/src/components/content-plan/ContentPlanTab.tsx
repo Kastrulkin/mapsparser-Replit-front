@@ -162,6 +162,42 @@ type SocialPublishEvidence = {
   recoverable?: boolean;
 };
 
+type SocialPublishRehearsal = {
+  schema?: string;
+  dry_run?: boolean;
+  post_id?: string;
+  platform?: string;
+  platform_label?: string;
+  publish_mode?: string;
+  current_status?: string;
+  ready_for_execution?: boolean;
+  external_publish_performed?: boolean;
+  provider_write_performed?: boolean;
+  would_external_publish?: boolean;
+  would_create_supervised_task?: boolean;
+  browser_final_click_allowed?: boolean;
+  stop_before_final_publish?: boolean;
+  summary_ru?: string;
+  summary_en?: string;
+  next_action_ru?: string;
+  next_action_en?: string;
+  blockers?: Array<{
+    code?: string;
+    message_ru?: string;
+    message_en?: string;
+  }>;
+  dispatch_decision?: {
+    dispatch_action?: string;
+    action_label_ru?: string;
+    action_label_en?: string;
+    would_status?: string;
+    reason_label_ru?: string;
+    reason_label_en?: string;
+    safety_summary_ru?: string;
+    safety_summary_en?: string;
+  };
+};
+
 type SocialOpenClawCapabilityStatus = {
   ready?: boolean;
   status?: string;
@@ -1098,6 +1134,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialRuntimeStatus, setSocialRuntimeStatus] = useState<SocialRuntimeStatus | null>(null);
   const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
   const [manualPublishRefs, setManualPublishRefs] = useState<Record<string, { url: string; id: string }>>({});
+  const [socialPublishRehearsals, setSocialPublishRehearsals] = useState<Record<string, SocialPublishRehearsal>>({});
   const [socialPreparePreview, setSocialPreparePreview] = useState<SocialPreparePreview | null>(null);
   const [socialApprovalPreview, setSocialApprovalPreview] = useState<SocialApprovalPreview | null>(null);
   const [socialQueuePreview, setSocialQueuePreview] = useState<SocialQueuePreview | null>(null);
@@ -2995,6 +3032,35 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
     } catch (manualError) {
       const message = manualError instanceof Error ? manualError.message : (isRu ? 'Не удалось отметить публикацию' : 'Could not mark post as published');
+      setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
+  const rehearseSocialPostPublish = async (post: SocialPost) => {
+    setSocialBusyAction(`rehearsal:${post.id}`);
+    setError('');
+    setActionSummary(null);
+    try {
+      const response = await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/publish-rehearsal`, {
+        method: 'POST',
+      });
+      const rehearsal = response.rehearsal && typeof response.rehearsal === 'object'
+        ? response.rehearsal
+        : {};
+      setSocialPublishRehearsals((prev) => ({
+        ...prev,
+        [post.id]: rehearsal,
+      }));
+      const ready = Boolean(rehearsal.ready_for_execution);
+      setActionSummary({
+        tone: ready ? 'success' : 'warning',
+        text_ru: String(rehearsal.summary_ru || (ready ? 'Проверка запуска пройдена.' : 'Проверка нашла блокер перед запуском.')),
+        text_en: String(rehearsal.summary_en || (ready ? 'Launch check passed.' : 'The launch check found a blocker.')),
+      });
+    } catch (rehearsalError) {
+      const message = rehearsalError instanceof Error ? rehearsalError.message : (isRu ? 'Не удалось проверить запуск публикации' : 'Could not check publish readiness');
       setError(message);
     } finally {
       setSocialBusyAction('');
@@ -8947,6 +9013,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const canCreateSupervisedTask = isSupervisedPost
                                 && (post.status === 'approved' || post.status === 'queued' || post.status === 'needs_manual_publish');
                               const publishEvidence = post.publish_evidence || null;
+                              const publishRehearsal = socialPublishRehearsals[post.id] || null;
                               const supervisedPayload = _socialSupervisedPayload(post);
                               const supervisedHandoffState = supervisedPayload?.handoff_state || null;
                               const manualRefs = manualPublishRefs[post.id] || {
@@ -9008,9 +9075,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 const evidenceProofUrl = String(publishEvidence?.proof_url || post.provider_post_url || '').trim();
                                 const evidenceProofId = String(publishEvidence?.proof_id || post.provider_post_id || '').trim();
                                 const evidenceProviderStatus = String(publishEvidence?.provider_status || '').trim();
-                                const evidenceProofSource = String(publishEvidence?.proof_source || '').trim();
-                                const evidenceProofQuality = String(publishEvidence?.proof_quality || '').trim();
-                                const actionHint = needsReview
+                              const evidenceProofSource = String(publishEvidence?.proof_source || '').trim();
+                              const evidenceProofQuality = String(publishEvidence?.proof_quality || '').trim();
+                              const rehearsalSummary = String(isRu ? publishRehearsal?.summary_ru || '' : publishRehearsal?.summary_en || '').trim();
+                              const rehearsalNextAction = String(isRu ? publishRehearsal?.next_action_ru || '' : publishRehearsal?.next_action_en || '').trim();
+                              const rehearsalAction = String(isRu ? publishRehearsal?.dispatch_decision?.action_label_ru || '' : publishRehearsal?.dispatch_decision?.action_label_en || '').trim();
+                              const rehearsalReason = String(isRu ? publishRehearsal?.dispatch_decision?.reason_label_ru || '' : publishRehearsal?.dispatch_decision?.reason_label_en || '').trim();
+                              const rehearsalReady = Boolean(publishRehearsal?.ready_for_execution);
+                              const rehearsalBlockers = Array.isArray(publishRehearsal?.blockers) ? publishRehearsal.blockers : [];
+                              const actionHint = needsReview
                                   ? {
                                     tone: 'safe',
                                     textRu: 'Подтверждение только фиксирует, что текст проверен. Наружу ничего не отправится.',
@@ -9403,6 +9476,75 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       ) : null}
                                     </div>
                                   ) : null}
+                                  {publishRehearsal ? (
+                                    <div
+                                      data-testid="social-publish-rehearsal"
+                                      className={[
+                                        'mt-3 rounded-xl border px-3 py-2 text-xs leading-5',
+                                        rehearsalReady
+                                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                                          : 'border-amber-200 bg-amber-50 text-amber-800',
+                                      ].join(' ')}
+                                    >
+                                      <div className={rehearsalReady ? 'font-semibold text-emerald-950' : 'font-semibold text-amber-950'}>
+                                        {isRu ? 'Проверка запуска' : 'Launch check'}
+                                      </div>
+                                      {rehearsalSummary ? (
+                                        <div className="mt-1">{rehearsalSummary}</div>
+                                      ) : null}
+                                      {rehearsalNextAction ? (
+                                        <div className="mt-1 font-medium">
+                                          {rehearsalNextAction}
+                                        </div>
+                                      ) : null}
+                                      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                                        <span className="rounded-full bg-white/70 px-2 py-0.5 font-medium">
+                                          {isRu ? 'наружу ничего не отправлено' : 'nothing sent externally'}
+                                        </span>
+                                        <span className="rounded-full bg-white/70 px-2 py-0.5 font-medium">
+                                          {publishRehearsal.would_external_publish
+                                            ? (isRu ? 'API готов к публикации' : 'API publish ready')
+                                            : (isRu ? 'без API-публикации сейчас' : 'no API publish now')}
+                                        </span>
+                                        {publishRehearsal.would_create_supervised_task ? (
+                                          <span className="rounded-full bg-white/70 px-2 py-0.5 font-medium">
+                                            {isRu ? 'создаст supervised task' : 'will create supervised task'}
+                                          </span>
+                                        ) : null}
+                                        {publishRehearsal.browser_final_click_allowed === false ? (
+                                          <span className="rounded-full bg-white/70 px-2 py-0.5 font-medium">
+                                            {isRu ? 'финальный клик запрещён' : 'final click forbidden'}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                      {rehearsalAction || rehearsalReason || rehearsalBlockers.length > 0 ? (
+                                        <div className="mt-2 grid gap-1 rounded-lg bg-white/70 px-3 py-2 text-[11px]">
+                                          {rehearsalAction ? (
+                                            <div>
+                                              <span className="font-semibold">{isRu ? 'Что будет: ' : 'Action: '}</span>
+                                              {rehearsalAction}
+                                            </div>
+                                          ) : null}
+                                          {rehearsalReason ? (
+                                            <div>
+                                              <span className="font-semibold">{isRu ? 'Причина: ' : 'Reason: '}</span>
+                                              {rehearsalReason}
+                                            </div>
+                                          ) : null}
+                                          {rehearsalBlockers.length > 0 ? (
+                                            <div>
+                                              <span className="font-semibold">{isRu ? 'Блокер: ' : 'Blocker: '}</span>
+                                              {String(
+                                                isRu
+                                                  ? rehearsalBlockers[0]?.message_ru || rehearsalBlockers[0]?.code || ''
+                                                  : rehearsalBlockers[0]?.message_en || rehearsalBlockers[0]?.code || ''
+                                              )}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
                                   {!canRecordResult ? (
                                     <div
                                       data-testid="social-preview-before-approval"
@@ -9506,6 +9648,19 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                     </div>
                                   ) : null}
                                   <div className="mt-3 flex flex-wrap gap-2">
+                                    {post.status !== 'published' ? (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => { void rehearseSocialPostPublish(post); }}
+                                        disabled={postBusy || postTextDirty}
+                                      >
+                                        {socialBusyAction === `rehearsal:${post.id}`
+                                          ? (isRu ? 'Проверяем...' : 'Checking...')
+                                          : (isRu ? 'Проверить запуск' : 'Check launch')}
+                                      </Button>
+                                    ) : null}
                                     {needsReview ? (
                                       <Button
                                         type="button"
