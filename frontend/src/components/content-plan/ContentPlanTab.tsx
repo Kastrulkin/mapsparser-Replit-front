@@ -2716,25 +2716,53 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       } else if (currentPlan?.id) {
         await loadSocialPosts(currentPlan.id);
       }
-      setSocialRecommendation(null);
-      setSocialRecommendationApproved(false);
+      let recommendationPayload: SocialRecommendationPayload | null = null;
+      let recommendationError = '';
+      if (currentPlan?.id) {
+        try {
+          recommendationPayload = await fetchSocialPlanRecommendation(currentPlan.id);
+        } catch (recommendErrorCaught) {
+          recommendationError = recommendErrorCaught instanceof Error
+            ? recommendErrorCaught.message
+            : (isRu ? 'Не удалось пересчитать рекомендации' : 'Could not recalculate recommendations');
+          setSocialRecommendation(null);
+          setSocialRecommendationApproved(false);
+        }
+      } else {
+        setSocialRecommendation(null);
+        setSocialRecommendationApproved(false);
+      }
       const feedback = _socialAttributionFeedback(eventType);
       const metrics = response?.metrics && typeof response.metrics === 'object' ? response.metrics : {};
       const leads = Number(metrics.leads || nextPost?.leads || post.leads || 0);
       const inquiries = Number(metrics.inquiries || nextPost?.inquiries || post.inquiries || 0);
       const comments = Number(metrics.comments || nextPost?.comments || post.comments || 0);
       const reach = Number(metrics.reach || metrics.views || nextPost?.reach || nextPost?.views || post.reach || post.views || 0);
+      const proposedCount = Number(recommendationPayload?.proposed_changes?.length || 0);
+      const readiness = recommendationPayload?.learning_readiness;
+      const readinessSummaryRu = String(readiness?.summary_ru || '').trim();
+      const readinessSummaryEn = String(readiness?.summary_en || '').trim();
       setActionSummary({
-        tone: 'success',
+        tone: recommendationError ? 'warning' : 'success',
         text_ru: feedback.ru,
         text_en: feedback.en,
         details_ru: [
           `Итого по посту: заявки ${leads}, обращения ${inquiries}, комментарии ${comments}, охват ${reach}.`,
-          'Рекомендации сброшены: нажмите «Предложить изменения», чтобы пересчитать следующий план по новым фактам.',
+          recommendationError
+            ? `Результат сохранён, но рекомендации не пересчитались: ${recommendationError}`
+            : proposedCount > 0
+              ? `LocalOS сразу подготовил предложения к следующему плану: ${proposedCount}. Они не применены автоматически.`
+              : 'LocalOS пересчитал рекомендации, но пока не нашёл изменений для применения.',
+          readinessSummaryRu || 'Главная метрика - заявки и обращения; изменения требуют отдельного подтверждения.',
         ],
         details_en: [
           `Post totals: leads ${leads}, inquiries ${inquiries}, comments ${comments}, reach ${reach}.`,
-          'Recommendations were reset: click “Suggest changes” to recalculate the next plan from the new facts.',
+          recommendationError
+            ? `The result was saved, but recommendations were not recalculated: ${recommendationError}`
+            : proposedCount > 0
+              ? `LocalOS immediately prepared next-plan proposals: ${proposedCount}. They were not applied automatically.`
+              : 'LocalOS recalculated recommendations, but found no changes to apply yet.',
+          readinessSummaryEn || 'The main metric is leads and inquiries; changes require separate approval.',
         ],
       });
     } catch (attributeError) {
