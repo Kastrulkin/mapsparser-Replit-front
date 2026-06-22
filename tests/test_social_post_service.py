@@ -567,6 +567,7 @@ def test_default_publish_mode_keeps_yandex_manual_when_browser_capability_is_abs
     monkeypatch.delenv("OPENCLAW_BROWSER_USE_AVAILABLE", raising=False)
     monkeypatch.delenv("OPENCLAW_CAPABILITY_CATALOG_URL", raising=False)
     monkeypatch.delenv("OPENCLAW_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_SANDBOX_BRIDGE_URL", raising=False)
 
     assert default_publish_mode("yandex_maps") == "manual"
     assert default_publish_mode("two_gis") == "manual"
@@ -601,12 +602,46 @@ def test_openclaw_browser_capability_status_explains_missing_catalog(monkeypatch
     monkeypatch.delenv("OPENCLAW_BROWSER_USE_AVAILABLE", raising=False)
     monkeypatch.delenv("OPENCLAW_CAPABILITY_CATALOG_URL", raising=False)
     monkeypatch.delenv("OPENCLAW_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_SANDBOX_BRIDGE_URL", raising=False)
 
     status = openclaw_browser_capability_status()
 
     assert status["ready"] is False
     assert status["source"] == "not_configured"
     assert status["reason"] == "openclaw_catalog_not_configured"
+
+
+def test_openclaw_browser_available_uses_sandbox_bridge_catalog(monkeypatch):
+    from services import openclaw_capability_catalog
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "actions": [
+                    {
+                        "openclaw_action_ref": "openclaw.browser.supervised_publish",
+                        "localos_capability": "social.post.publish_supervised_browser",
+                        "status": "available",
+                    }
+                ]
+            }
+
+    monkeypatch.delenv("OPENCLAW_BROWSER_USE_ENABLED", raising=False)
+    monkeypatch.delenv("OPENCLAW_BROWSER_USE_AVAILABLE", raising=False)
+    monkeypatch.delenv("OPENCLAW_CAPABILITY_CATALOG_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_BASE_URL", raising=False)
+    monkeypatch.setenv("OPENCLAW_SANDBOX_BRIDGE_URL", "http://openclaw.local/capabilities")
+    monkeypatch.setattr(openclaw_capability_catalog.requests, "get", lambda *args, **kwargs: FakeResponse())
+
+    status = openclaw_browser_capability_status()
+
+    assert openclaw_browser_available() is True
+    assert status["ready"] is True
+    assert status["source"] == "openclaw"
+    assert status["action_ref"] == "openclaw.browser.supervised_publish"
 
 
 def test_social_openclaw_browser_readiness_explains_ready_and_manual_fallback():

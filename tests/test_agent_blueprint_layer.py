@@ -1163,7 +1163,6 @@ def test_openclaw_capability_catalog_normalizes_current_capabilities_catalog_sha
     )
 
     by_capability = {action["localos_capability"]: action for action in catalog["actions"]}
-
     assert catalog["source"] == "openclaw"
     assert catalog["discovery"]["provider_paths_preserved"] is True
     assert by_capability["google_sheets.read_rows"]["openclaw_action_ref"] == "openclaw.google_sheets.read_rows"
@@ -1173,6 +1172,49 @@ def test_openclaw_capability_catalog_normalizes_current_capabilities_catalog_sha
     assert by_capability["communications.send_offer"]["openclaw_action_ref"] == "openclaw.telegram.publish_message"
     assert by_capability["communications.send_offer"]["approval_class"] == "external_send_request"
     assert any(item["provider"] == "openclaw" for item in by_capability["communications.send_offer"]["provider_candidates"])
+
+
+def test_openclaw_capability_catalog_can_use_sandbox_bridge_env(monkeypatch):
+    from services import openclaw_capability_catalog
+
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "actions": [
+                    {
+                        "openclaw_action_ref": "openclaw.browser.supervised_publish",
+                        "localos_capability": "social.post.publish_supervised_browser",
+                        "service": "browser",
+                        "status": "available",
+                    }
+                ]
+            }
+
+    def fake_get(url, headers=None, timeout=0):
+        captured["url"] = url
+        captured["headers"] = headers or {}
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.delenv("OPENCLAW_CAPABILITY_CATALOG_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_LOCALOS_TOKEN", raising=False)
+    monkeypatch.delenv("OPENCLAW_TOKEN", raising=False)
+    monkeypatch.setenv("OPENCLAW_SANDBOX_BRIDGE_URL", "http://openclaw.local/capabilities")
+    monkeypatch.setenv("OPENCLAW_SANDBOX_BRIDGE_TOKEN", "bridge-token")
+    monkeypatch.setattr(openclaw_capability_catalog.requests, "get", fake_get)
+
+    catalog = openclaw_capability_catalog.get_openclaw_capability_catalog()
+
+    assert captured["url"] == "http://openclaw.local/capabilities"
+    assert captured["headers"]["Authorization"] == "Bearer bridge-token"
+    assert catalog["source"] == "openclaw"
+    assert catalog["actions"][0]["localos_capability"] == "social.post.publish_supervised_browser"
 
 
 def test_openclaw_planner_loop_uses_catalog_without_tool_execution():

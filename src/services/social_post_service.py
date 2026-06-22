@@ -2804,7 +2804,11 @@ def openclaw_browser_capability_status(fetcher: Any = None) -> dict[str, Any]:
             "action_ref": "",
             "capability": "social.post.publish_supervised_browser",
         }
-    if not fetcher and not (os.getenv("OPENCLAW_CAPABILITY_CATALOG_URL") or os.getenv("OPENCLAW_BASE_URL")):
+    if not fetcher and not (
+        os.getenv("OPENCLAW_CAPABILITY_CATALOG_URL")
+        or os.getenv("OPENCLAW_BASE_URL")
+        or os.getenv("OPENCLAW_SANDBOX_BRIDGE_URL")
+    ):
         return {
             "ready": False,
             "source": "not_configured",

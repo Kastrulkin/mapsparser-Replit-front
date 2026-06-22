@@ -142,7 +142,14 @@ def _configured_openclaw_catalog_fetcher() -> OpenClawCatalogFetcher | None:
         base_url = str(os.getenv("OPENCLAW_BASE_URL") or "").strip().rstrip("/")
         if base_url:
             url = f"{base_url}/api/openclaw/capabilities/catalog"
-    token = str(os.getenv("OPENCLAW_LOCALOS_TOKEN") or os.getenv("OPENCLAW_TOKEN") or "").strip()
+    if not url:
+        url = str(os.getenv("OPENCLAW_SANDBOX_BRIDGE_URL") or "").strip()
+    token = str(
+        os.getenv("OPENCLAW_LOCALOS_TOKEN")
+        or os.getenv("OPENCLAW_TOKEN")
+        or os.getenv("OPENCLAW_SANDBOX_BRIDGE_TOKEN")
+        or ""
+    ).strip()
     if not url:
         return None
 
