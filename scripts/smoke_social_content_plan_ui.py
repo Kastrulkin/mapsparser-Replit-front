@@ -87,6 +87,7 @@ REQUIRED_COPY = {
     "queue preview second action": "Поставить в расписание после проверки",
     "queue action": "Поставить в расписание",
     "selected post path": "Маршрут выбранных постов",
+    "next step selects review posts": "Выделили темы с постами на проверку",
     "selected preview first": "Сначала откройте карточку темы ниже",
     "selected prepared topics stay checked": "LocalOS отметил подготовленные темы",
     "selected api queue warning": "Перед расписанием эти API-каналы не готовы",

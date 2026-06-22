@@ -4356,11 +4356,40 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       return;
     }
     if (socialPlanNextStep.action === 'review') {
-      const post = visibleSocialNeedsReview[0];
-      const itemId = String(post?.content_plan_item_id || '').trim();
-      if (itemId) {
-        setSelectedQueueItemId(itemId);
-        setEditorItemId(itemId);
+      const itemIds = visibleSocialNeedsReview
+        .map((post) => String(post.content_plan_item_id || '').trim())
+        .filter(Boolean);
+      const uniqueItemIds = Array.from(new Set(itemIds));
+      if (uniqueItemIds.length > 0) {
+        setSelectedItemIds(uniqueItemIds.reduce<Record<string, boolean>>((acc, itemId) => {
+          acc[itemId] = true;
+          return acc;
+        }, {}));
+        setSelectedQueueItemId(uniqueItemIds[0]);
+        setEditorItemId(uniqueItemIds[0]);
+        setActionSummary({
+          tone: 'neutral',
+          text_ru: `Выделили темы с постами на проверку: ${uniqueItemIds.length}. Проверьте preview и подтвердите тексты отдельной кнопкой.`,
+          text_en: `Selected topics with posts to review: ${uniqueItemIds.length}. Review the preview and approve copy with a separate button.`,
+          details_ru: [
+            'Наружу ничего не публикуется на этом шаге.',
+            'После approval следующим шагом будет “Поставить в расписание”.',
+          ],
+          details_en: [
+            'Nothing is published externally at this step.',
+            'After approval, the next step is “Queue on schedule”.',
+          ],
+        });
+      }
+      if (visibleSocialNeedsReview.length > 0) {
+        openSocialApprovalPreview(visibleSocialNeedsReview, 'selected', 'selected-social-approve');
+        if (typeof window !== 'undefined') {
+          window.setTimeout(() => {
+            document
+              .querySelector('[data-testid="social-approval-preview-panel"]')
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 50);
+        }
       }
       return;
     }
