@@ -732,6 +732,22 @@ def test_social_learning_readiness_warns_when_publish_work_is_pending():
     assert "manual/supervised" in readiness["next_action_en"]
 
 
+def test_social_learning_readiness_requires_signals_before_apply():
+    readiness = _social_learning_readiness(
+        [
+            {"status": "published", "platform": "telegram"},
+        ]
+    )
+
+    assert readiness["status"] == "published_without_signals"
+    assert readiness["confidence"] == "low"
+    assert readiness["published_posts"] == 1
+    assert readiness["posts_with_primary_result"] == 0
+    assert readiness["posts_with_early_signal"] == 0
+    assert readiness["safe_to_apply_recommendation"] is False
+    assert "Collect reactions" in readiness["next_action_en"]
+
+
 def test_manual_attribution_metrics_include_views_and_likes():
     metrics = _attribution_metrics_for_post(FakeAttributionMetricsCursor(), "post-1")
 

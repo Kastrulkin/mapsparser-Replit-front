@@ -4684,7 +4684,7 @@ def _social_learning_readiness(posts: list[dict[str, Any]]) -> dict[str, Any]:
         "summary_en": _social_learning_readiness_summary(status, False),
         "next_action_ru": _social_learning_readiness_next_action(status, True),
         "next_action_en": _social_learning_readiness_next_action(status, False),
-        "safe_to_apply_recommendation": status in {"ready_from_leads", "early_signals_only", "published_without_signals"},
+        "safe_to_apply_recommendation": status in {"ready_from_leads", "early_signals_only"},
     }
 
 
@@ -4703,9 +4703,9 @@ def _social_learning_readiness_summary(status: str, is_ru: bool) -> str:
         )
     if status == "published_without_signals":
         return (
-            "Посты опубликованы, но результата ещё не видно: предложения будут больше про CTA и оффер."
+            "Посты опубликованы, но результата ещё не видно: сначала соберите реакции или отметьте заявки вручную."
             if is_ru
-            else "Posts are published, but no result is visible yet: suggestions will focus on CTA and offer."
+            else "Posts are published, but no result is visible yet: collect reactions or record leads manually first."
         )
     if status == "finish_pending_publish":
         return (
@@ -4735,9 +4735,9 @@ def _social_learning_readiness_next_action(status: str, is_ru: bool) -> str:
         )
     if status == "published_without_signals":
         return (
-            "Обновите реакции позже или отметьте обращения вручную; пока меняйте только CTA/оффер."
+            "Нажмите «Собрать реакции» или отметьте обращения вручную, затем пересчитайте рекомендации."
             if is_ru
-            else "Update reactions later or record inquiries manually; for now, adjust only CTA/offer."
+            else 'Click "Collect reactions" or record inquiries manually, then recalculate recommendations.'
         )
     if status == "finish_pending_publish":
         return (
