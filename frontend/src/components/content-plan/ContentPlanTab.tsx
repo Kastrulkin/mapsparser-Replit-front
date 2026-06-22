@@ -546,7 +546,7 @@ type SocialChannelConnectionCheck = {
   detail_en?: string;
 };
 
-type SocialPlanNextAction = 'prepare' | 'review' | 'queue' | 'supervised' | 'manual' | 'recommend' | 'wait' | 'none';
+type SocialPlanNextAction = 'prepare' | 'review' | 'queue' | 'supervised' | 'manual' | 'collect' | 'recommend' | 'wait' | 'none';
 
 type SocialPlanNextStep = {
   action: SocialPlanNextAction;
@@ -1303,6 +1303,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       };
     }
     if (Number(socialSummary?.published || 0) > 0) {
+      if (!socialPrimaryResultCount && !socialEarlySignalCount && !socialRecommendation?.learning_readiness) {
+        return {
+          action: 'collect',
+          titleRu: 'Соберите реакции после публикаций',
+          titleEn: 'Collect reactions after publishing',
+          descriptionRu: 'Опубликованные посты уже есть. Сначала обновите реакции и ручные заявки, затем LocalOS предложит изменения следующей недели.',
+          descriptionEn: 'Published posts exist. First update reactions and manual leads, then LocalOS will suggest next-week changes.',
+          ctaRu: 'Собрать реакции',
+          ctaEn: 'Collect reactions',
+          count: Number(socialSummary?.published || 0),
+        };
+      }
       return {
         action: 'recommend',
         titleRu: 'Соберите выводы для следующего плана',
@@ -1526,6 +1538,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     socialSummary?.published,
     socialSummary?.scheduled,
     socialSummary?.total,
+    socialRecommendation?.learning_readiness,
+    socialEarlySignalCount,
+    socialPrimaryResultCount,
     visibleSocialCanQueue.length,
     visibleSocialNeedsManual.length,
     visibleSocialNeedsReview.length,
@@ -3932,6 +3947,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         setSelectedQueueItemId(itemId);
         setEditorItemId(itemId);
       }
+      return;
+    }
+    if (socialPlanNextStep.action === 'collect') {
+      void collectSocialPostMetricsForBusiness();
       return;
     }
     if (socialPlanNextStep.action === 'recommend') {
