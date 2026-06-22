@@ -2023,6 +2023,127 @@ def test_telegram_publish_error_state_marks_connection_errors_recoverable():
     assert _telegram_publish_error_state(429, "Too Many Requests") == ("failed", "telegram_api_error")
 
 
+def test_publish_telegram_post_sends_message_and_records_provider_evidence(monkeypatch):
+    class FakeTelegramResponse:
+        status = 200
+
+        def read(self):
+            return json.dumps(
+                {
+                    "ok": True,
+                    "result": {
+                        "message_id": 42,
+                    },
+                }
+            ).encode("utf-8")
+
+        def close(self):
+            pass
+
+    requests = []
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_business_publish_context",
+        lambda cursor, business_id: {
+            "telegram_bot_token": "encrypted-token",
+            "telegram_chat_id": "@localos_channel",
+        },
+    )
+    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "telegram-token")
+    monkeypatch.setattr(
+        social_post_service,
+        "telegram_urlopen",
+        lambda req, timeout=15: (requests.append(req) or FakeTelegramResponse()),
+    )
+
+    result = social_post_service._publish_telegram_post(
+        object(),
+        {
+            "id": "post-telegram",
+            "business_id": "biz-1",
+            "platform": "telegram",
+            "platform_text": "Пост для Telegram",
+        },
+    )
+
+    assert result["status"] == "published"
+    assert result["provider_post_id"] == "42"
+    assert result["provider_post_url"] == "https://t.me/localos_channel/42"
+    assert result["metadata_json"]["provider_status"] == "telegram_published"
+    assert result["metadata_json"]["provider_write_performed"] is True
+    assert result["metadata_json"]["external_publish_performed"] is True
+    assert len(requests) == 1
+    assert requests[0].full_url == "https://api.telegram.org/bottelegram-token/sendMessage"
+    payload = json.loads(requests[0].data.decode("utf-8"))
+    assert payload["chat_id"] == "@localos_channel"
+    assert payload["text"] == "Пост для Telegram"
+
+
+def test_publish_vk_post_calls_wall_post_and_records_provider_evidence(monkeypatch):
+    class FakeVkResponse:
+        def read(self):
+            return json.dumps(
+                {
+                    "response": {
+                        "post_id": 678,
+                    },
+                }
+            ).encode("utf-8")
+
+        def close(self):
+            pass
+
+    requests = []
+    monkeypatch.setattr(
+        social_post_service,
+        "_find_active_external_account",
+        lambda cursor, business_id, sources: {
+            "id": "vk-1",
+            "external_id": "12345",
+            "auth_data_encrypted": "encrypted",
+        },
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_external_account_auth_data",
+        lambda account: {
+            "access_token": "vk-token",
+            "owner_id": "-12345",
+            "scope": "wall",
+            "api_version": "5.199",
+        },
+    )
+    monkeypatch.setattr(
+        social_post_service.urllib.request,
+        "urlopen",
+        lambda req, timeout=15: (requests.append(req) or FakeVkResponse()),
+    )
+
+    result = social_post_service._publish_vk_post(
+        object(),
+        {
+            "id": "post-vk",
+            "business_id": "biz-1",
+            "platform": "vk",
+            "platform_text": "Пост для VK",
+        },
+    )
+
+    assert result["status"] == "published"
+    assert result["provider_post_id"] == "678"
+    assert result["provider_post_url"] == "https://vk.com/wall-12345_678"
+    assert result["metadata_json"]["provider_status"] == "vk_published"
+    assert result["metadata_json"]["provider_write_performed"] is True
+    assert result["metadata_json"]["external_publish_performed"] is True
+    assert result["metadata_json"]["external_account_id"] == "vk-1"
+    assert len(requests) == 1
+    assert requests[0].full_url == "https://api.vk.com/method/wall.post"
+    payload = social_post_service.urllib.parse.parse_qs(requests[0].data.decode("utf-8"))
+    assert payload["access_token"] == ["vk-token"]
+    assert payload["owner_id"] == ["-12345"]
+    assert payload["message"] == ["Пост для VK"]
+
+
 def test_openclaw_supervised_task_payload_stops_before_final_publish():
     payload = _build_openclaw_supervised_task_payload(
         {

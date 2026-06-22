@@ -3792,7 +3792,12 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
                 "status": "published",
                 "provider_post_id": message_id,
                 "provider_post_url": _telegram_post_url(chat_id, message_id),
-                "metadata_json": {"provider_status": "telegram_published", "telegram_response": parsed},
+                "metadata_json": {
+                    "provider_status": "telegram_published",
+                    "provider_write_performed": True,
+                    "external_publish_performed": True,
+                    "telegram_response": parsed,
+                },
             }
         finally:
             resp.close()
@@ -3929,6 +3934,8 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
         "provider_post_url": provider_url,
         "metadata_json": {
             "provider_status": "vk_published",
+            "provider_write_performed": True,
+            "external_publish_performed": True,
             "external_account_id": account.get("id"),
             "vk_response": parsed,
         },
