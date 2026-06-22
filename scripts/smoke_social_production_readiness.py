@@ -176,14 +176,21 @@ REQUIRED_RUNTIME_SMOKE_CONTRACT = {
 
 
 REQUIRED_ACCEPTANCE_PROBE_CONTRACT = {
+    "acceptance ready": "acceptance_ready",
     "read only": "read_only",
     "no external publish": "external_publish_performed",
     "no database writes": "database_write_performed",
+    "approval required": "approval_required",
+    "browser final click false": "browser_final_click_allowed",
+    "maps supervised or manual": "maps_are_supervised_or_manual",
     "plan summary": "plan_summary",
     "ready candidates": "ready_items_without_social_posts",
     "channel readiness": "channel_readiness_summary",
     "api preflight": "api_preflight_summary",
     "launch status": "launch_status",
+    "dispatch readiness": "dispatch_readiness",
+    "first cycle verification": "first_cycle_verification",
+    "safe scoped dispatch": "launch_safe_to_enable_scoped_dispatch",
     "dispatch dry run": "dispatch_preview",
     "next human step": "next_required_human_step",
     "prepare channels guidance": "Подготовить каналы",

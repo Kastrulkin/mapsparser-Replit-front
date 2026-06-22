@@ -154,12 +154,31 @@ def build_probe(business_id: str, batch_size: int) -> dict[str, Any]:
     ready_candidates = plan_payload.get("ready_items_without_social_posts")
     if not isinstance(ready_candidates, list):
         ready_candidates = []
+    safety = launch_preflight.get("safety") if isinstance(launch_preflight.get("safety"), dict) else {}
+    first_cycle_verification = (
+        launch_preflight.get("first_cycle_verification")
+        if isinstance(launch_preflight.get("first_cycle_verification"), dict)
+        else {}
+    )
+    dispatch_readiness = (
+        launch_preflight.get("dispatch_readiness")
+        if isinstance(launch_preflight.get("dispatch_readiness"), dict)
+        else {}
+    )
+    acceptance_ready = (
+        dispatch_preview.get("dry_run") is True
+        and safety.get("approval_required") is True
+        and safety.get("browser_final_click_allowed") is False
+        and safety.get("maps_are_supervised_or_manual") is True
+        and str(dispatch_preview.get("business_scope") or "").strip() == business_id
+    )
 
     return {
         "success": True,
         "read_only": True,
         "external_publish_performed": False,
         "database_write_performed": False,
+        "acceptance_ready": bool(acceptance_ready),
         "business": business,
         "latest_plan": plan_payload.get("plan") if isinstance(plan_payload.get("plan"), dict) else {},
         "plan_summary": plan_summary,
@@ -170,6 +189,14 @@ def build_probe(business_id: str, batch_size: int) -> dict[str, Any]:
         "launch_status": launch_preflight.get("status"),
         "launch_safe_to_enable_scoped_dispatch": launch_preflight.get("safe_to_enable_scoped_dispatch"),
         "launch_summary": launch_preflight.get("summary", {}),
+        "dispatch_readiness": dispatch_readiness,
+        "first_cycle_verification": first_cycle_verification,
+        "safety": {
+            "approval_required": safety.get("approval_required") is True,
+            "browser_final_click_allowed": safety.get("browser_final_click_allowed") is True,
+            "maps_are_supervised_or_manual": safety.get("maps_are_supervised_or_manual") is True,
+            "external_publish_requires_approval": True,
+        },
         "dispatch_preview": {
             "dry_run": dispatch_preview.get("dry_run"),
             "picked": dispatch_preview.get("picked"),
