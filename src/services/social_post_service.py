@@ -263,6 +263,10 @@ def check_social_openclaw_browser_readiness(user_id: str, business_id: str) -> d
             "read_only": True,
             "external_publish_performed": False,
             "browser_final_click_allowed": False,
+            "capability_checked": "social.post.publish_supervised_browser",
+            "safety_contract": _social_supervised_safety_contract(),
+            "owner_next_action_ru": "Если статус готов, подготовьте контролируемое размещение у поста карты. Если нет, используйте ручное размещение с готовым текстом и чеклистом.",
+            "owner_next_action_en": "If the check is ready, create a controlled placement task on the map post. If not, use manual placement with the prepared copy and checklist.",
         }
     finally:
         db.close()
@@ -2463,6 +2467,8 @@ def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool 
 def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None) -> dict[str, Any]:
     capability_status = status if isinstance(status, dict) else openclaw_browser_capability_status()
     ready = bool(capability_status.get("ready"))
+    safety_contract = _social_supervised_safety_contract()
+    missing_reason = str(capability_status.get("reason") or "").strip()
     return {
         "ready": ready,
         "status": "ready" if ready else "manual_fallback",
@@ -2470,8 +2476,20 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None) -> 
         "action_ref": str(capability_status.get("action_ref") or "").strip(),
         "source": str(capability_status.get("source") or "").strip(),
         "provider_status": str(capability_status.get("status") or "").strip(),
-        "reason": str(capability_status.get("reason") or "").strip(),
+        "reason": missing_reason,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "read_only": True,
+        "external_publish_performed": False,
         "browser_final_click_allowed": False,
+        "stop_before_final_publish": True,
+        "requires_final_human_confirmation": True,
+        "side_effect_policy": str(safety_contract.get("side_effect_policy") or "fill_preview_only"),
+        "final_publish_policy": str(safety_contract.get("final_publish_policy") or "human_final_click_required"),
+        "allowed_actions": safety_contract.get("allowed_actions") if isinstance(safety_contract.get("allowed_actions"), list) else [],
+        "forbidden_actions": safety_contract.get("forbidden_actions") if isinstance(safety_contract.get("forbidden_actions"), list) else [],
+        "manual_fallback_triggers": safety_contract.get("manual_fallback_triggers") if isinstance(safety_contract.get("manual_fallback_triggers"), list) else [],
+        "diagnostics_ru": _social_openclaw_browser_diagnostics(capability_status, True),
+        "diagnostics_en": _social_openclaw_browser_diagnostics(capability_status, False),
         "message_ru": (
             "OpenClaw browser-use готов: Яндекс/2ГИС можно вести как контролируемое размещение без финального клика."
             if ready
@@ -2493,6 +2511,51 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None) -> 
             else "Check the capability catalog/OpenClaw settings or use manual placement."
         ),
     }
+
+
+def _social_openclaw_browser_diagnostics(capability_status: dict[str, Any], is_ru: bool) -> list[str]:
+    source = str(capability_status.get("source") or "").strip()
+    provider_status = str(capability_status.get("status") or "").strip()
+    reason = str(capability_status.get("reason") or "").strip()
+    action_ref = str(capability_status.get("action_ref") or "").strip()
+    ready = bool(capability_status.get("ready"))
+    if is_ru:
+        lines = [
+            "Безопасная проверка: LocalOS только читает каталог возможностей OpenClaw и ничего не публикует.",
+            f"Проверяемая возможность: {str(capability_status.get('capability') or 'social.post.publish_supervised_browser').strip()}.",
+            "Финальная кнопка публикации запрещена до отдельного подтверждения человека.",
+        ]
+        if source:
+            lines.append(f"Источник проверки: {source}.")
+        if provider_status:
+            lines.append(f"Статус провайдера: {provider_status}.")
+        if action_ref:
+            lines.append(f"Действие OpenClaw: {action_ref}.")
+        if reason and not ready:
+            lines.append(f"Причина ручного fallback: {reason}.")
+        if ready:
+            lines.append("Следующий шаг: создать контролируемую задачу у поста Яндекс/2ГИС и проверить предпросмотр.")
+        else:
+            lines.append("Следующий шаг: проверить OPENCLAW_BASE_URL/catalog или использовать ручной fallback.")
+        return lines
+    lines = [
+        "Read-only check: LocalOS only reads the capability catalog and publishes nothing.",
+        f"Capability: {str(capability_status.get('capability') or 'social.post.publish_supervised_browser').strip()}.",
+        "The final publish button is forbidden until separate human confirmation.",
+    ]
+    if source:
+        lines.append(f"Check source: {source}.")
+    if provider_status:
+        lines.append(f"Provider status: {provider_status}.")
+    if action_ref:
+        lines.append(f"OpenClaw action: {action_ref}.")
+    if reason and not ready:
+        lines.append(f"Fallback reason: {reason}.")
+    if ready:
+        lines.append("Next step: create a controlled Yandex/2GIS task and review the preview.")
+    else:
+        lines.append("Next step: check OPENCLAW_BASE_URL/catalog or use manual fallback.")
+    return lines
 
 
 def openclaw_browser_capability_status(fetcher: Any = None) -> dict[str, Any]:

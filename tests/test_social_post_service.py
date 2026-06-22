@@ -564,11 +564,21 @@ def test_social_openclaw_browser_readiness_explains_ready_and_manual_fallback():
     assert ready["status"] == "ready"
     assert ready["action_ref"] == "openclaw.browser.fill_form"
     assert ready["browser_final_click_allowed"] is False
+    assert ready["read_only"] is True
+    assert ready["external_publish_performed"] is False
+    assert ready["stop_before_final_publish"] is True
+    assert ready["requires_final_human_confirmation"] is True
+    assert ready["final_publish_policy"] == "human_final_click_required"
+    assert "show_preview" in ready["allowed_actions"]
+    assert "click_final_publish" in ready["forbidden_actions"]
+    assert "changed_ui" in ready["manual_fallback_triggers"]
+    assert any("read-only" in item.lower() or "read-only" in item for item in ready["diagnostics_en"])
     assert "контролируемое размещение" in ready["message_ru"]
     assert fallback["ready"] is False
     assert fallback["status"] == "manual_fallback"
     assert "ручном fallback" in fallback["message_ru"]
     assert "capability catalog" in fallback["next_action_ru"]
+    assert any("openclaw_catalog_not_configured" in item for item in fallback["diagnostics_ru"])
 
 
 def test_check_social_openclaw_browser_readiness_is_read_only_and_scoped(monkeypatch):
@@ -598,6 +608,10 @@ def test_check_social_openclaw_browser_readiness_is_read_only_and_scoped(monkeyp
     assert result["read_only"] is True
     assert result["external_publish_performed"] is False
     assert result["browser_final_click_allowed"] is False
+    assert result["capability_checked"] == "social.post.publish_supervised_browser"
+    assert result["safety_contract"]["final_publish_policy"] == "human_final_click_required"
+    assert "click_final_publish" in result["safety_contract"]["forbidden_actions"]
+    assert "ручное размещение" in result["owner_next_action_ru"]
     assert result["openclaw_browser_readiness"]["status"] == "ready"
     assert captured["access"] == {"user_id": "user-1", "business_id": "biz-1"}
 
