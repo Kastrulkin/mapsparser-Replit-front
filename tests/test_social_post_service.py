@@ -644,6 +644,21 @@ def test_openclaw_browser_available_uses_sandbox_bridge_catalog(monkeypatch):
     assert status["action_ref"] == "openclaw.browser.supervised_publish"
 
 
+def test_openclaw_browser_capability_status_preserves_catalog_request_error(monkeypatch):
+    monkeypatch.delenv("OPENCLAW_BROWSER_USE_ENABLED", raising=False)
+    monkeypatch.delenv("OPENCLAW_BROWSER_USE_AVAILABLE", raising=False)
+
+    status = openclaw_browser_capability_status(
+        fetcher=lambda: (_ for _ in ()).throw(RuntimeError("bridge timeout"))
+    )
+
+    assert status["ready"] is False
+    assert status["source"] == "catalog_error"
+    assert status["status"] == "error"
+    assert status["reason"] == "openclaw_catalog_error"
+    assert "OpenClaw catalog request failed" in status["error"]
+
+
 def test_social_openclaw_browser_readiness_explains_ready_and_manual_fallback():
     ready = _social_openclaw_browser_readiness(
         {

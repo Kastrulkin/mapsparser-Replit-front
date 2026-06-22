@@ -2829,6 +2829,16 @@ def openclaw_browser_capability_status(fetcher: Any = None) -> dict[str, Any]:
             "action_ref": "",
             "capability": "social.post.publish_supervised_browser",
         }
+    if isinstance(catalog, dict) and str(catalog.get("source") or "").strip() == "static_fallback" and str(catalog.get("error") or "").strip():
+        return {
+            "ready": False,
+            "source": "catalog_error",
+            "status": "error",
+            "reason": "openclaw_catalog_error",
+            "error": str(catalog.get("error") or "").strip(),
+            "action_ref": "",
+            "capability": "social.post.publish_supervised_browser",
+        }
     for action in catalog.get("actions", []) if isinstance(catalog, dict) else []:
         if not isinstance(action, dict):
             continue
