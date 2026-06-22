@@ -1438,6 +1438,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     const failed = Number(socialSummary?.failed || 0);
     const hasPlan = Boolean(currentPlan?.items?.length);
     const hasRecommendation = Number(socialRecommendation?.proposed_changes?.length || 0) > 0;
+    const channelsPrepared = totalPosts > 0;
 
     return [
       {
@@ -1455,13 +1456,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       },
       {
         key: 'channels',
-        labelRu: 'Каналы подготовлены',
-        labelEn: 'Channels prepared',
-        status: !hasPlan ? 'pending' : totalPosts > 0 ? 'done' : 'current',
-        detailRu: totalPosts > 0
+        labelRu: channelsPrepared ? 'Каналы подготовлены' : 'Подготовить каналы',
+        labelEn: channelsPrepared ? 'Channels prepared' : 'Prepare channels',
+        status: !hasPlan ? 'pending' : channelsPrepared ? 'done' : 'current',
+        detailRu: channelsPrepared
           ? `Публикаций по каналам: ${totalPosts}`
           : 'Нажмите “Подготовить каналы”, внешних публикаций на этом шаге нет.',
-        detailEn: totalPosts > 0
+        detailEn: channelsPrepared
           ? `Channel posts: ${totalPosts}`
           : 'Click “Prepare channels”; no external publishing happens at this step.',
         count: totalPosts,
