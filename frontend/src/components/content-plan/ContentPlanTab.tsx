@@ -4367,6 +4367,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         }, {}));
         setSelectedQueueItemId(uniqueItemIds[0]);
         setEditorItemId(uniqueItemIds[0]);
+      }
+      if (visibleSocialNeedsReview.length > 0) {
+        openSocialApprovalPreview(visibleSocialNeedsReview, 'selected', 'selected-social-approve');
         setActionSummary({
           tone: 'neutral',
           text_ru: `Выделили темы с постами на проверку: ${uniqueItemIds.length}. Проверьте preview и подтвердите тексты отдельной кнопкой.`,
@@ -4380,9 +4383,6 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             'After approval, the next step is “Queue on schedule”.',
           ],
         });
-      }
-      if (visibleSocialNeedsReview.length > 0) {
-        openSocialApprovalPreview(visibleSocialNeedsReview, 'selected', 'selected-social-approve');
         if (typeof window !== 'undefined') {
           window.setTimeout(() => {
             document
