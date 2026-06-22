@@ -32,6 +32,7 @@ from services.social_post_service import (
     queue_social_post,
     queue_social_posts,
     rehearse_social_post_publish,
+    rehearse_social_posts_publish,
     recommend_next_plan_from_social_posts,
     record_social_post_attribution_event,
     run_scoped_social_dispatch_once,
@@ -386,6 +387,27 @@ def social_posts_bulk_queue():
     post_ids = data.get("post_ids") if isinstance(data.get("post_ids"), list) else []
     try:
         payload = queue_social_posts(str(user_data.get("user_id") or ""), post_ids)
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/bulk-publish-rehearsal", methods=["POST"])
+def social_posts_bulk_publish_rehearsal():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "bulk-publish-rehearsal")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    post_ids = data.get("post_ids") if isinstance(data.get("post_ids"), list) else []
+    try:
+        payload = rehearse_social_posts_publish(str(user_data.get("user_id") or ""), post_ids)
         return jsonify({"success": True, **payload})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403

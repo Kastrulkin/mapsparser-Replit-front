@@ -1590,86 +1590,34 @@ def rehearse_social_post_publish(user_id: str, post_id: str) -> dict[str, Any]:
     try:
         ensure_social_post_tables(cursor)
         post = _load_post_for_user(cursor, user_id, post_id)
-        decision = _preview_dispatch_decision(cursor, post)
-        current_status = str(post.get("status") or "").strip()
-        has_approval = bool(post.get("approved_at")) or current_status in {"approved", "queued", "needs_supervised_publish"}
-        has_text = _social_post_has_text(post)
-        allowed_status = current_status in {"approved", "queued", "needs_supervised_publish"}
-        blockers: list[dict[str, str]] = []
-        if current_status == "published":
-            blockers.append(
-                {
-                    "code": "already_published",
-                    "message_ru": "Пост уже опубликован; следующий шаг - сбор реакций и заявок.",
-                    "message_en": "The post is already published; the next step is collecting reactions and leads.",
-                }
-            )
-        elif not has_text:
-            blockers.append(
-                {
-                    "code": "missing_text",
-                    "message_ru": "Сначала заполните и сохраните текст поста.",
-                    "message_en": "Fill and save the post copy first.",
-                }
-            )
-        elif not has_approval:
-            blockers.append(
-                {
-                    "code": "missing_approval",
-                    "message_ru": "Перед запуском человек должен подтвердить preview.",
-                    "message_en": "A human must approve the preview before launch.",
-                }
-            )
-        elif not allowed_status:
-            blockers.append(
-                {
-                    "code": "not_queued_or_approved",
-                    "message_ru": "Пост ещё не утверждён и не поставлен в расписание.",
-                    "message_en": "The post is not approved or queued yet.",
-                }
-            )
-        metadata = _json_dict(decision.get("metadata_json"))
-        provider_status = str(metadata.get("provider_status") or metadata.get("queue_preflight_status") or "").strip()
-        if provider_status:
-            blockers.append(
-                {
-                    "code": provider_status,
-                    "message_ru": str(metadata.get("queue_preflight_message_ru") or decision.get("reason_label_ru") or "").strip(),
-                    "message_en": str(metadata.get("queue_preflight_message_en") or decision.get("reason_label_en") or "").strip(),
-                }
-            )
-        ready_for_execution = not blockers and str(decision.get("dispatch_action") or "") in {
-            "publish_api",
-            "create_supervised_task",
-        }
-        rehearsal = {
-            "schema": "localos_social_publish_rehearsal_v1",
+        return _build_social_post_publish_rehearsal(cursor, post)
+    finally:
+        db.close()
+
+
+def rehearse_social_posts_publish(user_id: str, post_ids: list[str]) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    rehearsals: list[dict[str, Any]] = []
+    failed: list[dict[str, str]] = []
+    try:
+        ensure_social_post_tables(cursor)
+        for post_id in _normalize_ids(post_ids):
+            try:
+                post = _load_post_for_user(cursor, user_id, post_id)
+                rehearsals.append(_build_social_post_publish_rehearsal(cursor, post))
+            except Exception:
+                failed.append({"id": post_id, "error": str(sys.exc_info()[1])})
+        summary = _social_publish_rehearsal_summary(rehearsals, failed)
+        return {
+            "schema": "localos_social_publish_rehearsal_bulk_v1",
             "dry_run": True,
-            "post_id": str(post.get("id") or "").strip(),
-            "platform": str(post.get("platform") or "").strip(),
-            "platform_label": platform_label(str(post.get("platform") or "")),
-            "publish_mode": str(post.get("publish_mode") or "").strip(),
-            "current_status": current_status,
-            "scheduled_for": decision.get("scheduled_for"),
-            "approved_at": decision.get("approved_at"),
-            "has_text": has_text,
-            "has_approval": has_approval,
-            "ready_for_execution": ready_for_execution,
             "external_publish_performed": False,
             "provider_write_performed": False,
-            "would_external_publish": bool(decision.get("external_publish")) and ready_for_execution,
-            "would_create_supervised_task": str(decision.get("dispatch_action") or "") == "create_supervised_task" and ready_for_execution,
-            "browser_final_click_allowed": False,
-            "stop_before_final_publish": bool(decision.get("stop_before_final_publish")) or str(post.get("platform") or "") in BROWSER_OR_MANUAL_PLATFORMS,
-            "dispatch_decision": decision,
-            "blockers": blockers,
-            "summary_ru": _publish_rehearsal_summary(ready_for_execution, decision, blockers, True),
-            "summary_en": _publish_rehearsal_summary(ready_for_execution, decision, blockers, False),
-            "next_action_ru": _publish_rehearsal_next_action(ready_for_execution, decision, blockers, True),
-            "next_action_en": _publish_rehearsal_next_action(ready_for_execution, decision, blockers, False),
-            "publish_evidence": _social_publish_evidence(post),
+            "rehearsals": rehearsals,
+            "failed": failed,
+            "summary": summary,
         }
-        return rehearsal
     finally:
         db.close()
 
@@ -3863,6 +3811,179 @@ def _with_dispatch_preview_labels(item: dict[str, Any]) -> dict[str, Any]:
     item["safety_summary_ru"] = _dispatch_preview_safety_summary(action, would_status, bool(item.get("external_publish")), True)
     item["safety_summary_en"] = _dispatch_preview_safety_summary(action, would_status, bool(item.get("external_publish")), False)
     return item
+
+
+def _build_social_post_publish_rehearsal(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    decision = _preview_dispatch_decision(cursor, post)
+    current_status = str(post.get("status") or "").strip()
+    platform = str(post.get("platform") or "").strip()
+    has_approval = bool(post.get("approved_at")) or current_status in {"approved", "queued", "needs_supervised_publish"}
+    has_text = _social_post_has_text(post)
+    allowed_status = current_status in {"approved", "queued", "needs_supervised_publish"}
+    blockers: list[dict[str, str]] = []
+    if current_status == "published":
+        blockers.append(
+            {
+                "code": "already_published",
+                "message_ru": "Пост уже опубликован; следующий шаг - сбор реакций и заявок.",
+                "message_en": "The post is already published; the next step is collecting reactions and leads.",
+            }
+        )
+    elif not has_text:
+        blockers.append(
+            {
+                "code": "missing_text",
+                "message_ru": "Сначала заполните и сохраните текст поста.",
+                "message_en": "Fill and save the post copy first.",
+            }
+        )
+    elif not has_approval:
+        blockers.append(
+            {
+                "code": "missing_approval",
+                "message_ru": "Перед запуском человек должен подтвердить preview.",
+                "message_en": "A human must approve the preview before launch.",
+            }
+        )
+    elif not allowed_status:
+        blockers.append(
+            {
+                "code": "not_queued_or_approved",
+                "message_ru": "Пост ещё не утверждён и не поставлен в расписание.",
+                "message_en": "The post is not approved or queued yet.",
+            }
+        )
+    metadata = _json_dict(decision.get("metadata_json"))
+    provider_status = str(metadata.get("provider_status") or metadata.get("queue_preflight_status") or "").strip()
+    if provider_status:
+        blockers.append(
+            {
+                "code": provider_status,
+                "message_ru": str(metadata.get("queue_preflight_message_ru") or decision.get("reason_label_ru") or "").strip(),
+                "message_en": str(metadata.get("queue_preflight_message_en") or decision.get("reason_label_en") or "").strip(),
+            }
+        )
+    ready_for_execution = not blockers and str(decision.get("dispatch_action") or "") in {
+        "publish_api",
+        "create_supervised_task",
+    }
+    return {
+        "schema": "localos_social_publish_rehearsal_v1",
+        "dry_run": True,
+        "post_id": str(post.get("id") or "").strip(),
+        "platform": platform,
+        "platform_label": platform_label(platform),
+        "publish_mode": str(post.get("publish_mode") or "").strip(),
+        "current_status": current_status,
+        "scheduled_for": decision.get("scheduled_for"),
+        "approved_at": decision.get("approved_at"),
+        "has_text": has_text,
+        "has_approval": has_approval,
+        "ready_for_execution": ready_for_execution,
+        "external_publish_performed": False,
+        "provider_write_performed": False,
+        "would_external_publish": bool(decision.get("external_publish")) and ready_for_execution,
+        "would_create_supervised_task": str(decision.get("dispatch_action") or "") == "create_supervised_task" and ready_for_execution,
+        "browser_final_click_allowed": False,
+        "stop_before_final_publish": bool(decision.get("stop_before_final_publish")) or platform in BROWSER_OR_MANUAL_PLATFORMS,
+        "dispatch_decision": decision,
+        "blockers": blockers,
+        "summary_ru": _publish_rehearsal_summary(ready_for_execution, decision, blockers, True),
+        "summary_en": _publish_rehearsal_summary(ready_for_execution, decision, blockers, False),
+        "next_action_ru": _publish_rehearsal_next_action(ready_for_execution, decision, blockers, True),
+        "next_action_en": _publish_rehearsal_next_action(ready_for_execution, decision, blockers, False),
+        "publish_evidence": _social_publish_evidence(post),
+    }
+
+
+def _social_publish_rehearsal_summary(rehearsals: list[dict[str, Any]], failed: list[dict[str, str]]) -> dict[str, Any]:
+    total = len(rehearsals) + len(failed)
+    ready = [item for item in rehearsals if bool(item.get("ready_for_execution"))]
+    blocked = [item for item in rehearsals if not bool(item.get("ready_for_execution"))]
+    api_ready = [item for item in ready if bool(item.get("would_external_publish"))]
+    supervised_ready = [item for item in ready if bool(item.get("would_create_supervised_task"))]
+    manual_or_blocked = len(blocked) + len(failed)
+    status = "empty"
+    if total > 0 and not ready:
+        status = "blocked"
+    elif total > 0 and manual_or_blocked > 0:
+        status = "partial"
+    elif total > 0:
+        status = "ready"
+    return {
+        "status": status,
+        "total": total,
+        "ready": len(ready),
+        "blocked": len(blocked),
+        "failed": len(failed),
+        "api_ready": len(api_ready),
+        "supervised_ready": len(supervised_ready),
+        "manual_or_blocked": manual_or_blocked,
+        "external_publish_performed": False,
+        "provider_write_performed": False,
+        "browser_final_click_allowed": False,
+        "message_ru": _social_publish_rehearsal_bulk_message(status, len(ready), len(api_ready), len(supervised_ready), manual_or_blocked, True),
+        "message_en": _social_publish_rehearsal_bulk_message(status, len(ready), len(api_ready), len(supervised_ready), manual_or_blocked, False),
+        "next_action_ru": _social_publish_rehearsal_bulk_next_action(status, blocked, failed, True),
+        "next_action_en": _social_publish_rehearsal_bulk_next_action(status, blocked, failed, False),
+    }
+
+
+def _social_publish_rehearsal_bulk_message(
+    status: str,
+    ready: int,
+    api_ready: int,
+    supervised_ready: int,
+    manual_or_blocked: int,
+    is_ru: bool,
+) -> str:
+    if status == "ready":
+        return (
+            f"Проверка пройдена: готово {ready}, API {api_ready}, контролируемое размещение {supervised_ready}."
+            if is_ru
+            else f"Check passed: ready {ready}, API {api_ready}, supervised placement {supervised_ready}."
+        )
+    if status == "partial":
+        return (
+            f"Часть постов готова: {ready}. Требуют внимания: {manual_or_blocked}."
+            if is_ru
+            else f"Some posts are ready: {ready}. Need attention: {manual_or_blocked}."
+        )
+    if status == "blocked":
+        return (
+            f"Запуск пока заблокирован: требуют внимания {manual_or_blocked}."
+            if is_ru
+            else f"Launch is blocked for now: {manual_or_blocked} need attention."
+        )
+    return "Выберите посты для проверки запуска." if is_ru else "Select posts to check launch readiness."
+
+
+def _social_publish_rehearsal_bulk_next_action(
+    status: str,
+    blocked: list[dict[str, Any]],
+    failed: list[dict[str, str]],
+    is_ru: bool,
+) -> str:
+    if status == "ready":
+        return (
+            "Можно ставить в расписание: API выйдет только по approval/дате, карты останутся контролируемыми."
+            if is_ru
+            else "You can queue them: API publishes only after approval/date, maps stay supervised."
+        )
+    if blocked:
+        first = blocked[0]
+        return str(first.get("next_action_ru" if is_ru else "next_action_en") or "").strip() or (
+            "Исправьте первый блокер и повторите проверку."
+            if is_ru
+            else "Fix the first blocker and run the check again."
+        )
+    if failed:
+        return (
+            "Проверьте доступ к выбранным постам и повторите проверку."
+            if is_ru
+            else "Check access to the selected posts and run the check again."
+        )
+    return "Выберите посты и повторите проверку." if is_ru else "Select posts and run the check again."
 
 
 def _publish_rehearsal_summary(

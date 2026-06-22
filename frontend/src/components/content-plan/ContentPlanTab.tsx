@@ -198,6 +198,33 @@ type SocialPublishRehearsal = {
   };
 };
 
+type SocialPublishRehearsalBulk = {
+  schema?: string;
+  dry_run?: boolean;
+  external_publish_performed?: boolean;
+  provider_write_performed?: boolean;
+  rehearsals?: SocialPublishRehearsal[];
+  failed?: Array<{
+    id?: string;
+    error?: string;
+  }>;
+  summary?: {
+    status?: string;
+    total?: number;
+    ready?: number;
+    blocked?: number;
+    failed?: number;
+    api_ready?: number;
+    supervised_ready?: number;
+    manual_or_blocked?: number;
+    browser_final_click_allowed?: boolean;
+    message_ru?: string;
+    message_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+  };
+};
+
 type SocialOpenClawCapabilityStatus = {
   ready?: boolean;
   status?: string;
@@ -1135,6 +1162,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
   const [manualPublishRefs, setManualPublishRefs] = useState<Record<string, { url: string; id: string }>>({});
   const [socialPublishRehearsals, setSocialPublishRehearsals] = useState<Record<string, SocialPublishRehearsal>>({});
+  const [socialBulkPublishRehearsal, setSocialBulkPublishRehearsal] = useState<SocialPublishRehearsalBulk | null>(null);
   const [socialPreparePreview, setSocialPreparePreview] = useState<SocialPreparePreview | null>(null);
   const [socialApprovalPreview, setSocialApprovalPreview] = useState<SocialApprovalPreview | null>(null);
   const [socialQueuePreview, setSocialQueuePreview] = useState<SocialQueuePreview | null>(null);
@@ -3064,6 +3092,55 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setError(message);
     } finally {
       setSocialBusyAction('');
+    }
+  };
+
+  const rehearseSelectedSocialPosts = async () => {
+    const postIds = selectedSocialPosts
+      .map((post) => String(post.id || '').trim())
+      .filter(Boolean);
+    if (postIds.length === 0) return;
+    setBulkBusyAction('selected-social-rehearsal');
+    setError('');
+    setActionSummary(null);
+    try {
+      const response = await newAuth.makeRequest('/social-posts/bulk-publish-rehearsal', {
+        method: 'POST',
+        body: JSON.stringify({ post_ids: postIds }),
+      });
+      const rehearsals = Array.isArray(response.rehearsals) ? response.rehearsals : [];
+      const summary = response.summary && typeof response.summary === 'object' ? response.summary : {};
+      const failed = Array.isArray(response.failed) ? response.failed : [];
+      const bulkPayload: SocialPublishRehearsalBulk = {
+        schema: String(response.schema || 'localos_social_publish_rehearsal_bulk_v1'),
+        dry_run: Boolean(response.dry_run),
+        external_publish_performed: Boolean(response.external_publish_performed),
+        provider_write_performed: Boolean(response.provider_write_performed),
+        rehearsals,
+        failed,
+        summary,
+      };
+      setSocialBulkPublishRehearsal(bulkPayload);
+      setSocialPublishRehearsals((prev) => {
+        const next = { ...prev };
+        for (const rehearsal of rehearsals) {
+          const postId = String(rehearsal.post_id || '').trim();
+          if (postId) next[postId] = rehearsal;
+        }
+        return next;
+      });
+      const ready = Number(summary.ready || 0);
+      const blocked = Number(summary.manual_or_blocked || 0);
+      setActionSummary({
+        tone: blocked > 0 ? 'warning' : 'success',
+        text_ru: String(summary.message_ru || `Проверка выбранных завершена: готово ${ready}, требуют внимания ${blocked}.`),
+        text_en: String(summary.message_en || `Selected launch check finished: ready ${ready}, need attention ${blocked}.`),
+      });
+    } catch (rehearsalError) {
+      const message = rehearsalError instanceof Error ? rehearsalError.message : (isRu ? 'Не удалось проверить выбранные посты' : 'Could not check selected posts');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
     }
   };
 
@@ -8693,6 +8770,63 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       </div>
                     </div>
                   ) : null}
+                  {socialBulkPublishRehearsal ? (
+                    <div
+                      data-testid="social-bulk-publish-rehearsal"
+                      className={[
+                        'w-full rounded-xl border px-3 py-3 text-xs leading-5',
+                        Number(socialBulkPublishRehearsal.summary?.manual_or_blocked || 0) > 0
+                          ? 'border-amber-200 bg-amber-50 text-amber-900'
+                          : 'border-emerald-200 bg-emerald-50 text-emerald-900',
+                      ].join(' ')}
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className={Number(socialBulkPublishRehearsal.summary?.manual_or_blocked || 0) > 0 ? 'font-semibold text-amber-950' : 'font-semibold text-emerald-950'}>
+                            {isRu ? 'Проверка запуска выбранных' : 'Selected launch check'}
+                          </div>
+                          <div className="mt-1">
+                            {isRu
+                              ? String(socialBulkPublishRehearsal.summary?.message_ru || '')
+                              : String(socialBulkPublishRehearsal.summary?.message_en || '')}
+                          </div>
+                          <div className="mt-1 font-medium">
+                            {isRu
+                              ? String(socialBulkPublishRehearsal.summary?.next_action_ru || '')
+                              : String(socialBulkPublishRehearsal.summary?.next_action_en || '')}
+                          </div>
+                        </div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold">
+                          {isRu ? 'наружу ничего не отправлено' : 'nothing sent externally'}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                        <div className="rounded-lg bg-white/70 px-2.5 py-2">
+                          <div className="font-semibold">{Number(socialBulkPublishRehearsal.summary?.ready || 0)}</div>
+                          <div>{isRu ? 'готово' : 'ready'}</div>
+                        </div>
+                        <div className="rounded-lg bg-white/70 px-2.5 py-2">
+                          <div className="font-semibold">{Number(socialBulkPublishRehearsal.summary?.api_ready || 0)}</div>
+                          <div>{isRu ? 'API' : 'API'}</div>
+                        </div>
+                        <div className="rounded-lg bg-white/70 px-2.5 py-2">
+                          <div className="font-semibold">{Number(socialBulkPublishRehearsal.summary?.supervised_ready || 0)}</div>
+                          <div>{isRu ? 'контроль' : 'supervised'}</div>
+                        </div>
+                        <div className="rounded-lg bg-white/70 px-2.5 py-2">
+                          <div className="font-semibold">{Number(socialBulkPublishRehearsal.summary?.manual_or_blocked || 0)}</div>
+                          <div>{isRu ? 'внимание' : 'attention'}</div>
+                        </div>
+                      </div>
+                      {Number(socialBulkPublishRehearsal.failed?.length || 0) > 0 ? (
+                        <div className="mt-2 rounded-lg bg-white/70 px-2.5 py-2 text-[11px]">
+                          {isRu
+                            ? `Не удалось проверить: ${Number(socialBulkPublishRehearsal.failed?.length || 0)}.`
+                            : `Could not check: ${Number(socialBulkPublishRehearsal.failed?.length || 0)}.`}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <Button
                     variant="outline"
                     onClick={() => { void runSelectedGenerateDrafts(); }}
@@ -8720,6 +8854,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     {bulkBusyAction === 'selected-social-prepare'
                       ? (isRu ? 'Готовим каналы...' : 'Preparing channels...')
                       : `${isRu ? 'Подготовить каналы' : 'Prepare channels'} · ${selectedItems.length}`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { void rehearseSelectedSocialPosts(); }}
+                    disabled={Boolean(bulkBusyAction) || selectedSocialPosts.length === 0}
+                  >
+                    {bulkBusyAction === 'selected-social-rehearsal'
+                      ? (isRu ? 'Проверяем запуск...' : 'Checking launch...')
+                      : `${isRu ? 'Проверить запуск выбранных' : 'Check selected launch'} · ${selectedSocialPosts.length}`}
                   </Button>
                   <Button
                     variant="outline"

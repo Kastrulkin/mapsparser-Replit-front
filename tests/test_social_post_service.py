@@ -64,6 +64,7 @@ from services.social_post_service import (
     publish_social_post,
     queue_social_post,
     rehearse_social_post_publish,
+    rehearse_social_posts_publish,
     record_social_post_attribution_event,
     run_scoped_social_dispatch_once,
     run_scoped_social_metrics_once,
@@ -1954,6 +1955,56 @@ def test_rehearse_social_post_publish_blocks_missing_approval(monkeypatch):
     assert rehearsal["provider_write_performed"] is False
     assert rehearsal["blockers"][0]["code"] == "missing_approval"
     assert "подтвердить" in rehearsal["summary_ru"]
+
+
+def test_rehearse_social_posts_publish_summarizes_ready_and_blocked(monkeypatch):
+    posts = {
+        "post-ready": {
+            "id": "post-ready",
+            "business_id": "biz-1",
+            "platform": "telegram",
+            "publish_mode": "api",
+            "status": "queued",
+            "approved_at": "2026-06-19T10:00:00+00:00",
+            "platform_text": "Готовый пост",
+            "base_text": "Готовый пост",
+        },
+        "post-blocked": {
+            "id": "post-blocked",
+            "business_id": "biz-1",
+            "platform": "vk",
+            "publish_mode": "api",
+            "status": "needs_review",
+            "approved_at": None,
+            "platform_text": "Текст без approval",
+            "base_text": "Текст без approval",
+        },
+    }
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeDispatchScopeDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: posts[post_id],
+    )
+    monkeypatch.setattr(social_post_service, "_queue_preflight_block", lambda cursor, post: {})
+    monkeypatch.setattr(
+        social_post_service,
+        "_publish_api_post",
+        lambda cursor, post: (_ for _ in ()).throw(AssertionError("bulk rehearsal must not call provider publish")),
+    )
+
+    payload = rehearse_social_posts_publish("user-1", ["post-ready", "post-blocked"])
+
+    assert payload["schema"] == "localos_social_publish_rehearsal_bulk_v1"
+    assert payload["dry_run"] is True
+    assert payload["external_publish_performed"] is False
+    assert payload["provider_write_performed"] is False
+    assert payload["summary"]["status"] == "partial"
+    assert payload["summary"]["ready"] == 1
+    assert payload["summary"]["api_ready"] == 1
+    assert payload["summary"]["manual_or_blocked"] == 1
+    assert payload["rehearsals"][1]["blockers"][0]["code"] == "missing_approval"
 
 
 def test_publish_social_post_moves_empty_copy_back_to_review(monkeypatch):
