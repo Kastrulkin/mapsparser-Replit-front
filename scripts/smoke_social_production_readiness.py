@@ -18,6 +18,7 @@ SOCIAL_POST_SERVICE = ROOT / "src" / "services" / "social_post_service.py"
 SOCIAL_POSTS_API = ROOT / "src" / "api" / "social_posts_api.py"
 WORKER = ROOT / "src" / "worker.py"
 RUNTIME_SMOKE = ROOT / "scripts" / "smoke_social_posting_runtime.sh"
+DEPLOY_BACKEND = ROOT / "scripts" / "deploy_backend_src.sh"
 DOCKER_COMPOSE = ROOT / "docker-compose.yml"
 ACCEPTANCE_PROBE = ROOT / "scripts" / "social_posting_acceptance_probe.py"
 
@@ -175,6 +176,16 @@ REQUIRED_RUNTIME_SMOKE_CONTRACT = {
 }
 
 
+REQUIRED_DEPLOY_CONTRACT = {
+    "runtime social scripts list": "runtime_script_files",
+    "acceptance probe upload": "scripts/social_posting_acceptance_probe.py",
+    "social readiness smoke upload": "scripts/smoke_social_production_readiness.py",
+    "container script sync": "docker compose cp ${remote_tmp}/scripts/. app:/app/scripts/",
+    "worker script sync": "docker compose cp ${remote_tmp}/scripts/. worker:/app/scripts/",
+    "container probe compile check": "python3 -m py_compile /app/scripts/social_posting_acceptance_probe.py",
+}
+
+
 REQUIRED_ACCEPTANCE_PROBE_CONTRACT = {
     "acceptance ready": "acceptance_ready",
     "read only": "read_only",
@@ -234,6 +245,7 @@ def main() -> int:
         worker = _read(WORKER)
         ui = _read(CONTENT_PLAN_TAB)
         runtime_smoke = _read(RUNTIME_SMOKE)
+        deploy_backend = _read(DEPLOY_BACKEND)
         docker_compose = _read(DOCKER_COMPOSE)
         acceptance_probe = _read(ACCEPTANCE_PROBE)
     except FileNotFoundError:
@@ -253,6 +265,7 @@ def main() -> int:
             )
     errors.extend(f"UI missing {item}" for item in _missing(ui, REQUIRED_UI_CONTRACT))
     errors.extend(f"runtime smoke missing {item}" for item in _missing(runtime_smoke, REQUIRED_RUNTIME_SMOKE_CONTRACT))
+    errors.extend(f"deploy backend missing {item}" for item in _missing(deploy_backend, REQUIRED_DEPLOY_CONTRACT))
     errors.extend(f"acceptance probe missing {item}" for item in _missing(acceptance_probe, REQUIRED_ACCEPTANCE_PROBE_CONTRACT))
 
     combined_owner_surface = "\n".join([ui, service])
