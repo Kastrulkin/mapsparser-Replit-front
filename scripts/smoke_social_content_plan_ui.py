@@ -93,6 +93,7 @@ REQUIRED_COPY = {
     "selected api queue warning": "Перед расписанием эти API-каналы не готовы",
     "selected api queue can save": "Queue можно сохранить",
     "selected api worker will not publish": "worker не будет публиковать эти каналы",
+    "preview api readiness fallback": "socialChannelReadinessByPlatform",
     "first publishing loop launch": "Первый запуск publishing loop",
     "first launch prepare step": "1. Подготовить каналы",
     "first launch review step": "2. Проверить тексты",

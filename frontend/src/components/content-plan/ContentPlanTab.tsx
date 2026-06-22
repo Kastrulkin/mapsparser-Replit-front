@@ -1616,6 +1616,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (!firstBlocked) return '/dashboard/settings?focus=integrations';
     return _socialSettingsPathForPlatform(String(firstBlocked.platform || ''));
   }, [socialReadinessSummary.blockedApiChannels]);
+  const socialChannelReadinessByPlatform = useMemo(() => {
+    const byPlatform: Record<string, SocialChannelReadiness> = {};
+    for (const item of socialChannelReadiness) {
+      const platform = String(item.platform || '').trim();
+      if (platform) byPlatform[platform] = item;
+    }
+    return byPlatform;
+  }, [socialChannelReadiness]);
   const socialApiPreflightByPlatform = useMemo(() => {
     const byPlatform: Record<string, SocialApiChannelPreflight> = {};
     for (const item of socialApiPreflight) {
@@ -1661,16 +1669,16 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     };
   }, [isRu, socialApiPreflight, socialChannelReadiness]);
   const selectedSocialQueueApiWarnings = useMemo(() => (
-    _socialApiQueueWarnings(selectedSocialCanQueue, socialApiPreflightByPlatform, isRu)
-  ), [isRu, selectedSocialCanQueue, socialApiPreflightByPlatform]);
+    _socialApiQueueWarnings(selectedSocialCanQueue, socialApiPreflightByPlatform, socialChannelReadinessByPlatform, isRu)
+  ), [isRu, selectedSocialCanQueue, socialApiPreflightByPlatform, socialChannelReadinessByPlatform]);
   const socialApprovalPreviewSummary = useMemo(() => {
     if (!socialApprovalPreview) return null;
-    return _socialApprovalSummary(socialApprovalPreview.posts, socialApiPreflightByPlatform, isRu);
-  }, [isRu, socialApiPreflightByPlatform, socialApprovalPreview]);
+    return _socialApprovalSummary(socialApprovalPreview.posts, socialApiPreflightByPlatform, socialChannelReadinessByPlatform, isRu);
+  }, [isRu, socialApiPreflightByPlatform, socialApprovalPreview, socialChannelReadinessByPlatform]);
   const socialQueuePreviewSummary = useMemo(() => {
     if (!socialQueuePreview) return null;
-    return _socialQueueSummary(socialQueuePreview.posts, socialApiPreflightByPlatform, isRu);
-  }, [isRu, socialApiPreflightByPlatform, socialQueuePreview]);
+    return _socialQueueSummary(socialQueuePreview.posts, socialApiPreflightByPlatform, socialChannelReadinessByPlatform, isRu);
+  }, [isRu, socialApiPreflightByPlatform, socialQueuePreview, socialChannelReadinessByPlatform]);
   const socialLaunchStages = useMemo<SocialLaunchStage[]>(() => {
     const totalPosts = Number(socialSummary?.total || 0);
     const needsReview = visibleSocialNeedsReview.length;
@@ -2689,7 +2697,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const executeSocialApprovalPreview = async () => {
     const preview = socialApprovalPreview;
     if (!preview || preview.postIds.length === 0) return;
-    const summary = _socialApprovalSummary(preview.posts, socialApiPreflightByPlatform, isRu);
+    const summary = _socialApprovalSummary(preview.posts, socialApiPreflightByPlatform, socialChannelReadinessByPlatform, isRu);
     if (summary.emptyText > 0) {
       setActionSummary({
         tone: 'warning',
@@ -9626,6 +9634,7 @@ function _socialSupervisedHandoffStateLabel(state: string, isRu: boolean): strin
 function _socialApiQueueWarnings(
   posts: SocialPost[],
   preflightByPlatform: Record<string, SocialApiChannelPreflight>,
+  readinessByPlatform: Record<string, SocialChannelReadiness>,
   isRu: boolean,
 ): Array<{ postId: string; platform: string; label: string; status: string }> {
   const warnings: Array<{ postId: string; platform: string; label: string; status: string }> = [];
@@ -9633,12 +9642,14 @@ function _socialApiQueueWarnings(
     if (String(post.publish_mode || '').trim() !== 'api') continue;
     const platform = String(post.platform || '').trim();
     const preflight = preflightByPlatform[platform];
-    if (!preflight || Boolean(preflight.ready)) continue;
+    const readiness = readinessByPlatform[platform];
+    if (preflight && Boolean(preflight.ready)) continue;
+    if (!preflight && (!readiness || Boolean(readiness.ready))) continue;
     warnings.push({
       postId: post.id,
       platform,
-      label: String(preflight.platform_label || post.platform_label || _socialPlatformLabel(platform, isRu)),
-      status: String(preflight.status || (isRu ? 'нужно внимание' : 'needs attention')),
+      label: String(preflight?.platform_label || readiness?.platform_label || post.platform_label || _socialPlatformLabel(platform, isRu)),
+      status: String(preflight?.status || readiness?.status || (isRu ? 'нужно внимание' : 'needs attention')),
     });
   }
   return warnings;
@@ -9651,6 +9662,7 @@ function _socialApprovalPostText(post: SocialPost): string {
 function _socialApprovalSummary(
   posts: SocialPost[],
   preflightByPlatform: Record<string, SocialApiChannelPreflight>,
+  readinessByPlatform: Record<string, SocialChannelReadiness>,
   isRu: boolean,
 ): SocialApprovalPreviewSummary {
   let api = 0;
@@ -9678,7 +9690,7 @@ function _socialApprovalSummary(
     api,
     supervised,
     emptyText,
-    blockedApiWarnings: _socialApiQueueWarnings(posts, preflightByPlatform, isRu),
+    blockedApiWarnings: _socialApiQueueWarnings(posts, preflightByPlatform, readinessByPlatform, isRu),
     platformLabels: labels,
   };
 }
@@ -9686,6 +9698,7 @@ function _socialApprovalSummary(
 function _socialQueueSummary(
   posts: SocialPost[],
   preflightByPlatform: Record<string, SocialApiChannelPreflight>,
+  readinessByPlatform: Record<string, SocialChannelReadiness>,
   isRu: boolean,
 ): SocialQueuePreviewSummary {
   let api = 0;
@@ -9722,7 +9735,7 @@ function _socialQueueSummary(
     api,
     supervised,
     dueNow,
-    blockedApiWarnings: _socialApiQueueWarnings(posts, preflightByPlatform, isRu),
+    blockedApiWarnings: _socialApiQueueWarnings(posts, preflightByPlatform, readinessByPlatform, isRu),
     platformLabels: labels,
     firstScheduledFor,
   };
