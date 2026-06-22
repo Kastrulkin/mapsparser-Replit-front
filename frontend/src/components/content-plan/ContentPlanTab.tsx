@@ -4666,6 +4666,58 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     <div>{isRu ? 'нужны ключи или права' : 'need keys or rights'}</div>
                   </div>
                 </div>
+                <div
+                  data-testid="social-overview-first-api-readiness"
+                  className={[
+                    'mt-3 rounded-xl border px-3 py-3 text-xs leading-5',
+                    socialFirstApiPublishReadiness.hasAnyReadyApi
+                      ? 'border-emerald-300/30 bg-emerald-400/10 text-emerald-50'
+                      : 'border-amber-300/30 bg-amber-400/10 text-amber-50',
+                  ].join(' ')}
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="font-semibold text-white">
+                        {isRu ? 'Первый API-пост' : 'First API post'}
+                        {' · '}
+                        {socialFirstApiPublishReadiness.hasAnyReadyApi
+                          ? (isRu ? 'есть готовый канал' : 'ready channel exists')
+                          : (isRu ? 'нужны ключи' : 'needs keys')}
+                      </div>
+                      <div className="mt-1 text-slate-200">
+                        {socialFirstApiPublishReadiness.hasAnyReadyApi
+                          ? (isRu
+                            ? `Можно начинать с API-каналов: ${socialFirstApiPublishReadiness.readyLabels.join(', ')}.`
+                            : `You can start with API channels: ${socialFirstApiPublishReadiness.readyLabels.join(', ')}.`)
+                          : (isRu
+                            ? 'Пока нет готового API-канала: подключите Telegram или VK, чтобы первый пост вышел по расписанию.'
+                            : 'No API channel is ready yet: connect Telegram or VK so the first post can publish on schedule.')}
+                      </div>
+                      <div className="mt-1 text-slate-300">
+                        {isRu
+                          ? 'Наружу только после preview, human approval, queue и даты публикации.'
+                          : 'External publishing happens only after preview, human approval, queueing, and the due date.'}
+                      </div>
+                      {socialFirstApiPublishReadiness.blockedLabels.length > 0 ? (
+                        <div className="mt-1 text-amber-100">
+                          <span className="font-semibold">{isRu ? 'Сначала исправить: ' : 'Fix first: '}</span>
+                          {socialFirstApiPublishReadiness.blockedLabels.slice(0, 3).join(', ')}
+                        </div>
+                      ) : null}
+                    </div>
+                    {socialFirstApiPublishReadiness.firstBlocked ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(_socialSettingsPathForPlatform(String(socialFirstApiPublishReadiness.firstBlocked?.platform || '')))}
+                        className="h-8 shrink-0 border-white/20 bg-white/10 px-3 text-xs text-white hover:bg-white/20 hover:text-white"
+                      >
+                        {isRu ? 'Открыть настройку' : 'Open setup'}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
                 <SocialLaunchChecklist
                   isRu={isRu}
                   stages={socialLaunchStages}
