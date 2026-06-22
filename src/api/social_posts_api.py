@@ -542,7 +542,7 @@ def social_posts_create_supervised_task(post_id: str):
         return rate_error
     data = request.get_json(silent=True) or {}
     if not bool(data.get("approved")):
-        return jsonify({"success": False, "error": "Для создания controlled-задачи нужно явное подтверждение"}), 403
+        return jsonify({"success": False, "error": "Для создания контролируемой задачи нужно явное подтверждение"}), 403
     try:
         post = create_supervised_publish_task(
             str(user_data.get("user_id") or ""),

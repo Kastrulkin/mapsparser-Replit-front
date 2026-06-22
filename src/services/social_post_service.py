@@ -76,7 +76,7 @@ SOCIAL_QUEUE_GROUPS = (
         "label_ru": "Нужно контролируемое размещение",
         "label_en": "Needs supervised placement",
         "next_action_ru": "Открыть контролируемое размещение для Яндекс/2ГИС и остановиться перед финальной публикацией.",
-        "next_action_en": "Open the controlled Yandex/2GIS task and stop before final publishing.",
+        "next_action_en": "Open supervised Yandex/2GIS placement and stop before final publishing.",
     },
     {
         "key": "needs_manual_publish",
@@ -2552,7 +2552,7 @@ def _social_openclaw_browser_diagnostics(capability_status: dict[str, Any], is_r
     if reason and not ready:
         lines.append(f"Fallback reason: {reason}.")
     if ready:
-        lines.append("Next step: create a controlled Yandex/2GIS task and review the preview.")
+        lines.append("Next step: create supervised Yandex/2GIS placement and review the preview.")
     else:
         lines.append("Next step: check OPENCLAW_BASE_URL/catalog or use manual fallback.")
     return lines
@@ -2839,7 +2839,7 @@ def _dispatch_preview_action_label(action: str, is_ru: bool) -> str:
     if clean == "publish_api":
         return "API-публикация" if is_ru else "API publish"
     if clean == "create_supervised_task":
-        return "Контролируемое размещение" if is_ru else "Controlled task"
+        return "Контролируемое размещение" if is_ru else "Supervised placement"
     if clean == "manual_handoff":
         return "Ручной fallback" if is_ru else "Manual fallback"
     return "Без действия" if is_ru else "No action"
@@ -4951,9 +4951,9 @@ def _channel_readiness_setup_summary(platform: str, status: str, is_ru: bool) ->
         )
     if status_key == "supervised_ready":
         return (
-            "Controlled-режим готов: LocalOS создаст задачу, а финальный клик останется за человеком."
+            "Контролируемый режим готов: LocalOS создаст задачу, а финальный клик останется за человеком."
             if is_ru
-            else "Controlled mode is ready: LocalOS will create a task and the final click remains human-owned."
+            else "Supervised mode is ready: LocalOS will create a placement task and the final click remains human-owned."
         )
     if status_key == "manual_fallback":
         return (

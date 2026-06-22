@@ -3095,7 +3095,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setActionSummary({
         tone: manualCount > 0 || Number(preview.skipped_no_access || 0) > 0 ? 'warning' : 'success',
         text_ru: `Dry-run расписания по текущему бизнесу: due-постов ${preview.picked || 0}, API ${apiCount}, контролируемое размещение ${supervisedCount}, вручную ${manualCount}. Наружу ничего не отправлено.`,
-        text_en: `Schedule dry-run for the current business: due posts ${preview.picked || 0}, API ${apiCount}, controlled ${supervisedCount}, manual ${manualCount}. Nothing was sent externally.`,
+        text_en: `Schedule dry-run for the current business: due posts ${preview.picked || 0}, API ${apiCount}, supervised ${supervisedCount}, manual ${manualCount}. Nothing was sent externally.`,
         details_ru: dryRunMessageRu ? [dryRunMessageRu] : [],
         details_en: dryRunMessageEn ? [dryRunMessageEn] : [],
       });
@@ -3158,7 +3158,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           preflight.next_action_ru || 'Следующий шаг появится в блоке запуска.',
         ],
         details_en: [
-          `Due: ${Number(preflight.summary?.due_posts || 0)} · API: ${Number(preflight.summary?.api_due_posts || 0)} · controlled: ${Number(preflight.summary?.controlled_due_posts || 0)} · manual: ${Number(preflight.summary?.manual_due_posts || 0)}.`,
+          `Due: ${Number(preflight.summary?.due_posts || 0)} · API: ${Number(preflight.summary?.api_due_posts || 0)} · supervised: ${Number(preflight.summary?.controlled_due_posts || 0)} · manual: ${Number(preflight.summary?.manual_due_posts || 0)}.`,
           preflight.next_action_en || 'The next step is shown in the launch block.',
         ],
       });
@@ -3206,7 +3206,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setActionSummary({
         tone: Number(result.failed || 0) > 0 || Number(result.manual || 0) > 0 ? 'warning' : 'success',
         text_ru: String(response.message_ru || `Первый scoped цикл выполнен: взято ${Number(result.picked || 0)}, опубликовано ${Number(result.published || 0)}, контролируемое размещение ${Number(result.supervised || 0)}, вручную ${Number(result.manual || 0)}, ошибок ${Number(result.failed || 0)}.`),
-        text_en: String(response.message_en || `First scoped cycle finished: picked ${Number(result.picked || 0)}, published ${Number(result.published || 0)}, controlled ${Number(result.supervised || 0)}, manual ${Number(result.manual || 0)}, failed ${Number(result.failed || 0)}.`),
+        text_en: String(response.message_en || `First scoped cycle finished: picked ${Number(result.picked || 0)}, published ${Number(result.published || 0)}, supervised ${Number(result.supervised || 0)}, manual ${Number(result.manual || 0)}, failed ${Number(result.failed || 0)}.`),
         details_ru: [
           ...resultSummariesRu,
           ...(followupRu.length ? followupRu : [
@@ -6047,7 +6047,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           <div className="mt-1 text-[11px] text-slate-200">
                             {isRu
                               ? `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · контролируемо ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · вручную ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`
-                              : `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · controlled ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · manual ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`}
+                              : `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · supervised ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · manual ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`}
                           </div>
                           {socialLaunchPreflight.next_action_ru || socialLaunchPreflight.next_action_en ? (
                             <div className="mt-1 font-medium text-white">
@@ -6122,7 +6122,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           </div>
                           <div className="mt-2 rounded-lg bg-slate-950/30 px-2 py-2 text-[11px] text-slate-100 ring-1 ring-white/10">
                             <div className="font-semibold text-white">
-                              {isRu ? 'Команды для безопасного запуска' : 'Controlled launch env'}
+                              {isRu ? 'Команды для безопасного запуска' : 'Safe launch env'}
                             </div>
                             <div className="mt-1 space-y-0.5 font-mono text-[10px] leading-4 text-slate-200">
                               {_socialWorkerEnvLines(
@@ -6159,7 +6159,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           <div>
                             {isRu
                               ? `Due: ${Number(socialDispatchPreview.picked || 0)} · API: ${Number(socialDispatchPreview.by_action?.publish_api || 0)} · контролируемо: ${Number(socialDispatchPreview.by_action?.create_supervised_task || 0)} · вручную: ${Number(socialDispatchPreview.by_action?.manual_handoff || 0)}`
-                              : `Due: ${Number(socialDispatchPreview.picked || 0)} · API: ${Number(socialDispatchPreview.by_action?.publish_api || 0)} · controlled: ${Number(socialDispatchPreview.by_action?.create_supervised_task || 0)} · manual: ${Number(socialDispatchPreview.by_action?.manual_handoff || 0)}`}
+                              : `Due: ${Number(socialDispatchPreview.picked || 0)} · API: ${Number(socialDispatchPreview.by_action?.publish_api || 0)} · supervised: ${Number(socialDispatchPreview.by_action?.create_supervised_task || 0)} · manual: ${Number(socialDispatchPreview.by_action?.manual_handoff || 0)}`}
                           </div>
                           <div className="text-[11px] text-slate-300">
                             {isRu ? 'Внешняя публикация не запускалась.' : 'No external publishing was started.'}
@@ -6201,7 +6201,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               <div className="mt-1 text-slate-300">
                                 {isRu
                                   ? `API ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · контролируемо ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · вручную ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`
-                                  : `external ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · controlled ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · manual ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`}
+                                  : `external ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · supervised ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · manual ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`}
                               </div>
                             </div>
                           ) : null}
@@ -7109,7 +7109,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           : selectedSocialCanMarkPublished.length > 0
                             ? (isRu
                               ? 'Для этих каналов нужен ручной или контролируемый финал: проверьте задачу и отметьте размещение.'
-                              : 'These channels need a manual or controlled finish: review the task and mark placement.')
+                              : 'These channels need a manual or supervised finish: review the task and mark placement.')
                             : (isRu
                               ? 'Если кнопки ниже показывают 0, сначала подготовьте каналы для выбранных тем.'
                               : 'If the buttons below show 0, prepare channels for the selected topics first.')}

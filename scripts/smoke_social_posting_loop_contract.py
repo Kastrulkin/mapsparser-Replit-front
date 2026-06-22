@@ -101,6 +101,23 @@ REQUIRED_RUNTIME_SMOKE_MARKERS = {
 FORBIDDEN_UI_MARKERS = {
     "maps autopublish claim ru": "Яндекс/2ГИС автопубликация",
     "maps autopublish claim en": "Yandex/2GIS autopublish",
+    "old controlled launch env": "Controlled launch env",
+    "old controlled finish copy": "manual or controlled finish",
+}
+
+
+FORBIDDEN_SERVICE_MARKERS = {
+    "old controlled task en": "Controlled task",
+    "old controlled task instruction en": "Open the controlled Yandex/2GIS task",
+    "old controlled task diagnostic en": "create a controlled Yandex/2GIS task",
+    "old controlled mode ru": "Controlled-режим",
+    "old controlled mode en": "Controlled mode is ready",
+}
+
+
+FORBIDDEN_API_MARKERS = {
+    "old controlled task api ru": "controlled-задачи",
+    "mixed supervised task api ru": "supervised-задачи",
 }
 
 
@@ -136,6 +153,8 @@ def main() -> int:
     errors.extend(f"worker missing {item}" for item in _missing(worker, REQUIRED_WORKER_MARKERS))
     errors.extend(f"runtime smoke missing {item}" for item in _missing(runtime_smoke, REQUIRED_RUNTIME_SMOKE_MARKERS))
     errors.extend(f"UI forbidden {item}" for item in _present(ui, FORBIDDEN_UI_MARKERS))
+    errors.extend(f"service forbidden {item}" for item in _present(service, FORBIDDEN_SERVICE_MARKERS))
+    errors.extend(f"API forbidden {item}" for item in _present(api, FORBIDDEN_API_MARKERS))
 
     if errors:
         print("social posting loop contract smoke failed:", file=sys.stderr)

@@ -190,7 +190,11 @@ FORBIDDEN_COPY = {
     "owner-facing manual controlled mix en": "manual/controlled placement",
     "owner-facing controlled placement en": "controlled placement, not hidden autopublish",
     "owner-facing controlled task ru": "controlled-задач",
+    "owner-facing controlled task en": "Controlled task",
     "owner-facing controlled launch ru": "Команды для controlled launch",
+    "owner-facing controlled launch en": "Controlled launch env",
+    "owner-facing controlled mode ru": "Controlled-режим",
+    "owner-facing controlled finish en": "manual or controlled finish",
 }
 
 
@@ -244,6 +248,7 @@ def main() -> int:
     missing.extend(_assert_contains(service_source, REQUIRED_BACKEND_DISPATCH_COPY))
     forbidden = _assert_absent(source, FORBIDDEN_COPY)
     forbidden.extend(_assert_absent(settings_source, FORBIDDEN_COPY))
+    forbidden.extend(_assert_absent(service_source, FORBIDDEN_COPY))
 
     if missing or forbidden:
         if missing:
