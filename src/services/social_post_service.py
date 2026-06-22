@@ -1411,6 +1411,8 @@ def dispatch_due_social_posts(batch_size: int = 20, business_id: str = "") -> di
         "followup_actions_en": _social_dispatch_followup_actions(
             len(picked), published, supervised, manual, failed, errors, False
         ),
+        "result_summaries_ru": _social_dispatch_result_summaries(details, True),
+        "result_summaries_en": _social_dispatch_result_summaries(details, False),
     }
 
 
@@ -1568,6 +1570,59 @@ def _social_dispatch_followup_actions(
         else "After publishing, collect reactions and mark leads/inquiries for next-plan correction."
     )
     return actions[:5]
+
+
+def _social_dispatch_result_summaries(details: list[dict[str, Any]], is_ru: bool) -> list[str]:
+    summaries: list[str] = []
+    for item in (details or [])[:5]:
+        platform = str(item.get("platform") or "").strip()
+        label = platform_label(platform) if platform else ("Канал" if is_ru else "Channel")
+        status = str(item.get("status") or "").strip()
+        provider_url = str(item.get("provider_post_url") or "").strip()
+        provider_id = str(item.get("provider_post_id") or "").strip()
+        automation_task_id = str(item.get("automation_task_id") or "").strip()
+        last_error = str(item.get("last_error") or "").strip()
+        if status == "published":
+            proof = provider_url or provider_id
+            summaries.append(
+                f"{label}: опубликовано" + (f", proof {proof}." if proof else ".")
+                if is_ru
+                else f"{label}: published" + (f", proof {proof}." if proof else ".")
+            )
+        elif status == "needs_supervised_publish":
+            summaries.append(
+                f"{label}: controlled-задача готова" + (f" ({automation_task_id})." if automation_task_id else ".")
+                if is_ru
+                else f"{label}: controlled task is ready" + (f" ({automation_task_id})." if automation_task_id else ".")
+            )
+        elif status == "needs_manual_publish":
+            reason = f": {last_error}" if last_error else ""
+            summaries.append(
+                f"{label}: нужен ручной шаг или подключение канала{reason}."
+                if is_ru
+                else f"{label}: manual step or channel connection is needed{reason}."
+            )
+        elif status == "failed":
+            reason = f": {last_error}" if last_error else ""
+            summaries.append(
+                f"{label}: ошибка публикации{reason}."
+                if is_ru
+                else f"{label}: publishing failed{reason}."
+            )
+        else:
+            summaries.append(
+                f"{label}: статус после dispatch - {status or 'unknown'}."
+                if is_ru
+                else f"{label}: status after dispatch is {status or 'unknown'}."
+            )
+    if len(details or []) > 5:
+        remaining = len(details or []) - 5
+        summaries.append(
+            f"Ещё {remaining} результатов смотрите в карточках постов."
+            if is_ru
+            else f"See {remaining} more results in post cards."
+        )
+    return summaries
 
 
 def _social_metrics_once_message(result: dict[str, Any], is_ru: bool) -> str:

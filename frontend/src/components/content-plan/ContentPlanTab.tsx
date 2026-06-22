@@ -3149,16 +3149,28 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       const followupEn = Array.isArray(result.followup_actions_en)
         ? result.followup_actions_en.map(String).filter(Boolean)
         : [];
+      const resultSummariesRu = Array.isArray(result.result_summaries_ru)
+        ? result.result_summaries_ru.map(String).filter(Boolean)
+        : [];
+      const resultSummariesEn = Array.isArray(result.result_summaries_en)
+        ? result.result_summaries_en.map(String).filter(Boolean)
+        : [];
       setActionSummary({
         tone: Number(result.failed || 0) > 0 || Number(result.manual || 0) > 0 ? 'warning' : 'success',
         text_ru: String(response.message_ru || `Первый scoped цикл выполнен: взято ${Number(result.picked || 0)}, опубликовано ${Number(result.published || 0)}, controlled ${Number(result.supervised || 0)}, вручную ${Number(result.manual || 0)}, ошибок ${Number(result.failed || 0)}.`),
         text_en: String(response.message_en || `First scoped cycle finished: picked ${Number(result.picked || 0)}, published ${Number(result.published || 0)}, controlled ${Number(result.supervised || 0)}, manual ${Number(result.manual || 0)}, failed ${Number(result.failed || 0)}.`),
-        details_ru: followupRu.length ? followupRu : [
-          'Проверьте карточки постов: API должны показать ссылку/ID или понятную ошибку, карты - controlled/manual задачу.',
-        ],
-        details_en: followupEn.length ? followupEn : [
-          'Check post cards: API posts should show a URL/ID or a clear error, maps should show a controlled/manual task.',
-        ],
+        details_ru: [
+          ...resultSummariesRu,
+          ...(followupRu.length ? followupRu : [
+            'Проверьте карточки постов: API должны показать ссылку/ID или понятную ошибку, карты - controlled/manual задачу.',
+          ]),
+        ].slice(0, 7),
+        details_en: [
+          ...resultSummariesEn,
+          ...(followupEn.length ? followupEn : [
+            'Check post cards: API posts should show a URL/ID or a clear error, maps should show a controlled/manual task.',
+          ]),
+        ].slice(0, 7),
       });
       if (currentPlan?.id) {
         await loadSocialPosts(currentPlan.id);

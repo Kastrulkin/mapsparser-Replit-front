@@ -13,6 +13,7 @@ from services.social_post_service import (
     _channel_readiness_message,
     _dispatch_action_for_status,
     _social_dispatch_followup_actions,
+    _social_dispatch_result_summaries,
     _dispatch_preview_readiness,
     _merge_metric_totals_into_posts,
     _meta_channel_readiness,
@@ -836,6 +837,40 @@ def test_social_dispatch_followup_actions_prioritize_real_outcomes():
     assert any("connect keys/permissions" in item for item in actions)
     assert any("VK token expired" in item for item in actions)
     assert "leads/inquiries" in actions[-1]
+
+
+def test_social_dispatch_result_summaries_explain_each_channel_outcome():
+    summaries = _social_dispatch_result_summaries(
+        [
+            {
+                "platform": "telegram",
+                "status": "published",
+                "provider_post_url": "https://t.me/channel/10",
+            },
+            {
+                "platform": "yandex_maps",
+                "status": "needs_supervised_publish",
+                "automation_task_id": "task-1",
+            },
+            {
+                "platform": "vk",
+                "status": "needs_manual_publish",
+                "last_error": "missing wall.post",
+            },
+            {
+                "platform": "facebook",
+                "status": "failed",
+                "last_error": "temporary",
+            },
+        ],
+        True,
+    )
+
+    assert "Telegram: опубликовано" in summaries[0]
+    assert "https://t.me/channel/10" in summaries[0]
+    assert summaries[1] == "Яндекс Карты: controlled-задача готова (task-1)."
+    assert "missing wall.post" in summaries[2]
+    assert summaries[3] == "Facebook: ошибка публикации: temporary."
 
 
 def test_dispatch_due_social_posts_blocks_unscoped_by_default(monkeypatch):
