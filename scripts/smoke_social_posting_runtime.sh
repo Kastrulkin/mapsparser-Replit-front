@@ -92,13 +92,15 @@ PY
   echo
   echo "[social-runtime] live frontend social cockpit chunk"
   curl -sS --max-time "${SMOKE_CURL_TIMEOUT:-10}" "$PUBLIC_DOMAIN/" | grep -n "/assets/index-" | head -n 1
-  cockpit_chunk="$(grep -R -l "Быстрый запуск публикаций" frontend/dist/assets 2>/dev/null | head -n 1 || true)"
+  cockpit_chunk="$(grep -R -l "OpenClaw не нажимает финальную кнопку публикации" frontend/dist/assets 2>/dev/null | head -n 1 || true)"
   if [[ -z "$cockpit_chunk" ]]; then
-    echo "Could not find current social cockpit copy in frontend/dist/assets" >&2
+    echo "Could not find current social OpenClaw readiness copy in frontend/dist/assets" >&2
     exit 1
   fi
   echo "cockpit_chunk=${cockpit_chunk}"
+  grep -F "Быстрый запуск публикаций" "$cockpit_chunk" >/dev/null
   grep -F "контроль/вручную" "$cockpit_chunk" >/dev/null
+  grep -F "Безопасная проверка: LocalOS ничего не публикует" "$cockpit_chunk" >/dev/null
   if grep -F "Яндекс/2ГИС controlled/manual" "$cockpit_chunk" >/dev/null; then
     echo "Current social cockpit chunk contains old mixed-language Yandex/2GIS copy" >&2
     exit 1
