@@ -146,6 +146,13 @@ type SocialPublishEvidence = {
   automation_task_id?: string;
   provider_status?: string;
   last_error?: string;
+  target_url?: string;
+  profile_hint?: string;
+  copy_ready_text?: string;
+  manual_checklist_ru?: string[];
+  manual_checklist_en?: string[];
+  stop_before_final_publish?: boolean;
+  browser_final_click_allowed?: boolean;
   recoverable?: boolean;
 };
 
@@ -7187,6 +7194,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const isSupervisedPost = _isSupervisedPlatform(post.platform);
                               const canCreateSupervisedTask = isSupervisedPost
                                 && (post.status === 'approved' || post.status === 'queued' || post.status === 'needs_manual_publish');
+                              const publishEvidence = post.publish_evidence || null;
                               const supervisedPayload = _socialSupervisedPayload(post);
                               const manualRefs = manualPublishRefs[post.id] || {
                                 url: String(post.provider_post_url || ''),
@@ -7207,13 +7215,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   : supervisedPayload?.manual_instruction_en || supervisedManualHandoff?.instruction_en || ''
                               ).trim();
                               const supervisedManualChecklistSource = isRu
-                                ? supervisedPayload?.manual_checklist_ru || supervisedManualHandoff?.checklist_ru || []
-                                : supervisedPayload?.manual_checklist_en || supervisedManualHandoff?.checklist_en || [];
+                                ? supervisedPayload?.manual_checklist_ru || supervisedManualHandoff?.checklist_ru || publishEvidence?.manual_checklist_ru || []
+                                : supervisedPayload?.manual_checklist_en || supervisedManualHandoff?.checklist_en || publishEvidence?.manual_checklist_en || [];
                               const supervisedManualChecklist = Array.isArray(supervisedManualChecklistSource)
                                 ? supervisedManualChecklistSource.filter(Boolean).map(String)
                                 : [];
-                              const supervisedCopyReadyText = String(supervisedPayload?.copy_ready_text || supervisedManualHandoff?.copy_ready_text || '').trim();
-                              const supervisedProfileHint = String(supervisedPayload?.profile_hint || supervisedManualHandoff?.profile_hint || '').trim();
+                              const supervisedCopyReadyText = String(supervisedPayload?.copy_ready_text || supervisedManualHandoff?.copy_ready_text || publishEvidence?.copy_ready_text || '').trim();
+                              const supervisedProfileHint = String(supervisedPayload?.profile_hint || supervisedManualHandoff?.profile_hint || publishEvidence?.profile_hint || '').trim();
+                              const supervisedTargetUrl = String(supervisedPayload?.target_url || supervisedManualHandoff?.target_url || publishEvidence?.target_url || '').trim();
                               const supervisedFallbackReasons = Array.isArray(supervisedPayload?.fallback_reasons)
                                 ? supervisedPayload.fallback_reasons.filter(Boolean).map(String)
                                 : [];
@@ -7226,7 +7235,6 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 ).trim();
                                 const nextActionLabel = _socialNextActionLabel(post.next_action || '', isRu);
                                 const hasNextAction = Boolean(String(post.next_action || '').trim());
-                                const publishEvidence = post.publish_evidence || null;
                                 const evidenceTitle = String(isRu ? publishEvidence?.title_ru || '' : publishEvidence?.title_en || '').trim();
                                 const evidenceSummary = String(isRu ? publishEvidence?.summary_ru || '' : publishEvidence?.summary_en || '').trim();
                                 const evidenceNextAction = String(isRu ? publishEvidence?.next_action_ru || '' : publishEvidence?.next_action_en || '').trim();
@@ -7407,7 +7415,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                           ) : null}
                                         </div>
                                       ) : null}
-                                      {post.automation_task_id || supervisedTaskStatus || supervisedActionRef || supervisedPayload?.target_url ? (
+                                      {post.automation_task_id || supervisedTaskStatus || supervisedActionRef || supervisedTargetUrl ? (
                                         <div className="mt-3 grid gap-2 rounded-lg bg-white px-3 py-2 text-[11px] text-amber-950 sm:grid-cols-2">
                                           {post.automation_task_id ? (
                                             <div>
@@ -7427,10 +7435,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                               <span className="font-mono">{supervisedActionRef}</span>
                                             </div>
                                           ) : null}
-                                          {supervisedPayload?.target_url ? (
+                                          {supervisedTargetUrl ? (
                                             <div>
                                               <span className="font-semibold">{isRu ? 'цель:' : 'target:'}</span>{' '}
-                                              <span className="break-all">{String(supervisedPayload.target_url)}</span>
+                                              <span className="break-all">{supervisedTargetUrl}</span>
                                             </div>
                                           ) : null}
                                         </div>

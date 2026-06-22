@@ -5607,6 +5607,17 @@ def _social_publish_evidence(post: dict[str, Any]) -> dict[str, Any]:
         return base
 
     if status == "needs_supervised_publish":
+        supervised = _json_dict(metadata.get("supervised_publish"))
+        manual_handoff = _json_dict(supervised.get("manual_handoff"))
+        target_url = str(supervised.get("target_url") or manual_handoff.get("target_url") or "").strip()
+        profile_hint = str(supervised.get("profile_hint") or manual_handoff.get("profile_hint") or "").strip()
+        copy_ready_text = str(supervised.get("copy_ready_text") or manual_handoff.get("copy_ready_text") or "").strip()
+        checklist_ru = supervised.get("manual_checklist_ru") or manual_handoff.get("checklist_ru") or []
+        checklist_en = supervised.get("manual_checklist_en") or manual_handoff.get("checklist_en") or []
+        if not isinstance(checklist_ru, list):
+            checklist_ru = []
+        if not isinstance(checklist_en, list):
+            checklist_en = []
         base.update(
             {
                 "tone": "warning",
@@ -5616,6 +5627,13 @@ def _social_publish_evidence(post: dict[str, Any]) -> dict[str, Any]:
                 "summary_en": "LocalOS prepared a controlled/manual task; the final publish click stays with a human.",
                 "next_action_ru": "Откройте контролируемое размещение, проверьте предпросмотр и отметьте результат.",
                 "next_action_en": "Open supervised placement, review the preview, and record the result.",
+                "target_url": target_url,
+                "profile_hint": profile_hint,
+                "copy_ready_text": copy_ready_text,
+                "manual_checklist_ru": [str(item) for item in checklist_ru if str(item or "").strip()][:5],
+                "manual_checklist_en": [str(item) for item in checklist_en if str(item or "").strip()][:5],
+                "stop_before_final_publish": bool(supervised.get("stop_before_final_publish", True)),
+                "browser_final_click_allowed": False,
             }
         )
         return base

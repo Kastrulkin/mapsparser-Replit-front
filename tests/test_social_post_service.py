@@ -2145,6 +2145,20 @@ def test_social_publish_evidence_keeps_supervised_maps_human_controlled():
             "platform": "yandex_maps",
             "status": "needs_supervised_publish",
             "automation_task_id": "task-1",
+            "metadata_json": {
+                "supervised_publish": {
+                    "target_url": "https://yandex.ru/maps/org/1",
+                    "profile_hint": "Riderra Tallinn",
+                    "copy_ready_text": "Текст для карты",
+                    "manual_checklist_ru": ["Скопируйте текст", "Отметьте размещённым"],
+                    "manual_checklist_en": ["Copy the text", "Mark as published"],
+                    "stop_before_final_publish": True,
+                    "manual_handoff": {
+                        "target_url": "https://yandex.ru/maps/org/1",
+                        "copy_ready_text": "fallback text",
+                    },
+                }
+            },
         }
     )
 
@@ -2152,6 +2166,12 @@ def test_social_publish_evidence_keeps_supervised_maps_human_controlled():
     assert evidence["automation_task_id"] == "task-1"
     assert "финальный клик" in evidence["summary_ru"]
     assert "controlled/manual" in evidence["summary_ru"]
+    assert evidence["target_url"] == "https://yandex.ru/maps/org/1"
+    assert evidence["profile_hint"] == "Riderra Tallinn"
+    assert evidence["copy_ready_text"] == "Текст для карты"
+    assert evidence["manual_checklist_ru"] == ["Скопируйте текст", "Отметьте размещённым"]
+    assert evidence["browser_final_click_allowed"] is False
+    assert evidence["stop_before_final_publish"] is True
 
 
 def test_social_supervised_blocked_metadata_preserves_manual_fallback_contract():
