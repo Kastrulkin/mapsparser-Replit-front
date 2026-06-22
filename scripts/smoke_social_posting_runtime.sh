@@ -159,13 +159,23 @@ PY
   echo
   echo "[social-runtime] live frontend social cockpit chunk"
   curl -sS --max-time "${SMOKE_CURL_TIMEOUT:-10}" "$PUBLIC_DOMAIN/" | grep -n "/assets/index-" | head -n 1
-  cockpit_chunk="$(grep -R -l "OpenClaw не нажимает финальную кнопку публикации" frontend/dist/assets 2>/dev/null | head -n 1 || true)"
+  current_index_js="$(grep -o '/assets/index-[^"]*\.js' frontend/dist/index.html | tail -n 1 | sed 's#^/##')"
+  current_news_js=""
+  if [[ -n "$current_index_js" && -f "frontend/dist/${current_index_js}" ]]; then
+    current_news_js="$(grep -o 'NewsGenerator-[A-Za-z0-9_-]*\.js' "frontend/dist/${current_index_js}" | tail -n 1 || true)"
+  fi
+  if [[ -n "$current_news_js" && -f "frontend/dist/assets/${current_news_js}" ]]; then
+    cockpit_chunk="frontend/dist/assets/${current_news_js}"
+  else
+    cockpit_chunk="$(grep -R -l "OpenClaw не нажимает финальную кнопку публикации" frontend/dist/assets 2>/dev/null | head -n 1 || true)"
+  fi
   if [[ -z "$cockpit_chunk" ]]; then
     echo "Could not find current social OpenClaw readiness copy in frontend/dist/assets" >&2
     exit 1
   fi
   echo "cockpit_chunk=${cockpit_chunk}"
   grep -F "Быстрый запуск публикаций" "$cockpit_chunk" >/dev/null
+  grep -F "Первый запуск publishing loop" "$cockpit_chunk" >/dev/null
   grep -F "контроль/вручную" "$cockpit_chunk" >/dev/null
   grep -F "Безопасная проверка: LocalOS ничего не публикует" "$cockpit_chunk" >/dev/null
   if grep -F "Яндекс/2ГИС controlled/manual" "$cockpit_chunk" >/dev/null; then
