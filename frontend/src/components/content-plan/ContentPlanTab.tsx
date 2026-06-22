@@ -317,6 +317,8 @@ type SocialLearningReadiness = {
   summary_en?: string;
   next_action_ru?: string;
   next_action_en?: string;
+  apply_blocked_reason_ru?: string;
+  apply_blocked_reason_en?: string;
   safe_to_apply_recommendation?: boolean;
 };
 
@@ -7064,6 +7066,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             : 'I reviewed the preview above and approve applying it only to future plan items.'}
                         </span>
                       </label>
+                      {socialRecommendation?.learning_readiness?.safe_to_apply_recommendation === false ? (
+                        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                          <div className="font-semibold text-amber-950">
+                            {isRu ? 'Почему нельзя применить сейчас' : 'Why apply is blocked'}
+                          </div>
+                          <div className="mt-1">
+                            {isRu
+                              ? String(socialRecommendation.learning_readiness.apply_blocked_reason_ru || socialRecommendation.learning_readiness.next_action_ru || '')
+                              : String(socialRecommendation.learning_readiness.apply_blocked_reason_en || socialRecommendation.learning_readiness.next_action_en || '')}
+                          </div>
+                        </div>
+                      ) : null}
                     </>
                   ) : null}
                 </div>

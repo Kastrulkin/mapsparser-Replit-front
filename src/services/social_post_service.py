@@ -5247,6 +5247,8 @@ def _social_learning_readiness(posts: list[dict[str, Any]]) -> dict[str, Any]:
         "summary_en": _social_learning_readiness_summary(status, False),
         "next_action_ru": _social_learning_readiness_next_action(status, True),
         "next_action_en": _social_learning_readiness_next_action(status, False),
+        "apply_blocked_reason_ru": _social_learning_apply_blocked_reason(status, True),
+        "apply_blocked_reason_en": _social_learning_apply_blocked_reason(status, False),
         "safe_to_apply_recommendation": status in {"ready_from_leads", "early_signals_only"},
     }
 
@@ -5312,6 +5314,28 @@ def _social_learning_readiness_next_action(status: str, is_ru: bool) -> str:
         "Подготовьте, подтвердите и опубликуйте первые посты, затем соберите реакции."
         if is_ru
         else "Prepare, approve, and publish the first posts, then collect reactions."
+    )
+
+
+def _social_learning_apply_blocked_reason(status: str, is_ru: bool) -> str:
+    if status in {"ready_from_leads", "early_signals_only"}:
+        return ""
+    if status == "published_without_signals":
+        return (
+            "Применение заблокировано: сначала соберите реакции или отметьте заявку/обращение вручную."
+            if is_ru
+            else "Apply is blocked: collect reactions or record a lead/inquiry manually first."
+        )
+    if status == "finish_pending_publish":
+        return (
+            "Применение заблокировано: сначала завершите контролируемое/ручное размещение или исправьте ошибки публикации."
+            if is_ru
+            else "Apply is blocked: finish supervised/manual placement or recover publishing errors first."
+        )
+    return (
+        "Применение заблокировано: сначала опубликуйте посты и соберите результат."
+        if is_ru
+        else "Apply is blocked: publish posts and collect results first."
     )
 
 

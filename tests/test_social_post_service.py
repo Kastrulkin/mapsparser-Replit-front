@@ -732,6 +732,8 @@ def test_social_learning_readiness_prefers_primary_business_results():
     assert readiness["confidence"] == "high"
     assert readiness["posts_with_primary_result"] == 1
     assert readiness["safe_to_apply_recommendation"] is True
+    assert readiness["apply_blocked_reason_ru"] == ""
+    assert readiness["apply_blocked_reason_en"] == ""
     assert "Заявки" in readiness["primary_metric_ru"]
 
 
@@ -749,6 +751,8 @@ def test_social_learning_readiness_warns_when_publish_work_is_pending():
     assert readiness["failed_posts"] == 1
     assert readiness["safe_to_apply_recommendation"] is False
     assert "manual/supervised" in readiness["next_action_en"]
+    assert "Apply is blocked" in readiness["apply_blocked_reason_en"]
+    assert "supervised/manual" in readiness["apply_blocked_reason_en"]
 
 
 def test_social_learning_readiness_requires_signals_before_apply():
@@ -765,6 +769,7 @@ def test_social_learning_readiness_requires_signals_before_apply():
     assert readiness["posts_with_early_signal"] == 0
     assert readiness["safe_to_apply_recommendation"] is False
     assert "Collect reactions" in readiness["next_action_en"]
+    assert "collect reactions" in readiness["apply_blocked_reason_en"].lower()
 
 
 def test_manual_attribution_metrics_include_views_and_likes():

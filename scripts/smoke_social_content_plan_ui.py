@@ -74,6 +74,8 @@ REQUIRED_COPY = {
     "next-plan recommendations": "Что менять в следующем плане",
     "recommendation preview": "Предпросмотр изменений плана",
     "apply with confirmation": "Применить после подтверждения",
+    "apply blocked explanation": "Почему нельзя применить сейчас",
+    "apply blocked reason contract": "apply_blocked_reason_ru",
     "lead attribution": "Была заявка",
     "inquiry attribution": "Было обращение",
     "primary result attribution group": "Главный результат",
