@@ -531,6 +531,11 @@ type SocialLaunchPreflight = {
     status?: string;
     ready?: boolean;
     all_api_channels_ready?: boolean;
+    recommended_start_platform?: {
+      platform?: string;
+      platform_label?: string;
+      status?: string;
+    };
     ready_platforms?: Array<{
       platform?: string;
       platform_label?: string;
@@ -549,6 +554,8 @@ type SocialLaunchPreflight = {
     message_en?: string;
     next_action_ru?: string;
     next_action_en?: string;
+    first_post_checklist_ru?: string[];
+    first_post_checklist_en?: string[];
     external_publish_requires_approval?: boolean;
     publish_path_ru?: string;
     publish_path_en?: string;
@@ -6974,6 +6981,29 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   ? String(socialLaunchPreflight.first_api_publish_readiness.next_action_ru || '')
                                   : String(socialLaunchPreflight.first_api_publish_readiness.next_action_en || '')}
                               </div>
+                              {(
+                                isRu
+                                  ? socialLaunchPreflight.first_api_publish_readiness.first_post_checklist_ru
+                                  : socialLaunchPreflight.first_api_publish_readiness.first_post_checklist_en
+                              )?.length ? (
+                                <div className="mt-2 rounded-lg bg-white/10 px-2 py-2">
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Чеклист первого API-поста' : 'First API post checklist'}
+                                  </div>
+                                  <ol className="mt-1 space-y-1">
+                                    {(
+                                      isRu
+                                        ? socialLaunchPreflight.first_api_publish_readiness.first_post_checklist_ru
+                                        : socialLaunchPreflight.first_api_publish_readiness.first_post_checklist_en
+                                    )?.slice(0, 5).map((step, index) => (
+                                      <li key={`first-api-checklist:${index}:${step}`} className="flex gap-1.5 text-slate-100">
+                                        <span className="font-semibold text-white">{index + 1}.</span>
+                                        <span>{step}</span>
+                                      </li>
+                                    ))}
+                                  </ol>
+                                </div>
+                              ) : null}
                               <div className="mt-1 text-slate-200">
                                 {isRu
                                   ? String(socialLaunchPreflight.first_api_publish_readiness.publish_path_ru || 'Только после preview, human approval, queue и due-даты.')

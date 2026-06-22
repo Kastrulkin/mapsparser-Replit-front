@@ -501,6 +501,7 @@ def _social_first_api_publish_readiness(
         status = "partial_api_ready"
     else:
         status = "no_api_ready"
+    recommended_start_platform = ready_platforms[0] if ready_platforms else (blocked_platforms[0] if blocked_platforms else {})
 
     return {
         "schema": "localos_social_first_api_publish_readiness_v1",
@@ -508,12 +509,15 @@ def _social_first_api_publish_readiness(
         "status": status,
         "ready": bool(ready_items),
         "all_api_channels_ready": bool(api_items) and not blocked_items,
+        "recommended_start_platform": recommended_start_platform,
         "ready_platforms": ready_platforms,
         "blocked_platforms": blocked_platforms,
         "message_ru": _social_first_api_publish_message(status, ready_platforms, blocked_platforms, True),
         "message_en": _social_first_api_publish_message(status, ready_platforms, blocked_platforms, False),
         "next_action_ru": _social_first_api_publish_next_action(status, blocked_platforms, True),
         "next_action_en": _social_first_api_publish_next_action(status, blocked_platforms, False),
+        "first_post_checklist_ru": _social_first_api_post_checklist(status, recommended_start_platform, True),
+        "first_post_checklist_en": _social_first_api_post_checklist(status, recommended_start_platform, False),
         "external_publish_requires_approval": True,
         "publish_path_ru": "Только после preview, human approval, queue и due-даты.",
         "publish_path_en": "Only after preview, human approval, queueing, and the due date.",
@@ -586,6 +590,85 @@ def _social_first_api_publish_next_action(
         if is_ru
         else "Connect at least one API channel: Telegram or VK will unlock the fastest production value."
     )
+
+
+def _social_first_api_post_checklist(
+    status: str,
+    recommended_platform: dict[str, Any],
+    is_ru: bool,
+) -> list[str]:
+    label = str(
+        recommended_platform.get("platform_label")
+        or recommended_platform.get("platform")
+        or ("API-канал" if is_ru else "API channel")
+    ).strip()
+    next_action = str(
+        recommended_platform.get("next_action_ru" if is_ru else "next_action_en")
+        or ""
+    ).strip()
+    if status in {"all_api_channels_ready", "partial_api_ready"}:
+        return [
+            (
+                f"Выберите первый готовый канал: {label}."
+                if is_ru
+                else f"Choose the first ready channel: {label}."
+            ),
+            (
+                "Откройте preview, проверьте текст и сохраните правки."
+                if is_ru
+                else "Open preview, review copy, and save edits."
+            ),
+            (
+                "Подтвердите текст человеком: approval не публикует наружу."
+                if is_ru
+                else "Approve the copy with a human: approval does not publish externally."
+            ),
+            (
+                "Поставьте пост в расписание и дождитесь due-даты или scoped worker cycle."
+                if is_ru
+                else "Queue the post and wait for the due date or a scoped worker cycle."
+            ),
+            (
+                "После публикации проверьте provider_post_id/provider_post_url и отметьте заявки."
+                if is_ru
+                else "After publishing, check provider_post_id/provider_post_url and record leads."
+            ),
+        ]
+    if status == "no_api_ready":
+        setup_step = next_action or (
+            "подключите ключи, права и привязку аккаунта"
+            if is_ru
+            else "connect keys, permissions, and account binding"
+        )
+        return [
+            (
+                f"Начните с канала {label}: {setup_step}."
+                if is_ru
+                else f"Start with {label}: {setup_step}."
+            ),
+            (
+                "Повторите live API-проверку без публикации."
+                if is_ru
+                else "Rerun the live API check without publishing."
+            ),
+            (
+                "Когда канал станет ready, пройдите preview → approval → queue."
+                if is_ru
+                else "Once the channel is ready, go through preview → approval → queue."
+            ),
+        ]
+    return [
+        (
+            "Подключите Telegram или VK как первый API-канал."
+            if is_ru
+            else "Connect Telegram or VK as the first API channel."
+        ),
+        (
+            "После подключения повторите live API-проверку и подготовьте первый пост."
+            if is_ru
+            else "After connecting it, rerun the live API check and prepare the first post."
+        ),
+    ]
 
 
 def _api_preflight_blocked_due_posts(
