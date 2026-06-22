@@ -26,6 +26,7 @@ from services.social_post_service import (
     get_social_channel_readiness,
     get_social_launch_preflight,
     preview_due_social_post_dispatch,
+    rehearse_social_posts_publish,
 )
 
 
@@ -122,6 +123,24 @@ def _status_counts(cursor: Any, business_id: str) -> list[dict[str, Any]]:
     )
 
 
+def _due_queued_post_ids(cursor: Any, business_id: str, batch_size: int) -> list[str]:
+    rows = _many(
+        cursor,
+        """
+        SELECT sp.id
+        FROM social_posts sp
+        WHERE sp.business_id = %s
+          AND sp.status = %s
+          AND sp.approved_at IS NOT NULL
+          AND COALESCE(sp.scheduled_for, NOW()) <= NOW()
+        ORDER BY sp.scheduled_for ASC NULLS FIRST, sp.updated_at ASC
+        LIMIT %s
+        """,
+        (business_id, "queued", max(1, min(int(batch_size or 10), 50))),
+    )
+    return [str(row.get("id") or "").strip() for row in rows if str(row.get("id") or "").strip()]
+
+
 def build_probe(business_id: str, batch_size: int) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -143,6 +162,7 @@ def build_probe(business_id: str, batch_size: int) -> dict[str, Any]:
 
         plan_payload = _latest_plan_snapshot(cursor, business_id)
         status_counts = _status_counts(cursor, business_id)
+        due_queued_post_ids = _due_queued_post_ids(cursor, business_id, batch_size)
     finally:
         db.close()
 
@@ -150,6 +170,7 @@ def build_probe(business_id: str, batch_size: int) -> dict[str, Any]:
     api_preflight = check_social_api_channel_preflight(owner_id, business_id)
     launch_preflight = get_social_launch_preflight(owner_id, business_id, batch_size=batch_size)
     dispatch_preview = preview_due_social_post_dispatch(owner_id, batch_size=batch_size, business_id=business_id)
+    launch_rehearsal = _build_launch_rehearsal(owner_id, due_queued_post_ids)
     plan_summary = plan_payload.get("summary") if isinstance(plan_payload.get("summary"), dict) else {}
     ready_candidates = plan_payload.get("ready_items_without_social_posts")
     if not isinstance(ready_candidates, list):
@@ -167,6 +188,9 @@ def build_probe(business_id: str, batch_size: int) -> dict[str, Any]:
     )
     acceptance_ready = (
         dispatch_preview.get("dry_run") is True
+        and launch_rehearsal.get("dry_run") is True
+        and launch_rehearsal.get("external_publish_performed") is False
+        and launch_rehearsal.get("provider_write_performed") is False
         and safety.get("approval_required") is True
         and safety.get("browser_final_click_allowed") is False
         and safety.get("maps_are_supervised_or_manual") is True
@@ -192,6 +216,8 @@ def build_probe(business_id: str, batch_size: int) -> dict[str, Any]:
         "first_api_publish_readiness": launch_preflight.get("first_api_publish_readiness", {}),
         "dispatch_readiness": dispatch_readiness,
         "first_cycle_verification": first_cycle_verification,
+        "due_queued_post_ids": due_queued_post_ids,
+        "launch_rehearsal": launch_rehearsal,
         "safety": {
             "approval_required": safety.get("approval_required") is True,
             "browser_final_click_allowed": safety.get("browser_final_click_allowed") is True,
@@ -205,15 +231,55 @@ def build_probe(business_id: str, batch_size: int) -> dict[str, Any]:
             "readiness": dispatch_preview.get("readiness", {}),
             "by_action": dispatch_preview.get("by_action", {}),
         },
-        "next_required_human_step": _next_required_human_step(plan_summary, ready_candidates),
+        "next_required_human_step": _next_required_human_step(plan_summary, ready_candidates, launch_rehearsal),
     }
 
 
-def _next_required_human_step(plan_summary: dict[str, Any], ready_candidates: list[dict[str, Any]]) -> dict[str, str]:
+def _build_launch_rehearsal(owner_id: str, post_ids: list[str]) -> dict[str, Any]:
+    if not post_ids:
+        return {
+            "schema": "localos_social_publish_rehearsal_bulk_v1",
+            "dry_run": True,
+            "external_publish_performed": False,
+            "provider_write_performed": False,
+            "summary": {
+                "status": "empty",
+                "total": 0,
+                "ready": 0,
+                "api_ready": 0,
+                "supervised_ready": 0,
+                "manual_or_blocked": 0,
+                "message_ru": "Нет due queued постов для rehearsal.",
+                "message_en": "No due queued posts for rehearsal.",
+            },
+            "rehearsals": [],
+            "failed": [],
+        }
+    return rehearse_social_posts_publish(owner_id, post_ids)
+
+
+def _next_required_human_step(
+    plan_summary: dict[str, Any],
+    ready_candidates: list[dict[str, Any]],
+    launch_rehearsal: dict[str, Any],
+) -> dict[str, str]:
     ready_count = int(plan_summary.get("ready_texts") or 0)
     social_posts = int(plan_summary.get("social_posts") or 0)
     due_posts = int(plan_summary.get("due_queued_posts") or 0)
+    rehearsal_summary = launch_rehearsal.get("summary") if isinstance(launch_rehearsal.get("summary"), dict) else {}
+    rehearsal_ready = int(rehearsal_summary.get("ready") or 0)
+    rehearsal_blocked = int(rehearsal_summary.get("manual_or_blocked") or 0)
     if due_posts > 0:
+        if rehearsal_blocked > 0:
+            return {
+                "ru": "Исправьте блокеры rehearsal у due-постов, затем повторите preflight перед dispatch.",
+                "en": "Fix due-post rehearsal blockers, then rerun preflight before dispatch.",
+            }
+        if rehearsal_ready > 0:
+            return {
+                "ru": "Due-посты прошли rehearsal: проверьте live API-preflight и запускайте scoped dispatch только после явного подтверждения.",
+                "en": "Due posts passed rehearsal: check live API preflight and run scoped dispatch only after explicit approval.",
+            }
         return {
             "ru": "Запустите scoped launch preflight и проверьте ключи перед первым dispatch.",
             "en": "Run scoped launch preflight and verify credentials before the first dispatch.",

@@ -206,6 +206,10 @@ REQUIRED_ACCEPTANCE_PROBE_CONTRACT = {
     "first API publish readiness": "first_api_publish_readiness",
     "safe scoped dispatch": "launch_safe_to_enable_scoped_dispatch",
     "dispatch dry run": "dispatch_preview",
+    "launch rehearsal": "launch_rehearsal",
+    "bulk rehearsal schema": "localos_social_publish_rehearsal_bulk_v1",
+    "due queued post ids": "due_queued_post_ids",
+    "rehearsal blocks provider write": "provider_write_performed",
     "next human step": "next_required_human_step",
     "prepare channels guidance": "Подготовить каналы",
 }
