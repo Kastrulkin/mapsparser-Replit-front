@@ -174,6 +174,12 @@ type SocialOpenClawReadiness = {
   next_action_en?: string;
 };
 
+type SocialSupervisedSafetyContract = {
+  allowed_actions?: string[];
+  forbidden_actions?: string[];
+  manual_fallback_triggers?: string[];
+};
+
 type SocialPostMetadata = {
   supervised_publish?: {
     instruction_ru?: string;
@@ -205,6 +211,7 @@ type SocialPostMetadata = {
     fallback_reasons?: string[];
     openclaw_capability_status?: string | SocialOpenClawCapabilityStatus;
     stop_before_final_publish?: boolean;
+    safety_contract?: SocialSupervisedSafetyContract;
   };
   openclaw_task?: Record<string, unknown>;
   agent_action_ledger_id?: string;
@@ -7030,6 +7037,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const supervisedFallbackReasons = Array.isArray(supervisedPayload?.fallback_reasons)
                                 ? supervisedPayload.fallback_reasons.filter(Boolean).map(String)
                                 : [];
+                              const supervisedSafety = _socialSupervisedSafetySummary(supervisedPayload?.safety_contract, isRu);
                               const preflightStatus = String(post.metadata_json?.queue_preflight_status || post.metadata_json?.provider_status || '').trim();
                                 const preflightMessage = String(
                                   isRu
@@ -7124,6 +7132,32 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                             : String(supervisedPayload.instruction_en || '')}
                                         </div>
                                       ) : null}
+                                      <div className="mt-3 grid gap-2 rounded-lg bg-white px-3 py-2 text-[11px] leading-5 text-amber-950 sm:grid-cols-2">
+                                        <div>
+                                          <div className="font-semibold">
+                                            {isRu ? 'Ассистент сделает' : 'Assistant will'}
+                                          </div>
+                                          <div className="mt-1 text-amber-900">
+                                            {supervisedSafety.allowed.join(', ')}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <div className="font-semibold">
+                                            {isRu ? 'Ассистент не сделает' : 'Assistant will not'}
+                                          </div>
+                                          <div className="mt-1 text-amber-900">
+                                            {supervisedSafety.forbidden.join(', ')}
+                                          </div>
+                                        </div>
+                                        {supervisedSafety.fallback.length > 0 ? (
+                                          <div className="sm:col-span-2 text-amber-900">
+                                            <span className="font-semibold">
+                                              {isRu ? 'Если мешает логин/капча/интерфейс: ' : 'If login/captcha/UI blocks it: '}
+                                            </span>
+                                            {supervisedSafety.fallback.join(', ')}
+                                          </div>
+                                        ) : null}
+                                      </div>
                                       {supervisedManualInstruction || supervisedManualChecklist.length > 0 || supervisedCopyReadyText ? (
                                         <div className="mt-3 rounded-lg bg-white px-3 py-2 text-amber-950">
                                           <div className="font-semibold">
@@ -7806,6 +7840,47 @@ function _socialOpenClawCapabilityLine(
     status.error,
   ].map((item) => String(item || '').trim()).filter(Boolean);
   return `OpenClaw browser-use: ${state}${details.length ? ` · ${details.join(' · ')}` : ''}`;
+}
+
+function _socialSupervisedSafetySummary(
+  contract: SocialSupervisedSafetyContract | undefined,
+  isRu: boolean,
+): { allowed: string[]; forbidden: string[]; fallback: string[] } {
+  const allowedSource = Array.isArray(contract?.allowed_actions) && contract.allowed_actions.length
+    ? contract.allowed_actions
+    : ['open_platform', 'fill_text', 'attach_media', 'show_preview'];
+  const forbiddenSource = Array.isArray(contract?.forbidden_actions) && contract.forbidden_actions.length
+    ? contract.forbidden_actions
+    : ['click_final_publish', 'publish_without_human_confirmation'];
+  const fallbackSource = Array.isArray(contract?.manual_fallback_triggers) && contract.manual_fallback_triggers.length
+    ? contract.manual_fallback_triggers
+    : ['captcha', 'login_required', 'changed_ui'];
+  return {
+    allowed: allowedSource.map((item) => _socialSupervisedSafetyActionLabel(item, isRu)).filter(Boolean).slice(0, 4),
+    forbidden: forbiddenSource.map((item) => _socialSupervisedSafetyActionLabel(item, isRu)).filter(Boolean).slice(0, 4),
+    fallback: fallbackSource.map((item) => _socialSupervisedSafetyActionLabel(item, isRu)).filter(Boolean).slice(0, 4),
+  };
+}
+
+function _socialSupervisedSafetyActionLabel(action: string, isRu: boolean): string {
+  const normalized = String(action || '').trim();
+  if (normalized === 'open_platform') return isRu ? 'откроет площадку' : 'open the platform';
+  if (normalized === 'fill_text') return isRu ? 'вставит текст' : 'fill the text';
+  if (normalized === 'attach_media') return isRu ? 'добавит медиа' : 'attach media';
+  if (normalized === 'show_preview') return isRu ? 'покажет предпросмотр' : 'show preview';
+  if (normalized === 'return_task_status') return isRu ? 'вернёт статус задачи' : 'return task status';
+  if (normalized === 'click_final_publish') return isRu ? 'не нажмёт финальную публикацию' : 'not click final publish';
+  if (normalized === 'bypass_login') return isRu ? 'не обойдёт авторизацию' : 'not bypass login';
+  if (normalized === 'solve_captcha_without_user') return isRu ? 'не решит капчу без вас' : 'not solve captcha without you';
+  if (normalized === 'change_business_profile_data') return isRu ? 'не изменит карточку бизнеса' : 'not change business profile data';
+  if (normalized === 'publish_without_human_confirmation') return isRu ? 'не опубликует без подтверждения' : 'not publish without confirmation';
+  if (normalized === 'captcha') return isRu ? 'капча' : 'captcha';
+  if (normalized === 'login_required') return isRu ? 'нужен вход' : 'login required';
+  if (normalized === 'changed_ui') return isRu ? 'изменился интерфейс' : 'changed UI';
+  if (normalized === 'missing_target_url') return isRu ? 'нет ссылки на профиль' : 'missing profile link';
+  if (normalized === 'browser_capability_unavailable') return isRu ? 'browser-use недоступен' : 'browser-use unavailable';
+  if (normalized === 'unexpected_external_prompt') return isRu ? 'внешний запрос подтверждения' : 'unexpected external prompt';
+  return normalized.replace(/_/g, ' ');
 }
 
 function _normalizeSocialChannelFilter(value: string): 'all' | 'social' | 'maps' {
