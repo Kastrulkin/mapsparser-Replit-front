@@ -23,6 +23,8 @@ REQUIRED_COPY = {
     "main next action": "Следующий шаг публикаций",
     "overview quick launch": "Быстрый запуск публикаций",
     "overview controlled placement": "LocalOS готовит контролируемое размещение",
+    "overview openclaw readiness": "OpenClaw readiness для Яндекс/2ГИС проверяется отдельно",
+    "overview openclaw check action": "Проверить OpenClaw",
     "overview channel next actions": "Каналы: что сделать",
     "launch checklist": "До рабочего запуска",
     "launch checklist progress": "Готово ${summary.done} из ${summary.total}",

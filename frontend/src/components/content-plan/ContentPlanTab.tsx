@@ -4596,9 +4596,30 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   </div>
                 ) : null}
                 <div className="mt-3 rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200">
-                  {isRu
-                    ? 'Внешние публикации идут только после preview и approval. Для Яндекс/2ГИС LocalOS готовит контролируемое размещение, а не скрытую автопубликацию.'
-                    : 'External publishing runs only after preview and approval. For Yandex/2GIS, LocalOS prepares supervised placement, not hidden autopublish.'}
+                  <div>
+                    {isRu
+                      ? 'Внешние публикации идут только после preview и approval. Для Яндекс/2ГИС LocalOS готовит контролируемое размещение, а не скрытую автопубликацию.'
+                      : 'External publishing runs only after preview and approval. For Yandex/2GIS, LocalOS prepares supervised placement, not hidden autopublish.'}
+                  </div>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-slate-300">
+                      {isRu
+                        ? 'OpenClaw readiness для Яндекс/2ГИС проверяется отдельно: если receiver недоступен, будет ручной fallback без срыва плана.'
+                        : 'OpenClaw readiness for Yandex/2GIS is checked separately: if the receiver is unreachable, LocalOS keeps manual fallback without blocking the plan.'}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { void checkOpenClawBrowserReadiness(); }}
+                      disabled={socialBusyAction === 'openclaw-check'}
+                      className="h-7 shrink-0 border-white/20 bg-white/10 px-2.5 text-[11px] text-white hover:bg-white/20 hover:text-white"
+                    >
+                      {socialBusyAction === 'openclaw-check'
+                        ? (isRu ? 'Проверяем...' : 'Checking...')
+                        : (isRu ? 'Проверить OpenClaw' : 'Check OpenClaw')}
+                    </Button>
+                  </div>
                 </div>
               </div>
               <div className="flex flex-col gap-2 sm:min-w-[260px]">
