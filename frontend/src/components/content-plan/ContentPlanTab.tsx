@@ -1563,6 +1563,33 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       needsAttention,
     };
   }, [socialApiPreflight]);
+  const socialFirstApiPublishReadiness = useMemo(() => {
+    const apiChannels = socialChannelReadiness.filter((channel) => String(channel.publish_mode || '').trim() === 'api');
+    const readyChannels = apiChannels.filter((channel) => Boolean(channel.ready));
+    const blockedChannels = apiChannels.filter((channel) => !Boolean(channel.ready));
+    const liveReady = socialApiPreflight.filter((item) => Boolean(item.ready));
+    const liveBlocked = socialApiPreflight.filter((item) => !Boolean(item.ready));
+    const primaryReady = liveReady.length > 0 ? liveReady : readyChannels;
+    const primaryBlocked = liveBlocked.length > 0 ? liveBlocked : blockedChannels;
+    const firstReady = primaryReady[0];
+    const firstBlocked = primaryBlocked[0];
+    const readyLabels = primaryReady.map((item) => String(item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)));
+    const blockedLabels = primaryBlocked.map((item) => String(item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)));
+    return {
+      apiChannels,
+      readyChannels,
+      blockedChannels,
+      liveReady,
+      liveBlocked,
+      firstReady,
+      firstBlocked,
+      readyLabels,
+      blockedLabels,
+      hasLiveCheck: socialApiPreflight.length > 0,
+      readyForFirstApiPublish: primaryReady.length > 0 && primaryBlocked.length === 0,
+      hasAnyReadyApi: primaryReady.length > 0,
+    };
+  }, [isRu, socialApiPreflight, socialChannelReadiness]);
   const selectedSocialQueueApiWarnings = useMemo(() => (
     _socialApiQueueWarnings(selectedSocialCanQueue, socialApiPreflightByPlatform, isRu)
   ), [isRu, selectedSocialCanQueue, socialApiPreflightByPlatform]);
@@ -7092,6 +7119,82 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           <div className="rounded-lg bg-sky-50 px-3 py-2 text-sky-800">
                             <div className="font-semibold text-sky-950">{socialReadinessSummary.supervisedOrManual}</div>
                             <div>{isRu ? 'контроль/вручную' : 'supervised/manual'}</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        data-testid="social-first-api-publish-readiness"
+                        className={[
+                          'mt-3 rounded-xl border px-3 py-3 text-xs leading-5',
+                          socialFirstApiPublishReadiness.readyForFirstApiPublish
+                            ? 'border-emerald-100 bg-emerald-50 text-emerald-900'
+                            : socialFirstApiPublishReadiness.hasAnyReadyApi
+                              ? 'border-sky-100 bg-sky-50 text-sky-900'
+                              : 'border-amber-100 bg-amber-50 text-amber-900',
+                        ].join(' ')}
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className={[
+                              'text-sm font-semibold',
+                              socialFirstApiPublishReadiness.readyForFirstApiPublish
+                                ? 'text-emerald-950'
+                                : socialFirstApiPublishReadiness.hasAnyReadyApi
+                                  ? 'text-sky-950'
+                                  : 'text-amber-950',
+                            ].join(' ')}
+                            >
+                              {isRu ? 'Первый API-пост' : 'First API post'}
+                            </div>
+                            <div className="mt-1">
+                              {socialFirstApiPublishReadiness.readyForFirstApiPublish
+                                ? (isRu
+                                  ? `Каналы готовы к первому реальному API-посту после preview, approval и расписания: ${socialFirstApiPublishReadiness.readyLabels.join(', ')}.`
+                                  : `Channels are ready for the first real API post after preview, approval, and queueing: ${socialFirstApiPublishReadiness.readyLabels.join(', ')}.`)
+                                : socialFirstApiPublishReadiness.hasAnyReadyApi
+                                  ? (isRu
+                                    ? `Можно начинать с готовых каналов: ${socialFirstApiPublishReadiness.readyLabels.join(', ')}. Заблокированные каналы worker пропустит до настройки.`
+                                    : `You can start with ready channels: ${socialFirstApiPublishReadiness.readyLabels.join(', ')}. Blocked channels will be skipped until setup is fixed.`)
+                                  : (isRu
+                                    ? 'Пока нет готового API-канала для первого реального поста. Сначала подключите ключи и права, затем запустите live API-проверку.'
+                                    : 'No API channel is ready for the first real post yet. Connect keys and permissions first, then run the live API check.')}
+                            </div>
+                            <div className="mt-1 font-medium">
+                              {socialFirstApiPublishReadiness.hasLiveCheck
+                                ? (isRu ? 'Live API-проверка уже выполнена без публикации.' : 'Live API check has already run without publishing.')
+                                : (isRu ? 'Для уверенного запуска нажмите “Проверить API-каналы” перед расписанием.' : 'For a confident launch, click “Check API channels” before queueing.')}
+                            </div>
+                            {socialFirstApiPublishReadiness.blockedLabels.length > 0 ? (
+                              <div className="mt-2">
+                                <span className="font-semibold">{isRu ? 'Сначала исправить: ' : 'Fix first: '}</span>
+                                {socialFirstApiPublishReadiness.blockedLabels.slice(0, 4).join(', ')}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 flex-wrap gap-2">
+                            {socialFirstApiPublishReadiness.firstBlocked ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-lg bg-white px-2.5 text-[11px]"
+                                onClick={() => navigate(_socialSettingsPathForPlatform(String(socialFirstApiPublishReadiness.firstBlocked?.platform || '')))}
+                              >
+                                {isRu ? 'Открыть настройку' : 'Open setup'}
+                              </Button>
+                            ) : null}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8 rounded-lg bg-white px-2.5 text-[11px]"
+                              onClick={() => { void checkApiChannelPreflight(); }}
+                              disabled={socialBusyAction === 'api-channel-preflight'}
+                            >
+                              {socialBusyAction === 'api-channel-preflight'
+                                ? (isRu ? 'Проверяем...' : 'Checking...')
+                                : (isRu ? 'Проверить API' : 'Check API')}
+                            </Button>
                           </div>
                         </div>
                       </div>
