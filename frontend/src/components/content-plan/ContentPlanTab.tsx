@@ -7072,6 +7072,45 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 const evidenceProofUrl = String(publishEvidence?.proof_url || post.provider_post_url || '').trim();
                                 const evidenceProofId = String(publishEvidence?.proof_id || post.provider_post_id || '').trim();
                                 const evidenceProviderStatus = String(publishEvidence?.provider_status || '').trim();
+                                const actionHint = needsReview
+                                  ? {
+                                    tone: 'safe',
+                                    textRu: 'Подтверждение только фиксирует, что текст проверен. Наружу ничего не отправится.',
+                                    textEn: 'Approval only records that the copy was reviewed. Nothing is sent externally.',
+                                  }
+                                  : canQueue
+                                    ? {
+                                      tone: 'queue',
+                                      textRu: isSupervisedPost
+                                        ? 'Расписание зафиксирует дату. Для Яндекс/2ГИС LocalOS создаст controlled/manual размещение, не автопубликацию.'
+                                        : 'Расписание передаст пост worker-у: API-публикация начнётся только по дате и только при готовом канале.',
+                                      textEn: isSupervisedPost
+                                        ? 'Queueing records the date. For Yandex/2GIS, LocalOS creates controlled/manual placement, not autopublish.'
+                                        : 'Queueing hands the post to the worker: API publishing starts only on schedule and only when the channel is ready.',
+                                    }
+                                    : post.status === 'queued'
+                                      ? {
+                                        tone: 'queue',
+                                        textRu: isSupervisedPost
+                                          ? 'Пост ждёт дату. Когда наступит время, он перейдёт в controlled/manual размещение.'
+                                          : 'Пост ждёт дату. Worker обработает только due-публикации с подтверждённым текстом.',
+                                        textEn: isSupervisedPost
+                                          ? 'The post is waiting for its date. When due, it moves to controlled/manual placement.'
+                                          : 'The post is waiting for its date. The worker processes only due posts with approved copy.',
+                                      }
+                                      : canCreateSupervisedTask
+                                        ? {
+                                          tone: 'controlled',
+                                          textRu: 'Controlled задача подготовит текст, ссылку и инструкцию. Финальную кнопку публикации нажимает человек.',
+                                          textEn: 'The controlled task prepares copy, link, and instructions. A human clicks the final publish button.',
+                                        }
+                                        : canMarkPublished
+                                          ? {
+                                            tone: 'manual',
+                                            textRu: 'Используйте это, когда пост уже размещён вручную или через controlled-задачу, чтобы LocalOS смог собрать результат.',
+                                            textEn: 'Use this after manual or controlled placement so LocalOS can collect results.',
+                                          }
+                                          : null;
                                 return (
                                 <div key={post.id} className="rounded-2xl border border-slate-200 bg-white p-3">
                                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -7504,6 +7543,22 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                           {isRu ? 'Отметить размещённым' : 'Mark published'}
                                         </Button>
                                       </>
+                                    ) : null}
+                                    {actionHint ? (
+                                      <div
+                                        className={[
+                                          'w-full rounded-xl border px-3 py-2 text-xs leading-5',
+                                          actionHint.tone === 'safe'
+                                            ? 'border-sky-100 bg-sky-50 text-sky-800'
+                                            : actionHint.tone === 'queue'
+                                              ? 'border-blue-100 bg-blue-50 text-blue-800'
+                                              : actionHint.tone === 'controlled'
+                                                ? 'border-amber-100 bg-amber-50 text-amber-800'
+                                                : 'border-slate-200 bg-slate-50 text-slate-700',
+                                        ].join(' ')}
+                                      >
+                                        {isRu ? actionHint.textRu : actionHint.textEn}
+                                      </div>
                                     ) : null}
                                     {canRecordResult ? (
                                       <div className="mt-1 flex w-full flex-col gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2">
