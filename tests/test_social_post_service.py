@@ -2714,6 +2714,19 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert "needs_supervised_publish" in payload["launch_runbook"]["success_criteria_ru"][1]
     assert payload["runtime_alignment"]["dispatch"]["status"]
     assert payload["runtime_alignment"]["dispatch"]["can_process_this_business"] is False
+    assert payload["production_readiness"]["schema"] == "localos_social_production_readiness_v1"
+    assert payload["production_readiness"]["status"] == "ready_after_worker_scope"
+    assert payload["production_readiness"]["safe_to_enable_scoped_dispatch"] is True
+    assert payload["production_readiness"]["ready_for_first_scoped_cycle"] is False
+    assert payload["production_readiness"]["due_posts"] == 2
+    assert payload["production_readiness"]["api_due_posts"] == 1
+    assert payload["production_readiness"]["controlled_due_posts"] == 1
+    assert payload["production_readiness"]["maps_are_supervised_or_manual"] is True
+    assert payload["production_readiness"]["browser_final_click_allowed"] is False
+    warning_keys = [item["key"] for item in payload["production_readiness"]["warnings"]]
+    assert "dispatch_runtime_not_aligned" in warning_keys
+    assert "maps_supervised_required" in warning_keys
+    assert "scoped worker" in payload["production_readiness"]["summary_en"]
     payload_json = json.dumps(payload, ensure_ascii=False)
     assert "controlled/manual" not in payload_json
     assert "controlled task" not in payload_json
@@ -2819,6 +2832,10 @@ def test_social_launch_preflight_blocks_due_api_posts_when_live_preflight_fails(
     assert payload["first_api_publish_readiness"]["recommended_start_platform"]["platform"] == "google_business"
     assert payload["first_api_publish_readiness"]["blocked_platforms"][0]["platform"] == "google_business"
     assert "live API-проверку" in payload["first_api_publish_readiness"]["first_post_checklist_ru"][1]
+    assert payload["production_readiness"]["status"] == "blocked"
+    assert payload["production_readiness"]["ready_for_first_scoped_cycle"] is False
+    assert payload["production_readiness"]["blockers"][0]["key"] == "api_preflight_blocked"
+    assert "ключи" in payload["production_readiness"]["next_action_ru"]
     assert payload["api_preflight_blocked_due_posts"][0]["id"] == "post-google"
     assert payload["api_preflight_blocked_due_posts"][0]["status"] == "missing_binding"
     assert payload["launch_runbook"]["ready"] is False

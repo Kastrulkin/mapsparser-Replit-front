@@ -42,6 +42,10 @@ REQUIRED_COPY = {
     "schedule preview": "Проверить расписание",
     "worker launch preflight": "Проверить запуск worker",
     "worker launch preflight result": "Preflight запуска worker",
+    "production readiness block": "social-production-readiness",
+    "production readiness heading": "Готовность к первому циклу",
+    "production readiness blockers": "Блокеры перед запуском",
+    "production readiness next action": "Что сделать: ",
     "worker launch live api block": "Live API-preflight остановил запуск",
     "worker launch live api blocked field": "api_preflight_blocked_due_posts",
     "worker launch recommended scope": "Рекомендованный scope",
@@ -280,6 +284,15 @@ REQUIRED_BACKEND_GOAL_PROGRESS_COPY = {
 }
 
 
+REQUIRED_BACKEND_PRODUCTION_READINESS_COPY = {
+    "production readiness schema": "localos_social_production_readiness_v1",
+    "production readiness scoped cycle": "ready_for_first_scoped_cycle",
+    "production readiness dispatch warning": "dispatch_runtime_not_aligned",
+    "production readiness api blocker": "api_preflight_blocked",
+    "production readiness maps guard": "maps_are_supervised_or_manual",
+}
+
+
 REQUIRED_TELEGRAM_SETTINGS_DATA_CONTRACT = {
     "telegram status endpoint": "/api/business/telegram-bot/status",
     "telegram profile endpoint": "/api/business/profile",
@@ -356,6 +369,7 @@ def main() -> int:
     missing.extend(_assert_contains(settings_page_source, REQUIRED_SETTINGS_PAGE_COPY))
     missing.extend(_assert_contains(service_source, REQUIRED_BACKEND_DISPATCH_COPY))
     missing.extend(_assert_contains(service_source, REQUIRED_BACKEND_GOAL_PROGRESS_COPY))
+    missing.extend(_assert_contains(service_source, REQUIRED_BACKEND_PRODUCTION_READINESS_COPY))
     forbidden = _assert_absent(source, FORBIDDEN_COPY)
     forbidden.extend(_assert_absent(settings_source, FORBIDDEN_COPY))
     forbidden.extend(_assert_absent(service_source, FORBIDDEN_COPY))

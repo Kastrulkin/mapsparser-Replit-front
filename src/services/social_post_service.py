@@ -397,10 +397,23 @@ def _build_social_launch_preflight_payload(
         scope,
     )
     runtime_alignment = _social_launch_runtime_alignment(scope)
+    production_readiness = _social_production_readiness(
+        status,
+        safe_to_enable,
+        due_count,
+        external_publish_count,
+        controlled_count,
+        manual_count,
+        skipped_no_access,
+        api_preflight_blocked_due_posts,
+        first_api_publish_readiness,
+        runtime_alignment,
+    )
     return {
         "business_id": scope,
         "status": status,
         "safe_to_enable_scoped_dispatch": safe_to_enable,
+        "production_readiness": production_readiness,
         "channel_readiness": channel_readiness,
         "channel_summary": channel_summary,
         "dispatch_preview": dispatch_preview,
@@ -452,6 +465,248 @@ def _build_social_launch_preflight_payload(
         "next_action_ru": _social_launch_preflight_next_action(status, scope, True),
         "next_action_en": _social_launch_preflight_next_action(status, scope, False),
     }
+
+
+def _social_production_readiness(
+    status: str,
+    safe_to_enable: bool,
+    due_count: int,
+    external_publish_count: int,
+    controlled_count: int,
+    manual_count: int,
+    skipped_no_access: int,
+    api_preflight_blocked_due_posts: list[dict[str, Any]],
+    first_api_publish_readiness: dict[str, Any],
+    runtime_alignment: dict[str, Any],
+) -> dict[str, Any]:
+    blockers: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
+
+    if int(due_count or 0) <= 0:
+        blockers.append(
+            _social_readiness_issue(
+                "no_due_posts",
+                "Нет due-постов",
+                "No due posts",
+                "Подготовьте посты, утвердите их и поставьте в расписание.",
+                "Prepare posts, approve them, and queue them on schedule.",
+                "queue",
+            )
+        )
+    if int(skipped_no_access or 0) > 0:
+        blockers.append(
+            _social_readiness_issue(
+                "skipped_no_access",
+                "Есть посты вне доступа",
+                "Some posts are outside access",
+                "Запустите проверку пользователем с доступом к бизнесу или уточните business scope.",
+                "Run the check as a user with business access or narrow the business scope.",
+                "permissions",
+                int(skipped_no_access or 0),
+            )
+        )
+    if api_preflight_blocked_due_posts:
+        blockers.append(
+            _social_readiness_issue(
+                "api_preflight_blocked",
+                "API-канал не готов",
+                "API channel is not ready",
+                "Исправьте ключи, permissions или location у заблокированного due API-поста.",
+                "Fix keys, permissions, or location for the blocked due API post.",
+                "channels",
+                len(api_preflight_blocked_due_posts),
+            )
+        )
+    if not bool(first_api_publish_readiness.get("ready")):
+        warnings.append(
+            _social_readiness_issue(
+                "no_api_channel_ready",
+                "Нет готового API-канала",
+                "No API channel is ready",
+                str(first_api_publish_readiness.get("next_action_ru") or "").strip()
+                or "Подключите Telegram или VK для первого API-поста.",
+                str(first_api_publish_readiness.get("next_action_en") or "").strip()
+                or "Connect Telegram or VK for the first API post.",
+                "channels",
+            )
+        )
+    dispatch_alignment = _json_dict(runtime_alignment.get("dispatch"))
+    if not bool(dispatch_alignment.get("can_process_this_business")):
+        warnings.append(
+            _social_readiness_issue(
+                "dispatch_runtime_not_aligned",
+                "Worker ещё не настроен на этот бизнес",
+                "Worker is not aligned to this business yet",
+                str(runtime_alignment.get("next_action_ru") or "").strip(),
+                str(runtime_alignment.get("next_action_en") or "").strip(),
+                "worker",
+            )
+        )
+    metrics_alignment = _json_dict(runtime_alignment.get("metrics"))
+    if not bool(metrics_alignment.get("can_collect_this_business")):
+        warnings.append(
+            _social_readiness_issue(
+                "metrics_runtime_not_aligned",
+                "Сбор реакций ещё не замкнут",
+                "Metrics collection is not aligned yet",
+                "Для learning loop включите сбор реакций с тем же business scope.",
+                "For the learning loop, enable metrics with the same business scope.",
+                "metrics",
+            )
+        )
+    if int(controlled_count or 0) > 0:
+        warnings.append(
+            _social_readiness_issue(
+                "maps_supervised_required",
+                "Карты пойдут через контроль",
+                "Maps require supervised placement",
+                "Яндекс/2ГИС не автопубликуются: проверьте supervised/manual задачу перед финальным размещением.",
+                "Yandex/2GIS do not autopublish: review supervised/manual placement before the final action.",
+                "maps",
+                int(controlled_count or 0),
+            )
+        )
+    if int(manual_count or 0) > 0:
+        warnings.append(
+            _social_readiness_issue(
+                "manual_handoff_exists",
+                "Есть ручной fallback",
+                "Manual fallback exists",
+                "Откройте ручные посты, разместите их вручную или подключите нужный канал.",
+                "Open manual posts, publish manually, or connect the required channel.",
+                "manual",
+                int(manual_count or 0),
+            )
+        )
+
+    if blockers:
+        readiness_status = "blocked"
+    elif safe_to_enable and bool(dispatch_alignment.get("can_process_this_business")):
+        readiness_status = "ready"
+    elif safe_to_enable:
+        readiness_status = "ready_after_worker_scope"
+    else:
+        readiness_status = "prepare_first"
+
+    return {
+        "schema": "localos_social_production_readiness_v1",
+        "status": readiness_status,
+        "ready_for_first_scoped_cycle": readiness_status == "ready",
+        "safe_to_enable_scoped_dispatch": bool(safe_to_enable),
+        "due_posts": int(due_count or 0),
+        "api_due_posts": int(external_publish_count or 0),
+        "controlled_due_posts": int(controlled_count or 0),
+        "manual_due_posts": int(manual_count or 0),
+        "blockers": blockers,
+        "warnings": warnings[:6],
+        "title_ru": _social_production_readiness_title(readiness_status, True),
+        "title_en": _social_production_readiness_title(readiness_status, False),
+        "summary_ru": _social_production_readiness_summary(readiness_status, blockers, warnings, True),
+        "summary_en": _social_production_readiness_summary(readiness_status, blockers, warnings, False),
+        "next_action_ru": _social_production_readiness_next_action(readiness_status, blockers, warnings, True),
+        "next_action_en": _social_production_readiness_next_action(readiness_status, blockers, warnings, False),
+        "external_publish_requires_approval": True,
+        "browser_final_click_allowed": False,
+        "maps_are_supervised_or_manual": True,
+    }
+
+
+def _social_readiness_issue(
+    key: str,
+    label_ru: str,
+    label_en: str,
+    action_ru: str,
+    action_en: str,
+    area: str,
+    count: int = 0,
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "area": area,
+        "count": int(count or 0),
+        "label_ru": label_ru,
+        "label_en": label_en,
+        "action_ru": action_ru,
+        "action_en": action_en,
+    }
+
+
+def _social_production_readiness_title(status: str, is_ru: bool) -> str:
+    if status == "ready":
+        return "Можно запускать первый scoped цикл" if is_ru else "Ready for the first scoped cycle"
+    if status == "ready_after_worker_scope":
+        return "Посты готовы, настройте worker scope" if is_ru else "Posts are ready; set worker scope"
+    if status == "blocked":
+        return "Сначала снять блокеры запуска" if is_ru else "Resolve launch blockers first"
+    return "Сначала подготовить очередь" if is_ru else "Prepare the queue first"
+
+
+def _social_production_readiness_summary(
+    status: str,
+    blockers: list[dict[str, Any]],
+    warnings: list[dict[str, Any]],
+    is_ru: bool,
+) -> str:
+    if status == "ready":
+        return (
+            "Due-посты готовы: API выйдет только после approval, карты останутся supervised/manual."
+            if is_ru
+            else "Due posts are ready: API publishes only after approval, maps stay supervised/manual."
+        )
+    if status == "ready_after_worker_scope":
+        return (
+            "Очередь готова, но runtime ещё не смотрит на этот бизнес. Включите scoped worker перед первым циклом."
+            if is_ru
+            else "The queue is ready, but runtime is not scoped to this business yet. Enable scoped worker before the first cycle."
+        )
+    if status == "blocked":
+        first = blockers[0] if blockers else {}
+        return (
+            f"Запуск остановлен: {first.get('label_ru') or 'есть блокер'}."
+            if is_ru
+            else f"Launch is blocked: {first.get('label_en') or 'there is a blocker'}."
+        )
+    if warnings:
+        first = warnings[0]
+        return (
+            f"Пока не готово к production loop: {first.get('label_ru') or 'нужна настройка'}."
+            if is_ru
+            else f"Not ready for the production loop yet: {first.get('label_en') or 'setup is needed'}."
+        )
+    return (
+        "Подготовьте посты из контент-плана, проверьте preview, утвердите и поставьте в расписание."
+        if is_ru
+        else "Prepare posts from the content plan, review preview, approve, and queue them."
+    )
+
+
+def _social_production_readiness_next_action(
+    status: str,
+    blockers: list[dict[str, Any]],
+    warnings: list[dict[str, Any]],
+    is_ru: bool,
+) -> str:
+    if blockers:
+        return str(blockers[0].get("action_ru" if is_ru else "action_en") or "").strip()
+    if status == "ready_after_worker_scope":
+        return (
+            "Включите worker только с SOCIAL_POST_DISPATCH_BUSINESS_ID текущего бизнеса и проверьте один цикл."
+            if is_ru
+            else "Enable the worker only with this business SOCIAL_POST_DISPATCH_BUSINESS_ID and check one cycle."
+        )
+    if status == "ready":
+        return (
+            "Запустите один scoped цикл, затем проверьте provider proof, supervised tasks и manual fallback."
+            if is_ru
+            else "Run one scoped cycle, then check provider proof, supervised tasks, and manual fallback."
+        )
+    if warnings:
+        return str(warnings[0].get("action_ru" if is_ru else "action_en") or "").strip()
+    return (
+        "Начните с подготовки каналов из выбранных тем контент-плана."
+        if is_ru
+        else "Start by preparing channels from selected content-plan topics."
+    )
 
 
 def _social_first_api_publish_readiness(

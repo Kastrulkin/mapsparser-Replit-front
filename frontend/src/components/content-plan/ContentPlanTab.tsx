@@ -504,6 +504,43 @@ type SocialLaunchPreflight = {
   business_id?: string;
   status?: string;
   safe_to_enable_scoped_dispatch?: boolean;
+  production_readiness?: {
+    schema?: string;
+    status?: string;
+    ready_for_first_scoped_cycle?: boolean;
+    safe_to_enable_scoped_dispatch?: boolean;
+    due_posts?: number;
+    api_due_posts?: number;
+    controlled_due_posts?: number;
+    manual_due_posts?: number;
+    blockers?: Array<{
+      key?: string;
+      area?: string;
+      count?: number;
+      label_ru?: string;
+      label_en?: string;
+      action_ru?: string;
+      action_en?: string;
+    }>;
+    warnings?: Array<{
+      key?: string;
+      area?: string;
+      count?: number;
+      label_ru?: string;
+      label_en?: string;
+      action_ru?: string;
+      action_en?: string;
+    }>;
+    title_ru?: string;
+    title_en?: string;
+    summary_ru?: string;
+    summary_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+    external_publish_requires_approval?: boolean;
+    browser_final_click_allowed?: boolean;
+    maps_are_supervised_or_manual?: boolean;
+  };
   channel_summary?: {
     api_ready?: number;
     api_needs_attention?: number;
@@ -3503,6 +3540,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         business_id: String(response.business_id || businessId),
         status: String(response.status || ''),
         safe_to_enable_scoped_dispatch: Boolean(response.safe_to_enable_scoped_dispatch),
+        production_readiness: response.production_readiness && typeof response.production_readiness === 'object'
+          ? response.production_readiness
+          : undefined,
         channel_summary: response.channel_summary && typeof response.channel_summary === 'object' ? response.channel_summary : {},
         dispatch_preview: dispatchPreview || undefined,
         dispatch_readiness: response.dispatch_readiness && typeof response.dispatch_readiness === 'object' ? response.dispatch_readiness : {},
@@ -3527,17 +3567,19 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         setSocialDispatchPreview(dispatchPreview);
       }
       setActionSummary({
-        tone: preflight.safe_to_enable_scoped_dispatch ? 'success' : 'warning',
-        text_ru: preflight.message_ru || 'Preflight запуска worker готов.',
-        text_en: preflight.message_en || 'Worker launch preflight is ready.',
+        tone: preflight.production_readiness?.ready_for_first_scoped_cycle || preflight.safe_to_enable_scoped_dispatch ? 'success' : 'warning',
+        text_ru: preflight.production_readiness?.summary_ru || preflight.message_ru || 'Preflight запуска worker готов.',
+        text_en: preflight.production_readiness?.summary_en || preflight.message_en || 'Worker launch preflight is ready.',
         details_ru: [
           `Due: ${Number(preflight.summary?.due_posts || 0)} · API: ${Number(preflight.summary?.api_due_posts || 0)} · контролируемо: ${Number(preflight.summary?.controlled_due_posts || 0)} · вручную: ${Number(preflight.summary?.manual_due_posts || 0)}.`,
+          preflight.production_readiness?.next_action_ru || '',
           preflight.next_action_ru || 'Следующий шаг появится в блоке запуска.',
-        ],
+        ].filter(Boolean),
         details_en: [
           `Due: ${Number(preflight.summary?.due_posts || 0)} · API: ${Number(preflight.summary?.api_due_posts || 0)} · supervised: ${Number(preflight.summary?.controlled_due_posts || 0)} · manual: ${Number(preflight.summary?.manual_due_posts || 0)}.`,
+          preflight.production_readiness?.next_action_en || '',
           preflight.next_action_en || 'The next step is shown in the launch block.',
-        ],
+        ].filter(Boolean),
       });
     } catch (preflightError) {
       const message = preflightError instanceof Error ? preflightError.message : (isRu ? 'Не удалось проверить запуск worker' : 'Could not check worker launch');
@@ -6973,6 +7015,75 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ? `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · контролируемо ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · вручную ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`
                               : `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · supervised ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · manual ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`}
                           </div>
+                          {socialLaunchPreflight.production_readiness ? (
+                            <div
+                              data-testid="social-production-readiness"
+                              className={[
+                                'mt-2 rounded-lg border px-2 py-2 text-[11px] leading-5',
+                                socialLaunchPreflight.production_readiness.ready_for_first_scoped_cycle
+                                  ? 'border-emerald-200/30 bg-emerald-400/10 text-emerald-50'
+                                  : Number(socialLaunchPreflight.production_readiness.blockers?.length || 0) > 0
+                                    ? 'border-amber-200/30 bg-amber-950/20 text-amber-50'
+                                    : 'border-sky-200/30 bg-sky-400/10 text-sky-50',
+                              ].join(' ')}
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Готовность к первому циклу' : 'First-cycle readiness'}
+                                    {' · '}
+                                    {isRu
+                                      ? String(socialLaunchPreflight.production_readiness.title_ru || '')
+                                      : String(socialLaunchPreflight.production_readiness.title_en || '')}
+                                  </div>
+                                  <div className="mt-1">
+                                    {isRu
+                                      ? String(socialLaunchPreflight.production_readiness.summary_ru || '')
+                                      : String(socialLaunchPreflight.production_readiness.summary_en || '')}
+                                  </div>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white">
+                                  {String(socialLaunchPreflight.production_readiness.status || 'prepare_first')}
+                                </span>
+                              </div>
+                              {Number(socialLaunchPreflight.production_readiness.blockers?.length || 0) > 0 ? (
+                                <div className="mt-2 rounded-lg bg-white/10 px-2 py-2">
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Блокеры перед запуском' : 'Launch blockers'}
+                                  </div>
+                                  <ul className="mt-1 space-y-1">
+                                    {(socialLaunchPreflight.production_readiness.blockers || []).slice(0, 4).map((item) => (
+                                      <li key={`production-blocker:${String(item.key || '')}`} className="text-amber-50">
+                                        <span className="font-semibold text-white">
+                                          {isRu ? String(item.label_ru || '') : String(item.label_en || '')}
+                                        </span>
+                                        {': '}
+                                        {isRu ? String(item.action_ru || '') : String(item.action_en || '')}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : null}
+                              {Number(socialLaunchPreflight.production_readiness.warnings?.length || 0) > 0 ? (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {(socialLaunchPreflight.production_readiness.warnings || []).slice(0, 4).map((item) => (
+                                    <span
+                                      key={`production-warning:${String(item.key || '')}`}
+                                      className="rounded-full bg-white/10 px-2 py-0.5 font-medium text-slate-50"
+                                    >
+                                      {isRu ? String(item.label_ru || '') : String(item.label_en || '')}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                              <div className="mt-2 font-medium text-white">
+                                {isRu ? 'Что сделать: ' : 'What to do: '}
+                                {isRu
+                                  ? String(socialLaunchPreflight.production_readiness.next_action_ru || '')
+                                  : String(socialLaunchPreflight.production_readiness.next_action_en || '')}
+                              </div>
+                            </div>
+                          ) : null}
                           {socialLaunchPreflight.first_api_publish_readiness ? (
                             <div
                               className={[
