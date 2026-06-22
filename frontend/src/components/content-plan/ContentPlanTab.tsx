@@ -5758,16 +5758,48 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     {isRu ? 'Что сделать дальше' : 'Next best action'}
                   </div>
                   <div className="mt-2 text-xl font-semibold">
-                    {planOperationalSummary.needsDraft > 0
-                      ? (isRu ? 'В плане есть темы без текста' : 'Some plan topics need text')
-                      : planOperationalSummary.readyToPublish > 0
-                        ? (isRu ? 'Теперь можно создать публикации' : 'Now create publications')
-                        : (isRu ? 'План под контролем' : 'Plan is under control')}
+                    {visibleSocialNeedsReview.length > 0
+                      ? (isRu ? 'Проверьте готовые публикации' : 'Review prepared publications')
+                      : visibleSocialCanQueue.length > 0
+                        ? (isRu ? 'Поставьте утверждённые посты в расписание' : 'Queue approved posts on schedule')
+                        : visibleSocialNeedsSupervised.length > 0
+                          ? (isRu ? 'Откройте контролируемое размещение' : 'Open supervised placement')
+                          : visibleSocialNeedsManual.length > 0
+                            ? (isRu ? 'Закройте ручные публикации' : 'Finish manual publications')
+                            : Number(socialSummary?.scheduled || 0) > 0
+                              ? (isRu ? 'Расписание ждёт исполнения' : 'Schedule is waiting for execution')
+                              : Number(socialSummary?.published || 0) > 0
+                                ? (isRu ? 'Соберите результат и улучшите план' : 'Collect results and improve the plan')
+                                : planOperationalSummary.needsDraft > 0
+                                  ? (isRu ? 'В плане есть темы без текста' : 'Some plan topics need text')
+                                  : planOperationalSummary.readyToPublish > 0
+                                    ? (isRu ? 'Теперь можно создать публикации' : 'Now create publications')
+                                    : (isRu ? 'План под контролем' : 'Plan is under control')}
                   </div>
                   <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-                    {isRu
-                      ? 'Это не создаёт новый план. Здесь вы работаете с уже выбранным планом: дописываете тексты, находите нужную тему и создаёте публикации.'
-                      : 'This does not create a new plan. Here you work with the selected plan: fill text, find topics, and create publications.'}
+                    {visibleSocialNeedsReview.length > 0
+                      ? (isRu
+                        ? 'Главный шаг сейчас — preview и approval. Текст можно поправить, а наружу ничего не отправится до отдельной постановки в расписание.'
+                        : 'The main step now is preview and approval. You can edit copy; nothing external is sent until a separate queue step.')
+                      : visibleSocialCanQueue.length > 0
+                        ? (isRu
+                          ? 'Approval уже есть. Следующий безопасный шаг — поставить посты в расписание, после чего worker обработает их только по дате и готовности каналов.'
+                          : 'Approval is done. The next safe step is queueing posts, then the worker processes them only by date and channel readiness.')
+                        : visibleSocialNeedsSupervised.length > 0
+                          ? (isRu
+                            ? 'Яндекс/2ГИС ждут контролируемое размещение: LocalOS подготовит текст и задачу, финальный клик остаётся за человеком.'
+                            : 'Yandex/2GIS await supervised placement: LocalOS prepares copy and a task, while the final click stays human-controlled.')
+                          : visibleSocialNeedsManual.length > 0
+                            ? (isRu
+                              ? 'Есть каналы без API или browser-use. Скопируйте готовый текст, разместите вручную и отметьте результат в LocalOS.'
+                              : 'Some channels have no API or browser-use. Copy the prepared text, publish manually, and mark the result in LocalOS.')
+                            : Number(socialSummary?.published || 0) > 0
+                              ? (isRu
+                                ? 'Публикации уже вышли. Теперь отметьте заявки/обращения и пересчитайте рекомендации следующего плана.'
+                                : 'Posts are already published. Record leads/inquiries and refresh next-plan recommendations.')
+                              : (isRu
+                                ? 'Это не создаёт новый план. Здесь вы работаете с уже выбранным планом: дописываете тексты, находите нужную тему и создаёте публикации.'
+                                : 'This does not create a new plan. Here you work with the selected plan: fill text, find topics, and create publications.')}
                   </div>
                   {Number(socialSummary?.total || 0) === 0 ? (
                     <div className="mt-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-4">
