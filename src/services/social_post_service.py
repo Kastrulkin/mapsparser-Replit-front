@@ -2751,6 +2751,7 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None, cur
 def _social_openclaw_handoff_delivery_readiness(cursor: Any | None = None) -> dict[str, Any]:
     callback_url = _social_supervised_openclaw_callback_url()
     callback_configured = bool(callback_url)
+    suggested_callback_url = _social_supervised_openclaw_suggested_callback_url()
     outbox_available: bool | None = None
     if cursor is not None:
         try:
@@ -2768,8 +2769,12 @@ def _social_openclaw_handoff_delivery_readiness(cursor: Any | None = None) -> di
         status = "callback_missing"
         message_ru = "Callback для OpenClaw supervised task не настроен; внешняя задача не будет отправлена."
         message_en = "The OpenClaw supervised task callback is not configured; no external task will be sent."
-        next_action_ru = "Добавьте OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL или используйте ручное размещение."
-        next_action_en = "Set OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL or use manual placement."
+        if suggested_callback_url:
+            next_action_ru = f"Добавьте OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL={suggested_callback_url} или используйте ручное размещение."
+            next_action_en = f"Set OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL={suggested_callback_url} or use manual placement."
+        else:
+            next_action_ru = "Добавьте OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL или используйте ручное размещение."
+            next_action_en = "Set OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL or use manual placement."
     else:
         status = "outbox_missing"
         message_ru = "Callback настроен, но action_callback_outbox недоступен; task не будет поставлена на доставку."
@@ -2781,6 +2786,8 @@ def _social_openclaw_handoff_delivery_readiness(cursor: Any | None = None) -> di
         "status": status,
         "callback_configured": callback_configured,
         "callback_url_configured": callback_configured,
+        "callback_env_var": "OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL",
+        "suggested_callback_url": suggested_callback_url,
         "outbox_available": outbox_available,
         "read_only": True,
         "external_publish_performed": False,
@@ -3772,6 +3779,27 @@ def _social_supervised_openclaw_callback_url() -> str:
         or os.getenv("OPENCLAW_SUPERVISED_CALLBACK_URL")
         or ""
     ).strip()
+
+
+def _social_supervised_openclaw_suggested_callback_url() -> str:
+    explicit = _social_supervised_openclaw_callback_url()
+    if explicit:
+        return explicit
+    base_url = str(os.getenv("OPENCLAW_BASE_URL") or "").strip()
+    if not base_url:
+        base_url = str(os.getenv("OPENCLAW_SANDBOX_BRIDGE_URL") or "").strip()
+    if not base_url:
+        catalog_url = str(os.getenv("OPENCLAW_CAPABILITY_CATALOG_URL") or "").strip()
+        base_url = catalog_url
+    if not base_url:
+        return ""
+    try:
+        parsed = urllib.parse.urlsplit(base_url)
+        if not parsed.scheme or not parsed.netloc:
+            return ""
+        return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "/m2m/localos/callbacks", "", ""))
+    except Exception:
+        return ""
 
 
 def _social_supervised_openclaw_max_attempts() -> int:

@@ -190,6 +190,8 @@ type SocialOpenClawReadiness = {
     status?: string;
     callback_configured?: boolean;
     callback_url_configured?: boolean;
+    callback_env_var?: string;
+    suggested_callback_url?: string;
     outbox_available?: boolean | null;
     message_ru?: string;
     message_en?: string;
@@ -9300,6 +9302,7 @@ function _socialOpenClawReadinessDetails(
   const diagnostics = Array.isArray(diagnosticsSource)
     ? diagnosticsSource.map(String).map((item) => item.trim()).filter(Boolean)
     : [];
+  const delivery = readiness.delivery_readiness || {};
   const details = diagnostics.length > 0 ? diagnostics : [
     isRu
       ? 'Безопасная проверка: LocalOS ничего не публикует и только проверяет готовность OpenClaw.'
@@ -9324,6 +9327,23 @@ function _socialOpenClawReadinessDetails(
         ? 'OpenClaw не нажимает финальную кнопку публикации.'
         : 'OpenClaw does not click the final publish button.',
     );
+  }
+  const suggestedCallback = String(delivery.suggested_callback_url || '').trim();
+  const callbackEnvVar = String(delivery.callback_env_var || 'OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL').trim();
+  if (suggestedCallback && !delivery.callback_configured) {
+    details.push(
+      isRu
+        ? `Добавить env: ${callbackEnvVar}=${suggestedCallback}`
+        : `Add env: ${callbackEnvVar}=${suggestedCallback}`,
+    );
+    details.push(
+      isRu
+        ? 'Стандартный receiver OpenClaw: /m2m/localos/callbacks'
+        : 'Standard OpenClaw receiver: /m2m/localos/callbacks',
+    );
+  }
+  if (delivery.outbox_available === true) {
+    details.push(isRu ? 'Outbox для доставки task найден.' : 'Task delivery outbox is available.');
   }
   return Array.from(new Set(details)).slice(0, 6);
 }

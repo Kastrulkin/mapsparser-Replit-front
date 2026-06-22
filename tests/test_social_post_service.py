@@ -707,6 +707,7 @@ def test_social_openclaw_browser_readiness_explains_ready_and_manual_fallback(mo
 def test_social_openclaw_browser_readiness_blocks_handoff_without_callback(monkeypatch):
     monkeypatch.delenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL", raising=False)
     monkeypatch.delenv("OPENCLAW_SUPERVISED_CALLBACK_URL", raising=False)
+    monkeypatch.setenv("OPENCLAW_SANDBOX_BRIDGE_URL", "http://openclaw.local:8091/capabilities")
 
     readiness = _social_openclaw_browser_readiness(
         {
@@ -723,8 +724,23 @@ def test_social_openclaw_browser_readiness_blocks_handoff_without_callback(monke
     assert readiness["handoff_ready"] is False
     assert readiness["status"] == "manual_fallback"
     assert readiness["delivery_readiness"]["status"] == "callback_missing"
+    assert readiness["delivery_readiness"]["callback_env_var"] == "OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL"
+    assert readiness["delivery_readiness"]["suggested_callback_url"] == "http://openclaw.local:8091/m2m/localos/callbacks"
     assert "Callback" in readiness["delivery_readiness"]["message_ru"]
+    assert "OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL=http://openclaw.local:8091/m2m/localos/callbacks" in readiness["delivery_readiness"]["next_action_ru"]
     assert "ручной fallback" in readiness["message_ru"]
+
+
+def test_social_openclaw_suggested_callback_prefers_base_url(monkeypatch):
+    monkeypatch.delenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_SUPERVISED_CALLBACK_URL", raising=False)
+    monkeypatch.setenv("OPENCLAW_BASE_URL", "https://openclaw.example/base")
+    monkeypatch.setenv("OPENCLAW_SANDBOX_BRIDGE_URL", "http://openclaw.local:8091/capabilities")
+
+    assert (
+        social_post_service._social_supervised_openclaw_suggested_callback_url()
+        == "https://openclaw.example/m2m/localos/callbacks"
+    )
 
 
 def test_social_openclaw_browser_readiness_explains_catalog_route_error():

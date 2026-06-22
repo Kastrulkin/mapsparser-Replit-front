@@ -179,6 +179,8 @@ REQUIRED_DATA_CONTRACT = {
     "openclaw owner-error summary": "LocalOS не смог проверить OpenClaw",
     "openclaw delivery title": "Доставка OpenClaw task не готова",
     "openclaw callback outbox fallback": "callback/outbox для задачи не готов",
+    "openclaw callback env action": "OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL",
+    "openclaw callback receiver path": "/m2m/localos/callbacks",
     "plan recommendation signal priority": "signal_priority",
 }
 
