@@ -796,6 +796,24 @@ type SocialApprovalPreviewSummary = {
   platformLabels: string[];
 };
 
+type SocialQueuePreview = {
+  key: string;
+  posts: SocialPost[];
+  postIds: string[];
+  busyAction: string;
+  source: 'selected' | 'visible' | 'single';
+};
+
+type SocialQueuePreviewSummary = {
+  total: number;
+  api: number;
+  supervised: number;
+  dueNow: number;
+  blockedApiWarnings: Array<{ postId: string; platform: string; label: string; status: string }>;
+  platformLabels: string[];
+  firstScheduledFor: string;
+};
+
 type NetworkOperatingSlice = {
   key: string;
   label: string;
@@ -930,6 +948,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [manualPublishRefs, setManualPublishRefs] = useState<Record<string, { url: string; id: string }>>({});
   const [socialPreparePreview, setSocialPreparePreview] = useState<SocialPreparePreview | null>(null);
   const [socialApprovalPreview, setSocialApprovalPreview] = useState<SocialApprovalPreview | null>(null);
+  const [socialQueuePreview, setSocialQueuePreview] = useState<SocialQueuePreview | null>(null);
   const [socialBusyAction, setSocialBusyAction] = useState('');
   const [activeZone, setActiveZone] = useState<ContentPlanZone>('overview');
   const [contentMode, setContentMode] = useState<ContentPlanMode>('point');
@@ -1551,6 +1570,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (!socialApprovalPreview) return null;
     return _socialApprovalSummary(socialApprovalPreview.posts, socialApiPreflightByPlatform, isRu);
   }, [isRu, socialApiPreflightByPlatform, socialApprovalPreview]);
+  const socialQueuePreviewSummary = useMemo(() => {
+    if (!socialQueuePreview) return null;
+    return _socialQueueSummary(socialQueuePreview.posts, socialApiPreflightByPlatform, isRu);
+  }, [isRu, socialApiPreflightByPlatform, socialQueuePreview]);
   const socialLaunchStages = useMemo<SocialLaunchStage[]>(() => {
     const totalPosts = Number(socialSummary?.total || 0);
     const needsReview = visibleSocialNeedsReview.length;
@@ -2533,6 +2556,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       .filter(Boolean);
     if (postIds.length === 0) return;
     setSocialPreparePreview(null);
+    setSocialQueuePreview(null);
     setSocialApprovalPreview({
       key: `${source}:${postIds.join(':')}`,
       posts,
@@ -2627,30 +2651,50 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
-  const queueSocialPostItem = async (post: SocialPost) => {
-    setSocialBusyAction(`queue:${post.id}`);
+  const openSocialQueuePreview = (posts: SocialPost[], source: 'selected' | 'visible' | 'single', busyAction: string) => {
+    const postIds = posts
+      .map((post) => String(post.id || '').trim())
+      .filter(Boolean);
+    if (postIds.length === 0) return;
+    setSocialPreparePreview(null);
+    setSocialApprovalPreview(null);
+    setSocialQueuePreview({
+      key: `${source}:${postIds.join(':')}`,
+      posts,
+      postIds,
+      busyAction,
+      source,
+    });
+    setActionSummary({
+      tone: 'neutral',
+      text_ru: 'Preview расписания готов. Проверьте, что именно разрешаете worker’у выполнить по дате.',
+      text_en: 'Queue preview is ready. Review exactly what you allow the worker to execute on schedule.',
+    });
+  };
+
+  const queueSocialPostItem = (post: SocialPost) => {
+    openSocialQueuePreview([post], 'single', `queue:${post.id}`);
+  };
+
+  const executeSocialQueuePreview = async () => {
+    const preview = socialQueuePreview;
+    if (!preview || preview.postIds.length === 0) return;
+    setBulkBusyAction(preview.busyAction);
     setError('');
     setActionSummary(null);
     try {
-      await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/queue`, {
+      await newAuth.makeRequest('/social-posts/bulk-queue', {
         method: 'POST',
-        body: JSON.stringify({}),
+        body: JSON.stringify({ post_ids: preview.postIds }),
       });
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
-      setActionSummary({
-        tone: 'success',
-        text_ru: socialDispatchEnabled
-          ? 'Публикация поставлена в расписание. Worker выполнит её, когда наступит дата.'
-          : 'Публикация поставлена в расписание. Dispatch сейчас выключен, поэтому автоматическое исполнение не начнётся до включения worker.',
-        text_en: socialDispatchEnabled
-          ? 'Post queued. The worker will execute it when the scheduled time arrives.'
-          : 'Post queued. Dispatch is currently disabled, so automatic execution will not start until the worker is enabled.',
-      });
+      setSocialQueuePreview(null);
+      setActionSummary(socialQueueResultSummary(preview.source === 'selected' || preview.source === 'single'));
     } catch (queueError) {
       const message = queueError instanceof Error ? queueError.message : (isRu ? 'Не удалось поставить публикацию в расписание' : 'Could not queue post');
       setError(message);
     } finally {
-      setSocialBusyAction('');
+      setBulkBusyAction('');
     }
   };
 
@@ -2953,6 +2997,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setBulkBusyAction(busyAction);
     setError('');
     setActionSummary(null);
+    setSocialApprovalPreview(null);
+    setSocialQueuePreview(null);
     try {
     const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(firstItem.id)}/social-posts/prepare-preview`, {
       method: 'POST',
@@ -3065,42 +3111,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
   const queueVisibleApprovedSocialPosts = async () => {
     if (!visibleSocialCanQueue.length) return;
-    setBulkBusyAction('visible-social-queue');
-    setError('');
-    setActionSummary(null);
-    try {
-      await newAuth.makeRequest('/social-posts/bulk-queue', {
-        method: 'POST',
-        body: JSON.stringify({ post_ids: visibleSocialCanQueue.map((post) => post.id) }),
-      });
-      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
-      setActionSummary(socialQueueResultSummary(false));
-    } catch (bulkError) {
-      const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось поставить публикации в расписание' : 'Could not queue posts');
-      setError(message);
-    } finally {
-      setBulkBusyAction('');
-    }
+    openSocialQueuePreview(visibleSocialCanQueue, 'visible', 'visible-social-queue');
   };
 
   const queueSelectedSocialPosts = async () => {
     if (!selectedSocialCanQueue.length) return;
-    setBulkBusyAction('selected-social-queue');
-    setError('');
-    setActionSummary(null);
-    try {
-      await newAuth.makeRequest('/social-posts/bulk-queue', {
-        method: 'POST',
-        body: JSON.stringify({ post_ids: selectedSocialCanQueue.map((post) => post.id) }),
-      });
-      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
-      setActionSummary(socialQueueResultSummary(true));
-    } catch (bulkError) {
-      const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось поставить выбранные публикации в расписание' : 'Could not queue selected posts');
-      setError(message);
-    } finally {
-      setBulkBusyAction('');
-    }
+    openSocialQueuePreview(selectedSocialCanQueue, 'selected', 'selected-social-queue');
   };
 
   const markSelectedSocialPostsPublished = async () => {
@@ -6093,6 +6109,145 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 </div>
               </div>
             ) : null}
+            {socialQueuePreview && socialQueuePreviewSummary ? (
+              <div
+                data-testid="social-queue-preview-panel"
+                className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-4 text-sm text-indigo-950"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">
+                      {isRu ? 'Preview постановки в расписание' : 'Queue preview'}
+                    </div>
+                    <div className="mt-1 text-base font-semibold text-indigo-950">
+                      {isRu
+                        ? `Разрешить исполнение по дате: ${socialQueuePreviewSummary.total}`
+                        : `Allow scheduled execution: ${socialQueuePreviewSummary.total}`}
+                    </div>
+                    <div className="mt-1 text-xs leading-5 text-indigo-800">
+                      {isRu
+                        ? 'Queue переводит утверждённые посты в расписание. После второго клика worker сможет обработать due API-каналы по дате; это уже шаг исполнения, но не мгновенная публикация всех каналов.'
+                        : 'Queue moves approved posts onto the schedule. After the second click, the worker can process due API channels by date; this is an execution step, but not instant publishing for every channel.'}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-indigo-100">
+                      <div className="text-lg font-semibold text-indigo-950">{socialQueuePreviewSummary.total}</div>
+                      <div>{isRu ? 'в расписание' : 'to queue'}</div>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-indigo-100">
+                      <div className="text-lg font-semibold text-indigo-950">{socialQueuePreviewSummary.api}</div>
+                      <div>{isRu ? 'API' : 'API'}</div>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-indigo-100">
+                      <div className="text-lg font-semibold text-indigo-950">{socialQueuePreviewSummary.supervised}</div>
+                      <div>{isRu ? 'карты' : 'maps'}</div>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-indigo-100">
+                      <div className="text-lg font-semibold text-indigo-950">{socialQueuePreviewSummary.dueNow}</div>
+                      <div>{isRu ? 'уже due' : 'due now'}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {socialQueuePreviewSummary.platformLabels.slice(0, 10).map((label) => (
+                    <span
+                      key={`queue-preview-platform:${label}`}
+                      className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-indigo-800 ring-1 ring-indigo-100"
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-3">
+                  <div className="rounded-xl bg-white px-3 py-2 text-xs leading-5 text-indigo-800 ring-1 ring-indigo-100">
+                    <div className="font-semibold text-indigo-950">
+                      {isRu ? 'Когда' : 'When'}
+                    </div>
+                    <div className="mt-1">
+                      {socialQueuePreviewSummary.firstScheduledFor
+                        ? _formatPlanItemDate(socialQueuePreviewSummary.firstScheduledFor, isRu)
+                        : (isRu ? 'Дата не указана' : 'No date set')}
+                    </div>
+                    <div className="mt-1 text-indigo-700">
+                      {socialQueuePreviewSummary.dueNow > 0
+                        ? (isRu
+                          ? 'Часть постов уже due: worker сможет взять их в ближайший цикл.'
+                          : 'Some posts are already due: the worker can pick them up in the next cycle.')
+                        : (isRu
+                          ? 'Worker будет ждать дату публикации.'
+                          : 'The worker will wait for the scheduled date.')}
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2 text-xs leading-5 text-indigo-800 ring-1 ring-indigo-100">
+                    <div className="font-semibold text-indigo-950">
+                      {isRu ? 'API-каналы' : 'API channels'}
+                    </div>
+                    <div className="mt-1">
+                      {socialDispatchEnabled && !socialDispatchBlockedWithoutScope && !socialDispatchScopeMismatch
+                        ? (isRu
+                          ? 'Worker включён для этого бизнеса и обработает готовые API-каналы.'
+                          : 'The worker is enabled for this business and will process ready API channels.')
+                        : (isRu
+                          ? 'Queue сохранится, но внешний worker сейчас не запустит эти API-посты.'
+                          : 'Queue will be saved, but the external worker will not run these API posts right now.')}
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2 text-xs leading-5 text-indigo-800 ring-1 ring-indigo-100">
+                    <div className="font-semibold text-indigo-950">
+                      {isRu ? 'Яндекс/2ГИС' : 'Yandex/2GIS'}
+                    </div>
+                    <div className="mt-1">
+                      {isRu
+                        ? 'Карты после queue не публикуются тихо: LocalOS создаст контролируемую или ручную задачу, финальный клик остаётся за человеком.'
+                        : 'Maps do not publish silently after queueing: LocalOS creates a supervised or manual task, and the final click stays human-controlled.'}
+                    </div>
+                  </div>
+                </div>
+                {socialQueuePreviewSummary.blockedApiWarnings.length > 0 ? (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                    <div className="font-semibold text-amber-950">
+                      {isRu ? 'Эти API-каналы попадут в расписание, но пока не готовы к публикации' : 'These API channels will be queued, but are not ready to publish yet'}
+                    </div>
+                    <div className="mt-1">
+                      {isRu
+                        ? 'Worker пропустит или переведёт их в понятный статус, пока не появятся ключи, права или привязка аккаунта.'
+                        : 'The worker will skip them or move them into a clear status until keys, permissions, or account binding are present.'}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {socialQueuePreviewSummary.blockedApiWarnings.slice(0, 6).map((warning) => (
+                        <span
+                          key={`queue-api-warning:${warning.postId}:${warning.platform}`}
+                          className="rounded-full bg-white px-2.5 py-1 font-medium text-amber-800"
+                        >
+                          {warning.label} · {warning.status}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="bg-white"
+                    onClick={() => setSocialQueuePreview(null)}
+                    disabled={Boolean(bulkBusyAction)}
+                  >
+                    {isRu ? 'Отменить' : 'Cancel'}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => { void executeSocialQueuePreview(); }}
+                    disabled={Boolean(bulkBusyAction)}
+                  >
+                    {bulkBusyAction === socialQueuePreview.busyAction
+                      ? (isRu ? 'Ставим в расписание...' : 'Queueing...')
+                      : (isRu ? 'Поставить в расписание после проверки' : 'Queue after review')}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             {actionSummary ? (
               <div
                 className={[
@@ -9044,6 +9199,51 @@ function _socialApprovalSummary(
     emptyText,
     blockedApiWarnings: _socialApiQueueWarnings(posts, preflightByPlatform, isRu),
     platformLabels: labels,
+  };
+}
+
+function _socialQueueSummary(
+  posts: SocialPost[],
+  preflightByPlatform: Record<string, SocialApiChannelPreflight>,
+  isRu: boolean,
+): SocialQueuePreviewSummary {
+  let api = 0;
+  let supervised = 0;
+  let dueNow = 0;
+  let firstScheduledFor = '';
+  const labels: string[] = [];
+  const seenLabels = new Set<string>();
+  const nowMs = Date.now();
+  for (const post of posts) {
+    if (_isSupervisedPlatform(String(post.platform || ''))) {
+      supervised += 1;
+    } else {
+      api += 1;
+    }
+    const scheduledFor = String(post.scheduled_for || '').trim();
+    if (scheduledFor) {
+      if (!firstScheduledFor || scheduledFor < firstScheduledFor) {
+        firstScheduledFor = scheduledFor;
+      }
+      const scheduledMs = Date.parse(scheduledFor);
+      if (Number.isFinite(scheduledMs) && scheduledMs <= nowMs) {
+        dueNow += 1;
+      }
+    }
+    const label = String(post.platform_label || _socialPlatformLabel(String(post.platform || ''), isRu));
+    if (label && !seenLabels.has(label)) {
+      seenLabels.add(label);
+      labels.push(label);
+    }
+  }
+  return {
+    total: posts.length,
+    api,
+    supervised,
+    dueNow,
+    blockedApiWarnings: _socialApiQueueWarnings(posts, preflightByPlatform, isRu),
+    platformLabels: labels,
+    firstScheduledFor,
   };
 }
 
