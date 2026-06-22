@@ -189,6 +189,7 @@ def build_probe(business_id: str, batch_size: int) -> dict[str, Any]:
         "launch_status": launch_preflight.get("status"),
         "launch_safe_to_enable_scoped_dispatch": launch_preflight.get("safe_to_enable_scoped_dispatch"),
         "launch_summary": launch_preflight.get("summary", {}),
+        "first_api_publish_readiness": launch_preflight.get("first_api_publish_readiness", {}),
         "dispatch_readiness": dispatch_readiness,
         "first_cycle_verification": first_cycle_verification,
         "safety": {

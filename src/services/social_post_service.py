@@ -368,6 +368,7 @@ def _build_social_launch_preflight_payload(
         item for item in channel_readiness
         if str(item.get("publish_mode") or "") != "api"
     ]
+    first_api_publish_readiness = _social_first_api_publish_readiness(channel_readiness, api_preflight_items)
     status = "no_due_posts"
     if external_publish_count > 0:
         status = "ready_for_api_dispatch"
@@ -407,6 +408,7 @@ def _build_social_launch_preflight_payload(
         "api_preflight_blocked_due_posts": api_preflight_blocked_due_posts,
         "blocked_api_channels": blocked_api_channels,
         "controlled_channels": controlled_channels,
+        "first_api_publish_readiness": first_api_publish_readiness,
         "recommended_env": {
             "dispatch": _dispatch_preview_recommended_env(str(business_id or "").strip()),
             "metrics": _metrics_preview_recommended_env(str(business_id or "").strip()),
@@ -424,6 +426,8 @@ def _build_social_launch_preflight_payload(
             "api_due_posts": external_publish_count,
             "controlled_due_posts": controlled_count,
             "manual_due_posts": manual_count,
+            "api_ready_channels": len(first_api_publish_readiness.get("ready_platforms") or []),
+            "api_blocked_channels": len(first_api_publish_readiness.get("blocked_platforms") or []),
             "blocked_api_channels": len(blocked_api_channels),
             "api_preflight_blocked_due_posts": len(api_preflight_blocked_due_posts),
             "controlled_channels": len(controlled_channels),
@@ -446,6 +450,142 @@ def _build_social_launch_preflight_payload(
         "next_action_ru": _social_launch_preflight_next_action(status, scope, True),
         "next_action_en": _social_launch_preflight_next_action(status, scope, False),
     }
+
+
+def _social_first_api_publish_readiness(
+    channel_readiness: list[dict[str, Any]],
+    api_preflight: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    live_items = [
+        item for item in (api_preflight or [])
+        if str(item.get("platform") or "").strip()
+    ]
+    if live_items:
+        api_items = live_items
+        source = "live_api_preflight"
+    else:
+        api_items = [
+            item for item in channel_readiness
+            if str(item.get("publish_mode") or "").strip() == "api"
+        ]
+        source = "channel_readiness"
+
+    ready_items = [item for item in api_items if bool(item.get("ready"))]
+    blocked_items = [item for item in api_items if not bool(item.get("ready"))]
+    ready_platforms = [
+        {
+            "platform": str(item.get("platform") or "").strip(),
+            "platform_label": str(item.get("platform_label") or platform_label(str(item.get("platform") or ""))).strip(),
+            "status": str(item.get("status") or "ready").strip(),
+        }
+        for item in ready_items
+    ]
+    blocked_platforms = [
+        {
+            "platform": str(item.get("platform") or "").strip(),
+            "platform_label": str(item.get("platform_label") or platform_label(str(item.get("platform") or ""))).strip(),
+            "status": str(item.get("status") or "needs_attention").strip(),
+            "message_ru": str(item.get("message_ru") or "").strip(),
+            "message_en": str(item.get("message_en") or "").strip(),
+            "next_action_ru": str(item.get("next_action_ru") or "").strip(),
+            "next_action_en": str(item.get("next_action_en") or "").strip(),
+        }
+        for item in blocked_items
+    ]
+
+    if not api_items:
+        status = "no_api_channels"
+    elif ready_items and not blocked_items:
+        status = "all_api_channels_ready"
+    elif ready_items:
+        status = "partial_api_ready"
+    else:
+        status = "no_api_ready"
+
+    return {
+        "schema": "localos_social_first_api_publish_readiness_v1",
+        "source": source,
+        "status": status,
+        "ready": bool(ready_items),
+        "all_api_channels_ready": bool(api_items) and not blocked_items,
+        "ready_platforms": ready_platforms,
+        "blocked_platforms": blocked_platforms,
+        "message_ru": _social_first_api_publish_message(status, ready_platforms, blocked_platforms, True),
+        "message_en": _social_first_api_publish_message(status, ready_platforms, blocked_platforms, False),
+        "next_action_ru": _social_first_api_publish_next_action(status, blocked_platforms, True),
+        "next_action_en": _social_first_api_publish_next_action(status, blocked_platforms, False),
+        "external_publish_requires_approval": True,
+        "publish_path_ru": "Только после preview, human approval, queue и due-даты.",
+        "publish_path_en": "Only after preview, human approval, queueing, and the due date.",
+    }
+
+
+def _social_first_api_publish_message(
+    status: str,
+    ready_platforms: list[dict[str, Any]],
+    blocked_platforms: list[dict[str, Any]],
+    is_ru: bool,
+) -> str:
+    ready_labels = [str(item.get("platform_label") or item.get("platform") or "").strip() for item in ready_platforms]
+    blocked_labels = [str(item.get("platform_label") or item.get("platform") or "").strip() for item in blocked_platforms]
+    ready_text = ", ".join(label for label in ready_labels if label)
+    blocked_text = ", ".join(label for label in blocked_labels if label)
+    if status == "all_api_channels_ready":
+        return (
+            f"API-каналы готовы к первому реальному посту: {ready_text}."
+            if is_ru
+            else f"API channels are ready for the first real post: {ready_text}."
+        )
+    if status == "partial_api_ready":
+        return (
+            f"Можно начинать с готовых API-каналов: {ready_text}. Остальные требуют настройки: {blocked_text}."
+            if is_ru
+            else f"You can start with ready API channels: {ready_text}. The rest need setup: {blocked_text}."
+        )
+    if status == "no_api_ready":
+        return (
+            f"Пока нет готового API-канала для первого реального поста. Требуют настройки: {blocked_text}."
+            if is_ru
+            else f"No API channel is ready for the first real post yet. Needs setup: {blocked_text}."
+        )
+    return (
+        "API-каналы ещё не настроены для публикаций."
+        if is_ru
+        else "API channels are not configured for publishing yet."
+    )
+
+
+def _social_first_api_publish_next_action(
+    status: str,
+    blocked_platforms: list[dict[str, Any]],
+    is_ru: bool,
+) -> str:
+    first_blocked = blocked_platforms[0] if blocked_platforms else {}
+    label = str(first_blocked.get("platform_label") or first_blocked.get("platform") or "").strip()
+    next_action = str(first_blocked.get("next_action_ru" if is_ru else "next_action_en") or "").strip()
+    if status == "all_api_channels_ready":
+        return (
+            "Проверьте тексты, подтвердите их и поставьте публикации в расписание."
+            if is_ru
+            else "Review copy, approve it, and queue posts on schedule."
+        )
+    if status == "partial_api_ready":
+        return (
+            f"Для первого запуска можно использовать готовые каналы; затем настройте {label}: {next_action or 'подключите ключи и права'}."
+            if is_ru
+            else f"For the first launch, use ready channels; then set up {label}: {next_action or 'connect keys and permissions'}."
+        )
+    if status == "no_api_ready":
+        return (
+            f"Сначала настройте {label}: {next_action or 'подключите ключи и права'}, затем повторите live API-проверку."
+            if is_ru
+            else f"Set up {label} first: {next_action or 'connect keys and permissions'}, then rerun the live API check."
+        )
+    return (
+        "Подключите хотя бы один API-канал: Telegram или VK быстрее всего дадут первый production-value."
+        if is_ru
+        else "Connect at least one API channel: Telegram or VK will unlock the fastest production value."
+    )
 
 
 def _api_preflight_blocked_due_posts(

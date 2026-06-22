@@ -525,6 +525,34 @@ type SocialLaunchPreflight = {
     message_ru?: string;
     message_en?: string;
   }>;
+  first_api_publish_readiness?: {
+    schema?: string;
+    source?: string;
+    status?: string;
+    ready?: boolean;
+    all_api_channels_ready?: boolean;
+    ready_platforms?: Array<{
+      platform?: string;
+      platform_label?: string;
+      status?: string;
+    }>;
+    blocked_platforms?: Array<{
+      platform?: string;
+      platform_label?: string;
+      status?: string;
+      message_ru?: string;
+      message_en?: string;
+      next_action_ru?: string;
+      next_action_en?: string;
+    }>;
+    message_ru?: string;
+    message_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+    external_publish_requires_approval?: boolean;
+    publish_path_ru?: string;
+    publish_path_en?: string;
+  };
   recommended_env?: {
     dispatch?: Record<string, string>;
     metrics?: Record<string, string>;
@@ -543,6 +571,8 @@ type SocialLaunchPreflight = {
     manual_due_posts?: number;
     blocked_api_channels?: number;
     api_preflight_blocked_due_posts?: number;
+    api_ready_channels?: number;
+    api_blocked_channels?: number;
     controlled_channels?: number;
     skipped_no_access?: number;
   };
@@ -3425,6 +3455,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         api_preflight: Array.isArray(response.api_preflight) ? response.api_preflight : [],
         api_preflight_summary: response.api_preflight_summary && typeof response.api_preflight_summary === 'object' ? response.api_preflight_summary : {},
         api_preflight_blocked_due_posts: Array.isArray(response.api_preflight_blocked_due_posts) ? response.api_preflight_blocked_due_posts : [],
+        first_api_publish_readiness: response.first_api_publish_readiness && typeof response.first_api_publish_readiness === 'object'
+          ? response.first_api_publish_readiness
+          : undefined,
         recommended_env: response.recommended_env && typeof response.recommended_env === 'object' ? response.recommended_env : {},
         safety: response.safety && typeof response.safety === 'object' ? response.safety : {},
         summary: response.summary && typeof response.summary === 'object' ? response.summary : {},
@@ -6782,6 +6815,68 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ? `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · контролируемо ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · вручную ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`
                               : `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · supervised ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · manual ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`}
                           </div>
+                          {socialLaunchPreflight.first_api_publish_readiness ? (
+                            <div
+                              className={[
+                                'mt-2 rounded-lg border px-2 py-2 text-[11px] leading-5',
+                                socialLaunchPreflight.first_api_publish_readiness.ready
+                                  ? 'border-emerald-200/30 bg-emerald-400/10 text-emerald-50'
+                                  : 'border-amber-200/30 bg-amber-400/10 text-amber-50',
+                              ].join(' ')}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-semibold text-white">
+                                  {isRu ? 'Первый API-пост' : 'First API post'}
+                                </span>
+                                <span className="rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white">
+                                  {socialLaunchPreflight.first_api_publish_readiness.ready
+                                    ? (isRu ? 'есть готовый канал' : 'ready channel')
+                                    : (isRu ? 'нужны ключи' : 'needs keys')}
+                                </span>
+                              </div>
+                              <div className="mt-1">
+                                {isRu
+                                  ? String(socialLaunchPreflight.first_api_publish_readiness.message_ru || '')
+                                  : String(socialLaunchPreflight.first_api_publish_readiness.message_en || '')}
+                              </div>
+                              {(socialLaunchPreflight.first_api_publish_readiness.ready_platforms || []).length > 0 ? (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {(socialLaunchPreflight.first_api_publish_readiness.ready_platforms || []).slice(0, 4).map((item) => (
+                                    <span
+                                      key={`launch-api-ready:${String(item.platform || '')}`}
+                                      className="rounded-full bg-emerald-400/20 px-2 py-0.5 font-medium text-emerald-50"
+                                    >
+                                      {item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {(socialLaunchPreflight.first_api_publish_readiness.blocked_platforms || []).length > 0 ? (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {(socialLaunchPreflight.first_api_publish_readiness.blocked_platforms || []).slice(0, 4).map((item) => (
+                                    <span
+                                      key={`launch-api-blocked:${String(item.platform || '')}`}
+                                      className="rounded-full bg-white/10 px-2 py-0.5 font-medium text-amber-50"
+                                    >
+                                      {item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)}
+                                      {' · '}
+                                      {String(item.status || 'not_ready')}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                              <div className="mt-1 font-medium text-white">
+                                {isRu
+                                  ? String(socialLaunchPreflight.first_api_publish_readiness.next_action_ru || '')
+                                  : String(socialLaunchPreflight.first_api_publish_readiness.next_action_en || '')}
+                              </div>
+                              <div className="mt-1 text-slate-200">
+                                {isRu
+                                  ? String(socialLaunchPreflight.first_api_publish_readiness.publish_path_ru || 'Только после preview, human approval, queue и due-даты.')
+                                  : String(socialLaunchPreflight.first_api_publish_readiness.publish_path_en || 'Only after preview, human approval, queueing, and the due date.')}
+                              </div>
+                            </div>
+                          ) : null}
                           {socialLaunchPreflight.next_action_ru || socialLaunchPreflight.next_action_en ? (
                             <div className="mt-1 font-medium text-white">
                               {isRu ? 'Следующий шаг: ' : 'Next step: '}

@@ -2683,9 +2683,17 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert payload["safe_to_enable_scoped_dispatch"] is True
     assert payload["summary"]["api_due_posts"] == 1
     assert payload["summary"]["controlled_due_posts"] == 1
+    assert payload["summary"]["api_ready_channels"] == 1
+    assert payload["summary"]["api_blocked_channels"] == 1
     assert payload["summary"]["blocked_api_channels"] == 1
     assert payload["blocked_api_channels"][0]["platform"] == "vk"
     assert payload["controlled_channels"][0]["platform"] == "yandex_maps"
+    assert payload["first_api_publish_readiness"]["schema"] == "localos_social_first_api_publish_readiness_v1"
+    assert payload["first_api_publish_readiness"]["status"] == "partial_api_ready"
+    assert payload["first_api_publish_readiness"]["ready"] is True
+    assert payload["first_api_publish_readiness"]["ready_platforms"][0]["platform"] == "telegram"
+    assert payload["first_api_publish_readiness"]["blocked_platforms"][0]["platform"] == "vk"
+    assert "approval" in payload["first_api_publish_readiness"]["publish_path_en"]
     assert payload["recommended_env"]["dispatch"]["SOCIAL_POST_DISPATCH_BUSINESS_ID"] == "biz-1"
     assert payload["recommended_env"]["metrics"]["SOCIAL_POST_METRICS_BUSINESS_ID"] == "biz-1"
     assert payload["safety"]["approval_required"] is True
@@ -2751,6 +2759,11 @@ def test_social_launch_preflight_blocks_due_api_posts_when_live_preflight_fails(
     assert payload["status"] == "api_preflight_blocked"
     assert payload["safe_to_enable_scoped_dispatch"] is False
     assert payload["summary"]["api_preflight_blocked_due_posts"] == 1
+    assert payload["summary"]["api_ready_channels"] == 0
+    assert payload["summary"]["api_blocked_channels"] == 1
+    assert payload["first_api_publish_readiness"]["status"] == "no_api_ready"
+    assert payload["first_api_publish_readiness"]["ready"] is False
+    assert payload["first_api_publish_readiness"]["blocked_platforms"][0]["platform"] == "google_business"
     assert payload["api_preflight_blocked_due_posts"][0]["id"] == "post-google"
     assert payload["api_preflight_blocked_due_posts"][0]["status"] == "missing_binding"
     assert payload["launch_runbook"]["ready"] is False

@@ -64,6 +64,8 @@ REQUIRED_COPY = {
     "first api post approval queue guard": "после preview, approval и расписания",
     "first api post blocked channels": "Сначала исправить:",
     "first api post preflight action": "Проверить API",
+    "launch first api readiness contract": "first_api_publish_readiness",
+    "launch first api needs keys": "нужны ключи",
     "readiness next action": "Что сделать:",
     "channel checks owner heading": "Что проверить",
     "channel check needed label": "Нужно",
