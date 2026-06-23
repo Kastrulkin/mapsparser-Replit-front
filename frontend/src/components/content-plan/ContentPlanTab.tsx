@@ -1799,6 +1799,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const visibleSocialNeedsManual = useMemo(() => (
     visibleSocialPosts.filter((post) => post.status === 'needs_manual_publish')
   ), [visibleSocialPosts]);
+  const visibleSocialPublishedPosts = useMemo(() => (
+    visibleSocialPosts.filter((post) => post.status === 'published')
+  ), [visibleSocialPosts]);
+  const visibleSocialPublishedWithoutPrimaryResult = useMemo(() => (
+    visibleSocialPublishedPosts.filter((post) => Number(post.leads || 0) + Number(post.inquiries || 0) === 0)
+  ), [visibleSocialPublishedPosts]);
   const socialResultSummary = useMemo(() => (
     visibleSocialPosts.reduce((acc, post) => {
       acc.leads += Number(post.leads || 0);
@@ -4019,6 +4025,34 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const queueSelectedSocialPosts = async () => {
     if (!selectedSocialCanQueue.length) return;
     openSocialQueuePreview(selectedSocialCanQueue, 'selected', 'selected-social-queue');
+  };
+
+  const selectPublishedSocialPostsForResult = () => {
+    const itemIds = visibleSocialPublishedPosts
+      .map((post) => String(post.content_plan_item_id || '').trim())
+      .filter(Boolean);
+    const uniqueItemIds = Array.from(new Set(itemIds));
+    if (!uniqueItemIds.length) return;
+    setSelectedItemIds(uniqueItemIds.reduce<Record<string, boolean>>((acc, itemId) => {
+      acc[itemId] = true;
+      return acc;
+    }, {}));
+    setSelectedQueueItemId(uniqueItemIds[0]);
+    setEditorItemId(uniqueItemIds[0]);
+    setActiveZone('queue');
+    setActionSummary({
+      tone: 'neutral',
+      text_ru: `Выбраны опубликованные темы: ${uniqueItemIds.length}. Теперь можно отметить заявки, обращения или ранние реакции.`,
+      text_en: `Published topics selected: ${uniqueItemIds.length}. You can now record leads, inquiries, or early reactions.`,
+      details_ru: [
+        'Это не публикует ничего наружу и не меняет план автоматически.',
+        'После отметки результата LocalOS пересчитает предложения следующего плана.',
+      ],
+      details_en: [
+        'This does not publish externally and does not change the plan automatically.',
+        'After result marking, LocalOS recalculates next-plan proposals.',
+      ],
+    });
   };
 
   const markSelectedSocialPostsPublished = async () => {
@@ -7059,6 +7093,67 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 ))}
               </div>
             </div>
+            {visibleSocialPublishedPosts.length > 0 ? (
+              <div
+                data-testid="social-result-collection-guide"
+                className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm leading-6 text-emerald-900"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                      {isRu ? 'Сбор результата' : 'Result collection'}
+                    </div>
+                    <div className="mt-1 text-base font-semibold text-emerald-950">
+                      {socialPrimaryResultCount > 0
+                        ? (isRu ? 'Есть заявки или обращения' : 'Leads or inquiries recorded')
+                        : (isRu ? 'Отметьте заявки и обращения после публикаций' : 'Record leads and inquiries after publishing')}
+                    </div>
+                    <div className="mt-1 max-w-3xl text-sm leading-6 text-emerald-800">
+                      {isRu
+                        ? 'LocalOS корректирует следующий план по фактам: сначала заявки и обращения, затем комментарии, репосты, клики и охваты. Изменения плана не применяются без подтверждения.'
+                        : 'LocalOS adjusts the next plan from facts: leads and inquiries first, then comments, shares, clicks, and reach. Plan changes are never applied without approval.'}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={selectPublishedSocialPostsForResult}
+                    disabled={visibleSocialPublishedPosts.length === 0}
+                    className="shrink-0 border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-100"
+                  >
+                    {isRu ? 'Выбрать опубликованные' : 'Select published'}
+                  </Button>
+                </div>
+                <div className="mt-3 grid gap-2 text-xs sm:grid-cols-4">
+                  <div className="rounded-xl bg-white px-3 py-2">
+                    <div className="text-base font-semibold text-emerald-950">{visibleSocialPublishedPosts.length}</div>
+                    <div>{isRu ? 'опубликовано' : 'published'}</div>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2">
+                    <div className="text-base font-semibold text-emerald-950">{visibleSocialPublishedWithoutPrimaryResult.length}</div>
+                    <div>{isRu ? 'без заявки/обращения' : 'without lead/inquiry'}</div>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2">
+                    <div className="text-base font-semibold text-emerald-950">{socialPrimaryResultCount}</div>
+                    <div>{isRu ? 'заявки и обращения' : 'leads and inquiries'}</div>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2">
+                    <div className="text-base font-semibold text-emerald-950">{socialEarlySignalCount}</div>
+                    <div>{isRu ? 'ранние сигналы' : 'early signals'}</div>
+                  </div>
+                </div>
+                <div className="mt-3 rounded-xl bg-white px-3 py-2 text-xs leading-5 text-emerald-800">
+                  {selectedSocialCanRecordResults.length > 0
+                    ? (isRu
+                      ? `Выбрано опубликованных постов: ${selectedSocialCanRecordResults.length}. Ниже доступны кнопки “Была заявка” и “Было обращение”.`
+                      : `Published posts selected: ${selectedSocialCanRecordResults.length}. The “Record lead” and “Record inquiry” buttons are available below.`)
+                    : (isRu
+                      ? 'Нажмите “Выбрать опубликованные”, затем отметьте результат по выбранным публикациям.'
+                      : 'Click “Select published”, then record results for the selected publications.')}
+                </div>
+              </div>
+            ) : null}
             {isNetworkMode && itemLocationSummary.length > 1 ? (
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
