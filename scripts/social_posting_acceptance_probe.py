@@ -214,6 +214,7 @@ def build_probe(business_id: str, batch_size: int) -> dict[str, Any]:
         "launch_safe_to_enable_scoped_dispatch": launch_preflight.get("safe_to_enable_scoped_dispatch"),
         "launch_summary": launch_preflight.get("summary", {}),
         "first_api_publish_readiness": launch_preflight.get("first_api_publish_readiness", {}),
+        "first_api_blocker": _first_api_blocker(launch_preflight.get("first_api_publish_readiness", {})),
         "dispatch_readiness": dispatch_readiness,
         "first_cycle_verification": first_cycle_verification,
         "due_queued_post_ids": due_queued_post_ids,
@@ -272,31 +273,78 @@ def _next_required_human_step(
     if due_posts > 0:
         if rehearsal_blocked > 0:
             return {
-                "ru": "Исправьте блокеры rehearsal у due-постов, затем повторите preflight перед dispatch.",
+                "ru": "Исправьте блокеры проверки у постов на текущую дату, затем повторите проверку перед запуском.",
                 "en": "Fix due-post rehearsal blockers, then rerun preflight before dispatch.",
             }
         if rehearsal_ready > 0:
             return {
-                "ru": "Due-посты прошли rehearsal: проверьте live API-preflight и запускайте scoped dispatch только после явного подтверждения.",
+                "ru": "Посты на текущую дату прошли проверку: проверьте API-каналы и запускайте обработку только после явного подтверждения.",
                 "en": "Due posts passed rehearsal: check live API preflight and run scoped dispatch only after explicit approval.",
             }
         return {
-            "ru": "Запустите scoped launch preflight и проверьте ключи перед первым dispatch.",
+            "ru": "Запустите проверку первого цикла и проверьте ключи перед обработкой расписания.",
             "en": "Run scoped launch preflight and verify credentials before the first dispatch.",
         }
     if social_posts > 0:
         return {
-            "ru": "Откройте preview, проверьте тексты, подтвердите и поставьте публикации в расписание.",
+            "ru": "Откройте предпросмотр, проверьте тексты, подтвердите и поставьте публикации в расписание.",
             "en": "Open preview, review copy, approve, and queue the posts.",
         }
     if ready_count > 0 and ready_candidates:
         return {
-            "ru": "В UI нажмите “Подготовить каналы” для готовой темы. Это создаст drafts, но не опубликует наружу.",
+            "ru": "В UI нажмите “Подготовить каналы” для готовой темы. Это создаст черновики, но не опубликует наружу.",
             "en": "In the UI, click Prepare channels for a ready topic. This creates drafts but does not publish externally.",
         }
     return {
         "ru": "Сначала допишите текст хотя бы для одной темы контент-плана.",
         "en": "First, add copy to at least one content plan item.",
+    }
+
+
+def _first_api_blocker(readiness: Any) -> dict[str, Any]:
+    if not isinstance(readiness, dict):
+        return {
+            "status": "unknown",
+            "platform": "",
+            "platform_label": "",
+            "next_step_ru": "Сначала запустите проверку API-каналов для выбранного бизнеса.",
+            "next_step_en": "First run the API channel readiness check for the selected business.",
+        }
+    if readiness.get("ready") is True:
+        ready_platforms = readiness.get("ready_platforms") if isinstance(readiness.get("ready_platforms"), list) else []
+        first_ready = ready_platforms[0] if ready_platforms and isinstance(ready_platforms[0], dict) else {}
+        label = str(first_ready.get("platform_label") or readiness.get("recommended_start_platform", {}).get("platform_label") or "").strip()
+        return {
+            "status": "ready",
+            "platform": str(first_ready.get("platform") or "").strip(),
+            "platform_label": label,
+            "next_step_ru": f"{label or 'API-канал'} готов: откройте предпросмотр, подтвердите текст и поставьте один пост в расписание.",
+            "next_step_en": f"{label or 'API channel'} is ready: review preview, approve copy, and queue one post.",
+        }
+    blocker = readiness.get("recommended_start_platform")
+    if not isinstance(blocker, dict):
+        blocker = {}
+    platform = str(blocker.get("platform") or "").strip()
+    label = str(blocker.get("platform_label") or platform or "").strip()
+    message_ru = str(blocker.get("message_ru") or readiness.get("message_ru") or "").strip()
+    message_en = str(blocker.get("message_en") or readiness.get("message_en") or "").strip()
+    if platform == "telegram":
+        next_ru = "Сначала подключите Telegram: сохраните bot token и chat id в настройках бизнеса, затем повторите проверку API-каналов."
+        next_en = "Set up Telegram first: save bot token and chat id in business settings, then rerun the API readiness check."
+    elif platform == "vk":
+        next_ru = "Сначала подключите VK: добавьте аккаунт/группу и права на публикацию, затем повторите проверку API-каналов."
+        next_en = "Set up VK first: connect account/group and wall post permission, then rerun the API readiness check."
+    else:
+        next_ru = readiness.get("next_action_ru") or "Подключите первый API-канал, затем повторите проверку и поставьте один пост в расписание."
+        next_en = readiness.get("next_action_en") or "Connect the first API channel, then rerun readiness and queue one post."
+    return {
+        "status": str(readiness.get("status") or "blocked").strip(),
+        "platform": platform,
+        "platform_label": label,
+        "message_ru": message_ru,
+        "message_en": message_en,
+        "next_step_ru": next_ru,
+        "next_step_en": next_en,
     }
 
 

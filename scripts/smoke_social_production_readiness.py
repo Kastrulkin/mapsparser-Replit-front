@@ -269,6 +269,8 @@ REQUIRED_ACCEPTANCE_PROBE_CONTRACT = {
     "dispatch readiness": "dispatch_readiness",
     "first cycle verification": "first_cycle_verification",
     "first API publish readiness": "first_api_publish_readiness",
+    "first API blocker": "first_api_blocker",
+    "first API blocker next step": "next_step_ru",
     "safe scoped dispatch": "launch_safe_to_enable_scoped_dispatch",
     "dispatch dry run": "dispatch_preview",
     "launch rehearsal": "launch_rehearsal",
