@@ -4792,6 +4792,7 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None, cur
     safety_contract = _social_supervised_safety_contract()
     missing_reason = str(capability_status.get("reason") or "").strip()
     catalog_error = missing_reason == "openclaw_catalog_error" or str(capability_status.get("source") or "").strip() == "catalog_error"
+    private_sandbox_bridge = missing_reason == "sandbox_bridge_private_host" or str(capability_status.get("source") or "").strip() == "sandbox_bridge_private_host"
     if ready and handoff_ready:
         message_ru = "OpenClaw browser-use готов: Яндекс/2ГИС можно вести как контролируемое размещение без финального клика."
         message_en = "OpenClaw browser-use is ready: Yandex/2GIS can use supervised placement without the final click."
@@ -4802,6 +4803,11 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None, cur
         message_en = "OpenClaw browser-use is available, but supervised task delivery is not ready: LocalOS will prepare manual fallback instead of an external task."
         next_action_ru = str(delivery_readiness.get("next_action_ru") or "Настройте доставку задачи OpenClaw или используйте ручное размещение.").strip()
         next_action_en = str(delivery_readiness.get("next_action_en") or "Configure the OpenClaw callback/outbox or use manual placement.").strip()
+    elif private_sandbox_bridge:
+        message_ru = "OpenClaw browser-use не подтверждён: настроен только приватный sandbox bridge, поэтому Яндекс/2ГИС останутся в ручном режиме."
+        message_en = "OpenClaw browser-use is not confirmed: only a private sandbox bridge is configured, so Yandex/2GIS will stay in manual fallback."
+        next_action_ru = "Настройте публичный OPENCLAW_BASE_URL или OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL для production handoff; до этого используйте ручное размещение."
+        next_action_en = "Set a public OPENCLAW_BASE_URL or OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL for production handoff; use manual placement until then."
     elif catalog_error:
         message_ru = "OpenClaw browser-use не подтверждён: LocalOS не смог прочитать capability catalog, поэтому Яндекс/2ГИС останутся в ручном режиме."
         message_en = "OpenClaw browser-use is not confirmed: LocalOS could not read the capability catalog, so Yandex/2GIS will stay in manual fallback."
@@ -4924,10 +4930,14 @@ def _social_openclaw_browser_diagnostics(capability_status: dict[str, Any], is_r
             lines.append(f"Действие OpenClaw: {action_ref}.")
         if reason and not ready:
             lines.append(f"Причина ручного режима: {reason}.")
-        if error and not ready:
+        if error and not ready and reason == "sandbox_bridge_private_host":
+            lines.append("Sandbox bridge указывает на приватный или локальный адрес; production handoff через него не включается.")
+        elif error and not ready:
             lines.append(f"Ошибка каталога OpenClaw: {error}.")
         if ready:
             lines.append("Следующий шаг: создать контролируемую задачу у поста Яндекс/2ГИС и проверить предпросмотр.")
+        elif reason == "sandbox_bridge_private_host" or source == "sandbox_bridge_private_host":
+            lines.append("Следующий шаг: настроить публичный OPENCLAW_BASE_URL/callback или использовать ручной режим.")
         elif reason == "openclaw_catalog_error" or source == "catalog_error":
             lines.append("Следующий шаг: сделать OpenClaw catalog доступным с production VPS или оставить ручной режим.")
         else:
@@ -4946,10 +4956,14 @@ def _social_openclaw_browser_diagnostics(capability_status: dict[str, Any], is_r
         lines.append(f"OpenClaw action: {action_ref}.")
     if reason and not ready:
         lines.append(f"Fallback reason: {reason}.")
-    if error and not ready:
+    if error and not ready and reason == "sandbox_bridge_private_host":
+        lines.append("The sandbox bridge points to a private or local host; production handoff is not enabled through it.")
+    elif error and not ready:
         lines.append(f"OpenClaw catalog error: {error}.")
     if ready:
         lines.append("Next step: create supervised Yandex/2GIS placement and review the preview.")
+    elif reason == "sandbox_bridge_private_host" or source == "sandbox_bridge_private_host":
+        lines.append("Next step: set a public OPENCLAW_BASE_URL/callback or use manual fallback.")
     elif reason == "openclaw_catalog_error" or source == "catalog_error":
         lines.append("Next step: make the OpenClaw catalog reachable from the production VPS or keep manual fallback.")
     else:

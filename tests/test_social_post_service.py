@@ -850,6 +850,26 @@ def test_social_openclaw_browser_readiness_blocks_handoff_without_callback(monke
     assert "ручной режим" in readiness["message_ru"]
 
 
+def test_social_openclaw_browser_readiness_explains_private_sandbox_bridge(monkeypatch):
+    monkeypatch.delenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_SUPERVISED_CALLBACK_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_CAPABILITY_CATALOG_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_SOCIAL_SUPERVISED_ALLOW_SANDBOX_CALLBACK", raising=False)
+    monkeypatch.setenv("OPENCLAW_SANDBOX_BRIDGE_URL", "http://192.168.0.177:8091/capabilities")
+
+    status = openclaw_browser_capability_status()
+    readiness = _social_openclaw_browser_readiness(status)
+
+    assert readiness["ready"] is False
+    assert readiness["status"] == "manual_fallback"
+    assert readiness["source"] == "sandbox_bridge_private_host"
+    assert "приватный sandbox bridge" in readiness["message_ru"]
+    assert "OPENCLAW_BASE_URL" in readiness["next_action_ru"]
+    assert any("Sandbox bridge" in item for item in readiness["diagnostics_ru"])
+    assert not any("Ошибка каталога OpenClaw" in item for item in readiness["diagnostics_ru"])
+
+
 def test_social_openclaw_suggested_callback_prefers_base_url(monkeypatch):
     monkeypatch.delenv("OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL", raising=False)
     monkeypatch.delenv("OPENCLAW_SUPERVISED_CALLBACK_URL", raising=False)
