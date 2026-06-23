@@ -1118,6 +1118,8 @@ type SocialApiChannelPreflight = {
   status?: string;
   message_ru?: string;
   message_en?: string;
+  missing_fields?: string[];
+  settings_path?: string;
   connection_checks?: SocialChannelConnectionCheck[];
   read_only?: boolean;
   external_publish_performed?: boolean;
@@ -2153,7 +2155,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const socialReadinessSetupPath = useMemo(() => {
     const firstBlocked = socialReadinessSummary.blockedApiChannels[0];
     if (!firstBlocked) return '/dashboard/settings?focus=integrations';
-    return _socialSettingsPathForPlatform(String(firstBlocked.platform || ''));
+    return firstBlocked.settings_path || _socialSettingsPathForPlatform(String(firstBlocked.platform || ''));
   }, [socialReadinessSummary.blockedApiChannels]);
   const socialChannelConnectionGuide = useMemo(() => {
     const apiChannels = socialChannelReadiness
@@ -9671,7 +9673,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 size="sm"
                                 variant="outline"
                                 className="h-8 rounded-lg bg-white px-2.5 text-[11px]"
-                                onClick={() => navigate(_socialSettingsPathForPlatform(String(socialFirstApiPublishReadiness.firstBlocked?.platform || '')))}
+                                onClick={() => navigate(socialFirstApiPublishReadiness.firstBlocked?.settings_path || _socialSettingsPathForPlatform(String(socialFirstApiPublishReadiness.firstBlocked?.platform || '')))}
                               >
                                 {isRu ? 'Открыть настройку' : 'Open setup'}
                               </Button>
@@ -9814,20 +9816,40 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             </span>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            {socialApiPreflight.map((item) => (
-                              <span
-                                key={`api-preflight-summary:${String(item.platform || '')}`}
-                                className={
-                                  item.ready
-                                    ? 'rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-800'
-                                    : 'rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-amber-800'
-                                }
-                              >
-                                {item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)}
-                                {' · '}
-                                {item.ready ? (isRu ? 'готов' : 'ready') : String(item.status || (isRu ? 'нужно внимание' : 'needs attention'))}
-                              </span>
-                            ))}
+                            {socialApiPreflight.map((item) => {
+                              const missingFields = (item.missing_fields || []).slice(0, 3);
+                              const setupPath = item.settings_path || _socialSettingsPathForPlatform(String(item.platform || ''));
+                              return (
+                                <span
+                                  key={`api-preflight-summary:${String(item.platform || '')}`}
+                                  className={
+                                    item.ready
+                                      ? 'inline-flex flex-wrap items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-800'
+                                      : 'inline-flex flex-wrap items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-amber-800'
+                                  }
+                                >
+                                  <span>
+                                    {item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)}
+                                    {' · '}
+                                    {item.ready ? (isRu ? 'готов' : 'ready') : String(item.status || (isRu ? 'нужно внимание' : 'needs attention'))}
+                                  </span>
+                                  {!item.ready && missingFields.length > 0 ? (
+                                    <span className="text-[10px] font-semibold text-amber-700">
+                                      {missingFields.join(', ')}
+                                    </span>
+                                  ) : null}
+                                  {!item.ready ? (
+                                    <button
+                                      type="button"
+                                      className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 underline-offset-2 hover:underline"
+                                      onClick={() => navigate(setupPath)}
+                                    >
+                                      {isRu ? 'настроить' : 'setup'}
+                                    </button>
+                                  ) : null}
+                                </span>
+                              );
+                            })}
                           </div>
                           {socialApiPreflightSummary.needsAttention.length > 0 ? (
                             <div className="mt-2 text-sky-800">
