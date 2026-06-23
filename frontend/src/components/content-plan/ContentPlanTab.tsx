@@ -1734,35 +1734,35 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (socialDispatchBlockedWithoutScope) {
       return {
         tone: 'warning',
-        titleRu: 'Dispatch включён, но остановлен защитой',
+        titleRu: 'Расписание включено, но остановлено защитой',
         titleEn: 'Dispatch is enabled but guarded',
-        textRu: 'LocalOS не запустит публикации, пока не указан business scope. Укажите SOCIAL_POST_DISPATCH_BUSINESS_ID для тестового бизнеса или включите явный allow-all.',
+        textRu: 'LocalOS не запустит публикации, пока не выбран конкретный бизнес для первого цикла. Укажите SOCIAL_POST_DISPATCH_BUSINESS_ID для тестового бизнеса или включите явное allow-all.',
         textEn: 'LocalOS will not publish until a business scope is set. Set SOCIAL_POST_DISPATCH_BUSINESS_ID for the test business or enable explicit allow-all.',
       };
     }
     if (socialDispatchScopeMismatch) {
       return {
         tone: 'warning',
-        titleRu: 'Dispatch включён для другого бизнеса',
+        titleRu: 'Расписание включено для другого бизнеса',
         titleEn: 'Dispatch is scoped to another business',
-        textRu: `Worker сейчас ограничен бизнесом ${String(socialRuntimeStatus?.dispatch?.business_scope || '')}. Посты этого бизнеса можно готовить и ставить в расписание, но они не уйдут, пока scope не совпадёт.`,
+        textRu: `Исполнитель расписания сейчас ограничен бизнесом ${String(socialRuntimeStatus?.dispatch?.business_scope || '')}. Посты этого бизнеса можно готовить и ставить в расписание, но они не уйдут, пока область запуска не совпадёт.`,
         textEn: `The worker is currently scoped to business ${String(socialRuntimeStatus?.dispatch?.business_scope || '')}. You can prepare and queue this business posts, but they will not publish until the scope matches.`,
       };
     }
     if (socialDispatchEnabled) {
       return {
         tone: 'ok',
-        titleRu: 'Worker публикаций включён',
+        titleRu: 'Публикация по расписанию включена',
         titleEn: 'Publishing worker is enabled',
-        textRu: 'Посты в расписании будут обработаны по дате: API-каналы уйдут через adapters, карты перейдут в контролируемое или ручное размещение.',
+        textRu: 'Посты в расписании будут обработаны по дате: API-каналы уйдут через подключённые интеграции, карты перейдут в контролируемое или ручное размещение.',
         textEn: 'Scheduled posts will be processed by date: API channels use adapters, maps move to supervised placement or manual handoff.',
       };
     }
     return {
       tone: 'warning',
-      titleRu: 'Worker публикаций сейчас выключен',
+      titleRu: 'Публикация по расписанию сейчас выключена',
       titleEn: 'Publishing worker is currently disabled',
-      textRu: 'Можно готовить, проверять и ставить посты в расписание, но автоматическое исполнение не начнётся до включения dispatch. Для Яндекс/2ГИС останется контролируемое или ручное размещение.',
+      textRu: 'Можно готовить, проверять и ставить посты в расписание, но исполнение не начнётся до включения фонового запуска. Для Яндекс/2ГИС останется контролируемое или ручное размещение.',
       textEn: 'You can prepare, review, and queue posts, but automatic execution will not start until dispatch is enabled. Yandex/2GIS remain supervised handoff.',
     };
   }, [socialDispatchBlockedWithoutScope, socialDispatchEnabled, socialDispatchScopeMismatch, socialRuntimeStatus?.dispatch?.business_scope]);
@@ -1772,27 +1772,27 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (socialDispatchBlockedWithoutScope) {
       return {
         tone: 'success',
-        text_ru: `${subjectRu} Queue сохранена, но LocalOS не запустит внешний worker без SOCIAL_POST_DISPATCH_BUSINESS_ID или явного allow-all.`,
+        text_ru: `${subjectRu} Расписание сохранено, но LocalOS не запустит внешнее исполнение без SOCIAL_POST_DISPATCH_BUSINESS_ID или явного allow-all.`,
         text_en: `${subjectEn} The queue is saved, but LocalOS will not start the external worker without SOCIAL_POST_DISPATCH_BUSINESS_ID or explicit allow-all.`,
       };
     }
     if (socialDispatchScopeMismatch) {
       return {
         tone: 'success',
-        text_ru: `${subjectRu} Queue сохранена, но текущий worker смотрит другой business scope и не обработает эти посты.`,
+        text_ru: `${subjectRu} Расписание сохранено, но текущий исполнитель смотрит другой business scope и не обработает эти посты.`,
         text_en: `${subjectEn} The queue is saved, but the current worker is scoped to another business and will not process these posts.`,
       };
     }
     if (socialDispatchEnabled) {
       return {
         tone: 'success',
-        text_ru: `${subjectRu} Worker обработает их по дате: API-каналы пойдут через adapters, Яндекс/2ГИС - в контролируемое размещение.`,
+        text_ru: `${subjectRu} Исполнитель обработает их по дате: API-каналы пойдут через интеграции, Яндекс/2ГИС - в контролируемое размещение.`,
         text_en: `${subjectEn} The worker will process them on schedule: API channels use adapters, Yandex/2GIS move to supervised placement.`,
       };
     }
     return {
       tone: 'success',
-      text_ru: `${subjectRu} Dispatch выключен: очередь сохранена, но внешний запуск начнётся только после включения worker.`,
+      text_ru: `${subjectRu} Фоновый запуск выключен: расписание сохранено, но внешнее исполнение начнётся только после включения исполнителя.`,
       text_en: `${subjectEn} Dispatch is disabled: the queue is saved, but external execution starts only after the worker is enabled.`,
     };
   };
@@ -1826,9 +1826,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (visibleSocialNeedsReview.length > 0) {
       return {
         action: 'review',
-        titleRu: 'Проверьте тексты перед approval',
+        titleRu: 'Проверьте тексты перед подтверждением',
         titleEn: 'Review copy before approval',
-        descriptionRu: 'Это безопасный preview-этап: текст можно поправить, а внешняя публикация ещё не запускается.',
+        descriptionRu: 'Это безопасный предпросмотр: текст можно поправить, а внешняя публикация ещё не запускается.',
         descriptionEn: 'This is the safe preview step: copy can be edited and external publishing is not started yet.',
         ctaRu: 'Открыть на проверку',
         ctaEn: 'Open review',
@@ -1839,22 +1839,22 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       return {
         action: 'queue',
         titleRu: socialDispatchBlockedWithoutScope
-          ? 'Поставьте в расписание, затем задайте business scope'
+          ? 'Поставьте в расписание, затем выберите бизнес для запуска'
           : socialDispatchScopeMismatch
-            ? 'Поставьте в расписание, затем исправьте scope'
-            : socialDispatchEnabled ? 'Поставьте утверждённое в расписание' : 'Поставьте в расписание, затем включите dispatch',
+            ? 'Поставьте в расписание, затем исправьте область запуска'
+            : socialDispatchEnabled ? 'Поставьте утверждённое в расписание' : 'Поставьте в расписание, затем включите фоновый запуск',
         titleEn: socialDispatchBlockedWithoutScope
           ? 'Queue posts, then set business scope'
           : socialDispatchScopeMismatch
             ? 'Queue posts, then fix dispatch scope'
             : socialDispatchEnabled ? 'Queue approved posts' : 'Queue posts, then enable dispatch',
         descriptionRu: socialDispatchBlockedWithoutScope
-          ? 'Queue зафиксирует approval и даты, но worker не начнёт внешние действия, пока dispatch включён без SOCIAL_POST_DISPATCH_BUSINESS_ID.'
+          ? 'Расписание зафиксирует подтверждение и даты, но исполнитель не начнёт внешние действия, пока фоновый запуск включён без SOCIAL_POST_DISPATCH_BUSINESS_ID.'
           : socialDispatchScopeMismatch
-            ? 'Queue зафиксирует approval и даты, но worker сейчас смотрит другой business scope и не обработает эти посты.'
+            ? 'Расписание зафиксирует подтверждение и даты, но исполнитель сейчас смотрит другой бизнес и не обработает эти посты.'
             : socialDispatchEnabled
-              ? 'Worker сможет исполнить API-каналы по дате, а карты перевести в контролируемое размещение.'
-              : 'Queue зафиксирует approval и даты, но внешнее исполнение не стартует, пока worker dispatch выключен.',
+              ? 'Исполнитель сможет по дате отправить API-каналы, а карты перевести в контролируемое размещение.'
+              : 'Расписание зафиксирует подтверждение и даты, но внешнее исполнение не стартует, пока фоновый запуск выключен.',
         descriptionEn: socialDispatchBlockedWithoutScope
           ? 'Queueing records approval and dates, but the worker will not start external actions while dispatch is enabled without SOCIAL_POST_DISPATCH_BUSINESS_ID.'
           : socialDispatchScopeMismatch
@@ -1884,7 +1884,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         action: 'manual',
         titleRu: 'Подключите канал или разместите вручную',
         titleEn: 'Connect the channel or publish manually',
-        descriptionRu: 'Этот статус означает не OpenClaw-задачу, а отсутствие ключей/прав или ручной fallback. Исправьте подключение либо отметьте размещение вручную.',
+        descriptionRu: 'Этот статус означает не OpenClaw-задачу, а отсутствие ключей/прав или ручной режим. Исправьте подключение либо отметьте размещение вручную.',
         descriptionEn: 'This status is not an OpenClaw task: keys/permissions are missing or manual fallback is needed. Fix the connection or mark manual placement.',
         ctaRu: 'Открыть публикацию',
         ctaEn: 'Open post',
@@ -1920,7 +1920,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         action: 'wait',
         titleRu: 'Публикации ждут дату',
         titleEn: 'Posts are waiting for schedule',
-        descriptionRu: 'Worker заберёт только due-посты с approval. Если канал не готов, конкретный пост получит понятный статус.',
+        descriptionRu: 'Исполнитель возьмёт только подтверждённые посты, когда наступит дата. Если канал не готов, конкретный пост получит понятный статус.',
         descriptionEn: 'The worker picks only due approved posts. If a channel is not ready, that post gets a clear status.',
         ctaRu: 'Обновить очередь',
         ctaEn: 'Refresh queue',
@@ -2133,8 +2133,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         labelEn: 'Copy reviewed',
         status: totalPosts === 0 ? 'pending' : needsReview > 0 ? 'current' : 'done',
         detailRu: needsReview > 0
-          ? `Нужно проверить перед approval: ${needsReview}`
-          : 'Preview и approval отделены от постановки в расписание.',
+          ? `Нужно проверить перед подтверждением: ${needsReview}`
+          : 'Предпросмотр и подтверждение отделены от постановки в расписание.',
         detailEn: needsReview > 0
           ? `Needs review before approval: ${needsReview}`
           : 'Preview and approval are separate from queueing.',
@@ -2155,7 +2155,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           ? `Утверждено, но ещё не в расписании: ${canQueue}`
           : scheduled > 0
             ? `Ждёт даты публикации: ${scheduled}`
-            : 'После approval нажмите “Поставить в расписание”.',
+            : 'После подтверждения нажмите “Поставить в расписание”.',
         detailEn: canQueue > 0
           ? `Approved but not queued: ${canQueue}`
           : scheduled > 0
@@ -2184,7 +2184,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               ? `Нужен ручной fallback или подключение: ${manual}`
               : published > 0
                 ? `Опубликовано: ${published}`
-                : 'API уйдут через worker; карты останутся в контролируемом или ручном режиме.',
+                : 'API уйдут по расписанию; карты останутся в контролируемом или ручном режиме.',
         detailEn: failed > 0
           ? `Failures: ${failed}. Open the post and retry or switch to manual mode.`
           : supervised > 0
@@ -2534,7 +2534,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (planOperationalSummary.readyToPublish > 0) {
       insights.push({
         key: 'plan:ready',
-        textRu: `${planOperationalSummary.readyToPublish} черновиков уже готовы как текст. Следующий шаг — разложить их по каналам и проверить preview.`,
+        textRu: `${planOperationalSummary.readyToPublish} черновиков уже готовы как текст. Следующий шаг — разложить их по каналам и проверить предпросмотр.`,
         textEn: `${planOperationalSummary.readyToPublish} drafts are ready as copy. Next, turn them into channel posts and review the preview.`,
       });
     }
@@ -3109,7 +3109,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     });
     setActionSummary({
       tone: 'neutral',
-      text_ru: 'Approval preview готов. Проверьте, что именно подтверждаете: это только проверка текста, без внешней публикации.',
+      text_ru: 'Предпросмотр подтверждения готов. Проверьте, что именно подтверждаете: это только проверка текста, без внешней публикации.',
       text_en: 'Approval preview is ready. Review exactly what you approve: this only confirms copy, without external publishing.',
     });
   };
@@ -3125,7 +3125,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (summary.emptyText > 0) {
       setActionSummary({
         tone: 'warning',
-        text_ru: `Перед approval заполните текст: ${summary.emptyText}. Пустой post нельзя подтверждать к исполнению.`,
+        text_ru: `Перед подтверждением заполните текст: ${summary.emptyText}. Пустой пост нельзя подтверждать к исполнению.`,
         text_en: `Add copy before approval: ${summary.emptyText}. Empty posts cannot be approved for execution.`,
       });
       return;
@@ -3150,8 +3150,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           : 'Selected posts approved. External publishing has not started yet.',
         details_ru: [
           'Следующий шаг - “Поставить в расписание”.',
-          'API-каналы пойдут в worker только после queue и даты публикации.',
-          'Яндекс/2ГИС после queue останутся контролируемым или ручным размещением.',
+          'API-каналы пойдут в исполнение только после постановки в расписание и даты публикации.',
+          'Яндекс/2ГИС после постановки в расписание останутся контролируемым или ручным размещением.',
         ],
         details_en: [
           'Next step: “Queue on schedule”.',
@@ -3210,7 +3210,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     });
     setActionSummary({
       tone: 'neutral',
-      text_ru: 'Preview расписания готов. Проверьте, что именно разрешаете worker’у выполнить по дате.',
+      text_ru: 'Предпросмотр расписания готов. Проверьте, что именно разрешаете выполнить по дате.',
       text_en: 'Queue preview is ready. Review exactly what you allow the worker to execute on schedule.',
     });
   };
@@ -3360,7 +3360,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setError('');
     setActionSummary(null);
     const reason = isRu
-      ? 'Контролируемое размещение заблокировано: нужен ручной fallback (логин, капча или изменённый интерфейс площадки).'
+      ? 'Контролируемое размещение заблокировано: нужен ручной режим (логин, капча или изменённый интерфейс площадки).'
       : 'Supervised placement is blocked: manual fallback is needed (login, captcha, or changed platform UI).';
     try {
       await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/mark-supervised-blocked`, {
@@ -3373,7 +3373,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
       setActionSummary({
         tone: 'warning',
-        text_ru: 'Пост переведён в ручной fallback. Текст и ссылка на площадку остались доступны, план не сорван.',
+        text_ru: 'Пост переведён в ручной режим. Текст и ссылка на площадку остались доступны, план не сорван.',
         text_en: 'Post moved to manual fallback. Copy and platform link remain available, and the plan is not blocked.',
       });
     } catch (blockedError) {
@@ -3407,8 +3407,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setActionSummary({
         tone: status === 'needs_manual_publish' ? 'warning' : 'success',
         text_ru: status === 'needs_manual_publish'
-          ? 'Контролируемое размещение подготовлено как ручной fallback: OpenClaw browser-use сейчас недоступен или не подтверждён.'
-          : 'Контролируемое размещение подготовлено. Проверьте инструкцию, откройте площадку и завершите размещение только после проверки preview.',
+          ? 'Контролируемое размещение подготовлено как ручной режим: браузерное размещение OpenClaw сейчас недоступно или не подтверждено.'
+          : 'Контролируемое размещение подготовлено. Проверьте инструкцию, откройте площадку и завершите размещение только после проверки предпросмотра.',
         text_en: status === 'needs_manual_publish'
           ? 'Supervised placement was prepared as manual fallback: OpenClaw browser-use is unavailable or not confirmed.'
           : 'Supervised placement prepared. Review the instructions, open the platform, and finish placement only after preview review.',
@@ -3437,8 +3437,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setActionSummary({
         tone: readiness?.ready ? 'success' : 'warning',
         text_ru: readiness?.ready
-          ? 'OpenClaw browser-use подтверждён. Яндекс/2ГИС можно вести через контролируемое размещение без финального клика.'
-          : 'OpenClaw browser-use не подтверждён. Яндекс/2ГИС останутся в ручном fallback, план не будет сорван.',
+          ? 'Браузерное размещение OpenClaw подтверждено. Яндекс/2ГИС можно вести через контролируемое размещение без финального клика.'
+          : 'Браузерное размещение OpenClaw не подтверждено. Яндекс/2ГИС останутся в ручном режиме, план не будет сорван.',
         text_en: readiness?.ready
           ? 'OpenClaw browser-use is confirmed. Yandex/2GIS can use supervised placement without the final click.'
           : 'OpenClaw browser-use is not confirmed. Yandex/2GIS will stay in manual fallback, and the plan will not be blocked.',
@@ -3446,7 +3446,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         details_en: _socialOpenClawReadinessDetails(readiness, false),
       });
     } catch (checkError) {
-      const message = checkError instanceof Error ? checkError.message : (isRu ? 'Не удалось проверить OpenClaw browser-use' : 'Could not check OpenClaw browser-use');
+      const message = checkError instanceof Error ? checkError.message : (isRu ? 'Не удалось проверить браузерное размещение OpenClaw' : 'Could not check OpenClaw browser-use');
       setError(message);
     } finally {
       setSocialBusyAction('');
@@ -3470,7 +3470,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         tone: attentionCount > 0 ? 'warning' : 'success',
         text_ru: attentionCount > 0
           ? `API-каналы проверены без публикации: готовы ${readyCount}, требуют внимания ${attentionCount}. Исправьте ключи/права до расписания.`
-          : `API-каналы проверены без публикации: готовы ${readyCount}. Публикация всё равно начнётся только после approval и расписания.`,
+          : `API-каналы проверены без публикации: готовы ${readyCount}. Публикация всё равно начнётся только после подтверждения и расписания.`,
         text_en: attentionCount > 0
           ? `API channels checked without publishing: ready ${readyCount}, need attention ${attentionCount}. Fix keys/permissions before scheduling.`
           : `API channels checked without publishing: ready ${readyCount}. Publishing still starts only after approval and queueing.`,
@@ -3510,11 +3510,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       await copyTextToClipboard([...lines, ...runbookLines].join('\n'));
       setActionSummary({
         tone: 'success',
-        text_ru: 'Env и runbook первого цикла скопированы. Включайте worker только для выбранного бизнеса и проверьте логи после одного цикла.',
+        text_ru: 'Env и runbook первого цикла скопированы. Включайте запуск только для выбранного бизнеса и проверьте логи после одного цикла.',
         text_en: 'Scoped dispatch env and first-cycle runbook copied. Enable the worker only for the selected business and check logs after one cycle.',
       });
     } catch {
-      setError(isRu ? 'Не удалось скопировать env для worker' : 'Could not copy worker env');
+      setError(isRu ? 'Не удалось скопировать env для запуска' : 'Could not copy worker env');
     }
   };
 
@@ -3647,12 +3647,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
       setActionSummary({
         tone: 'neutral',
-        text_ru: 'Preview подготовки каналов готов. Проверьте сводку и подтвердите создание drafts отдельной кнопкой.',
+        text_ru: 'Предпросмотр подготовки каналов готов. Проверьте сводку и подтвердите создание черновиков отдельной кнопкой.',
         text_en: 'Channel preparation preview is ready. Review the summary and confirm draft creation with a separate button.',
       });
       return false;
     } catch (previewError) {
-      const message = previewError instanceof Error ? previewError.message : (isRu ? 'Не удалось открыть preview подготовки каналов' : 'Could not open channel preparation preview');
+      const message = previewError instanceof Error ? previewError.message : (isRu ? 'Не удалось открыть предпросмотр подготовки каналов' : 'Could not open channel preparation preview');
       setError(message);
       return false;
     } finally {
@@ -3692,15 +3692,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         tone: 'success',
         text_ru: preview.source === 'selected'
           ? 'Каналы подготовлены для выбранных тем. Следующий шаг - проверить тексты.'
-          : 'Каналы подготовлены. Следующий безопасный шаг - открыть preview и проверить тексты.',
+          : 'Каналы подготовлены. Следующий безопасный шаг - открыть предпросмотр и проверить тексты.',
         text_en: preview.source === 'selected'
           ? 'Channels prepared for selected items. Next step: review copy.'
           : 'Channels prepared. Next safe step: open preview and review copy.',
         details_ru: [
           preview.source === 'selected'
-            ? 'Выбранные темы остались отмечены. В панели ниже откройте preview, сохраните правки и нажмите “Подтвердить посты”.'
-            : 'LocalOS отметил подготовленные темы, чтобы bulk approval был виден сразу.',
-          'Наружу ничего не отправлено: approval и постановка в расписание идут отдельными шагами.',
+            ? 'Выбранные темы остались отмечены. В панели ниже откройте предпросмотр, сохраните правки и нажмите “Подтвердить посты”.'
+            : 'LocalOS отметил подготовленные темы, чтобы массовое подтверждение было видно сразу.',
+          'Наружу ничего не отправлено: подтверждение и постановка в расписание идут отдельными шагами.',
         ],
         details_en: [
           preview.source === 'selected'
@@ -3722,7 +3722,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (selectedSocialDirtyReviewPosts.length > 0) {
       setActionSummary({
         tone: 'warning',
-        text_ru: `Сначала сохраните правки текста: ${selectedSocialDirtyReviewPosts.length}. Bulk approval не подтвердит несохранённый preview.`,
+        text_ru: `Сначала сохраните правки текста: ${selectedSocialDirtyReviewPosts.length}. Массовое подтверждение не подтвердит несохранённый предпросмотр.`,
         text_en: `Save copy edits first: ${selectedSocialDirtyReviewPosts.length}. Bulk approval will not approve unsaved preview text.`,
       });
       return;
@@ -3937,7 +3937,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       const dryRunMessageEn = String(preview.readiness?.message_en || '');
       setActionSummary({
         tone: manualCount > 0 || Number(preview.skipped_no_access || 0) > 0 ? 'warning' : 'success',
-        text_ru: `Dry-run расписания по текущему бизнесу: due-постов ${preview.picked || 0}, API ${apiCount}, контролируемое размещение ${supervisedCount}, вручную ${manualCount}. Наружу ничего не отправлено.`,
+        text_ru: `Проверка расписания по текущему бизнесу: пора публиковать ${preview.picked || 0}, API ${apiCount}, контролируемое размещение ${supervisedCount}, вручную ${manualCount}. Наружу ничего не отправлено.`,
         text_en: `Schedule dry-run for the current business: due posts ${preview.picked || 0}, API ${apiCount}, supervised ${supervisedCount}, manual ${manualCount}. Nothing was sent externally.`,
         details_ru: dryRunMessageRu ? [dryRunMessageRu] : [],
         details_en: dryRunMessageEn ? [dryRunMessageEn] : [],
@@ -4017,10 +4017,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       }
       setActionSummary({
         tone: preflight.production_readiness?.ready_for_first_scoped_cycle || preflight.safe_to_enable_scoped_dispatch ? 'success' : 'warning',
-        text_ru: preflight.production_readiness?.summary_ru || preflight.message_ru || 'Preflight запуска worker готов.',
+        text_ru: preflight.production_readiness?.summary_ru || preflight.message_ru || 'Проверка запуска по расписанию готова.',
         text_en: preflight.production_readiness?.summary_en || preflight.message_en || 'Worker launch preflight is ready.',
         details_ru: [
-          `Due: ${Number(preflight.summary?.due_posts || 0)} · API: ${Number(preflight.summary?.api_due_posts || 0)} · контролируемо: ${Number(preflight.summary?.controlled_due_posts || 0)} · вручную: ${Number(preflight.summary?.manual_due_posts || 0)}.`,
+          `Пора публиковать: ${Number(preflight.summary?.due_posts || 0)} · API: ${Number(preflight.summary?.api_due_posts || 0)} · контролируемо: ${Number(preflight.summary?.controlled_due_posts || 0)} · вручную: ${Number(preflight.summary?.manual_due_posts || 0)}.`,
           preflight.production_readiness?.next_action_ru || '',
           preflight.next_action_ru || 'Следующий шаг появится в блоке запуска.',
         ].filter(Boolean),
@@ -4031,7 +4031,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         ].filter(Boolean),
       });
     } catch (preflightError) {
-      const message = preflightError instanceof Error ? preflightError.message : (isRu ? 'Не удалось проверить запуск worker' : 'Could not check worker launch');
+      const message = preflightError instanceof Error ? preflightError.message : (isRu ? 'Не удалось проверить запуск по расписанию' : 'Could not check worker launch');
       setError(message);
     } finally {
       setSocialBusyAction('');
@@ -5275,7 +5275,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       </div>
                       <div className="mt-1 text-slate-300">
                         {isRu
-                          ? 'Наружу только после preview, human approval, queue и даты публикации.'
+                          ? 'Наружу только после предпросмотра, подтверждения, расписания и даты публикации.'
                           : 'External publishing happens only after preview, human approval, queueing, and the due date.'}
                       </div>
                       {socialFirstApiPublishReadiness.blockedLabels.length > 0 ? (
@@ -5328,19 +5328,19 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       {
                         labelRu: '2. Проверить тексты',
                         labelEn: '2. Review drafts',
-                        detailRu: 'Preview показывает канал, текст, дату и ограничения.',
+                        detailRu: 'Предпросмотр показывает канал, текст, дату и ограничения.',
                         detailEn: 'Preview shows channel, copy, date, and limits.',
                       },
                       {
                         labelRu: '3. Подтвердить',
                         labelEn: '3. Approve',
-                        detailRu: 'Approval фиксирует согласие, но ещё ничего не публикует.',
+                        detailRu: 'Подтверждение фиксирует согласие, но ещё ничего не публикует.',
                         detailEn: 'Approval records consent and still publishes nothing.',
                       },
                       {
                         labelRu: '4. Поставить в расписание',
                         labelEn: '4. Queue on schedule',
-                        detailRu: 'Worker сможет исполнить только approved и due API-посты.',
+                        detailRu: 'Исполнитель возьмёт только подтверждённые API-посты, когда наступит дата.',
                         detailEn: 'The worker can execute only approved due API posts.',
                       },
                       {
@@ -5416,10 +5416,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       <span className="rounded-full bg-white/10 px-2 py-0.5 font-medium text-slate-100">
-                        {isRu ? 'approval обязателен' : 'approval required'}
+                        {isRu ? 'подтверждение обязательно' : 'approval required'}
                       </span>
                       <span className="rounded-full bg-white/10 px-2 py-0.5 font-medium text-slate-100">
-                        {isRu ? 'публикация только через queue/due' : 'publish only through queue/due'}
+                        {isRu ? 'публикация только по расписанию' : 'publish only through queue/due'}
                       </span>
                       <span className="rounded-full bg-white/10 px-2 py-0.5 font-medium text-slate-100">
                         {isRu ? 'карты без финального автоклика' : 'maps without final auto-click'}
@@ -7263,7 +7263,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">
-                      {isRu ? 'Preview постановки в расписание' : 'Queue preview'}
+                      {isRu ? 'Предпросмотр постановки в расписание' : 'Queue preview'}
                     </div>
                     <div className="mt-1 text-base font-semibold text-indigo-950">
                       {isRu
@@ -7272,7 +7272,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                     <div className="mt-1 text-xs leading-5 text-indigo-800">
                       {isRu
-                        ? 'Queue переводит утверждённые посты в расписание. После второго клика worker сможет обработать due API-каналы по дате; это уже шаг исполнения, но не мгновенная публикация всех каналов.'
+                        ? 'Этот шаг переводит утверждённые посты в расписание. После второго клика исполнитель сможет обработать API-каналы по дате; это уже шаг исполнения, но не мгновенная публикация всех каналов.'
                         : 'Queue moves approved posts onto the schedule. After the second click, the worker can process due API channels by date; this is an execution step, but not instant publishing for every channel.'}
                     </div>
                   </div>
@@ -7318,10 +7318,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     <div className="mt-1 text-indigo-700">
                       {socialQueuePreviewSummary.dueNow > 0
                         ? (isRu
-                          ? 'Часть постов уже due: worker сможет взять их в ближайший цикл.'
+                          ? 'Часть постов уже пора публиковать: исполнитель сможет взять их в ближайший цикл.'
                           : 'Some posts are already due: the worker can pick them up in the next cycle.')
                         : (isRu
-                          ? 'Worker будет ждать дату публикации.'
+                          ? 'Исполнитель будет ждать дату публикации.'
                           : 'The worker will wait for the scheduled date.')}
                     </div>
                   </div>
@@ -7332,10 +7332,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     <div className="mt-1">
                       {socialDispatchEnabled && !socialDispatchBlockedWithoutScope && !socialDispatchScopeMismatch
                         ? (isRu
-                          ? 'Worker включён для этого бизнеса и обработает готовые API-каналы.'
+                          ? 'Фоновый запуск включён для этого бизнеса и обработает готовые API-каналы.'
                           : 'The worker is enabled for this business and will process ready API channels.')
                         : (isRu
-                          ? 'Queue сохранится, но внешний worker сейчас не запустит эти API-посты.'
+                          ? 'Расписание сохранится, но фоновый запуск сейчас не отправит эти API-посты.'
                           : 'Queue will be saved, but the external worker will not run these API posts right now.')}
                     </div>
                   </div>
@@ -7345,7 +7345,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                     <div className="mt-1">
                       {isRu
-                        ? 'Карты после queue не публикуются тихо: LocalOS создаст контролируемую или ручную задачу, финальный клик остаётся за человеком.'
+                        ? 'Карты после постановки в расписание не публикуются тихо: LocalOS создаст контролируемую или ручную задачу, финальный клик остаётся за человеком.'
                         : 'Maps do not publish silently after queueing: LocalOS creates a supervised or manual task, and the final click stays human-controlled.'}
                     </div>
                   </div>
@@ -7357,7 +7357,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                     <div className="mt-1">
                       {isRu
-                        ? 'Worker пропустит или переведёт их в понятный статус, пока не появятся ключи, права или привязка аккаунта.'
+                        ? 'Исполнитель пропустит их или переведёт в понятный статус, пока не появятся ключи, права или привязка аккаунта.'
                         : 'The worker will skip them or move them into a clear status until keys, permissions, or account binding are present.'}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -7586,7 +7586,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       >
                         {socialBusyAction === 'launch-preflight'
                           ? (isRu ? 'Проверяем запуск...' : 'Checking launch...')
-                          : (isRu ? 'Проверить запуск worker' : 'Check worker launch')}
+                          : (isRu ? 'Проверить запуск по расписанию' : 'Check worker launch')}
                       </Button>
                       <div className="grid grid-cols-3 gap-2 text-center text-[11px] text-slate-300">
                         <div className="rounded-xl bg-white/10 px-2 py-2">
@@ -7610,8 +7610,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       />
                       {socialRuntimeStatus ? (
                         <div className="rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200">
-                          <div className="font-semibold text-white">
-                            {isRu ? 'Runtime расписания' : 'Schedule runtime'}
+                            <div className="font-semibold text-white">
+                              {isRu ? 'Runtime расписания' : 'Schedule runtime'}
                           </div>
                           <div className="mt-1 grid gap-1">
                             <div className="flex items-center justify-between gap-3">
@@ -7673,9 +7673,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             ) : null}
                           </div>
                           <div className="mt-1 text-[11px] text-slate-300">
-                            {isRu
-                              ? 'Внешние публикации всё равно требуют approval; Яндекс/2ГИС не нажимают финальную кнопку без человека.'
-                              : 'External posts still require approval; Yandex/2GIS do not click final publish without a human.'}
+                              {isRu
+                                ? 'Внешние публикации всё равно требуют подтверждения; Яндекс/2ГИС не нажимают финальную кнопку без человека.'
+                                : 'External posts still require approval; Yandex/2GIS do not click final publish without a human.'}
                           </div>
                         </div>
                       ) : null}
@@ -7707,7 +7707,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-semibold">
-                              {isRu ? 'Preflight запуска worker' : 'Worker launch preflight'}
+                              {isRu ? 'Проверка запуска по расписанию' : 'Worker launch preflight'}
                             </span>
                             <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white">
                               {socialLaunchPreflight.safe_to_enable_scoped_dispatch
@@ -8006,7 +8006,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               </div>
                               <div className="mt-1">
                                 {isRu
-                                  ? 'Worker не будет запущен, пока due API-посты смотрят в канал без готовых ключей, прав, location или adapter.'
+                                  ? 'Исполнитель не будет запущен, пока API-посты с наступившей датой смотрят в канал без готовых ключей, прав, location или adapter.'
                                   : 'The worker will not run while due API posts target a channel without ready keys, permissions, location, or adapter.'}
                               </div>
                               <div className="mt-1 flex flex-wrap gap-1">
@@ -8044,7 +8044,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                     ) : null}
                                     <div className="mt-1 text-[10px] leading-4 text-amber-100">
                                       {isRu
-                                        ? String(item.safety_summary_ru || 'Worker не будет публиковать этот due-пост, пока канал не пройдёт live API-проверку.')
+                                        ? String(item.safety_summary_ru || 'Исполнитель не будет публиковать этот пост, пока канал не пройдёт live API-проверку.')
                                         : String(item.safety_summary_en || 'The worker will not publish this due post until the channel passes live API preflight.')}
                                     </div>
                                   </div>
@@ -8206,7 +8206,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                     {socialLaunchPreflight.first_api_proof_gate.background_worker_aligned ? (isRu ? 'да' : 'yes') : (isRu ? 'нет' : 'no')}
                                   </span>
                                   {' '}
-                                  {isRu ? 'worker scope' : 'worker scope'}
+                                  {isRu ? 'область запуска' : 'worker scope'}
                                 </div>
                                 <div className="rounded-md bg-white/10 px-2 py-1">
                                   <span className="font-semibold text-white">
@@ -8254,7 +8254,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           </Button>
                           <div className="mt-1 text-[11px] text-slate-300">
                             {isRu
-                              ? 'Запускает только due-посты текущего бизнеса. API может опубликовать approved/queued посты; Яндекс/2ГИС останутся в контролируемом или ручном размещении.'
+                              ? 'Запускает только посты текущего бизнеса, у которых наступила дата. API может опубликовать подтверждённые посты в расписании; Яндекс/2ГИС останутся в контролируемом или ручном размещении.'
                               : 'Runs only due posts for the current business. API may publish approved/queued posts; Yandex/2GIS stay supervised or manual.'}
                           </div>
                           <div className="mt-2 rounded-lg bg-slate-950/30 px-2 py-2 text-[11px] text-slate-100 ring-1 ring-white/10">
@@ -8276,14 +8276,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               className="mt-2 h-7 border-white/20 bg-white/10 px-2 text-[11px] text-white hover:bg-white/20"
                               onClick={() => { void copySocialWorkerEnv(); }}
                             >
-                              {isRu ? 'Скопировать env для worker' : 'Copy worker env'}
+                              {isRu ? 'Скопировать env для запуска' : 'Copy worker env'}
                             </Button>
                           </div>
                           {_socialFirstCycleVerificationBlock(socialLaunchPreflight.first_cycle_verification, isRu)}
                           {_socialLaunchRunbookBlock(socialLaunchPreflight.launch_runbook, isRu)}
                           <div className="mt-1 text-[11px] text-slate-300">
                             {isRu
-                              ? 'Preflight ничего не публикует: approval обязателен, карты остаются контролируемыми или ручными без финального клика.'
+                              ? 'Проверка ничего не публикует: подтверждение обязательно, карты остаются контролируемыми или ручными без финального клика.'
                               : 'Preflight publishes nothing: approval is required, and maps stay supervised without the final click.'}
                           </div>
                         </div>
@@ -8395,7 +8395,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           ) : null}
                           <div className="mt-1 text-[11px] text-slate-200">
                             {isRu
-                              ? 'API-публикации возможны только после approval/queue; Яндекс/2ГИС остаются supervised/manual без финального клика.'
+                              ? 'API-публикации возможны только после подтверждения и расписания; Яндекс/2ГИС остаются контролируемыми или ручными без финального клика.'
                               : 'API publishes only after approval/queue; Yandex/2GIS stay supervised/manual without the final click.'}
                           </div>
                           {socialDispatchExecutionReport.post_publish_learning_gate ? (
@@ -12149,9 +12149,9 @@ async function copyTextToClipboard(value: string): Promise<void> {
 function _socialPublishModeLabel(mode: string, isRu: boolean): string {
   const normalized = String(mode || '').trim();
   if (normalized === 'api') return isRu ? 'API после подтверждения' : 'API after approval';
-  if (normalized === 'openclaw_browser') return isRu ? 'OpenClaw browser-use под контролем' : 'Supervised OpenClaw browser-use';
+  if (normalized === 'openclaw_browser') return isRu ? 'Контролируемый браузер OpenClaw' : 'Supervised OpenClaw browser-use';
   if (normalized === 'local_supervised_browser') return isRu ? 'Локальный контролируемый браузер' : 'Local supervised browser';
-  if (normalized === 'manual') return isRu ? 'Ручной fallback' : 'Manual fallback';
+  if (normalized === 'manual') return isRu ? 'Ручное размещение' : 'Manual fallback';
   return isRu ? 'Режим не задан' : 'Mode not set';
 }
 
@@ -12160,7 +12160,7 @@ function _socialStatusLabel(status: string, isRu: boolean): string {
   if (normalized === 'draft') return isRu ? 'Черновик' : 'Draft';
   if (normalized === 'needs_review') return isRu ? 'Нужно проверить' : 'Needs review';
   if (normalized === 'approved') return isRu ? 'Подтверждено' : 'Approved';
-  if (normalized === 'queued') return isRu ? 'В очереди' : 'Queued';
+  if (normalized === 'queued') return isRu ? 'В расписании' : 'Queued';
   if (normalized === 'publishing') return isRu ? 'Публикуется' : 'Publishing';
   if (normalized === 'published') return isRu ? 'Опубликовано' : 'Published';
   if (normalized === 'failed') return isRu ? 'Ошибка' : 'Failed';
@@ -12194,7 +12194,7 @@ function _socialProofQualityLabel(value: string, isRu: boolean): string {
   if (normalized === 'url') return isRu ? 'ссылка' : 'URL';
   if (normalized === 'provider_id') return 'provider ID';
   if (normalized === 'published_without_provider_ref') return isRu ? 'без ссылки/ID' : 'no URL/ID';
-  if (normalized === 'supervised_task') return 'supervised task';
+  if (normalized === 'supervised_task') return isRu ? 'контролируемая задача' : 'supervised task';
   if (normalized === 'error') return isRu ? 'ошибка' : 'error';
   if (normalized === 'pending') return isRu ? 'ожидает результата' : 'pending';
   return normalized || (isRu ? 'неизвестно' : 'unknown');
@@ -12276,7 +12276,7 @@ function _socialItemQueueSummary(posts: SocialPost[], isRu: boolean): {
     label = isRu ? `Нужно внимание: ${attention}` : `Needs attention: ${attention}`;
     className = `${base} bg-red-100 text-red-700`;
   } else if (counts.supervised > 0) {
-    label = isRu ? `Controlled размещение: ${counts.supervised}` : `Supervised placement: ${counts.supervised}`;
+    label = isRu ? `Контролируемое размещение: ${counts.supervised}` : `Supervised placement: ${counts.supervised}`;
     className = `${base} bg-amber-100 text-amber-800`;
   } else if (counts.queued > 0) {
     label = isRu ? `В расписании: ${counts.queued}` : `Queued: ${counts.queued}`;
@@ -12308,7 +12308,7 @@ function _socialItemQueueSummary(posts: SocialPost[], isRu: boolean): {
 
 function _socialDispatchActionLabel(action: string, isRu: boolean): string {
   const normalized = String(action || '').trim();
-  if (normalized === 'publish_api') return isRu ? 'API publish' : 'API publish';
+  if (normalized === 'publish_api') return isRu ? 'API-публикация' : 'API publish';
   if (normalized === 'create_supervised_task') return isRu ? 'контролируемое размещение' : 'supervised placement';
   if (normalized === 'manual_handoff') return isRu ? 'ручной шаг' : 'manual step';
   return isRu ? 'проверить' : 'check';
@@ -12316,9 +12316,9 @@ function _socialDispatchActionLabel(action: string, isRu: boolean): string {
 
 function _socialDispatchReasonLabel(reason: string, isRu: boolean): string {
   const normalized = String(reason || '').trim();
-  if (normalized === 'channel_ready') return isRu ? 'Канал готов, после approval worker сможет выполнить API-публикацию.' : 'Channel is ready; after approval the worker can publish via API.';
+  if (normalized === 'channel_ready') return isRu ? 'Канал готов: после подтверждения исполнитель сможет выполнить API-публикацию.' : 'Channel is ready; after approval the worker can publish via API.';
   if (normalized === 'openclaw_browser_ready') return isRu ? 'OpenClaw browser-use готов, финальная кнопка публикации не нажимается без подтверждения.' : 'OpenClaw browser-use is ready; final publish is not clicked without approval.';
-  if (normalized === 'openclaw_browser_unavailable') return isRu ? 'Browser-use недоступен, нужен ручной или контролируемый режим.' : 'Browser-use is unavailable, manual/supervised fallback is needed.';
+  if (normalized === 'openclaw_browser_unavailable') return isRu ? 'Браузерное размещение недоступно, нужен ручной или контролируемый режим.' : 'Browser-use is unavailable, manual/supervised fallback is needed.';
   if (normalized === 'publish_mode_not_api') return isRu ? 'Для канала нет API-режима, нужен ручной шаг.' : 'This channel has no API mode, manual step is needed.';
   return normalized;
 }
