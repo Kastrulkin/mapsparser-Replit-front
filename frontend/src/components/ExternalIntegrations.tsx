@@ -68,9 +68,14 @@ interface SocialOpenClawReadiness {
 interface ExternalIntegrationsProps {
   currentBusinessId: string | null;
   readinessRefreshKey?: number;
+  focusedPlatform?: string | null;
 }
 
-export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ currentBusinessId, readinessRefreshKey = 0 }) => {
+export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
+  currentBusinessId,
+  readinessRefreshKey = 0,
+  focusedPlatform = null,
+}) => {
   const [accounts, setAccounts] = useState<ExternalAccount[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -91,6 +96,11 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
   const matonAccount = accounts.find((acc) => acc.source === 'maton');
   const googleAccount = accounts.find((acc) => acc.source === 'google_business');
   const vkAccount = accounts.find((acc) => acc.source === 'vk' || acc.source === 'vk_group' || acc.source === 'vk_business');
+  const normalizedFocusedPlatform = String(focusedPlatform || '').trim();
+  const isGoogleFocused = normalizedFocusedPlatform === 'google_business';
+  const isVkFocused = normalizedFocusedPlatform === 'vk';
+  const isMetaFocused = normalizedFocusedPlatform === 'meta' || normalizedFocusedPlatform === 'instagram' || normalizedFocusedPlatform === 'facebook';
+  const focusedCardClass = 'border-sky-300 bg-sky-50/80 ring-2 ring-sky-100';
   const openClawOperational = Boolean(
     socialOpenClawReadiness?.ready
     && (
@@ -537,11 +547,22 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
             </div>
           ) : socialReadiness.length ? (
             <>
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div
+                data-testid="social-settings-channel-readiness"
+                className={[
+                  'mt-4 rounded-2xl border px-4 py-4',
+                  isMetaFocused ? focusedCardClass : 'border-slate-200 bg-slate-50',
+                ].join(' ')}
+              >
                 <div className="text-sm font-semibold text-slate-950">Чеклист публикаций</div>
                 <div className="mt-1 text-xs leading-5 text-slate-600">
                   Сначала подключите API-каналы для автопубликации по расписанию. Яндекс/2ГИС остаются ручными или контролируемыми: LocalOS готовит текст и задачу, финальный клик делает человек.
                 </div>
+                {isMetaFocused ? (
+                  <div className="mt-3 rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs leading-5 text-sky-900">
+                    Вы пришли из контент-плана по Instagram/Facebook. Meta publish включается только после Page/IG business binding и нужных permissions; до этого LocalOS покажет ручной режим, а не fake success.
+                  </div>
+                ) : null}
                 <div className="mt-3 grid gap-2 text-xs md:grid-cols-2 xl:grid-cols-4">
                   <div className="rounded-xl bg-white px-3 py-2 text-slate-700 ring-1 ring-slate-200">
                     <span className="font-semibold text-slate-950">Telegram:</span> telegram_bot_token + telegram_chat_id
@@ -687,13 +708,24 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
         </div>
 
         {/* Google Business Profile */}
-        <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+        <div
+          data-testid="social-settings-google-card"
+          className={[
+            'flex flex-col gap-4 rounded-3xl border p-5',
+            isGoogleFocused ? focusedCardClass : 'border-slate-200 bg-slate-50/70',
+          ].join(' ')}
+        >
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="text-base font-semibold text-slate-950">Google Business Profile</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
                 Подключите Google-карточку, выберите нужную локацию и синхронизируйте отзывы. Публикация ответов, новостей и изменений остаётся только после ручного подтверждения.
               </p>
+              {isGoogleFocused ? (
+                <p className="mt-2 rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs leading-5 text-sky-900">
+                  Вы пришли из контент-плана: этот канал нужен для API-публикации Google после preview, approval и расписания.
+                </p>
+              ) : null}
             </div>
             <span className={`rounded-full px-3 py-1 text-xs font-semibold ${googleAccount ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
               {googleAccount ? (googleAccount.external_id ? 'Карточка выбрана' : 'Требуется выбор карточки') : 'Не подключён'}
@@ -763,13 +795,24 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
         </div>
 
         {/* VK */}
-        <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+        <div
+          data-testid="social-settings-vk-card"
+          className={[
+            'flex flex-col gap-4 rounded-3xl border p-5',
+            isVkFocused ? focusedCardClass : 'border-slate-200 bg-slate-50/70',
+          ].join(' ')}
+        >
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="text-base font-semibold text-slate-950">VK публикации</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
                 Подключите токен сообщества с правом wall.post, чтобы утверждённые посты выходили во VK по расписанию.
               </p>
+              {isVkFocused ? (
+                <p className="mt-2 rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs leading-5 text-sky-900">
+                  Вы пришли из контент-плана: VK обычно самый быстрый путь ко второму API-proof после Telegram. Публикация всё равно начнётся только после подтверждения и расписания.
+                </p>
+              ) : null}
             </div>
             <span className={`rounded-full px-3 py-1 text-xs font-semibold ${vkAccount ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
               {vkAccount ? 'Подключён' : 'Не подключён'}

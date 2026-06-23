@@ -12985,6 +12985,9 @@ function _socialMetricsSourceText(platform: string, isRu: boolean): string {
 function _socialSettingsPathForPlatform(platform: string): string {
   const normalized = String(platform || '').trim();
   if (normalized === 'telegram') return '/dashboard/settings?focus=channels';
+  if (normalized === 'vk') return '/dashboard/settings?focus=vk';
+  if (normalized === 'google_business') return '/dashboard/settings?focus=google_business';
+  if (normalized === 'instagram' || normalized === 'facebook') return `/dashboard/settings?focus=${normalized}`;
   return '/dashboard/settings?focus=integrations';
 }
 

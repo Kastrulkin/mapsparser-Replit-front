@@ -46,7 +46,8 @@ export const SettingsPage = () => {
     return searchParams.get('focus') || location.hash.replace(/^#/, '');
   }, [location.hash, location.search]);
   const channelsFocused = focusTarget === 'channels' || focusTarget === 'telegram';
-  const integrationsFocused = focusTarget === 'integrations';
+  const integrationFocusTargets = new Set(['integrations', 'vk', 'google_business', 'instagram', 'facebook', 'meta']);
+  const integrationsFocused = integrationFocusTargets.has(focusTarget);
 
   useEffect(() => {
     if (!channelsFocused && !integrationsFocused) return;
@@ -154,7 +155,7 @@ export const SettingsPage = () => {
         {integrationsFocused ? (
           <div className="mb-5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-900">
             <div>
-              Для публикаций подключите Google Business Profile и другие внешние кабинеты. Telegram-бот и WhatsApp находятся выше в разделе каналов связи; Яндекс/2ГИС остаются контролируемым или ручным размещением, если API недоступен.
+              Для публикаций подключите нужный внешний кабинет. Если вы пришли из контент-плана, LocalOS подсветит первый заблокированный канал: VK, Google Business Profile или Meta. Telegram-бот находится выше в разделе каналов связи; Яндекс/2ГИС остаются контролируемым или ручным размещением, если API недоступен.
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button type="button" size="sm" asChild>
@@ -167,7 +168,11 @@ export const SettingsPage = () => {
           </div>
         ) : null}
         <div className="space-y-5">
-          <ExternalIntegrations currentBusinessId={currentBusinessId} readinessRefreshKey={socialReadinessRefreshKey} />
+          <ExternalIntegrations
+            currentBusinessId={currentBusinessId}
+            readinessRefreshKey={socialReadinessRefreshKey}
+            focusedPlatform={focusTarget}
+          />
           <FinanceCrmPanel currentBusinessId={currentBusinessId} surface="embedded" />
         </div>
       </DashboardSection>
