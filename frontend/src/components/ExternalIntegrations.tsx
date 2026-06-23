@@ -46,6 +46,25 @@ interface SocialChannelReadiness {
   settings_path?: string | null;
 }
 
+interface SocialOpenClawReadiness {
+  ready?: boolean;
+  handoff_ready?: boolean;
+  status?: string | null;
+  provider_status?: string | null;
+  reason?: string | null;
+  action_ref?: string | null;
+  capability?: string | null;
+  stop_before_final_publish?: boolean;
+  browser_final_click_allowed?: boolean;
+  delivery_readiness?: {
+    ready?: boolean;
+    status?: string | null;
+    callback_configured?: boolean;
+  } | null;
+  diagnostics_ru?: string[];
+  diagnostics_en?: string[];
+}
+
 interface ExternalIntegrationsProps {
   currentBusinessId: string | null;
   readinessRefreshKey?: number;
@@ -65,12 +84,38 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
   const [vkBusy, setVkBusy] = useState(false);
   const [socialReadiness, setSocialReadiness] = useState<SocialChannelReadiness[]>([]);
   const [socialReadinessSummary, setSocialReadinessSummary] = useState<Record<string, number>>({});
+  const [socialOpenClawReadiness, setSocialOpenClawReadiness] = useState<SocialOpenClawReadiness | null>(null);
   const [socialReadinessLoading, setSocialReadinessLoading] = useState(false);
   const { toast } = useToast();
   const { t, language } = useLanguage();
   const matonAccount = accounts.find((acc) => acc.source === 'maton');
   const googleAccount = accounts.find((acc) => acc.source === 'google_business');
   const vkAccount = accounts.find((acc) => acc.source === 'vk' || acc.source === 'vk_group' || acc.source === 'vk_business');
+  const openClawOperational = Boolean(
+    socialOpenClawReadiness?.ready
+    && (
+      typeof socialOpenClawReadiness.handoff_ready === 'boolean'
+        ? socialOpenClawReadiness.handoff_ready
+        : (
+          socialOpenClawReadiness.delivery_readiness
+            ? Boolean(socialOpenClawReadiness.delivery_readiness.ready)
+            : true
+        )
+    ),
+  );
+  const openClawStatusLabel = openClawOperational
+    ? 'OpenClaw готов'
+    : socialOpenClawReadiness?.ready
+      ? 'Нужна настройка handoff'
+      : 'Ручной fallback';
+  const openClawStatusDetail = openClawOperational
+    ? 'Яндекс/2ГИС можно вести как контролируемое размещение: LocalOS готовит задачу, preview и останавливается перед финальной публикацией.'
+    : socialOpenClawReadiness?.ready
+      ? 'Browser-use найден, но delivery/handoff ещё не подтверждён. Для карт используйте ручной режим или завершите настройку OpenClaw.'
+      : 'Browser-use не подтверждён. LocalOS подготовит текст, чеклист и ручную отметку публикации, без скрытой автопубликации.';
+  const openClawDiagnostics = language === 'ru'
+    ? socialOpenClawReadiness?.diagnostics_ru
+    : socialOpenClawReadiness?.diagnostics_en;
 
   const loadAccounts = async () => {
     if (!currentBusinessId) return;
@@ -110,6 +155,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
     if (!currentBusinessId) {
       setSocialReadiness([]);
       setSocialReadinessSummary({});
+      setSocialOpenClawReadiness(null);
       return;
     }
     setSocialReadinessLoading(true);
@@ -128,9 +174,15 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
       }
       setSocialReadiness(Array.isArray(data.channel_readiness) ? data.channel_readiness : []);
       setSocialReadinessSummary(data.summary || {});
+      setSocialOpenClawReadiness(
+        data.openclaw_browser_readiness && typeof data.openclaw_browser_readiness === 'object'
+          ? data.openclaw_browser_readiness
+          : null,
+      );
     } catch (e: any) {
       setSocialReadiness([]);
       setSocialReadinessSummary({});
+      setSocialOpenClawReadiness(null);
       toast({
         title: t.error,
         description: e.message || 'Не удалось получить готовность каналов публикации',
@@ -510,6 +562,46 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                   <Button type="button" size="sm" variant="outline" className="h-7 bg-white px-2 text-[11px]" asChild>
                     <Link to="/dashboard/card?tab=news&mode=plan">Открыть контент-план</Link>
                   </Button>
+                </div>
+                <div
+                  className={[
+                    'mt-3 rounded-xl border px-3 py-3 text-xs leading-5',
+                    openClawOperational
+                      ? 'border-emerald-100 bg-emerald-50 text-emerald-900'
+                      : socialOpenClawReadiness?.ready
+                        ? 'border-amber-100 bg-amber-50 text-amber-900'
+                        : 'border-slate-200 bg-white text-slate-700',
+                  ].join(' ')}
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="font-semibold text-slate-950">Яндекс/2ГИС через browser-use</div>
+                      <div className="mt-1">{openClawStatusDetail}</div>
+                    </div>
+                    <span
+                      className={[
+                        'inline-flex w-max rounded-full px-2.5 py-1 text-[11px] font-semibold',
+                        openClawOperational
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : socialOpenClawReadiness?.ready
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-slate-100 text-slate-700',
+                      ].join(' ')}
+                    >
+                      {openClawStatusLabel}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-medium text-slate-600">
+                    <span>Финальный клик: человек</span>
+                    <span>Preview: обязателен</span>
+                    <span>Автопубликация карт: нет</span>
+                    {socialOpenClawReadiness?.action_ref ? <span>action: {socialOpenClawReadiness.action_ref}</span> : null}
+                  </div>
+                  {Array.isArray(openClawDiagnostics) && openClawDiagnostics.length > 0 ? (
+                    <div className="mt-2 text-[11px] text-slate-600">
+                      {openClawDiagnostics.slice(0, 2).join(' · ')}
+                    </div>
+                  ) : null}
                 </div>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
