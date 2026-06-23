@@ -2306,6 +2306,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     const firstBlocked = primaryBlocked[0];
     const readyLabels = primaryReady.map((item) => String(item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)));
     const blockedLabels = primaryBlocked.map((item) => String(item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)));
+    const fastStartPlatforms = ['telegram', 'vk'];
+    const fastStartReady = primaryReady.filter((item) => fastStartPlatforms.includes(String(item.platform || '').trim()));
+    const fastStartBlocked = primaryBlocked.filter((item) => fastStartPlatforms.includes(String(item.platform || '').trim()));
+    const fastStartReadyLabels = fastStartReady.map((item) => String(item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)));
+    const fastStartBlockedLabels = fastStartBlocked.map((item) => String(item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)));
     return {
       apiChannels,
       readyChannels,
@@ -2316,6 +2321,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       firstBlocked,
       readyLabels,
       blockedLabels,
+      fastStartReady,
+      fastStartBlocked,
+      fastStartReadyLabels,
+      fastStartBlockedLabels,
       hasLiveCheck: socialApiPreflight.length > 0,
       readyForFirstApiPublish: primaryReady.length > 0 && primaryBlocked.length === 0,
       hasAnyReadyApi: primaryReady.length > 0,
@@ -5937,6 +5946,32 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         {isRu
                           ? 'Наружу только после предпросмотра, подтверждения, расписания и даты публикации.'
                           : 'External publishing happens only after preview, human approval, queueing, and the due date.'}
+                      </div>
+                      <div
+                        data-testid="social-overview-fast-api-start"
+                        className="mt-2 rounded-lg bg-white/10 px-2.5 py-2 text-slate-100"
+                      >
+                        <div className="font-semibold text-white">
+                          {isRu ? 'Быстрый API старт: Telegram/VK' : 'Fast API start: Telegram/VK'}
+                        </div>
+                        <div className="mt-1">
+                          {socialFirstApiPublishReadiness.fastStartReadyLabels.length > 0
+                            ? (isRu
+                              ? `Начните proof с ${socialFirstApiPublishReadiness.fastStartReadyLabels.join(', ')}; это самый короткий путь до первого опубликованного API-поста.`
+                              : `Start the proof with ${socialFirstApiPublishReadiness.fastStartReadyLabels.join(', ')}; this is the shortest path to the first published API post.`)
+                            : socialFirstApiPublishReadiness.fastStartBlockedLabels.length > 0
+                              ? (isRu
+                                ? `Сначала подключите ${socialFirstApiPublishReadiness.fastStartBlockedLabels.join(', ')}: это быстрее, чем ждать Meta/Google permissions.`
+                                : `Connect ${socialFirstApiPublishReadiness.fastStartBlockedLabels.join(', ')} first: this is faster than waiting for Meta/Google permissions.`)
+                              : (isRu
+                                ? 'Если Telegram/VK не выбраны в плане, первый API-proof можно начать с готового канала, но Telegram/VK остаются самым быстрым MVP-путём.'
+                                : 'If Telegram/VK are not selected for the plan, start the first API proof with any ready channel, while Telegram/VK remain the fastest MVP path.')}
+                        </div>
+                        <div className="mt-1 text-slate-300">
+                          {isRu
+                            ? 'Безопасный порядок: проверить API-канал без публикации → открыть preview → утвердить человеком → поставить в расписание.'
+                            : 'Safe order: check the API channel without publishing → open preview → human approval → queue it.'}
+                        </div>
                       </div>
                       {socialFirstApiPublishReadiness.blockedLabels.length > 0 ? (
                         <div className="mt-1 text-amber-100">
