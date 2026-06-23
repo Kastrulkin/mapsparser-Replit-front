@@ -61,6 +61,8 @@ REQUIRED_COPY = {
     "worker idle reason heading": "Почему worker ждёт",
     "worker idle reason review copy": "проверить",
     "worker idle reason next action": "next_action_ru",
+    "worker idle reason review CTA": "Открыть посты на проверку",
+    "worker idle reason review CTA test id": "social-open-waiting-review",
     "workflow stage counts contract": "workflow_stage_counts",
     "workflow needs review summary": "workflow_needs_review",
     "production readiness block": "social-production-readiness",

@@ -1807,6 +1807,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const selectedSocialCanRecordResults = useMemo(() => (
     selectedSocialPosts.filter((post) => post.status === 'published')
   ), [selectedSocialPosts]);
+  const allSocialPosts = useMemo(() => (
+    Object.values(socialPostsByItem).flat()
+  ), [socialPostsByItem]);
+  const allSocialNeedsReview = useMemo(() => (
+    allSocialPosts.filter((post) => post.status === 'draft' || post.status === 'needs_review')
+  ), [allSocialPosts]);
   const visibleSocialPosts = useMemo(() => (
     visibleItems.flatMap((item) => socialPostsByItem[item.id] || [])
   ), [socialPostsByItem, visibleItems]);
@@ -5427,6 +5433,47 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const openSocialPostsWaitingForReview = () => {
+    setActiveZone('queue');
+    applyViewPreset('overview');
+    const reviewPosts = allSocialNeedsReview.length > 0 ? allSocialNeedsReview : visibleSocialNeedsReview;
+    const itemIds = reviewPosts
+      .map((post) => String(post.content_plan_item_id || '').trim())
+      .filter(Boolean);
+    const uniqueItemIds = Array.from(new Set(itemIds));
+    if (uniqueItemIds.length > 0) {
+      setSelectedItemIds(uniqueItemIds.reduce<Record<string, boolean>>((acc, itemId) => {
+        acc[itemId] = true;
+        return acc;
+      }, {}));
+      setSelectedQueueItemId(uniqueItemIds[0]);
+      setEditorItemId(uniqueItemIds[0]);
+    }
+    if (reviewPosts.length > 0) {
+      openSocialApprovalPreview(reviewPosts, 'selected', 'selected-social-approve');
+      setActionSummary({
+        tone: 'neutral',
+        text_ru: `Открыли посты на проверку: ${reviewPosts.length}. Проверьте предпросмотр, затем подтвердите тексты отдельной кнопкой.`,
+        text_en: `Opened posts for review: ${reviewPosts.length}. Review the preview, then approve copy with a separate button.`,
+        details_ru: [
+          'Наружу ничего не публикуется на этом шаге.',
+          'После подтверждения worker сможет поставить посты в расписание и исполнить API-каналы.',
+        ],
+        details_en: [
+          'Nothing is published externally at this step.',
+          'After approval, the worker can queue posts and execute API channels.',
+        ],
+      });
+      if (typeof window !== 'undefined') {
+        window.setTimeout(() => {
+          document
+            .querySelector('[data-testid="social-approval-preview-panel"]')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 50);
+      }
+    }
+  };
+
   const contentPlanZones: Array<{ key: ContentPlanZone; titleRu: string; titleEn: string; hintRu: string; hintEn: string }> = [
     { key: 'overview', titleRu: 'Обзор', titleEn: 'Overview', hintRu: 'Состояние и следующий шаг', hintEn: 'Status and next step' },
     { key: 'plan', titleRu: 'План', titleEn: 'Plan', hintRu: 'Создание и источники', hintEn: 'Creation and inputs' },
@@ -8297,6 +8344,19 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       ? String(socialLaunchPreflight.worker_idle_reason.next_action_ru || '')
                                       : String(socialLaunchPreflight.worker_idle_reason.next_action_en || '')}
                                   </div>
+                                  {String(socialLaunchPreflight.worker_idle_reason.status || '') === 'waiting_for_review' ? (
+                                    <div className="mt-2">
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={openSocialPostsWaitingForReview}
+                                        data-testid="social-open-waiting-review"
+                                      >
+                                        <CheckSquare className="mr-2 h-4 w-4" />
+                                        {isRu ? 'Открыть посты на проверку' : 'Open posts for review'}
+                                      </Button>
+                                    </div>
+                                  ) : null}
                                 </div>
                                 <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white">
                                   {isRu
