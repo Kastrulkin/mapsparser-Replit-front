@@ -2379,12 +2379,14 @@ def run_scoped_social_dispatch_once(
         batch_size=clean_batch_size,
         business_id=normalized_business_id,
     )
+    execution_report = _social_dispatch_execution_report(dispatch_result)
     return {
         "approved": True,
         "business_id": normalized_business_id,
         "batch_size": clean_batch_size,
         "preflight": preflight,
         "dispatch_result": dispatch_result,
+        "execution_report": execution_report,
         "external_publish_only_after_approval": True,
         "browser_final_click_allowed": False,
         "maps_are_supervised_or_manual": True,
@@ -2447,6 +2449,125 @@ def _social_dispatch_once_message(result: dict[str, Any], is_ru: bool) -> str:
     return (
         f"First scoped cycle finished: picked {picked}, published {published}, "
         f"supervised {supervised}, manual {manual}, failed {failed}."
+    )
+
+
+def _social_dispatch_execution_report(dispatch_result: dict[str, Any]) -> dict[str, Any]:
+    details = dispatch_result.get("details") if isinstance(dispatch_result.get("details"), list) else []
+    by_status = dispatch_result.get("by_status") if isinstance(dispatch_result.get("by_status"), dict) else {}
+    by_action = dispatch_result.get("by_action") if isinstance(dispatch_result.get("by_action"), dict) else {}
+    errors = dispatch_result.get("errors") if isinstance(dispatch_result.get("errors"), list) else []
+    picked = int(dispatch_result.get("picked") or 0)
+    published = int(dispatch_result.get("published") or 0)
+    supervised = int(dispatch_result.get("supervised") or 0)
+    manual = int(dispatch_result.get("manual") or 0)
+    failed = int(dispatch_result.get("failed") or 0)
+    status = "empty"
+    if failed > 0:
+        status = "attention"
+    elif manual > 0:
+        status = "manual_action_needed"
+    elif picked > 0:
+        status = "completed"
+    return {
+        "schema": "localos_social_dispatch_execution_report_v1",
+        "status": status,
+        "picked": picked,
+        "published": published,
+        "supervised": supervised,
+        "manual": manual,
+        "failed": failed,
+        "business_scope": str(dispatch_result.get("business_scope") or "").strip(),
+        "by_status": by_status,
+        "by_action": by_action,
+        "details": details,
+        "errors": errors,
+        "external_publish_only_after_approval": True,
+        "maps_are_supervised_or_manual": True,
+        "browser_final_click_allowed": False,
+        "provider_write_summary": {
+            "api_publish_attempted": published > 0 or bool(by_action.get("failed")),
+            "published_with_provider_proof": len(
+                [
+                    item for item in details
+                    if str(item.get("status") or "").strip() == "published"
+                    and (
+                        str(item.get("provider_post_id") or "").strip()
+                        or str(item.get("provider_post_url") or "").strip()
+                    )
+                ]
+            ),
+            "supervised_tasks_created": len(
+                [
+                    item for item in details
+                    if str(item.get("status") or "").strip() == "needs_supervised_publish"
+                    and str(item.get("automation_task_id") or "").strip()
+                ]
+            ),
+        },
+        "title_ru": _social_dispatch_execution_title(status, True),
+        "title_en": _social_dispatch_execution_title(status, False),
+        "summary_ru": _social_dispatch_execution_summary(picked, published, supervised, manual, failed, True),
+        "summary_en": _social_dispatch_execution_summary(picked, published, supervised, manual, failed, False),
+        "next_action_ru": _social_dispatch_execution_next_action(status, errors, True),
+        "next_action_en": _social_dispatch_execution_next_action(status, errors, False),
+    }
+
+
+def _social_dispatch_execution_title(status: str, is_ru: bool) -> str:
+    if status == "completed":
+        return "Цикл выполнен" if is_ru else "Cycle completed"
+    if status == "manual_action_needed":
+        return "Цикл выполнен, нужен ручной шаг" if is_ru else "Cycle completed, manual step needed"
+    if status == "attention":
+        return "Цикл выполнен с ошибками" if is_ru else "Cycle completed with errors"
+    return "Due-постов не было" if is_ru else "No due posts"
+
+
+def _social_dispatch_execution_summary(
+    picked: int,
+    published: int,
+    supervised: int,
+    manual: int,
+    failed: int,
+    is_ru: bool,
+) -> str:
+    if is_ru:
+        return (
+            f"Взято {picked}: опубликовано {published}, контролируемое размещение {supervised}, "
+            f"вручную {manual}, ошибок {failed}."
+        )
+    return (
+        f"Picked {picked}: published {published}, supervised {supervised}, manual {manual}, failed {failed}."
+    )
+
+
+def _social_dispatch_execution_next_action(status: str, errors: list[Any], is_ru: bool) -> str:
+    if status == "completed":
+        return (
+            "Проверьте provider ID/URL у API-постов, завершите supervised preview для карт и затем соберите реакции."
+            if is_ru
+            else "Check provider IDs/URLs for API posts, finish supervised map previews, then collect reactions."
+        )
+    if status == "manual_action_needed":
+        return (
+            "Откройте ручные/контролируемые публикации, разместите их и отметьте результат."
+            if is_ru
+            else "Open manual/supervised posts, publish them, and mark the result."
+        )
+    if status == "attention":
+        first_error = ""
+        if errors and isinstance(errors[0], dict):
+            first_error = str(errors[0].get("error") or "").strip()
+        return (
+            f"Разберите первую ошибку и повторите запуск для оставшихся due-постов: {first_error}".strip()
+            if is_ru
+            else f"Review the first error and rerun for remaining due posts: {first_error}".strip()
+        )
+    return (
+        "Сначала поставьте утверждённые посты в расписание и дождитесь due-даты."
+        if is_ru
+        else "Queue approved posts and wait for the due date first."
     )
 
 

@@ -539,6 +539,45 @@ type SocialDispatchPreview = {
   }>;
 };
 
+type SocialDispatchExecutionReport = {
+  schema?: string;
+  status?: string;
+  picked?: number;
+  published?: number;
+  supervised?: number;
+  manual?: number;
+  failed?: number;
+  business_scope?: string;
+  external_publish_only_after_approval?: boolean;
+  maps_are_supervised_or_manual?: boolean;
+  browser_final_click_allowed?: boolean;
+  provider_write_summary?: {
+    api_publish_attempted?: boolean;
+    published_with_provider_proof?: number;
+    supervised_tasks_created?: number;
+  };
+  details?: Array<{
+    id?: string;
+    platform?: string;
+    status?: string;
+    action?: string;
+    automation_task_id?: string;
+    provider_post_id?: string;
+    provider_post_url?: string;
+    last_error?: string;
+  }>;
+  errors?: Array<{
+    id?: string;
+    error?: string;
+  }>;
+  title_ru?: string;
+  title_en?: string;
+  summary_ru?: string;
+  summary_en?: string;
+  next_action_ru?: string;
+  next_action_en?: string;
+};
+
 type SocialFirstCycleVerification = {
   log_filter?: string;
   business_scope?: string;
@@ -1158,6 +1197,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialGoalProgress, setSocialGoalProgress] = useState<SocialGoalProgress | null>(null);
   const [socialRecommendationApproved, setSocialRecommendationApproved] = useState(false);
   const [socialDispatchPreview, setSocialDispatchPreview] = useState<SocialDispatchPreview | null>(null);
+  const [socialDispatchExecutionReport, setSocialDispatchExecutionReport] = useState<SocialDispatchExecutionReport | null>(null);
   const [socialLaunchPreflight, setSocialLaunchPreflight] = useState<SocialLaunchPreflight | null>(null);
   const [socialRuntimeStatus, setSocialRuntimeStatus] = useState<SocialRuntimeStatus | null>(null);
   const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
@@ -2531,6 +2571,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSocialRecommendation(null);
       setSocialRecommendationApproved(false);
       setSocialDispatchPreview(null);
+      setSocialDispatchExecutionReport(null);
       setSocialLaunchPreflight(null);
     }
   };
@@ -3795,6 +3836,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       const result = response.dispatch_result && typeof response.dispatch_result === 'object'
         ? response.dispatch_result
         : {};
+      const executionReport: SocialDispatchExecutionReport | null = response.execution_report && typeof response.execution_report === 'object'
+        ? response.execution_report
+        : null;
       const followupRu = Array.isArray(result.followup_actions_ru)
         ? result.followup_actions_ru.map(String).filter(Boolean)
         : [];
@@ -3828,6 +3872,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         await loadSocialPosts(currentPlan.id);
       }
       await loadSocialRuntimeStatus();
+      setSocialDispatchExecutionReport(executionReport);
       setSocialDispatchPreview(null);
       setSocialLaunchPreflight(null);
     } catch (dispatchError) {
@@ -7669,6 +7714,105 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ? 'Preflight ничего не публикует: approval обязателен, карты остаются контролируемыми или ручными без финального клика.'
                               : 'Preflight publishes nothing: approval is required, and maps stay supervised without the final click.'}
                           </div>
+                        </div>
+                      ) : null}
+                      {socialDispatchExecutionReport ? (
+                        <div
+                          data-testid="social-dispatch-execution-report"
+                          className={[
+                            'rounded-xl border px-3 py-2 text-xs leading-5',
+                            Number(socialDispatchExecutionReport.failed || 0) > 0
+                              ? 'border-red-300/30 bg-red-400/10 text-red-100'
+                              : Number(socialDispatchExecutionReport.manual || 0) > 0
+                                ? 'border-amber-300/30 bg-amber-400/10 text-amber-100'
+                                : 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100',
+                          ].join(' ')}
+                        >
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <div className="font-semibold text-white">
+                                {isRu ? 'Результат последнего запуска' : 'Last launch result'}
+                                {' · '}
+                                {isRu
+                                  ? String(socialDispatchExecutionReport.title_ru || '')
+                                  : String(socialDispatchExecutionReport.title_en || '')}
+                              </div>
+                              <div className="mt-1">
+                                {isRu
+                                  ? String(socialDispatchExecutionReport.summary_ru || '')
+                                  : String(socialDispatchExecutionReport.summary_en || '')}
+                              </div>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white">
+                              {String(socialDispatchExecutionReport.status || 'empty')}
+                            </span>
+                          </div>
+                          <div className="mt-2 grid gap-1 sm:grid-cols-5">
+                            <div className="rounded-md bg-white/10 px-2 py-1">
+                              <span className="font-semibold text-white">{Number(socialDispatchExecutionReport.published || 0)}</span>
+                              {' '}
+                              {isRu ? 'опубликовано' : 'published'}
+                            </div>
+                            <div className="rounded-md bg-white/10 px-2 py-1">
+                              <span className="font-semibold text-white">{Number(socialDispatchExecutionReport.supervised || 0)}</span>
+                              {' '}
+                              {isRu ? 'контроль' : 'supervised'}
+                            </div>
+                            <div className="rounded-md bg-white/10 px-2 py-1">
+                              <span className="font-semibold text-white">{Number(socialDispatchExecutionReport.manual || 0)}</span>
+                              {' '}
+                              {isRu ? 'вручную' : 'manual'}
+                            </div>
+                            <div className="rounded-md bg-white/10 px-2 py-1">
+                              <span className="font-semibold text-white">{Number(socialDispatchExecutionReport.failed || 0)}</span>
+                              {' '}
+                              {isRu ? 'ошибки' : 'failed'}
+                            </div>
+                            <div className="rounded-md bg-white/10 px-2 py-1">
+                              <span className="font-semibold text-white">{Number(socialDispatchExecutionReport.provider_write_summary?.published_with_provider_proof || 0)}</span>
+                              {' '}
+                              proof
+                            </div>
+                          </div>
+                          <div className="mt-2 font-medium text-white">
+                            {isRu ? 'Следующий шаг: ' : 'Next step: '}
+                            {isRu
+                              ? String(socialDispatchExecutionReport.next_action_ru || '')
+                              : String(socialDispatchExecutionReport.next_action_en || '')}
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-200">
+                            {isRu
+                              ? 'API-публикации возможны только после approval/queue; Яндекс/2ГИС остаются supervised/manual без финального клика.'
+                              : 'API publishes only after approval/queue; Yandex/2GIS stay supervised/manual without the final click.'}
+                          </div>
+                          {Number(socialDispatchExecutionReport.details?.length || 0) > 0 ? (
+                            <div className="mt-2 space-y-1">
+                              {(socialDispatchExecutionReport.details || []).slice(0, 4).map((item) => (
+                                <div
+                                  key={`dispatch-report:${String(item.id || '')}:${String(item.platform || '')}`}
+                                  className="rounded-lg bg-white/10 px-2 py-1.5 text-[11px] leading-4 text-slate-100"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-medium text-white">
+                                      {_socialPlatformLabel(String(item.platform || ''), isRu)}
+                                    </span>
+                                    <span>{String(item.status || '')}</span>
+                                  </div>
+                                  {item.provider_post_url || item.provider_post_id || item.automation_task_id || item.last_error ? (
+                                    <div className="mt-0.5 break-all text-slate-200">
+                                      {item.provider_post_url
+                                        ? String(item.provider_post_url)
+                                        : item.provider_post_id
+                                          ? `provider id: ${String(item.provider_post_id)}`
+                                          : item.automation_task_id
+                                            ? `task: ${String(item.automation_task_id)}`
+                                            : String(item.last_error || '')}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                       {socialDispatchPreview ? (

@@ -12,6 +12,7 @@ from services.social_post_service import (
     _build_social_launch_preflight_payload,
     _channel_readiness_message,
     _dispatch_action_for_status,
+    _social_dispatch_execution_report,
     _social_dispatch_followup_actions,
     _social_dispatch_result_summaries,
     _social_metrics_result_summaries,
@@ -1228,6 +1229,54 @@ def test_social_dispatch_result_summaries_explain_each_channel_outcome():
     assert summaries[3] == "Facebook: ошибка публикации: temporary."
 
 
+def test_social_dispatch_execution_report_keeps_owner_proof_and_safety():
+    report = _social_dispatch_execution_report(
+        {
+            "picked": 3,
+            "published": 1,
+            "supervised": 1,
+            "manual": 1,
+            "failed": 0,
+            "business_scope": "biz-1",
+            "by_status": {"published": 1, "needs_supervised_publish": 1, "needs_manual_publish": 1},
+            "by_action": {"published": 1, "supervised": 1, "manual": 1},
+            "details": [
+                {
+                    "id": "post-api",
+                    "platform": "telegram",
+                    "status": "published",
+                    "provider_post_url": "https://t.me/channel/10",
+                },
+                {
+                    "id": "post-map",
+                    "platform": "yandex_maps",
+                    "status": "needs_supervised_publish",
+                    "automation_task_id": "task-1",
+                },
+                {
+                    "id": "post-manual",
+                    "platform": "vk",
+                    "status": "needs_manual_publish",
+                    "last_error": "missing wall.post",
+                },
+            ],
+            "errors": [],
+        }
+    )
+
+    assert report["schema"] == "localos_social_dispatch_execution_report_v1"
+    assert report["status"] == "manual_action_needed"
+    assert report["published"] == 1
+    assert report["supervised"] == 1
+    assert report["manual"] == 1
+    assert report["external_publish_only_after_approval"] is True
+    assert report["maps_are_supervised_or_manual"] is True
+    assert report["browser_final_click_allowed"] is False
+    assert report["provider_write_summary"]["published_with_provider_proof"] == 1
+    assert report["provider_write_summary"]["supervised_tasks_created"] == 1
+    assert "ручные/контролируемые" in report["next_action_ru"]
+
+
 def test_dispatch_due_social_posts_blocks_unscoped_by_default(monkeypatch):
     def fail_if_db_opens():
         raise AssertionError("unscoped dispatch must not open DB")
@@ -1378,6 +1427,9 @@ def test_run_scoped_social_dispatch_once_runs_only_requested_business(monkeypatc
     assert result["business_id"] == "biz-1"
     assert result["batch_size"] == 50
     assert result["dispatch_result"]["published"] == 1
+    assert result["execution_report"]["schema"] == "localos_social_dispatch_execution_report_v1"
+    assert result["execution_report"]["published"] == 1
+    assert result["execution_report"]["browser_final_click_allowed"] is False
     assert result["browser_final_click_allowed"] is False
     assert result["external_publish_only_after_approval"] is True
     assert captured["preflight"] == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 50}
