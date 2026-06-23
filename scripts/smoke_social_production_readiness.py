@@ -150,6 +150,8 @@ REQUIRED_UI_CONTRACT = {
     "worker preflight action": "Проверить запуск worker",
     "worker preflight result": "Preflight запуска worker",
     "live api blocked": "Live API-preflight остановил запуск",
+    "live api blocked setup action": "Открыть настройку",
+    "live api blocked recovery copy": "Worker не будет публиковать этот due-пост",
     "safe launch env": "Команды для безопасного запуска",
     "copy worker env": "Скопировать env для worker",
     "dispatch enabled env": "SOCIAL_POST_DISPATCH_ENABLED",

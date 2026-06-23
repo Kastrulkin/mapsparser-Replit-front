@@ -48,6 +48,8 @@ REQUIRED_COPY = {
     "production readiness next action": "Что сделать: ",
     "worker launch live api block": "Live API-preflight остановил запуск",
     "worker launch live api blocked field": "api_preflight_blocked_due_posts",
+    "worker launch blocked setup action": "Открыть настройку",
+    "worker launch blocked recovery": "Worker не будет публиковать этот due-пост",
     "worker launch recommended scope": "Рекомендованный scope",
     "worker launch gate contract": "launch_gate",
     "worker launch gate test id": "social-first-cycle-launch-gate",

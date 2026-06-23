@@ -36,6 +36,7 @@ from services.social_post_service import (
     _social_learning_readiness,
     _social_goal_progress,
     _social_openclaw_browser_readiness,
+    _api_preflight_blocked_due_posts,
     _status_after_social_text_edit,
     _channel_readiness,
     _channel_readiness_next_action,
@@ -1457,6 +1458,47 @@ def test_run_scoped_social_dispatch_once_rejects_live_api_preflight_block(monkey
 
     assert error is not None
     assert "Live API-preflight" in str(error)
+
+
+def test_api_preflight_blocked_due_posts_include_recovery_actions():
+    blocked = _api_preflight_blocked_due_posts(
+        [
+            {
+                "id": "post-1",
+                "content_plan_item_id": "item-1",
+                "platform": "telegram",
+                "platform_label": "Telegram",
+                "dispatch_action": "publish_api",
+            },
+            {
+                "id": "post-2",
+                "platform": "vk",
+                "dispatch_action": "manual_handoff",
+            },
+        ],
+        [
+            {
+                "platform": "telegram",
+                "ready": False,
+                "status": "missing_keys",
+                "message_ru": "Для Telegram нужны ключи.",
+                "message_en": "Telegram needs keys.",
+            },
+            {
+                "platform": "vk",
+                "ready": False,
+                "status": "missing_permissions",
+            },
+        ],
+    )
+
+    assert len(blocked) == 1
+    assert blocked[0]["id"] == "post-1"
+    assert blocked[0]["content_plan_item_id"] == "item-1"
+    assert blocked[0]["settings_path"] == "/dashboard/settings?focus=channels"
+    assert blocked[0]["recoverable"] is True
+    assert "telegram_bot_token" in blocked[0]["next_action_ru"]
+    assert "Worker не будет публиковать" in blocked[0]["safety_summary_ru"]
 
 
 def test_run_scoped_social_dispatch_once_respects_launch_gate(monkeypatch):

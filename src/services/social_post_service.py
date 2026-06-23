@@ -1144,17 +1144,96 @@ def _api_preflight_blocked_due_posts(
         preflight = readiness_by_platform.get(platform)
         if not preflight or bool(preflight.get("ready")):
             continue
+        status = str(preflight.get("status") or "not_ready").strip()
+        label = str(item.get("platform_label") or platform_label(platform)).strip()
+        message_ru = str(preflight.get("message_ru") or "").strip()
+        message_en = str(preflight.get("message_en") or "").strip()
+        next_action_ru = _api_preflight_block_next_action(platform, status, True)
+        next_action_en = _api_preflight_block_next_action(platform, status, False)
         blocked.append(
             {
                 "id": str(item.get("id") or "").strip(),
+                "content_plan_item_id": str(item.get("content_plan_item_id") or "").strip(),
                 "platform": platform,
-                "platform_label": item.get("platform_label") or platform_label(platform),
-                "status": str(preflight.get("status") or "not_ready").strip(),
-                "message_ru": str(preflight.get("message_ru") or "").strip(),
-                "message_en": str(preflight.get("message_en") or "").strip(),
+                "platform_label": label,
+                "status": status,
+                "message_ru": message_ru,
+                "message_en": message_en,
+                "next_action_ru": next_action_ru,
+                "next_action_en": next_action_en,
+                "settings_path": _api_preflight_settings_path(platform),
+                "recoverable": True,
+                "safety_summary_ru": (
+                    "Worker не будет публиковать этот due-пост, пока канал не пройдёт live API-проверку. "
+                    "Approval сохранён, но внешний publish остановлен безопасно."
+                ),
+                "safety_summary_en": (
+                    "The worker will not publish this due post until the channel passes live API preflight. "
+                    "Approval is kept, but external publishing is safely stopped."
+                ),
             }
         )
     return blocked
+
+
+def _api_preflight_settings_path(platform: str) -> str:
+    normalized = str(platform or "").strip()
+    if normalized == "telegram":
+        return "/dashboard/settings?focus=channels"
+    return "/dashboard/settings?focus=integrations"
+
+
+def _api_preflight_block_next_action(platform: str, status: str, is_ru: bool) -> str:
+    normalized_platform = str(platform or "").strip()
+    normalized_status = str(status or "").strip()
+    label = platform_label(normalized_platform)
+    if normalized_platform == "telegram":
+        if normalized_status in {"missing_keys", "telegram_connection_missing"}:
+            return (
+                "Откройте настройки Telegram, добавьте telegram_bot_token и telegram_chat_id, затем повторите live API-проверку."
+                if is_ru
+                else "Open Telegram settings, add telegram_bot_token and telegram_chat_id, then rerun live API preflight."
+            )
+        return (
+            "Проверьте, что бот доступен, добавлен в канал/чат и имеет права писать; затем повторите live API-проверку."
+            if is_ru
+            else "Check that the bot is reachable, added to the channel/chat, and can post; then rerun live API preflight."
+        )
+    if normalized_platform == "vk":
+        if normalized_status == "missing_permissions":
+            return (
+                "Откройте интеграции VK и выдайте токену право wall.post; затем повторите live API-проверку."
+                if is_ru
+                else "Open VK integrations and grant wall.post to the token; then rerun live API preflight."
+            )
+        if normalized_status in {"missing_binding", "missing_keys"}:
+            return (
+                "Откройте интеграции VK, добавьте access_token и group_id/owner_id; затем повторите live API-проверку."
+                if is_ru
+                else "Open VK integrations, add access_token and group_id/owner_id, then rerun live API preflight."
+            )
+        return (
+            "Проверьте VK token, группу и доступ API; затем повторите live API-проверку."
+            if is_ru
+            else "Check the VK token, group, and API access; then rerun live API preflight."
+        )
+    if normalized_platform == "google_business":
+        return (
+            "Откройте интеграции Google Business Profile, проверьте OAuth и location для публикации."
+            if is_ru
+            else "Open Google Business Profile integrations and check OAuth plus the publishing location."
+        )
+    if normalized_platform in {"instagram", "facebook"}:
+        return (
+            f"Откройте Meta integration для {label}, проверьте Page/IG business binding и permissions; без них используйте ручной fallback."
+            if is_ru
+            else f"Open the Meta integration for {label}, check Page/IG business binding and permissions; use manual fallback until ready."
+        )
+    return (
+        f"Откройте настройки канала {label}, исправьте подключение и повторите live API-проверку."
+        if is_ru
+        else f"Open {label} channel settings, fix the connection, and rerun live API preflight."
+    )
 
 
 def _social_launch_preflight_message(status: str, is_ru: bool) -> str:

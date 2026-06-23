@@ -686,11 +686,18 @@ type SocialLaunchPreflight = {
   launch_rehearsal?: SocialPublishRehearsalBulk;
   api_preflight_blocked_due_posts?: Array<{
     id?: string;
+    content_plan_item_id?: string;
     platform?: string;
     platform_label?: string;
     status?: string;
     message_ru?: string;
     message_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+    settings_path?: string;
+    recoverable?: boolean;
+    safety_summary_ru?: string;
+    safety_summary_en?: string;
   }>;
   first_api_publish_readiness?: {
     schema?: string;
@@ -7573,14 +7580,43 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               </div>
                               <div className="mt-1 flex flex-wrap gap-1">
                                 {(socialLaunchPreflight.api_preflight_blocked_due_posts || []).slice(0, 4).map((item) => (
-                                  <span
+                                  <div
                                     key={`launch-api-block:${String(item.id || '')}:${String(item.platform || '')}`}
-                                    className="rounded-full bg-white/10 px-2 py-0.5 font-medium text-amber-50"
+                                    className="rounded-lg bg-white/10 px-2 py-1.5 text-amber-50"
                                   >
-                                    {item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)}
-                                    {' · '}
-                                    {String(item.status || 'not_ready')}
-                                  </span>
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <span className="font-semibold text-white">
+                                        {item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)}
+                                        {' · '}
+                                        {String(item.status || 'not_ready')}
+                                      </span>
+                                      {item.settings_path ? (
+                                        <button
+                                          type="button"
+                                          className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-white/20"
+                                          onClick={() => navigate(String(item.settings_path || _socialSettingsPathForPlatform(String(item.platform || ''))))}
+                                        >
+                                          {isRu ? 'Открыть настройку' : 'Open setup'}
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                    {(isRu ? item.message_ru : item.message_en) ? (
+                                      <div className="mt-1 text-amber-100">
+                                        {isRu ? String(item.message_ru || '') : String(item.message_en || '')}
+                                      </div>
+                                    ) : null}
+                                    {(isRu ? item.next_action_ru : item.next_action_en) ? (
+                                      <div className="mt-1 font-medium text-white">
+                                        {isRu ? 'Что сделать: ' : 'What to do: '}
+                                        {isRu ? String(item.next_action_ru || '') : String(item.next_action_en || '')}
+                                      </div>
+                                    ) : null}
+                                    <div className="mt-1 text-[10px] leading-4 text-amber-100">
+                                      {isRu
+                                        ? String(item.safety_summary_ru || 'Worker не будет публиковать этот due-пост, пока канал не пройдёт live API-проверку.')
+                                        : String(item.safety_summary_en || 'The worker will not publish this due post until the channel passes live API preflight.')}
+                                    </div>
+                                  </div>
                                 ))}
                               </div>
                             </div>
