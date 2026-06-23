@@ -1177,6 +1177,12 @@ type SocialApiChannelPreflight = {
   status?: string;
   message_ru?: string;
   message_en?: string;
+  next_action_ru?: string;
+  next_action_en?: string;
+  setup_summary_ru?: string;
+  setup_summary_en?: string;
+  setup_steps_ru?: string[];
+  setup_steps_en?: string[];
   missing_fields?: string[];
   settings_path?: string;
   connection_checks?: SocialChannelConnectionCheck[];
@@ -2311,6 +2317,19 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     const fastStartBlocked = primaryBlocked.filter((item) => fastStartPlatforms.includes(String(item.platform || '').trim()));
     const fastStartReadyLabels = fastStartReady.map((item) => String(item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)));
     const fastStartBlockedLabels = fastStartBlocked.map((item) => String(item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)));
+    const setupFocus = fastStartBlocked[0] || firstBlocked;
+    const setupFocusStepsSource = isRu
+      ? setupFocus?.setup_steps_ru
+      : setupFocus?.setup_steps_en;
+    const setupFocusSteps = Array.isArray(setupFocusStepsSource)
+      ? setupFocusStepsSource.filter(Boolean).map(String).slice(0, 4)
+      : [];
+    const setupFocusChecks = Array.isArray(setupFocus?.connection_checks)
+      ? setupFocus.connection_checks.filter((item) => !Boolean(item.ok)).slice(0, 4)
+      : [];
+    const setupFocusMissingFields = Array.isArray(setupFocus?.missing_fields)
+      ? setupFocus.missing_fields.filter(Boolean).map(String).slice(0, 4)
+      : [];
     return {
       apiChannels,
       readyChannels,
@@ -2325,6 +2344,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       fastStartBlocked,
       fastStartReadyLabels,
       fastStartBlockedLabels,
+      setupFocus,
+      setupFocusSteps,
+      setupFocusChecks,
+      setupFocusMissingFields,
       hasLiveCheck: socialApiPreflight.length > 0,
       readyForFirstApiPublish: primaryReady.length > 0 && primaryBlocked.length === 0,
       hasAnyReadyApi: primaryReady.length > 0,
@@ -10245,6 +10268,46 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               <div className="mt-2">
                                 <span className="font-semibold">{isRu ? 'Сначала исправить: ' : 'Fix first: '}</span>
                                 {socialFirstApiPublishReadiness.blockedLabels.slice(0, 4).join(', ')}
+                              </div>
+                            ) : null}
+                            {socialFirstApiPublishReadiness.setupFocus ? (
+                              <div
+                                data-testid="social-first-api-setup-checklist"
+                                className="mt-3 rounded-lg border border-white bg-white/70 px-3 py-2 text-xs leading-5"
+                              >
+                                <div className="font-semibold">
+                                  {isRu ? 'Мини-чеклист подключения' : 'Connection mini-checklist'}
+                                  {' · '}
+                                  {socialFirstApiPublishReadiness.setupFocus.platform_label
+                                    || _socialPlatformLabel(String(socialFirstApiPublishReadiness.setupFocus.platform || ''), isRu)}
+                                </div>
+                                {socialFirstApiPublishReadiness.setupFocusSteps.length > 0 ? (
+                                  <ol className="mt-1 list-decimal space-y-1 pl-4">
+                                    {socialFirstApiPublishReadiness.setupFocusSteps.map((step) => (
+                                      <li key={`first-api-setup-step:${step}`}>{step}</li>
+                                    ))}
+                                  </ol>
+                                ) : null}
+                                {socialFirstApiPublishReadiness.setupFocusChecks.length > 0 ? (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {socialFirstApiPublishReadiness.setupFocusChecks.map((check) => (
+                                      <span
+                                        key={`first-api-setup-check:${String(check.key || '')}`}
+                                        className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-900"
+                                      >
+                                        {isRu ? String(check.label_ru || check.key || '') : String(check.label_en || check.key || '')}
+                                        {': '}
+                                        {isRu ? String(check.detail_ru || '') : String(check.detail_en || '')}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
+                                {socialFirstApiPublishReadiness.setupFocusMissingFields.length > 0 ? (
+                                  <div className="mt-2 font-mono text-[11px]">
+                                    {isRu ? 'Поля: ' : 'Fields: '}
+                                    {socialFirstApiPublishReadiness.setupFocusMissingFields.join(', ')}
+                                  </div>
+                                ) : null}
                               </div>
                             ) : null}
                           </div>
