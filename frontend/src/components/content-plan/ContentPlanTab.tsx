@@ -3764,7 +3764,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
-  const recordSelectedSocialPostAttribution = async (eventType: 'lead' | 'inquiry') => {
+  const recordSelectedSocialPostAttribution = async (eventType: SocialAttributionEventType) => {
     if (!selectedSocialCanRecordResults.length) return;
     setBulkBusyAction(`selected-social-attribute-${eventType}`);
     setError('');
@@ -3797,16 +3797,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           return;
         }
       }
+      const feedback = _socialAttributionFeedback(eventType);
+      const isPrimaryResult = eventType === 'lead' || eventType === 'inquiry';
       setActionSummary({
         tone: 'success',
-        text_ru: eventType === 'lead'
-          ? `Заявка отмечена для выбранных опубликованных постов: ${selectedSocialCanRecordResults.length}. LocalOS пересчитал рекомендации, но не применил изменения автоматически.`
-          : `Обращение отмечено для выбранных опубликованных постов: ${selectedSocialCanRecordResults.length}. LocalOS пересчитал рекомендации, но не применил изменения автоматически.`,
-        text_en: eventType === 'lead'
-          ? `Lead recorded for selected published posts: ${selectedSocialCanRecordResults.length}. LocalOS recalculated recommendations but did not apply changes automatically.`
-          : `Inquiry recorded for selected published posts: ${selectedSocialCanRecordResults.length}. LocalOS recalculated recommendations but did not apply changes automatically.`,
-        details_ru: ['Главная метрика - заявки и обращения; охваты и лайки остаются ранними сигналами.'],
-        details_en: ['The main metric is leads and inquiries; reach and likes remain early signals.'],
+        text_ru: isPrimaryResult
+          ? `${feedback.ru} Массово отмечено: ${selectedSocialCanRecordResults.length}. LocalOS пересчитал рекомендации, но не применил изменения автоматически.`
+          : `${feedback.ru} Массово отмечено: ${selectedSocialCanRecordResults.length}. LocalOS пересчитал рекомендации, но заявки и обращения остаются главным KPI.`,
+        text_en: isPrimaryResult
+          ? `${feedback.en} Bulk recorded: ${selectedSocialCanRecordResults.length}. LocalOS recalculated recommendations but did not apply changes automatically.`
+          : `${feedback.en} Bulk recorded: ${selectedSocialCanRecordResults.length}. LocalOS recalculated recommendations, while leads and inquiries remain the main KPI.`,
+        details_ru: ['Главная метрика - заявки и обращения; комментарии, репосты, клики, охваты и лайки остаются ранними сигналами.'],
+        details_en: ['The main metric is leads and inquiries; comments, shares, clicks, reach, and likes remain early signals.'],
       });
     } catch (bulkError) {
       const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось отметить результат выбранных публикаций' : 'Could not record selected post results');
@@ -9805,8 +9807,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               : 'These channels need a manual or supervised finish: review the task and mark placement.')
                             : selectedSocialCanRecordResults.length > 0
                               ? (isRu
-                                ? 'Посты опубликованы: отметьте заявки/обращения, чтобы LocalOS корректировал следующий план по реальному результату.'
-                                : 'Posts are published: record leads/inquiries so LocalOS can adjust the next plan by real outcomes.')
+                                ? 'Посты опубликованы: отметьте заявки, обращения и ранние реакции, чтобы LocalOS корректировал следующий план по реальному результату.'
+                                : 'Posts are published: record leads, inquiries, and early reactions so LocalOS can adjust the next plan by real outcomes.')
                               : (isRu
                                 ? 'Если кнопки ниже показывают 0, сначала подготовьте каналы для выбранных тем.'
                                 : 'If the buttons below show 0, prepare channels for the selected topics first.')}
@@ -9979,6 +9981,33 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     {bulkBusyAction === 'selected-social-attribute-inquiry'
                       ? (isRu ? 'Отмечаем обращения...' : 'Recording inquiries...')
                       : `${isRu ? 'Было обращение' : 'Record inquiry'} · ${selectedSocialCanRecordResults.length}`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { void recordSelectedSocialPostAttribution('comment'); }}
+                    disabled={Boolean(bulkBusyAction) || selectedSocialCanRecordResults.length === 0}
+                  >
+                    {bulkBusyAction === 'selected-social-attribute-comment'
+                      ? (isRu ? 'Отмечаем комментарии...' : 'Recording comments...')
+                      : `${isRu ? 'Был комментарий' : 'Record comment'} · ${selectedSocialCanRecordResults.length}`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { void recordSelectedSocialPostAttribution('share'); }}
+                    disabled={Boolean(bulkBusyAction) || selectedSocialCanRecordResults.length === 0}
+                  >
+                    {bulkBusyAction === 'selected-social-attribute-share'
+                      ? (isRu ? 'Отмечаем репосты...' : 'Recording shares...')
+                      : `${isRu ? 'Был репост' : 'Record share'} · ${selectedSocialCanRecordResults.length}`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { void recordSelectedSocialPostAttribution('click'); }}
+                    disabled={Boolean(bulkBusyAction) || selectedSocialCanRecordResults.length === 0}
+                  >
+                    {bulkBusyAction === 'selected-social-attribute-click'
+                      ? (isRu ? 'Отмечаем клики...' : 'Recording clicks...')
+                      : `${isRu ? 'Был клик' : 'Record click'} · ${selectedSocialCanRecordResults.length}`}
                   </Button>
                   <Button type="button" variant="ghost" onClick={clearSelectedItems}>
                     {isRu ? 'Снять выбор' : 'Clear'}
