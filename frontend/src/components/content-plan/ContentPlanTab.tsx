@@ -2264,12 +2264,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       status = 'connect';
       titleRu = 'Первый запуск ждёт подключение канала';
       titleEn = 'First launch is waiting for channel setup';
-      nextRu = firstBlockedStatus === 'not_configured' || firstBlockedStatus === 'missing_credentials'
-        ? `Подключите ${firstBlockedLabel}, затем вернитесь к проверке текстов и расписанию.`
-        : `Проверьте права ${firstBlockedLabel}, затем вернитесь к проверке текстов и расписанию.`;
-      nextEn = firstBlockedStatus === 'not_configured' || firstBlockedStatus === 'missing_credentials'
-        ? `Connect ${firstBlockedLabel}, then return to copy review and queueing.`
-        : `Check ${firstBlockedLabel} permissions, then return to copy review and queueing.`;
+      const permissionsIssue = firstBlockedStatus.includes('permission') || firstBlockedStatus.includes('forbidden');
+      nextRu = permissionsIssue
+        ? `Проверьте права ${firstBlockedLabel}, затем вернитесь к проверке текстов и расписанию.`
+        : `Подключите ${firstBlockedLabel}, затем вернитесь к проверке текстов и расписанию.`;
+      nextEn = permissionsIssue
+        ? `Check ${firstBlockedLabel} permissions, then return to copy review and queueing.`
+        : `Connect ${firstBlockedLabel}, then return to copy review and queueing.`;
       ctaRu = 'Открыть настройку канала';
       ctaEn = 'Open channel setup';
     } else if (totalPosts === 0) {
