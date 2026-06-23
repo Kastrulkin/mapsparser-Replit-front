@@ -37,6 +37,7 @@ from services.social_post_service import (
     _social_recommendation_application_preview,
     _social_goal_progress,
     _social_first_api_proof_dossier,
+    _social_first_api_publish_readiness,
     _social_openclaw_browser_readiness,
     _api_preflight_blocked_due_posts,
     _status_after_social_text_edit,
@@ -3667,6 +3668,50 @@ def test_social_first_api_proof_dossier_prefers_telegram_ready_post_over_meta():
     assert dossier["candidate_post_id"] == "post-telegram"
     assert dossier["recommended_platform"] == "telegram"
     assert dossier["ready_api_channels"][0]["platform"] == "telegram"
+
+
+def test_social_first_api_publish_readiness_exposes_fast_start_and_safe_path():
+    readiness = _social_first_api_publish_readiness(
+        [
+            _channel_readiness("facebook", "api", True, "ready"),
+            _channel_readiness("telegram", "api", True, "ready"),
+            _channel_readiness("vk", "api", False, "missing_permissions"),
+        ]
+    )
+
+    assert readiness["schema"] == "localos_social_first_api_publish_readiness_v1"
+    assert readiness["recommended_start_platform"]["platform"] == "telegram"
+    assert readiness["fast_start_platforms"] == ["telegram", "vk"]
+    assert readiness["fast_start_ready_platforms"][0]["platform"] == "telegram"
+    assert readiness["fast_start_blocked_platforms"][0]["platform"] == "vk"
+    assert "Telegram" in readiness["fast_start_message_ru"]
+    assert "VK" in readiness["fast_start_message_ru"]
+    assert readiness["safe_path_ru"][0] == "Проверить API-каналы без публикации."
+    assert "provider_post_id/provider_post_url" in readiness["safe_path_ru"][-1]
+    assert readiness["external_publish_requires_approval"] is True
+
+
+def test_social_first_api_publish_readiness_keeps_non_fast_channel_when_it_is_the_only_live_candidate():
+    readiness = _social_first_api_publish_readiness(
+        [],
+        [
+            {
+                "platform": "google_business",
+                "platform_label": "Google Business",
+                "ready": False,
+                "status": "missing_binding",
+                "next_action_ru": "Выберите location.",
+                "next_action_en": "Select location.",
+            }
+        ],
+    )
+
+    assert readiness["source"] == "live_api_preflight"
+    assert readiness["recommended_start_platform"]["platform"] == "google_business"
+    assert readiness["fast_start_ready_platforms"] == []
+    assert readiness["fast_start_blocked_platforms"] == []
+    assert "Telegram/VK" in readiness["fast_start_message_ru"]
+    assert "provider_post_id/provider_post_url" in readiness["safe_path_en"][-1]
 
 
 def test_social_launch_preflight_blocks_due_api_posts_when_live_preflight_fails(monkeypatch):

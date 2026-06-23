@@ -31,6 +31,7 @@ SOCIAL_POST_PLATFORMS = [
 
 API_PLATFORMS = {"google_business", "telegram", "vk", "instagram", "facebook"}
 BROWSER_OR_MANUAL_PLATFORMS = {"yandex_maps", "two_gis"}
+FIRST_API_PROOF_PLATFORMS = ("telegram", "vk")
 
 SOCIAL_POST_STATUSES = {
     "draft",
@@ -1496,7 +1497,15 @@ def _social_first_api_publish_readiness(
         status = "partial_api_ready"
     else:
         status = "no_api_ready"
-    recommended_start_platform = ready_platforms[0] if ready_platforms else (blocked_platforms[0] if blocked_platforms else {})
+    fast_start_ready_platforms = [
+        item for item in ready_platforms
+        if str(item.get("platform") or "").strip() in FIRST_API_PROOF_PLATFORMS
+    ]
+    fast_start_blocked_platforms = [
+        item for item in blocked_platforms
+        if str(item.get("platform") or "").strip() in FIRST_API_PROOF_PLATFORMS
+    ]
+    recommended_start_platform = _social_preferred_first_api_platform(ready_platforms, blocked_platforms)
 
     return {
         "schema": "localos_social_first_api_publish_readiness_v1",
@@ -1507,6 +1516,13 @@ def _social_first_api_publish_readiness(
         "recommended_start_platform": recommended_start_platform,
         "ready_platforms": ready_platforms,
         "blocked_platforms": blocked_platforms,
+        "fast_start_platforms": list(FIRST_API_PROOF_PLATFORMS),
+        "fast_start_ready_platforms": fast_start_ready_platforms,
+        "fast_start_blocked_platforms": fast_start_blocked_platforms,
+        "fast_start_message_ru": _social_first_api_fast_start_message(status, fast_start_ready_platforms, fast_start_blocked_platforms, True),
+        "fast_start_message_en": _social_first_api_fast_start_message(status, fast_start_ready_platforms, fast_start_blocked_platforms, False),
+        "safe_path_ru": _social_first_api_safe_path(True),
+        "safe_path_en": _social_first_api_safe_path(False),
         "message_ru": _social_first_api_publish_message(status, ready_platforms, blocked_platforms, True),
         "message_en": _social_first_api_publish_message(status, ready_platforms, blocked_platforms, False),
         "next_action_ru": _social_first_api_publish_next_action(status, blocked_platforms, True),
@@ -1525,6 +1541,90 @@ def _social_first_api_publish_readiness(
         "publish_path_ru": "Только после предпросмотра, подтверждения, расписания и наступления даты.",
         "publish_path_en": "Only after preview, human approval, queueing, and the due date.",
     }
+
+
+def _social_preferred_first_api_platform(
+    ready_platforms: list[dict[str, Any]],
+    blocked_platforms: list[dict[str, Any]],
+) -> dict[str, Any]:
+    for collection in (ready_platforms, blocked_platforms):
+        for preferred in FIRST_API_PROOF_PLATFORMS:
+            for item in collection:
+                if str(item.get("platform") or "").strip() == preferred:
+                    return item
+    if ready_platforms:
+        return ready_platforms[0]
+    if blocked_platforms:
+        return blocked_platforms[0]
+    return {}
+
+
+def _social_first_api_fast_start_message(
+    status: str,
+    ready_platforms: list[dict[str, Any]],
+    blocked_platforms: list[dict[str, Any]],
+    is_ru: bool,
+) -> str:
+    ready_labels = [
+        str(item.get("platform_label") or item.get("platform") or "").strip()
+        for item in ready_platforms
+        if str(item.get("platform_label") or item.get("platform") or "").strip()
+    ]
+    blocked_labels = [
+        str(item.get("platform_label") or item.get("platform") or "").strip()
+        for item in blocked_platforms
+        if str(item.get("platform_label") or item.get("platform") or "").strip()
+    ]
+    if ready_labels:
+        joined = ", ".join(ready_labels)
+        blocked_joined = ", ".join(blocked_labels)
+        if blocked_joined:
+            return (
+                f"Самый быстрый API-proof можно начать через {joined}; параллельно доведите {blocked_joined} до готовности."
+                if is_ru
+                else f"The fastest API proof can start with {joined}; in parallel, make {blocked_joined} ready."
+            )
+        return (
+            f"Самый быстрый API-proof можно начать через {joined}: проверьте текст, подтвердите и поставьте в расписание."
+            if is_ru
+            else f"The fastest API proof can start with {joined}: review copy, approve it, and queue it."
+        )
+    if blocked_labels:
+        joined = ", ".join(blocked_labels)
+        return (
+            f"Быстрый старт ждёт подключения {joined}. Meta/Google можно подключать позже, но первый proof быстрее получить через Telegram или VK."
+            if is_ru
+            else f"Fast start is waiting for {joined}. Meta/Google can follow later, but the first proof is usually fastest through Telegram or VK."
+        )
+    if status == "no_api_channels":
+        return (
+            "Добавьте хотя бы Telegram или VK, чтобы получить первый доказанный API-пост."
+            if is_ru
+            else "Add Telegram or VK to get the first proven API post."
+        )
+    return (
+        "Telegram/VK сейчас не участвуют в проверке; можно продолжить с готовым API-каналом, но для MVP они остаются приоритетом."
+        if is_ru
+        else "Telegram/VK are not in this check; you can continue with a ready API channel, but they remain the MVP priority."
+    )
+
+
+def _social_first_api_safe_path(is_ru: bool) -> list[str]:
+    if is_ru:
+        return [
+            "Проверить API-каналы без публикации.",
+            "Открыть предпросмотр и сохранить правки текста.",
+            "Подтвердить текст человеком.",
+            "Поставить пост в расписание.",
+            "После worker проверить provider_post_id/provider_post_url, затем собрать реакции и отметить заявки.",
+        ]
+    return [
+        "Check API channels without publishing.",
+        "Open preview and save copy edits.",
+        "Approve the copy with a human.",
+        "Queue the post on schedule.",
+        "After the worker runs, verify provider_post_id/provider_post_url, then collect reactions and record leads.",
+    ]
 
 
 def _social_first_api_publish_message(

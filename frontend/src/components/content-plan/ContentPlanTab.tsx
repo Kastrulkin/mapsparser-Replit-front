@@ -992,6 +992,23 @@ type SocialLaunchPreflight = {
       next_action_ru?: string;
       next_action_en?: string;
     }>;
+    fast_start_platforms?: string[];
+    fast_start_ready_platforms?: Array<{
+      platform?: string;
+      platform_label?: string;
+      status?: string;
+    }>;
+    fast_start_blocked_platforms?: Array<{
+      platform?: string;
+      platform_label?: string;
+      status?: string;
+      next_action_ru?: string;
+      next_action_en?: string;
+    }>;
+    fast_start_message_ru?: string;
+    fast_start_message_en?: string;
+    safe_path_ru?: string[];
+    safe_path_en?: string[];
     message_ru?: string;
     message_en?: string;
     next_action_ru?: string;
@@ -8745,6 +8762,64 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   ))}
                                 </div>
                               ) : null}
+                              <div
+                                data-testid="social-first-api-fast-start"
+                                className="mt-2 rounded-lg bg-white/10 px-2 py-2"
+                              >
+                                <div className="font-semibold text-white">
+                                  {isRu ? 'Быстрый старт API' : 'Fast API start'}
+                                </div>
+                                <div className="mt-1 text-slate-100">
+                                  {isRu
+                                    ? String(socialLaunchPreflight.first_api_publish_readiness.fast_start_message_ru || 'Telegram или VK быстрее всего дают первый проверенный API-пост.')
+                                    : String(socialLaunchPreflight.first_api_publish_readiness.fast_start_message_en || 'Telegram or VK usually provide the fastest proven API post.')}
+                                </div>
+                                {(
+                                  (socialLaunchPreflight.first_api_publish_readiness.fast_start_ready_platforms || []).length > 0
+                                  || (socialLaunchPreflight.first_api_publish_readiness.fast_start_blocked_platforms || []).length > 0
+                                ) ? (
+                                  <div className="mt-2 flex flex-wrap gap-1">
+                                    {(socialLaunchPreflight.first_api_publish_readiness.fast_start_ready_platforms || []).slice(0, 2).map((item) => (
+                                      <span
+                                        key={`fast-api-ready:${String(item.platform || '')}`}
+                                        className="rounded-full bg-emerald-400/20 px-2 py-0.5 font-medium text-emerald-50"
+                                      >
+                                        {item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)}
+                                        {' · '}
+                                        {isRu ? 'готов' : 'ready'}
+                                      </span>
+                                    ))}
+                                    {(socialLaunchPreflight.first_api_publish_readiness.fast_start_blocked_platforms || []).slice(0, 2).map((item) => (
+                                      <span
+                                        key={`fast-api-blocked:${String(item.platform || '')}`}
+                                        className="rounded-full bg-amber-950/20 px-2 py-0.5 font-medium text-amber-50"
+                                      >
+                                        {item.platform_label || _socialPlatformLabel(String(item.platform || ''), isRu)}
+                                        {' · '}
+                                        {String(item.status || 'not_ready')}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
+                                {(
+                                  isRu
+                                    ? socialLaunchPreflight.first_api_publish_readiness.safe_path_ru
+                                    : socialLaunchPreflight.first_api_publish_readiness.safe_path_en
+                                )?.length ? (
+                                  <ol className="mt-2 grid gap-1 sm:grid-cols-2">
+                                    {(
+                                      isRu
+                                        ? socialLaunchPreflight.first_api_publish_readiness.safe_path_ru
+                                        : socialLaunchPreflight.first_api_publish_readiness.safe_path_en
+                                    )?.slice(0, 5).map((step, index) => (
+                                      <li key={`fast-api-safe-path:${index}:${step}`} className="flex gap-1.5 text-slate-100">
+                                        <span className="font-semibold text-white">{index + 1}.</span>
+                                        <span>{step}</span>
+                                      </li>
+                                    ))}
+                                  </ol>
+                                ) : null}
+                              </div>
                               <div className="mt-1 font-medium text-white">
                                 {isRu
                                   ? String(socialLaunchPreflight.first_api_publish_readiness.next_action_ru || '')
