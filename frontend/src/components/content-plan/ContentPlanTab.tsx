@@ -4543,6 +4543,30 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     } catch (dispatchError) {
       const message = dispatchError instanceof Error ? dispatchError.message : (isRu ? 'Не удалось запустить scoped цикл' : 'Could not run scoped cycle');
       setError(message);
+      try {
+        await checkSocialLaunchPreflight();
+      } catch {
+        // The visible recovery summary below is enough if refresh also fails.
+      }
+      setActionSummary({
+        tone: 'warning',
+        text_ru: 'Первый цикл не запущен: LocalOS остановил внешнее исполнение.',
+        text_en: 'The first cycle did not run: LocalOS stopped external execution.',
+        details_ru: [
+          message,
+          apiDuePosts > 0
+            ? `Если это API-публикация, повторите запуск только после dry-run и введите фразу подтверждения: ${externalPublishPhrase}.`
+            : 'Повторите безопасную проверку запуска: она ничего не публикует и покажет текущий блокер.',
+          'Яндекс/2ГИС всё равно остаются контролируемым или ручным размещением без финального автоклика.',
+        ],
+        details_en: [
+          message,
+          apiDuePosts > 0
+            ? `If this is API publishing, rerun only after the dry-run and type the confirmation phrase: ${externalPublishPhrase}.`
+            : 'Run the safe launch check again: it publishes nothing and shows the current blocker.',
+          'Yandex/2GIS still stay supervised or manual without the final auto-click.',
+        ],
+      });
     } finally {
       setSocialBusyAction('');
     }
