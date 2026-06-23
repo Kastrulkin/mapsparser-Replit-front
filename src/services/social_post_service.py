@@ -69,7 +69,7 @@ SOCIAL_QUEUE_GROUPS = (
         "key": "scheduled",
         "label_ru": "Запланировано",
         "label_en": "Scheduled",
-        "next_action_ru": "Ждёт даты публикации. Worker выполнит API publish или создаст контролируемое размещение.",
+        "next_action_ru": "Ждёт даты публикации. Исполнитель выполнит API-публикацию или создаст контролируемое размещение.",
         "next_action_en": "Waiting for schedule. The worker will publish via API or create supervised placement.",
     },
     {
@@ -176,7 +176,7 @@ def preview_social_posts_for_item(user_id: str, item_id: str, platforms: list[st
             "posts": previews,
             "summary": summary,
             "next_action_ru": (
-                "Если preview устраивает, нажмите “Подготовить каналы”. Это создаст drafts, но не опубликует наружу."
+                "Если предпросмотр устраивает, нажмите “Подготовить каналы”. Это создаст черновики, но не опубликует наружу."
             ),
             "next_action_en": (
                 "If the preview looks right, click Prepare channels. This creates drafts but does not publish externally."
@@ -434,6 +434,37 @@ def _build_social_launch_preflight_payload(
         api_preflight_blocked_due_posts,
         runtime_alignment,
     )
+    live_validation_checklist = _social_live_validation_checklist(
+        production_readiness,
+        launch_gate,
+        first_api_proof_gate,
+        due_count,
+        external_publish_count,
+        controlled_count,
+        manual_count,
+    )
+    recommended_env = {
+        "dispatch": _dispatch_preview_recommended_env(str(business_id or "").strip()),
+        "metrics": _metrics_preview_recommended_env(str(business_id or "").strip()),
+    }
+    launch_runbook = _social_launch_runbook(
+        status,
+        scope,
+        due_count,
+        external_publish_count,
+        controlled_count,
+        manual_count,
+        skipped_no_access,
+        first_cycle_verification,
+    )
+    first_cycle_proof_packet = _social_first_cycle_proof_packet(
+        launch_gate,
+        first_api_proof_gate,
+        live_validation_checklist,
+        recommended_env,
+        launch_runbook,
+        runtime_alignment,
+    )
     return {
         "business_id": scope,
         "status": status,
@@ -441,6 +472,8 @@ def _build_social_launch_preflight_payload(
         "production_readiness": production_readiness,
         "launch_gate": launch_gate,
         "first_api_proof_gate": first_api_proof_gate,
+        "live_validation_checklist": live_validation_checklist,
+        "first_cycle_proof_packet": first_cycle_proof_packet,
         "channel_readiness": channel_readiness,
         "channel_summary": channel_summary,
         "dispatch_preview": dispatch_preview,
@@ -452,10 +485,7 @@ def _build_social_launch_preflight_payload(
         "blocked_api_channels": blocked_api_channels,
         "controlled_channels": controlled_channels,
         "first_api_publish_readiness": first_api_publish_readiness,
-        "recommended_env": {
-            "dispatch": _dispatch_preview_recommended_env(str(business_id or "").strip()),
-            "metrics": _metrics_preview_recommended_env(str(business_id or "").strip()),
-        },
+        "recommended_env": recommended_env,
         "safety": {
             "approval_required": True,
             "scoped_dispatch_required": True,
@@ -480,21 +510,174 @@ def _build_social_launch_preflight_payload(
         },
         "first_cycle_verification": first_cycle_verification,
         "runtime_alignment": runtime_alignment,
-        "launch_runbook": _social_launch_runbook(
-            status,
-            scope,
-            due_count,
-            external_publish_count,
-            controlled_count,
-            manual_count,
-            skipped_no_access,
-            first_cycle_verification,
-        ),
+        "launch_runbook": launch_runbook,
         "message_ru": _social_launch_preflight_message(status, True),
         "message_en": _social_launch_preflight_message(status, False),
         "next_action_ru": _social_launch_preflight_next_action(status, scope, True),
         "next_action_en": _social_launch_preflight_next_action(status, scope, False),
     }
+
+
+def _social_first_cycle_proof_packet(
+    launch_gate: dict[str, Any],
+    first_api_proof_gate: dict[str, Any],
+    live_validation_checklist: list[dict[str, Any]],
+    recommended_env: dict[str, Any],
+    launch_runbook: dict[str, Any],
+    runtime_alignment: dict[str, Any],
+) -> dict[str, Any]:
+    dispatch_env = _json_dict(recommended_env.get("dispatch"))
+    metrics_env = _json_dict(recommended_env.get("metrics"))
+    launch_allowed = bool(launch_gate.get("allowed"))
+    api_proof_allowed = bool(first_api_proof_gate.get("allowed"))
+    background_aligned = bool(first_api_proof_gate.get("background_worker_aligned"))
+    checklist_total = len(live_validation_checklist or [])
+    checklist_done = len([item for item in live_validation_checklist or [] if str(item.get("status") or "") == "done"])
+    candidate = _json_dict(first_api_proof_gate.get("candidate"))
+    dispatch_alignment = _json_dict(runtime_alignment.get("dispatch"))
+    status = "ready_for_one_cycle" if launch_allowed else "not_ready"
+    if launch_allowed and not api_proof_allowed:
+        status = "ready_without_api_proof"
+    if launch_allowed and api_proof_allowed and background_aligned:
+        status = "ready_for_worker_or_button"
+    return {
+        "schema": "localos_social_first_cycle_proof_packet_v1",
+        "status": status,
+        "ready_to_run_once": launch_allowed,
+        "api_proof_ready": api_proof_allowed,
+        "background_worker_aligned": background_aligned,
+        "ui_run_once_allowed": bool(first_api_proof_gate.get("ui_run_once_allowed")),
+        "requires_human_confirmation": True,
+        "external_publish_requires_approval": True,
+        "browser_final_click_allowed": False,
+        "maps_are_supervised_or_manual": True,
+        "dispatch_business_id": str(dispatch_env.get("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip(),
+        "metrics_business_id": str(metrics_env.get("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip(),
+        "dispatch_env": dispatch_env,
+        "metrics_env": metrics_env,
+        "candidate_platform": str(candidate.get("platform") or "").strip(),
+        "candidate_platform_label": str(candidate.get("platform_label") or "").strip(),
+        "required_proof_fields": candidate.get("required_proof_fields") or ["provider_post_id", "provider_post_url"],
+        "checklist_done": checklist_done,
+        "checklist_total": checklist_total,
+        "run_once_action_ru": (
+            "Нажмите «Запустить один цикл сейчас» только после проверки: посты подтверждены, business scope указан, блокеров нет."
+            if launch_allowed
+            else "Сначала подготовьте due-посты, снимите блокеры и повторите проверку запуска."
+        ),
+        "run_once_action_en": (
+            "Click “Run one cycle now” only after checking: posts are approved, business scope is set, and blockers are gone."
+            if launch_allowed
+            else "Prepare due posts, resolve blockers, and run launch preflight again first."
+        ),
+        "after_run_checks_ru": [
+            "Проверьте логи [SOCIAL_POST_DISPATCH] и количество picked/published/supervised/manual/failed.",
+            "Для API-поста проверьте provider_post_id/provider_post_url или понятную ошибку.",
+            "Для Яндекс/2ГИС проверьте пакет контролируемого размещения; финальный клик остаётся за человеком.",
+            "После публикации соберите реакции и отметьте заявки/обращения перед изменением следующего плана.",
+        ],
+        "after_run_checks_en": [
+            "Check [SOCIAL_POST_DISPATCH] logs and picked/published/supervised/manual/failed counts.",
+            "For the API post, verify provider_post_id/provider_post_url or a clear error.",
+            "For Yandex/2GIS, check the supervised placement packet; the final click stays human-controlled.",
+            "After publishing, collect reactions and record leads/inquiries before changing the next plan.",
+        ],
+        "blocked_reason_ru": "" if launch_allowed else str(launch_runbook.get("blocked_reason_ru") or launch_gate.get("next_action_ru") or "").strip(),
+        "blocked_reason_en": "" if launch_allowed else str(launch_runbook.get("blocked_reason_en") or launch_gate.get("next_action_en") or "").strip(),
+        "runtime_status": str(dispatch_alignment.get("status") or "").strip(),
+    }
+
+
+def _social_live_validation_checklist(
+    production_readiness: dict[str, Any],
+    launch_gate: dict[str, Any],
+    first_api_proof_gate: dict[str, Any],
+    due_count: int,
+    external_publish_count: int,
+    controlled_count: int,
+    manual_count: int,
+) -> list[dict[str, Any]]:
+    ready_for_cycle = bool(production_readiness.get("ready_for_first_scoped_cycle"))
+    safe_to_enable = bool(production_readiness.get("safe_to_enable_scoped_dispatch"))
+    launch_allowed = bool(launch_gate.get("allowed"))
+    api_ready = bool(first_api_proof_gate.get("allowed"))
+    has_due = int(due_count or 0) > 0
+    has_api = int(external_publish_count or 0) > 0
+    has_maps_or_manual = int(controlled_count or 0) > 0 or int(manual_count or 0) > 0
+    return [
+        {
+            "key": "open_real_plan",
+            "status": "done" if has_due else "current",
+            "label_ru": "Открыт реальный контент-план",
+            "label_en": "Real content plan is open",
+            "detail_ru": (
+                f"На текущую дату найдено постов: {int(due_count or 0)}."
+                if has_due
+                else "Подготовьте, подтвердите и поставьте в расписание 1-2 темы из реального плана."
+            ),
+            "detail_en": (
+                f"Due posts found: {int(due_count or 0)}."
+                if has_due
+                else "Prepare, approve, and queue 1-2 topics from a real plan."
+            ),
+        },
+        {
+            "key": "ready_to_run_one_cycle",
+            "status": "done" if ready_for_cycle else ("current" if safe_to_enable and launch_allowed else "pending"),
+            "label_ru": "Можно проверить один цикл",
+            "label_en": "One-cycle check is possible",
+            "detail_ru": (
+                "Исполнитель уже ограничен этим бизнесом; можно запускать один цикл после подтверждения."
+                if ready_for_cycle
+                else "Перед запуском ограничьте исполнителя текущим бизнесом и проверьте блокеры."
+            ),
+            "detail_en": (
+                "The worker is already scoped to this business; one cycle can run after confirmation."
+                if ready_for_cycle
+                else "Before launch, scope the worker to this business and check blockers."
+            ),
+        },
+        {
+            "key": "api_proof_after_run",
+            "status": "current" if api_ready and has_api else ("pending" if has_api else "attention"),
+            "label_ru": "API-proof после запуска",
+            "label_en": "API proof after launch",
+            "detail_ru": (
+                "После цикла проверьте provider_post_id/provider_post_url или понятную ошибку."
+                if has_api
+                else "В первом живом прогоне нет API-поста; подключите Telegram/VK или другой API-канал."
+            ),
+            "detail_en": (
+                "After the cycle, check provider_post_id/provider_post_url or a clear error."
+                if has_api
+                else "There is no API post in the first live run; connect Telegram/VK or another API channel."
+            ),
+        },
+        {
+            "key": "maps_supervised_not_autopublish",
+            "status": "current" if has_maps_or_manual else "pending",
+            "label_ru": "Карты не автопубликуются",
+            "label_en": "Maps do not autopublish",
+            "detail_ru": (
+                f"Контролируемо: {int(controlled_count or 0)}, вручную: {int(manual_count or 0)}. Финальный клик остаётся за человеком."
+                if has_maps_or_manual
+                else "Добавьте Яндекс/2ГИС в выбранный план, чтобы проверить контролируемое или ручное размещение."
+            ),
+            "detail_en": (
+                f"Supervised: {int(controlled_count or 0)}, manual: {int(manual_count or 0)}. The final click stays human-controlled."
+                if has_maps_or_manual
+                else "Add Yandex/2GIS to the selected plan to verify supervised or manual placement."
+            ),
+        },
+        {
+            "key": "collect_results_next",
+            "status": "pending",
+            "label_ru": "После публикации собрать результат",
+            "label_en": "Collect results after publishing",
+            "detail_ru": "После первого цикла отметьте заявки/обращения и пересчитайте рекомендации следующего плана.",
+            "detail_en": "After the first cycle, record leads/inquiries and recalculate next-plan recommendations.",
+        },
+    ]
 
 
 def _empty_social_launch_rehearsal() -> dict[str, Any]:
@@ -517,9 +700,9 @@ def _empty_social_launch_rehearsal() -> dict[str, Any]:
             "external_publish_performed": False,
             "provider_write_performed": False,
             "browser_final_click_allowed": False,
-            "message_ru": "Нет due queued постов для проверки запуска.",
+            "message_ru": "Нет запланированных постов на текущую дату для проверки запуска.",
             "message_en": "No due queued posts to rehearse.",
-            "next_action_ru": "Сначала подтвердите посты, поставьте их в расписание и дождитесь due-даты.",
+            "next_action_ru": "Сначала подтвердите посты, поставьте их в расписание и дождитесь даты публикации.",
             "next_action_en": "Approve posts, queue them, and wait for the due date first.",
         },
     }
@@ -545,9 +728,9 @@ def _social_launch_rehearsal_from_preview(user_id: str, dispatch_preview: dict[s
             "status": "error",
             "failed": 1,
             "manual_or_blocked": 1,
-            "message_ru": f"Проверка due-постов не прошла: {error}",
+            "message_ru": f"Проверка постов на текущую дату не прошла: {error}",
             "message_en": f"Due-post rehearsal failed: {error}",
-            "next_action_ru": "Проверьте доступ к due-постам и повторите preflight запуска.",
+            "next_action_ru": "Проверьте доступ к постам на текущую дату и повторите проверку запуска.",
             "next_action_en": "Check access to due posts and run launch preflight again.",
         }
         return payload
@@ -615,9 +798,9 @@ def _social_first_cycle_launch_gate_title(status: str, is_ru: bool) -> str:
     if status == "ready_for_supervised_only":
         return "Можно запускать: только контролируемые задачи" if is_ru else "Ready to run: supervised tasks only"
     if status == "ready_for_manual_only":
-        return "Можно запускать: только ручной fallback" if is_ru else "Ready to run: manual fallback only"
+        return "Можно запускать: только ручной режим" if is_ru else "Ready to run: manual fallback only"
     if status == "no_due_posts":
-        return "Нет due-постов для запуска" if is_ru else "No due posts to run"
+        return "Нет постов на текущую дату для запуска" if is_ru else "No due posts to run"
     return "Запуск пока заблокирован" if is_ru else "Launch is blocked"
 
 
@@ -630,7 +813,7 @@ def _social_first_cycle_launch_gate_summary(
 ) -> str:
     if status == "ready_with_api_publish":
         return (
-            f"После подтверждения один scoped цикл может опубликовать API-посты: {int(external_publish_count or 0)}; карты останутся supervised/manual."
+            f"После подтверждения один ограниченный цикл может опубликовать API-посты: {int(external_publish_count or 0)}; карты останутся контролируемыми или ручными."
             if is_ru
             else f"After confirmation, one scoped cycle may publish API posts: {int(external_publish_count or 0)}; maps stay supervised/manual."
         )
@@ -642,13 +825,13 @@ def _social_first_cycle_launch_gate_summary(
         )
     if status == "ready_for_manual_only":
         return (
-            f"API и browser-use не готовы; цикл переведёт посты в ручной fallback: {int(manual_count or 0)}."
+            f"API и browser-use не готовы; цикл переведёт посты в ручной режим: {int(manual_count or 0)}."
             if is_ru
             else f"API and browser-use are not ready; the cycle will move posts to manual fallback: {int(manual_count or 0)}."
         )
     if status == "no_due_posts":
         return (
-            "Сначала утвердите посты, поставьте их в расписание и дождитесь due-даты."
+            "Сначала утвердите посты, поставьте их в расписание и дождитесь даты публикации."
             if is_ru
             else "Approve posts, queue them, and wait for the due date first."
         )
@@ -753,25 +936,25 @@ def _social_first_api_proof_gate_summary(
     label = str(candidate.get("platform_label") or candidate.get("platform") or "").strip()
     if status == "ready_for_worker_or_ui":
         return (
-            f"{label}: можно дождаться worker или запустить один scoped цикл из LocalOS; proof должен появиться как provider_post_id/provider_post_url."
+            f"{label}: можно дождаться исполнителя или запустить один ограниченный цикл из LocalOS; подтверждение должно появиться как provider_post_id/provider_post_url."
             if is_ru
             else f"{label}: wait for the worker or run one scoped cycle from LocalOS; proof must appear as provider_post_id/provider_post_url."
         )
     if status == "ready_for_ui_run_once":
         return (
-            f"{label}: можно запустить один scoped цикл из LocalOS; после запуска нужен provider_post_id/provider_post_url. Фоновой worker для этого бизнеса ещё не выровнен."
+            f"{label}: можно запустить один ограниченный цикл из LocalOS; после запуска нужен provider_post_id/provider_post_url. Фоновый исполнитель для этого бизнеса ещё не выровнен."
             if is_ru
             else f"{label}: one scoped cycle can run from LocalOS; provider_post_id/provider_post_url is required after launch. The background worker is not aligned to this business yet."
         )
     if status == "api_preflight_blocked":
         return (
-            "Live API-preflight нашёл due API-пост с неготовым каналом; publish не должен стартовать."
+            "Live API-проверка нашла API-пост на текущую дату с неготовым каналом; публикация не должна стартовать."
             if is_ru
             else "Live API preflight found a due API post with a channel that is not ready; publishing must not start."
         )
     if status == "no_due_api_candidate":
         return (
-            "Чтобы доказать API-loop, нужен due Telegram/VK/API-пост: approved, queued и с готовым каналом."
+            "Чтобы доказать API-loop, нужен Telegram/VK/API-пост на текущую дату: подтверждённый, в расписании и с готовым каналом."
             if is_ru
             else "To prove the API loop, create a due Telegram/VK/API post: approved, queued, and with a ready channel."
         )
@@ -790,13 +973,13 @@ def _social_first_api_proof_gate_next_action(
 ) -> str:
     if status == "ready_for_worker_or_ui":
         return (
-            "Запустите один scoped цикл или дождитесь worker, затем проверьте provider_post_id/provider_post_url и соберите реакции/заявки."
+            "Запустите один ограниченный цикл или дождитесь исполнителя, затем проверьте provider_post_id/provider_post_url и соберите реакции/заявки."
             if is_ru
             else "Run one scoped cycle or wait for the worker, then check provider_post_id/provider_post_url and collect reactions/leads."
         )
     if status == "ready_for_ui_run_once":
         return (
-            "Нажмите запуск одного scoped цикла; для фонового режима отдельно выровняйте SOCIAL_POST_DISPATCH_BUSINESS_ID."
+            "Нажмите запуск одного ограниченного цикла; для фонового режима отдельно выровняйте SOCIAL_POST_DISPATCH_BUSINESS_ID."
             if is_ru
             else "Run one scoped cycle; for background mode, align SOCIAL_POST_DISPATCH_BUSINESS_ID separately."
         )
@@ -804,7 +987,7 @@ def _social_first_api_proof_gate_next_action(
         first = api_preflight_blocked_due_posts[0] if api_preflight_blocked_due_posts else {}
         action = str(first.get("next_action_ru" if is_ru else "next_action_en") or "").strip()
         return action or (
-            "Исправьте ключи/permissions/location канала и повторите live API-проверку."
+            "Исправьте ключи, права или локацию канала и повторите live API-проверку."
             if is_ru
             else "Fix channel keys/permissions/location and rerun live API preflight."
         )
@@ -836,7 +1019,7 @@ def _social_production_readiness(
         blockers.append(
             _social_readiness_issue(
                 "no_due_posts",
-                "Нет due-постов",
+                "Нет постов на текущую дату",
                 "No due posts",
                 "Подготовьте посты, утвердите их и поставьте в расписание.",
                 "Prepare posts, approve them, and queue them on schedule.",
@@ -861,7 +1044,7 @@ def _social_production_readiness(
                 "api_preflight_blocked",
                 "API-канал не готов",
                 "API channel is not ready",
-                "Исправьте ключи, permissions или location у заблокированного due API-поста.",
+                "Исправьте ключи, права или локацию у заблокированного API-поста на текущую дату.",
                 "Fix keys, permissions, or location for the blocked due API post.",
                 "channels",
                 len(api_preflight_blocked_due_posts),
@@ -889,7 +1072,7 @@ def _social_production_readiness(
                 "Worker is not aligned to this business yet",
                 str(runtime_alignment.get("next_action_ru") or "").strip(),
                 str(runtime_alignment.get("next_action_en") or "").strip(),
-                "worker",
+                "исполнитель",
             )
         )
     metrics_alignment = _json_dict(runtime_alignment.get("metrics"))
@@ -920,7 +1103,7 @@ def _social_production_readiness(
         warnings.append(
             _social_readiness_issue(
                 "manual_handoff_exists",
-                "Есть ручной fallback",
+                "Есть ручной режим",
                 "Manual fallback exists",
                 "Откройте ручные посты, разместите их вручную или подключите нужный канал.",
                 "Open manual posts, publish manually, or connect the required channel.",
@@ -983,9 +1166,9 @@ def _social_readiness_issue(
 
 def _social_production_readiness_title(status: str, is_ru: bool) -> str:
     if status == "ready":
-        return "Можно запускать первый scoped цикл" if is_ru else "Ready for the first scoped cycle"
+        return "Можно запускать первый ограниченный цикл" if is_ru else "Ready for the first scoped cycle"
     if status == "ready_after_worker_scope":
-        return "Посты готовы, настройте worker scope" if is_ru else "Posts are ready; set worker scope"
+        return "Посты готовы, настройте бизнес для исполнителя" if is_ru else "Posts are ready; set worker scope"
     if status == "blocked":
         return "Сначала снять блокеры запуска" if is_ru else "Resolve launch blockers first"
     return "Сначала подготовить очередь" if is_ru else "Prepare the queue first"
@@ -999,13 +1182,13 @@ def _social_production_readiness_summary(
 ) -> str:
     if status == "ready":
         return (
-            "Due-посты готовы: API выйдет только после approval, карты останутся supervised/manual."
+            "Посты на текущую дату готовы: API выйдет только после подтверждения, карты останутся контролируемыми или ручными."
             if is_ru
             else "Due posts are ready: API publishes only after approval, maps stay supervised/manual."
         )
     if status == "ready_after_worker_scope":
         return (
-            "Очередь готова, но runtime ещё не смотрит на этот бизнес. Включите scoped worker перед первым циклом."
+            "Очередь готова, но исполнитель ещё не смотрит на этот бизнес. Включите ограниченный запуск перед первым циклом."
             if is_ru
             else "The queue is ready, but runtime is not scoped to this business yet. Enable scoped worker before the first cycle."
         )
@@ -1024,7 +1207,7 @@ def _social_production_readiness_summary(
             else f"Not ready for the production loop yet: {first.get('label_en') or 'setup is needed'}."
         )
     return (
-        "Подготовьте посты из контент-плана, проверьте preview, утвердите и поставьте в расписание."
+        "Подготовьте посты из контент-плана, проверьте предпросмотр, утвердите и поставьте в расписание."
         if is_ru
         else "Prepare posts from the content plan, review preview, approve, and queue them."
     )
@@ -1040,13 +1223,13 @@ def _social_production_readiness_next_action(
         return str(blockers[0].get("action_ru" if is_ru else "action_en") or "").strip()
     if status == "ready_after_worker_scope":
         return (
-            "Включите worker только с SOCIAL_POST_DISPATCH_BUSINESS_ID текущего бизнеса и проверьте один цикл."
+            "Включите исполнителя только с SOCIAL_POST_DISPATCH_BUSINESS_ID текущего бизнеса и проверьте один цикл."
             if is_ru
             else "Enable the worker only with this business SOCIAL_POST_DISPATCH_BUSINESS_ID and check one cycle."
         )
     if status == "ready":
         return (
-            "Запустите один scoped цикл, затем проверьте provider proof, supervised tasks и manual fallback."
+            "Запустите один ограниченный цикл, затем проверьте подтверждение провайдера, контролируемые задачи и ручной режим."
             if is_ru
             else "Run one scoped cycle, then check provider proof, supervised tasks, and manual fallback."
         )
@@ -1134,7 +1317,7 @@ def _social_first_api_publish_readiness(
         "metrics_followup_ru": _social_first_api_metrics_followup(status, recommended_start_platform, True),
         "metrics_followup_en": _social_first_api_metrics_followup(status, recommended_start_platform, False),
         "external_publish_requires_approval": True,
-        "publish_path_ru": "Только после preview, human approval, queue и due-даты.",
+        "publish_path_ru": "Только после предпросмотра, подтверждения, расписания и наступления даты.",
         "publish_path_en": "Only after preview, human approval, queueing, and the due date.",
     }
 
@@ -1229,17 +1412,17 @@ def _social_first_api_post_checklist(
                 else f"Choose the first ready channel: {label}."
             ),
             (
-                "Откройте preview, проверьте текст и сохраните правки."
+                "Откройте предпросмотр, проверьте текст и сохраните правки."
                 if is_ru
                 else "Open preview, review copy, and save edits."
             ),
             (
-                "Подтвердите текст человеком: approval не публикует наружу."
+                "Подтвердите текст человеком: подтверждение не публикует наружу."
                 if is_ru
                 else "Approve the copy with a human: approval does not publish externally."
             ),
             (
-                "Поставьте пост в расписание и дождитесь due-даты или scoped worker cycle."
+                "Поставьте пост в расписание и дождитесь даты публикации или одного ограниченного цикла исполнителя."
                 if is_ru
                 else "Queue the post and wait for the due date or a scoped worker cycle."
             ),
@@ -1267,7 +1450,7 @@ def _social_first_api_post_checklist(
                 else "Rerun the live API check without publishing."
             ),
             (
-                "Когда канал станет ready, пройдите preview → approval → queue."
+                "Когда канал станет готов, пройдите: предпросмотр → подтверждение → расписание."
                 if is_ru
                 else "Once the channel is ready, go through preview → approval → queue."
             ),
@@ -1308,17 +1491,17 @@ def _social_first_api_launch_plan(
                 else f"Start with one ready channel: {label}."
             ),
             (
-                "Возьмите ближайшую тему контент-плана и подготовьте platform-specific текст."
+                "Возьмите ближайшую тему контент-плана и подготовьте версии текста под каналы."
                 if is_ru
                 else "Use the nearest content-plan topic and prepare platform-specific copy."
             ),
             (
-                "Покажите preview владельцу и сохраните правки до approval."
+                "Покажите предпросмотр владельцу и сохраните правки до подтверждения."
                 if is_ru
                 else "Show the preview to the owner and save edits before approval."
             ),
             (
-                "После approval поставьте пост в queue; worker публикует только due API-пост."
+                "После подтверждения поставьте пост в расписание; исполнитель публикует только API-посты с наступившей датой."
                 if is_ru
                 else "After approval, queue the post; the worker publishes only the due API post."
             ),
@@ -1336,7 +1519,7 @@ def _social_first_api_launch_plan(
         )
         return [
             (
-                f"Сначала доведите {label} до ready: {setup_step}."
+                f"Сначала доведите {label} до готовности: {setup_step}."
                 if is_ru
                 else f"First make {label} ready: {setup_step}."
             ),
@@ -1346,12 +1529,12 @@ def _social_first_api_launch_plan(
                 else "Rerun live API-preflight without publishing."
             ),
             (
-                "Когда появится ready-канал, пройдите preview → approval → queue для одного поста."
+                "Когда появится готовый канал, пройдите: предпросмотр → подтверждение → расписание для одного поста."
                 if is_ru
                 else "When a ready channel appears, run preview → approval → queue for one post."
             ),
             (
-                "Не включайте внешний publish, пока нет явного ready и approval."
+                "Не включайте внешнюю публикацию, пока нет явной готовности и подтверждения."
                 if is_ru
                 else "Do not enable external publish until ready and approval are explicit."
             ),
@@ -1368,7 +1551,7 @@ def _social_first_api_launch_plan(
             else "After connecting it, rerun live API-preflight and prepare one content-plan post."
         ),
         (
-            "Дальше идите только через preview, human approval и queue."
+            "Дальше идите только через предпросмотр, подтверждение человека и расписание."
             if is_ru
             else "Then proceed only through preview, human approval, and queue."
         ),
@@ -1434,7 +1617,7 @@ def _social_first_api_metrics_followup(
 ) -> str:
     if status in {"all_api_channels_ready", "partial_api_ready"}:
         return (
-            "После proof соберите реакции/заявки и отметьте обращения; следующий план не меняется автоматически без approval."
+            "После первого подтверждённого запуска соберите реакции/заявки и отметьте обращения; следующий план не меняется автоматически без подтверждения."
             if is_ru
             else "After proof, collect reactions/leads and mark inquiries; the next plan is not changed automatically without approval."
         )
@@ -1543,7 +1726,7 @@ def _api_preflight_block_next_action(platform: str, status: str, is_ru: bool) ->
         )
     if normalized_platform in {"instagram", "facebook"}:
         return (
-            f"Откройте Meta integration для {label}, проверьте Page/IG business binding и permissions; без них используйте ручной fallback."
+            f"Откройте подключение Meta для {label}, проверьте Page/IG business и права; без них используйте ручной режим."
             if is_ru
             else f"Open the Meta integration for {label}, check Page/IG business binding and permissions; use manual fallback until ready."
         )
@@ -1557,25 +1740,25 @@ def _api_preflight_block_next_action(platform: str, status: str, is_ru: bool) ->
 def _social_launch_preflight_message(status: str, is_ru: bool) -> str:
     if status == "api_preflight_blocked":
         return (
-            "Due API-посты есть, но live API-проверка нашла канал без ключей, прав или готового adapter. Сначала исправьте канал или переведите пост в ручной fallback."
+            "Есть API-посты на текущую дату, но проверка нашла канал без ключей, прав или готового адаптера. Сначала исправьте канал или переведите пост в ручной режим."
             if is_ru
             else "Due API posts exist, but live API preflight found a channel without keys, permissions, or a ready adapter. Fix the channel or move the post to manual fallback first."
         )
     if status == "ready_for_api_dispatch":
         return (
-            "Есть due API-публикации: scoped worker сможет отправить их только после уже полученного approval."
+            "Есть API-публикации на текущую дату: ограниченный исполнитель сможет отправить их только после уже полученного подтверждения."
             if is_ru
             else "Due API posts exist: the scoped worker can publish them only after existing approval."
         )
     if status == "ready_for_controlled_handoff":
         return (
-            "Есть due публикации для карт: worker создаст контролируемое или ручное размещение без финального клика."
+            "Есть публикации для карт на текущую дату: исполнитель создаст контролируемое или ручное размещение без финального клика."
             if is_ru
             else "Due map posts exist: the worker will create supervised placement or manual handoff without the final click."
         )
     if status == "manual_or_connection_needed":
         return (
-            "Due-посты есть, но сейчас они требуют ручного fallback или подключения каналов."
+            "Посты на текущую дату есть, но сейчас они требуют ручного режима или подключения каналов."
             if is_ru
             else "Due posts exist, but they currently require manual fallback or channel connections."
         )
@@ -1601,7 +1784,7 @@ def _social_launch_preflight_next_action(status: str, business_id: str, is_ru: b
         )
     if status in {"ready_for_api_dispatch", "ready_for_controlled_handoff", "manual_or_connection_needed"}:
         return (
-            f"Для первого запуска включайте worker только с SOCIAL_POST_DISPATCH_BUSINESS_ID={business_id} и проверьте логи после одного цикла."
+            f"Для первого запуска включайте исполнителя только с SOCIAL_POST_DISPATCH_BUSINESS_ID={business_id} и проверьте логи после одного цикла."
             if is_ru
             else f"For the first launch, enable the worker only with SOCIAL_POST_DISPATCH_BUSINESS_ID={business_id} and check logs after one cycle."
         )
@@ -1612,7 +1795,7 @@ def _social_launch_preflight_next_action(status: str, business_id: str, is_ru: b
             else "Run preflight as a user with access to the business or choose another business scope."
         )
     return (
-        "Следующий шаг в интерфейсе: подготовить каналы, проверить preview, утвердить и поставить посты в расписание."
+        "Следующий шаг в интерфейсе: подготовить каналы, проверить предпросмотр, утвердить и поставить посты в расписание."
         if is_ru
         else "Next in the UI: prepare channels, review preview, approve, and queue posts on schedule."
     )
@@ -2139,12 +2322,12 @@ def mark_supervised_publish_blocked(
         if platform not in BROWSER_OR_MANUAL_PLATFORMS and status != "needs_supervised_publish":
             raise ValueError("Этот пост не является контролируемой browser-use публикацией")
         if status not in {"needs_supervised_publish", "needs_manual_publish", "queued"}:
-            raise ValueError("Контролируемый fallback доступен только для запланированных или контролируемых публикаций")
+            raise ValueError("Ручной режим доступен только для запланированных или контролируемых публикаций")
 
         blocked_reason = str(reason or "").strip()
         if not blocked_reason:
             blocked_reason = (
-                "Контролируемое размещение заблокировано: нужен ручной fallback "
+                "Контролируемое размещение заблокировано: нужен ручной режим "
                 "(логин, капча или изменённый интерфейс площадки)."
             )
         metadata = _social_supervised_blocked_metadata(
@@ -2624,7 +2807,7 @@ def _social_launch_runtime_next_action(dispatch_status: str, metrics_status: str
         )
     if dispatch_status == "blocked_without_scope":
         return (
-            f"Добавьте SOCIAL_POST_DISPATCH_BUSINESS_ID={business_scope}, иначе worker не начнёт внешние действия."
+            f"Добавьте SOCIAL_POST_DISPATCH_BUSINESS_ID={business_scope}, иначе исполнитель не начнёт внешние действия."
             if is_ru
             else f"Add SOCIAL_POST_DISPATCH_BUSINESS_ID={business_scope}; otherwise the worker will not start external actions."
         )
@@ -2641,7 +2824,7 @@ def _social_launch_runtime_next_action(dispatch_status: str, metrics_status: str
             else "Publishing can run, but enable metrics with the same business scope to close the learning loop."
         )
     return (
-        "Runtime совпадает с текущим бизнесом: после approval и расписания worker может выполнить первый цикл."
+        "Исполнитель совпадает с текущим бизнесом: после подтверждения и расписания он может выполнить первый цикл."
         if is_ru
         else "Runtime matches this business: after approval and queueing, the worker can run the first cycle."
     )
@@ -2854,9 +3037,9 @@ def run_scoped_social_dispatch_once(
         )
     summary = preflight.get("summary") if isinstance(preflight.get("summary"), dict) else {}
     if int(summary.get("skipped_no_access") or 0) > 0:
-        raise PermissionError("Есть due-посты вне доступа текущего пользователя; проверьте business scope")
+        raise PermissionError("Есть посты на текущую дату вне доступа текущего пользователя; проверьте бизнес для запуска")
     if int(summary.get("api_preflight_blocked_due_posts") or 0) > 0:
-        raise PermissionError("Live API-preflight нашёл неготовый канал; исправьте ключи/права или переведите пост в ручной fallback")
+        raise PermissionError("Live API-проверка нашла неготовый канал; исправьте ключи/права или переведите пост в ручной режим")
     api_due_posts = int(summary.get("api_due_posts") or launch_gate.get("api_posts") or 0)
     if api_due_posts > 0 and not _social_external_publish_confirmation_matches(approval_text):
         phrase = _social_external_publish_confirmation_phrase()
@@ -2918,6 +3101,7 @@ def run_scoped_social_metrics_once(
         "business_id": normalized_business_id,
         "batch_size": clean_batch_size,
         "metrics_result": metrics_result,
+        "metrics_learning_packet": _social_metrics_learning_packet(metrics_result),
         "external_publish_performed": False,
         "message_ru": _social_metrics_once_message(metrics_result, True),
         "message_en": _social_metrics_once_message(metrics_result, False),
@@ -2965,6 +3149,7 @@ def _social_dispatch_execution_report(dispatch_result: dict[str, Any]) -> dict[s
     elif picked > 0:
         status = "completed"
     first_api_proof_summary = _social_dispatch_first_api_proof_summary(details)
+    post_publish_learning_gate = _social_post_publish_learning_gate(details, first_api_proof_summary)
     return {
         "schema": "localos_social_dispatch_execution_report_v1",
         "status": status,
@@ -3002,7 +3187,17 @@ def _social_dispatch_execution_report(dispatch_result: dict[str, Any]) -> dict[s
             ),
         },
         "first_api_proof_summary": first_api_proof_summary,
-        "post_publish_learning_gate": _social_post_publish_learning_gate(details, first_api_proof_summary),
+        "post_publish_learning_gate": post_publish_learning_gate,
+        "after_run_proof_packet": _social_after_run_proof_packet(
+            status,
+            picked,
+            published,
+            supervised,
+            manual,
+            failed,
+            first_api_proof_summary,
+            post_publish_learning_gate,
+        ),
         "title_ru": _social_dispatch_execution_title(status, True),
         "title_en": _social_dispatch_execution_title(status, False),
         "summary_ru": _social_dispatch_execution_summary(picked, published, supervised, manual, failed, True),
@@ -3010,6 +3205,124 @@ def _social_dispatch_execution_report(dispatch_result: dict[str, Any]) -> dict[s
         "next_action_ru": _social_dispatch_execution_next_action(status, errors, True),
         "next_action_en": _social_dispatch_execution_next_action(status, errors, False),
     }
+
+
+def _social_after_run_proof_packet(
+    status: str,
+    picked: int,
+    published: int,
+    supervised: int,
+    manual: int,
+    failed: int,
+    first_api_proof_summary: dict[str, Any],
+    post_publish_learning_gate: dict[str, Any],
+) -> dict[str, Any]:
+    api_proof_ready = bool(first_api_proof_summary.get("ready"))
+    can_collect = bool(post_publish_learning_gate.get("can_collect_metrics"))
+    has_maps_handoff = int(supervised or 0) > 0 or int(manual or 0) > 0
+    has_failures = int(failed or 0) > 0
+    if has_failures:
+        proof_status = "needs_recovery"
+    elif api_proof_ready and can_collect:
+        proof_status = "loop_proven_collect_results"
+    elif can_collect:
+        proof_status = "published_collect_results"
+    elif has_maps_handoff:
+        proof_status = "finish_maps_handoff"
+    elif int(picked or 0) <= 0:
+        proof_status = "no_due_posts"
+    else:
+        proof_status = "check_details"
+    return {
+        "schema": "localos_social_after_run_proof_packet_v1",
+        "status": proof_status,
+        "dispatch_status": str(status or "").strip(),
+        "picked": int(picked or 0),
+        "published": int(published or 0),
+        "supervised": int(supervised or 0),
+        "manual": int(manual or 0),
+        "failed": int(failed or 0),
+        "api_proof_ready": api_proof_ready,
+        "can_collect_results": can_collect,
+        "maps_handoff_created": has_maps_handoff,
+        "browser_final_click_allowed": False,
+        "primary_metric_ru": "Заявки и обращения",
+        "primary_metric_en": "Leads and inquiries",
+        "title_ru": _social_after_run_proof_title(proof_status, True),
+        "title_en": _social_after_run_proof_title(proof_status, False),
+        "next_action_ru": _social_after_run_proof_next_action(proof_status, True),
+        "next_action_en": _social_after_run_proof_next_action(proof_status, False),
+        "checks_ru": _social_after_run_proof_checks(proof_status, True),
+        "checks_en": _social_after_run_proof_checks(proof_status, False),
+    }
+
+
+def _social_after_run_proof_title(status: str, is_ru: bool) -> str:
+    if status == "loop_proven_collect_results":
+        return "Цикл доказан: собирайте результат" if is_ru else "Loop proven: collect results"
+    if status == "published_collect_results":
+        return "Пост опубликован: добавьте proof и результат" if is_ru else "Post published: add proof and results"
+    if status == "finish_maps_handoff":
+        return "Карты ждут контролируемое размещение" if is_ru else "Maps wait for supervised placement"
+    if status == "needs_recovery":
+        return "Есть ошибки запуска" if is_ru else "Launch has errors"
+    if status == "no_due_posts":
+        return "На текущую дату нечего запускать" if is_ru else "No due posts to run"
+    return "Проверьте детали запуска" if is_ru else "Check launch details"
+
+
+def _social_after_run_proof_next_action(status: str, is_ru: bool) -> str:
+    if status == "loop_proven_collect_results":
+        return (
+            "Нажмите “Собрать реакции”, отметьте заявки/обращения и откройте предложения следующего плана."
+            if is_ru
+            else "Click “Collect reactions”, record leads/inquiries, and open next-plan suggestions."
+        )
+    if status == "published_collect_results":
+        return (
+            "Сохраните provider_post_id/provider_post_url, затем соберите реакции и отметьте заявки."
+            if is_ru
+            else "Save provider_post_id/provider_post_url, then collect reactions and record leads."
+        )
+    if status == "finish_maps_handoff":
+        return (
+            "Откройте пакет размещения Яндекс/2ГИС, завершите публикацию человеком и отметьте размещённым."
+            if is_ru
+            else "Open the Yandex/2GIS placement packet, finish publishing as a human, and mark it published."
+        )
+    if status == "needs_recovery":
+        return (
+            "Откройте ошибочные посты, исправьте ключи/права или переведите в ручной режим."
+            if is_ru
+            else "Open failed posts, fix keys/permissions, or move them to manual mode."
+        )
+    if status == "no_due_posts":
+        return (
+            "Подтвердите посты, поставьте их в расписание на текущую дату и повторите запуск."
+            if is_ru
+            else "Approve posts, queue them for the current date, and run again."
+        )
+    return (
+        "Сверьте статусы published/failed/needs_supervised_publish и обновите результат."
+        if is_ru
+        else "Check published/failed/needs_supervised_publish statuses and update results."
+    )
+
+
+def _social_after_run_proof_checks(status: str, is_ru: bool) -> list[str]:
+    if is_ru:
+        return [
+            "Сверьте provider_post_id/provider_post_url для API-поста.",
+            "Проверьте, что Яндекс/2ГИС не были автопубликованы без человека.",
+            "Соберите реакции и вручную отметьте заявки/обращения.",
+            "Откройте рекомендации следующего плана только после результата.",
+        ]
+    return [
+        "Verify provider_post_id/provider_post_url for the API post.",
+        "Confirm Yandex/2GIS were not autopublished without a human.",
+        "Collect reactions and manually record leads/inquiries.",
+        "Open next-plan recommendations only after results exist.",
+    ]
 
 
 def _social_post_publish_learning_gate(
@@ -3108,18 +3421,18 @@ def _social_post_publish_learning_gate_next_action(status: str, is_ru: bool) -> 
         )
     if status == "finish_supervised_or_manual_publish":
         return (
-            "Откройте контролируемое размещение или manual fallback; после фактической публикации сохраните ссылку/ID."
+            "Откройте контролируемое размещение или ручной режим; после фактической публикации сохраните ссылку/ID."
             if is_ru
             else "Open supervised placement or manual fallback; after the real publish, save URL/ID."
         )
     if status == "fix_failed_publish":
         return (
-            "Откройте ошибочный пост, исправьте ключи/permissions или повторите публикацию после approval."
+            "Откройте ошибочный пост, исправьте ключи/права или повторите публикацию после подтверждения."
             if is_ru
             else "Open the failed post, fix keys/permissions, or retry publishing after approval."
         )
     return (
-        "Подготовьте, подтвердите и поставьте пост в расписание, затем запустите scoped цикл."
+        "Подготовьте, подтвердите и поставьте пост в расписание, затем запустите ограниченный цикл."
         if is_ru
         else "Prepare, approve, and queue a post, then run a scoped cycle."
     )
@@ -3225,12 +3538,12 @@ def _social_dispatch_execution_next_action(status: str, errors: list[Any], is_ru
         if errors and isinstance(errors[0], dict):
             first_error = str(errors[0].get("error") or "").strip()
         return (
-            f"Разберите первую ошибку и повторите запуск для оставшихся due-постов: {first_error}".strip()
+            f"Разберите первую ошибку и повторите запуск для оставшихся постов на текущую дату: {first_error}".strip()
             if is_ru
             else f"Review the first error and rerun for remaining due posts: {first_error}".strip()
         )
     return (
-        "Сначала поставьте утверждённые посты в расписание и дождитесь due-даты."
+        "Сначала поставьте утверждённые посты в расписание и дождитесь даты публикации."
         if is_ru
         else "Queue approved posts and wait for the due date first."
     )
@@ -3247,7 +3560,7 @@ def _social_dispatch_followup_actions(
 ) -> list[str]:
     if picked <= 0:
         return [
-            "Due-постов нет: сначала подготовьте, подтвердите и поставьте публикации в расписание."
+            "Постов на текущую дату нет: сначала подготовьте, подтвердите и поставьте публикации в расписание."
             if is_ru
             else "No due posts: prepare, approve, and queue posts first."
         ]
@@ -3267,7 +3580,7 @@ def _social_dispatch_followup_actions(
         )
     if manual > 0:
         actions.append(
-            "Откройте manual-посты: подключите ключи/права или разместите вручную и сохраните ссылку."
+            "Откройте посты в ручном режиме: подключите ключи/права или разместите вручную и сохраните ссылку."
             if is_ru
             else "Open manual posts: connect keys/permissions or publish manually and save the URL."
         )
@@ -3277,19 +3590,19 @@ def _social_dispatch_followup_actions(
             sample_error = str((errors[0] or {}).get("error") or "").strip()
         if sample_error:
             actions.append(
-                f"Есть ошибки dispatch: {sample_error[:180]}. Исправьте причину и повторите scoped цикл."
+                f"Есть ошибки запуска: {sample_error[:180]}. Исправьте причину и повторите ограниченный цикл."
                 if is_ru
                 else f"Dispatch has failures: {sample_error[:180]}. Fix the cause and rerun the scoped cycle."
             )
         else:
             actions.append(
-                "Есть ошибки dispatch: откройте карточки с failed и выберите повтор или manual fallback."
+                "Есть ошибки запуска: откройте карточки с ошибкой и выберите повтор или ручной режим."
                 if is_ru
                 else "Dispatch has failures: open failed cards and choose retry or manual fallback."
             )
     if not actions:
         actions.append(
-            "Цикл завершён без внешних изменений: обновите очередь и проверьте due-даты."
+            "Цикл завершён без внешних изменений: обновите очередь и проверьте даты публикаций."
             if is_ru
             else "The cycle finished without external changes: refresh the queue and check due dates."
         )
@@ -3375,6 +3688,119 @@ def _social_metrics_once_message(result: dict[str, Any], is_ru: bool) -> str:
     return f"Metrics collection finished: checked {picked}, updated {collected}, failed {failed}."
 
 
+def _social_metrics_learning_packet(result: dict[str, Any]) -> dict[str, Any]:
+    details = result.get("metric_details") if isinstance(result.get("metric_details"), list) else []
+    leads = sum(int(item.get("leads") or 0) for item in details if isinstance(item, dict))
+    inquiries = sum(int(item.get("inquiries") or 0) for item in details if isinstance(item, dict))
+    comments = sum(int(item.get("comments") or 0) for item in details if isinstance(item, dict))
+    shares = sum(int(item.get("shares") or 0) for item in details if isinstance(item, dict))
+    clicks = sum(int(item.get("clicks") or 0) for item in details if isinstance(item, dict))
+    likes = sum(int(item.get("likes") or 0) for item in details if isinstance(item, dict))
+    views = sum(int(item.get("views") or 0) for item in details if isinstance(item, dict))
+    failed = int(result.get("failed") or 0)
+    collected = int(result.get("collected") or 0)
+    primary_total = leads + inquiries
+    early_total = comments + shares + clicks + likes + views
+    if primary_total > 0:
+        status = "ready_from_leads"
+    elif early_total > 0:
+        status = "early_signals_only"
+    elif collected > 0:
+        status = "collected_without_signals"
+    elif failed > 0:
+        status = "metrics_failed"
+    else:
+        status = "no_metrics_yet"
+    return {
+        "schema": "localos_social_metrics_learning_packet_v1",
+        "status": status,
+        "collected_posts": collected,
+        "failed_posts": failed,
+        "primary_metric_ru": "Заявки и обращения",
+        "primary_metric_en": "Leads and inquiries",
+        "primary_result_total": primary_total,
+        "early_signal_total": early_total,
+        "leads": leads,
+        "inquiries": inquiries,
+        "comments": comments,
+        "shares": shares,
+        "clicks": clicks,
+        "likes": likes,
+        "views": views,
+        "safe_to_recommend_next_plan": primary_total > 0 or early_total > 0,
+        "safe_to_apply_without_approval": False,
+        "external_publish_performed": False,
+        "summary_ru": _social_metrics_learning_summary(status, True),
+        "summary_en": _social_metrics_learning_summary(status, False),
+        "next_action_ru": _social_metrics_learning_next_action(status, True),
+        "next_action_en": _social_metrics_learning_next_action(status, False),
+    }
+
+
+def _social_metrics_learning_summary(status: str, is_ru: bool) -> str:
+    if status == "ready_from_leads":
+        return (
+            "Есть заявки или обращения: можно предлагать изменения следующего плана по главной метрике."
+            if is_ru
+            else "Leads or inquiries exist: next-plan changes can be suggested from the primary metric."
+        )
+    if status == "early_signals_only":
+        return (
+            "Есть ранние сигналы, но перед применением изменений проверьте заявки и обращения."
+            if is_ru
+            else "Early signals exist, but check leads and inquiries before applying changes."
+        )
+    if status == "collected_without_signals":
+        return (
+            "Метрики обновлены, но результата пока не видно: отметьте заявки/обращения вручную, если они были."
+            if is_ru
+            else "Metrics were updated, but no result is visible yet: manually record leads/inquiries if they happened."
+        )
+    if status == "metrics_failed":
+        return (
+            "Сбор реакций завершился с ошибками: исправьте доступы или используйте ручную разметку результата."
+            if is_ru
+            else "Metrics collection had errors: fix access or use manual result attribution."
+        )
+    return (
+        "Сначала опубликуйте посты или отметьте результат вручную."
+        if is_ru
+        else "Publish posts or record results manually first."
+    )
+
+
+def _social_metrics_learning_next_action(status: str, is_ru: bool) -> str:
+    if status == "ready_from_leads":
+        return (
+            "Откройте предложения следующего плана; применять их можно только после подтверждения."
+            if is_ru
+            else "Open next-plan suggestions; apply them only after approval."
+        )
+    if status == "early_signals_only":
+        return (
+            "Проверьте, были ли заявки/обращения, затем откройте рекомендации как предварительные."
+            if is_ru
+            else "Check whether leads/inquiries happened, then open recommendations as preliminary."
+        )
+    if status == "collected_without_signals":
+        return (
+            "Отметьте заявку, обращение или ранний сигнал на опубликованных постах."
+            if is_ru
+            else "Record a lead, inquiry, or early signal on published posts."
+        )
+    if status == "metrics_failed":
+        return (
+            "Откройте ошибки сбора метрик и исправьте канал или права."
+            if is_ru
+            else "Open metric collection errors and fix the channel or permissions."
+        )
+    return (
+        "Подготовьте публикацию, дождитесь результата и повторите сбор реакций."
+        if is_ru
+        else "Prepare a post, wait for results, and collect reactions again."
+    )
+
+
 def _social_metrics_result_summaries(details: list[dict[str, Any]], is_ru: bool) -> list[str]:
     summaries: list[str] = []
     for item in (details or [])[:5]:
@@ -3413,7 +3839,7 @@ def _social_metrics_result_summaries(details: list[dict[str, Any]], is_ru: bool)
             )
         elif source == "meta_graph_api":
             summaries.append(
-                f"{label}: Meta Graph метрики требуют готовых permissions; пока используйте ручную разметку заявок/обращений. Заявки {leads}, обращения {inquiries}."
+                f"{label}: Meta Graph метрики требуют готовых прав; пока используйте ручную разметку заявок/обращений. Заявки {leads}, обращения {inquiries}."
                 if is_ru
                 else f"{label}: Meta Graph metrics require ready permissions; use manual lead/inquiry marking for now. Leads {leads}, inquiries {inquiries}."
             )
@@ -3567,9 +3993,9 @@ def _dispatch_preview_readiness(
         ),
         "first_api_proof_candidate": _dispatch_first_api_proof_candidate(preview_items),
         "safety_notes_ru": [
-            "Внешние публикации уходят только из approved/queued постов.",
-            "Яндекс/2ГИС остаются контролируемыми или ручными: финальный клик публикации не выполняется worker.",
-            "Dry-run ничего не отправляет наружу и нужен для проверки первого цикла.",
+            "Внешние публикации уходят только из подтверждённых постов в расписании.",
+            "Яндекс/2ГИС остаются контролируемыми или ручными: финальный клик публикации не выполняется исполнителем.",
+            "Проверка ничего не отправляет наружу и нужна для первого цикла.",
         ],
         "safety_notes_en": [
             "External publishing runs only for approved/queued posts.",
@@ -3588,7 +4014,7 @@ def _dispatch_preview_first_cycle_steps(
     steps = [
         {
             "key": "api_publish_after_approval",
-            "label_ru": "API: публикация после approval",
+            "label_ru": "API: публикация после подтверждения",
             "label_en": "API: publish after approval",
             "count": int(external_publish_count or 0),
             "external_publish": True,
@@ -3596,7 +4022,7 @@ def _dispatch_preview_first_cycle_steps(
             "stop_before_final_publish": False,
             "expected_status_ru": "published или failed с понятной причиной",
             "expected_status_en": "published or failed with a clear reason",
-            "description_ru": "Telegram/VK/Google/Meta уйдут наружу только если пост уже approved, queued и канал готов.",
+            "description_ru": "Telegram/VK/Google/Meta уйдут наружу только если пост уже подтверждён, стоит в расписании и канал готов.",
             "description_en": "Telegram/VK/Google/Meta publish externally only when the post is already approved, queued, and the channel is ready.",
         },
         {
@@ -3609,12 +4035,12 @@ def _dispatch_preview_first_cycle_steps(
             "stop_before_final_publish": True,
             "expected_status_ru": "needs_supervised_publish",
             "expected_status_en": "needs_supervised_publish",
-            "description_ru": "Яндекс/2ГИС получают supervised task для OpenClaw, но финальная публикация остаётся за человеком.",
+            "description_ru": "Яндекс/2ГИС получают контролируемую задачу для OpenClaw, но финальная публикация остаётся за человеком.",
             "description_en": "Yandex/2GIS receive an OpenClaw supervised task, while final publishing stays human-controlled.",
         },
         {
             "key": "manual_handoff_or_connection",
-            "label_ru": "Ручной fallback или подключение канала",
+            "label_ru": "Ручной режим или подключение канала",
             "label_en": "Manual fallback or channel connection",
             "count": int(manual_count or 0),
             "external_publish": False,
@@ -3720,9 +4146,9 @@ def _social_worker_first_cycle_verification(
         expected_statuses.append(
             {
                 "key": "manual_fallback",
-                "label_ru": "Ручной fallback",
+                "label_ru": "Ручной режим",
                 "label_en": "Manual fallback",
-                "expected_ru": "needs_manual_publish с инструкцией и copy-ready текстом",
+                "expected_ru": "needs_manual_publish с инструкцией и готовым текстом",
                 "expected_en": "needs_manual_publish with instructions and copy-ready text",
             }
         )
@@ -3912,10 +4338,10 @@ def _social_launch_runbook_steps(
 ) -> list[str]:
     if str(status or "").strip() == "api_preflight_blocked":
         return [
-            "Исправьте live API-preflight: ключи, permissions, location или native adapter для заблокированного канала."
+            "Исправьте live API-проверку: ключи, права, локацию или адаптер для заблокированного канала."
             if is_ru
             else "Fix live API preflight first: keys, permissions, location, or native adapter for the blocked channel.",
-            "Если канал пока нельзя подключить, переведите конкретный пост в ручной fallback и повторите preflight."
+            "Если канал пока нельзя подключить, переведите конкретный пост в ручной режим и повторите проверку."
             if is_ru
             else "If the channel cannot be connected yet, move that specific post to manual fallback and run preflight again.",
         ]
@@ -4155,9 +4581,11 @@ def recommend_next_plan_from_social_posts(user_id: str, plan_id: str) -> dict[st
                 posts,
             )
         )
+        application_preview = _social_recommendation_application_preview(cursor, plan_id, proposed_changes)
         return {
             "recommendation": recommendation,
             "proposed_changes": proposed_changes,
+            "application_preview": application_preview,
             "learning_readiness": _social_learning_readiness(posts),
             "applies_automatically": False,
             "approval_required": True,
@@ -4234,6 +4662,7 @@ def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool 
             "applied_items": applied,
             "approval_record": approval_record,
             "applies_automatically": False,
+            "application_preview": recommendation_payload.get("application_preview") or {},
             "recommendation": recommendation_payload.get("recommendation") or {},
             "proposed_changes": proposed_changes,
         }
@@ -4242,6 +4671,117 @@ def apply_social_post_recommendation(user_id: str, plan_id: str, approved: bool 
         raise sys.exc_info()[1]
     finally:
         db.close()
+
+
+def _social_recommendation_application_preview(
+    cursor: Any,
+    plan_id: str,
+    proposed_changes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    item_ids = [
+        str(item.get("item_id") or "").strip()
+        for item in proposed_changes
+        if str(item.get("item_id") or "").strip()
+    ]
+    if not item_ids:
+        return {
+            "schema": "localos_social_recommendation_application_preview_v1",
+            "scope": "future_unpublished_content_plan_items",
+            "total": 0,
+            "applicable_count": 0,
+            "skipped_count": 0,
+            "items": [],
+            "summary_ru": "Нет изменений для применения.",
+            "summary_en": "There are no changes to apply.",
+        }
+    cursor.execute(
+        """
+        SELECT id, theme, scheduled_for, status, usernews_id
+        FROM contentplanitems
+        WHERE plan_id = %s
+          AND id = ANY(%s)
+        """,
+        (plan_id, item_ids),
+    )
+    rows = [_row_to_dict(cursor, row) for row in cursor.fetchall()]
+    rows_by_id = {str(row.get("id") or "").strip(): row for row in rows}
+    preview_items: list[dict[str, Any]] = []
+    for change in proposed_changes:
+        item_id = str(change.get("item_id") or "").strip()
+        if not item_id:
+            continue
+        row = rows_by_id.get(item_id) or {}
+        eligible, reason = _social_recommendation_application_eligibility(row)
+        preview_items.append(
+            {
+                "item_id": item_id,
+                "theme": str(change.get("theme") or row.get("theme") or "").strip(),
+                "applicable": eligible,
+                "skip_reason": "" if eligible else reason,
+                "status": str(row.get("status") or "").strip(),
+                "scheduled_for": _iso_or_empty(row.get("scheduled_for")),
+                "has_news": bool(str(row.get("usernews_id") or "").strip()),
+                "label_ru": "Будет изменён" if eligible else _social_recommendation_skip_reason_label(reason, True),
+                "label_en": "Will be changed" if eligible else _social_recommendation_skip_reason_label(reason, False),
+            }
+        )
+    applicable = sum(1 for item in preview_items if bool(item.get("applicable")))
+    skipped = len(preview_items) - applicable
+    return {
+        "schema": "localos_social_recommendation_application_preview_v1",
+        "scope": "future_unpublished_content_plan_items",
+        "total": len(preview_items),
+        "applicable_count": applicable,
+        "skipped_count": skipped,
+        "items": preview_items,
+        "summary_ru": (
+            f"Можно применить: {applicable}; будет пропущено: {skipped}. Меняются только будущие неопубликованные пункты."
+        ),
+        "summary_en": (
+            f"Applicable: {applicable}; skipped: {skipped}. Only future unpublished items are changed."
+        ),
+    }
+
+
+def _social_recommendation_application_eligibility(row: dict[str, Any]) -> tuple[bool, str]:
+    if not row:
+        return False, "missing_or_no_access"
+    if str(row.get("usernews_id") or "").strip():
+        return False, "already_has_news"
+    status = str(row.get("status") or "").strip()
+    if status in {"skipped", "published"}:
+        return False, f"status_{status}"
+    scheduled_for = row.get("scheduled_for")
+    scheduled_date = scheduled_for.date() if isinstance(scheduled_for, datetime) else scheduled_for
+    if isinstance(scheduled_date, str):
+        try:
+            scheduled_date = date.fromisoformat(scheduled_date[:10])
+        except ValueError:
+            scheduled_date = None
+    if isinstance(scheduled_date, date) and scheduled_date < date.today():
+        return False, "past_item"
+    return True, ""
+
+
+def _iso_or_empty(value: Any) -> str:
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    return str(value or "").strip()
+
+
+def _social_recommendation_skip_reason_label(reason: str, is_ru: bool) -> str:
+    normalized = str(reason or "").strip()
+    if normalized == "already_has_news":
+        return "Уже создана новость" if is_ru else "News already exists"
+    if normalized == "status_published":
+        return "Уже опубликован" if is_ru else "Already published"
+    if normalized == "status_skipped":
+        return "Пропущен" if is_ru else "Skipped"
+    if normalized == "past_item":
+        return "Прошлая дата" if is_ru else "Past date"
+    if normalized == "missing_or_no_access":
+        return "Не найден в плане" if is_ru else "Not found in plan"
+    return "Будет пропущен" if is_ru else "Will be skipped"
 
 
 def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None, cursor: Any | None = None) -> dict[str, Any]:
@@ -4255,15 +4795,15 @@ def _social_openclaw_browser_readiness(status: dict[str, Any] | None = None, cur
     if ready and handoff_ready:
         message_ru = "OpenClaw browser-use готов: Яндекс/2ГИС можно вести как контролируемое размещение без финального клика."
         message_en = "OpenClaw browser-use is ready: Yandex/2GIS can use supervised placement without the final click."
-        next_action_ru = "Подготовьте контролируемое размещение у поста карты и проверьте preview перед финальным размещением."
+        next_action_ru = "Подготовьте контролируемое размещение у поста карты и проверьте предпросмотр перед финальным размещением."
         next_action_en = "Create supervised placement on the map post and review the preview before final placement."
     elif ready:
-        message_ru = "OpenClaw browser-use найден, но доставка supervised task не готова: LocalOS подготовит ручной fallback вместо внешней задачи."
+        message_ru = "OpenClaw browser-use найден, но доставка контролируемой задачи не готова: LocalOS подготовит ручной режим вместо внешней задачи."
         message_en = "OpenClaw browser-use is available, but supervised task delivery is not ready: LocalOS will prepare manual fallback instead of an external task."
-        next_action_ru = str(delivery_readiness.get("next_action_ru") or "Настройте OpenClaw callback/outbox или используйте ручное размещение.").strip()
+        next_action_ru = str(delivery_readiness.get("next_action_ru") or "Настройте доставку задачи OpenClaw или используйте ручное размещение.").strip()
         next_action_en = str(delivery_readiness.get("next_action_en") or "Configure the OpenClaw callback/outbox or use manual placement.").strip()
     elif catalog_error:
-        message_ru = "OpenClaw browser-use не подтверждён: LocalOS не смог прочитать capability catalog, поэтому Яндекс/2ГИС останутся в ручном fallback."
+        message_ru = "OpenClaw browser-use не подтверждён: LocalOS не смог прочитать capability catalog, поэтому Яндекс/2ГИС останутся в ручном режиме."
         message_en = "OpenClaw browser-use is not confirmed: LocalOS could not read the capability catalog, so Yandex/2GIS will stay in manual fallback."
         next_action_ru = "Проверьте доступность OPENCLAW_BASE_URL или OPENCLAW_SANDBOX_BRIDGE_URL с production VPS; до этого используйте ручное размещение."
         next_action_en = "Check that OPENCLAW_BASE_URL or OPENCLAW_SANDBOX_BRIDGE_URL is reachable from the production VPS; use manual placement until then."
@@ -4383,15 +4923,15 @@ def _social_openclaw_browser_diagnostics(capability_status: dict[str, Any], is_r
         if action_ref:
             lines.append(f"Действие OpenClaw: {action_ref}.")
         if reason and not ready:
-            lines.append(f"Причина ручного fallback: {reason}.")
+            lines.append(f"Причина ручного режима: {reason}.")
         if error and not ready:
             lines.append(f"Ошибка каталога OpenClaw: {error}.")
         if ready:
             lines.append("Следующий шаг: создать контролируемую задачу у поста Яндекс/2ГИС и проверить предпросмотр.")
         elif reason == "openclaw_catalog_error" or source == "catalog_error":
-            lines.append("Следующий шаг: сделать OpenClaw catalog доступным с production VPS или оставить ручной fallback.")
+            lines.append("Следующий шаг: сделать OpenClaw catalog доступным с production VPS или оставить ручной режим.")
         else:
-            lines.append("Следующий шаг: проверить OPENCLAW_BASE_URL/catalog или использовать ручной fallback.")
+            lines.append("Следующий шаг: проверить OPENCLAW_BASE_URL/catalog или использовать ручной режим.")
         return lines
     lines = [
         "Read-only check: LocalOS only reads the capability catalog and publishes nothing.",
@@ -4964,18 +5504,18 @@ def _dispatch_preview_action_label(action: str, is_ru: bool) -> str:
     if clean == "create_supervised_task":
         return "Контролируемое размещение" if is_ru else "Supervised placement"
     if clean == "manual_handoff":
-        return "Ручной fallback" if is_ru else "Manual fallback"
+        return "Ручной режим" if is_ru else "Manual fallback"
     return "Без действия" if is_ru else "No action"
 
 
 def _dispatch_preview_reason_label(reason: str, is_ru: bool) -> str:
     clean = str(reason or "").strip()
     if clean == "channel_ready":
-        return "Канал готов, есть approval и расписание." if is_ru else "Channel is ready, approved, and scheduled."
+        return "Канал готов, есть подтверждение и расписание." if is_ru else "Channel is ready, approved, and scheduled."
     if clean == "openclaw_browser_ready":
-        return "OpenClaw browser-use доступен; будет создана supervised задача." if is_ru else "OpenClaw browser-use is available; a supervised task will be created."
+        return "OpenClaw browser-use доступен; будет создана контролируемая задача." if is_ru else "OpenClaw browser-use is available; a supervised task will be created."
     if clean == "openclaw_browser_unavailable":
-        return "OpenClaw browser-use не подтверждён; нужен ручной fallback." if is_ru else "OpenClaw browser-use is not confirmed; manual fallback is required."
+        return "OpenClaw browser-use не подтверждён; нужен ручной режим." if is_ru else "OpenClaw browser-use is not confirmed; manual fallback is required."
     if clean == "empty_post_copy":
         return "Текст пустой: сначала верните пост на проверку и заполните copy." if is_ru else "Copy is empty: send the post back to review and fill it first."
     if clean == "publish_mode_not_api":
@@ -5265,7 +5805,7 @@ def _social_supervised_handoff_state(
         owner_next_action_ru = "Откройте контролируемое размещение, проверьте предпросмотр и подтвердите финальное действие человеком."
         owner_next_action_en = "Open supervised placement, review the preview, and let a human confirm the final action."
     else:
-        owner_status_ru = "OpenClaw browser-use не подтверждён; включён ручной fallback."
+        owner_status_ru = "OpenClaw browser-use не подтверждён; включён ручной режим."
         owner_status_en = "OpenClaw browser-use is not confirmed; manual fallback is active."
         owner_next_action_ru = "Скопируйте готовый текст, разместите пост вручную и отметьте публикацию размещённой."
         owner_next_action_en = "Copy the prepared text, publish it manually, and mark the post as published."
@@ -6019,7 +6559,7 @@ def _telegram_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, 
         ready,
         "ready" if ready else "live_probe_failed",
         checks,
-        "Telegram готов к API-публикации после approval." if ready else "Telegram ключи заполнены, но live-проверка не прошла.",
+        "Telegram готов к API-публикации после подтверждения." if ready else "Telegram ключи заполнены, но live-проверка не прошла.",
         "Telegram is ready for API publishing after approval." if ready else "Telegram keys exist, but live preflight failed.",
     )
 
@@ -6076,7 +6616,7 @@ def _vk_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, Any]:
             bool(read_probe.get("ok")),
             "VK API отвечает",
             "VK API responds",
-            "wall.get прошёл; wall.post всё равно выполняется только после approval" if read_probe.get("ok") else str(read_probe.get("error_ru") or "VK live-проверка не прошла"),
+            "wall.get прошёл; wall.post всё равно выполняется только после подтверждения" if read_probe.get("ok") else str(read_probe.get("error_ru") or "VK live-проверка не прошла"),
             "wall.get passed; wall.post still runs only after approval" if read_probe.get("ok") else str(read_probe.get("error_en") or "VK live preflight failed"),
             "ok" if read_probe.get("ok") else str(read_probe.get("status") or "failed"),
         )
@@ -6087,7 +6627,7 @@ def _vk_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, Any]:
         ready,
         "ready" if ready else "live_probe_failed",
         checks,
-        "VK готов к API-публикации после approval." if ready else "VK binding найден, но live-проверка API не прошла.",
+        "VK готов к API-публикации после подтверждения." if ready else "VK binding найден, но live-проверка API не прошла.",
         "VK is ready for API publishing after approval." if ready else "VK binding exists, but live API preflight failed.",
     )
 
@@ -6163,7 +6703,7 @@ def _google_business_api_channel_preflight(cursor: Any, business_id: str) -> dic
         ready,
         status,
         checks,
-        "Google Business Profile готов к API-публикации после approval." if ready else _google_business_readiness_error(status),
+        "Google Business Profile готов к API-публикации после подтверждения." if ready else _google_business_readiness_error(status),
         "Google Business Profile is ready for API publishing after approval." if ready else _google_business_readiness_error(status),
     )
 
@@ -6535,7 +7075,7 @@ def _collect_scope_tokens(value: Any, tokens: set[str]) -> None:
 def _vk_readiness_error(status: str) -> str:
     normalized = str(status or "").strip()
     if normalized == "missing_permissions":
-        return "VK token найден, но в permissions/scope нет wall.post."
+        return "VK token найден, но в правах нет wall.post."
     if normalized == "missing_binding":
         return "Для VK нужен group_id или owner_id группы/страницы."
     if normalized == "missing_connection":
@@ -6546,10 +7086,10 @@ def _vk_readiness_error(status: str) -> str:
 def _google_business_readiness_error(status: str) -> str:
     normalized = str(status or "").strip()
     if normalized == "missing_binding":
-        return "Google Business Profile подключен, но location для публикации не выбран."
+        return "Google Business Profile подключен, но локация для публикации не выбрана."
     if normalized == "missing_connection":
         return "Google Business Profile не подключен."
-    return "Проверьте Google Business Profile OAuth, location и разрешения."
+    return "Проверьте Google Business Profile OAuth, локацию и разрешения."
 
 
 def _meta_readiness_error(platform: str, status: str, is_ru: bool) -> str:
@@ -6557,7 +7097,7 @@ def _meta_readiness_error(platform: str, status: str, is_ru: bool) -> str:
     normalized = str(status or "").strip()
     if normalized == "adapter_pending":
         return (
-            f"{label}: подключение выглядит готовым, но native Meta publish ещё не включён; используйте ручной fallback."
+            f"{label}: подключение выглядит готовым, но native Meta publish ещё не включён; используйте ручной режим."
             if is_ru
             else f"{label}: connection looks ready, but native Meta publish is not enabled yet; use manual fallback."
         )
@@ -7157,13 +7697,13 @@ def _social_first_api_proof_dossier_summary(
         )
     if status == "review_and_approve":
         return (
-            f"{label}: есть draft для проверки. Approval не публикует наружу."
+            f"{label}: есть черновик для проверки. Подтверждение не публикует наружу."
             if is_ru
             else f"{label}: a draft is ready for review. Approval does not publish externally."
         )
     if status == "fix_or_manual_fallback":
         return (
-            f"{label}: пост заблокирован ошибкой или подключением. Исправьте канал или используйте ручной fallback."
+            f"{label}: пост заблокирован ошибкой или подключением. Исправьте канал или используйте ручной режим."
             if is_ru
             else f"{label}: the post is blocked by an error or connection issue. Fix the channel or use manual fallback."
         )
@@ -7211,7 +7751,7 @@ def _social_first_api_proof_dossier_next_action(
         return "Откройте preview, сохраните правки и нажмите “Подтвердить”." if is_ru else "Open preview, save edits, and click Approve."
     if status == "fix_or_manual_fallback":
         return (
-            "Откройте настройку канала, повторите live API-проверку или отметьте ручной fallback."
+            "Откройте настройку канала, повторите live API-проверку или отметьте ручной режим."
             if is_ru
             else "Open channel setup, rerun live API preflight, or mark manual fallback."
         )
@@ -7235,7 +7775,7 @@ def _social_first_api_proof_dossier_steps(status: str, label: str, is_ru: bool) 
         return [
             "Проверьте provider_post_id/provider_post_url.",
             "Соберите реакции и отметьте заявки/обращения.",
-            "Предложите изменения следующего плана, но применяйте только после approval.",
+            "Предложите изменения следующего плана, но применяйте только после подтверждения.",
         ] if is_ru else [
             "Check provider_post_id/provider_post_url.",
             "Collect reactions and mark leads/inquiries.",
@@ -7243,8 +7783,8 @@ def _social_first_api_proof_dossier_steps(status: str, label: str, is_ru: bool) 
         ]
     if status == "wait_for_worker_or_run_once":
         return [
-            "Проверьте, что post approved, queued и due.",
-            "Запустите scoped worker/run-once только после явного подтверждения.",
+            "Проверьте, что пост подтверждён, стоит в расписании и его дата уже наступила.",
+            "Запустите ограниченный цикл исполнителя только после явного подтверждения.",
             "После публикации проверьте provider_post_id/provider_post_url.",
         ] if is_ru else [
             "Check that the post is approved, queued, and due.",
@@ -7253,9 +7793,9 @@ def _social_first_api_proof_dossier_steps(status: str, label: str, is_ru: bool) 
         ]
     if status == "queue_approved_post":
         return [
-            "Откройте post preview.",
+            "Откройте предпросмотр поста.",
             "Проверьте дату и канал.",
-            "Поставьте в расписание; это ещё не отправляет наружу до due worker.",
+            "Поставьте в расписание; это ещё не отправляет наружу до даты публикации и запуска исполнителя.",
         ] if is_ru else [
             "Open the post preview.",
             "Check date and channel.",
@@ -7263,9 +7803,9 @@ def _social_first_api_proof_dossier_steps(status: str, label: str, is_ru: bool) 
         ]
     if status == "review_and_approve":
         return [
-            "Проверьте platform-specific текст.",
+            "Проверьте текст под конкретную площадку.",
             "Сохраните правки.",
-            "Подтвердите текст; approval отделён от публикации.",
+            "Подтвердите текст; подтверждение отделено от публикации.",
         ] if is_ru else [
             "Review platform-specific copy.",
             "Save edits.",
@@ -7273,8 +7813,8 @@ def _social_first_api_proof_dossier_steps(status: str, label: str, is_ru: bool) 
         ]
     if status == "fix_or_manual_fallback":
         return [
-            "Откройте readiness канала.",
-            "Исправьте ключи/права или переведите в ручной fallback.",
+            "Откройте готовность канала.",
+            "Исправьте ключи/права или переведите в ручной режим.",
             "Повторите live API-проверку без публикации.",
         ] if is_ru else [
             "Open channel readiness.",
@@ -7284,8 +7824,8 @@ def _social_first_api_proof_dossier_steps(status: str, label: str, is_ru: bool) 
     if status == "prepare_first_post":
         return [
             f"Выберите ближайшую тему и канал {label}.",
-            "Создайте draft и проверьте preview.",
-            "Дальше: approval → queue → due worker proof.",
+            "Создайте черновик и проверьте предпросмотр.",
+            "Дальше: подтверждение → расписание → проверка результата после даты публикации.",
         ] if is_ru else [
             f"Choose the nearest topic and {label} channel.",
             "Create a draft and review preview.",
@@ -7295,7 +7835,7 @@ def _social_first_api_proof_dossier_steps(status: str, label: str, is_ru: bool) 
         return [
             "Подключите Telegram или VK.",
             "Запустите live API-проверку без публикации.",
-            "Когда канал ready, подготовьте один пост из плана.",
+            "Когда канал готов, подготовьте один пост из плана.",
         ] if is_ru else [
             "Connect Telegram or VK.",
             "Run live API preflight without publishing.",
@@ -7427,7 +7967,7 @@ def _social_goal_progress(posts: list[dict[str, Any]], plan_item_count: int = 0)
         current = next((stage for stage in stages if stage.get("status") == "pending"), stages[-1])
     return {
         "schema": "localos_social_goal_progress_v1",
-        "goal_ru": "Контент-план → посты → approval → расписание → исполнение → реакции → корректировка следующего плана.",
+        "goal_ru": "Контент-план → посты → подтверждение → расписание → исполнение → реакции → корректировка следующего плана.",
         "goal_en": "Content plan → posts → approval → schedule → execution → reactions → next-plan correction.",
         "stages": stages,
         "summary": {
@@ -7489,13 +8029,13 @@ def _social_goal_execution_detail(
         )
     if int(manual or 0) > 0:
         return (
-            f"Нужен ручной fallback или подключение: {int(manual or 0)}."
+            f"Нужен ручной режим или подключение: {int(manual or 0)}."
             if is_ru
             else f"Manual fallback or connection needed: {int(manual or 0)}."
         )
     if int(scheduled or 0) > 0:
         return (
-            f"Ждёт due-даты или scoped worker cycle: {int(scheduled or 0)}."
+            f"Ждёт даты публикации или ограниченного цикла исполнителя: {int(scheduled or 0)}."
             if is_ru
             else f"Waiting for the due date or scoped worker cycle: {int(scheduled or 0)}."
         )
@@ -7506,7 +8046,7 @@ def _social_goal_execution_detail(
             else f"Published: {int(published or 0)}. Collect reactions and leads."
         )
     return (
-        "API публикуются только после approval и расписания; карты остаются supervised/manual."
+        "API публикуются только после подтверждения и расписания; карты остаются контролируемыми или ручными."
         if is_ru
         else "API publishes only after approval and queueing; maps stay supervised/manual."
     )
@@ -7843,7 +8383,7 @@ def _maps_connection_checks(browser_ready: bool, target: dict[str, Any]) -> list
             browser_ready,
             "OpenClaw browser-use",
             "OpenClaw browser-use",
-            "capability подтверждена" if browser_ready else "capability не подтверждена, будет ручной fallback",
+            "capability подтверждена" if browser_ready else "capability не подтверждена, будет ручной режим",
             "capability confirmed" if browser_ready else "capability is not confirmed; manual fallback will be used",
             "ok" if browser_ready else "manual",
         ),
@@ -7878,7 +8418,7 @@ def _channel_readiness_message(platform: str, status: str, is_ru: bool) -> str:
                 if is_ru
                 else f"{label}: keys are set; run the live API check before the first API post."
             )
-        return f"{label}: готов к публикации после approval." if is_ru else f"{label}: ready to publish after approval."
+        return f"{label}: готов к публикации после подтверждения." if is_ru else f"{label}: ready to publish after approval."
     if status == "supervised_ready":
         return (
             f"{label}: доступно контролируемое размещение через OpenClaw."
@@ -7887,7 +8427,7 @@ def _channel_readiness_message(platform: str, status: str, is_ru: bool) -> str:
         )
     if status == "manual_fallback":
         return (
-            f"{label}: OpenClaw browser-use не подтверждён, будет ручной fallback."
+            f"{label}: OpenClaw browser-use не подтверждён, будет ручной режим."
             if is_ru
             else f"{label}: OpenClaw browser-use is not confirmed; manual fallback will be used."
         )
@@ -7967,20 +8507,20 @@ def _channel_readiness_next_action(platform: str, status: str, is_ru: bool) -> s
         )
     if platform_key == "google_business":
         return (
-            "Подключите Google Business Profile и выберите location для публикации."
+            "Подключите Google Business Profile и выберите локацию для публикации."
             if is_ru
             else "Connect Google Business Profile and select the location for publishing."
         )
     if platform_key in {"instagram", "facebook"}:
         if status_key == "adapter_pending":
             return (
-                "Пока используйте manual handoff; включайте API только после проверки Meta permissions."
+                "Пока используйте ручной режим; включайте API только после проверки прав Meta."
                 if is_ru
                 else "Use manual handoff for now; enable API only after Meta permissions are verified."
             )
         if status_key == "missing_permissions":
             return (
-                "Проверьте Meta Graph permissions и привязку Page/IG business account."
+                "Проверьте права Meta Graph и привязку Page/IG business account."
                 if is_ru
                 else "Check Meta Graph permissions and Page/IG business account binding."
             )
@@ -8010,7 +8550,7 @@ def _channel_readiness_setup_summary(platform: str, status: str, is_ru: bool) ->
     if status_key == "ready":
         if platform_key in {"telegram", "vk"}:
             return (
-                "Ключи заполнены: перед первым реальным API-постом выполните live API-проверку без публикации, затем approval и расписание."
+                "Ключи заполнены: перед первым реальным API-постом выполните live API-проверку без публикации, затем подтверждение и расписание."
                 if is_ru
                 else "Keys are set: before the first real API post, run the live API check without publishing, then approve and queue."
             )
@@ -8057,20 +8597,20 @@ def _channel_readiness_setup_summary(platform: str, status: str, is_ru: bool) ->
         )
     if platform_key == "google_business":
         return (
-            "Чтобы включить Google, подключите Business Profile и выберите location."
+                "Чтобы включить Google, подключите Business Profile и выберите локацию."
             if is_ru
             else "To enable Google, connect Business Profile and select the location."
         )
     if platform_key in {"instagram", "facebook"}:
         if status_key == "adapter_pending":
             return (
-                "Meta пока в ручном режиме: API включается только после проверки Page/IG permissions."
+                "Meta пока в ручном режиме: API включается только после проверки прав Page/IG."
                 if is_ru
                 else "Meta stays manual for now: API is enabled only after Page/IG permissions are verified."
             )
         if status_key == "missing_permissions":
             return (
-                "Meta почти готов: проверьте permissions для публикации и Page/IG binding."
+                "Meta почти готов: проверьте права для публикации и привязку Page/IG."
                 if is_ru
                 else "Meta is almost ready: verify publishing permissions and Page/IG binding."
             )
@@ -8081,7 +8621,7 @@ def _channel_readiness_setup_summary(platform: str, status: str, is_ru: bool) ->
                 else "For Meta, choose the Facebook Page or Instagram business account."
             )
         return (
-            "Чтобы включить Meta, подключите account, Page/IG asset и publish permissions."
+            "Чтобы включить Meta, подключите аккаунт, Page/IG asset и права публикации."
             if is_ru
             else "To enable Meta, connect the account, Page/IG asset, and publish permissions."
         )
@@ -8170,7 +8710,7 @@ def _channel_readiness_setup_steps(platform: str, status: str, is_ru: bool) -> l
     if platform_key == "google_business":
         return [
             "Подключите Google Business Profile.",
-            "Выберите business location.",
+            "Выберите локацию бизнеса.",
             "Проверьте, что Google publish доступен для аккаунта.",
         ] if is_ru else [
             "Connect Google Business Profile.",
@@ -8180,9 +8720,9 @@ def _channel_readiness_setup_steps(platform: str, status: str, is_ru: bool) -> l
     if platform_key in {"instagram", "facebook"}:
         if status_key == "adapter_pending":
             return [
-                "Оставьте канал в manual handoff.",
+                "Оставьте канал в ручном режиме.",
                 "Проверьте Meta Page/IG business binding.",
-                "Включайте API publish только после подтверждения permissions.",
+                "Включайте API-публикацию только после подтверждения прав.",
             ] if is_ru else [
                 "Keep the channel in manual handoff.",
                 "Verify Meta Page/IG business binding.",
@@ -8191,7 +8731,7 @@ def _channel_readiness_setup_steps(platform: str, status: str, is_ru: bool) -> l
         return [
             "Подключите Meta account.",
             "Выберите Page или Instagram business account.",
-            "Проверьте permissions для публикации.",
+            "Проверьте права для публикации.",
         ] if is_ru else [
             "Connect the Meta account.",
             "Choose the Page or Instagram business account.",
@@ -8348,8 +8888,89 @@ def _social_learning_readiness(posts: list[dict[str, Any]]) -> dict[str, Any]:
         "next_action_en": _social_learning_readiness_next_action(status, False),
         "apply_blocked_reason_ru": _social_learning_apply_blocked_reason(status, True),
         "apply_blocked_reason_en": _social_learning_apply_blocked_reason(status, False),
+        "checklist": _social_learning_readiness_checklist(
+            status,
+            total_posts,
+            published_posts,
+            manual_posts,
+            failed_posts,
+            posts_with_primary_result,
+            posts_with_early_signal,
+        ),
         "safe_to_apply_recommendation": status in {"ready_from_leads", "early_signals_only"},
     }
+
+
+def _social_learning_readiness_checklist(
+    status: str,
+    total_posts: int,
+    published_posts: int,
+    manual_posts: int,
+    failed_posts: int,
+    posts_with_primary_result: int,
+    posts_with_early_signal: int,
+) -> list[dict[str, Any]]:
+    pending_publish = int(manual_posts or 0) + int(failed_posts or 0)
+    has_result = int(posts_with_primary_result or 0) > 0 or int(posts_with_early_signal or 0) > 0
+    can_apply = status in {"ready_from_leads", "early_signals_only"}
+    return [
+        {
+            "key": "publish_first",
+            "status": "done" if int(published_posts or 0) > 0 else ("current" if int(total_posts or 0) > 0 else "pending"),
+            "label_ru": "Есть опубликованные посты",
+            "label_en": "Published posts exist",
+            "detail_ru": f"Опубликовано: {int(published_posts or 0)} из {int(total_posts or 0)}.",
+            "detail_en": f"Published: {int(published_posts or 0)} of {int(total_posts or 0)}.",
+        },
+        {
+            "key": "finish_manual_or_failed",
+            "status": "attention" if pending_publish > 0 else "done",
+            "label_ru": "Ручные задачи и ошибки разобраны",
+            "label_en": "Manual tasks and failures are handled",
+            "detail_ru": (
+                f"Нужно внимание: ручные/контролируемые {int(manual_posts or 0)}, ошибки {int(failed_posts or 0)}."
+                if pending_publish > 0
+                else "Нет ручных задач или ошибок, которые мешают обучению."
+            ),
+            "detail_en": (
+                f"Needs attention: manual/supervised {int(manual_posts or 0)}, failed {int(failed_posts or 0)}."
+                if pending_publish > 0
+                else "No manual tasks or failures block learning."
+            ),
+        },
+        {
+            "key": "record_results",
+            "status": "done" if has_result else ("current" if int(published_posts or 0) > 0 else "pending"),
+            "label_ru": "Результат отмечен",
+            "label_en": "Results are recorded",
+            "detail_ru": (
+                f"Постов с заявками/обращениями: {int(posts_with_primary_result or 0)}; с ранними сигналами: {int(posts_with_early_signal or 0)}."
+                if has_result
+                else "Соберите реакции или отметьте заявку/обращение вручную."
+            ),
+            "detail_en": (
+                f"Posts with leads/inquiries: {int(posts_with_primary_result or 0)}; with early signals: {int(posts_with_early_signal or 0)}."
+                if has_result
+                else "Collect reactions or record a lead/inquiry manually."
+            ),
+        },
+        {
+            "key": "apply_with_confirmation",
+            "status": "current" if can_apply else "pending",
+            "label_ru": "Можно применять только после подтверждения",
+            "label_en": "Apply only after confirmation",
+            "detail_ru": (
+                "Можно открыть предпросмотр изменений и применить после подтверждения."
+                if can_apply
+                else "Сначала нужен опубликованный результат: заявки/обращения или хотя бы ранние сигналы."
+            ),
+            "detail_en": (
+                "Open the change preview and apply after confirmation."
+                if can_apply
+                else "Published results are needed first: leads/inquiries or at least early signals."
+            ),
+        },
+    ]
 
 
 def _social_learning_readiness_summary(status: str, is_ru: bool) -> str:
@@ -8387,7 +9008,7 @@ def _social_learning_readiness_summary(status: str, is_ru: bool) -> str:
 def _social_learning_readiness_next_action(status: str, is_ru: bool) -> str:
     if status == "ready_from_leads":
         return (
-            "Нажмите «Предложить изменения», проверьте preview и применяйте только после подтверждения."
+            "Нажмите «Предложить изменения», проверьте предпросмотр и применяйте только после подтверждения."
             if is_ru
             else "Click “Suggest changes”, review the preview, and apply only after approval."
         )
@@ -9001,6 +9622,7 @@ def _social_publish_evidence(post: dict[str, Any]) -> dict[str, Any]:
                 "summary_en": summary_en,
                 "next_action_ru": "Обновите реакции и отметьте заявки, если они пришли с этой публикации.",
                 "next_action_en": "Update reactions and record leads if they came from this post.",
+                "result_packet": _social_result_collection_packet(post),
             }
         )
         return base
@@ -9033,11 +9655,14 @@ def _social_publish_evidence(post: dict[str, Any]) -> dict[str, Any]:
                 "manual_checklist_en": [str(item) for item in checklist_en if str(item or "").strip()][:5],
                 "stop_before_final_publish": bool(supervised.get("stop_before_final_publish", True)),
                 "browser_final_click_allowed": False,
+                "placement_packet": _social_supervised_placement_packet(post, supervised, manual_handoff),
             }
         )
         return base
 
     if status == "needs_manual_publish":
+        supervised = _json_dict(metadata.get("supervised_publish"))
+        manual_handoff = _json_dict(supervised.get("manual_handoff") or metadata.get("manual_handoff"))
         summary_ru = last_error or "Канал требует ручного размещения или подключения ключей."
         summary_en = last_error or "The channel needs manual placement or connected credentials."
         base.update(
@@ -9049,6 +9674,7 @@ def _social_publish_evidence(post: dict[str, Any]) -> dict[str, Any]:
                 "summary_en": summary_en,
                 "next_action_ru": "Подключите канал или разместите пост вручную и сохраните ссылку/ID.",
                 "next_action_en": "Connect the channel or publish manually, then save the URL/ID.",
+                "placement_packet": _social_supervised_placement_packet(post, supervised, manual_handoff),
             }
         )
         return base
@@ -9105,6 +9731,122 @@ def _social_publish_evidence(post: dict[str, Any]) -> dict[str, Any]:
         "next_action_ru": "Подготовьте preview и подтвердите публикацию.",
         "next_action_en": "Prepare the preview and approve the post.",
     }
+
+
+def _social_supervised_placement_packet(
+    post: dict[str, Any],
+    supervised: dict[str, Any],
+    manual_handoff: dict[str, Any],
+) -> dict[str, Any]:
+    platform = str(post.get("platform") or supervised.get("platform") or "").strip()
+    status = str(post.get("status") or "").strip()
+    target_url = str(supervised.get("target_url") or manual_handoff.get("target_url") or "").strip()
+    profile_hint = str(supervised.get("profile_hint") or manual_handoff.get("profile_hint") or "").strip()
+    copy_ready_text = str(supervised.get("copy_ready_text") or manual_handoff.get("copy_ready_text") or "").strip()
+    checklist_ru = supervised.get("manual_checklist_ru") or manual_handoff.get("checklist_ru") or []
+    checklist_en = supervised.get("manual_checklist_en") or manual_handoff.get("checklist_en") or []
+    if not isinstance(checklist_ru, list):
+        checklist_ru = []
+    if not isinstance(checklist_en, list):
+        checklist_en = []
+    handoff_state = _json_dict(supervised.get("handoff_state"))
+    return {
+        "schema": "localos_social_supervised_placement_packet_v1",
+        "platform": platform,
+        "platform_label": platform_label(platform),
+        "status": status,
+        "mode": str(supervised.get("mode") or post.get("publish_mode") or "manual").strip(),
+        "target_url": target_url,
+        "target_ready": bool(target_url),
+        "profile_hint": profile_hint,
+        "copy_ready": bool(copy_ready_text),
+        "copy_ready_text": copy_ready_text,
+        "checklist_ru": [str(item) for item in checklist_ru if str(item or "").strip()][:5],
+        "checklist_en": [str(item) for item in checklist_en if str(item or "").strip()][:5],
+        "checklist_count": len([item for item in checklist_ru if str(item or "").strip()]),
+        "automation_task_id": str(post.get("automation_task_id") or "").strip(),
+        "openclaw_task_requested": bool(handoff_state.get("openclaw_task_requested")),
+        "openclaw_outbox_id": str(handoff_state.get("openclaw_outbox_id") or "").strip(),
+        "agent_action_ledger_id": str(_json_dict(post.get("metadata_json")).get("agent_action_ledger_id") or "").strip(),
+        "manual_fallback_required": status == "needs_manual_publish" or bool(supervised.get("manual_fallback_required")),
+        "stop_before_final_publish": bool(supervised.get("stop_before_final_publish", True)),
+        "browser_final_click_allowed": False,
+        "final_publish_policy": "human_final_click_required",
+        "owner_next_action_ru": (
+            "Откройте площадку, вставьте готовый текст, проверьте предпросмотр и нажмите финальную публикацию только сами."
+        ),
+        "owner_next_action_en": (
+            "Open the platform, paste the prepared copy, review the preview, and make the final publish click yourself."
+        ),
+    }
+
+
+def _social_result_collection_packet(post: dict[str, Any]) -> dict[str, Any]:
+    leads = int(post.get("leads") or 0)
+    inquiries = int(post.get("inquiries") or 0)
+    comments = int(post.get("comments") or 0)
+    shares = int(post.get("shares") or 0)
+    clicks = int(post.get("clicks") or 0)
+    likes = int(post.get("likes") or 0)
+    views = int(post.get("views") or 0)
+    reach = int(post.get("reach") or 0)
+    primary_total = leads + inquiries
+    early_total = comments + shares + clicks + likes + views + reach
+    if primary_total > 0:
+        status = "primary_result_recorded"
+    elif early_total > 0:
+        status = "early_signals_only"
+    else:
+        status = "needs_result_input"
+    return {
+        "schema": "localos_social_result_collection_packet_v1",
+        "status": status,
+        "primary_metric_ru": "Заявки и обращения",
+        "primary_metric_en": "Leads and inquiries",
+        "primary_result_total": primary_total,
+        "early_signal_total": early_total,
+        "leads": leads,
+        "inquiries": inquiries,
+        "comments": comments,
+        "shares": shares,
+        "clicks": clicks,
+        "likes": likes,
+        "views": views,
+        "reach": reach,
+        "recommendation_priority": [
+            "leads",
+            "inquiries",
+            "comments",
+            "shares",
+            "clicks",
+            "reach",
+            "views",
+            "likes",
+        ],
+        "ready_for_recommendation": primary_total > 0 or early_total > 0,
+        "owner_next_action_ru": _social_result_collection_next_action(status, True),
+        "owner_next_action_en": _social_result_collection_next_action(status, False),
+    }
+
+
+def _social_result_collection_next_action(status: str, is_ru: bool) -> str:
+    if status == "primary_result_recorded":
+        return (
+            "Заявки/обращения отмечены. Можно предлагать изменения следующего плана и проверять их перед применением."
+            if is_ru
+            else "Leads/inquiries are recorded. You can suggest next-plan changes and review them before applying."
+        )
+    if status == "early_signals_only":
+        return (
+            "Есть ранние сигналы. Перед применением изменений проверьте, были ли заявки или обращения."
+            if is_ru
+            else "Early signals exist. Before applying changes, check whether leads or inquiries happened."
+        )
+    return (
+        "Сначала отметьте заявку, обращение или ранний сигнал, чтобы LocalOS понял результат публикации."
+        if is_ru
+        else "Record a lead, inquiry, or early signal first so LocalOS can learn from the post."
+    )
 
 
 def _social_publish_proof_source(provider_status: str, metadata: dict[str, Any]) -> str:

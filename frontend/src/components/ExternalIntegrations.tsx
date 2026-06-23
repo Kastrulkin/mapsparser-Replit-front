@@ -107,9 +107,9 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
     ? 'OpenClaw готов'
     : socialOpenClawReadiness?.ready
       ? 'Нужна настройка handoff'
-      : 'Ручной fallback';
+      : 'Ручной режим';
   const openClawStatusDetail = openClawOperational
-    ? 'Яндекс/2ГИС можно вести как контролируемое размещение: LocalOS готовит задачу, preview и останавливается перед финальной публикацией.'
+    ? 'Яндекс/2ГИС можно вести как контролируемое размещение: LocalOS готовит задачу, предпросмотр и останавливается перед финальной публикацией.'
     : socialOpenClawReadiness?.ready
       ? 'Browser-use найден, но delivery/handoff ещё не подтверждён. Для карт используйте ручной режим или завершите настройку OpenClaw.'
       : 'Browser-use не подтверждён. LocalOS подготовит текст, чеклист и ручную отметку публикации, без скрытой автопубликации.';
@@ -512,7 +512,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
             <div>
               <h3 className="text-base font-semibold text-slate-950">Публикации из контент-плана</h3>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-                Перед постановкой постов в расписание проверьте, какие каналы готовы к API-публикации, а где нужен ручной или контролируемый шаг. Внешняя публикация всё равно пойдёт только после preview и вашего подтверждения.
+                Перед постановкой постов в расписание проверьте, какие каналы готовы к API-публикации, а где нужен ручной или контролируемый шаг. Внешняя публикация всё равно пойдёт только после предпросмотра и вашего подтверждения.
               </p>
             </div>
             <div className="grid min-w-full gap-2 text-xs sm:grid-cols-3 lg:min-w-[360px]">
@@ -550,15 +550,15 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                     <span className="font-semibold text-slate-950">VK:</span> access_token + group_id/owner_id + wall.post
                   </div>
                   <div className="rounded-xl bg-white px-3 py-2 text-slate-700 ring-1 ring-slate-200">
-                    <span className="font-semibold text-slate-950">Google:</span> Business Profile + location
+                    <span className="font-semibold text-slate-950">Google:</span> Business Profile + локация
                   </div>
                   <div className="rounded-xl bg-white px-3 py-2 text-slate-700 ring-1 ring-slate-200">
-                    <span className="font-semibold text-slate-950">Meta:</span> Page/IG business + permissions
+                    <span className="font-semibold text-slate-950">Meta:</span> Page/IG business + права
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-sky-100 bg-white px-3 py-2 text-xs leading-5 text-sky-900">
                   <span className="font-semibold text-sky-950">После подключения:</span>
-                  <span>Вернуться в контент-план, нажмите “Проверить готовность”, затем пройдите preview → approval → расписание.</span>
+                  <span>Вернуться в контент-план, нажмите “Проверить готовность”, затем пройдите предпросмотр → подтверждение → расписание.</span>
                   <Button type="button" size="sm" variant="outline" className="h-7 bg-white px-2 text-[11px]" asChild>
                     <Link to="/dashboard/card?tab=news&mode=plan">Открыть контент-план</Link>
                   </Button>
@@ -593,7 +593,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-medium text-slate-600">
                     <span>Финальный клик: человек</span>
-                    <span>Preview: обязателен</span>
+                    <span>Предпросмотр: обязателен</span>
                     <span>Автопубликация карт: нет</span>
                     {socialOpenClawReadiness?.action_ref ? <span>action: {socialOpenClawReadiness.action_ref}</span> : null}
                   </div>
@@ -647,7 +647,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                         </span>
                       </div>
                       <div className="mt-3 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                        {isApi ? 'API publish после approval' : 'Ручное или контролируемое размещение'}
+                        {isApi ? 'API-публикация после подтверждения' : 'Ручное или контролируемое размещение'}
                       </div>
                       {setupSummary ? (
                         <div className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs leading-5 text-slate-700 ring-1 ring-slate-200">

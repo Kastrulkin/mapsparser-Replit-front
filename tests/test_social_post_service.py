@@ -34,6 +34,7 @@ from services.social_post_service import (
     _social_supervised_blocked_metadata,
     _social_publish_evidence,
     _social_learning_readiness,
+    _social_recommendation_application_preview,
     _social_goal_progress,
     _social_first_api_proof_dossier,
     _social_openclaw_browser_readiness,
@@ -152,10 +153,27 @@ class FakeRecommendationCursor:
     def __init__(self, conn):
         self.conn = conn
         self.next_row = None
+        self.next_rows = []
         self.description = []
 
     def execute(self, query, params=None):
         normalized = " ".join(str(query).split()).lower()
+        if "select id, theme, scheduled_for, status, usernews_id from contentplanitems" in normalized:
+            plan_id, item_ids = params
+            self.description = [("id",), ("theme",), ("scheduled_for",), ("status",), ("usernews_id",)]
+            self.next_rows = [
+                (
+                    item["id"],
+                    item["theme"],
+                    item["scheduled_for"],
+                    item["status"],
+                    item["usernews_id"],
+                )
+                for item_id in item_ids
+                for item in [self.conn.items.get(str(item_id))]
+                if item and item["plan_id"] == plan_id
+            ]
+            return
         if "update contentplanitems" in normalized:
             assert "scheduled_for >= current_date" in normalized
             proposed_goal, item_id, plan_id = params
@@ -183,6 +201,9 @@ class FakeRecommendationCursor:
 
     def fetchone(self):
         return self.next_row
+
+    def fetchall(self):
+        return self.next_rows
 
 
 class FakeRecommendationDB:
@@ -795,7 +816,7 @@ def test_social_openclaw_browser_readiness_blocks_handoff_without_callback(monke
     assert readiness["delivery_readiness"]["suggested_callback_blocked_reason"] == "sandbox_bridge_private_host"
     assert "Callback" in readiness["delivery_readiness"]["message_ru"]
     assert "публичный/доступный OPENCLAW_SOCIAL_SUPERVISED_CALLBACK_URL" in readiness["delivery_readiness"]["next_action_ru"]
-    assert "ручной fallback" in readiness["message_ru"]
+    assert "ручной режим" in readiness["message_ru"]
 
 
 def test_social_openclaw_suggested_callback_prefers_base_url(monkeypatch):
@@ -1044,6 +1065,12 @@ def test_social_learning_readiness_prefers_primary_business_results():
     assert readiness["apply_blocked_reason_ru"] == ""
     assert readiness["apply_blocked_reason_en"] == ""
     assert "Заявки" in readiness["primary_metric_ru"]
+    checklist = {item["key"]: item for item in readiness["checklist"]}
+    assert checklist["publish_first"]["status"] == "done"
+    assert checklist["finish_manual_or_failed"]["status"] == "done"
+    assert checklist["record_results"]["status"] == "done"
+    assert checklist["apply_with_confirmation"]["status"] == "current"
+    assert "Можно применять" in checklist["apply_with_confirmation"]["label_ru"]
 
 
 def test_social_learning_readiness_warns_when_publish_work_is_pending():
@@ -1062,6 +1089,9 @@ def test_social_learning_readiness_warns_when_publish_work_is_pending():
     assert "manual/supervised" in readiness["next_action_en"]
     assert "Apply is blocked" in readiness["apply_blocked_reason_en"]
     assert "supervised/manual" in readiness["apply_blocked_reason_en"]
+    checklist = {item["key"]: item for item in readiness["checklist"]}
+    assert checklist["finish_manual_or_failed"]["status"] == "attention"
+    assert checklist["record_results"]["status"] == "pending"
 
 
 def test_social_learning_readiness_requires_signals_before_apply():
@@ -1310,7 +1340,7 @@ def test_social_metrics_result_summaries_explain_api_manual_and_failed_results()
     assert "заявки 1" in summaries[0]
     assert "Telegram: Bot API опубликовал пост, но не отдаёт просмотры/реакции" in summaries[1]
     assert "Google Business: публикация учтена, но сбор реакций через Google Business пока не включён" in summaries[2]
-    assert "Instagram: Meta Graph метрики требуют готовых permissions" in summaries[3]
+    assert "Instagram: Meta Graph метрики требуют готовых прав" in summaries[3]
     assert "Яндекс Карты: реакции с карт собираются вручную" in summaries[4]
     assert "Ещё 1 результатов смотрите" in summaries[5]
 
@@ -1367,7 +1397,7 @@ def test_social_dispatch_followup_actions_explain_no_due_posts():
     )
 
     assert len(actions) == 1
-    assert "Due-постов нет" in actions[0]
+    assert "Постов на текущую дату нет" in actions[0]
     assert "подтвердите" in actions[0]
 
 
@@ -1473,6 +1503,13 @@ def test_social_dispatch_execution_report_keeps_owner_proof_and_safety():
     assert report["first_api_proof_summary"]["published_with_provider_proof"] == 1
     assert report["first_api_proof_summary"]["provider_post_url"] == "https://t.me/channel/10"
     assert "заявки" in report["first_api_proof_summary"]["next_action_ru"]
+    assert report["after_run_proof_packet"]["schema"] == "localos_social_after_run_proof_packet_v1"
+    assert report["after_run_proof_packet"]["status"] == "loop_proven_collect_results"
+    assert report["after_run_proof_packet"]["api_proof_ready"] is True
+    assert report["after_run_proof_packet"]["can_collect_results"] is True
+    assert report["after_run_proof_packet"]["maps_handoff_created"] is True
+    assert report["after_run_proof_packet"]["browser_final_click_allowed"] is False
+    assert "provider_post_id/provider_post_url" in report["after_run_proof_packet"]["checks_ru"][0]
     assert report["post_publish_learning_gate"]["schema"] == "localos_social_post_publish_learning_gate_v1"
     assert report["post_publish_learning_gate"]["status"] == "ready_for_metrics_and_attribution"
     assert report["post_publish_learning_gate"]["allowed"] is True
@@ -1727,7 +1764,7 @@ def test_run_scoped_social_dispatch_once_rejects_live_api_preflight_block(monkey
         error = sys.exc_info()[1]
 
     assert error is not None
-    assert "Live API-preflight" in str(error)
+    assert "Live API-проверка" in str(error)
 
 
 def test_api_preflight_blocked_due_posts_include_recovery_actions():
@@ -1921,6 +1958,30 @@ def test_run_scoped_social_metrics_once_collects_only_requested_business(monkeyp
             "failed": 1,
             "errors": [{"id": "post-3", "error": "temporary"}],
             "business_scope": business_id,
+            "metric_details": [
+                {
+                    "post_id": "post-1",
+                    "platform": "telegram",
+                    "leads": 1,
+                    "inquiries": 2,
+                    "comments": 3,
+                    "shares": 1,
+                    "clicks": 4,
+                    "likes": 5,
+                    "views": 100,
+                },
+                {
+                    "post_id": "post-2",
+                    "platform": "vk",
+                    "leads": 0,
+                    "inquiries": 1,
+                    "comments": 1,
+                    "shares": 0,
+                    "clicks": 2,
+                    "likes": 7,
+                    "views": 80,
+                },
+            ],
         }
 
     monkeypatch.setattr(social_post_service, "collect_due_social_post_metrics", fake_collect_due)
@@ -1931,6 +1992,13 @@ def test_run_scoped_social_metrics_once_collects_only_requested_business(monkeyp
     assert result["batch_size"] == 100
     assert result["external_publish_performed"] is False
     assert result["metrics_result"]["collected"] == 2
+    assert result["metrics_learning_packet"]["schema"] == "localos_social_metrics_learning_packet_v1"
+    assert result["metrics_learning_packet"]["status"] == "ready_from_leads"
+    assert result["metrics_learning_packet"]["primary_result_total"] == 4
+    assert result["metrics_learning_packet"]["early_signal_total"] == 203
+    assert result["metrics_learning_packet"]["safe_to_recommend_next_plan"] is True
+    assert result["metrics_learning_packet"]["safe_to_apply_without_approval"] is False
+    assert result["metrics_learning_packet"]["external_publish_performed"] is False
     assert "ошибок 1" in result["message_ru"]
     assert captured["access"] == {"user_id": "user-1", "business_id": "biz-1"}
     assert captured["collect_due"] == {"batch_size": 100, "business_id": "biz-1"}
@@ -2933,7 +3001,7 @@ def test_supervised_handoff_state_explains_manual_fallback():
     assert state["openclaw_task_requested"] is False
     assert state["ledger_recorded"] is False
     assert state["browser_final_click_allowed"] is False
-    assert "ручной fallback" in state["owner_status_ru"]
+    assert "ручной режим" in state["owner_status_ru"]
     assert "Отметьте" in state["owner_next_action_ru"] or "отметьте" in state["owner_next_action_ru"]
 
 
@@ -3134,7 +3202,7 @@ def test_dispatch_preview_readiness_explains_external_controlled_and_manual_work
     assert verification["expected_statuses"][0]["key"] == "api_channels"
     assert verification["expected_statuses"][1]["key"] == "maps_controlled"
     assert "picked/published" in verification["checks_en"][1]
-    assert "Dry-run" in readiness["safety_notes_ru"][2]
+    assert "Проверка" in readiness["safety_notes_ru"][2]
     readiness_json = json.dumps(readiness, ensure_ascii=False)
     assert "controlled/manual" not in readiness_json
     assert "controlled task" not in readiness_json
@@ -3144,7 +3212,7 @@ def test_dispatch_preview_readiness_explains_external_controlled_and_manual_work
 def test_dispatch_preview_first_cycle_steps_keep_owner_safe_before_worker_launch():
     steps = _dispatch_preview_first_cycle_steps(2, 1, 3)
 
-    assert steps[0]["label_ru"] == "API: публикация после approval"
+    assert steps[0]["label_ru"] == "API: публикация после подтверждения"
     assert steps[0]["count"] == 2
     assert steps[0]["external_publish"] is True
     assert steps[0]["requires_approval"] is True
@@ -3152,7 +3220,7 @@ def test_dispatch_preview_first_cycle_steps_keep_owner_safe_before_worker_launch
     assert steps[1]["label_en"] == "Maps: supervised/manual without final click"
     assert steps[1]["external_publish"] is False
     assert steps[1]["stop_before_final_publish"] is True
-    assert steps[2]["label_ru"] == "Ручной fallback или подключение канала"
+    assert steps[2]["label_ru"] == "Ручной режим или подключение канала"
     assert steps[2]["count"] == 3
 
 
@@ -3296,6 +3364,21 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert payload["first_api_proof_gate"]["background_worker_aligned"] is False
     assert payload["first_api_proof_gate"]["candidate"]["id"] == "post-telegram"
     assert "provider_post_id/provider_post_url" in payload["first_api_proof_gate"]["summary_ru"]
+    assert payload["first_cycle_proof_packet"]["schema"] == "localos_social_first_cycle_proof_packet_v1"
+    assert payload["first_cycle_proof_packet"]["status"] == "ready_for_one_cycle"
+    assert payload["first_cycle_proof_packet"]["ready_to_run_once"] is True
+    assert payload["first_cycle_proof_packet"]["api_proof_ready"] is True
+    assert payload["first_cycle_proof_packet"]["dispatch_business_id"] == "biz-1"
+    assert payload["first_cycle_proof_packet"]["candidate_platform_label"] == "Telegram"
+    assert payload["first_cycle_proof_packet"]["browser_final_click_allowed"] is False
+    assert "provider_post_id/provider_post_url" in payload["first_cycle_proof_packet"]["after_run_checks_ru"][1]
+    live_checklist = {item["key"]: item for item in payload["live_validation_checklist"]}
+    assert live_checklist["open_real_plan"]["status"] == "done"
+    assert live_checklist["ready_to_run_one_cycle"]["status"] == "current"
+    assert live_checklist["api_proof_after_run"]["status"] == "current"
+    assert live_checklist["maps_supervised_not_autopublish"]["status"] == "current"
+    assert live_checklist["collect_results_next"]["status"] == "pending"
+    assert "Финальный клик" in live_checklist["maps_supervised_not_autopublish"]["detail_ru"]
     warning_keys = [item["key"] for item in payload["production_readiness"]["warnings"]]
     assert "dispatch_runtime_not_aligned" in warning_keys
     assert "maps_supervised_required" in warning_keys
@@ -3515,7 +3598,7 @@ def test_social_launch_preflight_blocks_due_api_posts_when_live_preflight_fails(
     assert payload["api_preflight_blocked_due_posts"][0]["status"] == "missing_binding"
     assert payload["launch_runbook"]["ready"] is False
     assert "Live API-preflight" in payload["launch_runbook"]["blocked_reason_ru"]
-    assert "повторите preflight" in payload["launch_runbook"]["steps_ru"][1]
+    assert "повторите проверку" in payload["launch_runbook"]["steps_ru"][1]
     assert "исправьте" in payload["next_action_ru"].lower()
 
 
@@ -3734,6 +3817,10 @@ def test_social_publish_evidence_explains_published_api_result():
             "status": "published",
             "provider_post_id": "678",
             "provider_post_url": "https://vk.com/wall-12345_678",
+            "leads": 1,
+            "inquiries": 2,
+            "likes": 9,
+            "views": 120,
             "metadata_json": {"provider_status": "vk_published"},
         }
     )
@@ -3749,6 +3836,13 @@ def test_social_publish_evidence_explains_published_api_result():
     assert evidence["ready_for_metrics"] is True
     assert evidence["ready_for_attribution"] is True
     assert "заявки" in evidence["next_action_ru"]
+    packet = evidence["result_packet"]
+    assert packet["schema"] == "localos_social_result_collection_packet_v1"
+    assert packet["status"] == "primary_result_recorded"
+    assert packet["primary_result_total"] == 3
+    assert packet["early_signal_total"] == 129
+    assert packet["ready_for_recommendation"] is True
+    assert packet["recommendation_priority"][:2] == ["leads", "inquiries"]
 
 
 def test_social_publish_evidence_explains_recoverable_failure():
@@ -3806,6 +3900,30 @@ def test_social_publish_evidence_keeps_supervised_maps_human_controlled():
     assert evidence["manual_checklist_ru"] == ["Скопируйте текст", "Отметьте размещённым"]
     assert evidence["browser_final_click_allowed"] is False
     assert evidence["stop_before_final_publish"] is True
+    packet = evidence["placement_packet"]
+    assert packet["schema"] == "localos_social_supervised_placement_packet_v1"
+    assert packet["target_url"] == "https://yandex.ru/maps/org/1"
+    assert packet["target_ready"] is True
+    assert packet["copy_ready"] is True
+    assert packet["checklist_count"] == 2
+    assert packet["automation_task_id"] == "task-1"
+    assert packet["final_publish_policy"] == "human_final_click_required"
+    assert packet["browser_final_click_allowed"] is False
+
+
+def test_social_publish_evidence_explains_queued_waiting_state():
+    evidence = _social_publish_evidence(
+        {
+            "platform": "telegram",
+            "status": "queued",
+            "metadata_json": {},
+        }
+    )
+
+    assert evidence["tone"] == "info"
+    assert evidence["title_ru"] == "Telegram: в расписании"
+    assert "ждёт даты публикации" in evidence["summary_ru"]
+    assert "scoped dispatch" in evidence["next_action_ru"]
 
 
 def test_social_supervised_blocked_metadata_preserves_manual_fallback_contract():
@@ -3854,6 +3972,33 @@ def test_apply_social_post_recommendation_requires_explicit_approval(monkeypatch
 
     assert error is not None
     assert "явное подтверждение" in str(error)
+
+
+def test_social_recommendation_application_preview_explains_future_only_scope():
+    conn = FakeRecommendationConn()
+    cursor = conn.cursor()
+
+    preview = _social_recommendation_application_preview(
+        cursor,
+        "plan-1",
+        [
+            {"item_id": "future-draft", "theme": "Будущая тема", "proposed_goal": "Новый goal"},
+            {"item_id": "past-draft", "theme": "Прошлая тема", "proposed_goal": "Нельзя"},
+            {"item_id": "future-published", "theme": "Опубликованная тема", "proposed_goal": "Нельзя"},
+            {"item_id": "future-news", "theme": "Тема с новостью", "proposed_goal": "Нельзя"},
+        ],
+    )
+
+    by_id = {item["item_id"]: item for item in preview["items"]}
+    assert preview["schema"] == "localos_social_recommendation_application_preview_v1"
+    assert preview["scope"] == "future_unpublished_content_plan_items"
+    assert preview["applicable_count"] == 1
+    assert preview["skipped_count"] == 3
+    assert by_id["future-draft"]["applicable"] is True
+    assert by_id["past-draft"]["skip_reason"] == "past_item"
+    assert by_id["future-published"]["skip_reason"] == "status_published"
+    assert by_id["future-news"]["skip_reason"] == "already_has_news"
+    assert "будущие неопубликованные" in preview["summary_ru"]
 
 
 def test_apply_social_post_recommendation_changes_only_future_unpublished_items(monkeypatch):

@@ -124,7 +124,7 @@ export const SettingsPage = () => {
                 <Link to="/dashboard/card?tab=news&mode=plan">Вернуться в контент-план</Link>
               </Button>
               <span className="text-xs font-medium text-sky-800">
-                Следующий безопасный шаг: preview → approval → расписание.
+                Следующий безопасный шаг: предпросмотр → подтверждение → расписание.
               </span>
             </div>
           </div>

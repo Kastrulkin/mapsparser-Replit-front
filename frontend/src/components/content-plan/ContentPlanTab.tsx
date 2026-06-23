@@ -159,6 +159,49 @@ type SocialPublishEvidence = {
   manual_checklist_en?: string[];
   stop_before_final_publish?: boolean;
   browser_final_click_allowed?: boolean;
+  placement_packet?: {
+    schema?: string;
+    platform_label?: string;
+    status?: string;
+    mode?: string;
+    target_url?: string;
+    target_ready?: boolean;
+    profile_hint?: string;
+    copy_ready?: boolean;
+    copy_ready_text?: string;
+    checklist_ru?: string[];
+    checklist_en?: string[];
+    checklist_count?: number;
+    automation_task_id?: string;
+    openclaw_task_requested?: boolean;
+    openclaw_outbox_id?: string;
+    agent_action_ledger_id?: string;
+    manual_fallback_required?: boolean;
+    stop_before_final_publish?: boolean;
+    browser_final_click_allowed?: boolean;
+    final_publish_policy?: string;
+    owner_next_action_ru?: string;
+    owner_next_action_en?: string;
+  };
+  result_packet?: {
+    schema?: string;
+    status?: string;
+    primary_metric_ru?: string;
+    primary_metric_en?: string;
+    primary_result_total?: number;
+    early_signal_total?: number;
+    leads?: number;
+    inquiries?: number;
+    comments?: number;
+    shares?: number;
+    clicks?: number;
+    likes?: number;
+    views?: number;
+    reach?: number;
+    ready_for_recommendation?: boolean;
+    owner_next_action_ru?: string;
+    owner_next_action_en?: string;
+  };
   recoverable?: boolean;
 };
 
@@ -374,6 +417,26 @@ type SocialRecommendationPayload = {
     }>;
   };
   learning_readiness?: SocialLearningReadiness;
+  application_preview?: {
+    schema?: string;
+    scope?: string;
+    total?: number;
+    applicable_count?: number;
+    skipped_count?: number;
+    summary_ru?: string;
+    summary_en?: string;
+    items?: Array<{
+      item_id?: string;
+      theme?: string;
+      applicable?: boolean;
+      skip_reason?: string;
+      status?: string;
+      scheduled_for?: string;
+      has_news?: boolean;
+      label_ru?: string;
+      label_en?: string;
+    }>;
+  };
   proposed_changes?: Array<{
     item_id?: string;
     theme?: string;
@@ -429,6 +492,14 @@ type SocialLearningReadiness = {
   apply_blocked_reason_ru?: string;
   apply_blocked_reason_en?: string;
   safe_to_apply_recommendation?: boolean;
+  checklist?: Array<{
+    key?: string;
+    status?: 'done' | 'current' | 'attention' | 'pending' | string;
+    label_ru?: string;
+    label_en?: string;
+    detail_ru?: string;
+    detail_en?: string;
+  }>;
 };
 
 type SocialRecommendationTopicInsight = {
@@ -587,6 +658,28 @@ type SocialDispatchExecutionReport = {
     next_action_ru?: string;
     next_action_en?: string;
   };
+  after_run_proof_packet?: {
+    schema?: string;
+    status?: string;
+    dispatch_status?: string;
+    picked?: number;
+    published?: number;
+    supervised?: number;
+    manual?: number;
+    failed?: number;
+    api_proof_ready?: boolean;
+    can_collect_results?: boolean;
+    maps_handoff_created?: boolean;
+    browser_final_click_allowed?: boolean;
+    primary_metric_ru?: string;
+    primary_metric_en?: string;
+    title_ru?: string;
+    title_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+    checks_ru?: string[];
+    checks_en?: string[];
+  };
   post_publish_learning_gate?: {
     schema?: string;
     status?: string;
@@ -655,6 +748,31 @@ type SocialLaunchRunbook = {
   success_criteria_en?: string[];
   blocked_reason_ru?: string;
   blocked_reason_en?: string;
+};
+
+type SocialMetricsLearningPacket = {
+  schema?: string;
+  status?: string;
+  collected_posts?: number;
+  failed_posts?: number;
+  primary_metric_ru?: string;
+  primary_metric_en?: string;
+  primary_result_total?: number;
+  early_signal_total?: number;
+  leads?: number;
+  inquiries?: number;
+  comments?: number;
+  shares?: number;
+  clicks?: number;
+  likes?: number;
+  views?: number;
+  safe_to_recommend_next_plan?: boolean;
+  safe_to_apply_without_approval?: boolean;
+  external_publish_performed?: boolean;
+  summary_ru?: string;
+  summary_en?: string;
+  next_action_ru?: string;
+  next_action_en?: string;
 };
 
 type SocialLaunchPreflight = {
@@ -748,6 +866,40 @@ type SocialLaunchPreflight = {
       metrics_followup_en?: string;
     };
   };
+  first_cycle_proof_packet?: {
+    schema?: string;
+    status?: string;
+    ready_to_run_once?: boolean;
+    api_proof_ready?: boolean;
+    background_worker_aligned?: boolean;
+    ui_run_once_allowed?: boolean;
+    requires_human_confirmation?: boolean;
+    external_publish_requires_approval?: boolean;
+    browser_final_click_allowed?: boolean;
+    maps_are_supervised_or_manual?: boolean;
+    dispatch_business_id?: string;
+    metrics_business_id?: string;
+    candidate_platform?: string;
+    candidate_platform_label?: string;
+    required_proof_fields?: string[];
+    checklist_done?: number;
+    checklist_total?: number;
+    run_once_action_ru?: string;
+    run_once_action_en?: string;
+    after_run_checks_ru?: string[];
+    after_run_checks_en?: string[];
+    blocked_reason_ru?: string;
+    blocked_reason_en?: string;
+    runtime_status?: string;
+  };
+  live_validation_checklist?: Array<{
+    key?: string;
+    status?: 'done' | 'current' | 'attention' | 'pending' | string;
+    label_ru?: string;
+    label_en?: string;
+    detail_ru?: string;
+    detail_en?: string;
+  }>;
   channel_summary?: {
     api_ready?: number;
     api_needs_attention?: number;
@@ -1331,6 +1483,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialRecommendationApproved, setSocialRecommendationApproved] = useState(false);
   const [socialDispatchPreview, setSocialDispatchPreview] = useState<SocialDispatchPreview | null>(null);
   const [socialDispatchExecutionReport, setSocialDispatchExecutionReport] = useState<SocialDispatchExecutionReport | null>(null);
+  const [socialMetricsLearningPacket, setSocialMetricsLearningPacket] = useState<SocialMetricsLearningPacket | null>(null);
   const [socialLaunchPreflight, setSocialLaunchPreflight] = useState<SocialLaunchPreflight | null>(null);
   const [socialRuntimeStatus, setSocialRuntimeStatus] = useState<SocialRuntimeStatus | null>(null);
   const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
@@ -2181,7 +2334,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           : supervised > 0
             ? `Яндекс/2ГИС ждут контролируемое размещение: ${supervised}`
             : manual > 0
-              ? `Нужен ручной fallback или подключение: ${manual}`
+              ? `Нужен ручной режим или подключение: ${manual}`
               : published > 0
                 ? `Опубликовано: ${published}`
                 : 'API уйдут по расписанию; карты останутся в контролируемом или ручном режиме.',
@@ -3377,7 +3530,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         text_en: 'Post moved to manual fallback. Copy and platform link remain available, and the plan is not blocked.',
       });
     } catch (blockedError) {
-      const message = blockedError instanceof Error ? blockedError.message : (isRu ? 'Не удалось перевести пост в ручной fallback' : 'Could not move post to manual fallback');
+      const message = blockedError instanceof Error ? blockedError.message : (isRu ? 'Не удалось перевести пост в ручной режим' : 'Could not move post to manual fallback');
       setError(message);
     } finally {
       setSocialBusyAction('');
@@ -3510,11 +3663,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       await copyTextToClipboard([...lines, ...runbookLines].join('\n'));
       setActionSummary({
         tone: 'success',
-        text_ru: 'Env и runbook первого цикла скопированы. Включайте запуск только для выбранного бизнеса и проверьте логи после одного цикла.',
+        text_ru: 'Настройки и чеклист первого цикла скопированы. Включайте запуск только для выбранного бизнеса и проверьте логи после одного цикла.',
         text_en: 'Scoped dispatch env and first-cycle runbook copied. Enable the worker only for the selected business and check logs after one cycle.',
       });
     } catch {
-      setError(isRu ? 'Не удалось скопировать env для запуска' : 'Could not copy worker env');
+      setError(isRu ? 'Не удалось скопировать настройки запуска' : 'Could not copy worker env');
     }
   };
 
@@ -3584,7 +3737,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         details_ru: [
           `Итого по посту: заявки ${leads}, обращения ${inquiries}, комментарии ${comments}, охват ${reach}.`,
           recommendationError
-            ? `Рекомендации сброшены: результат сохранён, но новый preview не пересчитался: ${recommendationError}`
+            ? `Рекомендации сброшены: результат сохранён, но новый предпросмотр не пересчитался: ${recommendationError}`
             : proposedCount > 0
               ? `LocalOS сразу подготовил предложения к следующему плану: ${proposedCount}. Они не применены автоматически.`
               : 'LocalOS пересчитал рекомендации, но пока не нашёл изменений для применения.',
@@ -3826,6 +3979,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     const payload: SocialRecommendationPayload = {
       recommendation: response.recommendation || {},
       learning_readiness: response.learning_readiness || undefined,
+      application_preview: response.application_preview && typeof response.application_preview === 'object'
+        ? response.application_preview
+        : undefined,
       proposed_changes: Array.isArray(response.proposed_changes) ? response.proposed_changes : [],
     };
     setSocialRecommendation(payload);
@@ -3855,6 +4011,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       const result = response.metrics_result && typeof response.metrics_result === 'object'
         ? response.metrics_result
         : {};
+      setSocialMetricsLearningPacket(
+        response.metrics_learning_packet && typeof response.metrics_learning_packet === 'object'
+          ? response.metrics_learning_packet
+          : null
+      );
       const collected = Number(result.collected || 0);
       const picked = Number(result.picked || 0);
       const failed = Number(result.failed || 0);
@@ -3886,7 +4047,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         details_ru: [
           ...resultSummariesRu,
           recommendationError
-            ? `Рекомендации сброшены: реакции сохранены, но новый preview не пересчитался: ${recommendationError}`
+            ? `Рекомендации сброшены: реакции сохранены, но новый предпросмотр не пересчитался: ${recommendationError}`
             : proposedCount > 0
               ? `LocalOS сразу подготовил предложения к следующему плану: ${proposedCount}. Они не применены автоматически.`
               : 'LocalOS пересчитал рекомендации, но пока не нашёл изменений для применения.',
@@ -3981,6 +4142,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         launch_gate: response.launch_gate && typeof response.launch_gate === 'object'
           ? response.launch_gate
           : undefined,
+        first_api_proof_gate: response.first_api_proof_gate && typeof response.first_api_proof_gate === 'object'
+          ? response.first_api_proof_gate
+          : undefined,
+        first_cycle_proof_packet: response.first_cycle_proof_packet && typeof response.first_cycle_proof_packet === 'object'
+          ? response.first_cycle_proof_packet
+          : undefined,
+        live_validation_checklist: Array.isArray(response.live_validation_checklist)
+          ? response.live_validation_checklist
+          : [],
         channel_summary: response.channel_summary && typeof response.channel_summary === 'object' ? response.channel_summary : {},
         dispatch_preview: dispatchPreview || undefined,
         dispatch_readiness: response.dispatch_readiness && typeof response.dispatch_readiness === 'object' ? response.dispatch_readiness : {},
@@ -4989,11 +5159,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         openSocialApprovalPreview(visibleSocialNeedsReview, 'selected', 'selected-social-approve');
         setActionSummary({
           tone: 'neutral',
-          text_ru: `Выделили темы с постами на проверку: ${uniqueItemIds.length}. Проверьте preview и подтвердите тексты отдельной кнопкой.`,
+          text_ru: `Выделили темы с постами на проверку: ${uniqueItemIds.length}. Проверьте предпросмотр и подтвердите тексты отдельной кнопкой.`,
           text_en: `Selected topics with posts to review: ${uniqueItemIds.length}. Review the preview and approve copy with a separate button.`,
           details_ru: [
             'Наружу ничего не публикуется на этом шаге.',
-            'После approval следующим шагом будет “Поставить в расписание”.',
+            'После подтверждения следующим шагом будет “Поставить в расписание”.',
           ],
           details_en: [
             'Nothing is published externally at this step.',
@@ -5346,7 +5516,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       {
                         labelRu: '5. Контролируемое размещение',
                         labelEn: '5. Supervised placement',
-                        detailRu: 'Яндекс/2ГИС получают задачу с preview, без тихого автоклика.',
+                        detailRu: 'Яндекс/2ГИС получают задачу с предпросмотром, без тихого автоклика.',
                         detailEn: 'Yandex/2GIS get a preview task, without hidden auto-clicks.',
                       },
                       {
@@ -5517,13 +5687,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 <div className="mt-3 rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200">
                   <div>
                     {isRu
-                      ? 'Внешние публикации идут только после preview и approval. Для Яндекс/2ГИС LocalOS готовит контролируемое размещение, а не скрытую автопубликацию.'
+                      ? 'Внешние публикации идут только после предпросмотра и подтверждения. Для Яндекс/2ГИС LocalOS готовит контролируемое размещение, а не скрытую автопубликацию.'
                       : 'External publishing runs only after preview and approval. For Yandex/2GIS, LocalOS prepares supervised placement, not hidden autopublish.'}
                   </div>
                   <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="text-slate-300">
                       {isRu
-                        ? 'OpenClaw readiness для Яндекс/2ГИС проверяется отдельно: если receiver недоступен, будет ручной fallback без срыва плана.'
+                        ? 'Готовность OpenClaw для Яндекс/2ГИС проверяется отдельно: если внешний исполнитель недоступен, будет ручной режим без срыва плана.'
                         : 'OpenClaw readiness for Yandex/2GIS is checked separately: if the receiver is unreachable, LocalOS keeps manual fallback without blocking the plan.'}
                     </div>
                     <Button
@@ -5558,7 +5728,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   onClick={() => setActiveZone('queue')}
                   className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
                 >
-                  {isRu ? 'Открыть очередь и preview' : 'Open queue and preview'}
+                  {isRu ? 'Открыть очередь и предпросмотр' : 'Open queue and preview'}
                 </Button>
                 <Button
                   type="button"
@@ -5586,7 +5756,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     {String(
                       (isRu ? socialGoalProgress?.goal_ru : socialGoalProgress?.goal_en)
                       || (isRu
-                        ? 'Дойти от темы в контент-плане до публикации, результата и корректировки следующей недели. Карты идут через контролируемое или ручное размещение, API-каналы — только после approval.'
+                        ? 'Дойти от темы в контент-плане до публикации, результата и корректировки следующей недели. Карты идут через контролируемое или ручное размещение, API-каналы — только после подтверждения.'
                         : 'Move from a content-plan topic to publishing, results, and next-week correction. Maps stay supervised; API channels run only after approval.')
                     )}
                   </div>
@@ -5597,8 +5767,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </span>
                     <span className="rounded-full bg-white px-2 py-0.5 text-slate-700">
                       {socialGoalProgress?.approval_required === false
-                        ? (isRu ? 'approval не требуется' : 'approval not required')
-                        : (isRu ? 'approval обязателен' : 'approval required')}
+                        ? (isRu ? 'подтверждение не требуется' : 'approval not required')
+                        : (isRu ? 'подтверждение обязательно' : 'approval required')}
                     </span>
                     <span className="rounded-full bg-white px-2 py-0.5 text-slate-700">
                       {socialGoalProgress?.maps_are_supervised_or_manual === false
@@ -5666,7 +5836,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   </div>
                   <div className="mt-1">
                     {isRu
-                      ? 'Посты появляются из LocalOS content plan, проходят preview и approval.'
+                      ? 'Посты появляются из контент-плана LocalOS, проходят предпросмотр и подтверждение.'
                       : 'Posts come from the LocalOS content plan, then pass preview and approval.'}
                   </div>
                 </div>
@@ -6503,7 +6673,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             </div>
             <div className="mt-2 inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-100">
               {isRu
-                ? 'Каналы: карты + соцсети, публикация только после approval'
+                ? 'Каналы: карты + соцсети, публикация только после подтверждения'
                 : 'Channels: maps + social, publish only after approval'}
             </div>
             <div className="mt-1 text-sm leading-6 text-slate-600">
@@ -6581,7 +6751,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
                     {visibleSocialNeedsReview.length > 0
                       ? (isRu
-                        ? 'Главный шаг сейчас — preview и approval. Текст можно поправить, а наружу ничего не отправится до отдельной постановки в расписание.'
+                        ? 'Главный шаг сейчас — предпросмотр и подтверждение. Текст можно поправить, а наружу ничего не отправится до отдельной постановки в расписание.'
                         : 'The main step now is preview and approval. You can edit copy; nothing external is sent until a separate queue step.')
                       : visibleSocialCanQueue.length > 0
                         ? (isRu
@@ -6618,7 +6788,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       </Button>
                       <div className="text-xs leading-5 text-slate-300">
                         {isRu
-                          ? 'Кнопка ведёт к безопасному шагу: preview, approval, queue, контролируемое размещение или сбор результата.'
+                          ? 'Кнопка ведёт к безопасному шагу: предпросмотр, подтверждение, расписание, контролируемое размещение или сбор результата.'
                           : 'This button opens the safe next step: preview, approval, queueing, supervised placement, or result collection.'}
                       </div>
                     </div>
@@ -6635,7 +6805,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         </div>
                         <div className="rounded-xl bg-white/10 px-3 py-2">
                           <div className="font-semibold text-white">{isRu ? '2. Проверить тексты' : '2. Review copy'}</div>
-                          <div>{isRu ? 'Открыть preview, поправить общий и platform-specific текст.' : 'Open preview and edit base plus platform-specific copy.'}</div>
+                          <div>{isRu ? 'Открыть предпросмотр, поправить общий текст и версии под каналы.' : 'Open preview and edit base plus platform-specific copy.'}</div>
                         </div>
                         <div className="rounded-xl bg-white/10 px-3 py-2">
                           <div className="font-semibold text-white">{isRu ? '3. Утвердить и поставить' : '3. Approve and queue'}</div>
@@ -7063,14 +7233,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-600">
-                      {isRu ? 'Preview подготовки каналов' : 'Channel preparation preview'}
+                      {isRu ? 'Предпросмотр подготовки каналов' : 'Channel preparation preview'}
                     </div>
                     <div className="mt-1 text-base font-semibold text-blue-950">
                       {socialPreparePreview.previewItemTitle}
                     </div>
                     <div className="mt-1 text-xs leading-5 text-blue-800">
                       {isRu
-                        ? 'Это отдельный безопасный шаг: LocalOS показал, что будет создано, но drafts ещё не записаны и наружу ничего не опубликовано.'
+                        ? 'Это отдельный безопасный шаг: LocalOS показал, что будет создано, но черновики ещё не записаны и наружу ничего не опубликовано.'
                         : 'This is a separate safe step: LocalOS shows what will be created, but drafts are not written yet and nothing is published externally.'}
                     </div>
                   </div>
@@ -7107,7 +7277,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 </div>
                 <div className="mt-3 rounded-xl bg-white px-3 py-2 text-xs leading-5 text-blue-800 ring-1 ring-blue-100">
                   {isRu
-                    ? `Выбрано тем: ${socialPreparePreview.itemIds.length}. Preview детально показан по первой теме; при продолжении drafts будут созданы для всех выбранных тем.`
+                    ? `Выбрано тем: ${socialPreparePreview.itemIds.length}. Подробный предпросмотр показан по первой теме; при продолжении черновики будут созданы для всех выбранных тем.`
                     : `Selected items: ${socialPreparePreview.itemIds.length}. The detailed preview is shown for the first item; continuing creates drafts for all selected items.`}
                 </div>
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -7126,8 +7296,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     disabled={Boolean(bulkBusyAction) || Boolean(socialBusyAction)}
                   >
                     {bulkBusyAction === socialPreparePreview.busyAction
-                      ? (isRu ? 'Создаём drafts...' : 'Creating drafts...')
-                      : (isRu ? 'Создать drafts для проверки' : 'Create drafts for review')}
+                      ? (isRu ? 'Создаём черновики...' : 'Creating drafts...')
+                      : (isRu ? 'Создать черновики для проверки' : 'Create drafts for review')}
                   </Button>
                 </div>
               </div>
@@ -7140,7 +7310,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-600">
-                      {isRu ? 'Preview перед approval' : 'Preview before approval'}
+                      {isRu ? 'Предпросмотр перед подтверждением' : 'Preview before approval'}
                     </div>
                     <div className="mt-1 text-base font-semibold text-sky-950">
                       {isRu
@@ -7149,7 +7319,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                     <div className="mt-1 text-xs leading-5 text-sky-800">
                       {isRu
-                        ? 'Approval только фиксирует проверку текста. Наружу ничего не публикуется: после этого отдельный шаг - “Поставить в расписание”.'
+                        ? 'Подтверждение только фиксирует проверку текста. Наружу ничего не публикуется: после этого отдельный шаг - “Поставить в расписание”.'
                         : 'Approval only records copy review. Nothing is published externally: the separate next step is “Queue on schedule”.'}
                     </div>
                   </div>
@@ -7189,7 +7359,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                     <div className="mt-1">
                       {isRu
-                        ? 'LocalOS сохранит human approval. API-публикация не начнётся, пока вы отдельно не поставите посты в расписание.'
+                        ? 'LocalOS сохранит подтверждение человека. API-публикация не начнётся, пока вы отдельно не поставите посты в расписание.'
                         : 'LocalOS will save human approval. API publishing will not start until you separately queue posts on schedule.'}
                     </div>
                   </div>
@@ -7199,7 +7369,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                     <div className="mt-1">
                       {isRu
-                        ? 'Для карт approval не означает автопубликацию: после queue LocalOS создаст контролируемую или ручную задачу, финальный клик остаётся за человеком.'
+                        ? 'Для карт подтверждение не означает автопубликацию: после постановки в расписание LocalOS создаст контролируемую или ручную задачу, финальный клик остаётся за человеком.'
                         : 'For map platforms, approval does not mean autopublish: after queueing, LocalOS creates a supervised or manual task, and the final click stays human-controlled.'}
                     </div>
                   </div>
@@ -7211,7 +7381,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                     <div className="mt-1">
                       {isRu
-                        ? 'Подтверждение текста разрешено, но worker не опубликует эти каналы без ключей, прав или привязки аккаунта.'
+                        ? 'Подтверждение текста разрешено, но исполнитель не опубликует эти каналы без ключей, прав или привязки аккаунта.'
                         : 'Copy approval is allowed, but the worker will not publish these channels without keys, permissions, or account binding.'}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -7229,7 +7399,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 {socialApprovalPreviewSummary.emptyText > 0 ? (
                   <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-800">
                     {isRu
-                      ? `Перед approval заполните и сохраните текст: ${socialApprovalPreviewSummary.emptyText}.`
+                      ? `Перед подтверждением заполните и сохраните текст: ${socialApprovalPreviewSummary.emptyText}.`
                       : `Add and save copy before approval: ${socialApprovalPreviewSummary.emptyText}.`}
                   </div>
                 ) : null}
@@ -7917,14 +8087,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       {isRu ? 'После публикации: ' : 'After publishing: '}
                                     </span>
                                     {isRu
-                                      ? String(socialLaunchPreflight.first_api_publish_readiness.metrics_followup_ru || 'После proof соберите реакции/заявки; следующий план не меняется автоматически без approval.')
+                                      ? String(socialLaunchPreflight.first_api_publish_readiness.metrics_followup_ru || 'После первого подтверждённого запуска соберите реакции/заявки; следующий план не меняется автоматически без подтверждения.')
                                       : String(socialLaunchPreflight.first_api_publish_readiness.metrics_followup_en || 'After proof, collect reactions/leads; the next plan is not changed automatically without approval.')}
                                   </div>
                                 </div>
                               ) : null}
                               <div className="mt-1 text-slate-200">
                                 {isRu
-                                  ? String(socialLaunchPreflight.first_api_publish_readiness.publish_path_ru || 'Только после preview, human approval, queue и due-даты.')
+                                  ? String(socialLaunchPreflight.first_api_publish_readiness.publish_path_ru || 'Только после предпросмотра, подтверждения, расписания и наступления даты.')
                                   : String(socialLaunchPreflight.first_api_publish_readiness.publish_path_en || 'Only after preview, human approval, queueing, and the due date.')}
                               </div>
                             </div>
@@ -7944,7 +8114,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                                 <div>
                                   <div className="font-semibold text-white">
-                                    {isRu ? 'Проверка due-постов' : 'Due-post launch check'}
+                                    {isRu ? 'Проверка постов на текущую дату' : 'Due-post launch check'}
                                   </div>
                                   <div className="mt-1">
                                     {isRu
@@ -8006,7 +8176,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               </div>
                               <div className="mt-1">
                                 {isRu
-                                  ? 'Исполнитель не будет запущен, пока API-посты с наступившей датой смотрят в канал без готовых ключей, прав, location или adapter.'
+                                  ? 'Исполнитель не будет запущен, пока API-посты с наступившей датой смотрят в канал без готовых ключей, прав, локации или адаптера.'
                                   : 'The worker will not run while due API posts target a channel without ready keys, permissions, location, or adapter.'}
                               </div>
                               <div className="mt-1 flex flex-wrap gap-1">
@@ -8054,14 +8224,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           ) : null}
                           <div className="mt-2 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] text-slate-200">
                             {isRu
-                              ? `Рекомендованный scope: SOCIAL_POST_DISPATCH_BUSINESS_ID=${String(socialLaunchPreflight.recommended_env?.dispatch?.SOCIAL_POST_DISPATCH_BUSINESS_ID || businessId || '')}`
+                              ? `Рекомендованный бизнес для запуска: SOCIAL_POST_DISPATCH_BUSINESS_ID=${String(socialLaunchPreflight.recommended_env?.dispatch?.SOCIAL_POST_DISPATCH_BUSINESS_ID || businessId || '')}`
                               : `Recommended scope: SOCIAL_POST_DISPATCH_BUSINESS_ID=${String(socialLaunchPreflight.recommended_env?.dispatch?.SOCIAL_POST_DISPATCH_BUSINESS_ID || businessId || '')}`}
                           </div>
                           {socialLaunchPreflight.runtime_alignment ? (
                             <div className="mt-2 rounded-lg bg-white/10 px-2 py-1.5 text-[11px] leading-5 text-slate-200">
                               <div className="flex items-center justify-between gap-2">
                                 <span className="font-semibold text-white">
-                                  {isRu ? 'Runtime этого бизнеса' : 'This business runtime'}
+                                  {isRu ? 'Исполнитель этого бизнеса' : 'This business runtime'}
                                 </span>
                                 <span
                                   className={[
@@ -8206,7 +8376,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                     {socialLaunchPreflight.first_api_proof_gate.background_worker_aligned ? (isRu ? 'да' : 'yes') : (isRu ? 'нет' : 'no')}
                                   </span>
                                   {' '}
-                                  {isRu ? 'область запуска' : 'worker scope'}
+                                  {isRu ? 'бизнес запуска' : 'worker scope'}
                                 </div>
                                 <div className="rounded-md bg-white/10 px-2 py-1">
                                   <span className="font-semibold text-white">
@@ -8237,6 +8407,145 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               </div>
                             </div>
                           ) : null}
+                          {socialLaunchPreflight.first_cycle_proof_packet ? (
+                            <div
+                              data-testid="social-first-cycle-proof-packet"
+                              data-schema="localos_social_first_cycle_proof_packet_v1"
+                              className={[
+                                'mt-2 rounded-lg border px-2 py-2 text-[11px] leading-5',
+                                socialLaunchPreflight.first_cycle_proof_packet.ready_to_run_once
+                                  ? 'border-emerald-200/30 bg-emerald-400/10 text-emerald-50'
+                                  : 'border-amber-200/30 bg-amber-950/20 text-amber-50',
+                              ].join(' ')}
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Пакет первого запуска' : 'First-cycle proof packet'}
+                                  </div>
+                                  <div className="mt-1">
+                                    {isRu
+                                      ? String(socialLaunchPreflight.first_cycle_proof_packet.run_once_action_ru || '')
+                                      : String(socialLaunchPreflight.first_cycle_proof_packet.run_once_action_en || '')}
+                                  </div>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white">
+                                  {socialLaunchPreflight.first_cycle_proof_packet.ready_to_run_once
+                                    ? (isRu ? 'можно один цикл' : 'one cycle ready')
+                                    : (isRu ? 'не готово' : 'not ready')}
+                                </span>
+                              </div>
+                              <div className="mt-2 grid gap-1 sm:grid-cols-3">
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">
+                                    {String(socialLaunchPreflight.first_cycle_proof_packet.dispatch_business_id || '-')}
+                                  </span>
+                                  {' '}
+                                  {isRu ? 'бизнес запуска' : 'dispatch scope'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">
+                                    {socialLaunchPreflight.first_cycle_proof_packet.candidate_platform_label
+                                      || _socialPlatformLabel(String(socialLaunchPreflight.first_cycle_proof_packet.candidate_platform || ''), isRu)
+                                      || '-'}
+                                  </span>
+                                  {' '}
+                                  API-proof
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">
+                                    {Number(socialLaunchPreflight.first_cycle_proof_packet.checklist_done || 0)}
+                                    /
+                                    {Number(socialLaunchPreflight.first_cycle_proof_packet.checklist_total || 0)}
+                                  </span>
+                                  {' '}
+                                  {isRu ? 'чеклист' : 'checklist'}
+                                </div>
+                              </div>
+                              {socialLaunchPreflight.first_cycle_proof_packet.ready_to_run_once ? (
+                                <div className="mt-2 rounded-md bg-white/10 px-2 py-1.5 text-slate-100">
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Что проверить после цикла' : 'What to verify after the cycle'}
+                                  </div>
+                                  <ol className="mt-1 space-y-1">
+                                    {(
+                                      isRu
+                                        ? socialLaunchPreflight.first_cycle_proof_packet.after_run_checks_ru || []
+                                        : socialLaunchPreflight.first_cycle_proof_packet.after_run_checks_en || []
+                                    ).slice(0, 4).map((step, index) => (
+                                      <li key={`first-cycle-proof-check:${index}:${step}`} className="flex gap-1.5">
+                                        <span className="font-semibold text-white">{index + 1}.</span>
+                                        <span>{step}</span>
+                                      </li>
+                                    ))}
+                                  </ol>
+                                </div>
+                              ) : (
+                                <div className="mt-2 rounded-md bg-white/10 px-2 py-1.5 text-amber-50">
+                                  <span className="font-semibold text-white">
+                                    {isRu ? 'Что мешает: ' : 'Blocked by: '}
+                                  </span>
+                                  {isRu
+                                    ? String(socialLaunchPreflight.first_cycle_proof_packet.blocked_reason_ru || '')
+                                    : String(socialLaunchPreflight.first_cycle_proof_packet.blocked_reason_en || '')}
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+                          {Number(socialLaunchPreflight.live_validation_checklist?.length || 0) > 0 ? (
+                            <div
+                              data-testid="social-live-validation-checklist"
+                              className="mt-2 rounded-lg border border-sky-200/30 bg-sky-400/10 px-2 py-2 text-[11px] leading-5 text-sky-50"
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Чеклист живой проверки' : 'Live validation checklist'}
+                                  </div>
+                                  <div className="mt-1 text-sky-100">
+                                    {isRu
+                                      ? 'Эти пункты показывают, доказан ли полный loop: публикация, контроль карт, сбор результата и корректировка плана.'
+                                      : 'These items show whether the full loop is proven: publishing, map control, result collection, and plan correction.'}
+                                  </div>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white">
+                                  {Number(socialLaunchPreflight.live_validation_checklist?.filter((item) => item.status === 'done').length || 0)}
+                                  /
+                                  {Number(socialLaunchPreflight.live_validation_checklist?.length || 0)}
+                                </span>
+                              </div>
+                              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                                {(socialLaunchPreflight.live_validation_checklist || []).map((item) => {
+                                  const itemStatus = String(item.status || '').trim();
+                                  const tone = itemStatus === 'done'
+                                    ? 'border-emerald-200/30 bg-emerald-400/10 text-emerald-50'
+                                    : itemStatus === 'attention'
+                                      ? 'border-amber-200/30 bg-amber-400/10 text-amber-50'
+                                      : itemStatus === 'current'
+                                        ? 'border-sky-200/40 bg-white/10 text-sky-50'
+                                        : 'border-slate-200/20 bg-white/5 text-slate-100';
+                                  return (
+                                    <div
+                                      key={`live-validation:${String(item.key || item.label_ru || item.label_en || '')}`}
+                                      className={`rounded-lg border px-2 py-1.5 ${tone}`}
+                                    >
+                                      <div className="flex items-start justify-between gap-2">
+                                        <span className="font-semibold text-white">
+                                          {isRu ? String(item.label_ru || '') : String(item.label_en || '')}
+                                        </span>
+                                        <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white">
+                                          {_socialLearningChecklistStatusLabel(itemStatus, isRu)}
+                                        </span>
+                                      </div>
+                                      <div className="mt-1">
+                                        {isRu ? String(item.detail_ru || '') : String(item.detail_en || '')}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
                           <Button
                             type="button"
                             size="sm"
@@ -8250,7 +8559,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           >
                             {socialBusyAction === 'dispatch-run-once'
                               ? (isRu ? 'Запускаем цикл...' : 'Running cycle...')
-                              : (isRu ? 'Запустить один scoped цикл' : 'Run one scoped cycle')}
+                              : (isRu ? 'Запустить один ограниченный цикл' : 'Run one scoped cycle')}
                           </Button>
                           <div className="mt-1 text-[11px] text-slate-300">
                             {isRu
@@ -8276,7 +8585,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               className="mt-2 h-7 border-white/20 bg-white/10 px-2 text-[11px] text-white hover:bg-white/20"
                               onClick={() => { void copySocialWorkerEnv(); }}
                             >
-                              {isRu ? 'Скопировать env для запуска' : 'Copy worker env'}
+                              {isRu ? 'Скопировать настройки запуска' : 'Copy worker env'}
                             </Button>
                           </div>
                           {_socialFirstCycleVerificationBlock(socialLaunchPreflight.first_cycle_verification, isRu)}
@@ -8352,6 +8661,79 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ? String(socialDispatchExecutionReport.next_action_ru || '')
                               : String(socialDispatchExecutionReport.next_action_en || '')}
                           </div>
+                          {socialDispatchExecutionReport.after_run_proof_packet ? (
+                            <div
+                              data-testid="social-after-run-proof-packet"
+                              data-schema="localos_social_after_run_proof_packet_v1"
+                              className={[
+                                'mt-2 rounded-lg border px-2 py-2 text-[11px] leading-5',
+                                socialDispatchExecutionReport.after_run_proof_packet.can_collect_results
+                                  ? 'border-emerald-300/20 bg-emerald-400/10 text-emerald-50'
+                                  : Number(socialDispatchExecutionReport.after_run_proof_packet.failed || 0) > 0
+                                    ? 'border-red-300/20 bg-red-400/10 text-red-50'
+                                    : 'border-amber-300/20 bg-amber-400/10 text-amber-50',
+                              ].join(' ')}
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Проверка после запуска' : 'After-run proof'}
+                                    {' · '}
+                                    {isRu
+                                      ? String(socialDispatchExecutionReport.after_run_proof_packet.title_ru || '')
+                                      : String(socialDispatchExecutionReport.after_run_proof_packet.title_en || '')}
+                                  </div>
+                                  <div className="mt-1">
+                                    {isRu
+                                      ? String(socialDispatchExecutionReport.after_run_proof_packet.next_action_ru || '')
+                                      : String(socialDispatchExecutionReport.after_run_proof_packet.next_action_en || '')}
+                                  </div>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white">
+                                  {socialDispatchExecutionReport.after_run_proof_packet.api_proof_ready
+                                    ? 'API proof'
+                                    : (isRu ? 'proof нужен' : 'proof needed')}
+                                </span>
+                              </div>
+                              <div className="mt-2 grid gap-1 sm:grid-cols-3">
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">
+                                    {socialDispatchExecutionReport.after_run_proof_packet.can_collect_results ? (isRu ? 'да' : 'yes') : (isRu ? 'нет' : 'no')}
+                                  </span>
+                                  {' '}
+                                  {isRu ? 'собирать результат' : 'collect results'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">
+                                    {socialDispatchExecutionReport.after_run_proof_packet.maps_handoff_created ? (isRu ? 'да' : 'yes') : (isRu ? 'нет' : 'no')}
+                                  </span>
+                                  {' '}
+                                  {isRu ? 'карты handoff' : 'maps handoff'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">
+                                    {socialDispatchExecutionReport.after_run_proof_packet.browser_final_click_allowed === false
+                                      ? (isRu ? 'человек' : 'human')
+                                      : (isRu ? 'неясно' : 'unclear')}
+                                  </span>
+                                  {' '}
+                                  {isRu ? 'финальный клик' : 'final click'}
+                                </div>
+                              </div>
+                              <ol className="mt-2 space-y-1">
+                                {(
+                                  isRu
+                                    ? socialDispatchExecutionReport.after_run_proof_packet.checks_ru || []
+                                    : socialDispatchExecutionReport.after_run_proof_packet.checks_en || []
+                                ).slice(0, 4).map((step, index) => (
+                                  <li key={`after-run-proof:${index}:${step}`} className="flex gap-1.5 text-slate-100">
+                                    <span className="font-semibold text-white">{index + 1}.</span>
+                                    <span>{step}</span>
+                                  </li>
+                                ))}
+                              </ol>
+                            </div>
+                          ) : null}
                           {socialDispatchExecutionReport.first_api_proof_summary ? (
                             <div
                               data-testid="social-first-api-proof-summary"
@@ -8532,11 +8914,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       {socialDispatchPreview ? (
                         <div className="rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200">
                           <div className="font-semibold text-white">
-                            {isRu ? 'Dry-run worker' : 'Worker dry-run'}
+                            {isRu ? 'Проверка исполнителя' : 'Worker dry-run'}
                           </div>
                           <div>
                             {isRu
-                              ? `Due: ${Number(socialDispatchPreview.picked || 0)} · API: ${Number(socialDispatchPreview.by_action?.publish_api || 0)} · контролируемо: ${Number(socialDispatchPreview.by_action?.create_supervised_task || 0)} · вручную: ${Number(socialDispatchPreview.by_action?.manual_handoff || 0)}`
+                              ? `К дате: ${Number(socialDispatchPreview.picked || 0)} · API: ${Number(socialDispatchPreview.by_action?.publish_api || 0)} · контролируемо: ${Number(socialDispatchPreview.by_action?.create_supervised_task || 0)} · вручную: ${Number(socialDispatchPreview.by_action?.manual_handoff || 0)}`
                               : `Due: ${Number(socialDispatchPreview.picked || 0)} · API: ${Number(socialDispatchPreview.by_action?.publish_api || 0)} · supervised: ${Number(socialDispatchPreview.by_action?.create_supervised_task || 0)} · manual: ${Number(socialDispatchPreview.by_action?.manual_handoff || 0)}`}
                           </div>
                           <div className="text-[11px] text-slate-300">
@@ -8561,7 +8943,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ].join(' ')}
                             >
                               <div className="font-semibold">
-                                {isRu ? 'Вывод перед dispatch' : 'Dispatch readiness'}
+                                {isRu ? 'Вывод перед запуском' : 'Dispatch readiness'}
                               </div>
                               <div>
                                 {isRu
@@ -8858,7 +9240,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 ? 'Перед постановкой API-каналов в расписание подключите ключи или права. Карты останутся контролируемыми или ручными и не будут выглядеть как автопубликация.'
                                 : 'Connect keys or permissions before queueing API channels. Maps stay supervised/manual and are not shown as autopublish.')
                               : (isRu
-                                ? 'API-каналы готовы к публикации после approval. Карты идут через контролируемое или ручное размещение.'
+                                ? 'API-каналы готовы к публикации после подтверждения. Карты идут через контролируемое или ручное размещение.'
                                 : 'API channels are ready to publish after approval. Maps use supervised placement.')}
                           </div>
                           {socialOpenClawReadiness ? (
@@ -8990,11 +9372,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             <div className="mt-1">
                               {socialFirstApiPublishReadiness.readyForFirstApiPublish
                                 ? (isRu
-                                  ? `Каналы готовы к первому реальному API-посту после preview, approval и расписания: ${socialFirstApiPublishReadiness.readyLabels.join(', ')}.`
+                                  ? `Каналы готовы к первому реальному API-посту после предпросмотра, подтверждения и расписания: ${socialFirstApiPublishReadiness.readyLabels.join(', ')}.`
                                   : `Channels are ready for the first real API post after preview, approval, and queueing: ${socialFirstApiPublishReadiness.readyLabels.join(', ')}.`)
                                 : socialFirstApiPublishReadiness.hasAnyReadyApi
                                   ? (isRu
-                                    ? `Можно начинать с готовых каналов: ${socialFirstApiPublishReadiness.readyLabels.join(', ')}. Заблокированные каналы worker пропустит до настройки.`
+                                    ? `Можно начинать с готовых каналов: ${socialFirstApiPublishReadiness.readyLabels.join(', ')}. Заблокированные каналы исполнитель пропустит до настройки.`
                                     : `You can start with ready channels: ${socialFirstApiPublishReadiness.readyLabels.join(', ')}. Blocked channels will be skipped until setup is fixed.`)
                                   : (isRu
                                     ? 'Пока нет готового API-канала для первого реального поста. Сначала подключите ключи и права, затем запустите live API-проверку.'
@@ -9063,7 +9445,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   ? `Первое действие: открыть настройку ${socialChannelConnectionGuide.recommendedSetup.platform_label || _socialPlatformLabel(String(socialChannelConnectionGuide.recommendedSetup.platform || ''), isRu)} и добавить ключи/права.`
                                   : `First action: open ${socialChannelConnectionGuide.recommendedSetup.platform_label || _socialPlatformLabel(String(socialChannelConnectionGuide.recommendedSetup.platform || ''), isRu)} setup and add keys/permissions.`)
                                 : (isRu
-                                  ? 'Первое действие: подготовить посты, проверить preview и поставить готовые API-каналы в расписание.'
+                                  ? 'Первое действие: подготовить посты, проверить предпросмотр и поставить готовые API-каналы в расписание.'
                                   : 'First action: prepare posts, review the preview, and queue ready API channels.')}
                             </div>
                           </div>
@@ -9158,7 +9540,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               </div>
                             </div>
                             <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-sky-800">
-                              {isRu ? 'publish только после approval' : 'publish only after approval'}
+                              {isRu ? 'публикация только после подтверждения' : 'publish only after approval'}
                             </span>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -9180,7 +9562,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           {socialApiPreflightSummary.needsAttention.length > 0 ? (
                             <div className="mt-2 text-sky-800">
                               {isRu
-                                ? 'Перед расписанием исправьте ключи, права или используйте ручной fallback для заблокированных каналов.'
+                                ? 'Перед расписанием исправьте ключи, права или используйте ручной режим для заблокированных каналов.'
                                 : 'Before queueing, fix keys, permissions, or use manual fallback for blocked channels.'}
                             </div>
                           ) : null}
@@ -9309,7 +9691,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 ))}
                               </div>
                               <div className="mt-1 text-[10px] font-medium text-slate-500">
-                                {isRu ? 'Посты не отправлялись. Publish только после approval.' : 'No posts were sent. Publish only after approval.'}
+                                {isRu ? 'Посты не отправлялись. Публикация только после подтверждения.' : 'No posts were sent. Publish only after approval.'}
                               </div>
                             </div>
                           ) : null}
@@ -9410,13 +9792,96 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               {socialPrimaryResultCount > 0
                                 ? (isRu ? 'заявки главнее' : 'leads first')
                                 : socialEarlySignalCount > 0
-                                  ? (isRu ? 'ранний сигнал' : 'early signal')
-                                  : Number(socialSummary?.published || 0) > 0
-                                    ? (isRu ? 'ждём реакции' : 'needs reactions')
-                                    : (isRu ? 'после publish' : 'after publish')}
+                              ? (isRu ? 'ранний сигнал' : 'early signal')
+                              : Number(socialSummary?.published || 0) > 0
+                                ? (isRu ? 'ждём реакции' : 'needs reactions')
+                                : (isRu ? 'после publish' : 'after publish')}
                             </span>
                           </div>
                         </div>
+                        {socialMetricsLearningPacket ? (
+                          <div
+                            data-testid="social-metrics-learning-packet"
+                            data-schema="localos_social_metrics_learning_packet_v1"
+                            className={[
+                              'mt-3 rounded-lg border px-3 py-2 text-xs leading-5',
+                              Number(socialMetricsLearningPacket.primary_result_total || 0) > 0
+                                ? 'border-emerald-200 bg-white text-emerald-900'
+                                : Number(socialMetricsLearningPacket.early_signal_total || 0) > 0
+                                  ? 'border-sky-200 bg-sky-50 text-sky-900'
+                                  : Number(socialMetricsLearningPacket.failed_posts || 0) > 0
+                                    ? 'border-amber-200 bg-amber-50 text-amber-900'
+                                    : 'border-slate-200 bg-white text-slate-700',
+                            ].join(' ')}
+                          >
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <div className="font-semibold">
+                                  {isRu ? 'Результат после сбора реакций' : 'Result after collecting reactions'}
+                                </div>
+                                <div className="mt-1">
+                                  {isRu
+                                    ? String(socialMetricsLearningPacket.summary_ru || '')
+                                    : String(socialMetricsLearningPacket.summary_en || '')}
+                                </div>
+                              </div>
+                              <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium">
+                                {isRu
+                                  ? `обновлено: ${Number(socialMetricsLearningPacket.collected_posts || 0)}`
+                                  : `updated: ${Number(socialMetricsLearningPacket.collected_posts || 0)}`}
+                              </span>
+                            </div>
+                            <div className="mt-2 grid gap-2 text-[11px] sm:grid-cols-3">
+                              <div className="rounded-lg bg-white px-2.5 py-2">
+                                <div className="font-semibold">
+                                  {isRu ? 'Главная метрика' : 'Main metric'}
+                                </div>
+                                <div className="mt-1">
+                                  {isRu
+                                    ? String(socialMetricsLearningPacket.primary_metric_ru || 'Заявки и обращения')
+                                    : String(socialMetricsLearningPacket.primary_metric_en || 'Leads and inquiries')}
+                                </div>
+                                <div className="mt-1 text-base font-semibold">
+                                  {Number(socialMetricsLearningPacket.primary_result_total || 0)}
+                                </div>
+                              </div>
+                              <div className="rounded-lg bg-white px-2.5 py-2">
+                                <div className="font-semibold">
+                                  {isRu ? 'Ранние сигналы' : 'Early signals'}
+                                </div>
+                                <div className="mt-1">
+                                  {isRu
+                                    ? `комм. ${Number(socialMetricsLearningPacket.comments || 0)}, репосты ${Number(socialMetricsLearningPacket.shares || 0)}, клики ${Number(socialMetricsLearningPacket.clicks || 0)}`
+                                    : `comments ${Number(socialMetricsLearningPacket.comments || 0)}, shares ${Number(socialMetricsLearningPacket.shares || 0)}, clicks ${Number(socialMetricsLearningPacket.clicks || 0)}`}
+                                </div>
+                                <div className="mt-1 text-base font-semibold">
+                                  {Number(socialMetricsLearningPacket.early_signal_total || 0)}
+                                </div>
+                              </div>
+                              <div className="rounded-lg bg-white px-2.5 py-2">
+                                <div className="font-semibold">
+                                  {isRu ? 'Для проверки' : 'Need attention'}
+                                </div>
+                                <div className="mt-1">
+                                  {isRu
+                                    ? `ошибок: ${Number(socialMetricsLearningPacket.failed_posts || 0)}`
+                                    : `failed: ${Number(socialMetricsLearningPacket.failed_posts || 0)}`}
+                                </div>
+                                <div className="mt-1">
+                                  {isRu
+                                    ? `заявки ${Number(socialMetricsLearningPacket.leads || 0)}, обращения ${Number(socialMetricsLearningPacket.inquiries || 0)}`
+                                    : `leads ${Number(socialMetricsLearningPacket.leads || 0)}, inquiries ${Number(socialMetricsLearningPacket.inquiries || 0)}`}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="mt-2 rounded-lg bg-white px-2.5 py-2 text-[11px] font-medium">
+                              {isRu ? 'Следующий шаг: ' : 'Next step: '}
+                              {isRu
+                                ? String(socialMetricsLearningPacket.next_action_ru || '')
+                                : String(socialMetricsLearningPacket.next_action_en || '')}
+                            </div>
+                          </div>
+                        ) : null}
                         {socialRecommendation?.learning_readiness ? (
                           <div className={_socialLearningReadinessClassName(socialRecommendation.learning_readiness.confidence || '')}>
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -9470,6 +9935,46 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 </div>
                               </div>
                             </div>
+                            {Number(socialRecommendation.learning_readiness.checklist?.length || 0) > 0 ? (
+                              <div
+                                data-testid="social-learning-readiness-checklist"
+                                className="mt-2 rounded-lg bg-white px-2.5 py-2 text-[11px] leading-5"
+                              >
+                                <div className="font-semibold">
+                                  {isRu ? 'Чеклист перед корректировкой' : 'Checklist before changing the plan'}
+                                </div>
+                                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                                  {(socialRecommendation.learning_readiness.checklist || []).map((item) => {
+                                    const itemStatus = String(item.status || '').trim();
+                                    const tone = itemStatus === 'done'
+                                      ? 'border-emerald-100 bg-emerald-50 text-emerald-900'
+                                      : itemStatus === 'attention'
+                                        ? 'border-amber-100 bg-amber-50 text-amber-900'
+                                        : itemStatus === 'current'
+                                          ? 'border-sky-100 bg-sky-50 text-sky-900'
+                                          : 'border-slate-200 bg-slate-50 text-slate-700';
+                                    return (
+                                      <div
+                                        key={String(item.key || item.label_ru || item.label_en || '')}
+                                        className={`rounded-lg border px-2.5 py-2 ${tone}`}
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="font-semibold">
+                                            {isRu ? String(item.label_ru || '') : String(item.label_en || '')}
+                                          </span>
+                                          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium">
+                                            {_socialLearningChecklistStatusLabel(itemStatus, isRu)}
+                                          </span>
+                                        </div>
+                                        <div className="mt-1">
+                                          {isRu ? String(item.detail_ru || '') : String(item.detail_en || '')}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : null}
                             <div className="mt-2 text-[11px] leading-5">
                               {isRu
                                 ? String(socialRecommendation.learning_readiness.next_action_ru || '')
@@ -9739,6 +10244,66 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             </div>
                           ))}
                         </div>
+                        {socialRecommendation?.application_preview ? (
+                          <div
+                            data-testid="social-recommendation-application-preview"
+                            className="mt-3 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900"
+                          >
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <div className="font-semibold text-sky-950">
+                                  {isRu ? 'Что реально изменится' : 'What will actually change'}
+                                </div>
+                                <div className="mt-1">
+                                  {isRu
+                                    ? String(socialRecommendation.application_preview.summary_ru || '')
+                                    : String(socialRecommendation.application_preview.summary_en || '')}
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                <span className="rounded-full bg-white px-2 py-0.5 font-medium text-sky-800">
+                                  {isRu
+                                    ? `изменится: ${Number(socialRecommendation.application_preview.applicable_count || 0)}`
+                                    : `changes: ${Number(socialRecommendation.application_preview.applicable_count || 0)}`}
+                                </span>
+                                <span className="rounded-full bg-white px-2 py-0.5 font-medium text-sky-800">
+                                  {isRu
+                                    ? `пропустится: ${Number(socialRecommendation.application_preview.skipped_count || 0)}`
+                                    : `skipped: ${Number(socialRecommendation.application_preview.skipped_count || 0)}`}
+                                </span>
+                              </div>
+                            </div>
+                            {Number(socialRecommendation.application_preview.items?.length || 0) > 0 ? (
+                              <div className="mt-2 grid gap-1.5 md:grid-cols-2">
+                                {(socialRecommendation.application_preview.items || []).slice(0, 4).map((item) => (
+                                  <div
+                                    key={`application-preview:${String(item.item_id || item.theme || '')}`}
+                                    className={[
+                                      'rounded-md border px-2 py-1.5',
+                                      item.applicable
+                                        ? 'border-emerald-100 bg-white text-emerald-900'
+                                        : 'border-amber-100 bg-white text-amber-900',
+                                    ].join(' ')}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <span className="line-clamp-1 font-semibold">
+                                        {String(item.theme || item.item_id || (isRu ? 'Пункт плана' : 'Plan item'))}
+                                      </span>
+                                      <span className="shrink-0 rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-medium">
+                                        {isRu ? String(item.label_ru || '') : String(item.label_en || '')}
+                                      </span>
+                                    </div>
+                                    <div className="mt-1 text-[11px]">
+                                      {isRu
+                                        ? `дата: ${String(item.scheduled_for || 'не задана')}${item.status ? ` · статус: ${String(item.status)}` : ''}`
+                                        : `date: ${String(item.scheduled_for || 'not set')}${item.status ? ` · status: ${String(item.status)}` : ''}`}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {Number(socialRecommendation?.proposed_changes?.length || 0) > 4 ? (
                           <div className="mt-2 text-[11px] text-emerald-700">
                             {isRu
@@ -9789,7 +10354,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                     <div className="mt-1">
                       {isRu
-                        ? `Проверить preview: ${selectedSocialNeedsReview.length} · поставить в расписание: ${selectedSocialCanQueue.length} · ручное/контролируемое размещение: ${selectedSocialCanMarkPublished.length} · отметить результат: ${selectedSocialCanRecordResults.length}.`
+                        ? `Проверить предпросмотр: ${selectedSocialNeedsReview.length} · поставить в расписание: ${selectedSocialCanQueue.length} · ручное/контролируемое размещение: ${selectedSocialCanMarkPublished.length} · отметить результат: ${selectedSocialCanRecordResults.length}.`
                         : `Review preview: ${selectedSocialNeedsReview.length} · queue on schedule: ${selectedSocialCanQueue.length} · manual/supervised placement: ${selectedSocialCanMarkPublished.length} · record result: ${selectedSocialCanRecordResults.length}.`}
                     </div>
                     <div className="mt-1 text-blue-800">
@@ -9821,7 +10386,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       </div>
                       <div className="mt-1">
                         {isRu
-                          ? 'Queue можно сохранить, но worker не будет публиковать эти каналы, пока не появятся ключи, права, location или adapter.'
+                          ? 'Расписание можно сохранить, но исполнитель не будет публиковать эти каналы, пока не появятся ключи, права, локация или адаптер.'
                           : 'Queue can still be saved, but the worker will not publish these channels until keys, permissions, location, or adapter are ready.'}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -9964,6 +10529,24 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       ? (isRu ? 'Отмечаем...' : 'Marking...')
                       : `${isRu ? 'Отметить размещёнными' : 'Mark published'} · ${selectedSocialCanMarkPublished.length}`}
                   </Button>
+                  {selectedSocialCanRecordResults.length > 0 ? (
+                    <div
+                      data-testid="social-bulk-attribution-actions"
+                      className="w-full rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900"
+                    >
+                      <div className="font-semibold text-emerald-950">
+                        {isRu ? 'Отметить результат по выбранным публикациям' : 'Record result for selected posts'}
+                      </div>
+                      <div className="mt-1">
+                        {isRu
+                          ? 'Сначала отмечайте заявки и обращения. Комментарии, репосты, клики, лайки и просмотры помогают понять формат, но стоят ниже бизнес-результата.'
+                          : 'Record leads and inquiries first. Comments, shares, clicks, likes, and views help evaluate the format, but rank below business outcomes.'}
+                      </div>
+                    </div>
+                  ) : null}
+                  <span className="w-full text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    {isRu ? 'Главный результат' : 'Primary result'}
+                  </span>
                   <Button
                     variant="outline"
                     onClick={() => { void recordSelectedSocialPostAttribution('lead'); }}
@@ -9982,6 +10565,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       ? (isRu ? 'Отмечаем обращения...' : 'Recording inquiries...')
                       : `${isRu ? 'Было обращение' : 'Record inquiry'} · ${selectedSocialCanRecordResults.length}`}
                   </Button>
+                  <span className="w-full text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {isRu ? 'Ранние сигналы' : 'Early signals'}
+                  </span>
                   <Button
                     variant="outline"
                     onClick={() => { void recordSelectedSocialPostAttribution('comment'); }}
@@ -10008,6 +10594,24 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     {bulkBusyAction === 'selected-social-attribute-click'
                       ? (isRu ? 'Отмечаем клики...' : 'Recording clicks...')
                       : `${isRu ? 'Был клик' : 'Record click'} · ${selectedSocialCanRecordResults.length}`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { void recordSelectedSocialPostAttribution('like'); }}
+                    disabled={Boolean(bulkBusyAction) || selectedSocialCanRecordResults.length === 0}
+                  >
+                    {bulkBusyAction === 'selected-social-attribute-like'
+                      ? (isRu ? 'Отмечаем лайки...' : 'Recording likes...')
+                      : `${isRu ? 'Был лайк' : 'Record like'} · ${selectedSocialCanRecordResults.length}`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { void recordSelectedSocialPostAttribution('view'); }}
+                    disabled={Boolean(bulkBusyAction) || selectedSocialCanRecordResults.length === 0}
+                  >
+                    {bulkBusyAction === 'selected-social-attribute-view'
+                      ? (isRu ? 'Отмечаем просмотры...' : 'Recording views...')
+                      : `${isRu ? 'Был просмотр' : 'Record view'} · ${selectedSocialCanRecordResults.length}`}
                   </Button>
                   <Button type="button" variant="ghost" onClick={clearSelectedItems}>
                     {isRu ? 'Снять выбор' : 'Clear'}
@@ -10267,8 +10871,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const canCreateSupervisedTask = isSupervisedPost
                                 && (post.status === 'approved' || post.status === 'queued' || post.status === 'needs_manual_publish');
                               const publishEvidence = post.publish_evidence || null;
+                              const resultPacket = publishEvidence?.result_packet || null;
                               const publishRehearsal = socialPublishRehearsals[post.id] || null;
                               const supervisedPayload = _socialSupervisedPayload(post);
+                              const placementPacket = publishEvidence?.placement_packet || null;
                               const supervisedHandoffState = supervisedPayload?.handoff_state || null;
                               const manualRefs = manualPublishRefs[post.id] || {
                                 url: String(post.provider_post_url || ''),
@@ -10294,9 +10900,43 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const supervisedManualChecklist = Array.isArray(supervisedManualChecklistSource)
                                 ? supervisedManualChecklistSource.filter(Boolean).map(String)
                                 : [];
-                              const supervisedCopyReadyText = String(supervisedPayload?.copy_ready_text || supervisedManualHandoff?.copy_ready_text || publishEvidence?.copy_ready_text || '').trim();
-                              const supervisedProfileHint = String(supervisedPayload?.profile_hint || supervisedManualHandoff?.profile_hint || publishEvidence?.profile_hint || '').trim();
-                              const supervisedTargetUrl = String(supervisedPayload?.target_url || supervisedManualHandoff?.target_url || publishEvidence?.target_url || '').trim();
+                              const supervisedCopyReadyText = String(
+                                placementPacket?.copy_ready_text || supervisedPayload?.copy_ready_text || supervisedManualHandoff?.copy_ready_text || publishEvidence?.copy_ready_text || ''
+                              ).trim();
+                              const supervisedProfileHint = String(
+                                placementPacket?.profile_hint || supervisedPayload?.profile_hint || supervisedManualHandoff?.profile_hint || publishEvidence?.profile_hint || ''
+                              ).trim();
+                              const supervisedTargetUrl = String(
+                                placementPacket?.target_url || supervisedPayload?.target_url || supervisedManualHandoff?.target_url || publishEvidence?.target_url || ''
+                              ).trim();
+                              const placementChecklistSource = isRu
+                                ? placementPacket?.checklist_ru || []
+                                : placementPacket?.checklist_en || [];
+                              const placementChecklist = Array.isArray(placementChecklistSource)
+                                ? placementChecklistSource.filter(Boolean).map(String)
+                                : [];
+                              const placementNextAction = String(
+                                isRu
+                                  ? placementPacket?.owner_next_action_ru || ''
+                                  : placementPacket?.owner_next_action_en || ''
+                              ).trim();
+                              const placementTaskId = String(placementPacket?.automation_task_id || post.automation_task_id || '').trim();
+                              const placementOutboxId = String(placementPacket?.openclaw_outbox_id || '').trim();
+                              const placementLedgerId = String(placementPacket?.agent_action_ledger_id || supervisedLedgerId || '').trim();
+                              const placementReadyChips = [
+                                placementPacket?.target_ready
+                                  ? (isRu ? 'цель готова' : 'target ready')
+                                  : (isRu ? 'нужна ссылка на профиль' : 'profile link needed'),
+                                placementPacket?.copy_ready
+                                  ? (isRu ? 'текст готов' : 'copy ready')
+                                  : (isRu ? 'нужен текст' : 'copy needed'),
+                                placementPacket?.openclaw_task_requested
+                                  ? (isRu ? 'задача отправлена' : 'task sent')
+                                  : (isRu ? 'ожидает запуска' : 'waiting to start'),
+                                placementPacket?.browser_final_click_allowed === false
+                                  ? (isRu ? 'финальный клик человеком' : 'human final click')
+                                  : '',
+                              ].filter(Boolean);
                               const supervisedFallbackReasons = Array.isArray(supervisedPayload?.fallback_reasons)
                                 ? supervisedPayload.fallback_reasons.filter(Boolean).map(String)
                                 : [];
@@ -10451,6 +11091,81 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                           ? 'Для этого канала LocalOS готовит задачу для OpenClaw/manual handoff, а не делает вид стабильной API-автопубликации.'
                                           : 'For this channel LocalOS prepares an OpenClaw/manual handoff task instead of pretending stable API autopublishing exists.'}
                                       </div>
+                                      {placementPacket ? (
+                                        <div
+                                          data-testid="social-supervised-placement-packet"
+                                          className="mt-3 rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-950"
+                                        >
+                                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                            <div>
+                                              <div className="font-semibold">
+                                                {isRu ? 'Пакет для размещения' : 'Placement packet'}
+                                              </div>
+                                              <div className="mt-1 text-[11px] leading-5 text-amber-900">
+                                                {placementNextAction || (isRu
+                                                  ? 'Откройте площадку, проверьте предпросмотр и завершите размещение вручную.'
+                                                  : 'Open the platform, review the preview, and finish placement manually.')}
+                                              </div>
+                                            </div>
+                                            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+                                              {placementPacket.manual_fallback_required
+                                                ? (isRu ? 'ручной режим' : 'manual mode')
+                                                : (isRu ? 'контролируемо' : 'supervised')}
+                                            </span>
+                                          </div>
+                                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                            <div className="rounded-md bg-amber-50 px-2 py-1.5">
+                                              <div className="font-semibold">
+                                                {isRu ? 'Куда размещать' : 'Where to post'}
+                                              </div>
+                                              <div className="mt-1 break-all text-[11px] leading-5 text-amber-900">
+                                                {supervisedTargetUrl || supervisedProfileHint || (isRu ? 'Ссылка на профиль не найдена' : 'Profile link is missing')}
+                                              </div>
+                                            </div>
+                                            <div className="rounded-md bg-amber-50 px-2 py-1.5">
+                                              <div className="font-semibold">
+                                                {isRu ? 'Что готово' : 'Ready assets'}
+                                              </div>
+                                              <div className="mt-1 text-[11px] leading-5 text-amber-900">
+                                                {isRu
+                                                  ? `текст: ${placementPacket.copy_ready ? 'готов' : 'нужен'} · шагов: ${Number(placementPacket.checklist_count || placementChecklist.length || 0)}`
+                                                  : `copy: ${placementPacket.copy_ready ? 'ready' : 'needed'} · steps: ${Number(placementPacket.checklist_count || placementChecklist.length || 0)}`}
+                                              </div>
+                                            </div>
+                                          </div>
+                                          {placementReadyChips.length > 0 ? (
+                                            <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                                              {placementReadyChips.map((chip) => (
+                                                <span key={`${post.id}:placement-chip:${chip}`} className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">
+                                                  {chip}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          ) : null}
+                                          {placementTaskId || placementOutboxId || placementLedgerId ? (
+                                            <div className="mt-2 grid gap-1 text-[11px] text-amber-900 sm:grid-cols-3">
+                                              {placementTaskId ? (
+                                                <div>
+                                                  <span className="font-semibold">task:</span>{' '}
+                                                  <span className="font-mono">{placementTaskId}</span>
+                                                </div>
+                                              ) : null}
+                                              {placementOutboxId ? (
+                                                <div>
+                                                  <span className="font-semibold">outbox:</span>{' '}
+                                                  <span className="font-mono">{placementOutboxId}</span>
+                                                </div>
+                                              ) : null}
+                                              {placementLedgerId ? (
+                                                <div>
+                                                  <span className="font-semibold">ledger:</span>{' '}
+                                                  <span className="font-mono">{placementLedgerId}</span>
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      ) : null}
                                       {supervisedHandoffState ? (
                                         <div className="mt-3 rounded-lg border border-amber-200 bg-white px-3 py-2 text-amber-950">
                                           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -10488,7 +11203,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                               </span>
                                             ) : (
                                               <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">
-                                                {isRu ? 'ручной fallback' : 'manual fallback'}
+                                                {isRu ? 'ручной режим' : 'manual fallback'}
                                               </span>
                                             )}
                                             {supervisedHandoffState.openclaw_task_requested ? (
@@ -10554,7 +11269,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       {supervisedManualInstruction || supervisedManualChecklist.length > 0 || supervisedCopyReadyText ? (
                                         <div className="mt-3 rounded-lg bg-white px-3 py-2 text-amber-950">
                                           <div className="font-semibold">
-                                            {isRu ? 'Ручной fallback без догадок' : 'Manual fallback without guessing'}
+                                            {isRu ? 'Ручной режим без догадок' : 'Manual fallback without guessing'}
                                           </div>
                                           {supervisedManualInstruction ? (
                                             <div className="mt-1 text-[11px] leading-5 text-amber-900">
@@ -10621,7 +11336,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       ) : null}
                                       {supervisedFallbackReasons.length > 0 ? (
                                         <div className="mt-1 text-[11px] text-amber-900">
-                                          {isRu ? 'fallback: ' : 'fallback: '}
+                                          {isRu ? 'ручной режим: ' : 'fallback: '}
                                           {supervisedFallbackReasons.join(', ')}
                                         </div>
                                       ) : null}
@@ -10841,7 +11556,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                             ? 'После подтверждения LocalOS подготовит контролируемое или ручное размещение; финальная публикация остаётся за человеком.'
                                             : 'After approval, LocalOS prepares supervised or manual placement; final publishing stays human-controlled.')
                                           : (isRu
-                                            ? 'После подтверждения можно поставить в расписание; API-публикация запустится только worker’ом и только по дате.'
+                                            ? 'После подтверждения можно поставить в расписание; API-публикация запустится только исполнителем и только по дате.'
                                             : 'After approval, you can queue it; API publishing starts only through the worker and only on schedule.')}
                                       </div>
                                     </div>
@@ -10983,7 +11698,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                             onClick={() => { void markSupervisedPostBlocked(post); }}
                                             disabled={postBusy}
                                           >
-                                            {isRu ? 'Нужен ручной fallback' : 'Manual fallback needed'}
+                                            {isRu ? 'Нужен ручной режим' : 'Manual fallback needed'}
                                           </Button>
                                         ) : null}
                                         <Button
@@ -11015,6 +11730,52 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                     ) : null}
                                     {canRecordResult ? (
                                       <div className="mt-1 flex w-full flex-col gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                                        {resultPacket ? (
+                                          <div
+                                            data-testid="social-result-collection-packet"
+                                            className="rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs leading-5 text-emerald-900"
+                                          >
+                                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                              <div>
+                                                <div className="font-semibold text-emerald-950">
+                                                  {isRu ? 'Результат публикации' : 'Post result'}
+                                                </div>
+                                                <div className="mt-1">
+                                                  {isRu
+                                                    ? String(resultPacket.owner_next_action_ru || 'Отметьте заявки, обращения или ранние сигналы.')
+                                                    : String(resultPacket.owner_next_action_en || 'Record leads, inquiries, or early signals.')}
+                                                </div>
+                                              </div>
+                                              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
+                                                {resultPacket.ready_for_recommendation
+                                                  ? (isRu ? 'есть данные для плана' : 'plan data ready')
+                                                  : (isRu ? 'нужен результат' : 'result needed')}
+                                              </span>
+                                            </div>
+                                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                              <div className="rounded-md bg-emerald-50 px-2 py-1.5">
+                                                <div className="font-semibold">
+                                                  {isRu ? 'Главная метрика' : 'Primary metric'}
+                                                </div>
+                                                <div className="mt-1 text-[11px] text-emerald-900">
+                                                  {isRu
+                                                    ? `заявки ${Number(resultPacket.leads || 0)} · обращения ${Number(resultPacket.inquiries || 0)}`
+                                                    : `leads ${Number(resultPacket.leads || 0)} · inquiries ${Number(resultPacket.inquiries || 0)}`}
+                                                </div>
+                                              </div>
+                                              <div className="rounded-md bg-emerald-50 px-2 py-1.5">
+                                                <div className="font-semibold">
+                                                  {isRu ? 'Ранние сигналы' : 'Early signals'}
+                                                </div>
+                                                <div className="mt-1 text-[11px] text-emerald-900">
+                                                  {isRu
+                                                    ? `комм. ${Number(resultPacket.comments || 0)} · репосты ${Number(resultPacket.shares || 0)} · клики ${Number(resultPacket.clicks || 0)} · лайки ${Number(resultPacket.likes || 0)} · просмотры ${Number(resultPacket.views || 0)}`
+                                                    : `comments ${Number(resultPacket.comments || 0)} · shares ${Number(resultPacket.shares || 0)} · clicks ${Number(resultPacket.clicks || 0)} · likes ${Number(resultPacket.likes || 0)} · views ${Number(resultPacket.views || 0)}`}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ) : null}
                                         <div className="text-xs leading-5 text-emerald-900">
                                           {isRu
                                             ? 'Отмечайте заявки и обращения в первую очередь: LocalOS считает их главным результатом и по ним предлагает изменения следующего плана. Лайки и просмотры - только ранний сигнал.'
@@ -11142,7 +11903,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               </div>
                               <div className="rounded-lg bg-slate-50 px-3 py-2">
                                 <div className="font-semibold text-slate-950">
-                                  2. {isRu ? 'Preview и approval' : 'Preview and approval'}
+                                  2. {isRu ? 'Предпросмотр и подтверждение' : 'Preview and approval'}
                                 </div>
                                 <div>
                                   {isRu
@@ -11156,7 +11917,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 </div>
                                 <div>
                                   {isRu
-                                    ? 'Только после approval можно поставить API-каналы в очередь; карты останутся контролируемыми или ручными.'
+                                    ? 'Только после подтверждения можно поставить API-каналы в расписание; карты останутся контролируемыми или ручными.'
                                     : 'Only after approval can API channels be queued; maps remain supervised/manual.'}
                                 </div>
                               </div>
@@ -11563,7 +12324,7 @@ function _socialOpenClawReadinessDetails(
       : 'Safe check: LocalOS publishes nothing and only checks OpenClaw readiness.',
     readiness.ready
       ? (isRu ? 'Следующий шаг: подготовить контролируемое размещение и проверить предпросмотр.' : 'Next step: prepare supervised placement and review the preview.')
-      : (isRu ? 'Следующий шаг: использовать ручной fallback или проверить настройки OpenClaw.' : 'Next step: use manual fallback or check OpenClaw settings.'),
+      : (isRu ? 'Следующий шаг: использовать ручной режим или проверить настройки OpenClaw.' : 'Next step: use manual fallback or check OpenClaw settings.'),
   ];
   if (readiness.browser_final_click_allowed === false || readiness.stop_before_final_publish) {
     details.push(
@@ -11593,14 +12354,14 @@ function _socialOpenClawReadinessDetails(
     );
     details.push(
       isRu
-        ? 'Стандартный receiver OpenClaw: /m2m/localos/callbacks'
+        ? 'Стандартный адрес обратной связи OpenClaw: /m2m/localos/callbacks'
         : 'Standard OpenClaw receiver: /m2m/localos/callbacks',
     );
   }
   if (!suggestedCallback && blockedCallbackReason === 'sandbox_bridge_private_host') {
     details.push(
       isRu
-        ? 'Текущий sandbox bridge не подходит для production callback; нужен доступный OpenClaw receiver.'
+        ? 'Текущий тестовый bridge не подходит для рабочего callback; нужен доступный адрес OpenClaw.'
         : 'The current sandbox bridge is not suitable for the production callback; use a reachable OpenClaw receiver.',
     );
   }
@@ -11682,7 +12443,7 @@ function _socialOpenClawOwnerCheckSummary(readiness: SocialOpenClawReadiness, is
   }
   if (readiness.ready && readiness.delivery_readiness && !readiness.delivery_readiness.ready) {
     return isRu
-      ? 'OpenClaw browser-use найден, но callback/outbox для задачи не готов: LocalOS сохранит ручной fallback.'
+      ? 'OpenClaw browser-use найден, но доставка задачи не готова: LocalOS сохранит ручной режим.'
       : 'OpenClaw browser-use is available, but callback/outbox delivery is not ready: LocalOS keeps manual fallback.';
   }
   if (readiness.provider_status === 'missing_catalog' || readiness.reason === 'openclaw_catalog_not_configured') {
@@ -11696,7 +12457,7 @@ function _socialOpenClawOwnerCheckSummary(readiness: SocialOpenClawReadiness, is
       : 'LocalOS could not verify OpenClaw: use manual placement until access is restored.';
   }
   return isRu
-    ? 'OpenClaw не подтверждён: для Яндекс/2ГИС будет показан ручной или контролируемый fallback.'
+    ? 'OpenClaw не подтверждён: для Яндекс/2ГИС будет показан ручной или контролируемый режим.'
     : 'OpenClaw is not confirmed: Yandex/2GIS will use manual or supervised fallback.';
 }
 
@@ -12215,6 +12976,14 @@ function _socialLearningConfidenceLabel(confidence: string, isRu: boolean): stri
   if (normalized === 'medium') return isRu ? 'среднее доверие' : 'medium confidence';
   if (normalized === 'low') return isRu ? 'данных мало' : 'low data';
   return isRu ? 'ждём факты' : 'waiting for facts';
+}
+
+function _socialLearningChecklistStatusLabel(status: string, isRu: boolean): string {
+  const normalized = String(status || '').trim();
+  if (normalized === 'done') return isRu ? 'готово' : 'done';
+  if (normalized === 'current') return isRu ? 'сейчас' : 'now';
+  if (normalized === 'attention') return isRu ? 'внимание' : 'attention';
+  return isRu ? 'позже' : 'later';
 }
 
 function _socialNextActionLabel(action: string, isRu: boolean): string {
