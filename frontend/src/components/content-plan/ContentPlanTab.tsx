@@ -5558,6 +5558,69 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           </div>
 
           <div
+            data-testid="social-owner-simple-goal"
+            className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4"
+          >
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">
+                  {isRu ? 'Цель сейчас' : 'Current goal'}
+                </div>
+                <div className="mt-1 text-lg font-semibold text-blue-950">
+                  {isRu
+                    ? 'Довести тему до публикации и результата'
+                    : 'Move a topic to publishing and results'}
+                </div>
+                <div className="mt-1 max-w-3xl text-sm leading-6 text-blue-900">
+                  {isRu
+                    ? 'Простой путь: подготовить посты из контент-плана, проверить тексты, подтвердить, поставить в расписание, закрыть Яндекс/2ГИС контролируемо и отметить заявки.'
+                    : 'Simple path: prepare posts from the content plan, review copy, approve, queue, finish Yandex/2GIS supervised placement, and record leads.'}
+                </div>
+              </div>
+              <Button
+                type="button"
+                onClick={runSocialPlanNextStep}
+                disabled={Boolean(bulkBusyAction) || Boolean(socialBusyAction) || Boolean(socialPlanNextStep.disabled)}
+                className="shrink-0 bg-blue-700 text-white hover:bg-blue-800"
+              >
+                {Boolean(bulkBusyAction) || Boolean(socialBusyAction)
+                  ? (isRu ? 'Выполняем...' : 'Working...')
+                  : (isRu ? socialPlanNextStep.ctaRu : socialPlanNextStep.ctaEn)}
+              </Button>
+            </div>
+            <div className="mt-3 grid gap-2 text-sm leading-6 md:grid-cols-3">
+              <div className="rounded-xl bg-white px-3 py-3 text-blue-900">
+                <div className="font-semibold text-blue-950">
+                  {isRu ? '1. Что делать первым' : '1. First action'}
+                </div>
+                <div className="mt-1">
+                  {isRu ? socialPlanNextStep.descriptionRu : socialPlanNextStep.descriptionEn}
+                </div>
+              </div>
+              <div className="rounded-xl bg-white px-3 py-3 text-blue-900">
+                <div className="font-semibold text-blue-950">
+                  {isRu ? '2. Что не произойдёт само' : '2. What will not happen silently'}
+                </div>
+                <div className="mt-1">
+                  {isRu
+                    ? 'Наружу ничего не уйдёт без предпросмотра, подтверждения и расписания. Финальный клик в Яндекс/2ГИС остаётся за человеком.'
+                    : 'Nothing goes external without preview, approval, and queueing. The final Yandex/2GIS click stays human-controlled.'}
+                </div>
+              </div>
+              <div className="rounded-xl bg-white px-3 py-3 text-blue-900">
+                <div className="font-semibold text-blue-950">
+                  {isRu ? '3. Как понять успех' : '3. Success signal'}
+                </div>
+                <div className="mt-1">
+                  {isRu
+                    ? 'Есть опубликованные посты, закрытые ручные задачи и отмеченные заявки/обращения. После этого LocalOS предлагает изменения следующего плана.'
+                    : 'Posts are published, manual tasks are closed, and leads/inquiries are recorded. Then LocalOS suggests next-plan changes.'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
             data-testid="social-quick-launch"
             className="mt-5 rounded-2xl border border-slate-900 bg-slate-950 px-4 py-4 text-white"
           >

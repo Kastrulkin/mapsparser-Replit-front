@@ -23,6 +23,13 @@ SOCIAL_POST_SERVICE = ROOT / "src" / "services" / "social_post_service.py"
 REQUIRED_COPY = {
     "main next action": "Следующий шаг публикаций",
     "overview quick launch": "Быстрый запуск публикаций",
+    "owner simple goal test id": "social-owner-simple-goal",
+    "owner simple goal heading": "Цель сейчас",
+    "owner simple goal first action": "1. Что делать первым",
+    "owner simple goal no silent publish": "2. Что не произойдёт само",
+    "owner simple goal success signal": "3. Как понять успех",
+    "owner simple goal final click": "Финальный клик в Яндекс/2ГИС остаётся за человеком",
+    "owner simple goal next plan": "LocalOS предлагает изменения следующего плана",
     "overview controlled placement": "LocalOS готовит контролируемое размещение",
     "overview openclaw readiness": "Готовность OpenClaw для Яндекс/2ГИС проверяется отдельно",
     "overview openclaw check action": "Проверить OpenClaw",
