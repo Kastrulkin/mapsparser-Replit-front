@@ -8300,6 +8300,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       <Button
                         type="button"
                         variant="outline"
+                        data-testid="social-check-worker-launch"
                         onClick={() => { void checkSocialLaunchPreflight(); }}
                         disabled={Boolean(bulkBusyAction) || Boolean(socialBusyAction) || !businessId}
                         className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
@@ -8308,6 +8309,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           ? (isRu ? 'Проверяем запуск...' : 'Checking launch...')
                           : (isRu ? 'Проверить запуск по расписанию' : 'Check worker launch')}
                       </Button>
+                      <div className="text-[11px] leading-4 text-slate-400">
+                        {isRu
+                          ? 'Безопасная проверка: ничего не публикует, только показывает первый цикл и блокеры.'
+                          : 'Safe check: publishes nothing, only shows the first cycle and blockers.'}
+                      </div>
                       <div className="grid grid-cols-3 gap-2 text-center text-[11px] text-slate-300">
                         <div className="rounded-xl bg-white/10 px-2 py-2">
                           <div className="text-sm font-semibold text-white">{socialReadinessSummary.apiReady}</div>

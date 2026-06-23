@@ -57,6 +57,8 @@ REQUIRED_COPY = {
     "overview first api blocker maps": "Яндекс/2ГИС только через контролируемое размещение или ручной режим",
     "schedule preview": "Проверить расписание",
     "worker launch preflight": "Проверить запуск по расписанию",
+    "worker launch preflight action test id": "social-check-worker-launch",
+    "worker launch preflight safe copy": "Безопасная проверка: ничего не публикует",
     "worker launch preflight result": "Проверка запуска по расписанию",
     "worker idle reason contract": "worker_idle_reason",
     "worker idle reason test id": "social-worker-idle-reason",
