@@ -4284,7 +4284,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
-  const previewSocialDispatch = async () => {
+  const previewSocialDispatch = async (scrollToPreview = false) => {
     setSocialBusyAction('dispatch-preview');
     setError('');
     setActionSummary(null);
@@ -4316,6 +4316,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         details_ru: dryRunMessageRu ? [dryRunMessageRu] : [],
         details_en: dryRunMessageEn ? [dryRunMessageEn] : [],
       });
+      if (scrollToPreview && typeof window !== 'undefined') {
+        window.setTimeout(() => {
+          document
+            .querySelector('[data-testid="social-dispatch-preview-panel"]')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 50);
+      }
     } catch (previewError) {
       const message = previewError instanceof Error ? previewError.message : (isRu ? 'Не удалось проверить расписание' : 'Could not preview schedule');
       setError(message);
@@ -8414,6 +8421,22 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       </Button>
                                     </div>
                                   ) : null}
+                                  {String(socialLaunchPreflight.worker_idle_reason.status || '') === 'has_due_queued_posts' ? (
+                                    <div className="mt-2">
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => { void previewSocialDispatch(true); }}
+                                        disabled={socialBusyAction === 'dispatch-preview'}
+                                        data-testid="social-open-due-dispatch-preview"
+                                      >
+                                        <Globe className="mr-2 h-4 w-4" />
+                                        {socialBusyAction === 'dispatch-preview'
+                                          ? (isRu ? 'Проверяем due...' : 'Checking due...')
+                                          : (isRu ? 'Проверить due-публикации' : 'Preview due dispatch')}
+                                      </Button>
+                                    </div>
+                                  ) : null}
                                 </div>
                                 <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white">
                                   {isRu
@@ -9462,7 +9485,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         </div>
                       ) : null}
                       {socialDispatchPreview ? (
-                        <div className="rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200">
+                        <div
+                          data-testid="social-dispatch-preview-panel"
+                          className="rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200"
+                        >
                           <div className="font-semibold text-white">
                             {isRu ? 'Проверка исполнителя' : 'Worker dry-run'}
                           </div>
