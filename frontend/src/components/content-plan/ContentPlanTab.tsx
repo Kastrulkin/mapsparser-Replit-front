@@ -918,6 +918,45 @@ type SocialChannelReadiness = {
   connection_checks?: SocialChannelConnectionCheck[];
 };
 
+type SocialFirstApiProofDossier = {
+  schema?: string;
+  status?: string;
+  ready?: boolean;
+  candidate_post_id?: string;
+  candidate_status?: string;
+  recommended_platform?: string;
+  recommended_platform_label?: string;
+  ready_api_channels?: Array<{
+    platform?: string;
+    platform_label?: string;
+    status?: string;
+  }>;
+  blocked_api_channels?: Array<{
+    platform?: string;
+    platform_label?: string;
+    status?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+    settings_path?: string;
+  }>;
+  provider_post_id?: string;
+  provider_post_url?: string;
+  external_publish_requires_approval?: boolean;
+  external_publish_performed?: boolean;
+  browser_final_click_allowed?: boolean;
+  maps_are_supervised_or_manual?: boolean;
+  primary_metric_ru?: string;
+  primary_metric_en?: string;
+  title_ru?: string;
+  title_en?: string;
+  summary_ru?: string;
+  summary_en?: string;
+  next_action_ru?: string;
+  next_action_en?: string;
+  steps_ru?: string[];
+  steps_en?: string[];
+};
+
 type SocialApiChannelPreflight = {
   platform: string;
   platform_label?: string;
@@ -1287,6 +1326,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialOpenClawReadiness, setSocialOpenClawReadiness] = useState<SocialOpenClawReadiness | null>(null);
   const [socialRecommendation, setSocialRecommendation] = useState<SocialRecommendationPayload | null>(null);
   const [socialGoalProgress, setSocialGoalProgress] = useState<SocialGoalProgress | null>(null);
+  const [socialFirstApiProofDossier, setSocialFirstApiProofDossier] = useState<SocialFirstApiProofDossier | null>(null);
   const [socialRecommendationApproved, setSocialRecommendationApproved] = useState(false);
   const [socialDispatchPreview, setSocialDispatchPreview] = useState<SocialDispatchPreview | null>(null);
   const [socialDispatchExecutionReport, setSocialDispatchExecutionReport] = useState<SocialDispatchExecutionReport | null>(null);
@@ -2674,6 +2714,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSocialGoalProgress(response.goal_progress && typeof response.goal_progress === 'object'
         ? response.goal_progress
         : null);
+      setSocialFirstApiProofDossier(response.first_api_proof_dossier && typeof response.first_api_proof_dossier === 'object'
+        ? response.first_api_proof_dossier
+        : null);
       setSocialOpenClawReadiness(response.openclaw_browser_readiness && typeof response.openclaw_browser_readiness === 'object'
         ? response.openclaw_browser_readiness
         : null);
@@ -2688,6 +2731,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSocialQueueGroups([]);
       setSocialChannelReadiness([]);
       setSocialGoalProgress(null);
+      setSocialFirstApiProofDossier(null);
       setSocialOpenClawReadiness(null);
       setSocialRecommendation(null);
       setSocialRecommendationApproved(false);
@@ -5233,6 +5277,67 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     ))}
                   </div>
                 </div>
+                {socialFirstApiProofDossier ? (
+                  <div
+                    data-testid="social-first-api-proof-dossier"
+                    data-schema="localos_social_first_api_proof_dossier_v1"
+                    className={[
+                      'mt-3 rounded-xl border px-3 py-3 text-xs leading-5',
+                      socialFirstApiProofDossier.ready
+                        ? 'border-emerald-300/30 bg-emerald-400/10 text-emerald-50'
+                        : 'border-sky-300/30 bg-sky-400/10 text-sky-50',
+                    ].join(' ')}
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="font-semibold text-white">
+                          {isRu ? socialFirstApiProofDossier.title_ru : socialFirstApiProofDossier.title_en}
+                        </div>
+                        <div className="mt-1 text-slate-200">
+                          {isRu ? socialFirstApiProofDossier.summary_ru : socialFirstApiProofDossier.summary_en}
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-white/10 px-2 py-1.5 text-[11px] font-semibold text-white">
+                        {isRu ? socialFirstApiProofDossier.primary_metric_ru : socialFirstApiProofDossier.primary_metric_en}
+                      </div>
+                    </div>
+                    <div className="mt-2 rounded-lg bg-white/10 px-2 py-2">
+                      <div className="font-semibold text-white">
+                        {isRu ? 'Следующий шаг: ' : 'Next step: '}
+                        {isRu ? socialFirstApiProofDossier.next_action_ru : socialFirstApiProofDossier.next_action_en}
+                      </div>
+                      {(
+                        isRu
+                          ? socialFirstApiProofDossier.steps_ru
+                          : socialFirstApiProofDossier.steps_en
+                      )?.length ? (
+                        <ol className="mt-2 space-y-1">
+                          {(
+                            isRu
+                              ? socialFirstApiProofDossier.steps_ru
+                              : socialFirstApiProofDossier.steps_en
+                          )?.slice(0, 3).map((step, index) => (
+                            <li key={`first-api-proof-dossier-step:${index}:${step}`} className="flex gap-1.5 text-slate-100">
+                              <span className="font-semibold text-white">{index + 1}.</span>
+                              <span>{step}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : null}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="rounded-full bg-white/10 px-2 py-0.5 font-medium text-slate-100">
+                        {isRu ? 'approval обязателен' : 'approval required'}
+                      </span>
+                      <span className="rounded-full bg-white/10 px-2 py-0.5 font-medium text-slate-100">
+                        {isRu ? 'публикация только через queue/due' : 'publish only through queue/due'}
+                      </span>
+                      <span className="rounded-full bg-white/10 px-2 py-0.5 font-medium text-slate-100">
+                        {isRu ? 'карты без финального автоклика' : 'maps without final auto-click'}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
                 <SocialLaunchChecklist
                   isRu={isRu}
                   stages={socialLaunchStages}

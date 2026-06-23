@@ -35,6 +35,7 @@ from services.social_post_service import (
     _social_publish_evidence,
     _social_learning_readiness,
     _social_goal_progress,
+    _social_first_api_proof_dossier,
     _social_openclaw_browser_readiness,
     _api_preflight_blocked_due_posts,
     _status_after_social_text_edit,
@@ -3095,6 +3096,53 @@ def test_social_goal_progress_maps_owner_loop_from_plan_to_learning():
     assert stages["execution"]["status"] == "current"
     assert stages["learning"]["status"] == "done"
     assert "Заявки и обращения" in progress["primary_metric_ru"]
+
+
+def test_social_first_api_proof_dossier_guides_owner_from_setup_to_proof():
+    no_channel = _social_first_api_proof_dossier(
+        [],
+        [_channel_readiness("telegram", "api", False, "missing_keys")],
+        plan_item_count=2,
+    )
+    review = _social_first_api_proof_dossier(
+        [{"id": "post-review", "platform": "telegram", "status": "needs_review"}],
+        [_channel_readiness("telegram", "api", True, "ready")],
+        plan_item_count=2,
+    )
+    queued = _social_first_api_proof_dossier(
+        [{"id": "post-queued", "platform": "vk", "status": "queued"}],
+        [_channel_readiness("vk", "api", True, "ready")],
+        plan_item_count=2,
+    )
+    proven = _social_first_api_proof_dossier(
+        [
+            {
+                "id": "post-proven",
+                "platform": "telegram",
+                "status": "published",
+                "provider_post_url": "https://t.me/channel/10",
+            }
+        ],
+        [_channel_readiness("telegram", "api", True, "ready")],
+        plan_item_count=2,
+    )
+
+    assert no_channel["schema"] == "localos_social_first_api_proof_dossier_v1"
+    assert no_channel["status"] == "connect_first_api_channel"
+    assert no_channel["external_publish_requires_approval"] is True
+    assert no_channel["browser_final_click_allowed"] is False
+    assert "Telegram" in no_channel["summary_ru"]
+    assert review["status"] == "review_and_approve"
+    assert review["candidate_post_id"] == "post-review"
+    assert "Подтвердите" in review["steps_ru"][2]
+    assert queued["status"] == "wait_for_worker_or_run_once"
+    assert queued["candidate_post_id"] == "post-queued"
+    assert "provider_post_id/provider_post_url" in queued["steps_ru"][2]
+    assert proven["status"] == "proof_complete"
+    assert proven["ready"] is True
+    assert proven["provider_post_url"] == "https://t.me/channel/10"
+    assert "реакции/заявки" in proven["next_action_ru"]
+    assert proven["primary_metric_ru"] == "Заявки и обращения"
 
 
 def test_social_launch_preflight_blocks_due_api_posts_when_live_preflight_fails(monkeypatch):

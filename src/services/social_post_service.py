@@ -228,6 +228,7 @@ def list_social_posts_for_plan(user_id: str, plan_id: str) -> dict[str, Any]:
         )
         posts = [_serialize_social_post(cursor, row) for row in cursor.fetchall() or []]
         plan_item_count = _content_plan_item_count(cursor, plan_id)
+        channel_readiness = _build_channel_readiness(cursor, str(plan.get("business_id") or ""))
         return {
             "posts": posts,
             "summary": _summary_for_posts(posts),
@@ -235,7 +236,8 @@ def list_social_posts_for_plan(user_id: str, plan_id: str) -> dict[str, Any]:
             "recommendation": _build_plan_recommendation(posts),
             "learning_readiness": _social_learning_readiness(posts),
             "goal_progress": _social_goal_progress(posts, plan_item_count),
-            "channel_readiness": _build_channel_readiness(cursor, str(plan.get("business_id") or "")),
+            "channel_readiness": channel_readiness,
+            "first_api_proof_dossier": _social_first_api_proof_dossier(posts, channel_readiness, plan_item_count),
             "openclaw_browser_readiness": _social_openclaw_browser_readiness(),
         }
     finally:
@@ -6853,6 +6855,320 @@ def _summary_for_posts(posts: list[dict[str, Any]]) -> dict[str, Any]:
         "published": by_status.get("published", 0),
         "failed": by_status.get("failed", 0),
     }
+
+
+def _social_first_api_proof_dossier(
+    posts: list[dict[str, Any]],
+    channel_readiness: list[dict[str, Any]],
+    plan_item_count: int = 0,
+) -> dict[str, Any]:
+    api_channels = [
+        item for item in channel_readiness
+        if str(item.get("publish_mode") or "").strip() == "api"
+    ]
+    ready_channels = [item for item in api_channels if bool(item.get("ready"))]
+    blocked_channels = [item for item in api_channels if not bool(item.get("ready"))]
+    api_posts = [
+        post for post in posts
+        if str(post.get("platform") or "").strip() in API_PLATFORMS
+    ]
+    published_with_proof = [
+        post for post in api_posts
+        if str(post.get("status") or "").strip() == "published"
+        and (
+            str(post.get("provider_post_id") or "").strip()
+            or str(post.get("provider_post_url") or "").strip()
+        )
+    ]
+    queued_posts = [post for post in api_posts if str(post.get("status") or "").strip() == "queued"]
+    approved_posts = [post for post in api_posts if str(post.get("status") or "").strip() == "approved"]
+    review_posts = [
+        post for post in api_posts
+        if str(post.get("status") or "").strip() in {"draft", "needs_review"}
+    ]
+    failed_or_manual_posts = [
+        post for post in api_posts
+        if str(post.get("status") or "").strip() in {"failed", "needs_manual_publish"}
+    ]
+
+    candidate: dict[str, Any] = {}
+    if published_with_proof:
+        status = "proof_complete"
+        candidate = published_with_proof[0]
+    elif queued_posts:
+        status = "wait_for_worker_or_run_once"
+        candidate = queued_posts[0]
+    elif approved_posts:
+        status = "queue_approved_post"
+        candidate = approved_posts[0]
+    elif review_posts:
+        status = "review_and_approve"
+        candidate = review_posts[0]
+    elif failed_or_manual_posts:
+        status = "fix_or_manual_fallback"
+        candidate = failed_or_manual_posts[0]
+    elif ready_channels and int(plan_item_count or 0) > 0:
+        status = "prepare_first_post"
+    elif int(plan_item_count or 0) > 0:
+        status = "connect_first_api_channel"
+    else:
+        status = "create_content_plan"
+
+    recommended_channel = ready_channels[0] if ready_channels else (blocked_channels[0] if blocked_channels else {})
+    platform = str(candidate.get("platform") or recommended_channel.get("platform") or "").strip()
+    label = str(
+        candidate.get("platform_label")
+        or recommended_channel.get("platform_label")
+        or platform_label(platform)
+        or "API"
+    ).strip()
+    provider_post_id = str(candidate.get("provider_post_id") or "").strip()
+    provider_post_url = str(candidate.get("provider_post_url") or "").strip()
+
+    return {
+        "schema": "localos_social_first_api_proof_dossier_v1",
+        "status": status,
+        "ready": status == "proof_complete",
+        "candidate_post_id": str(candidate.get("id") or "").strip(),
+        "candidate_status": str(candidate.get("status") or "").strip(),
+        "recommended_platform": platform,
+        "recommended_platform_label": label,
+        "ready_api_channels": [
+            {
+                "platform": str(item.get("platform") or "").strip(),
+                "platform_label": str(item.get("platform_label") or platform_label(str(item.get("platform") or ""))).strip(),
+                "status": str(item.get("status") or "ready").strip(),
+            }
+            for item in ready_channels
+        ],
+        "blocked_api_channels": [
+            {
+                "platform": str(item.get("platform") or "").strip(),
+                "platform_label": str(item.get("platform_label") or platform_label(str(item.get("platform") or ""))).strip(),
+                "status": str(item.get("status") or "needs_attention").strip(),
+                "next_action_ru": str(item.get("next_action_ru") or "").strip(),
+                "next_action_en": str(item.get("next_action_en") or "").strip(),
+                "settings_path": str(item.get("settings_path") or _api_preflight_settings_path(str(item.get("platform") or ""))).strip(),
+            }
+            for item in blocked_channels
+        ],
+        "provider_post_id": provider_post_id,
+        "provider_post_url": provider_post_url,
+        "external_publish_requires_approval": True,
+        "external_publish_performed": False,
+        "browser_final_click_allowed": False,
+        "maps_are_supervised_or_manual": True,
+        "primary_metric_ru": "Заявки и обращения",
+        "primary_metric_en": "Leads and inquiries",
+        "title_ru": _social_first_api_proof_dossier_title(status, True),
+        "title_en": _social_first_api_proof_dossier_title(status, False),
+        "summary_ru": _social_first_api_proof_dossier_summary(status, label, candidate, True),
+        "summary_en": _social_first_api_proof_dossier_summary(status, label, candidate, False),
+        "next_action_ru": _social_first_api_proof_dossier_next_action(status, label, recommended_channel, True),
+        "next_action_en": _social_first_api_proof_dossier_next_action(status, label, recommended_channel, False),
+        "steps_ru": _social_first_api_proof_dossier_steps(status, label, True),
+        "steps_en": _social_first_api_proof_dossier_steps(status, label, False),
+    }
+
+
+def _social_first_api_proof_dossier_title(status: str, is_ru: bool) -> str:
+    if status == "proof_complete":
+        return "Первый API-proof готов" if is_ru else "First API proof is ready"
+    if status == "wait_for_worker_or_run_once":
+        return "Первый API-пост ждёт worker" if is_ru else "First API post is waiting for the worker"
+    if status == "queue_approved_post":
+        return "Утверждённый API-пост нужно поставить в расписание" if is_ru else "Approved API post needs queueing"
+    if status == "review_and_approve":
+        return "Первый API-пост нужно проверить" if is_ru else "First API post needs review"
+    if status == "fix_or_manual_fallback":
+        return "Первый API-пост требует исправления" if is_ru else "First API post needs recovery"
+    if status == "prepare_first_post":
+        return "Готов канал для первого API-поста" if is_ru else "A channel is ready for the first API post"
+    if status == "connect_first_api_channel":
+        return "Сначала подключите API-канал" if is_ru else "Connect an API channel first"
+    return "Сначала нужен контент-план" if is_ru else "Create a content plan first"
+
+
+def _social_first_api_proof_dossier_summary(
+    status: str,
+    label: str,
+    candidate: dict[str, Any],
+    is_ru: bool,
+) -> str:
+    if status == "proof_complete":
+        proof = str(candidate.get("provider_post_url") or candidate.get("provider_post_id") or "").strip()
+        return (
+            f"{label} уже дал proof публикации: {proof}. Теперь можно собирать реакции и заявки."
+            if is_ru
+            else f"{label} already has publish proof: {proof}. Now collect reactions and leads."
+        )
+    if status == "wait_for_worker_or_run_once":
+        return (
+            f"{label}: пост уже в queue. Следующий безопасный шаг — scoped worker или ручной run-once из LocalOS."
+            if is_ru
+            else f"{label}: the post is queued. The next safe step is a scoped worker cycle or manual LocalOS run-once."
+        )
+    if status == "queue_approved_post":
+        return (
+            f"{label}: текст подтверждён, но ещё не поставлен в расписание."
+            if is_ru
+            else f"{label}: copy is approved but not queued yet."
+        )
+    if status == "review_and_approve":
+        return (
+            f"{label}: есть draft для проверки. Approval не публикует наружу."
+            if is_ru
+            else f"{label}: a draft is ready for review. Approval does not publish externally."
+        )
+    if status == "fix_or_manual_fallback":
+        return (
+            f"{label}: пост заблокирован ошибкой или подключением. Исправьте канал или используйте ручной fallback."
+            if is_ru
+            else f"{label}: the post is blocked by an error or connection issue. Fix the channel or use manual fallback."
+        )
+    if status == "prepare_first_post":
+        return (
+            f"{label} готов к первому proof: возьмите ближайшую тему плана и подготовьте канал."
+            if is_ru
+            else f"{label} is ready for the first proof: take the nearest plan topic and prepare the channel."
+        )
+    if status == "connect_first_api_channel":
+        return (
+            "План есть, но ни один API-канал ещё не готов. Быстрее всего начать с Telegram или VK."
+            if is_ru
+            else "A plan exists, but no API channel is ready yet. Telegram or VK is the fastest start."
+        )
+    return (
+        "Откройте или создайте контент-план, затем подготовьте посты по каналам."
+        if is_ru
+        else "Open or create a content plan, then prepare channel posts."
+    )
+
+
+def _social_first_api_proof_dossier_next_action(
+    status: str,
+    label: str,
+    recommended_channel: dict[str, Any],
+    is_ru: bool,
+) -> str:
+    setup_action = str(recommended_channel.get("next_action_ru" if is_ru else "next_action_en") or "").strip()
+    if status == "proof_complete":
+        return (
+            "Соберите реакции/заявки и предложите корректировку следующего плана."
+            if is_ru
+            else "Collect reactions/leads and suggest the next plan adjustment."
+        )
+    if status == "wait_for_worker_or_run_once":
+        return (
+            "Проверьте launch preflight, затем запустите scoped worker/run-once с явным подтверждением."
+            if is_ru
+            else "Check launch preflight, then run the scoped worker/run-once with explicit confirmation."
+        )
+    if status == "queue_approved_post":
+        return "Нажмите “Поставить в расписание” для этого API-поста." if is_ru else "Click Queue on schedule for this API post."
+    if status == "review_and_approve":
+        return "Откройте preview, сохраните правки и нажмите “Подтвердить”." if is_ru else "Open preview, save edits, and click Approve."
+    if status == "fix_or_manual_fallback":
+        return (
+            "Откройте настройку канала, повторите live API-проверку или отметьте ручной fallback."
+            if is_ru
+            else "Open channel setup, rerun live API preflight, or mark manual fallback."
+        )
+    if status == "prepare_first_post":
+        return (
+            f"Подготовьте первый пост для {label}, затем пройдите preview → approval → queue."
+            if is_ru
+            else f"Prepare the first {label} post, then go through preview → approval → queue."
+        )
+    if status == "connect_first_api_channel":
+        return setup_action or (
+            "Подключите Telegram или VK и повторите live API-проверку."
+            if is_ru
+            else "Connect Telegram or VK and rerun live API preflight."
+        )
+    return "Создайте контент-план на неделю." if is_ru else "Create a weekly content plan."
+
+
+def _social_first_api_proof_dossier_steps(status: str, label: str, is_ru: bool) -> list[str]:
+    if status == "proof_complete":
+        return [
+            "Проверьте provider_post_id/provider_post_url.",
+            "Соберите реакции и отметьте заявки/обращения.",
+            "Предложите изменения следующего плана, но применяйте только после approval.",
+        ] if is_ru else [
+            "Check provider_post_id/provider_post_url.",
+            "Collect reactions and mark leads/inquiries.",
+            "Suggest next-plan changes, but apply only after approval.",
+        ]
+    if status == "wait_for_worker_or_run_once":
+        return [
+            "Проверьте, что post approved, queued и due.",
+            "Запустите scoped worker/run-once только после явного подтверждения.",
+            "После публикации проверьте provider_post_id/provider_post_url.",
+        ] if is_ru else [
+            "Check that the post is approved, queued, and due.",
+            "Run scoped worker/run-once only after explicit confirmation.",
+            "After publishing, check provider_post_id/provider_post_url.",
+        ]
+    if status == "queue_approved_post":
+        return [
+            "Откройте post preview.",
+            "Проверьте дату и канал.",
+            "Поставьте в расписание; это ещё не отправляет наружу до due worker.",
+        ] if is_ru else [
+            "Open the post preview.",
+            "Check date and channel.",
+            "Queue it; this still does not send externally until the due worker cycle.",
+        ]
+    if status == "review_and_approve":
+        return [
+            "Проверьте platform-specific текст.",
+            "Сохраните правки.",
+            "Подтвердите текст; approval отделён от публикации.",
+        ] if is_ru else [
+            "Review platform-specific copy.",
+            "Save edits.",
+            "Approve copy; approval is separate from publishing.",
+        ]
+    if status == "fix_or_manual_fallback":
+        return [
+            "Откройте readiness канала.",
+            "Исправьте ключи/права или переведите в ручной fallback.",
+            "Повторите live API-проверку без публикации.",
+        ] if is_ru else [
+            "Open channel readiness.",
+            "Fix keys/permissions or move to manual fallback.",
+            "Rerun live API preflight without publishing.",
+        ]
+    if status == "prepare_first_post":
+        return [
+            f"Выберите ближайшую тему и канал {label}.",
+            "Создайте draft и проверьте preview.",
+            "Дальше: approval → queue → due worker proof.",
+        ] if is_ru else [
+            f"Choose the nearest topic and {label} channel.",
+            "Create a draft and review preview.",
+            "Then: approval → queue → due worker proof.",
+        ]
+    if status == "connect_first_api_channel":
+        return [
+            "Подключите Telegram или VK.",
+            "Запустите live API-проверку без публикации.",
+            "Когда канал ready, подготовьте один пост из плана.",
+        ] if is_ru else [
+            "Connect Telegram or VK.",
+            "Run live API preflight without publishing.",
+            "When the channel is ready, prepare one post from the plan.",
+        ]
+    return [
+        "Создайте недельный контент-план.",
+        "Подготовьте каналы для первой темы.",
+        "Начните с Telegram/VK для первого API-proof.",
+    ] if is_ru else [
+        "Create a weekly content plan.",
+        "Prepare channels for the first topic.",
+        "Start with Telegram/VK for the first API proof.",
+    ]
 
 
 def _social_goal_progress(posts: list[dict[str, Any]], plan_item_count: int = 0) -> dict[str, Any]:
