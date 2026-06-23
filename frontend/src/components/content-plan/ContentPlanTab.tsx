@@ -5165,6 +5165,74 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     ) : null}
                   </div>
                 </div>
+                <div
+                  data-testid="social-owner-publishing-path"
+                  className="mt-3 rounded-xl border border-white/10 bg-white/10 px-3 py-3"
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                        {isRu ? 'Маршрут поста' : 'Post path'}
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-white">
+                        {isRu
+                          ? 'Подготовить, проверить, подтвердить и только потом исполнить'
+                          : 'Prepare, review, approve, then execute'}
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-white/10 px-2 py-1.5 text-xs font-semibold text-emerald-100">
+                      {isRu ? 'Финальный клик на картах — за человеком' : 'Map final click stays human'}
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {[
+                      {
+                        labelRu: '1. Подготовить каналы',
+                        labelEn: '1. Prepare channels',
+                        detailRu: 'Из темы создаются тексты для карт и соцсетей.',
+                        detailEn: 'A plan topic becomes map and social drafts.',
+                      },
+                      {
+                        labelRu: '2. Проверить тексты',
+                        labelEn: '2. Review drafts',
+                        detailRu: 'Preview показывает канал, текст, дату и ограничения.',
+                        detailEn: 'Preview shows channel, copy, date, and limits.',
+                      },
+                      {
+                        labelRu: '3. Подтвердить',
+                        labelEn: '3. Approve',
+                        detailRu: 'Approval фиксирует согласие, но ещё ничего не публикует.',
+                        detailEn: 'Approval records consent and still publishes nothing.',
+                      },
+                      {
+                        labelRu: '4. Поставить в расписание',
+                        labelEn: '4. Queue on schedule',
+                        detailRu: 'Worker сможет исполнить только approved и due API-посты.',
+                        detailEn: 'The worker can execute only approved due API posts.',
+                      },
+                      {
+                        labelRu: '5. Контролируемое размещение',
+                        labelEn: '5. Supervised placement',
+                        detailRu: 'Яндекс/2ГИС получают задачу с preview, без тихого автоклика.',
+                        detailEn: 'Yandex/2GIS get a preview task, without hidden auto-clicks.',
+                      },
+                      {
+                        labelRu: '6. Сбор реакций и заявок',
+                        labelEn: '6. Collect results',
+                        detailRu: 'Главный сигнал для следующего плана — заявки и обращения.',
+                        detailEn: 'Leads and inquiries are the main signal for the next plan.',
+                      },
+                    ].map((step) => (
+                      <div
+                        key={isRu ? step.labelRu : step.labelEn}
+                        className="rounded-lg bg-slate-950/50 px-3 py-2 text-xs leading-5 text-slate-300"
+                      >
+                        <div className="font-semibold text-white">{isRu ? step.labelRu : step.labelEn}</div>
+                        <div className="mt-1">{isRu ? step.detailRu : step.detailEn}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <SocialLaunchChecklist
                   isRu={isRu}
                   stages={socialLaunchStages}
