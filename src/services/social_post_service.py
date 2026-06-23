@@ -6769,6 +6769,8 @@ def _api_channel_preflight_result(
         "publish_mode": "api",
         "ready": bool(ready),
         "status": str(status or "").strip(),
+        "settings_path": _channel_readiness_settings_path(platform),
+        "missing_fields": _channel_readiness_missing_fields(platform, status),
         "message_ru": str(message_ru or "").strip(),
         "message_en": str(message_en or "").strip(),
         "connection_checks": checks,

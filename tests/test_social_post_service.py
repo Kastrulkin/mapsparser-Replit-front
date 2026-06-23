@@ -2228,6 +2228,60 @@ def test_api_channel_preflight_covers_all_api_channels_without_publish(monkeypat
     assert result["external_publish_performed"] is False
 
 
+def test_api_channel_preflight_result_exposes_setup_path_and_missing_fields():
+    telegram = social_post_service._api_channel_preflight_result(
+        "telegram",
+        False,
+        "missing_keys",
+        [],
+        "missing",
+        "missing",
+    )
+    vk = social_post_service._api_channel_preflight_result(
+        "vk",
+        False,
+        "missing_permissions",
+        [],
+        "missing",
+        "missing",
+    )
+    google = social_post_service._api_channel_preflight_result(
+        "google_business",
+        False,
+        "missing_binding",
+        [],
+        "missing",
+        "missing",
+    )
+    instagram = social_post_service._api_channel_preflight_result(
+        "instagram",
+        False,
+        "missing_connection",
+        [],
+        "missing",
+        "missing",
+    )
+    facebook = social_post_service._api_channel_preflight_result(
+        "facebook",
+        False,
+        "missing_permissions",
+        [],
+        "missing",
+        "missing",
+    )
+
+    assert telegram["settings_path"] == "/dashboard/settings?focus=telegram"
+    assert telegram["missing_fields"] == ["telegram_bot_token", "telegram_chat_id"]
+    assert vk["settings_path"] == "/dashboard/settings?focus=vk"
+    assert vk["missing_fields"] == ["vk_access_token.wall_post_scope"]
+    assert google["settings_path"] == "/dashboard/settings?focus=google_business"
+    assert google["missing_fields"] == ["google_business_account", "google_business_location"]
+    assert instagram["settings_path"] == "/dashboard/settings?focus=instagram"
+    assert "instagram_business_account" in instagram["missing_fields"]
+    assert facebook["settings_path"] == "/dashboard/settings?focus=facebook"
+    assert facebook["missing_fields"] == ["meta_permissions.pages_manage_posts"]
+
+
 def test_google_business_api_channel_preflight_requires_location(monkeypatch):
     monkeypatch.setattr(
         social_post_service,
