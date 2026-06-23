@@ -580,6 +580,7 @@ def _social_first_cycle_launch_gate(
         "requires_human_confirmation": True,
         "dry_run_completed": True,
         "external_publish_requires_approval": True,
+        "external_publish_confirmation_phrase": _social_external_publish_confirmation_phrase(),
         "browser_final_click_allowed": False,
         "maps_are_supervised_or_manual": True,
         "due_posts": int(due_count or 0),
@@ -2836,6 +2837,7 @@ def run_scoped_social_dispatch_once(
     business_id: str,
     batch_size: int = 10,
     approved: bool = False,
+    approval_text: str = "",
 ) -> dict[str, Any]:
     if not approved:
         raise PermissionError("Для запуска первого цикла публикаций нужно явное подтверждение")
@@ -2855,6 +2857,10 @@ def run_scoped_social_dispatch_once(
         raise PermissionError("Есть due-посты вне доступа текущего пользователя; проверьте business scope")
     if int(summary.get("api_preflight_blocked_due_posts") or 0) > 0:
         raise PermissionError("Live API-preflight нашёл неготовый канал; исправьте ключи/права или переведите пост в ручной fallback")
+    api_due_posts = int(summary.get("api_due_posts") or launch_gate.get("api_posts") or 0)
+    if api_due_posts > 0 and not _social_external_publish_confirmation_matches(approval_text):
+        phrase = _social_external_publish_confirmation_phrase()
+        raise PermissionError(f"Для API-публикации подтвердите внешний запуск фразой: {phrase}")
     dispatch_result = dispatch_due_social_posts(
         batch_size=clean_batch_size,
         business_id=normalized_business_id,
@@ -2868,11 +2874,20 @@ def run_scoped_social_dispatch_once(
         "dispatch_result": dispatch_result,
         "execution_report": execution_report,
         "external_publish_only_after_approval": True,
+        "external_publish_confirmation_phrase": _social_external_publish_confirmation_phrase() if api_due_posts > 0 else "",
         "browser_final_click_allowed": False,
         "maps_are_supervised_or_manual": True,
         "message_ru": _social_dispatch_once_message(dispatch_result, True),
         "message_en": _social_dispatch_once_message(dispatch_result, False),
     }
+
+
+def _social_external_publish_confirmation_phrase() -> str:
+    return "ПУБЛИКУЮ"
+
+
+def _social_external_publish_confirmation_matches(value: str) -> bool:
+    return str(value or "").strip().upper() == _social_external_publish_confirmation_phrase()
 
 
 def run_scoped_social_metrics_once(

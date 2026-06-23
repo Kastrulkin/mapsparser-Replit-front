@@ -315,11 +315,12 @@ def test_social_post_dispatch_run_once_runs_scoped_first_cycle(monkeypatch):
     monkeypatch.setattr(social_posts_api, "_require_auth", lambda: ({"user_id": "user-1"}, None))
     captured = {}
 
-    def fake_run_once(user_id, business_id, batch_size=10, approved=False):
+    def fake_run_once(user_id, business_id, batch_size=10, approved=False, approval_text=""):
         captured["user_id"] = user_id
         captured["business_id"] = business_id
         captured["batch_size"] = batch_size
         captured["approved"] = approved
+        captured["approval_text"] = approval_text
         return {
             "business_id": business_id,
             "approved": approved,
@@ -338,7 +339,7 @@ def test_social_post_dispatch_run_once_runs_scoped_first_cycle(monkeypatch):
 
     response = app.test_client().post(
         "/api/social-posts/dispatch/run-once",
-        json={"business_id": "biz-1", "batch_size": 500, "approved": True},
+        json={"business_id": "biz-1", "batch_size": 500, "approved": True, "approval_text": "ПУБЛИКУЮ"},
     )
 
     assert response.status_code == 200
@@ -346,7 +347,13 @@ def test_social_post_dispatch_run_once_runs_scoped_first_cycle(monkeypatch):
     assert payload["success"] is True
     assert payload["dispatch_result"]["published"] == 1
     assert payload["browser_final_click_allowed"] is False
-    assert captured == {"user_id": "user-1", "business_id": "biz-1", "batch_size": 50, "approved": True}
+    assert captured == {
+        "user_id": "user-1",
+        "business_id": "biz-1",
+        "batch_size": 50,
+        "approved": True,
+        "approval_text": "ПУБЛИКУЮ",
+    }
 
 
 def test_social_post_metrics_run_once_requires_explicit_approval(monkeypatch):

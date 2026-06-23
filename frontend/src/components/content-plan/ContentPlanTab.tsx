@@ -705,6 +705,7 @@ type SocialLaunchPreflight = {
     requires_human_confirmation?: boolean;
     dry_run_completed?: boolean;
     external_publish_requires_approval?: boolean;
+    external_publish_confirmation_phrase?: string;
     browser_final_click_allowed?: boolean;
     maps_are_supervised_or_manual?: boolean;
     due_posts?: number;
@@ -4037,13 +4038,35 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
   const runSocialDispatchOnce = async () => {
     if (!businessId) return;
+    const apiDuePosts = Number(
+      socialLaunchPreflight?.summary?.api_due_posts
+      ?? socialLaunchPreflight?.launch_gate?.api_posts
+      ?? socialDispatchPreview?.readiness?.external_publish_count
+      ?? 0
+    );
+    const externalPublishPhrase = String(
+      socialLaunchPreflight?.launch_gate?.external_publish_confirmation_phrase
+      || 'ПУБЛИКУЮ'
+    );
+    let approvalText = '';
     if (typeof window !== 'undefined') {
-      const confirmed = window.confirm(
-        isRu
-          ? 'Запустить один scoped цикл публикаций для текущего бизнеса? API-каналы могут быть опубликованы, если посты уже утверждены и стоят в расписании. Яндекс/2ГИС перейдут в контролируемое или ручное размещение без финального клика.'
-          : 'Run one scoped publishing cycle for the current business? API channels may publish if posts are already approved and queued. Yandex/2GIS will move to supervised placement without the final click.'
-      );
-      if (!confirmed) return;
+      if (apiDuePosts > 0) {
+        const typed = window.prompt(
+          isRu
+            ? `Этот запуск может опубликовать API-посты: ${apiDuePosts}. Чтобы подтвердить внешний publish, введите: ${externalPublishPhrase}`
+            : `This run may publish API posts: ${apiDuePosts}. To confirm external publishing, type: ${externalPublishPhrase}`,
+          ''
+        );
+        if (typed === null) return;
+        approvalText = typed;
+      } else {
+        const confirmed = window.confirm(
+          isRu
+            ? 'Запустить один scoped цикл для текущего бизнеса? Яндекс/2ГИС перейдут в контролируемое или ручное размещение без финального клика.'
+            : 'Run one scoped cycle for the current business? Yandex/2GIS will move to supervised placement without the final click.'
+        );
+        if (!confirmed) return;
+      }
     }
     setSocialBusyAction('dispatch-run-once');
     setError('');
@@ -4051,7 +4074,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     try {
       const response = await newAuth.makeRequest('/social-posts/dispatch/run-once', {
         method: 'POST',
-        body: JSON.stringify({ business_id: businessId, batch_size: 10, approved: true }),
+        body: JSON.stringify({
+          business_id: businessId,
+          batch_size: 10,
+          approved: true,
+          approval_text: approvalText,
+        }),
       });
       const result = response.dispatch_result && typeof response.dispatch_result === 'object'
         ? response.dispatch_result

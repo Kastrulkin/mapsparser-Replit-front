@@ -478,6 +478,7 @@ def social_posts_dispatch_run_once():
             business_id=str(data.get("business_id") or ""),
             batch_size=_bounded_int_payload(data, "batch_size", 10, 1, 50),
             approved=bool(data.get("approved")),
+            approval_text=str(data.get("approval_text") or ""),
         )
         return jsonify({"success": True, **payload})
     except PermissionError:

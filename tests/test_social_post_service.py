@@ -1642,6 +1642,71 @@ def test_run_scoped_social_dispatch_once_runs_only_requested_business(monkeypatc
     assert captured["dispatch"] == {"business_id": "biz-1", "batch_size": 50}
 
 
+def test_run_scoped_social_dispatch_once_requires_phrase_for_api_publish(monkeypatch):
+    def fake_preflight(user_id, business_id, batch_size=10):
+        return {
+            "business_id": business_id,
+            "launch_gate": {"allowed": True, "api_posts": 1},
+            "summary": {
+                "due_posts": 1,
+                "api_due_posts": 1,
+                "skipped_no_access": 0,
+                "api_preflight_blocked_due_posts": 0,
+            },
+        }
+
+    def fail_dispatch(*args, **kwargs):
+        raise AssertionError("dispatch must not run without typed external publish confirmation")
+
+    monkeypatch.setattr(social_post_service, "get_social_launch_preflight", fake_preflight)
+    monkeypatch.setattr(social_post_service, "dispatch_due_social_posts", fail_dispatch)
+
+    error = None
+    try:
+        run_scoped_social_dispatch_once("user-1", "biz-1", approved=True, approval_text="")
+    except PermissionError:
+        error = sys.exc_info()[1]
+
+    assert error is not None
+    assert "ПУБЛИКУЮ" in str(error)
+
+
+def test_run_scoped_social_dispatch_once_accepts_phrase_for_api_publish(monkeypatch):
+    captured = {}
+
+    def fake_preflight(user_id, business_id, batch_size=10):
+        return {
+            "business_id": business_id,
+            "launch_gate": {"allowed": True, "api_posts": 1},
+            "summary": {
+                "due_posts": 1,
+                "api_due_posts": 1,
+                "skipped_no_access": 0,
+                "api_preflight_blocked_due_posts": 0,
+            },
+        }
+
+    def fake_dispatch(batch_size=20, business_id=""):
+        captured["dispatch"] = {"business_id": business_id, "batch_size": batch_size}
+        return {
+            "picked": 1,
+            "published": 1,
+            "supervised": 0,
+            "manual": 0,
+            "failed": 0,
+            "business_scope": business_id,
+        }
+
+    monkeypatch.setattr(social_post_service, "get_social_launch_preflight", fake_preflight)
+    monkeypatch.setattr(social_post_service, "dispatch_due_social_posts", fake_dispatch)
+
+    result = run_scoped_social_dispatch_once("user-1", "biz-1", approved=True, approval_text="публикую")
+
+    assert result["dispatch_result"]["published"] == 1
+    assert result["external_publish_confirmation_phrase"] == "ПУБЛИКУЮ"
+    assert captured["dispatch"] == {"business_id": "biz-1", "batch_size": 10}
+
+
 def test_run_scoped_social_dispatch_once_rejects_live_api_preflight_block(monkeypatch):
     def fake_preflight(user_id, business_id, batch_size=10):
         return {
