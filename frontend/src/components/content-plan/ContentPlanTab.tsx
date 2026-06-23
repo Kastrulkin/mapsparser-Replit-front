@@ -8229,6 +8229,39 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
                         {isRu ? socialPlanNextStep.descriptionRu : socialPlanNextStep.descriptionEn}
                       </div>
+                      <div
+                        data-testid="social-owner-simple-goal"
+                        className="mt-3 grid gap-2 text-xs leading-5 md:grid-cols-3"
+                      >
+                        <div className="rounded-xl bg-white/10 px-3 py-2 text-slate-100">
+                          <div className="font-semibold text-white">
+                            {isRu ? '1. Что делать первым' : '1. First action'}
+                          </div>
+                          <div className="mt-1">
+                            {isRu ? socialPlanNextStep.descriptionRu : socialPlanNextStep.descriptionEn}
+                          </div>
+                        </div>
+                        <div className="rounded-xl bg-white/10 px-3 py-2 text-slate-100">
+                          <div className="font-semibold text-white">
+                            {isRu ? '2. Что не произойдёт само' : '2. What will not happen silently'}
+                          </div>
+                          <div className="mt-1">
+                            {isRu
+                              ? 'Наружу ничего не уйдёт без предпросмотра, подтверждения и расписания. Финальный клик в Яндекс/2ГИС остаётся за человеком.'
+                              : 'Nothing goes external without preview, approval, and queueing. The final Yandex/2GIS click stays human-controlled.'}
+                          </div>
+                        </div>
+                        <div className="rounded-xl bg-white/10 px-3 py-2 text-slate-100">
+                          <div className="font-semibold text-white">
+                            {isRu ? '3. Как понять успех' : '3. Success signal'}
+                          </div>
+                          <div className="mt-1">
+                            {isRu
+                              ? 'Посты опубликованы, ручные задачи закрыты, заявки/обращения отмечены. После этого LocalOS предлагает изменения следующего плана.'
+                              : 'Posts are published, manual tasks are closed, and leads/inquiries are recorded. Then LocalOS suggests next-plan changes.'}
+                          </div>
+                        </div>
+                      </div>
                       <SocialOwnerLaunchPath
                         isRu={isRu}
                         currentAction={socialPlanNextStep.action}
