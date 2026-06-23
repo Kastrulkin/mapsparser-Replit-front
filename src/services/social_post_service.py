@@ -9432,13 +9432,78 @@ def _build_social_learning_insights(rows: list[dict[str, Any]], posts: list[dict
         if not _row_has_any_signal(item)
     ][:5]
     weak_channels = _weak_channel_insights(posts)
+    owner_next_steps = _owner_next_steps_for_social_learning(winning_topics, weak_channels, no_result_topics, posts)
     return {
         "winning_topics": winning_topics,
         "weak_channels": weak_channels,
         "no_result_topics": no_result_topics,
+        "owner_next_steps": owner_next_steps,
         "cta_suggestions": _cta_suggestions(winning_topics, weak_channels, no_result_topics),
         "frequency_suggestions": _frequency_suggestions(winning_topics, weak_channels, no_result_topics),
     }
+
+
+def _owner_next_steps_for_social_learning(
+    winning_topics: list[dict[str, Any]],
+    weak_channels: list[dict[str, Any]],
+    no_result_topics: list[dict[str, Any]],
+    posts: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    published_posts = sum(1 for post in posts if str(post.get("status") or "").strip() == "published")
+    primary_results = sum(int(post.get("leads") or 0) + int(post.get("inquiries") or 0) for post in posts)
+    steps: list[dict[str, Any]] = []
+    if winning_topics:
+        topic = str(winning_topics[0].get("theme") or "").strip()
+        topic_ru = f": {topic}" if topic else ""
+        topic_en = f": {topic}" if topic else ""
+        steps.append(
+            {
+                "key": "repeat_winner",
+                "priority": 1,
+                "ru": f"Повторить выигравшую тему{topic_ru} с прямым CTA на запись или сообщение.",
+                "en": f"Repeat the winning topic{topic_en} with a direct CTA to book or message.",
+            }
+        )
+    if weak_channels:
+        channel = str(weak_channels[0].get("platform_label") or "").strip()
+        channel_ru = f": {channel}" if channel else ""
+        channel_en = f": {channel}" if channel else ""
+        steps.append(
+            {
+                "key": "fix_weak_channel",
+                "priority": 2,
+                "ru": f"Разобрать слабый канал{channel_ru}: ошибка, ручное размещение или охват без заявки.",
+                "en": f"Fix the weak channel{channel_en}: error, manual placement, or reach without leads.",
+            }
+        )
+    if no_result_topics and not winning_topics:
+        steps.append(
+            {
+                "key": "rewrite_no_result_topic",
+                "priority": 3,
+                "ru": "Переписать темы без результата от проблемы клиента к конкретной услуге, офферу и записи.",
+                "en": "Rewrite no-result topics from customer problem to concrete service, offer, and booking.",
+            }
+        )
+    if published_posts and primary_results <= 0:
+        steps.append(
+            {
+                "key": "record_primary_result",
+                "priority": 4,
+                "ru": "Проверить, были ли заявки или обращения, и отметить их вручную перед применением изменений.",
+                "en": "Check whether leads or inquiries happened and record them manually before applying changes.",
+            }
+        )
+    if not steps:
+        steps.append(
+            {
+                "key": "publish_and_measure",
+                "priority": 1,
+                "ru": "Опубликовать первые посты, собрать реакции и отметить заявки/обращения как главный результат.",
+                "en": "Publish the first posts, collect reactions, and record leads/inquiries as the main result.",
+            }
+        )
+    return steps[:4]
 
 
 def _score_performance_row(row: dict[str, Any]) -> dict[str, Any]:

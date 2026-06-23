@@ -408,6 +408,12 @@ type SocialRecommendationPayload = {
     winning_topics?: SocialRecommendationTopicInsight[];
     weak_channels?: SocialRecommendationChannelInsight[];
     no_result_topics?: SocialRecommendationTopicInsight[];
+    owner_next_steps?: Array<{
+      key?: string;
+      priority?: number;
+      ru?: string;
+      en?: string;
+    }>;
     cta_suggestions?: SocialRecommendationTextSuggestion[];
     frequency_suggestions?: SocialRecommendationTextSuggestion[];
     signal_priority?: Array<{
@@ -10388,9 +10394,27 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   {Number(socialRecommendation?.recommendation?.winning_topics?.length || 0)
                     || Number(socialRecommendation?.recommendation?.weak_channels?.length || 0)
                     || Number(socialRecommendation?.recommendation?.no_result_topics?.length || 0)
+                    || Number(socialRecommendation?.recommendation?.owner_next_steps?.length || 0)
                     || Number(socialRecommendation?.recommendation?.cta_suggestions?.length || 0)
                     || Number(socialRecommendation?.recommendation?.frequency_suggestions?.length || 0) ? (
                     <div className="mt-3 grid gap-2 lg:grid-cols-3">
+                      {Number(socialRecommendation?.recommendation?.owner_next_steps?.length || 0) > 0 ? (
+                        <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2 lg:col-span-3">
+                          <div className="text-xs font-semibold text-emerald-950">
+                            {isRu ? 'Что сделать первым' : 'What to do first'}
+                          </div>
+                          <div className="mt-2 grid gap-2 md:grid-cols-2">
+                            {(socialRecommendation?.recommendation?.owner_next_steps || []).slice(0, 4).map((step, index) => (
+                              <div key={String(step.key || index)} className="flex gap-2 rounded-md bg-emerald-50 px-2.5 py-2 text-xs leading-5 text-emerald-900">
+                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-emerald-800">
+                                  {Number(step.priority || index + 1)}
+                                </span>
+                                <span>{isRu ? String(step.ru || '') : String(step.en || '')}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                       {Number(socialRecommendation?.recommendation?.winning_topics?.length || 0) > 0 ? (
                         <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
                           <div className="text-xs font-semibold text-emerald-950">

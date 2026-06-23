@@ -3253,8 +3253,17 @@ def test_social_learning_insights_explain_winners_weak_channels_and_no_result_to
     assert insights["winning_topics"][0]["item_id"] == "lead-item"
     assert insights["no_result_topics"][0]["item_id"] == "empty-item"
     assert insights["weak_channels"][0]["platform"] == "vk"
+    assert insights["owner_next_steps"][0]["key"] == "repeat_winner"
+    assert insights["owner_next_steps"][1]["key"] == "fix_weak_channel"
     assert insights["cta_suggestions"][0]["ru"]
     assert insights["frequency_suggestions"][0]["ru"]
+
+
+def test_social_learning_insights_give_simple_first_step_without_results():
+    insights = _build_social_learning_insights([], [])
+
+    assert insights["owner_next_steps"][0]["key"] == "publish_and_measure"
+    assert "заявки" in insights["owner_next_steps"][0]["ru"]
 
 
 def test_metric_totals_are_merged_back_into_collected_posts():
