@@ -16,6 +16,7 @@ CONTENT_PLAN_TAB = ROOT / "frontend" / "src" / "components" / "content-plan" / "
 EXTERNAL_INTEGRATIONS = ROOT / "frontend" / "src" / "components" / "ExternalIntegrations.tsx"
 TELEGRAM_BOT_CREDENTIALS = ROOT / "frontend" / "src" / "components" / "TelegramBotCredentials.tsx"
 SETTINGS_PAGE = ROOT / "frontend" / "src" / "pages" / "dashboard" / "SettingsPage.tsx"
+CARD_OVERVIEW_PAGE = ROOT / "frontend" / "src" / "pages" / "dashboard" / "CardOverviewPage.tsx"
 SOCIAL_POST_SERVICE = ROOT / "src" / "services" / "social_post_service.py"
 
 
@@ -406,6 +407,19 @@ REQUIRED_SETTINGS_PAGE_COPY = {
 }
 
 
+REQUIRED_CARD_OVERVIEW_PLAN_MODE_COPY = {
+    "card page plan mode flag": "isContentPlanMode",
+    "card page plan title": "Контент-план и посты",
+    "card page plan workspace": "Рабочий режим публикаций",
+    "card page plan direct route": "Вы пришли прямо в контент-план",
+    "card page plan setup action": "Настроить каналы",
+    "card page plan listing mode action": "Обычный режим карточки",
+    "card page plan hides map switcher": "!isContentPlanMode && mapSources.length > 0",
+    "card page plan hides learning block": "user?.is_superadmin && !isContentPlanMode",
+    "card page mode cleanup": "nextParams.delete('mode')",
+}
+
+
 REQUIRED_BACKEND_DISPATCH_COPY = {
     "worker first cycle api step": "API: публикация после подтверждения",
     "worker first cycle maps step": "Карты: контроль/вручную без финального клика",
@@ -498,6 +512,9 @@ def main() -> int:
     if not SETTINGS_PAGE.exists():
         print(f"Missing settings page source: {SETTINGS_PAGE}", file=sys.stderr)
         return 1
+    if not CARD_OVERVIEW_PAGE.exists():
+        print(f"Missing card overview source: {CARD_OVERVIEW_PAGE}", file=sys.stderr)
+        return 1
     if not SOCIAL_POST_SERVICE.exists():
         print(f"Missing social post service source: {SOCIAL_POST_SERVICE}", file=sys.stderr)
         return 1
@@ -506,6 +523,7 @@ def main() -> int:
     settings_source = EXTERNAL_INTEGRATIONS.read_text(encoding="utf-8")
     telegram_settings_source = TELEGRAM_BOT_CREDENTIALS.read_text(encoding="utf-8")
     settings_page_source = SETTINGS_PAGE.read_text(encoding="utf-8")
+    card_overview_source = CARD_OVERVIEW_PAGE.read_text(encoding="utf-8")
     service_source = SOCIAL_POST_SERVICE.read_text(encoding="utf-8")
     missing = []
     missing.extend(_assert_contains(source, REQUIRED_COPY))
@@ -516,6 +534,7 @@ def main() -> int:
     missing.extend(_assert_contains(telegram_settings_source, REQUIRED_TELEGRAM_SETTINGS_COPY))
     missing.extend(_assert_contains(telegram_settings_source, REQUIRED_TELEGRAM_SETTINGS_DATA_CONTRACT))
     missing.extend(_assert_contains(settings_page_source, REQUIRED_SETTINGS_PAGE_COPY))
+    missing.extend(_assert_contains(card_overview_source, REQUIRED_CARD_OVERVIEW_PLAN_MODE_COPY))
     missing.extend(_assert_contains(service_source, REQUIRED_BACKEND_DISPATCH_COPY))
     missing.extend(_assert_contains(service_source, REQUIRED_BACKEND_GOAL_PROGRESS_COPY))
     missing.extend(_assert_contains(service_source, REQUIRED_BACKEND_PRODUCTION_READINESS_COPY))

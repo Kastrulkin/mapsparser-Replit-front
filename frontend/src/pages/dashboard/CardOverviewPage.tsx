@@ -192,7 +192,8 @@ export const CardOverviewPage = () => {
   const initialModeParam = String(searchParams.get('mode') || '').trim().toLowerCase();
   const initialReviewFocusParam = String(searchParams.get('review_filter') || '').trim().toLowerCase();
   const [activeTab, setActiveTab] = useState<CardTabValue>(isCardTabValue(initialTabParam) ? initialTabParam : 'services');
-  const initialNewsWorkspaceMode = activeTab === 'news' && initialModeParam === 'plan' ? 'plan' : 'news';
+  const isContentPlanMode = activeTab === 'news' && initialModeParam === 'plan';
+  const initialNewsWorkspaceMode = isContentPlanMode ? 'plan' : 'news';
   const reviewFocus = isReviewFocusValue(initialReviewFocusParam) ? initialReviewFocusParam : 'all';
 
   // Состояния для рейтинга и отзывов
@@ -919,113 +920,158 @@ export const CardOverviewPage = () => {
 
       <div className={cn("transition-all duration-300", isNetworkMaster ? "pointer-events-none select-none blur-sm opacity-50" : "")}>
         <DashboardPageHeader
-          eyebrow={isRu ? 'Карточка бизнеса' : 'Business listing'}
+          eyebrow={isContentPlanMode ? (isRu ? 'Посты и контент-план' : 'Posts and content plan') : (isRu ? 'Карточка бизнеса' : 'Business listing')}
           icon={LayoutGrid}
-          title={t.dashboard.card.title}
-          description={t.dashboard.card.subtitle}
+          title={isContentPlanMode ? (isRu ? 'Контент-план и посты' : 'Content plan and posts') : t.dashboard.card.title}
+          description={isContentPlanMode
+            ? (isRu
+              ? 'Готовьте посты для карт и соцсетей, проверяйте каналы, утверждайте тексты и ставьте публикации в расписание.'
+              : 'Prepare posts for maps and social channels, check readiness, approve copy, and queue publications.')
+            : t.dashboard.card.subtitle}
           actions={(
-            <>
-              <Button
-                type="button"
-                onClick={handleRefreshCardData}
-                disabled={!currentBusinessId || refreshingCardData || !canTriggerRefresh}
-                className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
-                title={isRu ? 'Запускает сбор свежих данных по вашей карточке на карте.' : 'Starts collecting fresh data from your map listing.'}
-              >
-                <RefreshCw className={cn("mr-2 h-4 w-4", refreshingCardData ? "animate-spin" : "")} />
-                {refreshingCardData ? (isRu ? 'Запускаем обновление...' : 'Starting refresh...') : (isRu ? 'Обновить данные карточки' : 'Refresh card data')}
-              </Button>
-              <a
-                href="/dashboard/progress"
-                title={isRu ? 'Открывает аудит карточки, метрики и историю изменений.' : 'Opens the listing audit, metrics, and change history.'}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
-              >
-                <FileSearch className="w-4 h-4" />
-                <span>{t.dashboard.card.progressTab}</span>
-              </a>
-            </>
-          )}
-        />
-
-        <DashboardCompactMetricsRow
-          className="mt-6"
-          items={[
-            {
-              label: isRu ? 'Рейтинг' : 'Rating',
-              value: rating != null ? Number(rating).toFixed(1) : '—',
-              hint: isRu ? 'Средняя оценка карточки на карте.' : 'Average map listing rating.',
-            },
-            {
-              label: isRu ? 'Отзывы' : 'Reviews',
-              value: reviewsTotal,
-              hint: isRu ? 'Текущий объём отзывов в карточке.' : 'Current review volume in the listing.',
-            },
-            {
-              label: isRu ? 'Последнее обновление' : 'Last refresh',
-              value: lastParseDate
-                ? new Date(lastParseDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US')
-                : '—',
-              hint: isRu ? 'Когда данные в разделе обновлялись в последний раз.' : 'When the section data was last refreshed.',
-            },
-            {
-              label: isRu ? 'Источники карт' : 'Map sources',
-              value: mapSources.length || 0,
-              hint: isRu ? 'Подключённые карточки для этой точки.' : 'Connected map profiles for this location.',
-            },
-          ]}
-        />
-
-        <DashboardActionPanel
-          className="mt-6"
-          tone="amber"
-          title={firstRunCopy.title}
-          description={!hasConfiguredMapLink
-            ? firstRunCopy.bodyMissingMap
-            : (isRu ? (
+            isContentPlanMode ? (
               <>
-                Обновляйте карточку здесь, а аудит и историю изменений проверяйте в <span className="font-semibold">«Прогрессе»</span>.
-                Если нужно изменить ссылку или точку входа, это делается через <span className="font-semibold">«Профиль и бизнес»</span>.
+                <Button
+                  type="button"
+                  onClick={() => navigate('/dashboard/settings?focus=telegram')}
+                  className="bg-slate-900 text-white hover:bg-slate-800"
+                >
+                  {isRu ? 'Настроить каналы' : 'Set up channels'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate('/dashboard/card?tab=news')}
+                  className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
+                >
+                  {isRu ? 'Обычный режим карточки' : 'Listing mode'}
+                </Button>
               </>
             ) : (
               <>
-                Refresh the listing here, and review the audit and history in <span className="font-semibold">Progress</span>.
-                If you need to change the source link, do it in <span className="font-semibold">Profile &amp; Business</span>.
+                <Button
+                  type="button"
+                  onClick={handleRefreshCardData}
+                  disabled={!currentBusinessId || refreshingCardData || !canTriggerRefresh}
+                  className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
+                  title={isRu ? 'Запускает сбор свежих данных по вашей карточке на карте.' : 'Starts collecting fresh data from your map listing.'}
+                >
+                  <RefreshCw className={cn("mr-2 h-4 w-4", refreshingCardData ? "animate-spin" : "")} />
+                  {refreshingCardData ? (isRu ? 'Запускаем обновление...' : 'Starting refresh...') : (isRu ? 'Обновить данные карточки' : 'Refresh card data')}
+                </Button>
+                <a
+                  href="/dashboard/progress"
+                  title={isRu ? 'Открывает аудит карточки, метрики и историю изменений.' : 'Opens the listing audit, metrics, and change history.'}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
+                >
+                  <FileSearch className="w-4 h-4" />
+                  <span>{t.dashboard.card.progressTab}</span>
+                </a>
               </>
-            ))}
-          status={(
-            <span>
-              {isRu ? 'Сейчас: ' : 'Now: '}
-              <span className="font-semibold">{parseStatusLabel}</span>
-              {hasConfiguredMapLink && !canRefreshCardData && mapSources.length > 0
-                ? (isRu ? ' · Обновление сейчас поддержано для Яндекс и 2ГИС.' : ' · Refresh is currently supported for Yandex and 2GIS.')
-                : ''}
-              {parseStatusHelpText ? (
-                <span className="mt-1 block font-normal text-slate-600">{parseStatusHelpText}</span>
-              ) : null}
-            </span>
-          )}
-          actions={!hasConfiguredMapLink ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate('/dashboard/profile')}
-              className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
-              title={isRu ? 'Открывает раздел, где нужно сохранить ссылку на карту перед первым аудитом.' : 'Opens the section where you need to save the map link before the first audit.'}
-            >
-              <ArrowRight className="mr-2 h-4 w-4" />
-              {firstRunCopy.goToProfile}
-            </Button>
-          ) : (
-            <a
-              href="/dashboard/progress"
-              title={isRu ? 'Открывает аудит карточки, бизнес-метрики и историю изменений после сбора данных.' : 'Opens the listing audit, business metrics, and change history after data collection.'}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
-            >
-              <TrendingUp className="h-4 w-4" />
-              {isRu ? 'Открыть прогресс' : 'Open progress'}
-            </a>
+            )
           )}
         />
+
+        {isContentPlanMode ? (
+          <DashboardActionPanel
+            className="mt-6"
+            tone="sky"
+            title={isRu ? 'Рабочий режим публикаций' : 'Publishing workspace'}
+            description={isRu
+              ? 'Вы пришли прямо в контент-план. Сначала проверьте готовность каналов, затем откройте публикации на проверку, подтвердите тексты и поставьте их в расписание.'
+              : 'You opened the content plan directly. Check channel readiness, review prepared posts, approve copy, and queue them on schedule.'}
+            status={(
+              <div className="grid gap-2 text-sm sm:grid-cols-4">
+                <div><span className="font-semibold text-slate-950">1.</span> {isRu ? 'Готовность' : 'Readiness'}</div>
+                <div><span className="font-semibold text-slate-950">2.</span> {isRu ? 'Проверка' : 'Review'}</div>
+                <div><span className="font-semibold text-slate-950">3.</span> {isRu ? 'Расписание' : 'Schedule'}</div>
+                <div><span className="font-semibold text-slate-950">4.</span> {isRu ? 'Результат' : 'Result'}</div>
+              </div>
+            )}
+          />
+        ) : (
+          <>
+            <DashboardCompactMetricsRow
+              className="mt-6"
+              items={[
+                {
+                  label: isRu ? 'Рейтинг' : 'Rating',
+                  value: rating != null ? Number(rating).toFixed(1) : '—',
+                  hint: isRu ? 'Средняя оценка карточки на карте.' : 'Average map listing rating.',
+                },
+                {
+                  label: isRu ? 'Отзывы' : 'Reviews',
+                  value: reviewsTotal,
+                  hint: isRu ? 'Текущий объём отзывов в карточке.' : 'Current review volume in the listing.',
+                },
+                {
+                  label: isRu ? 'Последнее обновление' : 'Last refresh',
+                  value: lastParseDate
+                    ? new Date(lastParseDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US')
+                    : '—',
+                  hint: isRu ? 'Когда данные в разделе обновлялись в последний раз.' : 'When the section data was last refreshed.',
+                },
+                {
+                  label: isRu ? 'Источники карт' : 'Map sources',
+                  value: mapSources.length || 0,
+                  hint: isRu ? 'Подключённые карточки для этой точки.' : 'Connected map profiles for this location.',
+                },
+              ]}
+            />
+
+            <DashboardActionPanel
+              className="mt-6"
+              tone="amber"
+              title={firstRunCopy.title}
+              description={!hasConfiguredMapLink
+                ? firstRunCopy.bodyMissingMap
+                : (isRu ? (
+                  <>
+                    Обновляйте карточку здесь, а аудит и историю изменений проверяйте в <span className="font-semibold">«Прогрессе»</span>.
+                    Если нужно изменить ссылку или точку входа, это делается через <span className="font-semibold">«Профиль и бизнес»</span>.
+                  </>
+                ) : (
+                  <>
+                    Refresh the listing here, and review the audit and history in <span className="font-semibold">Progress</span>.
+                    If you need to change the source link, do it in <span className="font-semibold">Profile &amp; Business</span>.
+                  </>
+                ))}
+              status={(
+                <span>
+                  {isRu ? 'Сейчас: ' : 'Now: '}
+                  <span className="font-semibold">{parseStatusLabel}</span>
+                  {hasConfiguredMapLink && !canRefreshCardData && mapSources.length > 0
+                    ? (isRu ? ' · Обновление сейчас поддержано для Яндекс и 2ГИС.' : ' · Refresh is currently supported for Yandex and 2GIS.')
+                    : ''}
+                  {parseStatusHelpText ? (
+                    <span className="mt-1 block font-normal text-slate-600">{parseStatusHelpText}</span>
+                  ) : null}
+                </span>
+              )}
+              actions={!hasConfiguredMapLink ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate('/dashboard/profile')}
+                  className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
+                  title={isRu ? 'Открывает раздел, где нужно сохранить ссылку на карту перед первым аудитом.' : 'Opens the section where you need to save the map link before the first audit.'}
+                >
+                  <ArrowRight className="mr-2 h-4 w-4" />
+                  {firstRunCopy.goToProfile}
+                </Button>
+              ) : (
+                <a
+                  href="/dashboard/progress"
+                  title={isRu ? 'Открывает аудит карточки, бизнес-метрики и историю изменений после сбора данных.' : 'Opens the listing audit, business metrics, and change history after data collection.'}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  {isRu ? 'Открыть прогресс' : 'Open progress'}
+                </a>
+              )}
+            />
+          </>
+        )}
 
         {error && (
           <div className="bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 px-6 py-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
@@ -1042,7 +1088,7 @@ export const CardOverviewPage = () => {
         )}
 
         {/* Map Source Switcher */}
-        {mapSources.length > 0 && (
+        {!isContentPlanMode && mapSources.length > 0 && (
           <div className="mb-6 inline-flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-2">
             <button
               onClick={() => setSelectedSource('all')}
@@ -1088,6 +1134,9 @@ export const CardOverviewPage = () => {
             } else if (!nextParams.get('review_filter')) {
               nextParams.set('review_filter', 'all');
             }
+            if (nextTab !== 'news') {
+              nextParams.delete('mode');
+            }
             setSearchParams(nextParams, { replace: true });
           }}
           className="space-y-8"
@@ -1115,7 +1164,7 @@ export const CardOverviewPage = () => {
             </TabsTrigger>
           </TabsList>
 
-          {user?.is_superadmin && (
+          {user?.is_superadmin && !isContentPlanMode && (
             <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 p-4">
               <div className="flex items-center justify-between gap-2 mb-3">
                 <div>
