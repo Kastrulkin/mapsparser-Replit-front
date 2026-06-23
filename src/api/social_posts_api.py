@@ -78,29 +78,129 @@ def social_post_runtime_status_payload() -> dict[str, object]:
     dispatch_enabled = _bool_env("SOCIAL_POST_DISPATCH_ENABLED", False)
     metrics_allow_unscoped = _bool_env("SOCIAL_POST_METRICS_ALLOW_UNSCOPED", False)
     metrics_enabled = _bool_env("SOCIAL_POST_METRICS_ENABLED", False)
+    dispatch_status = {
+        "enabled": dispatch_enabled,
+        "interval_sec": max(15, _int_env("SOCIAL_POST_DISPATCH_INTERVAL_SEC", 60)),
+        "batch_size": max(1, min(_int_env("SOCIAL_POST_DISPATCH_BATCH_SIZE", 20), 200)),
+        "business_scope": dispatch_business_scope,
+        "scoped": bool(dispatch_business_scope),
+        "allow_unscoped": dispatch_allow_unscoped,
+        "requires_business_scope": not dispatch_allow_unscoped,
+        "blocked_without_scope": dispatch_enabled and not dispatch_business_scope and not dispatch_allow_unscoped,
+    }
+    metrics_status = {
+        "enabled": metrics_enabled,
+        "interval_sec": max(60, _int_env("SOCIAL_POST_METRICS_INTERVAL_SEC", 3600)),
+        "batch_size": max(1, min(_int_env("SOCIAL_POST_METRICS_BATCH_SIZE", 50), 500)),
+        "business_scope": metrics_business_scope,
+        "scoped": bool(metrics_business_scope),
+        "allow_unscoped": metrics_allow_unscoped,
+        "requires_business_scope": not metrics_allow_unscoped,
+        "blocked_without_scope": metrics_enabled and not metrics_business_scope and not metrics_allow_unscoped,
+    }
     return {
-        "dispatch": {
-            "enabled": dispatch_enabled,
-            "interval_sec": max(15, _int_env("SOCIAL_POST_DISPATCH_INTERVAL_SEC", 60)),
-            "batch_size": max(1, min(_int_env("SOCIAL_POST_DISPATCH_BATCH_SIZE", 20), 200)),
-            "business_scope": dispatch_business_scope,
-            "scoped": bool(dispatch_business_scope),
-            "allow_unscoped": dispatch_allow_unscoped,
-            "requires_business_scope": not dispatch_allow_unscoped,
-            "blocked_without_scope": dispatch_enabled and not dispatch_business_scope and not dispatch_allow_unscoped,
-        },
-        "metrics": {
-            "enabled": metrics_enabled,
-            "interval_sec": max(60, _int_env("SOCIAL_POST_METRICS_INTERVAL_SEC", 3600)),
-            "batch_size": max(1, min(_int_env("SOCIAL_POST_METRICS_BATCH_SIZE", 50), 500)),
-            "business_scope": metrics_business_scope,
-            "scoped": bool(metrics_business_scope),
-            "allow_unscoped": metrics_allow_unscoped,
-            "requires_business_scope": not metrics_allow_unscoped,
-            "blocked_without_scope": metrics_enabled and not metrics_business_scope and not metrics_allow_unscoped,
-        },
+        "dispatch": dispatch_status,
+        "metrics": metrics_status,
+        "owner_status": _social_runtime_owner_status(dispatch_status, metrics_status),
         "approval_required": True,
         "browser_final_click_allowed": False,
+    }
+
+
+def _social_runtime_owner_status(dispatch_status: dict[str, object], metrics_status: dict[str, object]) -> dict[str, object]:
+    dispatch_enabled = bool(dispatch_status.get("enabled"))
+    dispatch_blocked = bool(dispatch_status.get("blocked_without_scope"))
+    dispatch_scoped = bool(dispatch_status.get("scoped"))
+    dispatch_allow_unscoped = bool(dispatch_status.get("allow_unscoped"))
+    metrics_enabled = bool(metrics_status.get("enabled"))
+    metrics_blocked = bool(metrics_status.get("blocked_without_scope"))
+    metrics_scoped = bool(metrics_status.get("scoped"))
+    metrics_allow_unscoped = bool(metrics_status.get("allow_unscoped"))
+
+    if dispatch_blocked:
+        status = "dispatch_guarded_without_scope"
+        tone = "warning"
+        title_ru = "Исполнитель защищён и ждёт business scope"
+        title_en = "Worker is guarded and waiting for business scope"
+        summary_ru = "Фоновый запуск включён, но LocalOS не будет публиковать без SOCIAL_POST_DISPATCH_BUSINESS_ID или явного allow-all."
+        summary_en = "Dispatch is enabled, but LocalOS will not publish without SOCIAL_POST_DISPATCH_BUSINESS_ID or explicit allow-all."
+        next_action_ru = "Укажите SOCIAL_POST_DISPATCH_BUSINESS_ID тестового бизнеса и проверьте один цикл."
+        next_action_en = "Set SOCIAL_POST_DISPATCH_BUSINESS_ID for the test business and verify one cycle."
+    elif dispatch_enabled and dispatch_scoped:
+        status = "dispatch_scoped"
+        tone = "ready"
+        scope = str(dispatch_status.get("business_scope") or "").strip()
+        title_ru = "Публикация по расписанию ограничена бизнесом"
+        title_en = "Scheduled publishing is scoped to one business"
+        summary_ru = f"Worker обработает только due-посты бизнеса {scope}: API по ключам, Яндекс/2ГИС через контроль или ручной режим."
+        summary_en = f"The worker will process only due posts for business {scope}: API through keys, Yandex/2GIS through supervised/manual flow."
+        next_action_ru = "Сверьте, что открыт тот же бизнес, затем запустите preflight или дождитесь worker."
+        next_action_en = "Check that the same business is open, then run preflight or wait for the worker."
+    elif dispatch_enabled and dispatch_allow_unscoped:
+        status = "dispatch_unscoped_allowed"
+        tone = "warning"
+        title_ru = "Публикация включена для всех due-постов"
+        title_en = "Publishing is enabled for all due posts"
+        summary_ru = "Это явный allow-all режим: используйте только после проверки, потому что worker смотрит все доступные due-посты."
+        summary_en = "This is explicit allow-all mode: use only after verification because the worker scans all available due posts."
+        next_action_ru = "Для первого цикла безопаснее ограничить запуск конкретным SOCIAL_POST_DISPATCH_BUSINESS_ID."
+        next_action_en = "For the first cycle, it is safer to scope dispatch to a specific SOCIAL_POST_DISPATCH_BUSINESS_ID."
+    elif dispatch_enabled:
+        status = "dispatch_enabled_needs_scope"
+        tone = "warning"
+        title_ru = "Публикация включена, но область неочевидна"
+        title_en = "Publishing is enabled, but scope is unclear"
+        summary_ru = "Проверьте dispatch scope перед первым живым циклом, чтобы не обработать лишние посты."
+        summary_en = "Check dispatch scope before the first live cycle so unrelated posts are not processed."
+        next_action_ru = "Запустите preflight и ограничьте worker конкретным бизнесом."
+        next_action_en = "Run preflight and scope the worker to one business."
+    else:
+        status = "dispatch_disabled"
+        tone = "idle"
+        title_ru = "Фоновая публикация выключена"
+        title_en = "Background publishing is off"
+        summary_ru = "Можно готовить, редактировать, подтверждать и ставить посты в расписание; внешнее исполнение начнётся после включения worker."
+        summary_en = "You can prepare, edit, approve, and queue posts; external execution starts after the worker is enabled."
+        next_action_ru = "Подготовьте первый Telegram/VK пост, подтвердите и поставьте в расписание; затем включайте scoped worker."
+        next_action_en = "Prepare the first Telegram/VK post, approve and queue it; then enable the scoped worker."
+
+    if metrics_blocked:
+        metrics_status_label = "metrics_guarded_without_scope"
+        metrics_summary_ru = "Сбор реакций включён, но защищён без SOCIAL_POST_METRICS_BUSINESS_ID."
+        metrics_summary_en = "Metrics collection is enabled but guarded without SOCIAL_POST_METRICS_BUSINESS_ID."
+    elif metrics_enabled and metrics_scoped:
+        metrics_status_label = "metrics_scoped"
+        metrics_summary_ru = "Сбор реакций ограничен тем же бизнесом, если scope совпадает."
+        metrics_summary_en = "Metrics collection is scoped to one business when the scope matches."
+    elif metrics_enabled and metrics_allow_unscoped:
+        metrics_status_label = "metrics_unscoped_allowed"
+        metrics_summary_ru = "Сбор реакций включён для всех опубликованных постов в явном allow-all режиме."
+        metrics_summary_en = "Metrics collection is enabled for all published posts in explicit allow-all mode."
+    elif metrics_enabled:
+        metrics_status_label = "metrics_enabled_needs_scope"
+        metrics_summary_ru = "Перед learning loop проверьте scope сбора реакций."
+        metrics_summary_en = "Check metrics collection scope before the learning loop."
+    else:
+        metrics_status_label = "metrics_disabled"
+        metrics_summary_ru = "Сбор реакций пока выключен; после публикации его нужно включить или отметить заявки вручную."
+        metrics_summary_en = "Metrics collection is off; after publishing, enable it or record leads manually."
+
+    return {
+        "schema": "localos_social_runtime_owner_status_v1",
+        "status": status,
+        "tone": tone,
+        "title_ru": title_ru,
+        "title_en": title_en,
+        "summary_ru": summary_ru,
+        "summary_en": summary_en,
+        "next_action_ru": next_action_ru,
+        "next_action_en": next_action_en,
+        "metrics_status": metrics_status_label,
+        "metrics_summary_ru": metrics_summary_ru,
+        "metrics_summary_en": metrics_summary_en,
+        "external_publish_requires_approval": True,
+        "browser_final_click_allowed": False,
+        "maps_are_supervised_or_manual": True,
     }
 
 

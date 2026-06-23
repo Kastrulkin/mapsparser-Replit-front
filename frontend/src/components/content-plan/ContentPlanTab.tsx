@@ -1087,6 +1087,23 @@ type SocialLaunchPreflight = {
 };
 
 type SocialRuntimeStatus = {
+  owner_status?: {
+    schema?: string;
+    status?: string;
+    tone?: string;
+    title_ru?: string;
+    title_en?: string;
+    summary_ru?: string;
+    summary_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+    metrics_status?: string;
+    metrics_summary_ru?: string;
+    metrics_summary_en?: string;
+    external_publish_requires_approval?: boolean;
+    browser_final_click_allowed?: boolean;
+    maps_are_supervised_or_manual?: boolean;
+  };
   dispatch?: {
     enabled?: boolean;
     interval_sec?: number;
@@ -8493,10 +8510,38 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         compact
                       />
                       {socialRuntimeStatus ? (
-                        <div className="rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200">
+                        <div
+                          className="rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-slate-200"
+                          data-testid="social-runtime-owner-status"
+                          data-schema="localos_social_runtime_owner_status_v1"
+                        >
                             <div className="font-semibold text-white">
                               {isRu ? 'Runtime расписания' : 'Schedule runtime'}
                           </div>
+                          {socialRuntimeStatus.owner_status ? (
+                            <div className="mt-2 rounded-lg border border-white/10 bg-white/10 px-2 py-2">
+                              <div className="font-semibold text-white">
+                                {isRu
+                                  ? String(socialRuntimeStatus.owner_status.title_ru || '')
+                                  : String(socialRuntimeStatus.owner_status.title_en || '')}
+                              </div>
+                              <div className="mt-1 text-slate-200">
+                                {isRu
+                                  ? String(socialRuntimeStatus.owner_status.summary_ru || '')
+                                  : String(socialRuntimeStatus.owner_status.summary_en || '')}
+                              </div>
+                              <div className="mt-1 font-medium text-slate-100">
+                                {isRu
+                                  ? String(socialRuntimeStatus.owner_status.next_action_ru || '')
+                                  : String(socialRuntimeStatus.owner_status.next_action_en || '')}
+                              </div>
+                              <div className="mt-1 text-[11px] text-slate-300">
+                                {isRu
+                                  ? String(socialRuntimeStatus.owner_status.metrics_summary_ru || '')
+                                  : String(socialRuntimeStatus.owner_status.metrics_summary_en || '')}
+                              </div>
+                            </div>
+                          ) : null}
                           <div className="mt-1 grid gap-1">
                             <div className="flex items-center justify-between gap-3">
                               <span>{isRu ? 'Публикация по расписанию' : 'Scheduled dispatch'}</span>

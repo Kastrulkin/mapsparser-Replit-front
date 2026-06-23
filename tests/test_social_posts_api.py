@@ -89,6 +89,11 @@ def test_social_post_runtime_status_reflects_worker_flags(monkeypatch):
     assert payload["metrics"]["blocked_without_scope"] is False
     assert payload["approval_required"] is True
     assert payload["browser_final_click_allowed"] is False
+    assert payload["owner_status"]["schema"] == "localos_social_runtime_owner_status_v1"
+    assert payload["owner_status"]["status"] == "dispatch_scoped"
+    assert payload["owner_status"]["metrics_status"] == "metrics_disabled"
+    assert payload["owner_status"]["external_publish_requires_approval"] is True
+    assert payload["owner_status"]["browser_final_click_allowed"] is False
 
 
 def test_social_post_runtime_status_blocks_enabled_unscoped_dispatch(monkeypatch):
@@ -103,6 +108,8 @@ def test_social_post_runtime_status_blocks_enabled_unscoped_dispatch(monkeypatch
     assert payload["dispatch"]["allow_unscoped"] is False
     assert payload["dispatch"]["requires_business_scope"] is True
     assert payload["dispatch"]["blocked_without_scope"] is True
+    assert payload["owner_status"]["status"] == "dispatch_guarded_without_scope"
+    assert "SOCIAL_POST_DISPATCH_BUSINESS_ID" in payload["owner_status"]["next_action_ru"]
 
 
 def test_social_post_runtime_status_allows_explicit_unscoped_dispatch(monkeypatch):
@@ -117,6 +124,8 @@ def test_social_post_runtime_status_allows_explicit_unscoped_dispatch(monkeypatc
     assert payload["dispatch"]["allow_unscoped"] is True
     assert payload["dispatch"]["requires_business_scope"] is False
     assert payload["dispatch"]["blocked_without_scope"] is False
+    assert payload["owner_status"]["status"] == "dispatch_unscoped_allowed"
+    assert payload["owner_status"]["tone"] == "warning"
 
 
 def test_social_post_runtime_status_blocks_enabled_unscoped_metrics(monkeypatch):
@@ -131,6 +140,7 @@ def test_social_post_runtime_status_blocks_enabled_unscoped_metrics(monkeypatch)
     assert payload["metrics"]["allow_unscoped"] is False
     assert payload["metrics"]["requires_business_scope"] is True
     assert payload["metrics"]["blocked_without_scope"] is True
+    assert payload["owner_status"]["metrics_status"] == "metrics_guarded_without_scope"
 
 
 def test_social_post_runtime_status_allows_explicit_unscoped_metrics(monkeypatch):
