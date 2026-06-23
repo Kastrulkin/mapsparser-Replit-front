@@ -5198,6 +5198,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
                   {isRu ? socialPlanNextStep.descriptionRu : socialPlanNextStep.descriptionEn}
                 </div>
+                <SocialOwnerLaunchPath
+                  isRu={isRu}
+                  currentAction={socialPlanNextStep.action}
+                />
                 <div className="mt-3 grid gap-2 text-xs text-slate-300 sm:grid-cols-3">
                   <div className="rounded-xl bg-white/10 px-3 py-2">
                     <div className="text-base font-semibold text-white">{socialReadinessSummary.apiReady}</div>
@@ -7478,6 +7482,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
                         {isRu ? socialPlanNextStep.descriptionRu : socialPlanNextStep.descriptionEn}
                       </div>
+                      <SocialOwnerLaunchPath
+                        isRu={isRu}
+                        currentAction={socialPlanNextStep.action}
+                      />
                     </div>
                     <div className="flex flex-col gap-2 sm:min-w-[260px]">
                       <Button
@@ -11352,6 +11360,90 @@ function SocialLaunchChecklist({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function SocialOwnerLaunchPath({
+  isRu,
+  currentAction,
+}: {
+  isRu: boolean;
+  currentAction: SocialPlanNextAction;
+}) {
+  const normalized = String(currentAction || 'none').trim() as SocialPlanNextAction;
+  const steps: Array<{
+    key: string;
+    ru: string;
+    en: string;
+    actions: SocialPlanNextAction[];
+  }> = [
+    {
+      key: 'prepare',
+      ru: 'Подготовить',
+      en: 'Prepare',
+      actions: ['prepare'],
+    },
+    {
+      key: 'review',
+      ru: 'Проверить',
+      en: 'Review',
+      actions: ['review'],
+    },
+    {
+      key: 'launch',
+      ru: 'Расписание',
+      en: 'Queue',
+      actions: ['queue', 'wait', 'supervised', 'manual'],
+    },
+    {
+      key: 'learn',
+      ru: 'Результат',
+      en: 'Results',
+      actions: ['collect', 'recommend'],
+    },
+  ];
+  const currentIndex = steps.findIndex((step) => step.actions.includes(normalized));
+  const activeIndex = currentIndex >= 0 ? currentIndex : 0;
+
+  return (
+    <div
+      data-testid="social-owner-launch-path"
+      className="mt-3 grid gap-1.5 text-xs sm:grid-cols-4"
+    >
+      {steps.map((step, index) => {
+        const isCurrent = index === activeIndex;
+        const isDone = normalized !== 'none' && index < activeIndex;
+        return (
+          <div
+            key={`owner-launch-path-${step.key}`}
+            className={[
+              'flex items-center gap-2 rounded-lg px-2 py-1.5',
+              isCurrent
+                ? 'bg-white text-slate-950'
+                : isDone
+                  ? 'bg-emerald-300/15 text-emerald-50'
+                  : 'bg-white/10 text-slate-300',
+            ].join(' ')}
+          >
+            <span
+              className={[
+                'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
+                isCurrent
+                  ? 'bg-slate-950 text-white'
+                  : isDone
+                    ? 'bg-emerald-200 text-emerald-900'
+                    : 'bg-white/10 text-slate-300',
+              ].join(' ')}
+            >
+              {index + 1}
+            </span>
+            <span className="min-w-0 truncate font-medium">
+              {isRu ? step.ru : step.en}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
