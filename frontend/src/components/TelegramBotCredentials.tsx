@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -255,6 +256,15 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
           <p className="text-xs font-medium text-slate-700">
             После сохранения LocalOS сразу обновит готовность каналов для постов из контент-плана.
           </p>
+          <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
+            <div className="font-semibold text-sky-950">После подключения Telegram</div>
+            <div className="mt-1">
+              Вернитесь в контент-план, нажмите “Проверить готовность”, подготовьте preview и подтвердите публикацию перед расписанием.
+            </div>
+            <Button type="button" size="sm" variant="outline" className="mt-2 h-7 bg-white px-2 text-[11px]" asChild>
+              <Link to="/dashboard/card?tab=news&mode=plan">Открыть контент-план</Link>
+            </Button>
+          </div>
         </div>
 
         <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">

@@ -116,7 +116,17 @@ export const SettingsPage = () => {
       >
         {channelsFocused ? (
           <div className="mb-5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-900">
-            Для публикаций в Telegram заполните bot token и канал/чат для публикаций. После сохранения LocalOS обновит готовность каналов для контент-плана.
+            <div>
+              Для публикаций в Telegram заполните bot token и канал/чат для публикаций. После сохранения LocalOS обновит готовность каналов для контент-плана.
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button type="button" size="sm" asChild>
+                <Link to="/dashboard/card?tab=news&mode=plan">Вернуться в контент-план</Link>
+              </Button>
+              <span className="text-xs font-medium text-sky-800">
+                Следующий безопасный шаг: preview → approval → расписание.
+              </span>
+            </div>
           </div>
         ) : null}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -143,7 +153,17 @@ export const SettingsPage = () => {
       >
         {integrationsFocused ? (
           <div className="mb-5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-900">
-            Для публикаций подключите Google Business Profile и другие внешние кабинеты. Telegram-бот и WhatsApp находятся выше в разделе каналов связи; Яндекс/2ГИС остаются контролируемым или ручным размещением, если API недоступен.
+            <div>
+              Для публикаций подключите Google Business Profile и другие внешние кабинеты. Telegram-бот и WhatsApp находятся выше в разделе каналов связи; Яндекс/2ГИС остаются контролируемым или ручным размещением, если API недоступен.
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button type="button" size="sm" asChild>
+                <Link to="/dashboard/card?tab=news&mode=plan">Вернуться в контент-план</Link>
+              </Button>
+              <span className="text-xs font-medium text-sky-800">
+                После подключения проверьте готовность API-каналов без публикации.
+              </span>
+            </div>
           </div>
         ) : null}
         <div className="space-y-5">

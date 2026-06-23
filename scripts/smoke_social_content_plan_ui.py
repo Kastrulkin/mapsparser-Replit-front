@@ -266,6 +266,10 @@ REQUIRED_SETTINGS_COPY = {
     "settings setup steps": "Шаги подключения",
     "settings setup steps contract": "setup_steps_ru",
     "settings maps controlled": "Яндекс/2ГИС остаются ручными или контролируемыми",
+    "settings return to content plan": "Вернуться в контент-план",
+    "settings safe flow after setup": "preview → approval → расписание",
+    "settings check readiness after setup": "Проверить готовность",
+    "settings open content plan action": "Открыть контент-план",
 }
 
 
@@ -287,6 +291,8 @@ REQUIRED_TELEGRAM_SETTINGS_COPY = {
     "telegram publish api warning": "не сможет отправить его по API",
     "telegram publish save success": "Telegram подключён для публикаций из контент-плана.",
     "telegram readiness refresh copy": "сразу обновит готовность каналов",
+    "telegram return to content plan": "После подключения Telegram",
+    "telegram readiness before preview": "нажмите “Проверить готовность”",
 }
 
 

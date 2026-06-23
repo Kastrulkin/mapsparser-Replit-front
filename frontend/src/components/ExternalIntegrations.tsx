@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -502,6 +503,13 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                   <div className="rounded-xl bg-white px-3 py-2 text-slate-700 ring-1 ring-slate-200">
                     <span className="font-semibold text-slate-950">Meta:</span> Page/IG business + permissions
                   </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-sky-100 bg-white px-3 py-2 text-xs leading-5 text-sky-900">
+                  <span className="font-semibold text-sky-950">После подключения:</span>
+                  <span>Вернуться в контент-план, нажмите “Проверить готовность”, затем пройдите preview → approval → расписание.</span>
+                  <Button type="button" size="sm" variant="outline" className="h-7 bg-white px-2 text-[11px]" asChild>
+                    <Link to="/dashboard/card?tab=news&mode=plan">Открыть контент-план</Link>
+                  </Button>
                 </div>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
