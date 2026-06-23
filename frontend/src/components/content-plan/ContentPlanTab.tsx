@@ -5771,6 +5771,65 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 </div>
               </div>
             </div>
+            {socialLaunchStages.length > 0 ? (
+              <div
+                data-testid="social-owner-goal-progress"
+                className="mt-3 rounded-xl border border-blue-100 bg-white px-3 py-3 text-sm leading-6 text-blue-900"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="font-semibold text-blue-950">
+                      {isRu ? 'Где мы сейчас' : 'Where we are now'}
+                    </div>
+                    <div className="mt-1">
+                      {String(
+                        (isRu ? socialGoalProgress?.summary?.current_label_ru : socialGoalProgress?.summary?.current_label_en)
+                        || (socialLaunchChecklistSummary.current
+                          ? (isRu ? socialLaunchChecklistSummary.current.labelRu : socialLaunchChecklistSummary.current.labelEn)
+                          : (isRu ? 'Следующий шаг' : 'Next step'))
+                      )}
+                      {' · '}
+                      {String(
+                        (isRu ? socialGoalProgress?.next_action_ru : socialGoalProgress?.next_action_en)
+                        || (socialLaunchChecklistSummary.current
+                          ? (isRu
+                            ? socialLaunchChecklistSummary.current.detailRu
+                            : socialLaunchChecklistSummary.current.detailEn)
+                          : (isRu
+                            ? 'Откройте очередь публикаций и подготовьте первый канал.'
+                            : 'Open the publishing queue and prepare the first channel.'))
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid gap-2 text-xs sm:grid-cols-3 lg:min-w-[420px]">
+                    <div className="rounded-lg bg-blue-50 px-2 py-1.5">
+                      <div className="font-semibold text-blue-950">
+                        {Number(socialLaunchChecklistSummary.done || 0)}
+                        /
+                        {Number(socialLaunchChecklistSummary.total || socialLaunchStages.length || 0)}
+                      </div>
+                      <div>{isRu ? 'этапов готово' : 'steps done'}</div>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 px-2 py-1.5 text-amber-800">
+                      <div className="font-semibold text-amber-950">
+                        {Math.max(0, Number(socialLaunchChecklistSummary.attention || 0))}
+                      </div>
+                      <div>{isRu ? 'требует внимания' : 'need attention'}</div>
+                    </div>
+                    <div className="rounded-lg bg-emerald-50 px-2 py-1.5 text-emerald-800">
+                      <div className="font-semibold text-emerald-950">
+                        {Math.max(
+                          0,
+                          Number(socialLaunchChecklistSummary.total || socialLaunchStages.length || 0)
+                            - Number(socialLaunchChecklistSummary.done || 0),
+                        )}
+                      </div>
+                      <div>{isRu ? 'осталось до loop' : 'left to loop'}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div
