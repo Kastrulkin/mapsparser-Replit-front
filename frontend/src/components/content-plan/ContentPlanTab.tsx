@@ -10829,6 +10829,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         type="button"
                         size="sm"
                         variant="outline"
+                        onClick={selectPublishedSocialPostsForResult}
+                        disabled={!Number(socialSummary?.published || 0)}
+                      >
+                        {`${isRu ? 'Отметить заявки/обращения' : 'Record leads/inquiries'} · ${Number(socialSummary?.published || 0)}`}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
                         onClick={() => { void recommendNextSocialPlan(); }}
                         disabled={socialBusyAction === 'recommend'}
                       >

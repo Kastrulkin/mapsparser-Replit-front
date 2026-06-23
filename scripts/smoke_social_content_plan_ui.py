@@ -207,6 +207,7 @@ REQUIRED_COPY = {
     "publish to learning next step test id": "social-post-publish-to-learning-next-step",
     "publish to learning next step copy": "Следующий шаг в loop: собрать реакции",
     "publish to learning record leads action": "Отметить заявки/обращения",
+    "next plan visible record leads action": "Отметить заявки/обращения",
     "approval empty text guard": "Перед подтверждением заполните и сохраните текст",
     "bulk approval saved preview guard": "Сначала сохраните правки текста",
     "queue preview panel": "Предпросмотр постановки в расписание",
