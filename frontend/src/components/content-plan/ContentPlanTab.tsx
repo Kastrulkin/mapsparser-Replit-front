@@ -5581,9 +5581,28 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     {isRu ? 'Цель публикаций' : 'Publishing goal'}
                   </div>
                   <div className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
-                    {isRu
-                      ? 'Дойти от темы в контент-плане до публикации, результата и корректировки следующей недели. Карты идут через контролируемое или ручное размещение, API-каналы — только после approval.'
-                      : 'Move from a content-plan topic to publishing, results, and next-week correction. Maps stay supervised; API channels run only after approval.'}
+                    {String(
+                      (isRu ? socialGoalProgress?.goal_ru : socialGoalProgress?.goal_en)
+                      || (isRu
+                        ? 'Дойти от темы в контент-плане до публикации, результата и корректировки следующей недели. Карты идут через контролируемое или ручное размещение, API-каналы — только после approval.'
+                        : 'Move from a content-plan topic to publishing, results, and next-week correction. Maps stay supervised; API channels run only after approval.')
+                    )}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-medium">
+                    <span className="rounded-full bg-white px-2 py-0.5 text-slate-700">
+                      {isRu ? 'Главный KPI: ' : 'Main KPI: '}
+                      {String((isRu ? socialGoalProgress?.primary_metric_ru : socialGoalProgress?.primary_metric_en) || (isRu ? 'заявки и обращения' : 'leads and inquiries'))}
+                    </span>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-slate-700">
+                      {socialGoalProgress?.approval_required === false
+                        ? (isRu ? 'approval не требуется' : 'approval not required')
+                        : (isRu ? 'approval обязателен' : 'approval required')}
+                    </span>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-slate-700">
+                      {socialGoalProgress?.maps_are_supervised_or_manual === false
+                        ? (isRu ? 'карты требуют проверки режима' : 'map mode needs review')
+                        : (isRu ? 'Яндекс/2ГИС: контроль/вручную' : 'Yandex/2GIS: supervised/manual')}
+                    </span>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start lg:max-w-[520px]">
@@ -5603,14 +5622,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         ? `Этап ${Math.max(1, socialLaunchChecklistSummary.done + 1)} из ${socialLaunchChecklistSummary.total || socialLaunchStages.length}`
                         : `Step ${Math.max(1, socialLaunchChecklistSummary.done + 1)} of ${socialLaunchChecklistSummary.total || socialLaunchStages.length}`}
                     </div>
+                    <div className="mt-0.5 font-medium">
+                      {String(
+                        (isRu ? socialGoalProgress?.summary?.current_label_ru : socialGoalProgress?.summary?.current_label_en)
+                        || (socialLaunchChecklistSummary.current
+                          ? (isRu ? socialLaunchChecklistSummary.current.labelRu : socialLaunchChecklistSummary.current.labelEn)
+                          : (isRu ? 'Следующий шаг' : 'Next step'))
+                      )}
+                    </div>
                     <div className="mt-0.5">
-                      {socialLaunchChecklistSummary.current
-                        ? (isRu
-                          ? socialLaunchChecklistSummary.current.detailRu
-                          : socialLaunchChecklistSummary.current.detailEn)
-                        : (isRu
-                          ? 'Откройте очередь публикаций и подготовьте первый канал.'
-                          : 'Open the publishing queue and prepare the first channel.')}
+                      {String(
+                        (isRu ? socialGoalProgress?.next_action_ru : socialGoalProgress?.next_action_en)
+                        || (socialLaunchChecklistSummary.current
+                          ? (isRu
+                            ? socialLaunchChecklistSummary.current.detailRu
+                            : socialLaunchChecklistSummary.current.detailEn)
+                          : (isRu
+                            ? 'Откройте очередь публикаций и подготовьте первый канал.'
+                            : 'Open the publishing queue and prepare the first channel.'))
+                      )}
                     </div>
                   </div>
                   <Button
