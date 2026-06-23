@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import requests
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from auth_encryption import decrypt_auth_data, encrypt_auth_data
 from auth_system import verify_session
@@ -644,7 +644,7 @@ def get_external_accounts(business_id):
             db.close()
             err_str = str(table_err)
             is_missing_relation = "does not exist" in err_str or "relation" in err_str.lower()
-            if is_missing_relation and getattr(app, "debug", False):
+            if is_missing_relation and getattr(current_app, "debug", False):
                 print(f"⚠️ GET external-accounts: таблица отсутствует, возвращаем [] (dev): {table_err}")
                 return jsonify({"success": True, "accounts": [], "_debug": {"tableMissing": True, "tableName": "externalbusinessaccounts"}})
             if is_missing_relation:
@@ -671,7 +671,7 @@ def get_external_accounts(business_id):
             })
         db.close()
         resp = {"success": True, "accounts": accounts}
-        if getattr(app, "debug", False):
+        if getattr(current_app, "debug", False):
             resp["_debug"] = {"tableName": "externalbusinessaccounts"}
         return jsonify(resp)
 
@@ -680,7 +680,7 @@ def get_external_accounts(business_id):
         err_tb = traceback.format_exc()
         print(f"❌ Ошибка GET external-accounts: {e}\n{err_tb}")
         payload = {"error": str(e), "detail": "get_external_accounts"}
-        if getattr(app, "debug", False):
+        if getattr(current_app, "debug", False):
             payload["traceback"] = err_tb
         return jsonify(payload), 500
 
@@ -874,7 +874,7 @@ def upsert_external_account(business_id):
         db.close()
 
         resp = {"success": True, "account_id": account_id}
-        if getattr(app, "debug", False):
+        if getattr(current_app, "debug", False):
             resp["_debug"] = {
                 "action": action,
                 "business_id": business_id,
@@ -1316,7 +1316,7 @@ def get_external_reviews(business_id):
         err_tb = traceback.format_exc()
         print(f"❌ get_external_reviews: {e}\n{err_tb}")
         payload = {"success": False, "where": "get_external_reviews", "error": str(e)}
-        if getattr(app, "debug", False):
+        if getattr(current_app, "debug", False):
             payload["traceback"] = err_tb
         return jsonify(payload), 500
 
@@ -1605,7 +1605,7 @@ def get_external_summary(business_id):
         err_tb = traceback.format_exc()
         print(f"❌ get_external_summary: {e}\n{err_tb}")
         payload = {"success": False, "where": "get_external_summary", "error_type": type(e).__name__, "error": str(e)}
-        if getattr(app, "debug", False):
+        if getattr(current_app, "debug", False):
             payload["traceback"] = err_tb
         return jsonify(payload), 500
 
@@ -1776,6 +1776,6 @@ def get_external_posts(business_id):
         err_tb = traceback.format_exc()
         print(f"❌ get_external_posts: {e}\n{err_tb}")
         payload = {"success": False, "where": "get_external_posts", "error": str(e)}
-        if getattr(app, "debug", False):
+        if getattr(current_app, "debug", False):
             payload["traceback"] = err_tb
         return jsonify(payload), 500
