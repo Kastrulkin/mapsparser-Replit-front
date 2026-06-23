@@ -3763,6 +3763,51 @@ def test_social_launch_preflight_payload_handles_no_due_posts_as_next_ui_work():
     assert "Подготовьте" in payload["launch_runbook"]["steps_ru"][0]
 
 
+def test_social_launch_preflight_explains_worker_idle_on_review_posts():
+    payload = _build_social_launch_preflight_payload(
+        "biz-1",
+        [_channel_readiness("telegram", "api", False, "missing_keys")],
+        {"api_ready": 0},
+        {
+            "dry_run": True,
+            "picked": 0,
+            "skipped_no_access": 0,
+            "readiness": {
+                "status": "no_due_posts",
+                "due_count": 0,
+                "external_publish_count": 0,
+                "controlled_count": 0,
+                "manual_count": 0,
+                "skipped_no_access": 0,
+            },
+        },
+        workflow_stage_counts={
+            "schema": "localos_social_post_workflow_stage_counts_v1",
+            "business_id": "biz-1",
+            "total": 7,
+            "draft": 0,
+            "needs_review": 7,
+            "approved_not_queued": 0,
+            "queued_total": 0,
+            "queued_due": 0,
+            "queued_future": 0,
+            "publishing": 0,
+            "published": 0,
+            "needs_supervised_publish": 0,
+            "needs_manual_publish": 0,
+            "failed": 0,
+        },
+    )
+
+    assert payload["status"] == "no_due_posts"
+    assert payload["summary"]["workflow_needs_review"] == 7
+    assert payload["worker_idle_reason"]["status"] == "waiting_for_review"
+    assert payload["worker_idle_reason"]["count"] == 7
+    assert payload["production_readiness"]["blockers"][0]["key"] == "posts_need_review"
+    assert payload["production_readiness"]["blockers"][0]["count"] == 7
+    assert "предпросмотр" in payload["production_readiness"]["next_action_ru"]
+
+
 def test_social_launch_runtime_alignment_explains_disabled_and_matching_scope(monkeypatch):
     monkeypatch.delenv("SOCIAL_POST_DISPATCH_ENABLED", raising=False)
     monkeypatch.delenv("SOCIAL_POST_DISPATCH_BUSINESS_ID", raising=False)

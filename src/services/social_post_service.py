@@ -337,6 +337,7 @@ def get_social_launch_preflight(user_id: str, business_id: str, batch_size: int 
     channel_readiness = channel_payload.get("channel_readiness")
     channel_summary = channel_payload.get("summary")
     launch_rehearsal = _social_launch_rehearsal_from_preview(user_id, dispatch_preview)
+    workflow_stage_counts = _social_post_workflow_stage_counts(user_id, normalized_business_id)
     return _build_social_launch_preflight_payload(
         normalized_business_id,
         channel_readiness if isinstance(channel_readiness, list) else [],
@@ -345,7 +346,92 @@ def get_social_launch_preflight(user_id: str, business_id: str, batch_size: int 
         api_preflight_payload.get("api_preflight") if isinstance(api_preflight_payload.get("api_preflight"), list) else [],
         api_preflight_payload.get("summary") if isinstance(api_preflight_payload.get("summary"), dict) else {},
         launch_rehearsal,
+        workflow_stage_counts,
     )
+
+
+def _social_post_workflow_stage_counts(user_id: str, business_id: str) -> dict[str, Any]:
+    normalized_business_id = str(business_id or "").strip()
+    if not normalized_business_id:
+        return _empty_social_post_workflow_stage_counts()
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        _require_business_access(cursor, user_id, normalized_business_id)
+        cursor.execute(
+            """
+            SELECT
+              COUNT(*) AS total,
+              COUNT(*) FILTER (WHERE status = 'draft') AS draft,
+              COUNT(*) FILTER (WHERE status = 'needs_review') AS needs_review,
+              COUNT(*) FILTER (WHERE status = 'approved') AS approved_not_queued,
+              COUNT(*) FILTER (WHERE status = 'queued') AS queued_total,
+              COUNT(*) FILTER (
+                WHERE status = 'queued'
+                  AND COALESCE(scheduled_for, NOW()) <= NOW()
+              ) AS queued_due,
+              COUNT(*) FILTER (
+                WHERE status = 'queued'
+                  AND scheduled_for > NOW()
+              ) AS queued_future,
+              COUNT(*) FILTER (WHERE status = 'publishing') AS publishing,
+              COUNT(*) FILTER (WHERE status = 'published') AS published,
+              COUNT(*) FILTER (WHERE status = 'needs_supervised_publish') AS needs_supervised_publish,
+              COUNT(*) FILTER (WHERE status = 'needs_manual_publish') AS needs_manual_publish,
+              COUNT(*) FILTER (WHERE status = 'failed') AS failed
+            FROM social_posts
+            WHERE business_id = %s
+            """,
+            (normalized_business_id,),
+        )
+        row = _row_to_dict(cursor, cursor.fetchone())
+    finally:
+        db.close()
+    counts = _empty_social_post_workflow_stage_counts()
+    for key in _social_post_workflow_count_keys():
+        counts[key] = int(row.get(key) or 0)
+    counts["business_id"] = normalized_business_id
+    counts["schema"] = "localos_social_post_workflow_stage_counts_v1"
+    counts["worker_idle_reason"] = _social_worker_idle_reason(counts)
+    return counts
+
+
+def _social_post_workflow_count_keys() -> tuple[str, ...]:
+    return (
+        "total",
+        "draft",
+        "needs_review",
+        "approved_not_queued",
+        "queued_total",
+        "queued_due",
+        "queued_future",
+        "publishing",
+        "published",
+        "needs_supervised_publish",
+        "needs_manual_publish",
+        "failed",
+    )
+
+
+def _empty_social_post_workflow_stage_counts() -> dict[str, Any]:
+    return {
+        "schema": "localos_social_post_workflow_stage_counts_v1",
+        "business_id": "",
+        "total": 0,
+        "draft": 0,
+        "needs_review": 0,
+        "approved_not_queued": 0,
+        "queued_total": 0,
+        "queued_due": 0,
+        "queued_future": 0,
+        "publishing": 0,
+        "published": 0,
+        "needs_supervised_publish": 0,
+        "needs_manual_publish": 0,
+        "failed": 0,
+        "worker_idle_reason": {},
+    }
 
 
 def _build_social_launch_preflight_payload(
@@ -356,8 +442,10 @@ def _build_social_launch_preflight_payload(
     api_preflight: list[dict[str, Any]] | None = None,
     api_preflight_summary: dict[str, Any] | None = None,
     launch_rehearsal: dict[str, Any] | None = None,
+    workflow_stage_counts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     readiness = dispatch_preview.get("readiness") if isinstance(dispatch_preview.get("readiness"), dict) else {}
+    workflow_counts = workflow_stage_counts if isinstance(workflow_stage_counts, dict) else _empty_social_post_workflow_stage_counts()
     dispatch_items = dispatch_preview.get("items") if isinstance(dispatch_preview.get("items"), list) else []
     due_count = int(readiness.get("due_count") or dispatch_preview.get("picked") or 0)
     external_publish_count = int(readiness.get("external_publish_count") or 0)
@@ -419,6 +507,7 @@ def _build_social_launch_preflight_payload(
         api_preflight_blocked_due_posts,
         first_api_publish_readiness,
         runtime_alignment,
+        workflow_counts,
     )
     launch_gate = _social_first_cycle_launch_gate(
         production_readiness,
@@ -481,6 +570,8 @@ def _build_social_launch_preflight_payload(
         "api_preflight": api_preflight_items,
         "api_preflight_summary": api_preflight_summary_payload,
         "launch_rehearsal": launch_rehearsal_payload,
+        "workflow_stage_counts": workflow_counts,
+        "worker_idle_reason": _social_worker_idle_reason(workflow_counts),
         "api_preflight_blocked_due_posts": api_preflight_blocked_due_posts,
         "blocked_api_channels": blocked_api_channels,
         "controlled_channels": controlled_channels,
@@ -507,6 +598,10 @@ def _build_social_launch_preflight_payload(
             "launch_rehearsal_blocked_posts": int(launch_rehearsal_summary.get("manual_or_blocked") or 0),
             "controlled_channels": len(controlled_channels),
             "skipped_no_access": skipped_no_access,
+            "workflow_total_posts": int(workflow_counts.get("total") or 0),
+            "workflow_needs_review": int(workflow_counts.get("needs_review") or 0),
+            "workflow_approved_not_queued": int(workflow_counts.get("approved_not_queued") or 0),
+            "workflow_queued_future": int(workflow_counts.get("queued_future") or 0),
         },
         "first_cycle_verification": first_cycle_verification,
         "runtime_alignment": runtime_alignment,
@@ -1011,21 +1106,14 @@ def _social_production_readiness(
     api_preflight_blocked_due_posts: list[dict[str, Any]],
     first_api_publish_readiness: dict[str, Any],
     runtime_alignment: dict[str, Any],
+    workflow_stage_counts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     blockers: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
+    workflow_counts = workflow_stage_counts if isinstance(workflow_stage_counts, dict) else {}
 
     if int(due_count or 0) <= 0:
-        blockers.append(
-            _social_readiness_issue(
-                "no_due_posts",
-                "Нет постов на текущую дату",
-                "No due posts",
-                "Подготовьте посты, утвердите их и поставьте в расписание.",
-                "Prepare posts, approve them, and queue them on schedule.",
-                "queue",
-            )
-        )
+        blockers.append(_social_no_due_posts_readiness_issue(workflow_counts))
     if int(skipped_no_access or 0) > 0:
         blockers.append(
             _social_readiness_issue(
@@ -1130,6 +1218,8 @@ def _social_production_readiness(
         "api_due_posts": int(external_publish_count or 0),
         "controlled_due_posts": int(controlled_count or 0),
         "manual_due_posts": int(manual_count or 0),
+        "workflow_stage_counts": workflow_counts,
+        "worker_idle_reason": _social_worker_idle_reason(workflow_counts),
         "blockers": blockers,
         "warnings": warnings[:6],
         "title_ru": _social_production_readiness_title(readiness_status, True),
@@ -1141,6 +1231,121 @@ def _social_production_readiness(
         "external_publish_requires_approval": True,
         "browser_final_click_allowed": False,
         "maps_are_supervised_or_manual": True,
+}
+
+
+def _social_no_due_posts_readiness_issue(workflow_counts: dict[str, Any]) -> dict[str, Any]:
+    counts = workflow_counts if isinstance(workflow_counts, dict) else {}
+    if int(counts.get("needs_review") or 0) > 0:
+        return _social_readiness_issue(
+            "posts_need_review",
+            "Посты ждут проверки",
+            "Posts need review",
+            "Откройте предпросмотр, проверьте тексты и нажмите «Подтвердить». После этого поставьте их в расписание.",
+            "Open preview, review the copy, and click Approve. Then queue them on schedule.",
+            "review",
+            int(counts.get("needs_review") or 0),
+        )
+    if int(counts.get("approved_not_queued") or 0) > 0:
+        return _social_readiness_issue(
+            "posts_approved_not_queued",
+            "Посты утверждены, но не в расписании",
+            "Posts are approved but not queued",
+            "Поставьте утверждённые посты в расписание; worker возьмёт только queued-публикации по дате.",
+            "Queue approved posts on schedule; the worker only picks queued due publications.",
+            "queue",
+            int(counts.get("approved_not_queued") or 0),
+        )
+    if int(counts.get("queued_future") or 0) > 0:
+        return _social_readiness_issue(
+            "posts_queued_for_future",
+            "Посты запланированы на будущую дату",
+            "Posts are queued for a future date",
+            "Дождитесь даты публикации или измените расписание у тестового поста перед proof-запуском.",
+            "Wait for the publish date or adjust the test post schedule before the proof run.",
+            "schedule",
+            int(counts.get("queued_future") or 0),
+        )
+    if int(counts.get("total") or 0) > 0:
+        return _social_readiness_issue(
+            "posts_not_ready_for_worker",
+            "Посты есть, но worker их не берёт",
+            "Posts exist, but the worker cannot pick them",
+            "Проверьте статусы постов: для worker нужны approved → queued и scheduled_for <= now.",
+            "Check post statuses: the worker needs approved → queued and scheduled_for <= now.",
+            "queue",
+            int(counts.get("total") or 0),
+        )
+    return _social_readiness_issue(
+        "no_due_posts",
+        "Нет постов на текущую дату",
+        "No due posts",
+        "Подготовьте посты, утвердите их и поставьте в расписание.",
+        "Prepare posts, approve them, and queue them on schedule.",
+        "queue",
+    )
+
+
+def _social_worker_idle_reason(workflow_counts: dict[str, Any]) -> dict[str, Any]:
+    counts = workflow_counts if isinstance(workflow_counts, dict) else {}
+    if int(counts.get("queued_due") or 0) > 0:
+        return {
+            "schema": "localos_social_worker_idle_reason_v1",
+            "status": "has_due_queued_posts",
+            "title_ru": "Worker должен подобрать due-посты",
+            "title_en": "Worker should pick due posts",
+            "next_action_ru": "Проверьте dispatch dry-run и worker logs.",
+            "next_action_en": "Check dispatch dry-run and worker logs.",
+            "count": int(counts.get("queued_due") or 0),
+        }
+    if int(counts.get("needs_review") or 0) > 0:
+        return {
+            "schema": "localos_social_worker_idle_reason_v1",
+            "status": "waiting_for_review",
+            "title_ru": "Worker ждёт проверки текстов",
+            "title_en": "Worker is waiting for copy review",
+            "next_action_ru": "Откройте предпросмотр, проверьте тексты и подтвердите посты.",
+            "next_action_en": "Open preview, review copy, and approve posts.",
+            "count": int(counts.get("needs_review") or 0),
+        }
+    if int(counts.get("approved_not_queued") or 0) > 0:
+        return {
+            "schema": "localos_social_worker_idle_reason_v1",
+            "status": "waiting_for_queue",
+            "title_ru": "Worker ждёт постановки в расписание",
+            "title_en": "Worker is waiting for queueing",
+            "next_action_ru": "Поставьте утверждённые посты в расписание.",
+            "next_action_en": "Queue approved posts on schedule.",
+            "count": int(counts.get("approved_not_queued") or 0),
+        }
+    if int(counts.get("queued_future") or 0) > 0:
+        return {
+            "schema": "localos_social_worker_idle_reason_v1",
+            "status": "waiting_for_publish_date",
+            "title_ru": "Worker ждёт дату публикации",
+            "title_en": "Worker is waiting for the publish date",
+            "next_action_ru": "Дождитесь scheduled_for или измените дату у тестовой публикации.",
+            "next_action_en": "Wait for scheduled_for or adjust the test post date.",
+            "count": int(counts.get("queued_future") or 0),
+        }
+    if int(counts.get("total") or 0) > 0:
+        return {
+            "schema": "localos_social_worker_idle_reason_v1",
+            "status": "no_pickable_posts",
+            "title_ru": "Worker не видит подходящих постов",
+            "title_en": "Worker has no pickable posts",
+            "next_action_ru": "Проверьте статусы: нужны approved → queued и дата не позже текущей.",
+            "next_action_en": "Check statuses: posts need approved → queued and a due date not later than now.",
+            "count": int(counts.get("total") or 0),
+        }
+    return {
+        "schema": "localos_social_worker_idle_reason_v1",
+        "status": "no_posts",
+        "title_ru": "Посты ещё не подготовлены",
+        "title_en": "Posts are not prepared yet",
+        "next_action_ru": "Подготовьте каналы из контент-плана.",
+        "next_action_en": "Prepare channels from the content plan.",
+        "count": 0,
     }
 
 
