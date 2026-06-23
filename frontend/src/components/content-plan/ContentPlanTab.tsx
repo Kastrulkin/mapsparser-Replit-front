@@ -1607,6 +1607,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const selectedSocialCanMarkPublished = useMemo(() => (
     selectedSocialPosts.filter((post) => post.status === 'needs_supervised_publish' || post.status === 'needs_manual_publish')
   ), [selectedSocialPosts]);
+  const selectedSocialCanRecordResults = useMemo(() => (
+    selectedSocialPosts.filter((post) => post.status === 'published')
+  ), [selectedSocialPosts]);
   const visibleSocialPosts = useMemo(() => (
     visibleItems.flatMap((item) => socialPostsByItem[item.id] || [])
   ), [socialPostsByItem, visibleItems]);
@@ -3754,6 +3757,61 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
     } catch (bulkError) {
       const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось отметить выбранные публикации' : 'Could not mark selected posts');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
+  const recordSelectedSocialPostAttribution = async (eventType: 'lead' | 'inquiry') => {
+    if (!selectedSocialCanRecordResults.length) return;
+    setBulkBusyAction(`selected-social-attribute-${eventType}`);
+    setError('');
+    setActionSummary(null);
+    try {
+      for (const post of selectedSocialCanRecordResults) {
+        await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/attribution-events`, {
+          method: 'POST',
+          body: JSON.stringify({
+            event_type: eventType,
+            value: 1,
+            event_source: 'manual_content_plan_bulk',
+            metadata: {
+              platform: post.platform,
+              content_plan_item_id: post.content_plan_item_id,
+              selected_bulk: true,
+            },
+          }),
+        });
+      }
+      if (currentPlan?.id) {
+        await loadSocialPosts(currentPlan.id);
+        try {
+          await fetchSocialPlanRecommendation(currentPlan.id);
+        } catch (recommendError) {
+          setActionSummary({
+            tone: 'warning',
+            text_ru: 'Результаты сохранены, но рекомендации следующего плана не пересчитались.',
+            text_en: 'Results were saved, but next-plan recommendations were not recalculated.',
+            details_ru: [recommendError instanceof Error ? recommendError.message : 'Повторите пересчёт рекомендаций позже.'],
+            details_en: [recommendError instanceof Error ? recommendError.message : 'Run recommendation refresh again later.'],
+          });
+          return;
+        }
+      }
+      setActionSummary({
+        tone: 'success',
+        text_ru: eventType === 'lead'
+          ? `Заявка отмечена для выбранных опубликованных постов: ${selectedSocialCanRecordResults.length}. LocalOS пересчитал рекомендации, но не применил изменения автоматически.`
+          : `Обращение отмечено для выбранных опубликованных постов: ${selectedSocialCanRecordResults.length}. LocalOS пересчитал рекомендации, но не применил изменения автоматически.`,
+        text_en: eventType === 'lead'
+          ? `Lead recorded for selected published posts: ${selectedSocialCanRecordResults.length}. LocalOS recalculated recommendations but did not apply changes automatically.`
+          : `Inquiry recorded for selected published posts: ${selectedSocialCanRecordResults.length}. LocalOS recalculated recommendations but did not apply changes automatically.`,
+        details_ru: ['Главная метрика - заявки и обращения; охваты и лайки остаются ранними сигналами.'],
+        details_en: ['The main metric is leads and inquiries; reach and likes remain early signals.'],
+      });
+    } catch (bulkError) {
+      const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось отметить результат выбранных публикаций' : 'Could not record selected post results');
       setError(message);
     } finally {
       setBulkBusyAction('');
@@ -9666,8 +9724,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                     <div className="mt-1">
                       {isRu
-                        ? `Проверить preview: ${selectedSocialNeedsReview.length} · поставить в расписание: ${selectedSocialCanQueue.length} · ручное/контролируемое размещение: ${selectedSocialCanMarkPublished.length}.`
-                        : `Review preview: ${selectedSocialNeedsReview.length} · queue on schedule: ${selectedSocialCanQueue.length} · manual/supervised placement: ${selectedSocialCanMarkPublished.length}.`}
+                        ? `Проверить preview: ${selectedSocialNeedsReview.length} · поставить в расписание: ${selectedSocialCanQueue.length} · ручное/контролируемое размещение: ${selectedSocialCanMarkPublished.length} · отметить результат: ${selectedSocialCanRecordResults.length}.`
+                        : `Review preview: ${selectedSocialNeedsReview.length} · queue on schedule: ${selectedSocialCanQueue.length} · manual/supervised placement: ${selectedSocialCanMarkPublished.length} · record result: ${selectedSocialCanRecordResults.length}.`}
                     </div>
                     <div className="mt-1 text-blue-800">
                       {selectedSocialNeedsReview.length > 0
@@ -9682,9 +9740,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             ? (isRu
                               ? 'Для этих каналов нужен ручной или контролируемый финал: проверьте задачу и отметьте размещение.'
                               : 'These channels need a manual or supervised finish: review the task and mark placement.')
-                            : (isRu
-                              ? 'Если кнопки ниже показывают 0, сначала подготовьте каналы для выбранных тем.'
-                              : 'If the buttons below show 0, prepare channels for the selected topics first.')}
+                            : selectedSocialCanRecordResults.length > 0
+                              ? (isRu
+                                ? 'Посты опубликованы: отметьте заявки/обращения, чтобы LocalOS корректировал следующий план по реальному результату.'
+                                : 'Posts are published: record leads/inquiries so LocalOS can adjust the next plan by real outcomes.')
+                              : (isRu
+                                ? 'Если кнопки ниже показывают 0, сначала подготовьте каналы для выбранных тем.'
+                                : 'If the buttons below show 0, prepare channels for the selected topics first.')}
                     </div>
                   </div>
                   {selectedSocialQueueApiWarnings.length > 0 ? (
@@ -9836,6 +9898,24 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     {bulkBusyAction === 'selected-social-manual'
                       ? (isRu ? 'Отмечаем...' : 'Marking...')
                       : `${isRu ? 'Отметить размещёнными' : 'Mark published'} · ${selectedSocialCanMarkPublished.length}`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { void recordSelectedSocialPostAttribution('lead'); }}
+                    disabled={Boolean(bulkBusyAction) || selectedSocialCanRecordResults.length === 0}
+                  >
+                    {bulkBusyAction === 'selected-social-attribute-lead'
+                      ? (isRu ? 'Отмечаем заявки...' : 'Recording leads...')
+                      : `${isRu ? 'Была заявка' : 'Record lead'} · ${selectedSocialCanRecordResults.length}`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { void recordSelectedSocialPostAttribution('inquiry'); }}
+                    disabled={Boolean(bulkBusyAction) || selectedSocialCanRecordResults.length === 0}
+                  >
+                    {bulkBusyAction === 'selected-social-attribute-inquiry'
+                      ? (isRu ? 'Отмечаем обращения...' : 'Recording inquiries...')
+                      : `${isRu ? 'Было обращение' : 'Record inquiry'} · ${selectedSocialCanRecordResults.length}`}
                   </Button>
                   <Button type="button" variant="ghost" onClick={clearSelectedItems}>
                     {isRu ? 'Снять выбор' : 'Clear'}
