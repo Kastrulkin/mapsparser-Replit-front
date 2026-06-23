@@ -644,6 +644,7 @@ type SocialLaunchPreflight = {
     ready?: number;
     needs_attention?: number;
   };
+  launch_rehearsal?: SocialPublishRehearsalBulk;
   api_preflight_blocked_due_posts?: Array<{
     id?: string;
     platform?: string;
@@ -3721,6 +3722,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         dispatch_readiness: response.dispatch_readiness && typeof response.dispatch_readiness === 'object' ? response.dispatch_readiness : {},
         api_preflight: Array.isArray(response.api_preflight) ? response.api_preflight : [],
         api_preflight_summary: response.api_preflight_summary && typeof response.api_preflight_summary === 'object' ? response.api_preflight_summary : {},
+        launch_rehearsal: response.launch_rehearsal && typeof response.launch_rehearsal === 'object'
+          ? {
+            schema: String(response.launch_rehearsal.schema || 'localos_social_publish_rehearsal_bulk_v1'),
+            dry_run: Boolean(response.launch_rehearsal.dry_run),
+            external_publish_performed: Boolean(response.launch_rehearsal.external_publish_performed),
+            provider_write_performed: Boolean(response.launch_rehearsal.provider_write_performed),
+            rehearsals: Array.isArray(response.launch_rehearsal.rehearsals) ? response.launch_rehearsal.rehearsals : [],
+            failed: Array.isArray(response.launch_rehearsal.failed) ? response.launch_rehearsal.failed : [],
+            summary: response.launch_rehearsal.summary && typeof response.launch_rehearsal.summary === 'object' ? response.launch_rehearsal.summary : {},
+          }
+          : undefined,
         api_preflight_blocked_due_posts: Array.isArray(response.api_preflight_blocked_due_posts) ? response.api_preflight_blocked_due_posts : [],
         first_api_publish_readiness: response.first_api_publish_readiness && typeof response.first_api_publish_readiness === 'object'
           ? response.first_api_publish_readiness
@@ -7402,6 +7414,68 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 {isRu
                                   ? String(socialLaunchPreflight.first_api_publish_readiness.publish_path_ru || 'Только после preview, human approval, queue и due-даты.')
                                   : String(socialLaunchPreflight.first_api_publish_readiness.publish_path_en || 'Only after preview, human approval, queueing, and the due date.')}
+                              </div>
+                            </div>
+                          ) : null}
+                          {socialLaunchPreflight.launch_rehearsal ? (
+                            <div
+                              data-testid="social-launch-rehearsal"
+                              className={[
+                                'mt-2 rounded-lg border px-2 py-2 text-[11px] leading-5',
+                                Number(socialLaunchPreflight.launch_rehearsal.summary?.manual_or_blocked || 0) > 0
+                                  ? 'border-amber-200/30 bg-amber-400/10 text-amber-50'
+                                  : Number(socialLaunchPreflight.launch_rehearsal.summary?.ready || 0) > 0
+                                    ? 'border-emerald-200/30 bg-emerald-400/10 text-emerald-50'
+                                    : 'border-sky-200/30 bg-sky-400/10 text-sky-50',
+                              ].join(' ')}
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Проверка due-постов' : 'Due-post launch check'}
+                                  </div>
+                                  <div className="mt-1">
+                                    {isRu
+                                      ? String(socialLaunchPreflight.launch_rehearsal.summary?.message_ru || '')
+                                      : String(socialLaunchPreflight.launch_rehearsal.summary?.message_en || '')}
+                                  </div>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white">
+                                  {String(socialLaunchPreflight.launch_rehearsal.summary?.status || 'empty')}
+                                </span>
+                              </div>
+                              <div className="mt-2 grid gap-1 sm:grid-cols-4">
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">{Number(socialLaunchPreflight.launch_rehearsal.summary?.ready || 0)}</span>
+                                  {' '}
+                                  {isRu ? 'готово' : 'ready'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">{Number(socialLaunchPreflight.launch_rehearsal.summary?.api_ready || 0)}</span>
+                                  {' '}
+                                  API
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">{Number(socialLaunchPreflight.launch_rehearsal.summary?.supervised_ready || 0)}</span>
+                                  {' '}
+                                  {isRu ? 'контроль' : 'supervised'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">{Number(socialLaunchPreflight.launch_rehearsal.summary?.manual_or_blocked || 0)}</span>
+                                  {' '}
+                                  {isRu ? 'внимание' : 'attention'}
+                                </div>
+                              </div>
+                              <div className="mt-2 font-medium text-white">
+                                {isRu ? 'Следующий шаг: ' : 'Next step: '}
+                                {isRu
+                                  ? String(socialLaunchPreflight.launch_rehearsal.summary?.next_action_ru || '')
+                                  : String(socialLaunchPreflight.launch_rehearsal.summary?.next_action_en || '')}
+                              </div>
+                              <div className="mt-1 text-slate-200">
+                                {isRu
+                                  ? 'Проверка запуска: наружу ничего не отправлено, provider write не выполнялся, финальный клик в Яндекс/2ГИС запрещён.'
+                                  : 'Launch check: nothing was sent externally, provider write did not run, and the Yandex/2GIS final click is disabled.'}
                               </div>
                             </div>
                           ) : null}

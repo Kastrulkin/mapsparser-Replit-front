@@ -2822,6 +2822,29 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
                 "skipped_no_access": 0,
             },
         },
+        launch_rehearsal={
+            "schema": "localos_social_publish_rehearsal_bulk_v1",
+            "dry_run": True,
+            "external_publish_performed": False,
+            "provider_write_performed": False,
+            "rehearsals": [],
+            "failed": [],
+            "summary": {
+                "status": "partial",
+                "total": 2,
+                "ready": 1,
+                "blocked": 1,
+                "failed": 0,
+                "api_ready": 1,
+                "supervised_ready": 0,
+                "manual_or_blocked": 1,
+                "browser_final_click_allowed": False,
+                "message_ru": "Часть постов готова.",
+                "message_en": "Some posts are ready.",
+                "next_action_ru": "Исправьте первый блокер.",
+                "next_action_en": "Fix the first blocker.",
+            },
+        },
     )
 
     assert payload["status"] == "ready_for_api_dispatch"
@@ -2831,6 +2854,14 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert payload["summary"]["api_ready_channels"] == 1
     assert payload["summary"]["api_blocked_channels"] == 1
     assert payload["summary"]["blocked_api_channels"] == 1
+    assert payload["summary"]["launch_rehearsal_ready_posts"] == 1
+    assert payload["summary"]["launch_rehearsal_blocked_posts"] == 1
+    assert payload["launch_rehearsal"]["schema"] == "localos_social_publish_rehearsal_bulk_v1"
+    assert payload["launch_rehearsal"]["dry_run"] is True
+    assert payload["launch_rehearsal"]["external_publish_performed"] is False
+    assert payload["launch_rehearsal"]["provider_write_performed"] is False
+    assert payload["launch_rehearsal"]["summary"]["api_ready"] == 1
+    assert payload["launch_rehearsal"]["summary"]["browser_final_click_allowed"] is False
     assert payload["blocked_api_channels"][0]["platform"] == "vk"
     assert payload["controlled_channels"][0]["platform"] == "yandex_maps"
     assert payload["first_api_publish_readiness"]["schema"] == "localos_social_first_api_publish_readiness_v1"
@@ -3020,6 +3051,9 @@ def test_social_launch_preflight_payload_handles_no_due_posts_as_next_ui_work():
     assert payload["status"] == "no_due_posts"
     assert payload["safe_to_enable_scoped_dispatch"] is False
     assert payload["summary"]["due_posts"] == 0
+    assert payload["launch_rehearsal"]["schema"] == "localos_social_publish_rehearsal_bulk_v1"
+    assert payload["launch_rehearsal"]["summary"]["status"] == "empty"
+    assert payload["launch_rehearsal"]["provider_write_performed"] is False
     assert "подготовьте" in payload["message_ru"]
     assert payload["launch_runbook"]["ready"] is False
     assert "Нет due-постов" in payload["launch_runbook"]["blocked_reason_ru"]

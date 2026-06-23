@@ -334,6 +334,7 @@ def get_social_launch_preflight(user_id: str, business_id: str, batch_size: int 
     api_preflight_payload = check_social_api_channel_preflight(user_id, normalized_business_id)
     channel_readiness = channel_payload.get("channel_readiness")
     channel_summary = channel_payload.get("summary")
+    launch_rehearsal = _social_launch_rehearsal_from_preview(user_id, dispatch_preview)
     return _build_social_launch_preflight_payload(
         normalized_business_id,
         channel_readiness if isinstance(channel_readiness, list) else [],
@@ -341,6 +342,7 @@ def get_social_launch_preflight(user_id: str, business_id: str, batch_size: int 
         dispatch_preview,
         api_preflight_payload.get("api_preflight") if isinstance(api_preflight_payload.get("api_preflight"), list) else [],
         api_preflight_payload.get("summary") if isinstance(api_preflight_payload.get("summary"), dict) else {},
+        launch_rehearsal,
     )
 
 
@@ -351,6 +353,7 @@ def _build_social_launch_preflight_payload(
     dispatch_preview: dict[str, Any],
     api_preflight: list[dict[str, Any]] | None = None,
     api_preflight_summary: dict[str, Any] | None = None,
+    launch_rehearsal: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     readiness = dispatch_preview.get("readiness") if isinstance(dispatch_preview.get("readiness"), dict) else {}
     dispatch_items = dispatch_preview.get("items") if isinstance(dispatch_preview.get("items"), list) else []
@@ -361,6 +364,12 @@ def _build_social_launch_preflight_payload(
     skipped_no_access = int(readiness.get("skipped_no_access") or dispatch_preview.get("skipped_no_access") or 0)
     api_preflight_items = api_preflight if isinstance(api_preflight, list) else []
     api_preflight_summary_payload = api_preflight_summary if isinstance(api_preflight_summary, dict) else {}
+    launch_rehearsal_payload = launch_rehearsal if isinstance(launch_rehearsal, dict) else _empty_social_launch_rehearsal()
+    launch_rehearsal_summary = (
+        launch_rehearsal_payload.get("summary")
+        if isinstance(launch_rehearsal_payload.get("summary"), dict)
+        else {}
+    )
     api_preflight_blocked_due_posts = _api_preflight_blocked_due_posts(dispatch_items, api_preflight_items)
     blocked_api_channels = [
         item for item in channel_readiness
@@ -429,6 +438,7 @@ def _build_social_launch_preflight_payload(
         "dispatch_readiness": readiness,
         "api_preflight": api_preflight_items,
         "api_preflight_summary": api_preflight_summary_payload,
+        "launch_rehearsal": launch_rehearsal_payload,
         "api_preflight_blocked_due_posts": api_preflight_blocked_due_posts,
         "blocked_api_channels": blocked_api_channels,
         "controlled_channels": controlled_channels,
@@ -454,6 +464,8 @@ def _build_social_launch_preflight_payload(
             "api_blocked_channels": len(first_api_publish_readiness.get("blocked_platforms") or []),
             "blocked_api_channels": len(blocked_api_channels),
             "api_preflight_blocked_due_posts": len(api_preflight_blocked_due_posts),
+            "launch_rehearsal_ready_posts": int(launch_rehearsal_summary.get("ready") or 0),
+            "launch_rehearsal_blocked_posts": int(launch_rehearsal_summary.get("manual_or_blocked") or 0),
             "controlled_channels": len(controlled_channels),
             "skipped_no_access": skipped_no_access,
         },
@@ -474,6 +486,62 @@ def _build_social_launch_preflight_payload(
         "next_action_ru": _social_launch_preflight_next_action(status, scope, True),
         "next_action_en": _social_launch_preflight_next_action(status, scope, False),
     }
+
+
+def _empty_social_launch_rehearsal() -> dict[str, Any]:
+    return {
+        "schema": "localos_social_publish_rehearsal_bulk_v1",
+        "dry_run": True,
+        "external_publish_performed": False,
+        "provider_write_performed": False,
+        "rehearsals": [],
+        "failed": [],
+        "summary": {
+            "status": "empty",
+            "total": 0,
+            "ready": 0,
+            "blocked": 0,
+            "failed": 0,
+            "api_ready": 0,
+            "supervised_ready": 0,
+            "manual_or_blocked": 0,
+            "external_publish_performed": False,
+            "provider_write_performed": False,
+            "browser_final_click_allowed": False,
+            "message_ru": "Нет due queued постов для проверки запуска.",
+            "message_en": "No due queued posts to rehearse.",
+            "next_action_ru": "Сначала подтвердите посты, поставьте их в расписание и дождитесь due-даты.",
+            "next_action_en": "Approve posts, queue them, and wait for the due date first.",
+        },
+    }
+
+
+def _social_launch_rehearsal_from_preview(user_id: str, dispatch_preview: dict[str, Any]) -> dict[str, Any]:
+    items = dispatch_preview.get("items") if isinstance(dispatch_preview.get("items"), list) else []
+    post_ids = [
+        str(item.get("id") or "").strip()
+        for item in items
+        if isinstance(item, dict) and str(item.get("id") or "").strip()
+    ]
+    if not post_ids:
+        return _empty_social_launch_rehearsal()
+    try:
+        return rehearse_social_posts_publish(user_id, post_ids)
+    except Exception:
+        error = str(sys.exc_info()[1])
+        payload = _empty_social_launch_rehearsal()
+        payload["failed"] = [{"id": "", "error": error}]
+        payload["summary"] = {
+            **payload["summary"],
+            "status": "error",
+            "failed": 1,
+            "manual_or_blocked": 1,
+            "message_ru": f"Проверка due-постов не прошла: {error}",
+            "message_en": f"Due-post rehearsal failed: {error}",
+            "next_action_ru": "Проверьте доступ к due-постам и повторите preflight запуска.",
+            "next_action_en": "Check access to due posts and run launch preflight again.",
+        }
+        return payload
 
 
 def _social_first_cycle_launch_gate(
