@@ -7785,6 +7785,48 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ? 'API-публикации возможны только после approval/queue; Яндекс/2ГИС остаются supervised/manual без финального клика.'
                               : 'API publishes only after approval/queue; Yandex/2GIS stay supervised/manual without the final click.'}
                           </div>
+                          <div
+                            data-testid="social-post-publish-to-learning-next-step"
+                            className="mt-2 rounded-lg bg-white/10 px-2 py-2"
+                          >
+                            <div className="text-[11px] font-semibold text-white">
+                              {isRu ? 'После публикации' : 'After publishing'}
+                            </div>
+                            <div className="mt-1 text-[11px] leading-4 text-slate-200">
+                              {isRu
+                                ? 'Следующий шаг в loop: собрать реакции, отметить заявки/обращения и пересчитать следующий контент-план. Изменения плана не применяются автоматически.'
+                                : 'Next loop step: collect reactions, mark leads/inquiries, and recalculate the next content plan. Plan changes are not applied automatically.'}
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 border-white/20 bg-white/10 px-2 text-[11px] text-white hover:bg-white/20"
+                                onClick={() => { void collectSocialPostMetricsForBusiness(); }}
+                                disabled={
+                                  socialBusyAction === 'collect-metrics'
+                                  || Number(socialDispatchExecutionReport.published || 0) <= 0
+                                }
+                              >
+                                {socialBusyAction === 'collect-metrics'
+                                  ? (isRu ? 'Собираем...' : 'Collecting...')
+                                  : (isRu ? 'Собрать реакции' : 'Collect reactions')}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 border-white/20 bg-white/10 px-2 text-[11px] text-white hover:bg-white/20"
+                                onClick={() => { void recommendNextSocialPlan(); }}
+                                disabled={socialBusyAction === 'recommend'}
+                              >
+                                {socialBusyAction === 'recommend'
+                                  ? (isRu ? 'Считаем...' : 'Calculating...')
+                                  : (isRu ? 'Предложить изменения' : 'Suggest changes')}
+                              </Button>
+                            </div>
+                          </div>
                           {Number(socialDispatchExecutionReport.details?.length || 0) > 0 ? (
                             <div className="mt-2 space-y-1">
                               {(socialDispatchExecutionReport.details || []).slice(0, 4).map((item) => (

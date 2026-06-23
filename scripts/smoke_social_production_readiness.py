@@ -138,6 +138,7 @@ REQUIRED_UI_CONTRACT = {
     "launch readiness test id": 'data-testid="social-launch-readiness"',
     "launch rehearsal test id": 'data-testid="social-launch-rehearsal"',
     "dispatch execution report test id": 'data-testid="social-dispatch-execution-report"',
+    "publish to learning next step test id": 'data-testid="social-post-publish-to-learning-next-step"',
     "channel queue test id": 'data-testid="social-channel-queue"',
     "next plan recommendation test id": 'data-testid="social-next-plan-recommendation"',
     "preview before approval test id": 'data-testid="social-preview-before-approval"',

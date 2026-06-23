@@ -108,6 +108,8 @@ REQUIRED_COPY = {
     "dispatch execution report panel": "Результат последнего запуска",
     "dispatch execution report test id": "social-dispatch-execution-report",
     "dispatch execution report safety": "API-публикации возможны только после approval/queue",
+    "publish to learning next step test id": "social-post-publish-to-learning-next-step",
+    "publish to learning next step copy": "Следующий шаг в loop: собрать реакции",
     "approval empty text guard": "Перед approval заполните и сохраните текст",
     "bulk approval saved preview guard": "Сначала сохраните правки текста",
     "queue preview panel": "Preview постановки в расписание",
