@@ -10965,12 +10965,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                             {isRu ? 'Скопировать текст' : 'Copy text'}
                                           </Button>
                                         ) : null}
-                                        {supervisedPayload?.target_url ? (
+                                        {supervisedTargetUrl ? (
                                           <Button
                                             type="button"
                                             size="sm"
                                             variant="outline"
-                                            onClick={() => window.open(String(supervisedPayload.target_url || ''), '_blank', 'noopener,noreferrer')}
+                                            onClick={() => window.open(supervisedTargetUrl, '_blank', 'noopener,noreferrer')}
                                           >
                                             {isRu ? 'Открыть площадку' : 'Open platform'}
                                           </Button>
