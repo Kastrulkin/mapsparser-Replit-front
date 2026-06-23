@@ -68,6 +68,7 @@ from services.social_post_service import (
     queue_social_post,
     rehearse_social_post_publish,
     rehearse_social_posts_publish,
+    mark_manual_published,
     record_social_post_attribution_event,
     record_social_post_attribution_events,
     run_scoped_social_dispatch_once,
@@ -305,6 +306,59 @@ class FakeAttributionEventDB:
     def __init__(self):
         self.conn = FakeAttributionEventConn()
         FakeAttributionEventDB.last_conn = self.conn
+
+    def close(self):
+        pass
+
+
+class FakeManualPublishedConn:
+    def __init__(self):
+        self.committed = False
+        self.rolled_back = False
+        self.updated_row = {}
+
+    def cursor(self):
+        return FakeManualPublishedCursor(self)
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+
+class FakeManualPublishedCursor:
+    def __init__(self, conn):
+        self.conn = conn
+        self.next_row = None
+        self.description = []
+
+    def execute(self, query, params=None):
+        normalized = " ".join(str(query).split()).lower()
+        if "update social_posts" in normalized and "set status = 'published'" in normalized:
+            self.conn.updated_row = {
+                "id": params[4],
+                "business_id": "biz-1",
+                "platform": "yandex_maps",
+                "status": "published",
+                "metadata_json": params[3],
+                "provider_post_url": params[1],
+                "provider_post_id": params[2],
+            }
+            self.next_row = self.conn.updated_row
+            return
+        raise AssertionError(f"unexpected SQL: {query}")
+
+    def fetchone(self):
+        return self.next_row
+
+
+class FakeManualPublishedDB:
+    last_conn = None
+
+    def __init__(self):
+        self.conn = FakeManualPublishedConn()
+        FakeManualPublishedDB.last_conn = self.conn
 
     def close(self):
         pass
@@ -1161,6 +1215,52 @@ def test_record_social_post_attribution_events_rejects_unpublished_bulk_post(mon
 
     assert FakeAttributionEventDB.last_conn.rolled_back is True
     assert FakeAttributionEventDB.last_conn.committed is False
+
+
+def test_mark_manual_published_allows_manual_or_supervised_only(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeManualPublishedDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "yandex_maps",
+            "status": "needs_supervised_publish",
+            "metadata_json": {},
+        },
+    )
+
+    post = mark_manual_published("user-1", "post-1", provider_post_url="https://maps.example/post-1")
+
+    assert post["status"] == "published"
+    assert post["provider_post_url"] == "https://maps.example/post-1"
+    assert post["metadata_json"]["published_source"] == "manual_confirmation"
+    assert FakeManualPublishedDB.last_conn.committed is True
+
+
+def test_mark_manual_published_rejects_approved_api_post(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeManualPublishedDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "telegram",
+            "status": "approved",
+            "metadata_json": {},
+        },
+    )
+
+    with pytest.raises(ValueError, match="ручного или контролируемого"):
+        mark_manual_published("user-1", "post-api")
+
+    assert FakeManualPublishedDB.last_conn.updated_row == {}
+    assert FakeManualPublishedDB.last_conn.committed is False
+    assert FakeManualPublishedDB.last_conn.rolled_back is True
 
 
 def test_social_metrics_result_summaries_explain_api_manual_and_failed_results():

@@ -2092,6 +2092,9 @@ def mark_manual_published(user_id: str, post_id: str, provider_post_url: str = "
     try:
         ensure_social_post_tables(cursor)
         post = _load_post_for_user(cursor, user_id, post_id)
+        status = str(post.get("status") or "").strip()
+        if status not in {"needs_supervised_publish", "needs_manual_publish"}:
+            raise ValueError("Ручная отметка публикации доступна только для ручного или контролируемого размещения")
         metadata = _json_dict(post.get("metadata_json"))
         metadata["published_source"] = "manual_confirmation"
         cursor.execute(
