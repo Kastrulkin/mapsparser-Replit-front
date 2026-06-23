@@ -789,6 +789,30 @@ type SocialLaunchPreflight = {
   business_id?: string;
   status?: string;
   safe_to_enable_scoped_dispatch?: boolean;
+  workflow_stage_counts?: {
+    schema?: string;
+    total?: number;
+    draft?: number;
+    needs_review?: number;
+    approved_not_queued?: number;
+    queued_total?: number;
+    queued_due?: number;
+    queued_future?: number;
+    publishing?: number;
+    published?: number;
+    needs_supervised_publish?: number;
+    needs_manual_publish?: number;
+    failed?: number;
+  };
+  worker_idle_reason?: {
+    schema?: string;
+    status?: string;
+    title_ru?: string;
+    title_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+    count?: number;
+  };
   production_readiness?: {
     schema?: string;
     status?: string;
@@ -825,6 +849,8 @@ type SocialLaunchPreflight = {
     external_publish_requires_approval?: boolean;
     browser_final_click_allowed?: boolean;
     maps_are_supervised_or_manual?: boolean;
+    workflow_stage_counts?: SocialLaunchPreflight['workflow_stage_counts'];
+    worker_idle_reason?: SocialLaunchPreflight['worker_idle_reason'];
   };
   launch_gate?: {
     schema?: string;
@@ -1004,6 +1030,10 @@ type SocialLaunchPreflight = {
     api_blocked_channels?: number;
     controlled_channels?: number;
     skipped_no_access?: number;
+    workflow_total_posts?: number;
+    workflow_needs_review?: number;
+    workflow_approved_not_queued?: number;
+    workflow_queued_future?: number;
   };
   message_ru?: string;
   message_en?: string;
@@ -4322,6 +4352,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         first_cycle_proof_packet: response.first_cycle_proof_packet && typeof response.first_cycle_proof_packet === 'object'
           ? response.first_cycle_proof_packet
           : undefined,
+        workflow_stage_counts: response.workflow_stage_counts && typeof response.workflow_stage_counts === 'object'
+          ? response.workflow_stage_counts
+          : undefined,
+        worker_idle_reason: response.worker_idle_reason && typeof response.worker_idle_reason === 'object'
+          ? response.worker_idle_reason
+          : undefined,
         live_validation_checklist: Array.isArray(response.live_validation_checklist)
           ? response.live_validation_checklist
           : [],
@@ -4365,11 +4401,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         text_en: preflight.production_readiness?.summary_en || preflight.message_en || 'Worker launch preflight is ready.',
         details_ru: [
           `Пора публиковать: ${Number(preflight.summary?.due_posts || 0)} · API: ${Number(preflight.summary?.api_due_posts || 0)} · контролируемо: ${Number(preflight.summary?.controlled_due_posts || 0)} · вручную: ${Number(preflight.summary?.manual_due_posts || 0)}.`,
+          preflight.worker_idle_reason?.next_action_ru || '',
           preflight.production_readiness?.next_action_ru || '',
           preflight.next_action_ru || 'Следующий шаг появится в блоке запуска.',
         ].filter(Boolean),
         details_en: [
           `Due: ${Number(preflight.summary?.due_posts || 0)} · API: ${Number(preflight.summary?.api_due_posts || 0)} · supervised: ${Number(preflight.summary?.controlled_due_posts || 0)} · manual: ${Number(preflight.summary?.manual_due_posts || 0)}.`,
+          preflight.worker_idle_reason?.next_action_en || '',
           preflight.production_readiness?.next_action_en || '',
           preflight.next_action_en || 'The next step is shown in the launch block.',
         ].filter(Boolean),
@@ -8240,6 +8278,56 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ? `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · контролируемо ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · вручную ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`
                               : `Due ${Number(socialLaunchPreflight.summary?.due_posts || 0)} · API ${Number(socialLaunchPreflight.summary?.api_due_posts || 0)} · supervised ${Number(socialLaunchPreflight.summary?.controlled_due_posts || 0)} · manual ${Number(socialLaunchPreflight.summary?.manual_due_posts || 0)}`}
                           </div>
+                          {socialLaunchPreflight.worker_idle_reason ? (
+                            <div
+                              data-testid="social-worker-idle-reason"
+                              className="mt-2 rounded-lg border border-amber-200/30 bg-amber-400/10 px-2 py-2 text-[11px] leading-5 text-amber-50"
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Почему worker ждёт' : 'Why the worker is waiting'}
+                                    {' · '}
+                                    {isRu
+                                      ? String(socialLaunchPreflight.worker_idle_reason.title_ru || '')
+                                      : String(socialLaunchPreflight.worker_idle_reason.title_en || '')}
+                                  </div>
+                                  <div className="mt-1">
+                                    {isRu
+                                      ? String(socialLaunchPreflight.worker_idle_reason.next_action_ru || '')
+                                      : String(socialLaunchPreflight.worker_idle_reason.next_action_en || '')}
+                                  </div>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white">
+                                  {isRu
+                                    ? `постов: ${Number(socialLaunchPreflight.worker_idle_reason.count || 0)}`
+                                    : `posts: ${Number(socialLaunchPreflight.worker_idle_reason.count || 0)}`}
+                                </span>
+                              </div>
+                              <div className="mt-2 grid gap-1 sm:grid-cols-4">
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">{Number(socialLaunchPreflight.workflow_stage_counts?.needs_review || socialLaunchPreflight.summary?.workflow_needs_review || 0)}</span>
+                                  {' '}
+                                  {isRu ? 'проверить' : 'review'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">{Number(socialLaunchPreflight.workflow_stage_counts?.approved_not_queued || socialLaunchPreflight.summary?.workflow_approved_not_queued || 0)}</span>
+                                  {' '}
+                                  {isRu ? 'утверждено' : 'approved'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">{Number(socialLaunchPreflight.workflow_stage_counts?.queued_future || socialLaunchPreflight.summary?.workflow_queued_future || 0)}</span>
+                                  {' '}
+                                  {isRu ? 'будущие' : 'future'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">{Number(socialLaunchPreflight.workflow_stage_counts?.queued_due || socialLaunchPreflight.summary?.due_posts || 0)}</span>
+                                  {' '}
+                                  {isRu ? 'готовы сейчас' : 'due now'}
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
                           {socialLaunchPreflight.production_readiness ? (
                             <div
                               data-testid="social-production-readiness"
