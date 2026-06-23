@@ -355,6 +355,10 @@ REQUIRED_SETTINGS_DATA_CONTRACT = {
 
 
 REQUIRED_TELEGRAM_SETTINGS_COPY = {
+    "telegram first api setup test id": 'data-testid="telegram-first-api-post-setup"',
+    "telegram first api heading": "Первый API-пост начинается с Telegram",
+    "telegram first api requirements": "bot token и chat_id",
+    "telegram first api no silent publish": "не уйдут наружу",
     "telegram publish target label": "Канал или чат для публикаций",
     "telegram publish chat id need": "Для постов из контент-плана нужен telegram_chat_id",
     "telegram publish chat id placeholder": "@channelname или -1001234567890",
@@ -363,6 +367,7 @@ REQUIRED_TELEGRAM_SETTINGS_COPY = {
     "telegram readiness refresh copy": "сразу обновит готовность каналов",
     "telegram return to content plan": "После подключения Telegram",
     "telegram readiness before preview": "нажмите “Проверить готовность”",
+    "telegram preview copy is localized": "откройте предпросмотр",
 }
 
 
@@ -491,6 +496,7 @@ def main() -> int:
     missing.extend(_assert_contains(service_source, REQUIRED_BACKEND_PRODUCTION_READINESS_COPY))
     forbidden = _assert_absent(source, FORBIDDEN_COPY)
     forbidden.extend(_assert_absent(settings_source, FORBIDDEN_COPY))
+    forbidden.extend(_assert_absent(telegram_settings_source, FORBIDDEN_COPY))
     forbidden.extend(_assert_absent(service_source, FORBIDDEN_COPY))
 
     if missing or forbidden:

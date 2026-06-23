@@ -205,6 +205,27 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
           </AlertDescription>
         </Alert>
 
+        <div
+          data-testid="telegram-first-api-post-setup"
+          className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900"
+        >
+          <div className="font-semibold text-blue-950">Первый API-пост начинается с Telegram</div>
+          <div className="mt-1">
+            Чтобы LocalOS смог опубликовать пост из контент-плана по расписанию, нужны два поля:
+            bot token и chat_id канала или чата. Без них посты останутся на проверке и не уйдут наружу.
+          </div>
+          <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
+            <div className={`rounded-xl bg-white px-3 py-2 ring-1 ${configured ? 'text-emerald-800 ring-emerald-100' : 'text-amber-800 ring-amber-100'}`}>
+              <span className="font-semibold">{configured ? 'Готово: ' : 'Нужно: '}</span>
+              bot token
+            </div>
+            <div className={`rounded-xl bg-white px-3 py-2 ring-1 ${configuredChatId ? 'text-emerald-800 ring-emerald-100' : 'text-amber-800 ring-amber-100'}`}>
+              <span className="font-semibold">{configuredChatId ? 'Готово: ' : 'Нужно: '}</span>
+              chat_id
+            </div>
+          </div>
+        </div>
+
         <div className="space-y-2">
           <Label htmlFor="telegram-bot-token">{t.dashboard.settings.telegram2.tokenLabel}</Label>
           <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${configured ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
@@ -259,7 +280,7 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
           <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
             <div className="font-semibold text-sky-950">После подключения Telegram</div>
             <div className="mt-1">
-              Вернитесь в контент-план, нажмите “Проверить готовность”, подготовьте preview и подтвердите публикацию перед расписанием.
+              Вернитесь в контент-план, нажмите “Проверить готовность”, откройте предпросмотр и подтвердите публикацию перед расписанием.
             </div>
             <Button type="button" size="sm" variant="outline" className="mt-2 h-7 bg-white px-2 text-[11px]" asChild>
               <Link to="/dashboard/card?tab=news&mode=plan">Открыть контент-план</Link>
