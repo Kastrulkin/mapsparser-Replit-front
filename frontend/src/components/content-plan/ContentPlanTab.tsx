@@ -171,6 +171,8 @@ type SocialPublishEvidence = {
     copy_ready_text?: string;
     checklist_ru?: string[];
     checklist_en?: string[];
+    handoff_checklist_ru?: string[];
+    handoff_checklist_en?: string[];
     checklist_count?: number;
     automation_task_id?: string;
     openclaw_task_requested?: boolean;
@@ -350,6 +352,8 @@ type SocialPostMetadata = {
     instruction_en?: string;
     manual_instruction_ru?: string;
     manual_instruction_en?: string;
+    handoff_checklist_ru?: string[];
+    handoff_checklist_en?: string[];
     manual_checklist_ru?: string[];
     manual_checklist_en?: string[];
     manual_handoff?: {
@@ -11924,6 +11928,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const placementChecklist = Array.isArray(placementChecklistSource)
                                 ? placementChecklistSource.filter(Boolean).map(String)
                                 : [];
+                              const placementHandoffChecklistSource = isRu
+                                ? placementPacket?.handoff_checklist_ru || supervisedPayload?.handoff_checklist_ru || []
+                                : placementPacket?.handoff_checklist_en || supervisedPayload?.handoff_checklist_en || [];
+                              const placementHandoffChecklist = Array.isArray(placementHandoffChecklistSource)
+                                ? placementHandoffChecklistSource.filter(Boolean).map(String).slice(0, 5)
+                                : [];
                               const placementNextAction = String(
                                 isRu
                                   ? placementPacket?.owner_next_action_ru || ''
@@ -12226,6 +12236,21 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                                   {placementCompletionFields.join(', ')}
                                                 </div>
                                               ) : null}
+                                            </div>
+                                          ) : null}
+                                          {placementHandoffChecklist.length > 0 ? (
+                                            <div
+                                              data-testid="social-supervised-handoff-checklist"
+                                              className="mt-2 rounded-md border border-amber-100 bg-amber-50 px-2 py-1.5 text-[11px] leading-5 text-amber-900"
+                                            >
+                                              <div className="font-semibold text-amber-950">
+                                                {isRu ? 'Маршрут handoff' : 'Handoff route'}
+                                              </div>
+                                              <ol className="mt-1 list-decimal space-y-1 pl-4">
+                                                {placementHandoffChecklist.map((step, index) => (
+                                                  <li key={`${post.id}:handoff-checklist:${index}`}>{step}</li>
+                                                ))}
+                                              </ol>
                                             </div>
                                           ) : null}
                                           {placementDoneCriteria.length > 0 ? (

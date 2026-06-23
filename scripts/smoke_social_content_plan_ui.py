@@ -254,6 +254,8 @@ REQUIRED_COPY = {
     "supervised placement state": "Контролируемое размещение",
     "supervised placement packet test id": 'data-testid="social-supervised-placement-packet"',
     "supervised placement packet heading": "Пакет для размещения",
+    "supervised handoff checklist test id": 'data-testid="social-supervised-handoff-checklist"',
+    "supervised handoff checklist copy": "Маршрут handoff",
     "supervised placement packet target": "Куда размещать",
     "supervised placement packet human click": "финальный клик человеком",
     "supervised done criteria block": "social-supervised-done-criteria",

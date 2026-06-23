@@ -6082,6 +6082,7 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
     manual_handoff = _manual_publish_handoff_payload(post, target, "browser_capability_unavailable")
     safety_contract = _social_supervised_safety_contract()
     completion_contract = _social_supervised_completion_contract()
+    handoff_checklist = _social_supervised_handoff_checklist()
     handoff_state = _social_supervised_handoff_state(post, task_payload, capability_status)
     return {
         "automation_task_id": automation_task_id,
@@ -6101,6 +6102,8 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
             "instruction_en": "Open the platform, fill text and media, show preview, and stop before final publish until explicit approval.",
             "manual_instruction_ru": manual_handoff["instruction_ru"],
             "manual_instruction_en": manual_handoff["instruction_en"],
+            "handoff_checklist_ru": handoff_checklist["ru"],
+            "handoff_checklist_en": handoff_checklist["en"],
             "manual_checklist_ru": manual_handoff["checklist_ru"],
             "manual_checklist_en": manual_handoff["checklist_en"],
             "manual_handoff": manual_handoff,
@@ -6179,6 +6182,7 @@ def _build_openclaw_supervised_task_payload(
     safety_contract = _social_supervised_safety_contract()
     completion_contract = _social_supervised_completion_contract()
     done_criteria = _social_supervised_done_criteria()
+    handoff_checklist = _social_supervised_handoff_checklist()
     return {
         "schema": "localos_social_supervised_publish_task_v1",
         "task_id": str(automation_task_id or "").strip(),
@@ -6191,6 +6195,8 @@ def _build_openclaw_supervised_task_payload(
         "auto_final_click_allowed": False,
         "safety_contract": safety_contract,
         "completion_contract": completion_contract,
+        "handoff_checklist_ru": handoff_checklist["ru"],
+        "handoff_checklist_en": handoff_checklist["en"],
         "done_criteria_ru": done_criteria["ru"],
         "done_criteria_en": done_criteria["en"],
         "operator_next_action_ru": "Заполнить форму, показать предпросмотр и остановиться до финальной публикации; результат вернуть как preview_ready или manual_fallback.",
@@ -6297,6 +6303,25 @@ def _social_supervised_done_criteria() -> dict[str, list[str]]:
             "The final publish click was made by a human, not browser automation.",
             "LocalOS has the published post URL or ID if the platform provides one.",
             "The post is marked as published so reactions and leads can inform the next plan.",
+        ],
+    }
+
+
+def _social_supervised_handoff_checklist() -> dict[str, list[str]]:
+    return {
+        "ru": [
+            "Открыть профиль нужной точки на площадке.",
+            "Вставить подготовленный текст и медиа из LocalOS.",
+            "Показать предпросмотр человеку и сверить, что площадка/точка выбраны верно.",
+            "Остановиться перед финальной кнопкой публикации.",
+            "После ручного финального клика сохранить ссылку или ID и отметить пост размещённым.",
+        ],
+        "en": [
+            "Open the correct location profile on the platform.",
+            "Paste the prepared LocalOS copy and media.",
+            "Show the preview to a human and verify the platform/location.",
+            "Stop before the final publish button.",
+            "After the human final click, save the URL or ID and mark the post as published.",
         ],
     }
 
@@ -6508,6 +6533,12 @@ def _enqueue_social_supervised_openclaw_outbox(
             "handoff_state": handoff_state,
             "safety_contract": safety_contract,
             "completion_contract": completion_contract,
+            "handoff_checklist_ru": supervised_payload.get("handoff_checklist_ru")
+            if isinstance(supervised_payload.get("handoff_checklist_ru"), list)
+            else task_payload.get("handoff_checklist_ru", []),
+            "handoff_checklist_en": supervised_payload.get("handoff_checklist_en")
+            if isinstance(supervised_payload.get("handoff_checklist_en"), list)
+            else task_payload.get("handoff_checklist_en", []),
             "operator_next_action_ru": str(
                 supervised_payload.get("operator_next_action_ru")
                 or task_payload.get("operator_next_action_ru")
@@ -10238,10 +10269,16 @@ def _social_supervised_placement_packet(
     copy_ready_text = str(supervised.get("copy_ready_text") or manual_handoff.get("copy_ready_text") or "").strip()
     checklist_ru = supervised.get("manual_checklist_ru") or manual_handoff.get("checklist_ru") or []
     checklist_en = supervised.get("manual_checklist_en") or manual_handoff.get("checklist_en") or []
+    handoff_checklist_ru = supervised.get("handoff_checklist_ru") or []
+    handoff_checklist_en = supervised.get("handoff_checklist_en") or []
     if not isinstance(checklist_ru, list):
         checklist_ru = []
     if not isinstance(checklist_en, list):
         checklist_en = []
+    if not isinstance(handoff_checklist_ru, list):
+        handoff_checklist_ru = []
+    if not isinstance(handoff_checklist_en, list):
+        handoff_checklist_en = []
     handoff_state = _json_dict(supervised.get("handoff_state"))
     completion_contract = _json_dict(supervised.get("completion_contract") or _social_supervised_completion_contract())
     done_criteria_ru = completion_contract.get("done_criteria_ru") or supervised.get("done_criteria_ru") or []
@@ -10263,6 +10300,8 @@ def _social_supervised_placement_packet(
         "copy_ready_text": copy_ready_text,
         "checklist_ru": [str(item) for item in checklist_ru if str(item or "").strip()][:5],
         "checklist_en": [str(item) for item in checklist_en if str(item or "").strip()][:5],
+        "handoff_checklist_ru": [str(item) for item in handoff_checklist_ru if str(item or "").strip()][:5],
+        "handoff_checklist_en": [str(item) for item in handoff_checklist_en if str(item or "").strip()][:5],
         "checklist_count": len([item for item in checklist_ru if str(item or "").strip()]),
         "automation_task_id": str(post.get("automation_task_id") or "").strip(),
         "openclaw_task_requested": bool(handoff_state.get("openclaw_task_requested")),

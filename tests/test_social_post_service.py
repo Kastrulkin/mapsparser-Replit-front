@@ -3032,6 +3032,8 @@ def test_openclaw_supervised_task_payload_stops_before_final_publish():
     assert payload["completion_contract"]["preview_required"] is True
     assert payload["completion_contract"]["browser_final_click_allowed"] is False
     assert "filled_text" in payload["completion_contract"]["required_result_fields"]
+    assert "Остановиться перед финальной кнопкой публикации" in payload["handoff_checklist_ru"][3]
+    assert "Stop before the final publish button" in payload["handoff_checklist_en"][3]
     assert "Финальную публикацию нажал человек" in payload["done_criteria_ru"][1]
     assert "final publish click" in payload["completion_contract"]["done_criteria_en"][1]
     assert "click_final_publish" in payload["safety_contract"]["forbidden_actions"]
@@ -3090,6 +3092,8 @@ def test_supervised_publish_metadata_exposes_user_visible_contract(monkeypatch):
     assert supervised["stop_before_final_publish"] is True
     assert supervised["completion_contract"]["success_state"] == "preview_ready"
     assert supervised["completion_contract"]["final_publish_click_owner"] == "human"
+    assert "Остановиться перед финальной кнопкой публикации" in supervised["handoff_checklist_ru"][3]
+    assert "Stop before the final publish button" in supervised["handoff_checklist_en"][3]
     assert "blocked_by_captcha" in supervised["completion_contract"]["allowed_result_statuses"]
     assert "Пост отмечен размещённым" in supervised["completion_contract"]["done_criteria_ru"][-1]
     assert "preview" in supervised["operator_next_action_en"]
@@ -3982,6 +3986,8 @@ def test_supervised_openclaw_outbox_enqueues_when_callback_is_configured(monkeyp
             "supervised_publish": {
                 "target_url": "https://yandex.ru/maps/org/1",
                 "handoff_state": {"state": "ready_for_openclaw_handoff"},
+                "handoff_checklist_ru": ["Открыть профиль", "Остановиться перед финальной кнопкой публикации"],
+                "handoff_checklist_en": ["Open profile", "Stop before the final publish button"],
                 "safety_contract": {
                     "side_effect_policy": "fill_preview_only",
                     "final_publish_policy": "human_final_click_required",
@@ -4017,6 +4023,8 @@ def test_supervised_openclaw_outbox_enqueues_when_callback_is_configured(monkeyp
     assert payload["completion_contract"]["browser_final_click_allowed"] is False
     assert "status" in payload["completion_contract"]["required_result_fields"]
     assert "post is marked as published" in payload["completion_contract"]["done_criteria_en"][-1]
+    assert payload["handoff_checklist_ru"][-1] == "Остановиться перед финальной кнопкой публикации"
+    assert payload["handoff_checklist_en"][-1] == "Stop before the final publish button"
     assert "preview" in payload["operator_next_action_en"]
     assert params[7] == "social-supervised:post-1:task-1"
 
@@ -4105,6 +4113,8 @@ def test_social_publish_evidence_keeps_supervised_maps_human_controlled():
                     "copy_ready_text": "Текст для карты",
                     "manual_checklist_ru": ["Скопируйте текст", "Отметьте размещённым"],
                     "manual_checklist_en": ["Copy the text", "Mark as published"],
+                    "handoff_checklist_ru": ["Открыть профиль", "Остановиться перед финальной кнопкой публикации"],
+                    "handoff_checklist_en": ["Open profile", "Stop before the final publish button"],
                     "stop_before_final_publish": True,
                     "manual_handoff": {
                         "target_url": "https://yandex.ru/maps/org/1",
@@ -4133,6 +4143,8 @@ def test_social_publish_evidence_keeps_supervised_maps_human_controlled():
     assert packet["target_ready"] is True
     assert packet["copy_ready"] is True
     assert packet["checklist_count"] == 2
+    assert packet["handoff_checklist_ru"][-1] == "Остановиться перед финальной кнопкой публикации"
+    assert packet["handoff_checklist_en"][-1] == "Stop before the final publish button"
     assert packet["automation_task_id"] == "task-1"
     assert packet["final_publish_policy"] == "human_final_click_required"
     assert packet["browser_final_click_allowed"] is False
