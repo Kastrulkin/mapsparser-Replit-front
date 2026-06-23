@@ -3031,6 +3031,8 @@ def test_openclaw_supervised_task_payload_stops_before_final_publish():
     assert payload["completion_contract"]["preview_required"] is True
     assert payload["completion_contract"]["browser_final_click_allowed"] is False
     assert "filled_text" in payload["completion_contract"]["required_result_fields"]
+    assert "Финальную публикацию нажал человек" in payload["done_criteria_ru"][1]
+    assert "final publish click" in payload["completion_contract"]["done_criteria_en"][1]
     assert "click_final_publish" in payload["safety_contract"]["forbidden_actions"]
     assert "show_preview" in payload["safety_contract"]["allowed_actions"]
     assert "предпросмотр" in payload["operator_next_action_ru"]
@@ -3088,6 +3090,7 @@ def test_supervised_publish_metadata_exposes_user_visible_contract(monkeypatch):
     assert supervised["completion_contract"]["success_state"] == "preview_ready"
     assert supervised["completion_contract"]["final_publish_click_owner"] == "human"
     assert "blocked_by_captcha" in supervised["completion_contract"]["allowed_result_statuses"]
+    assert "Пост отмечен размещённым" in supervised["completion_contract"]["done_criteria_ru"][-1]
     assert "preview" in supervised["operator_next_action_en"]
     assert supervised["safety_contract"]["requires_final_human_confirmation"] is True
     assert "publish_without_human_confirmation" in supervised["safety_contract"]["forbidden_actions"]
@@ -3968,6 +3971,7 @@ def test_supervised_openclaw_outbox_enqueues_when_callback_is_configured(monkeyp
     assert payload["completion_contract"]["success_state"] == "preview_ready"
     assert payload["completion_contract"]["browser_final_click_allowed"] is False
     assert "status" in payload["completion_contract"]["required_result_fields"]
+    assert "post is marked as published" in payload["completion_contract"]["done_criteria_en"][-1]
     assert "preview" in payload["operator_next_action_en"]
     assert params[7] == "social-supervised:post-1:task-1"
 
@@ -4087,6 +4091,8 @@ def test_social_publish_evidence_keeps_supervised_maps_human_controlled():
     assert packet["automation_task_id"] == "task-1"
     assert packet["final_publish_policy"] == "human_final_click_required"
     assert packet["browser_final_click_allowed"] is False
+    assert "Финальную публикацию нажал человек" in packet["done_criteria_ru"][1]
+    assert "post is marked as published" in packet["done_criteria_en"][-1]
 
 
 def test_social_publish_evidence_explains_queued_waiting_state():

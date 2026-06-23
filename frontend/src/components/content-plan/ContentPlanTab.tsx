@@ -181,6 +181,8 @@ type SocialPublishEvidence = {
     browser_final_click_allowed?: boolean;
     final_publish_policy?: string;
     completion_required_fields?: string[];
+    done_criteria_ru?: string[];
+    done_criteria_en?: string[];
     preview_required?: boolean;
     operator_next_action_ru?: string;
     operator_next_action_en?: string;
@@ -11579,6 +11581,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const placementCompletionFields = Array.isArray(placementPacket?.completion_required_fields)
                                 ? placementPacket.completion_required_fields.filter(Boolean).map(String).slice(0, 5)
                                 : [];
+                              const placementDoneCriteriaFallback = isRu
+                                ? [
+                                  'Предпросмотр на площадке показан человеку.',
+                                  'Финальную публикацию нажал человек, не браузер-автоматизация.',
+                                  'В LocalOS внесена ссылка или ID опубликованного поста, если площадка их даёт.',
+                                  'Пост отмечен размещённым, чтобы реакции и заявки попали в следующий план.',
+                                ]
+                                : [
+                                  'The platform preview was shown to a human.',
+                                  'The final publish click was made by a human, not browser automation.',
+                                  'LocalOS has the published post URL or ID if the platform provides one.',
+                                  'The post is marked as published so reactions and leads can inform the next plan.',
+                                ];
+                              const placementDoneCriteriaSource = isRu
+                                ? placementPacket?.done_criteria_ru || placementDoneCriteriaFallback
+                                : placementPacket?.done_criteria_en || placementDoneCriteriaFallback;
+                              const placementDoneCriteria = Array.isArray(placementDoneCriteriaSource)
+                                ? placementDoneCriteriaSource.filter(Boolean).map(String).slice(0, 5)
+                                : [];
                               const placementReadyChips = [
                                 placementPacket?.target_ready
                                   ? (isRu ? 'цель готова' : 'target ready')
@@ -11846,6 +11867,21 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                                   {placementCompletionFields.join(', ')}
                                                 </div>
                                               ) : null}
+                                            </div>
+                                          ) : null}
+                                          {placementDoneCriteria.length > 0 ? (
+                                            <div
+                                              data-testid="social-supervised-done-criteria"
+                                              className="mt-2 rounded-md border border-amber-100 bg-amber-50 px-2 py-1.5 text-[11px] leading-5 text-amber-900"
+                                            >
+                                              <div className="font-semibold text-amber-950">
+                                                {isRu ? 'Готово, когда' : 'Done when'}
+                                              </div>
+                                              <ul className="mt-1 list-disc space-y-1 pl-4">
+                                                {placementDoneCriteria.map((criterion, index) => (
+                                                  <li key={`${post.id}:done-criterion:${index}`}>{criterion}</li>
+                                                ))}
+                                              </ul>
                                             </div>
                                           ) : null}
                                         </div>

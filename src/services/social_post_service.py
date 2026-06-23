@@ -6078,6 +6078,7 @@ def _build_openclaw_supervised_task_payload(
     text = str(post.get("platform_text") or post.get("base_text") or "").strip()
     safety_contract = _social_supervised_safety_contract()
     completion_contract = _social_supervised_completion_contract()
+    done_criteria = _social_supervised_done_criteria()
     return {
         "schema": "localos_social_supervised_publish_task_v1",
         "task_id": str(automation_task_id or "").strip(),
@@ -6090,6 +6091,8 @@ def _build_openclaw_supervised_task_payload(
         "auto_final_click_allowed": False,
         "safety_contract": safety_contract,
         "completion_contract": completion_contract,
+        "done_criteria_ru": done_criteria["ru"],
+        "done_criteria_en": done_criteria["en"],
         "operator_next_action_ru": "Заполнить форму, показать предпросмотр и остановиться до финальной публикации; результат вернуть как preview_ready или manual_fallback.",
         "operator_next_action_en": "Fill the form, show the preview, and stop before final publishing; return preview_ready or manual_fallback.",
         "status": "ready_for_supervised_or_manual_handoff",
@@ -6142,6 +6145,7 @@ def _build_openclaw_supervised_task_payload(
 
 
 def _social_supervised_completion_contract() -> dict[str, Any]:
+    done_criteria = _social_supervised_done_criteria()
     return {
         "schema": "localos_social_supervised_completion_contract_v1",
         "success_state": "preview_ready",
@@ -6173,8 +6177,27 @@ def _social_supervised_completion_contract() -> dict[str, Any]:
             "browser_capability_unavailable",
             "unexpected_external_prompt",
         ],
+        "done_criteria_ru": done_criteria["ru"],
+        "done_criteria_en": done_criteria["en"],
         "owner_completion_instruction_ru": "После предпросмотра человек сам нажимает финальную публикацию и отмечает пост размещённым в LocalOS.",
         "owner_completion_instruction_en": "After preview, a human clicks the final publish button and marks the post as published in LocalOS.",
+    }
+
+
+def _social_supervised_done_criteria() -> dict[str, list[str]]:
+    return {
+        "ru": [
+            "Предпросмотр на площадке показан человеку.",
+            "Финальную публикацию нажал человек, не браузер-автоматизация.",
+            "В LocalOS внесена ссылка или ID опубликованного поста, если площадка их даёт.",
+            "Пост отмечен размещённым, чтобы реакции и заявки попали в следующий план.",
+        ],
+        "en": [
+            "The platform preview was shown to a human.",
+            "The final publish click was made by a human, not browser automation.",
+            "LocalOS has the published post URL or ID if the platform provides one.",
+            "The post is marked as published so reactions and leads can inform the next plan.",
+        ],
     }
 
 
@@ -10121,6 +10144,12 @@ def _social_supervised_placement_packet(
         checklist_en = []
     handoff_state = _json_dict(supervised.get("handoff_state"))
     completion_contract = _json_dict(supervised.get("completion_contract") or _social_supervised_completion_contract())
+    done_criteria_ru = completion_contract.get("done_criteria_ru") or supervised.get("done_criteria_ru") or []
+    done_criteria_en = completion_contract.get("done_criteria_en") or supervised.get("done_criteria_en") or []
+    if not isinstance(done_criteria_ru, list):
+        done_criteria_ru = []
+    if not isinstance(done_criteria_en, list):
+        done_criteria_en = []
     return {
         "schema": "localos_social_supervised_placement_packet_v1",
         "platform": platform,
@@ -10147,6 +10176,8 @@ def _social_supervised_placement_packet(
         "completion_required_fields": completion_contract.get("required_result_fields")
         if isinstance(completion_contract.get("required_result_fields"), list)
         else [],
+        "done_criteria_ru": [str(item) for item in done_criteria_ru if str(item or "").strip()][:5],
+        "done_criteria_en": [str(item) for item in done_criteria_en if str(item or "").strip()][:5],
         "preview_required": bool(completion_contract.get("preview_required", True)),
         "operator_next_action_ru": str(supervised.get("operator_next_action_ru") or "").strip(),
         "operator_next_action_en": str(supervised.get("operator_next_action_en") or "").strip(),
