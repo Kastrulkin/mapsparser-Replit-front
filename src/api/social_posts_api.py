@@ -35,6 +35,7 @@ from services.social_post_service import (
     rehearse_social_posts_publish,
     recommend_next_plan_from_social_posts,
     record_social_post_attribution_event,
+    record_social_post_attribution_events,
     run_scoped_social_dispatch_once,
     run_scoped_social_metrics_once,
     update_social_post_text,
@@ -640,6 +641,34 @@ def social_posts_attribution_event(post_id: str):
         payload = record_social_post_attribution_event(
             str(user_data.get("user_id") or ""),
             post_id,
+            event_type=str(data.get("event_type") or "").strip(),
+            value=int(data.get("value") or 1),
+            event_source=str(data.get("event_source") or "manual").strip(),
+            metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else {},
+        )
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+
+
+@social_posts_bp.route("/api/social-posts/bulk-attribution-events", methods=["POST"])
+def social_posts_bulk_attribution_events():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    rate_error = _check_write_rate_limit(str(user_data.get("user_id") or ""), "bulk-attribution")
+    if rate_error:
+        return rate_error
+    data = request.get_json(silent=True) or {}
+    post_ids = data.get("post_ids") if isinstance(data.get("post_ids"), list) else []
+    try:
+        payload = record_social_post_attribution_events(
+            str(user_data.get("user_id") or ""),
+            post_ids,
             event_type=str(data.get("event_type") or "").strip(),
             value=int(data.get("value") or 1),
             event_source=str(data.get("event_source") or "manual").strip(),

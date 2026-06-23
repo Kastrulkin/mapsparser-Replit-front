@@ -54,6 +54,7 @@ def test_social_post_routes_include_bulk_and_attribution_endpoints():
     assert ("/api/social-posts/<post_id>/mark-supervised-blocked", frozenset({"POST"})) in routes
     assert ("/api/social-posts/<post_id>/supervised-task", frozenset({"POST"})) in routes
     assert ("/api/social-posts/<post_id>/attribution-events", frozenset({"POST"})) in routes
+    assert ("/api/social-posts/bulk-attribution-events", frozenset({"POST"})) in routes
     assert ("/api/content-plans/<plan_id>/social-posts/recommend-next-plan", frozenset({"POST"})) in routes
     assert ("/api/content-plans/<plan_id>/social-posts/apply-recommendation", frozenset({"POST"})) in routes
 

@@ -3769,21 +3769,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setError('');
     setActionSummary(null);
     try {
-      for (const post of selectedSocialCanRecordResults) {
-        await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/attribution-events`, {
-          method: 'POST',
-          body: JSON.stringify({
-            event_type: eventType,
-            value: 1,
-            event_source: 'manual_content_plan_bulk',
-            metadata: {
-              platform: post.platform,
-              content_plan_item_id: post.content_plan_item_id,
-              selected_bulk: true,
-            },
-          }),
-        });
-      }
+      await newAuth.makeRequest('/social-posts/bulk-attribution-events', {
+        method: 'POST',
+        body: JSON.stringify({
+          post_ids: selectedSocialCanRecordResults.map((post) => post.id),
+          event_type: eventType,
+          value: 1,
+          event_source: 'manual_content_plan_bulk',
+          metadata: {
+            selected_bulk: true,
+          },
+        }),
+      });
       if (currentPlan?.id) {
         await loadSocialPosts(currentPlan.id);
         try {

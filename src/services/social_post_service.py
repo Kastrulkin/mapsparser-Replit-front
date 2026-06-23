@@ -2248,34 +2248,14 @@ def record_social_post_attribution_event(
         ensure_social_post_tables(cursor)
         post = _load_post_for_user(cursor, user_id, post_id)
         normalized_event_type = str(event_type or "").strip().lower()
-        if normalized_event_type not in {"lead", "inquiry", "comment", "share", "click", "like", "view"}:
-            raise ValueError("Неподдерживаемый тип события")
-        event_value = max(int(value or 1), 1)
-        event_id = _new_id()
-        cursor.execute(
-            """
-            INSERT INTO social_post_attribution_events (
-                id, social_post_id, business_id, event_type, event_source, value, metadata_json, event_at
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
-            RETURNING *
-            """,
-            (
-                event_id,
-                post.get("id"),
-                post.get("business_id"),
-                normalized_event_type,
-                str(event_source or "manual").strip() or "manual",
-                event_value,
-                _json_dumps(metadata or {}),
-            ),
+        event, metrics = _record_social_post_attribution_event_in_cursor(
+            cursor,
+            post,
+            normalized_event_type,
+            value,
+            event_source,
+            metadata or {},
         )
-        event = _row_to_dict(cursor, cursor.fetchone())
-        for key, item in list(event.items()):
-            if isinstance(item, (datetime, date)):
-                event[key] = item.isoformat()
-        _upsert_manual_attribution_metrics(cursor, str(post.get("id") or ""))
-        metrics = _attribution_metrics_for_post(cursor, str(post.get("id") or ""))
         updated_post = {
             **post,
             **metrics,
@@ -2291,6 +2271,105 @@ def record_social_post_attribution_event(
         raise sys.exc_info()[1]
     finally:
         db.close()
+
+
+def record_social_post_attribution_events(
+    user_id: str,
+    post_ids: list[str],
+    event_type: str,
+    value: int = 1,
+    event_source: str = "manual",
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    requested_ids = [str(post_id or "").strip() for post_id in post_ids if str(post_id or "").strip()]
+    if not requested_ids:
+        raise ValueError("Нет выбранных публикаций")
+    normalized_event_type = str(event_type or "").strip().lower()
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_social_post_tables(cursor)
+        events = []
+        posts = []
+        metrics_by_post = {}
+        for post_id in requested_ids:
+            post = _load_post_for_user(cursor, user_id, post_id)
+            event, metrics = _record_social_post_attribution_event_in_cursor(
+                cursor,
+                post,
+                normalized_event_type,
+                value,
+                event_source,
+                {
+                    **(metadata or {}),
+                    "bulk": True,
+                    "post_id": post_id,
+                    "platform": str(post.get("platform") or "").strip(),
+                    "content_plan_item_id": str(post.get("content_plan_item_id") or "").strip(),
+                },
+            )
+            events.append(event)
+            posts.append({**post, **metrics})
+            metrics_by_post[str(post.get("id") or post_id)] = metrics
+        db.conn.commit()
+        return {
+            "events": events,
+            "posts": posts,
+            "metrics_by_post": metrics_by_post,
+            "summary": {
+                "requested": len(requested_ids),
+                "recorded": len(events),
+                "event_type": normalized_event_type,
+                "external_publish_performed": False,
+                "provider_write_performed": False,
+                "recommendation_should_refresh": True,
+            },
+        }
+    except Exception:
+        db.conn.rollback()
+        raise sys.exc_info()[1]
+    finally:
+        db.close()
+
+
+def _record_social_post_attribution_event_in_cursor(
+    cursor: Any,
+    post: dict[str, Any],
+    event_type: str,
+    value: int = 1,
+    event_source: str = "manual",
+    metadata: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, int]]:
+    normalized_event_type = str(event_type or "").strip().lower()
+    if normalized_event_type not in {"lead", "inquiry", "comment", "share", "click", "like", "view"}:
+        raise ValueError("Неподдерживаемый тип события")
+    event_value = max(int(value or 1), 1)
+    event_id = _new_id()
+    cursor.execute(
+        """
+        INSERT INTO social_post_attribution_events (
+            id, social_post_id, business_id, event_type, event_source, value, metadata_json, event_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+        RETURNING *
+        """,
+        (
+            event_id,
+            post.get("id"),
+            post.get("business_id"),
+            normalized_event_type,
+            str(event_source or "manual").strip() or "manual",
+            event_value,
+            _json_dumps(metadata or {}),
+        ),
+    )
+    event = _row_to_dict(cursor, cursor.fetchone())
+    for key, item in list(event.items()):
+        if isinstance(item, (datetime, date)):
+            event[key] = item.isoformat()
+    _upsert_manual_attribution_metrics(cursor, str(post.get("id") or ""))
+    metrics = _attribution_metrics_for_post(cursor, str(post.get("id") or ""))
+    return event, metrics
 
 
 def collect_social_post_metrics(user_id: str, business_id: str = "", post_id: str = "") -> dict[str, Any]:

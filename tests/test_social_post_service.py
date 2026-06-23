@@ -69,6 +69,7 @@ from services.social_post_service import (
     rehearse_social_post_publish,
     rehearse_social_posts_publish,
     record_social_post_attribution_event,
+    record_social_post_attribution_events,
     run_scoped_social_dispatch_once,
     run_scoped_social_metrics_once,
     _vk_post_url,
@@ -242,6 +243,7 @@ class FakeAttributionEventConn:
         self.committed = False
         self.rolled_back = False
         self.inserted_event = None
+        self.inserted_events = []
         self.metric_upserted = False
 
     def cursor(self):
@@ -264,6 +266,7 @@ class FakeAttributionEventCursor:
         normalized = " ".join(str(query).split()).lower()
         if "insert into social_post_attribution_events" in normalized:
             self.conn.inserted_event = params
+            self.conn.inserted_events.append(params)
             self.next_row = {
                 "id": params[0],
                 "social_post_id": params[1],
@@ -1067,6 +1070,47 @@ def test_record_social_post_attribution_event_returns_updated_metrics(monkeypatc
     assert payload["metrics"]["inquiries"] == 1
     assert payload["post"]["leads"] == 2
     assert payload["post"]["comments"] == 3
+    assert FakeAttributionEventDB.last_conn.metric_upserted is True
+    assert FakeAttributionEventDB.last_conn.committed is True
+
+
+def test_record_social_post_attribution_events_records_bulk_without_external_publish(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeAttributionEventDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "telegram" if post_id == "post-1" else "vk",
+            "status": "published",
+            "content_plan_item_id": f"item-{post_id}",
+            "leads": 0,
+            "inquiries": 0,
+        },
+    )
+
+    payload = record_social_post_attribution_events(
+        "user-1",
+        ["post-1", "post-2"],
+        "inquiry",
+        value=1,
+        event_source="manual_content_plan_bulk",
+        metadata={"selected_bulk": True},
+    )
+
+    assert payload["summary"]["requested"] == 2
+    assert payload["summary"]["recorded"] == 2
+    assert payload["summary"]["event_type"] == "inquiry"
+    assert payload["summary"]["external_publish_performed"] is False
+    assert payload["summary"]["provider_write_performed"] is False
+    assert len(payload["events"]) == 2
+    assert [item["event_type"] for item in payload["events"]] == ["inquiry", "inquiry"]
+    assert len(payload["posts"]) == 2
+    assert payload["posts"][0]["inquiries"] == 1
+    assert payload["metrics_by_post"]["post-1"]["inquiries"] == 1
+    assert len(FakeAttributionEventDB.last_conn.inserted_events) == 2
     assert FakeAttributionEventDB.last_conn.metric_upserted is True
     assert FakeAttributionEventDB.last_conn.committed is True
 
