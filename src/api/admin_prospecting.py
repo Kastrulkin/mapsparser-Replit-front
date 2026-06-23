@@ -9389,10 +9389,13 @@ def partnership_parse_lead(lead_id):
         finally:
             conn.close()
 
-        lead = _drop_mismatched_explicit_business_link(dict(lead))
         display_lead = _normalize_lead_for_display(dict(lead))
         if not display_lead:
             return jsonify({"error": "Lead is not available for parsing"}), 400
+        if _is_internal_partnership_source_url(display_lead.get("source_url")):
+            return jsonify({
+                "error": "Для импортированных из Google Docs партнёров парсинг карты недоступен: добавьте ссылку на Яндекс Карты в поле источника или откройте карточку вручную.",
+            }), 400
 
         business, business_created = _ensure_parse_business_for_partnership_lead(display_lead, str(user_data["user_id"]))
         parse_business_id = str(business.get("id") or "").strip()
@@ -9497,6 +9500,10 @@ def partnership_bulk_parse_leads():
                 if not display_lead:
                     skipped_count += 1
                     errors.append({"lead_id": lead_id, "error": "Lead is not available for parsing"})
+                    continue
+                if _is_internal_partnership_source_url(display_lead.get("source_url")):
+                    skipped_count += 1
+                    errors.append({"lead_id": lead_id, "error": "Google Docs import source is not a map card"})
                     continue
 
                 business, _business_created = _ensure_parse_business_for_partnership_lead(display_lead, str(user_data["user_id"]))
@@ -9773,6 +9780,76 @@ def partnership_update_lead(lead_id):
         return jsonify({"success": True, "item": dict(updated) if hasattr(updated, "keys") else updated})
     except Exception as e:
         print(f"Error updating partnership lead: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/manual-contact", methods=["POST"])
+def partnership_mark_lead_manual_contact(lead_id):
+    """User-level manual contact marker for room-first partnership outreach."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        channel = str(data.get("channel") or "manual").strip().lower() or "manual"
+        comment = str(data.get("comment") or "").strip() or "Отправлено вручную из цифровой комнаты"
+        if channel not in ALLOWED_OUTREACH_CHANNELS:
+            return jsonify({"error": "Unsupported channel"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_manual_crm_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            cur.execute(
+                """
+                SELECT *
+                FROM prospectingleads
+                WHERE id = %s
+                  AND business_id = %s
+                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                LIMIT 1
+                """,
+                (lead_id, business_id),
+            )
+            lead = cur.fetchone()
+            if not lead:
+                return jsonify({"error": "Lead not found"}), 404
+            lead_payload = dict(lead)
+            if channel != "manual" and not _lead_has_channel_contact(lead_payload, channel):
+                return jsonify({"error": _outreach_channel_contact_error(channel)}), 400
+
+            updated = _apply_pipeline_transition(
+                cur,
+                lead_id=lead_id,
+                pipeline_status=PIPELINE_CONTACTED,
+                actor_id=str(user_data.get("user_id") or "") or None,
+                comment=comment,
+                last_contact_channel=channel,
+                last_contact_comment=comment,
+                set_last_contact_at=True,
+            )
+            _record_lead_timeline_event(
+                cur,
+                lead_id=lead_id,
+                event_type="manual_contact_marked",
+                actor_id=str(user_data.get("user_id") or "") or None,
+                comment=comment,
+                payload={"channel": channel, "source": "partnership_room"},
+            )
+            conn.commit()
+            updated = _normalize_lead_for_display(updated or lead_payload) or updated or lead_payload
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, "lead": _to_json_compatible(updated)})
+    except Exception as e:
+        print(f"Error marking partnership manual contact: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -11130,6 +11207,40 @@ def _make_sales_room_url(slug: str) -> str:
     return f"{frontend_base}/room/{slug}"
 
 
+def _is_internal_partnership_source_url(url: Any) -> bool:
+    return str(url or "").strip().lower().startswith("localos-doc://")
+
+
+def _load_latest_sales_room_url_for_lead(cur, lead_id: str) -> str:
+    _ensure_sales_room_tables(cur.connection)
+    cur.execute(
+        """
+        SELECT slug
+        FROM sales_rooms
+        WHERE lead_id = %s
+        ORDER BY updated_at DESC
+        LIMIT 1
+        """,
+        (lead_id,),
+    )
+    row = cur.fetchone()
+    slug = str(row.get("slug") if row and hasattr(row, "get") else (row[0] if row else "")).strip()
+    return _make_sales_room_url(slug) if slug else ""
+
+
+def _append_sales_room_link_to_outreach_text(text: str, room_url: str) -> str:
+    cleaned = str(text or "").strip()
+    url = str(room_url or "").strip()
+    if not cleaned or not url or "/room/" in cleaned:
+        return cleaned
+    return (
+        f"{cleaned}\n\n"
+        "Для удобства подготовил общую цифровую комнату, где можно обсуждать идеи, "
+        "приглашать коллег и обмениваться материалами:\n\n"
+        f"{url}"
+    )
+
+
 def _normalize_sales_room_data_mode(value: Any) -> str:
     normalized = str(value or "").strip().lower()
     if normalized == SALES_ROOM_DATA_AUDITED:
@@ -11377,12 +11488,20 @@ def _build_sales_room_invitation_text(
     if mode == SALES_ROOM_MODE_PARTNER:
         if data_mode == SALES_ROOM_DATA_AUDITED:
             return (
-                f"Здравствуйте. Подготовили короткое предложение по партнёрству между {business_name} и {lead_name}.\n\n"
-                f"Собрали его в отдельной странице, чтобы было удобно посмотреть идею, аудит и следующий шаг:\n{room_url}"
+                "Здравствуйте!\n\n"
+                f"Мы — {business_name}. Подготовили предложение по возможному партнёрству с {lead_name}.\n\n"
+                "Для удобства собрал всё в общей цифровой комнате: там можно посмотреть идею, "
+                "пригласить коллег, внести правки и обмениваться материалами.\n\n"
+                f"{room_url}\n\n"
+                "Подскажите, пожалуйста, с кем можно обсудить возможные варианты сотрудничества?"
             )
         return (
-            f"Здравствуйте. Подготовили короткую идею сотрудничества между {business_name} и {lead_name}.\n\n"
-            f"Собрали предложение на одной странице:\n{room_url}"
+            "Здравствуйте!\n\n"
+            f"Мы — {business_name}. Подготовили короткую идею сотрудничества с {lead_name}.\n\n"
+            "Для удобства сделал общую цифровую комнату, где можно обсуждать варианты, "
+            "приглашать коллег и обмениваться материалами.\n\n"
+            f"{room_url}\n\n"
+            "Подскажите, пожалуйста, с кем можно обсудить возможное сотрудничество?"
         )
     if data_mode == SALES_ROOM_DATA_AUDITED:
         return (
@@ -13927,6 +14046,9 @@ def partnership_draft_offer(lead_id):
                     "prompt_version": "short_note_v2" if letter_type == "first_note" else "commercial_offer_v1",
                     "prompt_source": "local_fallback",
                 }
+
+            room_url = _load_latest_sales_room_url_for_lead(cur, lead_id)
+            draft_text = _append_sales_room_link_to_outreach_text(draft_text, room_url)
 
             draft_id = str(uuid.uuid4())
             cur.execute(

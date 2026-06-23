@@ -55,6 +55,7 @@ import {
   loadPartnershipOutcomes,
   loadPartnershipRalphLoop,
   loadPartnershipSourceQuality,
+  markPartnershipLeadManualContact,
   normalizePartnershipLeads,
   patchPartnershipLead,
   preparePartnershipSalesRoom,
@@ -1328,6 +1329,15 @@ export const PartnershipSearchPage: React.FC = () => {
     });
   };
 
+  const markManualContact = async (leadId: string) => {
+    if (!currentBusinessId) return;
+    await runPartnershipAction('Не удалось отметить ручную отправку', async () => {
+      await markPartnershipLeadManualContact(currentBusinessId, leadId);
+      setMessage('Отправка вручную зафиксирована');
+      await refreshOperationalData();
+    });
+  };
+
   const saveLeadContacts = async () => {
     if (!currentBusinessId || !selectedLeadId) return;
     await runPartnershipAction('Не удалось сохранить данные лида', async () => {
@@ -2458,6 +2468,7 @@ export const PartnershipSearchPage: React.FC = () => {
               onRunAudit={(leadId) => void runAudit(leadId)}
               onRunMatch={(leadId) => void runMatch(leadId)}
               onPrepareSalesRoom={(leadId, dataMode) => void prepareSalesRoom(leadId, dataMode)}
+              onMarkManualContact={(leadId) => void markManualContact(leadId)}
               onUpdateLeadStage={(leadId, stageValue, successMessage, deferred) => void updateLeadStage(leadId, stageValue, successMessage, deferred)}
               onDeleteLead={(leadId) => void deleteLead(leadId)}
               onClearLastGeoSearch={() => {

@@ -234,6 +234,16 @@ export const preparePartnershipSalesRoom = (
     }),
   });
 
+export const markPartnershipLeadManualContact = (businessId: string, leadId: string) =>
+  request(`/partnership/leads/${leadId}/manual-contact`, {
+    method: 'POST',
+    body: JSON.stringify({
+      business_id: businessId,
+      channel: 'manual',
+      comment: 'Отправлено вручную из цифровой комнаты',
+    }),
+  });
+
 export const approvePartnershipDraft = (businessId: string, draftId: string, approvedText: string) =>
   request(`/partnership/drafts/${draftId}/approve`, {
     method: 'POST',

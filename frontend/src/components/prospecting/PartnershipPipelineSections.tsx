@@ -394,6 +394,7 @@ type PartnershipPipelineListProps = {
   onRunAudit: (leadId: string) => void;
   onRunMatch: (leadId: string) => void;
   onPrepareSalesRoom: (leadId: string, dataMode: 'audited' | 'template') => void;
+  onMarkManualContact: (leadId: string) => void;
   onUpdateLeadStage: (leadId: string, stage: string, message: string, deferred: DeferredPayload) => void;
   onDeleteLead: (leadId: string) => void;
   onClearLastGeoSearch: () => void;
@@ -457,6 +458,7 @@ export const PartnershipPipelineList = ({
   onRunAudit,
   onRunMatch,
   onPrepareSalesRoom,
+  onMarkManualContact,
   onUpdateLeadStage,
   onDeleteLead,
   onClearLastGeoSearch,
@@ -655,6 +657,14 @@ export const PartnershipPipelineList = ({
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => onPrepareSalesRoom(lead.id, 'template')} disabled={loading}>
                             Без подготовки данных
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
+                            onClick={() => onMarkManualContact(lead.id)}
+                            disabled={loading}
+                          >
+                            Отправлено вручную
                           </Button>
                         </div>
                       </div>
