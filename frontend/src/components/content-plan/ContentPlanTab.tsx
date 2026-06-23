@@ -9603,6 +9603,16 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 size="sm"
                                 variant="outline"
                                 className="h-7 border-white/20 bg-white/10 px-2 text-[11px] text-white hover:bg-white/20"
+                                onClick={selectPublishedSocialPostsForResult}
+                                disabled={visibleSocialPublishedPosts.length === 0}
+                              >
+                                {isRu ? 'Отметить заявки/обращения' : 'Record leads/inquiries'}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 border-white/20 bg-white/10 px-2 text-[11px] text-white hover:bg-white/20"
                                 onClick={() => { void recommendNextSocialPlan(); }}
                                 disabled={socialBusyAction === 'recommend'}
                               >
