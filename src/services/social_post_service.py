@@ -4959,7 +4959,7 @@ def _social_openclaw_browser_diagnostics(capability_status: dict[str, Any], is_r
 
 def openclaw_browser_capability_status(fetcher: Any = None) -> dict[str, Any]:
     env_value = str(os.getenv("OPENCLAW_BROWSER_USE_ENABLED") or os.getenv("OPENCLAW_BROWSER_USE_AVAILABLE") or "").strip().lower()
-    if env_value in {"1", "true", "yes", "on"}:
+    if env_value in {"1", "true", "yes", "on", "enabled", "available"}:
         return {
             "ready": True,
             "source": "env_override",
@@ -4968,12 +4968,29 @@ def openclaw_browser_capability_status(fetcher: Any = None) -> dict[str, Any]:
             "action_ref": "openclaw.browser.supervised_publish",
             "capability": "social.post.publish_supervised_browser",
         }
-    if env_value in {"0", "false", "no", "off"}:
+    if env_value in {"0", "false", "no", "off", "disabled", "unavailable"}:
         return {
             "ready": False,
             "source": "env_override",
             "status": "disabled",
             "reason": "browser_use_disabled_by_env",
+            "action_ref": "",
+            "capability": "social.post.publish_supervised_browser",
+        }
+    sandbox_bridge_url = str(os.getenv("OPENCLAW_SANDBOX_BRIDGE_URL") or "").strip()
+    if (
+        not fetcher
+        and sandbox_bridge_url
+        and not (os.getenv("OPENCLAW_CAPABILITY_CATALOG_URL") or os.getenv("OPENCLAW_BASE_URL"))
+        and _url_uses_private_or_local_host(sandbox_bridge_url)
+        and not _env_flag_enabled("OPENCLAW_SOCIAL_SUPERVISED_ALLOW_SANDBOX_CALLBACK")
+    ):
+        return {
+            "ready": False,
+            "source": "sandbox_bridge_private_host",
+            "status": "unreachable_from_production",
+            "reason": "sandbox_bridge_private_host",
+            "error": "OPENCLAW_SANDBOX_BRIDGE_URL points to a private/local host and is not allowed for production social browser-use.",
             "action_ref": "",
             "capability": "social.post.publish_supervised_browser",
         }
@@ -6205,7 +6222,7 @@ def _url_uses_private_or_local_host(url: str) -> bool:
 
 
 def _env_flag_enabled(name: str) -> bool:
-    return str(os.getenv(name) or "").strip().lower() in {"1", "true", "yes", "on"}
+    return str(os.getenv(name) or "").strip().lower() in {"1", "true", "yes", "on", "enabled", "available"}
 
 
 def _social_supervised_openclaw_max_attempts() -> int:

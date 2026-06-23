@@ -728,6 +728,37 @@ def test_openclaw_browser_available_uses_sandbox_bridge_catalog(monkeypatch):
     assert status["action_ref"] == "openclaw.browser.supervised_publish"
 
 
+def test_openclaw_browser_capability_status_blocks_private_sandbox_bridge(monkeypatch):
+    monkeypatch.delenv("OPENCLAW_BROWSER_USE_ENABLED", raising=False)
+    monkeypatch.delenv("OPENCLAW_BROWSER_USE_AVAILABLE", raising=False)
+    monkeypatch.delenv("OPENCLAW_CAPABILITY_CATALOG_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_SOCIAL_SUPERVISED_ALLOW_SANDBOX_CALLBACK", raising=False)
+    monkeypatch.setenv("OPENCLAW_SANDBOX_BRIDGE_URL", "http://192.168.0.177:8091/capabilities")
+
+    status = openclaw_browser_capability_status()
+
+    assert status["ready"] is False
+    assert status["source"] == "sandbox_bridge_private_host"
+    assert status["status"] == "unreachable_from_production"
+    assert status["reason"] == "sandbox_bridge_private_host"
+    assert "private/local host" in status["error"]
+
+
+def test_openclaw_browser_capability_status_accepts_enabled_env_values(monkeypatch):
+    monkeypatch.setenv("OPENCLAW_BROWSER_USE_ENABLED", "enabled")
+    monkeypatch.delenv("OPENCLAW_BROWSER_USE_AVAILABLE", raising=False)
+    monkeypatch.delenv("OPENCLAW_CAPABILITY_CATALOG_URL", raising=False)
+    monkeypatch.delenv("OPENCLAW_BASE_URL", raising=False)
+    monkeypatch.setenv("OPENCLAW_SANDBOX_BRIDGE_URL", "http://192.168.0.177:8091/capabilities")
+
+    status = openclaw_browser_capability_status()
+
+    assert status["ready"] is True
+    assert status["source"] == "env_override"
+    assert status["reason"] == "browser_use_enabled_by_env"
+
+
 def test_openclaw_browser_capability_status_preserves_catalog_request_error(monkeypatch):
     monkeypatch.delenv("OPENCLAW_BROWSER_USE_ENABLED", raising=False)
     monkeypatch.delenv("OPENCLAW_BROWSER_USE_AVAILABLE", raising=False)
