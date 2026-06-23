@@ -29,6 +29,7 @@ export const SettingsPage = () => {
   const location = useLocation();
   const channelsRef = useRef<HTMLElement | null>(null);
   const integrationsRef = useRef<HTMLElement | null>(null);
+  const telegramPublishRef = useRef<HTMLDivElement | null>(null);
   const [socialReadinessRefreshKey, setSocialReadinessRefreshKey] = useState(0);
   const { currentBusinessId, currentBusiness } = useOutletContext<{
     currentBusinessId?: string | null;
@@ -46,6 +47,7 @@ export const SettingsPage = () => {
     return searchParams.get('focus') || location.hash.replace(/^#/, '');
   }, [location.hash, location.search]);
   const channelsFocused = focusTarget === 'channels' || focusTarget === 'telegram';
+  const telegramPublishFocused = focusTarget === 'telegram';
   const integrationFocusTargets = new Set(['integrations', 'vk', 'google_business', 'instagram', 'facebook', 'meta']);
   const integrationsFocused = integrationFocusTargets.has(focusTarget);
 
@@ -53,12 +55,16 @@ export const SettingsPage = () => {
     if (!channelsFocused && !integrationsFocused) return;
     window.setTimeout(() => {
       if (channelsFocused) {
+        if (telegramPublishFocused && telegramPublishRef.current) {
+          telegramPublishRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
         channelsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
       }
       integrationsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 80);
-  }, [channelsFocused, integrationsFocused]);
+  }, [channelsFocused, integrationsFocused, telegramPublishFocused]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-7 pb-10">
@@ -136,11 +142,17 @@ export const SettingsPage = () => {
         </div>
         <div className="mt-5 grid grid-cols-1 gap-5 border-t border-slate-100 pt-5 lg:grid-cols-2">
           <WABACredentials businessId={currentBusinessId} business={currentBusiness} />
-          <TelegramBotCredentials
-            businessId={currentBusinessId}
-            business={currentBusiness}
-            onSaved={() => setSocialReadinessRefreshKey((value) => value + 1)}
-          />
+          <div
+            ref={telegramPublishRef}
+            data-testid="social-settings-telegram-publish-card"
+            className={telegramPublishFocused ? 'scroll-mt-24 rounded-3xl ring-2 ring-sky-100' : 'scroll-mt-24'}
+          >
+            <TelegramBotCredentials
+              businessId={currentBusinessId}
+              business={currentBusiness}
+              onSaved={() => setSocialReadinessRefreshKey((value) => value + 1)}
+            />
+          </div>
         </div>
       </DashboardSection>
 
