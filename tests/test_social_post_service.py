@@ -2680,7 +2680,9 @@ def test_meta_channel_readiness_blocks_ready_until_native_publish_exists():
 def test_channel_readiness_exposes_owner_next_action():
     telegram = _channel_readiness("telegram", "api", False, "missing_keys")
     vk = _channel_readiness("vk", "api", False, "missing_permissions")
+    google = _channel_readiness("google_business", "api", False, "missing_connection")
     meta = _channel_readiness("instagram", "api", False, "missing_binding")
+    facebook = _channel_readiness("facebook", "api", False, "missing_connection")
     maps = _channel_readiness("yandex_maps", "manual", False, "manual_fallback")
 
     assert "telegram_bot_token" in telegram["next_action_en"]
@@ -2697,7 +2699,11 @@ def test_channel_readiness_exposes_owner_next_action():
     assert "wall.post" in vk["setup_steps_en"][1]
     assert maps["missing_fields"] == []
     assert "Скопируйте" in maps["setup_steps_ru"][0]
-    assert telegram["settings_path"] == "/dashboard/settings?focus=channels"
+    assert telegram["settings_path"] == "/dashboard/settings?focus=telegram"
+    assert vk["settings_path"] == "/dashboard/settings?focus=vk"
+    assert google["settings_path"] == "/dashboard/settings?focus=google_business"
+    assert meta["settings_path"] == "/dashboard/settings?focus=instagram"
+    assert facebook["settings_path"] == "/dashboard/settings?focus=facebook"
 
 
 def test_channel_readiness_can_expose_safe_connection_checks():

@@ -8816,7 +8816,13 @@ def _channel_readiness_missing_fields(platform: str, status: str) -> list[str]:
 def _channel_readiness_settings_path(platform: str) -> str:
     platform_key = str(platform or "").strip()
     if platform_key == "telegram":
-        return "/dashboard/settings?focus=channels"
+        return "/dashboard/settings?focus=telegram"
+    if platform_key == "vk":
+        return "/dashboard/settings?focus=vk"
+    if platform_key == "google_business":
+        return "/dashboard/settings?focus=google_business"
+    if platform_key in {"instagram", "facebook"}:
+        return f"/dashboard/settings?focus={platform_key}"
     if platform_key in {"yandex_maps", "two_gis"}:
         return "/dashboard/card?tab=news&mode=plan"
     return "/dashboard/settings?focus=integrations"
