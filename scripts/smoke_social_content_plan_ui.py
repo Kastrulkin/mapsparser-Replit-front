@@ -89,6 +89,7 @@ REQUIRED_COPY = {
     "settings vk focus path": "/dashboard/settings?focus=vk",
     "settings google focus path": "/dashboard/settings?focus=google_business",
     "settings meta focus path": "`/dashboard/settings?focus=${normalized}`",
+    "settings maps stay in content plan": "if (normalized === 'yandex_maps' || normalized === 'two_gis') return '/dashboard/card?tab=news&mode=plan';",
     "worker launch recommended scope": "Рекомендованный бизнес для запуска",
     "worker launch gate contract": "launch_gate",
     "worker launch gate test id": "social-first-cycle-launch-gate",

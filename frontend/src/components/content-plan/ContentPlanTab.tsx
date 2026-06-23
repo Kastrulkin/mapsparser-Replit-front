@@ -13752,6 +13752,7 @@ function _socialSettingsPathForPlatform(platform: string): string {
   if (normalized === 'vk') return '/dashboard/settings?focus=vk';
   if (normalized === 'google_business') return '/dashboard/settings?focus=google_business';
   if (normalized === 'instagram' || normalized === 'facebook') return `/dashboard/settings?focus=${normalized}`;
+  if (normalized === 'yandex_maps' || normalized === 'two_gis') return '/dashboard/card?tab=news&mode=plan';
   return '/dashboard/settings?focus=integrations';
 }
 
