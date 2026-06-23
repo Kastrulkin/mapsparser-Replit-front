@@ -6976,7 +6976,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         : 'The main step now is preview and approval. You can edit copy; nothing external is sent until a separate queue step.')
                       : visibleSocialCanQueue.length > 0
                         ? (isRu
-                          ? 'Approval уже есть. Следующий безопасный шаг — поставить посты в расписание, после чего worker обработает их только по дате и готовности каналов.'
+                          ? 'Подтверждение уже есть. Следующий безопасный шаг — поставить посты в расписание, после чего исполнитель обработает их только по дате и готовности каналов.'
                           : 'Approval is done. The next safe step is queueing posts, then the worker processes them only by date and channel readiness.')
                         : visibleSocialNeedsSupervised.length > 0
                           ? (isRu
@@ -7030,7 +7030,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         </div>
                         <div className="rounded-xl bg-white/10 px-3 py-2">
                           <div className="font-semibold text-white">{isRu ? '3. Утвердить и поставить' : '3. Approve and queue'}</div>
-                          <div>{isRu ? 'Approval и расписание идут отдельными безопасными шагами.' : 'Approval and scheduling stay separate safe steps.'}</div>
+                          <div>{isRu ? 'Подтверждение и расписание идут отдельными безопасными шагами.' : 'Approval and scheduling stay separate safe steps.'}</div>
                         </div>
                         <div className="rounded-xl bg-white/10 px-3 py-2">
                           <div className="font-semibold text-white">{isRu ? '4. Исполнить по режиму' : '4. Execute by mode'}</div>

@@ -741,7 +741,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
               </p>
               {isGoogleFocused ? (
                 <p className="mt-2 rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs leading-5 text-sky-900">
-                  Вы пришли из контент-плана: этот канал нужен для API-публикации Google после preview, approval и расписания.
+                  Вы пришли из контент-плана: этот канал нужен для API-публикации Google после предпросмотра, подтверждения и расписания.
                 </p>
               ) : null}
             </div>
