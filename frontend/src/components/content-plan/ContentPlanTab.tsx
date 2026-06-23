@@ -1859,6 +1859,35 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (!firstBlocked) return '/dashboard/settings?focus=integrations';
     return _socialSettingsPathForPlatform(String(firstBlocked.platform || ''));
   }, [socialReadinessSummary.blockedApiChannels]);
+  const socialChannelConnectionGuide = useMemo(() => {
+    const apiChannels = socialChannelReadiness
+      .filter((channel) => String(channel.publish_mode || '').trim() === 'api')
+      .sort(_socialChannelSetupSort);
+    const readyApiChannels = apiChannels.filter((channel) => Boolean(channel.ready));
+    const blockedApiChannels = apiChannels.filter((channel) => !Boolean(channel.ready));
+    const supervisedChannels = socialChannelReadiness
+      .filter((channel) => String(channel.publish_mode || '').trim() !== 'api')
+      .sort(_socialChannelSetupSort);
+    const firstBlocked = blockedApiChannels[0] || null;
+    const quickStartCandidate = readyApiChannels.find((channel) => (
+      String(channel.platform || '').trim() === 'telegram'
+      || String(channel.platform || '').trim() === 'vk'
+    )) || readyApiChannels[0] || null;
+    const recommendedSetup = blockedApiChannels.find((channel) => (
+      String(channel.platform || '').trim() === 'telegram'
+      || String(channel.platform || '').trim() === 'vk'
+    )) || firstBlocked;
+    return {
+      apiChannels,
+      readyApiChannels,
+      blockedApiChannels,
+      supervisedChannels,
+      firstBlocked,
+      quickStartCandidate,
+      recommendedSetup,
+      readyToStart: readyApiChannels.length > 0,
+    };
+  }, [socialChannelReadiness]);
   const socialChannelReadinessByPlatform = useMemo(() => {
     const byPlatform: Record<string, SocialChannelReadiness> = {};
     for (const item of socialChannelReadiness) {
@@ -8333,6 +8362,102 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           </div>
                         </div>
                       </div>
+                      <div
+                        data-testid="social-channel-connection-guide"
+                        className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3"
+                      >
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-950">
+                              {isRu ? 'Подключение каналов' : 'Channel setup guide'}
+                            </div>
+                            <div className="mt-1 text-xs leading-5 text-slate-600">
+                              {socialChannelConnectionGuide.readyToStart
+                                ? (isRu
+                                  ? `Можно начинать с готового API-канала: ${socialChannelConnectionGuide.quickStartCandidate?.platform_label || _socialPlatformLabel(String(socialChannelConnectionGuide.quickStartCandidate?.platform || ''), isRu)}. Остальные каналы LocalOS покажет как “нужно подключить” или “контролируемое размещение”.`
+                                  : `You can start with a ready API channel: ${socialChannelConnectionGuide.quickStartCandidate?.platform_label || _socialPlatformLabel(String(socialChannelConnectionGuide.quickStartCandidate?.platform || ''), isRu)}. Other channels stay marked as setup needed or supervised placement.`)
+                                : (isRu
+                                  ? 'Для первого реального API-поста быстрее всего подключить Telegram или VK. Яндекс/2ГИС останутся контролируемым размещением, а не скрытой автопубликацией.'
+                                  : 'For the first real API post, connect Telegram or VK first. Yandex/2GIS stay supervised placement, not hidden autopublish.')}
+                            </div>
+                            <div className="mt-2 text-xs font-medium text-slate-700">
+                              {socialChannelConnectionGuide.recommendedSetup
+                                ? (isRu
+                                  ? `Первое действие: открыть настройку ${socialChannelConnectionGuide.recommendedSetup.platform_label || _socialPlatformLabel(String(socialChannelConnectionGuide.recommendedSetup.platform || ''), isRu)} и добавить ключи/права.`
+                                  : `First action: open ${socialChannelConnectionGuide.recommendedSetup.platform_label || _socialPlatformLabel(String(socialChannelConnectionGuide.recommendedSetup.platform || ''), isRu)} setup and add keys/permissions.`)
+                                : (isRu
+                                  ? 'Первое действие: подготовить посты, проверить preview и поставить готовые API-каналы в расписание.'
+                                  : 'First action: prepare posts, review the preview, and queue ready API channels.')}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 flex-wrap gap-2">
+                            {socialChannelConnectionGuide.recommendedSetup ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-lg bg-white px-2.5 text-[11px]"
+                                onClick={() => navigate(socialChannelConnectionGuide.recommendedSetup?.settings_path || _socialSettingsPathForPlatform(String(socialChannelConnectionGuide.recommendedSetup?.platform || '')))}
+                              >
+                                {isRu ? 'Открыть подключение' : 'Open setup'}
+                              </Button>
+                            ) : null}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8 rounded-lg bg-white px-2.5 text-[11px]"
+                              onClick={() => { void checkApiChannelPreflight(); }}
+                              disabled={socialBusyAction === 'api-channel-preflight'}
+                            >
+                              {socialBusyAction === 'api-channel-preflight'
+                                ? (isRu ? 'Проверяем...' : 'Checking...')
+                                : (isRu ? 'Проверить готовность' : 'Check readiness')}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                          {socialChannelConnectionGuide.apiChannels.map((channel) => (
+                            <div
+                              key={`connection-guide-api:${channel.platform}`}
+                              className={channel.ready
+                                ? 'rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs leading-5 text-emerald-800'
+                                : 'rounded-lg border border-amber-100 bg-white px-3 py-2 text-xs leading-5 text-amber-800'}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className={channel.ready ? 'font-semibold text-emerald-950' : 'font-semibold text-amber-950'}>
+                                  {channel.platform_label || _socialPlatformLabel(channel.platform, isRu)}
+                                </span>
+                                <span className={channel.ready ? 'rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700' : 'rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700'}>
+                                  {_socialChannelConnectionStateLabel(channel, isRu)}
+                                </span>
+                              </div>
+                              <div className="mt-1">
+                                {isRu
+                                  ? channel.setup_summary_ru || channel.next_action_ru || channel.message_ru
+                                  : channel.setup_summary_en || channel.next_action_en || channel.message_en}
+                              </div>
+                            </div>
+                          ))}
+                          {socialChannelConnectionGuide.supervisedChannels.length > 0 ? (
+                            <div className="rounded-lg border border-sky-100 bg-white px-3 py-2 text-xs leading-5 text-sky-800">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-semibold text-sky-950">
+                                  {isRu ? 'Яндекс/2ГИС' : 'Yandex/2GIS'}
+                                </span>
+                                <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                                  {isRu ? 'контролируемо' : 'supervised'}
+                                </span>
+                              </div>
+                              <div className="mt-1">
+                                {isRu
+                                  ? 'LocalOS подготовит текст и задачу. Финальный клик остаётся за человеком.'
+                                  : 'LocalOS prepares the text and task. The final click stays with a human.'}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
                       {socialReadinessSummary.blockedApiChannels.length > 0 ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           {socialReadinessSummary.blockedApiChannels.slice(0, 4).map((channel) => (
@@ -11020,6 +11145,26 @@ function _socialSettingsPathForPlatform(platform: string): string {
   const normalized = String(platform || '').trim();
   if (normalized === 'telegram') return '/dashboard/settings?focus=channels';
   return '/dashboard/settings?focus=integrations';
+}
+
+function _socialChannelSetupSort(left: SocialChannelReadiness, right: SocialChannelReadiness): number {
+  const priority = ['telegram', 'vk', 'google_business', 'instagram', 'facebook', 'yandex_maps', 'two_gis'];
+  const leftPlatform = String(left.platform || '').trim();
+  const rightPlatform = String(right.platform || '').trim();
+  const leftIndex = priority.indexOf(leftPlatform);
+  const rightIndex = priority.indexOf(rightPlatform);
+  const leftRank = leftIndex >= 0 ? leftIndex : priority.length;
+  const rightRank = rightIndex >= 0 ? rightIndex : priority.length;
+  if (leftRank !== rightRank) return leftRank - rightRank;
+  return String(left.platform_label || leftPlatform).localeCompare(String(right.platform_label || rightPlatform));
+}
+
+function _socialChannelConnectionStateLabel(channel: SocialChannelReadiness, isRu: boolean): string {
+  if (Boolean(channel.ready)) return isRu ? 'готово' : 'ready';
+  const status = String(channel.status || '').trim();
+  if (status.includes('permission') || status.includes('blocked')) return isRu ? 'нужны права' : 'permissions';
+  if ((channel.missing_fields || []).length > 0) return isRu ? 'нужны ключи' : 'keys needed';
+  return isRu ? 'нужно подключить' : 'setup needed';
 }
 
 function _socialWorkerEnvLines(
