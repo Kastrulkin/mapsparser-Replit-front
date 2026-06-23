@@ -2229,6 +2229,115 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       hasAnyReadyApi: primaryReady.length > 0,
     };
   }, [isRu, socialApiPreflight, socialChannelReadiness]);
+  const socialFirstApiBlockerCard = useMemo(() => {
+    const totalPosts = Number(socialSummary?.total || 0);
+    const needsReview = Math.max(visibleSocialNeedsReview.length, Number(socialSummary?.needs_review || 0));
+    const approvedNotQueued = visibleSocialCanQueue.length;
+    const queued = Number(socialSummary?.scheduled || 0);
+    const firstBlocked = socialFirstApiPublishReadiness.firstBlocked;
+    const firstBlockedPlatform = String(firstBlocked?.platform || '').trim();
+    const firstBlockedLabel = firstBlocked
+      ? String(firstBlocked.platform_label || _socialPlatformLabel(firstBlockedPlatform, isRu))
+      : 'Telegram';
+    const firstBlockedStatus = String(firstBlocked?.status || '').trim();
+    const channelLineRu = socialFirstApiPublishReadiness.hasAnyReadyApi
+      ? `Канал: готово ${socialFirstApiPublishReadiness.readyLabels.join(', ')}.`
+      : `Канал: ${firstBlockedLabel} - нужны ключи или права.`;
+    const channelLineEn = socialFirstApiPublishReadiness.hasAnyReadyApi
+      ? `Channel: ready ${socialFirstApiPublishReadiness.readyLabels.join(', ')}.`
+      : `Channel: ${firstBlockedLabel} needs keys or permissions.`;
+    const textLineRu = totalPosts > 0
+      ? `Посты: ${needsReview} на проверке, ${approvedNotQueued} утверждено, ${queued} в расписании.`
+      : 'Посты: сначала подготовьте публикации из тем контент-плана.';
+    const textLineEn = totalPosts > 0
+      ? `Posts: ${needsReview} in review, ${approvedNotQueued} approved, ${queued} queued.`
+      : 'Posts: first prepare publications from content-plan topics.';
+    let status: 'connect' | 'prepare' | 'review' | 'queue' | 'wait' | 'ready' = 'ready';
+    let titleRu = 'Первый рабочий запуск почти готов';
+    let titleEn = 'First working launch is almost ready';
+    let nextRu = 'Проверьте запуск по расписанию и после публикации соберите реакции/заявки.';
+    let nextEn = 'Check scheduled launch and collect reactions/leads after publishing.';
+    let ctaRu = 'Проверить запуск';
+    let ctaEn = 'Check launch';
+
+    if (!socialFirstApiPublishReadiness.hasAnyReadyApi) {
+      status = 'connect';
+      titleRu = 'Первый запуск ждёт подключение канала';
+      titleEn = 'First launch is waiting for channel setup';
+      nextRu = firstBlockedStatus === 'not_configured' || firstBlockedStatus === 'missing_credentials'
+        ? `Подключите ${firstBlockedLabel}, затем вернитесь к проверке текстов и расписанию.`
+        : `Проверьте права ${firstBlockedLabel}, затем вернитесь к проверке текстов и расписанию.`;
+      nextEn = firstBlockedStatus === 'not_configured' || firstBlockedStatus === 'missing_credentials'
+        ? `Connect ${firstBlockedLabel}, then return to copy review and queueing.`
+        : `Check ${firstBlockedLabel} permissions, then return to copy review and queueing.`;
+      ctaRu = 'Открыть настройку канала';
+      ctaEn = 'Open channel setup';
+    } else if (totalPosts === 0) {
+      status = 'prepare';
+      titleRu = 'Первый запуск ждёт подготовку постов';
+      titleEn = 'First launch is waiting for post preparation';
+      nextRu = 'Подготовьте каналы из ближайших тем; наружу на этом шаге ничего не отправится.';
+      nextEn = 'Prepare channel posts from the next topics; nothing is sent externally at this step.';
+      ctaRu = 'Подготовить посты';
+      ctaEn = 'Prepare posts';
+    } else if (needsReview > 0) {
+      status = 'review';
+      titleRu = 'Первый запуск ждёт проверку текстов';
+      titleEn = 'First launch is waiting for copy review';
+      nextRu = 'Откройте предпросмотр, поправьте текст и подтвердите публикации отдельной кнопкой.';
+      nextEn = 'Open the preview, edit copy, and approve publications with a separate button.';
+      ctaRu = 'Открыть проверку';
+      ctaEn = 'Open review';
+    } else if (approvedNotQueued > 0) {
+      status = 'queue';
+      titleRu = 'Первый запуск ждёт расписание';
+      titleEn = 'First launch is waiting for queueing';
+      nextRu = 'Поставьте утверждённые посты в расписание; исполнитель возьмёт их только по дате.';
+      nextEn = 'Queue approved posts; the worker will pick them only when due.';
+      ctaRu = 'Поставить в расписание';
+      ctaEn = 'Queue on schedule';
+    } else if (queued > 0) {
+      status = 'wait';
+      titleRu = 'Первый запуск ждёт дату публикации';
+      titleEn = 'First launch is waiting for the publish date';
+      nextRu = 'Когда наступит дата, API-каналы пойдут через интеграции, а Яндекс/2ГИС останутся контролируемыми.';
+      nextEn = 'When due, API channels use integrations while Yandex/2GIS stay supervised.';
+      ctaRu = 'Проверить запуск';
+      ctaEn = 'Check launch';
+    }
+
+    return {
+      status,
+      tone: status === 'connect' || status === 'review' ? 'warning' : status === 'ready' || status === 'wait' ? 'success' : 'neutral',
+      firstBlockedPlatform,
+      titleRu,
+      titleEn,
+      factsRu: [
+        channelLineRu,
+        textLineRu,
+        'Карты: Яндекс/2ГИС только через контролируемое размещение или ручной режим.',
+      ],
+      factsEn: [
+        channelLineEn,
+        textLineEn,
+        'Maps: Yandex/2GIS only use supervised placement or manual mode.',
+      ],
+      nextRu,
+      nextEn,
+      ctaRu,
+      ctaEn,
+    };
+  }, [
+    isRu,
+    socialFirstApiPublishReadiness.firstBlocked,
+    socialFirstApiPublishReadiness.hasAnyReadyApi,
+    socialFirstApiPublishReadiness.readyLabels,
+    socialSummary?.needs_review,
+    socialSummary?.scheduled,
+    socialSummary?.total,
+    visibleSocialCanQueue.length,
+    visibleSocialNeedsReview.length,
+  ]);
   const selectedSocialQueueApiWarnings = useMemo(() => (
     _socialApiQueueWarnings(selectedSocialCanQueue, socialApiPreflightByPlatform, socialChannelReadinessByPlatform, isRu)
   ), [isRu, selectedSocialCanQueue, socialApiPreflightByPlatform, socialChannelReadinessByPlatform]);
@@ -5466,6 +5575,52 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         {isRu ? 'Открыть настройку' : 'Open setup'}
                       </Button>
                     ) : null}
+                  </div>
+                </div>
+                <div
+                  data-testid="social-first-api-blocker-card"
+                  className={[
+                    'mt-3 rounded-xl border px-3 py-3 text-xs leading-5',
+                    socialFirstApiBlockerCard.tone === 'success'
+                      ? 'border-emerald-300/30 bg-emerald-400/10 text-emerald-50'
+                      : socialFirstApiBlockerCard.tone === 'warning'
+                        ? 'border-amber-300/30 bg-amber-400/10 text-amber-50'
+                        : 'border-sky-300/30 bg-sky-400/10 text-sky-50',
+                  ].join(' ')}
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="font-semibold text-white">
+                        {isRu ? socialFirstApiBlockerCard.titleRu : socialFirstApiBlockerCard.titleEn}
+                      </div>
+                      <ul className="mt-2 space-y-1 text-slate-100">
+                        {(isRu ? socialFirstApiBlockerCard.factsRu : socialFirstApiBlockerCard.factsEn).map((line) => (
+                          <li key={`first-api-blocker-fact:${line}`} className="flex gap-1.5">
+                            <span className="font-semibold text-white">•</span>
+                            <span>{line}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-2 font-medium text-white">
+                        {isRu ? 'Следующий безопасный шаг: ' : 'Next safe step: '}
+                        {isRu ? socialFirstApiBlockerCard.nextRu : socialFirstApiBlockerCard.nextEn}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (socialFirstApiBlockerCard.status === 'connect') {
+                          navigate(_socialSettingsPathForPlatform(socialFirstApiBlockerCard.firstBlockedPlatform || 'telegram'));
+                          return;
+                        }
+                        runSocialPlanNextStep();
+                      }}
+                      className="h-8 shrink-0 border-white/20 bg-white/10 px-3 text-xs text-white hover:bg-white/20 hover:text-white"
+                    >
+                      {isRu ? socialFirstApiBlockerCard.ctaRu : socialFirstApiBlockerCard.ctaEn}
+                    </Button>
                   </div>
                 </div>
                 <div
