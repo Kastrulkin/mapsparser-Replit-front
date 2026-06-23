@@ -115,6 +115,22 @@ if mismatches:
     sys.exit(1)
 PY
 
+  if [[ -z "${SMOKE_BUSINESS_ID}" ]]; then
+    SMOKE_BUSINESS_ID="$(
+      APP_SOCIAL_ENV_JSON="$app_social_env_json" python3 - <<'PY'
+import json
+import os
+
+env = json.loads(os.environ["APP_SOCIAL_ENV_JSON"])
+business_id = str(env.get("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
+print(business_id)
+PY
+    )"
+    if [[ -n "${SMOKE_BUSINESS_ID}" ]]; then
+      echo "auto_scoped_smoke_business_id=${SMOKE_BUSINESS_ID}"
+    fi
+  fi
+
   if [[ -n "${SMOKE_BUSINESS_ID}" ]]; then
     echo
     echo "[social-runtime] scoped launch preflight dry-run"
