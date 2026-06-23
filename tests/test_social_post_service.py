@@ -1275,6 +1275,11 @@ def test_social_dispatch_execution_report_keeps_owner_proof_and_safety():
     assert report["browser_final_click_allowed"] is False
     assert report["provider_write_summary"]["published_with_provider_proof"] == 1
     assert report["provider_write_summary"]["supervised_tasks_created"] == 1
+    assert report["first_api_proof_summary"]["schema"] == "localos_social_first_api_proof_summary_v1"
+    assert report["first_api_proof_summary"]["ready"] is True
+    assert report["first_api_proof_summary"]["published_with_provider_proof"] == 1
+    assert report["first_api_proof_summary"]["provider_post_url"] == "https://t.me/channel/10"
+    assert "заявки" in report["first_api_proof_summary"]["next_action_ru"]
     assert "ручные/контролируемые" in report["next_action_ru"]
 
 
@@ -2853,6 +2858,11 @@ def test_dispatch_preview_readiness_explains_external_controlled_and_manual_work
     assert readiness["first_cycle_steps"][1]["stop_before_final_publish"] is True
     assert readiness["first_cycle_steps"][2]["key"] == "manual_handoff_or_connection"
     assert readiness["first_cycle_steps"][3]["key"] == "skipped_no_access"
+    assert readiness["first_api_proof_candidate"]["schema"] == "localos_social_first_api_proof_candidate_v1"
+    assert readiness["first_api_proof_candidate"]["ready"] is True
+    assert readiness["first_api_proof_candidate"]["id"] == "api-post"
+    assert "provider_post_id/provider_post_url" in readiness["first_api_proof_candidate"]["proof_check_ru"]
+    assert "реакции/заявки" in readiness["first_api_proof_candidate"]["metrics_followup_ru"]
     verification = readiness["first_cycle_verification"]
     assert verification["log_filter"] == "[SOCIAL_POST_DISPATCH]"
     assert verification["business_scope"] == "biz-1"

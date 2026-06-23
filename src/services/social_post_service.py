@@ -2751,12 +2751,67 @@ def _social_dispatch_execution_report(dispatch_result: dict[str, Any]) -> dict[s
                 ]
             ),
         },
+        "first_api_proof_summary": _social_dispatch_first_api_proof_summary(details),
         "title_ru": _social_dispatch_execution_title(status, True),
         "title_en": _social_dispatch_execution_title(status, False),
         "summary_ru": _social_dispatch_execution_summary(picked, published, supervised, manual, failed, True),
         "summary_en": _social_dispatch_execution_summary(picked, published, supervised, manual, failed, False),
         "next_action_ru": _social_dispatch_execution_next_action(status, errors, True),
         "next_action_en": _social_dispatch_execution_next_action(status, errors, False),
+    }
+
+
+def _social_dispatch_first_api_proof_summary(details: list[dict[str, Any]]) -> dict[str, Any]:
+    api_details = [
+        item for item in details or []
+        if str(item.get("platform") or "").strip() in API_PLATFORMS
+    ]
+    published_api = [
+        item for item in api_details
+        if str(item.get("status") or "").strip() == "published"
+    ]
+    proof_items = [
+        item for item in published_api
+        if str(item.get("provider_post_id") or "").strip()
+        or str(item.get("provider_post_url") or "").strip()
+    ]
+    first = proof_items[0] if proof_items else (published_api[0] if published_api else (api_details[0] if api_details else {}))
+    platform = str(first.get("platform") or "").strip()
+    label = str(first.get("platform_label") or platform_label(platform)).strip() if platform else ""
+    ready = bool(proof_items)
+    return {
+        "schema": "localos_social_first_api_proof_summary_v1",
+        "ready": ready,
+        "api_posts_checked": len(api_details),
+        "published_api_posts": len(published_api),
+        "published_with_provider_proof": len(proof_items),
+        "platform": platform,
+        "platform_label": label,
+        "post_id": str(first.get("id") or "").strip(),
+        "provider_post_id": str(first.get("provider_post_id") or "").strip(),
+        "provider_post_url": str(first.get("provider_post_url") or "").strip(),
+        "last_error": str(first.get("last_error") or "").strip(),
+        "required_proof_fields": ["provider_post_id", "provider_post_url"],
+        "summary_ru": (
+            f"Первый API-loop доказан: {label} сохранил provider_post_id/provider_post_url."
+            if ready
+            else "Первый API-loop ещё не доказан: нет published API-поста с provider_post_id/provider_post_url."
+        ),
+        "summary_en": (
+            f"First API loop is proven: {label} saved provider_post_id/provider_post_url."
+            if ready
+            else "First API loop is not proven yet: no published API post has provider_post_id/provider_post_url."
+        ),
+        "next_action_ru": (
+            "Соберите реакции/заявки и отметьте обращения перед корректировкой следующего плана."
+            if ready
+            else "Откройте details dispatch: если есть failed, исправьте канал; если published без proof, сохраните ссылку/ID вручную."
+        ),
+        "next_action_en": (
+            "Collect reactions/leads and mark inquiries before adjusting the next plan."
+            if ready
+            else "Open dispatch details: if failed, fix the channel; if published without proof, save the URL/ID manually."
+        ),
     }
 
 
@@ -3146,6 +3201,7 @@ def _dispatch_preview_readiness(
             skipped_no_access,
             business_scope,
         ),
+        "first_api_proof_candidate": _dispatch_first_api_proof_candidate(preview_items),
         "safety_notes_ru": [
             "Внешние публикации уходят только из approved/queued постов.",
             "Яндекс/2ГИС остаются контролируемыми или ручными: финальный клик публикации не выполняется worker.",
@@ -3223,6 +3279,49 @@ def _dispatch_preview_first_cycle_steps(
             }
         )
     return steps
+
+
+def _dispatch_first_api_proof_candidate(preview_items: list[dict[str, Any]]) -> dict[str, Any]:
+    for item in preview_items or []:
+        if str(item.get("dispatch_action") or "").strip() != "publish_api":
+            continue
+        platform = str(item.get("platform") or "").strip()
+        label = str(item.get("platform_label") or platform_label(platform)).strip()
+        return {
+            "schema": "localos_social_first_api_proof_candidate_v1",
+            "ready": True,
+            "id": str(item.get("id") or "").strip(),
+            "business_id": str(item.get("business_id") or "").strip(),
+            "content_plan_id": str(item.get("content_plan_id") or "").strip(),
+            "content_plan_item_id": str(item.get("content_plan_item_id") or "").strip(),
+            "platform": platform,
+            "platform_label": label,
+            "scheduled_for": item.get("scheduled_for"),
+            "required_proof_fields": ["provider_post_id", "provider_post_url"],
+            "expected_status_ru": "published с provider_post_id/provider_post_url или failed с понятной причиной",
+            "expected_status_en": "published with provider_post_id/provider_post_url or failed with a clear reason",
+            "proof_check_ru": f"После worker откройте {label}: у этого post должен появиться provider_post_id/provider_post_url.",
+            "proof_check_en": f"After the worker runs, open {label}: this post must get provider_post_id/provider_post_url.",
+            "metrics_followup_ru": "Если proof есть, сразу соберите реакции/заявки и отметьте обращения.",
+            "metrics_followup_en": "If proof exists, immediately collect reactions/leads and mark inquiries.",
+            "external_publish_requires_approval": True,
+            "external_publish_performed": False,
+            "dry_run": True,
+        }
+    return {
+        "schema": "localos_social_first_api_proof_candidate_v1",
+        "ready": False,
+        "required_proof_fields": ["provider_post_id", "provider_post_url"],
+        "expected_status_ru": "нет due API-поста для доказательства первого API-loop",
+        "expected_status_en": "no due API post is available to prove the first API loop",
+        "proof_check_ru": "Сначала подготовьте, подтвердите и поставьте в расписание один Telegram/VK/API-пост.",
+        "proof_check_en": "First prepare, approve, and queue one Telegram/VK/API post.",
+        "metrics_followup_ru": "Метрики и заявки появятся после первого доказанного API-поста.",
+        "metrics_followup_en": "Metrics and leads come after the first proven API post.",
+        "external_publish_requires_approval": True,
+        "external_publish_performed": False,
+        "dry_run": True,
+    }
 
 
 def _social_worker_first_cycle_verification(

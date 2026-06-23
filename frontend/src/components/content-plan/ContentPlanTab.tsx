@@ -518,6 +518,20 @@ type SocialDispatchPreview = {
       description_en?: string;
     }>;
     first_cycle_verification?: SocialFirstCycleVerification;
+    first_api_proof_candidate?: {
+      schema?: string;
+      ready?: boolean;
+      id?: string;
+      platform?: string;
+      platform_label?: string;
+      expected_status_ru?: string;
+      expected_status_en?: string;
+      proof_check_ru?: string;
+      proof_check_en?: string;
+      metrics_followup_ru?: string;
+      metrics_followup_en?: string;
+      required_proof_fields?: string[];
+    };
     safety_notes_ru?: string[];
     safety_notes_en?: string[];
   };
@@ -555,6 +569,23 @@ type SocialDispatchExecutionReport = {
     api_publish_attempted?: boolean;
     published_with_provider_proof?: number;
     supervised_tasks_created?: number;
+  };
+  first_api_proof_summary?: {
+    schema?: string;
+    ready?: boolean;
+    api_posts_checked?: number;
+    published_api_posts?: number;
+    published_with_provider_proof?: number;
+    platform?: string;
+    platform_label?: string;
+    post_id?: string;
+    provider_post_id?: string;
+    provider_post_url?: string;
+    last_error?: string;
+    summary_ru?: string;
+    summary_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
   };
   details?: Array<{
     id?: string;
@@ -7903,6 +7934,47 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ? String(socialDispatchExecutionReport.next_action_ru || '')
                               : String(socialDispatchExecutionReport.next_action_en || '')}
                           </div>
+                          {socialDispatchExecutionReport.first_api_proof_summary ? (
+                            <div
+                              data-testid="social-first-api-proof-summary"
+                              className={[
+                                'mt-2 rounded-lg border px-2 py-2 text-[11px] leading-5',
+                                socialDispatchExecutionReport.first_api_proof_summary.ready
+                                  ? 'border-emerald-300/20 bg-emerald-400/10 text-emerald-50'
+                                  : 'border-amber-300/20 bg-amber-400/10 text-amber-50',
+                              ].join(' ')}
+                            >
+                              <div className="font-semibold text-white">
+                                {isRu ? 'Proof первого API-loop' : 'First API-loop proof'}
+                              </div>
+                              <div>
+                                {isRu
+                                  ? String(socialDispatchExecutionReport.first_api_proof_summary.summary_ru || '')
+                                  : String(socialDispatchExecutionReport.first_api_proof_summary.summary_en || '')}
+                              </div>
+                              <div className="mt-1 text-slate-100">
+                                {isRu ? 'Проверено API-постов: ' : 'API posts checked: '}
+                                {Number(socialDispatchExecutionReport.first_api_proof_summary.api_posts_checked || 0)}
+                                {' · '}
+                                {isRu ? 'с provider_post_id/provider_post_url: ' : 'with provider_post_id/provider_post_url: '}
+                                {Number(socialDispatchExecutionReport.first_api_proof_summary.published_with_provider_proof || 0)}
+                              </div>
+                              {socialDispatchExecutionReport.first_api_proof_summary.provider_post_url || socialDispatchExecutionReport.first_api_proof_summary.provider_post_id ? (
+                                <div className="mt-1 break-all text-slate-100">
+                                  {String(
+                                    socialDispatchExecutionReport.first_api_proof_summary.provider_post_url
+                                    || socialDispatchExecutionReport.first_api_proof_summary.provider_post_id
+                                    || ''
+                                  )}
+                                </div>
+                              ) : null}
+                              <div className="mt-1 font-medium text-white">
+                                {isRu
+                                  ? String(socialDispatchExecutionReport.first_api_proof_summary.next_action_ru || '')
+                                  : String(socialDispatchExecutionReport.first_api_proof_summary.next_action_en || '')}
+                              </div>
+                            </div>
+                          ) : null}
                           <div className="mt-1 text-[11px] text-slate-200">
                             {isRu
                               ? 'API-публикации возможны только после approval/queue; Яндекс/2ГИС остаются supervised/manual без финального клика.'
@@ -8031,6 +8103,40 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 {isRu
                                   ? `API ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · контролируемо ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · вручную ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`
                                   : `external ${Number(socialDispatchPreview.readiness?.external_publish_count || 0)} · supervised ${Number(socialDispatchPreview.readiness?.controlled_count || 0)} · manual ${Number(socialDispatchPreview.readiness?.manual_count || 0)}`}
+                              </div>
+                            </div>
+                          ) : null}
+                          {socialDispatchPreview.readiness?.first_api_proof_candidate ? (
+                            <div
+                              data-testid="social-first-api-proof-candidate"
+                              className={[
+                                'mt-2 rounded-lg border px-2 py-2 text-[11px] leading-5',
+                                socialDispatchPreview.readiness.first_api_proof_candidate.ready
+                                  ? 'border-emerald-300/20 bg-emerald-400/10 text-emerald-50'
+                                  : 'border-slate-300/20 bg-white/10 text-slate-200',
+                              ].join(' ')}
+                            >
+                              <div className="font-semibold text-white">
+                                {isRu ? 'Кандидат на первый API-proof' : 'First API-proof candidate'}
+                              </div>
+                              <div>
+                                {socialDispatchPreview.readiness.first_api_proof_candidate.ready
+                                  ? (isRu
+                                    ? `${String(socialDispatchPreview.readiness.first_api_proof_candidate.platform_label || '')}: после worker должен появиться provider_post_id/provider_post_url.`
+                                    : `${String(socialDispatchPreview.readiness.first_api_proof_candidate.platform_label || '')}: after the worker runs, provider_post_id/provider_post_url must appear.`)
+                                  : (isRu
+                                    ? 'Нет due API-поста для доказательства loop.'
+                                    : 'No due API post is available to prove the loop.')}
+                              </div>
+                              <div className="mt-1 text-slate-100">
+                                {isRu
+                                  ? String(socialDispatchPreview.readiness.first_api_proof_candidate.proof_check_ru || '')
+                                  : String(socialDispatchPreview.readiness.first_api_proof_candidate.proof_check_en || '')}
+                              </div>
+                              <div className="mt-1 text-slate-100">
+                                {isRu
+                                  ? String(socialDispatchPreview.readiness.first_api_proof_candidate.metrics_followup_ru || '')
+                                  : String(socialDispatchPreview.readiness.first_api_proof_candidate.metrics_followup_en || '')}
                               </div>
                             </div>
                           ) : null}
