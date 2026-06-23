@@ -340,6 +340,7 @@ REQUIRED_SETTINGS_COPY = {
     "settings google focused card": 'data-testid="social-settings-google-card"',
     "settings vk focused card": 'data-testid="social-settings-vk-card"',
     "settings channel readiness focused card": 'data-testid="social-settings-channel-readiness"',
+    "settings focused card scroll": "target?.scrollIntoView({ behavior: 'smooth', block: 'center' })",
     "settings meta focused copy": "Meta publish включается только после",
     "settings vk requirements": "access_token + group_id/owner_id + wall.post",
     "settings vk form title": "VK публикации",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -91,6 +91,9 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const [socialReadinessSummary, setSocialReadinessSummary] = useState<Record<string, number>>({});
   const [socialOpenClawReadiness, setSocialOpenClawReadiness] = useState<SocialOpenClawReadiness | null>(null);
   const [socialReadinessLoading, setSocialReadinessLoading] = useState(false);
+  const socialReadinessRef = useRef<HTMLDivElement | null>(null);
+  const googleCardRef = useRef<HTMLDivElement | null>(null);
+  const vkCardRef = useRef<HTMLDivElement | null>(null);
   const { toast } = useToast();
   const { t, language } = useLanguage();
   const matonAccount = accounts.find((acc) => acc.source === 'maton');
@@ -126,6 +129,19 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const openClawDiagnostics = language === 'ru'
     ? socialOpenClawReadiness?.diagnostics_ru
     : socialOpenClawReadiness?.diagnostics_en;
+
+  useEffect(() => {
+    let target: HTMLDivElement | null = null;
+    if (isVkFocused) target = vkCardRef.current;
+    else if (isGoogleFocused) target = googleCardRef.current;
+    else if (isMetaFocused) target = socialReadinessRef.current;
+
+    if (!target) return;
+    const timeoutId = window.setTimeout(() => {
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 140);
+    return () => window.clearTimeout(timeoutId);
+  }, [isGoogleFocused, isMetaFocused, isVkFocused, socialReadinessLoading]);
 
   const loadAccounts = async () => {
     if (!currentBusinessId) return;
@@ -548,6 +564,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
           ) : socialReadiness.length ? (
             <>
               <div
+                ref={socialReadinessRef}
                 data-testid="social-settings-channel-readiness"
                 className={[
                   'mt-4 rounded-2xl border px-4 py-4',
@@ -709,6 +726,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
 
         {/* Google Business Profile */}
         <div
+          ref={googleCardRef}
           data-testid="social-settings-google-card"
           className={[
             'flex flex-col gap-4 rounded-3xl border p-5',
@@ -796,6 +814,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
 
         {/* VK */}
         <div
+          ref={vkCardRef}
           data-testid="social-settings-vk-card"
           className={[
             'flex flex-col gap-4 rounded-3xl border p-5',
