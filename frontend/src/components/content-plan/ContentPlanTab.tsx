@@ -1486,6 +1486,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialMetricsLearningPacket, setSocialMetricsLearningPacket] = useState<SocialMetricsLearningPacket | null>(null);
   const [socialLaunchPreflight, setSocialLaunchPreflight] = useState<SocialLaunchPreflight | null>(null);
   const [socialRuntimeStatus, setSocialRuntimeStatus] = useState<SocialRuntimeStatus | null>(null);
+  const [socialPostsLoading, setSocialPostsLoading] = useState(false);
   const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
   const [manualPublishRefs, setManualPublishRefs] = useState<Record<string, { url: string; id: string }>>({});
   const [socialPublishRehearsals, setSocialPublishRehearsals] = useState<Record<string, SocialPublishRehearsal>>({});
@@ -2246,10 +2247,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     const channelLineEn = socialFirstApiPublishReadiness.hasAnyReadyApi
       ? `Channel: ready ${socialFirstApiPublishReadiness.readyLabels.join(', ')}.`
       : `Channel: ${firstBlockedLabel} needs keys or permissions.`;
-    const textLineRu = totalPosts > 0
+    const textLineRu = socialPostsLoading
+      ? 'Посты: обновляем очередь публикаций по этому плану.'
+      : totalPosts > 0
       ? `Посты: ${needsReview} на проверке, ${approvedNotQueued} утверждено, ${queued} в расписании.`
       : 'Посты: сначала подготовьте публикации из тем контент-плана.';
-    const textLineEn = totalPosts > 0
+    const textLineEn = socialPostsLoading
+      ? 'Posts: refreshing the publishing queue for this plan.'
+      : totalPosts > 0
       ? `Posts: ${needsReview} in review, ${approvedNotQueued} approved, ${queued} queued.`
       : 'Posts: first prepare publications from content-plan topics.';
     let status: 'connect' | 'prepare' | 'review' | 'queue' | 'wait' | 'ready' = 'ready';
@@ -2260,7 +2265,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     let ctaRu = 'Проверить запуск';
     let ctaEn = 'Check launch';
 
-    if (!socialFirstApiPublishReadiness.hasAnyReadyApi) {
+    if (socialPostsLoading) {
+      status = 'prepare';
+      titleRu = 'Обновляем очередь публикаций';
+      titleEn = 'Refreshing the publishing queue';
+      nextRu = 'Подождите пару секунд: LocalOS сверяет готовые тексты, подтверждения и расписание.';
+      nextEn = 'Wait a moment: LocalOS is checking prepared copy, approvals, and schedule.';
+      ctaRu = 'Обновляем';
+      ctaEn = 'Refreshing';
+    } else if (!socialFirstApiPublishReadiness.hasAnyReadyApi) {
       status = 'connect';
       titleRu = 'Первый запуск ждёт подключение канала';
       titleEn = 'First launch is waiting for channel setup';
@@ -2333,6 +2346,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     socialFirstApiPublishReadiness.firstBlocked,
     socialFirstApiPublishReadiness.hasAnyReadyApi,
     socialFirstApiPublishReadiness.readyLabels,
+    socialPostsLoading,
     socialSummary?.needs_review,
     socialSummary?.scheduled,
     socialSummary?.total,
@@ -2963,6 +2977,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
   const loadSocialPosts = async (planId: string) => {
     if (!planId) return;
+    setSocialPostsLoading(true);
     try {
       const response = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(planId)}/social-posts`, {
         method: 'GET',
@@ -3005,6 +3020,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSocialDispatchPreview(null);
       setSocialDispatchExecutionReport(null);
       setSocialLaunchPreflight(null);
+    } finally {
+      setSocialPostsLoading(false);
     }
   };
 
@@ -3061,6 +3078,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSocialPostsByItem({});
       setSocialSummary(null);
       setSocialQueueGroups([]);
+      setSocialPostsLoading(false);
       return;
     }
     void loadSocialPosts(currentPlan.id);
@@ -5611,6 +5629,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       type="button"
                       variant="outline"
                       size="sm"
+                      disabled={socialFirstApiBlockerCard.status === 'prepare' && socialPostsLoading}
                       onClick={() => {
                         if (socialFirstApiBlockerCard.status === 'connect') {
                           navigate(_socialSettingsPathForPlatform(socialFirstApiBlockerCard.firstBlockedPlatform || 'telegram'));

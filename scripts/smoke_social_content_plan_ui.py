@@ -42,6 +42,7 @@ REQUIRED_COPY = {
     "overview first api blocker card": "social-first-api-blocker-card",
     "overview first api blocker channel": "Канал:",
     "overview first api blocker posts": "Посты:",
+    "overview first api loading queue": "Посты: обновляем очередь публикаций по этому плану.",
     "overview first api blocker safe step": "Следующий безопасный шаг:",
     "overview first api blocker maps": "Яндекс/2ГИС только через контролируемое размещение или ручной режим",
     "schedule preview": "Проверить расписание",
