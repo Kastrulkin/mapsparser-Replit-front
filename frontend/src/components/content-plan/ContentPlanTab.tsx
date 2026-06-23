@@ -587,6 +587,24 @@ type SocialDispatchExecutionReport = {
     next_action_ru?: string;
     next_action_en?: string;
   };
+  post_publish_learning_gate?: {
+    schema?: string;
+    status?: string;
+    allowed?: boolean;
+    can_collect_metrics?: boolean;
+    can_record_attribution?: boolean;
+    api_proof_ready?: boolean;
+    published_posts?: number;
+    published_with_api_proof?: number;
+    manual_or_supervised_posts?: number;
+    failed_posts?: number;
+    primary_metric_ru?: string;
+    primary_metric_en?: string;
+    summary_ru?: string;
+    summary_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+  };
   details?: Array<{
     id?: string;
     platform?: string;
@@ -8084,6 +8102,65 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ? 'API-публикации возможны только после approval/queue; Яндекс/2ГИС остаются supervised/manual без финального клика.'
                               : 'API publishes only after approval/queue; Yandex/2GIS stay supervised/manual without the final click.'}
                           </div>
+                          {socialDispatchExecutionReport.post_publish_learning_gate ? (
+                            <div
+                              data-testid="social-post-publish-learning-gate"
+                              data-schema="localos_social_post_publish_learning_gate_v1"
+                              className={[
+                                'mt-2 rounded-lg border px-2 py-2 text-[11px] leading-5',
+                                socialDispatchExecutionReport.post_publish_learning_gate.allowed
+                                  ? 'border-emerald-300/20 bg-emerald-400/10 text-emerald-50'
+                                  : 'border-amber-300/20 bg-amber-400/10 text-amber-50',
+                              ].join(' ')}
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Сбор реакций и заявок' : 'Reactions and leads'}
+                                  </div>
+                                  <div className="mt-1">
+                                    {isRu
+                                      ? String(socialDispatchExecutionReport.post_publish_learning_gate.summary_ru || '')
+                                      : String(socialDispatchExecutionReport.post_publish_learning_gate.summary_en || '')}
+                                  </div>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white">
+                                  {socialDispatchExecutionReport.post_publish_learning_gate.allowed
+                                    ? (isRu ? 'можно собирать' : 'can collect')
+                                    : (isRu ? 'сначала publish' : 'publish first')}
+                                </span>
+                              </div>
+                              <div className="mt-2 grid gap-1 sm:grid-cols-3">
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">
+                                    {Number(socialDispatchExecutionReport.post_publish_learning_gate.published_posts || 0)}
+                                  </span>
+                                  {' '}
+                                  {isRu ? 'published' : 'published'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">
+                                    {Number(socialDispatchExecutionReport.post_publish_learning_gate.published_with_api_proof || 0)}
+                                  </span>
+                                  {' '}
+                                  API proof
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">
+                                    {isRu
+                                      ? String(socialDispatchExecutionReport.post_publish_learning_gate.primary_metric_ru || 'Заявки и обращения')
+                                      : String(socialDispatchExecutionReport.post_publish_learning_gate.primary_metric_en || 'Leads and inquiries')}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="mt-2 font-medium text-white">
+                                {isRu ? 'Следующий шаг: ' : 'Next step: '}
+                                {isRu
+                                  ? String(socialDispatchExecutionReport.post_publish_learning_gate.next_action_ru || '')
+                                  : String(socialDispatchExecutionReport.post_publish_learning_gate.next_action_en || '')}
+                              </div>
+                            </div>
+                          ) : null}
                           <div
                             data-testid="social-post-publish-to-learning-next-step"
                             className="mt-2 rounded-lg bg-white/10 px-2 py-2"

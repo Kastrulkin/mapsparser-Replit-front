@@ -1280,6 +1280,13 @@ def test_social_dispatch_execution_report_keeps_owner_proof_and_safety():
     assert report["first_api_proof_summary"]["published_with_provider_proof"] == 1
     assert report["first_api_proof_summary"]["provider_post_url"] == "https://t.me/channel/10"
     assert "заявки" in report["first_api_proof_summary"]["next_action_ru"]
+    assert report["post_publish_learning_gate"]["schema"] == "localos_social_post_publish_learning_gate_v1"
+    assert report["post_publish_learning_gate"]["status"] == "ready_for_metrics_and_attribution"
+    assert report["post_publish_learning_gate"]["allowed"] is True
+    assert report["post_publish_learning_gate"]["can_collect_metrics"] is True
+    assert report["post_publish_learning_gate"]["api_proof_ready"] is True
+    assert report["post_publish_learning_gate"]["primary_metric_ru"] == "Заявки и обращения"
+    assert "Собрать реакции" in report["post_publish_learning_gate"]["next_action_ru"]
     assert "ручные/контролируемые" in report["next_action_ru"]
 
 

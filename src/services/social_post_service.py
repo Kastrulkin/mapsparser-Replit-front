@@ -2863,6 +2863,7 @@ def _social_dispatch_execution_report(dispatch_result: dict[str, Any]) -> dict[s
         status = "manual_action_needed"
     elif picked > 0:
         status = "completed"
+    first_api_proof_summary = _social_dispatch_first_api_proof_summary(details)
     return {
         "schema": "localos_social_dispatch_execution_report_v1",
         "status": status,
@@ -2899,7 +2900,8 @@ def _social_dispatch_execution_report(dispatch_result: dict[str, Any]) -> dict[s
                 ]
             ),
         },
-        "first_api_proof_summary": _social_dispatch_first_api_proof_summary(details),
+        "first_api_proof_summary": first_api_proof_summary,
+        "post_publish_learning_gate": _social_post_publish_learning_gate(details, first_api_proof_summary),
         "title_ru": _social_dispatch_execution_title(status, True),
         "title_en": _social_dispatch_execution_title(status, False),
         "summary_ru": _social_dispatch_execution_summary(picked, published, supervised, manual, failed, True),
@@ -2907,6 +2909,119 @@ def _social_dispatch_execution_report(dispatch_result: dict[str, Any]) -> dict[s
         "next_action_ru": _social_dispatch_execution_next_action(status, errors, True),
         "next_action_en": _social_dispatch_execution_next_action(status, errors, False),
     }
+
+
+def _social_post_publish_learning_gate(
+    details: list[dict[str, Any]],
+    first_api_proof_summary: dict[str, Any],
+) -> dict[str, Any]:
+    published_items = [
+        item for item in details or []
+        if str(item.get("status") or "").strip() == "published"
+    ]
+    failed_items = [
+        item for item in details or []
+        if str(item.get("status") or "").strip() == "failed"
+    ]
+    manual_or_supervised = [
+        item for item in details or []
+        if str(item.get("status") or "").strip() in {"needs_manual_publish", "needs_supervised_publish"}
+    ]
+    proof_ready = bool(first_api_proof_summary.get("ready"))
+    can_collect = len(published_items) > 0
+    if proof_ready:
+        status = "ready_for_metrics_and_attribution"
+    elif can_collect:
+        status = "published_without_api_proof"
+    elif manual_or_supervised:
+        status = "finish_supervised_or_manual_publish"
+    elif failed_items:
+        status = "fix_failed_publish"
+    else:
+        status = "publish_first"
+    return {
+        "schema": "localos_social_post_publish_learning_gate_v1",
+        "status": status,
+        "allowed": can_collect,
+        "can_collect_metrics": can_collect,
+        "can_record_attribution": can_collect,
+        "api_proof_ready": proof_ready,
+        "published_posts": len(published_items),
+        "published_with_api_proof": int(first_api_proof_summary.get("published_with_provider_proof") or 0),
+        "manual_or_supervised_posts": len(manual_or_supervised),
+        "failed_posts": len(failed_items),
+        "primary_metric_ru": "Заявки и обращения",
+        "primary_metric_en": "Leads and inquiries",
+        "external_publish_performed": False,
+        "summary_ru": _social_post_publish_learning_gate_summary(status, True),
+        "summary_en": _social_post_publish_learning_gate_summary(status, False),
+        "next_action_ru": _social_post_publish_learning_gate_next_action(status, True),
+        "next_action_en": _social_post_publish_learning_gate_next_action(status, False),
+    }
+
+
+def _social_post_publish_learning_gate_summary(status: str, is_ru: bool) -> str:
+    if status == "ready_for_metrics_and_attribution":
+        return (
+            "API-публикация доказана: можно собирать реакции и отмечать заявки/обращения."
+            if is_ru
+            else "API publishing is proven: collect reactions and record leads/inquiries."
+        )
+    if status == "published_without_api_proof":
+        return (
+            "Есть опубликованные посты, но первый API-proof неполный: сохраните ссылку или provider ID, затем собирайте реакции."
+            if is_ru
+            else "Published posts exist, but first API proof is incomplete: save URL or provider ID, then collect reactions."
+        )
+    if status == "finish_supervised_or_manual_publish":
+        return (
+            "Сначала завершите контролируемое или ручное размещение и отметьте публикацию."
+            if is_ru
+            else "Finish supervised/manual placement and mark the post as published first."
+        )
+    if status == "fix_failed_publish":
+        return (
+            "Публикация упала: исправьте канал или переведите пост в ручной режим."
+            if is_ru
+            else "Publishing failed: fix the channel or move the post to manual flow."
+        )
+    return (
+        "Сначала опубликуйте хотя бы один approved/queued пост."
+        if is_ru
+        else "Publish at least one approved/queued post first."
+    )
+
+
+def _social_post_publish_learning_gate_next_action(status: str, is_ru: bool) -> str:
+    if status == "ready_for_metrics_and_attribution":
+        return (
+            "Нажмите “Собрать реакции”, затем отметьте заявки/обращения и откройте рекомендации следующего плана."
+            if is_ru
+            else "Click “Collect reactions”, then mark leads/inquiries and open next-plan recommendations."
+        )
+    if status == "published_without_api_proof":
+        return (
+            "Сохраните provider_post_id/provider_post_url или отметьте публикацию вручную, чтобы proof был проверяемым."
+            if is_ru
+            else "Save provider_post_id/provider_post_url or mark the publish manually so proof is verifiable."
+        )
+    if status == "finish_supervised_or_manual_publish":
+        return (
+            "Откройте контролируемое размещение или manual fallback; после фактической публикации сохраните ссылку/ID."
+            if is_ru
+            else "Open supervised placement or manual fallback; after the real publish, save URL/ID."
+        )
+    if status == "fix_failed_publish":
+        return (
+            "Откройте ошибочный пост, исправьте ключи/permissions или повторите публикацию после approval."
+            if is_ru
+            else "Open the failed post, fix keys/permissions, or retry publishing after approval."
+        )
+    return (
+        "Подготовьте, подтвердите и поставьте пост в расписание, затем запустите scoped цикл."
+        if is_ru
+        else "Prepare, approve, and queue a post, then run a scoped cycle."
+    )
 
 
 def _social_dispatch_first_api_proof_summary(details: list[dict[str, Any]]) -> dict[str, Any]:
