@@ -2343,6 +2343,8 @@ def _record_social_post_attribution_event_in_cursor(
     normalized_event_type = str(event_type or "").strip().lower()
     if normalized_event_type not in {"lead", "inquiry", "comment", "share", "click", "like", "view"}:
         raise ValueError("Неподдерживаемый тип события")
+    if str(post.get("status") or "").strip() != "published":
+        raise ValueError("Результаты можно отмечать только после публикации")
     event_value = max(int(value or 1), 1)
     event_id = _new_id()
     cursor.execute(

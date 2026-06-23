@@ -1074,6 +1074,28 @@ def test_record_social_post_attribution_event_returns_updated_metrics(monkeypatc
     assert FakeAttributionEventDB.last_conn.committed is True
 
 
+def test_record_social_post_attribution_event_rejects_unpublished_post(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeAttributionEventDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "telegram",
+            "status": "queued",
+        },
+    )
+
+    with pytest.raises(ValueError, match="после публикации"):
+        record_social_post_attribution_event("user-1", "post-queued", "lead")
+
+    assert FakeAttributionEventDB.last_conn.inserted_events == []
+    assert FakeAttributionEventDB.last_conn.committed is False
+    assert FakeAttributionEventDB.last_conn.rolled_back is True
+
+
 def test_record_social_post_attribution_events_records_bulk_without_external_publish(monkeypatch):
     monkeypatch.setattr(social_post_service, "DatabaseManager", FakeAttributionEventDB)
     monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
@@ -1113,6 +1135,32 @@ def test_record_social_post_attribution_events_records_bulk_without_external_pub
     assert len(FakeAttributionEventDB.last_conn.inserted_events) == 2
     assert FakeAttributionEventDB.last_conn.metric_upserted is True
     assert FakeAttributionEventDB.last_conn.committed is True
+
+
+def test_record_social_post_attribution_events_rejects_unpublished_bulk_post(monkeypatch):
+    monkeypatch.setattr(social_post_service, "DatabaseManager", FakeAttributionEventDB)
+    monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_post_for_user",
+        lambda cursor, user_id, post_id: {
+            "id": post_id,
+            "business_id": "biz-1",
+            "platform": "telegram",
+            "status": "published" if post_id == "post-published" else "approved",
+        },
+    )
+
+    with pytest.raises(ValueError, match="после публикации"):
+        record_social_post_attribution_events(
+            "user-1",
+            ["post-published", "post-approved"],
+            "inquiry",
+            event_source="manual_content_plan_bulk",
+        )
+
+    assert FakeAttributionEventDB.last_conn.rolled_back is True
+    assert FakeAttributionEventDB.last_conn.committed is False
 
 
 def test_social_metrics_result_summaries_explain_api_manual_and_failed_results():
