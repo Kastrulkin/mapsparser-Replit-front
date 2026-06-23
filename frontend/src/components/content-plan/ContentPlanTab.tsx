@@ -1884,46 +1884,61 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     const failed = Number(socialSummary?.failed || 0);
     if (failed > 0 || pending > 0) {
       return {
+        action: 'open_results',
         tone: 'warning',
         titleRu: 'Сначала закрыть публикации',
         titleEn: 'Finish publishing first',
         textRu: `Нужно закрыть ручное/контролируемое размещение или ошибки: ${pending + failed}. После этого LocalOS сможет честно сравнить результат.`,
         textEn: `Manual/supervised placement or failures still need action: ${pending + failed}. After that, LocalOS can compare results honestly.`,
+        ctaRu: 'Открыть публикации',
+        ctaEn: 'Open posts',
       };
     }
     if (socialPrimaryResultCount > 0) {
       return {
+        action: 'recommend',
         tone: 'success',
         titleRu: 'Есть главный результат',
         titleEn: 'Primary results recorded',
         textRu: `Заявки и обращения: ${socialPrimaryResultCount}. Можно предлагать изменения следующего плана, но применять только после подтверждения.`,
         textEn: `Leads and inquiries: ${socialPrimaryResultCount}. You can suggest next-plan changes, but apply only after approval.`,
+        ctaRu: 'Предложить изменения',
+        ctaEn: 'Suggest changes',
       };
     }
     if (socialEarlySignalCount > 0) {
       return {
+        action: 'recommend',
         tone: 'caution',
         titleRu: 'Есть ранние сигналы',
         titleEn: 'Early signals recorded',
         textRu: `Ранние сигналы: ${socialEarlySignalCount}. Перед применением изменений отметьте заявки/обращения, если они были.`,
         textEn: `Early signals: ${socialEarlySignalCount}. Before applying changes, record leads/inquiries if any happened.`,
+        ctaRu: 'Предложить изменения',
+        ctaEn: 'Suggest changes',
       };
     }
     if (published > 0) {
       return {
+        action: 'collect',
         tone: 'caution',
         titleRu: 'Нужно собрать реакции',
         titleEn: 'Collect reactions next',
         textRu: `Опубликовано: ${published}. Соберите реакции или отметьте заявки вручную, затем предложите изменения следующего плана.`,
         textEn: `Published: ${published}. Collect reactions or record leads manually, then suggest next-plan changes.`,
+        ctaRu: 'Собрать реакции',
+        ctaEn: 'Collect reactions',
       };
     }
     return {
+      action: 'open_results',
       tone: 'neutral',
       titleRu: 'Результаты появятся после публикаций',
       titleEn: 'Results appear after publishing',
       textRu: 'Сначала подготовьте, утвердите и поставьте посты в расписание. После публикаций здесь появятся реакции, заявки и следующий шаг.',
       textEn: 'Prepare, approve, and queue posts first. After publishing, reactions, leads, and the next action will appear here.',
+      ctaRu: 'Открыть очередь',
+      ctaEn: 'Open queue',
     };
   }, [
     socialEarlySignalCount,
@@ -6048,10 +6063,29 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => setActiveZone('queue')}
+                      onClick={() => {
+                        if (socialLearningLoopStatus.action === 'collect') {
+                          void collectSocialPostMetricsForBusiness();
+                          return;
+                        }
+                        if (socialLearningLoopStatus.action === 'recommend') {
+                          void recommendNextSocialPlan();
+                          return;
+                        }
+                        setActiveZone('queue');
+                      }}
+                      disabled={
+                        (socialLearningLoopStatus.action === 'collect' && socialBusyAction === 'collect-metrics')
+                        || (socialLearningLoopStatus.action === 'recommend' && socialBusyAction === 'recommend')
+                      }
+                      data-testid="social-overview-learning-loop-action"
                       className="h-8 shrink-0 border-white/20 bg-white/10 px-3 text-xs text-white hover:bg-white/20 hover:text-white"
                     >
-                      {isRu ? 'Открыть результаты' : 'Open results'}
+                      {socialLearningLoopStatus.action === 'collect' && socialBusyAction === 'collect-metrics'
+                        ? (isRu ? 'Собираем...' : 'Collecting...')
+                        : socialLearningLoopStatus.action === 'recommend' && socialBusyAction === 'recommend'
+                          ? (isRu ? 'Считаем...' : 'Calculating...')
+                          : (isRu ? socialLearningLoopStatus.ctaRu : socialLearningLoopStatus.ctaEn)}
                     </Button>
                   </div>
                 </div>
