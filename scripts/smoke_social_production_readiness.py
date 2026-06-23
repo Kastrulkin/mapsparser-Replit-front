@@ -246,6 +246,7 @@ REQUIRED_DEPLOY_CONTRACT = {
     "runtime social scripts list": "runtime_script_files",
     "acceptance probe upload": "scripts/social_posting_acceptance_probe.py",
     "social readiness smoke upload": "scripts/smoke_social_production_readiness.py",
+    "social runtime smoke upload": "scripts/smoke_social_posting_runtime.sh",
     "container script sync": "docker compose cp ${remote_tmp}/scripts/. app:/app/scripts/",
     "worker script sync": "docker compose cp ${remote_tmp}/scripts/. worker:/app/scripts/",
     "container probe compile check": "python3 -m py_compile /app/scripts/social_posting_acceptance_probe.py",

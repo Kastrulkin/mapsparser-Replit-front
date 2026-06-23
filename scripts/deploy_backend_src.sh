@@ -8,6 +8,7 @@ entrypoint_file="${repo_root}/entrypoint.sh"
 runtime_script_files=(
   "scripts/social_posting_acceptance_probe.py"
   "scripts/smoke_social_production_readiness.py"
+  "scripts/smoke_social_posting_runtime.sh"
 )
 
 server_host="${DEPLOY_HOST:-root@80.78.242.105}"
