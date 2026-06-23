@@ -730,6 +730,14 @@ type SocialLaunchPreflight = {
     next_action_en?: string;
     first_post_checklist_ru?: string[];
     first_post_checklist_en?: string[];
+    first_api_launch_plan_ru?: string[];
+    first_api_launch_plan_en?: string[];
+    recommended_start_reason_ru?: string;
+    recommended_start_reason_en?: string;
+    proof_check_ru?: string;
+    proof_check_en?: string;
+    metrics_followup_ru?: string;
+    metrics_followup_en?: string;
     external_publish_requires_approval?: boolean;
     publish_path_ru?: string;
     publish_path_en?: string;
@@ -7489,6 +7497,56 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       </li>
                                     ))}
                                   </ol>
+                                </div>
+                              ) : null}
+                              {(
+                                isRu
+                                  ? socialLaunchPreflight.first_api_publish_readiness.first_api_launch_plan_ru
+                                  : socialLaunchPreflight.first_api_publish_readiness.first_api_launch_plan_en
+                              )?.length ? (
+                                <div
+                                  data-testid="social-first-api-launch-plan"
+                                  className="mt-2 rounded-lg bg-white/10 px-2 py-2"
+                                >
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'План первого API-поста' : 'First API post launch plan'}
+                                  </div>
+                                  <ol className="mt-1 space-y-1">
+                                    {(
+                                      isRu
+                                        ? socialLaunchPreflight.first_api_publish_readiness.first_api_launch_plan_ru
+                                        : socialLaunchPreflight.first_api_publish_readiness.first_api_launch_plan_en
+                                    )?.slice(0, 5).map((step, index) => (
+                                      <li key={`first-api-launch-plan:${index}:${step}`} className="flex gap-1.5 text-slate-100">
+                                        <span className="font-semibold text-white">{index + 1}.</span>
+                                        <span>{step}</span>
+                                      </li>
+                                    ))}
+                                  </ol>
+                                  <div className="mt-2 rounded-md bg-white/10 px-2 py-1 text-slate-100">
+                                    <span className="font-semibold text-white">
+                                      {isRu ? 'Почему этот канал: ' : 'Why this channel: '}
+                                    </span>
+                                    {isRu
+                                      ? String(socialLaunchPreflight.first_api_publish_readiness.recommended_start_reason_ru || '')
+                                      : String(socialLaunchPreflight.first_api_publish_readiness.recommended_start_reason_en || '')}
+                                  </div>
+                                  <div className="mt-1 rounded-md bg-white/10 px-2 py-1 text-slate-100">
+                                    <span className="font-semibold text-white">
+                                      {isRu ? 'Proof-check: ' : 'Proof check: '}
+                                    </span>
+                                    {isRu
+                                      ? String(socialLaunchPreflight.first_api_publish_readiness.proof_check_ru || 'После первого запуска проверьте provider_post_id/provider_post_url; без этого цикл не доказан.')
+                                      : String(socialLaunchPreflight.first_api_publish_readiness.proof_check_en || 'After the first run, check provider_post_id/provider_post_url; without that, the loop is not proven.')}
+                                  </div>
+                                  <div className="mt-1 rounded-md bg-white/10 px-2 py-1 text-slate-100">
+                                    <span className="font-semibold text-white">
+                                      {isRu ? 'После публикации: ' : 'After publishing: '}
+                                    </span>
+                                    {isRu
+                                      ? String(socialLaunchPreflight.first_api_publish_readiness.metrics_followup_ru || 'После proof соберите реакции/заявки; следующий план не меняется автоматически без approval.')
+                                      : String(socialLaunchPreflight.first_api_publish_readiness.metrics_followup_en || 'After proof, collect reactions/leads; the next plan is not changed automatically without approval.')}
+                                  </div>
                                 </div>
                               ) : null}
                               <div className="mt-1 text-slate-200">

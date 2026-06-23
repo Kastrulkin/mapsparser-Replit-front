@@ -974,6 +974,14 @@ def _social_first_api_publish_readiness(
         "next_action_en": _social_first_api_publish_next_action(status, blocked_platforms, False),
         "first_post_checklist_ru": _social_first_api_post_checklist(status, recommended_start_platform, True),
         "first_post_checklist_en": _social_first_api_post_checklist(status, recommended_start_platform, False),
+        "first_api_launch_plan_ru": _social_first_api_launch_plan(status, recommended_start_platform, True),
+        "first_api_launch_plan_en": _social_first_api_launch_plan(status, recommended_start_platform, False),
+        "recommended_start_reason_ru": _social_first_api_start_reason(status, recommended_start_platform, True),
+        "recommended_start_reason_en": _social_first_api_start_reason(status, recommended_start_platform, False),
+        "proof_check_ru": _social_first_api_proof_check(status, recommended_start_platform, True),
+        "proof_check_en": _social_first_api_proof_check(status, recommended_start_platform, False),
+        "metrics_followup_ru": _social_first_api_metrics_followup(status, recommended_start_platform, True),
+        "metrics_followup_en": _social_first_api_metrics_followup(status, recommended_start_platform, False),
         "external_publish_requires_approval": True,
         "publish_path_ru": "Только после preview, human approval, queue и due-даты.",
         "publish_path_en": "Only after preview, human approval, queueing, and the due date.",
@@ -1125,6 +1133,165 @@ def _social_first_api_post_checklist(
             else "After connecting it, rerun the live API check and prepare the first post."
         ),
     ]
+
+
+def _social_first_api_launch_plan(
+    status: str,
+    recommended_platform: dict[str, Any],
+    is_ru: bool,
+) -> list[str]:
+    label = str(
+        recommended_platform.get("platform_label")
+        or recommended_platform.get("platform")
+        or ("API-канал" if is_ru else "API channel")
+    ).strip()
+    next_action = str(
+        recommended_platform.get("next_action_ru" if is_ru else "next_action_en")
+        or ""
+    ).strip()
+    if status in {"all_api_channels_ready", "partial_api_ready"}:
+        return [
+            (
+                f"Начните с одного готового канала: {label}."
+                if is_ru
+                else f"Start with one ready channel: {label}."
+            ),
+            (
+                "Возьмите ближайшую тему контент-плана и подготовьте platform-specific текст."
+                if is_ru
+                else "Use the nearest content-plan topic and prepare platform-specific copy."
+            ),
+            (
+                "Покажите preview владельцу и сохраните правки до approval."
+                if is_ru
+                else "Show the preview to the owner and save edits before approval."
+            ),
+            (
+                "После approval поставьте пост в queue; worker публикует только due API-пост."
+                if is_ru
+                else "After approval, queue the post; the worker publishes only the due API post."
+            ),
+            (
+                "Зафиксируйте proof публикации и сразу отметьте заявки/обращения, если они появились."
+                if is_ru
+                else "Record publish proof and immediately mark leads/inquiries if they appear."
+            ),
+        ]
+    if status == "no_api_ready":
+        setup_step = next_action or (
+            "подключите ключи, права и аккаунт"
+            if is_ru
+            else "connect keys, permissions, and account binding"
+        )
+        return [
+            (
+                f"Сначала доведите {label} до ready: {setup_step}."
+                if is_ru
+                else f"First make {label} ready: {setup_step}."
+            ),
+            (
+                "Повторите live API-проверку без публикации."
+                if is_ru
+                else "Rerun live API-preflight without publishing."
+            ),
+            (
+                "Когда появится ready-канал, пройдите preview → approval → queue для одного поста."
+                if is_ru
+                else "When a ready channel appears, run preview → approval → queue for one post."
+            ),
+            (
+                "Не включайте внешний publish, пока нет явного ready и approval."
+                if is_ru
+                else "Do not enable external publish until ready and approval are explicit."
+            ),
+        ]
+    return [
+        (
+            "Подключите Telegram или VK как первый API-канал."
+            if is_ru
+            else "Connect Telegram or VK as the first API channel."
+        ),
+        (
+            "После подключения повторите live API-проверку и подготовьте один пост из контент-плана."
+            if is_ru
+            else "After connecting it, rerun live API-preflight and prepare one content-plan post."
+        ),
+        (
+            "Дальше идите только через preview, human approval и queue."
+            if is_ru
+            else "Then proceed only through preview, human approval, and queue."
+        ),
+    ]
+
+
+def _social_first_api_start_reason(
+    status: str,
+    recommended_platform: dict[str, Any],
+    is_ru: bool,
+) -> str:
+    label = str(
+        recommended_platform.get("platform_label")
+        or recommended_platform.get("platform")
+        or ("API-канал" if is_ru else "API channel")
+    ).strip()
+    if status in {"all_api_channels_ready", "partial_api_ready"}:
+        return (
+            f"{label} выбран как самый короткий путь к первому проверенному API-посту: канал уже ready, поэтому риск только в тексте, approval и due-времени."
+            if is_ru
+            else f"{label} is the shortest path to the first proven API post: the channel is ready, so the remaining risk is copy, approval, and due time."
+        )
+    if status == "no_api_ready":
+        return (
+            f"{label} выбран как первый блокер: без ключей/прав LocalOS не должен пытаться публиковать наружу."
+            if is_ru
+            else f"{label} is the first blocker: without keys/permissions LocalOS must not try to publish externally."
+        )
+    return (
+        "Telegram или VK обычно быстрее всего дают первый проверенный API-пост."
+        if is_ru
+        else "Telegram or VK usually unlock the first proven API post fastest."
+    )
+
+
+def _social_first_api_proof_check(
+    status: str,
+    recommended_platform: dict[str, Any],
+    is_ru: bool,
+) -> str:
+    label = str(
+        recommended_platform.get("platform_label")
+        or recommended_platform.get("platform")
+        or ("API-канал" if is_ru else "API channel")
+    ).strip()
+    if status in {"all_api_channels_ready", "partial_api_ready"}:
+        return (
+            f"После первого запуска откройте {label}: у опубликованного social_post должны быть provider_post_id/provider_post_url; без этого цикл не доказан."
+            if is_ru
+            else f"After the first run, open {label}: the published social_post must have provider_post_id/provider_post_url; without that, the loop is not proven."
+        )
+    return (
+        "Сначала добейтесь ready в live API-проверке; provider_post_id/provider_post_url проверяются только после реальной approved/queued публикации."
+        if is_ru
+        else "First get live API-preflight to ready; provider_post_id/provider_post_url are checked only after a real approved/queued publish."
+    )
+
+
+def _social_first_api_metrics_followup(
+    status: str,
+    recommended_platform: dict[str, Any],
+    is_ru: bool,
+) -> str:
+    if status in {"all_api_channels_ready", "partial_api_ready"}:
+        return (
+            "После proof соберите реакции/заявки и отметьте обращения; следующий план не меняется автоматически без approval."
+            if is_ru
+            else "After proof, collect reactions/leads and mark inquiries; the next plan is not changed automatically without approval."
+        )
+    return (
+        "Метрики появятся после первого доказанного API-поста; до этого цель — подключить канал и не имитировать success."
+        if is_ru
+        else "Metrics come after the first proven API post; until then, the goal is to connect a channel and avoid fake success."
+    )
 
 
 def _api_preflight_blocked_due_posts(

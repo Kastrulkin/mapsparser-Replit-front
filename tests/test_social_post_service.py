@@ -2967,6 +2967,10 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert "approval" in payload["first_api_publish_readiness"]["publish_path_en"]
     assert "Telegram" in payload["first_api_publish_readiness"]["first_post_checklist_ru"][0]
     assert "approval" in payload["first_api_publish_readiness"]["first_post_checklist_en"][2]
+    assert "Telegram" in payload["first_api_publish_readiness"]["first_api_launch_plan_ru"][0]
+    assert "provider_post_id/provider_post_url" in payload["first_api_publish_readiness"]["proof_check_ru"]
+    assert "заявки" in payload["first_api_publish_readiness"]["metrics_followup_ru"]
+    assert "shortest path" in payload["first_api_publish_readiness"]["recommended_start_reason_en"]
     assert payload["recommended_env"]["dispatch"]["SOCIAL_POST_DISPATCH_BUSINESS_ID"] == "biz-1"
     assert payload["recommended_env"]["metrics"]["SOCIAL_POST_METRICS_BUSINESS_ID"] == "biz-1"
     assert payload["safety"]["approval_required"] is True
@@ -3110,6 +3114,9 @@ def test_social_launch_preflight_blocks_due_api_posts_when_live_preflight_fails(
     assert payload["first_api_publish_readiness"]["recommended_start_platform"]["platform"] == "google_business"
     assert payload["first_api_publish_readiness"]["blocked_platforms"][0]["platform"] == "google_business"
     assert "live API-проверку" in payload["first_api_publish_readiness"]["first_post_checklist_ru"][1]
+    assert "Повторите live API-проверку" in payload["first_api_publish_readiness"]["first_api_launch_plan_ru"][1]
+    assert "provider_post_id/provider_post_url" in payload["first_api_publish_readiness"]["proof_check_ru"]
+    assert "не имитировать success" in payload["first_api_publish_readiness"]["metrics_followup_ru"]
     assert payload["production_readiness"]["status"] == "blocked"
     assert payload["production_readiness"]["ready_for_first_scoped_cycle"] is False
     assert payload["production_readiness"]["blockers"][0]["key"] == "api_preflight_blocked"
