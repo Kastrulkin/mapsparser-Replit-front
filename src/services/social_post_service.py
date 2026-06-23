@@ -426,12 +426,19 @@ def _build_social_launch_preflight_payload(
         manual_count,
         skipped_no_access,
     )
+    first_api_proof_gate = _social_first_api_proof_gate(
+        launch_gate,
+        readiness.get("first_api_proof_candidate") if isinstance(readiness.get("first_api_proof_candidate"), dict) else {},
+        api_preflight_blocked_due_posts,
+        runtime_alignment,
+    )
     return {
         "business_id": scope,
         "status": status,
         "safe_to_enable_scoped_dispatch": safe_to_enable,
         "production_readiness": production_readiness,
         "launch_gate": launch_gate,
+        "first_api_proof_gate": first_api_proof_gate,
         "channel_readiness": channel_readiness,
         "channel_summary": channel_summary,
         "dispatch_preview": dispatch_preview,
@@ -664,6 +671,147 @@ def _social_first_cycle_launch_gate_next_action(status: str, blockers: list[Any]
         if is_ru
         else "Prepare, approve, and queue at least one post."
     )
+
+
+def _social_first_api_proof_gate(
+    launch_gate: dict[str, Any],
+    candidate: dict[str, Any],
+    api_preflight_blocked_due_posts: list[dict[str, Any]],
+    runtime_alignment: dict[str, Any],
+) -> dict[str, Any]:
+    candidate_ready = bool(candidate.get("ready"))
+    launch_allowed = bool(launch_gate.get("allowed"))
+    api_blocked = len(api_preflight_blocked_due_posts or []) > 0
+    dispatch_alignment = (
+        runtime_alignment.get("dispatch")
+        if isinstance(runtime_alignment.get("dispatch"), dict)
+        else {}
+    )
+    background_worker_aligned = bool(dispatch_alignment.get("can_process_this_business"))
+    ui_run_once_allowed = bool(candidate_ready and launch_allowed and not api_blocked)
+    if api_blocked:
+        status = "api_preflight_blocked"
+    elif not candidate_ready:
+        status = "no_due_api_candidate"
+    elif not launch_allowed:
+        status = "launch_gate_blocked"
+    elif not background_worker_aligned:
+        status = "ready_for_ui_run_once"
+    else:
+        status = "ready_for_worker_or_ui"
+    return {
+        "schema": "localos_social_first_api_proof_gate_v1",
+        "status": status,
+        "allowed": ui_run_once_allowed,
+        "ui_run_once_allowed": ui_run_once_allowed,
+        "background_worker_aligned": background_worker_aligned,
+        "requires_human_confirmation": True,
+        "external_publish_requires_approval": True,
+        "external_publish_performed": False,
+        "browser_final_click_allowed": False,
+        "candidate": candidate,
+        "blocked_posts": len(api_preflight_blocked_due_posts or []),
+        "title_ru": _social_first_api_proof_gate_title(status, True),
+        "title_en": _social_first_api_proof_gate_title(status, False),
+        "summary_ru": _social_first_api_proof_gate_summary(status, candidate, True),
+        "summary_en": _social_first_api_proof_gate_summary(status, candidate, False),
+        "next_action_ru": _social_first_api_proof_gate_next_action(
+            status,
+            launch_gate,
+            api_preflight_blocked_due_posts,
+            True,
+        ),
+        "next_action_en": _social_first_api_proof_gate_next_action(
+            status,
+            launch_gate,
+            api_preflight_blocked_due_posts,
+            False,
+        ),
+    }
+
+
+def _social_first_api_proof_gate_title(status: str, is_ru: bool) -> str:
+    if status == "ready_for_worker_or_ui":
+        return "API-proof готов к запуску" if is_ru else "API proof is ready to run"
+    if status == "ready_for_ui_run_once":
+        return "Можно запустить из LocalOS" if is_ru else "Can run from LocalOS"
+    if status == "api_preflight_blocked":
+        return "API-proof заблокирован preflight" if is_ru else "API proof is blocked by preflight"
+    if status == "no_due_api_candidate":
+        return "Нет API-поста для proof" if is_ru else "No API post for proof"
+    return "Сначала откройте общий запуск" if is_ru else "Open the general launch gate first"
+
+
+def _social_first_api_proof_gate_summary(
+    status: str,
+    candidate: dict[str, Any],
+    is_ru: bool,
+) -> str:
+    label = str(candidate.get("platform_label") or candidate.get("platform") or "").strip()
+    if status == "ready_for_worker_or_ui":
+        return (
+            f"{label}: можно дождаться worker или запустить один scoped цикл из LocalOS; proof должен появиться как provider_post_id/provider_post_url."
+            if is_ru
+            else f"{label}: wait for the worker or run one scoped cycle from LocalOS; proof must appear as provider_post_id/provider_post_url."
+        )
+    if status == "ready_for_ui_run_once":
+        return (
+            f"{label}: можно запустить один scoped цикл из LocalOS; после запуска нужен provider_post_id/provider_post_url. Фоновой worker для этого бизнеса ещё не выровнен."
+            if is_ru
+            else f"{label}: one scoped cycle can run from LocalOS; provider_post_id/provider_post_url is required after launch. The background worker is not aligned to this business yet."
+        )
+    if status == "api_preflight_blocked":
+        return (
+            "Live API-preflight нашёл due API-пост с неготовым каналом; publish не должен стартовать."
+            if is_ru
+            else "Live API preflight found a due API post with a channel that is not ready; publishing must not start."
+        )
+    if status == "no_due_api_candidate":
+        return (
+            "Чтобы доказать API-loop, нужен due Telegram/VK/API-пост: approved, queued и с готовым каналом."
+            if is_ru
+            else "To prove the API loop, create a due Telegram/VK/API post: approved, queued, and with a ready channel."
+        )
+    return (
+        "Общий launch gate пока закрыт; API-proof нельзя запускать отдельно."
+        if is_ru
+        else "The general launch gate is closed; API proof cannot run separately."
+    )
+
+
+def _social_first_api_proof_gate_next_action(
+    status: str,
+    launch_gate: dict[str, Any],
+    api_preflight_blocked_due_posts: list[dict[str, Any]],
+    is_ru: bool,
+) -> str:
+    if status == "ready_for_worker_or_ui":
+        return (
+            "Запустите один scoped цикл или дождитесь worker, затем проверьте provider_post_id/provider_post_url и соберите реакции/заявки."
+            if is_ru
+            else "Run one scoped cycle or wait for the worker, then check provider_post_id/provider_post_url and collect reactions/leads."
+        )
+    if status == "ready_for_ui_run_once":
+        return (
+            "Нажмите запуск одного scoped цикла; для фонового режима отдельно выровняйте SOCIAL_POST_DISPATCH_BUSINESS_ID."
+            if is_ru
+            else "Run one scoped cycle; for background mode, align SOCIAL_POST_DISPATCH_BUSINESS_ID separately."
+        )
+    if status == "api_preflight_blocked":
+        first = api_preflight_blocked_due_posts[0] if api_preflight_blocked_due_posts else {}
+        action = str(first.get("next_action_ru" if is_ru else "next_action_en") or "").strip()
+        return action or (
+            "Исправьте ключи/permissions/location канала и повторите live API-проверку."
+            if is_ru
+            else "Fix channel keys/permissions/location and rerun live API preflight."
+        )
+    if status == "no_due_api_candidate":
+        return (
+            "Подготовьте один Telegram/VK/API-пост, подтвердите текст и поставьте его в расписание на сейчас или ближайшее время."
+            if is_ru
+            else "Prepare one Telegram/VK/API post, approve the copy, and queue it for now or the nearest time."
+        )
+    return str(launch_gate.get("next_action_ru" if is_ru else "next_action_en") or "").strip()
 
 
 def _social_production_readiness(

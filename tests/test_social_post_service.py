@@ -2924,6 +2924,15 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
                 "controlled_count": 1,
                 "manual_count": 0,
                 "skipped_no_access": 0,
+                "first_api_proof_candidate": {
+                    "schema": "localos_social_first_api_proof_candidate_v1",
+                    "ready": True,
+                    "id": "post-telegram",
+                    "platform": "telegram",
+                    "platform_label": "Telegram",
+                    "proof_check_ru": "После worker должен появиться provider_post_id/provider_post_url.",
+                    "metrics_followup_ru": "Если proof есть, сразу соберите реакции/заявки.",
+                },
             },
         },
         launch_rehearsal={
@@ -3015,6 +3024,13 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert payload["launch_gate"]["requires_human_confirmation"] is True
     assert payload["launch_gate"]["browser_final_click_allowed"] is False
     assert "API-посты" in payload["launch_gate"]["summary_ru"]
+    assert payload["first_api_proof_gate"]["schema"] == "localos_social_first_api_proof_gate_v1"
+    assert payload["first_api_proof_gate"]["status"] == "ready_for_ui_run_once"
+    assert payload["first_api_proof_gate"]["allowed"] is True
+    assert payload["first_api_proof_gate"]["ui_run_once_allowed"] is True
+    assert payload["first_api_proof_gate"]["background_worker_aligned"] is False
+    assert payload["first_api_proof_gate"]["candidate"]["id"] == "post-telegram"
+    assert "provider_post_id/provider_post_url" in payload["first_api_proof_gate"]["summary_ru"]
     warning_keys = [item["key"] for item in payload["production_readiness"]["warnings"]]
     assert "dispatch_runtime_not_aligned" in warning_keys
     assert "maps_supervised_required" in warning_keys

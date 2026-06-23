@@ -701,6 +701,34 @@ type SocialLaunchPreflight = {
     next_action_ru?: string;
     next_action_en?: string;
   };
+  first_api_proof_gate?: {
+    schema?: string;
+    status?: string;
+    allowed?: boolean;
+    ui_run_once_allowed?: boolean;
+    background_worker_aligned?: boolean;
+    requires_human_confirmation?: boolean;
+    external_publish_requires_approval?: boolean;
+    external_publish_performed?: boolean;
+    browser_final_click_allowed?: boolean;
+    blocked_posts?: number;
+    title_ru?: string;
+    title_en?: string;
+    summary_ru?: string;
+    summary_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+    candidate?: {
+      ready?: boolean;
+      id?: string;
+      platform?: string;
+      platform_label?: string;
+      proof_check_ru?: string;
+      proof_check_en?: string;
+      metrics_followup_ru?: string;
+      metrics_followup_en?: string;
+    };
+  };
   channel_summary?: {
     api_ready?: number;
     api_needs_attention?: number;
@@ -7816,6 +7844,82 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 {isRu
                                   ? 'Нажатие запуска всё равно требует подтверждения; Яндекс/2ГИС без финального клика.'
                                   : 'Running still requires confirmation; Yandex/2GIS keep the final click disabled.'}
+                              </div>
+                            </div>
+                          ) : null}
+                          {socialLaunchPreflight.first_api_proof_gate ? (
+                            <div
+                              data-testid="social-first-api-proof-gate"
+                              data-schema="localos_social_first_api_proof_gate_v1"
+                              className={[
+                                'mt-2 rounded-lg border px-2 py-2 text-[11px] leading-5',
+                                socialLaunchPreflight.first_api_proof_gate.allowed
+                                  ? 'border-emerald-200/30 bg-emerald-400/10 text-emerald-50'
+                                  : 'border-amber-200/30 bg-amber-950/20 text-amber-50',
+                              ].join(' ')}
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Первый API-proof' : 'First API proof'}
+                                    {' · '}
+                                    {isRu
+                                      ? String(socialLaunchPreflight.first_api_proof_gate.title_ru || '')
+                                      : String(socialLaunchPreflight.first_api_proof_gate.title_en || '')}
+                                  </div>
+                                  <div className="mt-1">
+                                    {isRu
+                                      ? String(socialLaunchPreflight.first_api_proof_gate.summary_ru || '')
+                                      : String(socialLaunchPreflight.first_api_proof_gate.summary_en || '')}
+                                  </div>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white">
+                                  {socialLaunchPreflight.first_api_proof_gate.allowed
+                                    ? (isRu ? 'можно проверить' : 'can verify')
+                                    : (isRu ? 'не готово' : 'not ready')}
+                                </span>
+                              </div>
+                              <div className="mt-2 grid gap-1 sm:grid-cols-3">
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">
+                                    {socialLaunchPreflight.first_api_proof_gate.ui_run_once_allowed ? (isRu ? 'да' : 'yes') : (isRu ? 'нет' : 'no')}
+                                  </span>
+                                  {' '}
+                                  {isRu ? 'запуск из LocalOS' : 'LocalOS run'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">
+                                    {socialLaunchPreflight.first_api_proof_gate.background_worker_aligned ? (isRu ? 'да' : 'yes') : (isRu ? 'нет' : 'no')}
+                                  </span>
+                                  {' '}
+                                  {isRu ? 'worker scope' : 'worker scope'}
+                                </div>
+                                <div className="rounded-md bg-white/10 px-2 py-1">
+                                  <span className="font-semibold text-white">
+                                    {Number(socialLaunchPreflight.first_api_proof_gate.blocked_posts || 0)}
+                                  </span>
+                                  {' '}
+                                  {isRu ? 'блокеры' : 'blockers'}
+                                </div>
+                              </div>
+                              {socialLaunchPreflight.first_api_proof_gate.candidate?.ready ? (
+                                <div className="mt-2 rounded-md bg-white/10 px-2 py-1.5 text-slate-100">
+                                  <div className="font-semibold text-white">
+                                    {socialLaunchPreflight.first_api_proof_gate.candidate.platform_label
+                                      || _socialPlatformLabel(String(socialLaunchPreflight.first_api_proof_gate.candidate.platform || ''), isRu)}
+                                  </div>
+                                  <div>
+                                    {isRu
+                                      ? String(socialLaunchPreflight.first_api_proof_gate.candidate.proof_check_ru || 'После запуска должен появиться provider_post_id/provider_post_url.')
+                                      : String(socialLaunchPreflight.first_api_proof_gate.candidate.proof_check_en || 'After launch, provider_post_id/provider_post_url must appear.')}
+                                  </div>
+                                </div>
+                              ) : null}
+                              <div className="mt-2 font-medium text-white">
+                                {isRu ? 'Следующий шаг: ' : 'Next step: '}
+                                {isRu
+                                  ? String(socialLaunchPreflight.first_api_proof_gate.next_action_ru || '')
+                                  : String(socialLaunchPreflight.first_api_proof_gate.next_action_en || '')}
                               </div>
                             </div>
                           ) : null}
