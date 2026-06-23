@@ -6866,30 +6866,53 @@ def _social_first_api_proof_dossier(
         item for item in channel_readiness
         if str(item.get("publish_mode") or "").strip() == "api"
     ]
-    ready_channels = [item for item in api_channels if bool(item.get("ready"))]
-    blocked_channels = [item for item in api_channels if not bool(item.get("ready"))]
+    ready_channels = sorted(
+        [item for item in api_channels if bool(item.get("ready"))],
+        key=lambda item: _social_first_api_priority_rank(str(item.get("platform") or "")),
+    )
+    blocked_channels = sorted(
+        [item for item in api_channels if not bool(item.get("ready"))],
+        key=lambda item: _social_first_api_priority_rank(str(item.get("platform") or "")),
+    )
+    ready_platforms = {
+        str(item.get("platform") or "").strip()
+        for item in ready_channels
+        if str(item.get("platform") or "").strip()
+    }
     api_posts = [
         post for post in posts
         if str(post.get("platform") or "").strip() in API_PLATFORMS
     ]
-    published_with_proof = [
+    published_with_proof = sorted([
         post for post in api_posts
         if str(post.get("status") or "").strip() == "published"
         and (
             str(post.get("provider_post_id") or "").strip()
             or str(post.get("provider_post_url") or "").strip()
         )
+    ], key=_social_first_api_post_priority)
+    proof_candidate_posts = [
+        post for post in api_posts
+        if str(post.get("platform") or "").strip() in ready_platforms
     ]
-    queued_posts = [post for post in api_posts if str(post.get("status") or "").strip() == "queued"]
-    approved_posts = [post for post in api_posts if str(post.get("status") or "").strip() == "approved"]
-    review_posts = [
+    queued_posts = sorted(
+        [post for post in proof_candidate_posts if str(post.get("status") or "").strip() == "queued"],
+        key=_social_first_api_post_priority,
+    )
+    approved_posts = sorted(
+        [post for post in proof_candidate_posts if str(post.get("status") or "").strip() == "approved"],
+        key=_social_first_api_post_priority,
+    )
+    review_posts = sorted([
         post for post in api_posts
         if str(post.get("status") or "").strip() in {"draft", "needs_review"}
-    ]
-    failed_or_manual_posts = [
+        and str(post.get("platform") or "").strip() in ready_platforms
+    ], key=_social_first_api_post_priority)
+    failed_or_manual_posts = sorted([
         post for post in api_posts
         if str(post.get("status") or "").strip() in {"failed", "needs_manual_publish"}
-    ]
+        and str(post.get("platform") or "").strip() in ready_platforms
+    ], key=_social_first_api_post_priority)
 
     candidate: dict[str, Any] = {}
     if published_with_proof:
@@ -6969,6 +6992,25 @@ def _social_first_api_proof_dossier(
         "steps_ru": _social_first_api_proof_dossier_steps(status, label, True),
         "steps_en": _social_first_api_proof_dossier_steps(status, label, False),
     }
+
+
+def _social_first_api_priority_rank(platform: str) -> int:
+    priority = {
+        "telegram": 0,
+        "vk": 1,
+        "google_business": 2,
+        "instagram": 3,
+        "facebook": 4,
+    }
+    return priority.get(str(platform or "").strip(), 99)
+
+
+def _social_first_api_post_priority(post: dict[str, Any]) -> tuple[int, str]:
+    platform = str(post.get("platform") or "").strip()
+    scheduled_for = str(post.get("scheduled_for") or "").strip()
+    created_at = str(post.get("created_at") or "").strip()
+    post_id = str(post.get("id") or "").strip()
+    return (_social_first_api_priority_rank(platform), scheduled_for or created_at or post_id)
 
 
 def _social_first_api_proof_dossier_title(status: str, is_ru: bool) -> str:

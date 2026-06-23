@@ -3145,6 +3145,58 @@ def test_social_first_api_proof_dossier_guides_owner_from_setup_to_proof():
     assert proven["primary_metric_ru"] == "Заявки и обращения"
 
 
+def test_social_first_api_proof_dossier_does_not_pick_blocked_meta_draft():
+    dossier = _social_first_api_proof_dossier(
+        [
+            {
+                "id": "post-facebook",
+                "platform": "facebook",
+                "status": "needs_review",
+            }
+        ],
+        [
+            _channel_readiness("facebook", "api", False, "adapter_pending"),
+            _channel_readiness("telegram", "api", False, "missing_keys"),
+            _channel_readiness("vk", "api", False, "missing_permissions"),
+        ],
+        plan_item_count=2,
+    )
+
+    assert dossier["status"] == "connect_first_api_channel"
+    assert dossier["candidate_post_id"] == ""
+    assert dossier["recommended_platform"] == "telegram"
+    assert dossier["blocked_api_channels"][0]["platform"] == "telegram"
+    assert "Telegram или VK" in dossier["summary_ru"]
+    assert "Подключите Telegram или VK" in dossier["steps_ru"][0]
+
+
+def test_social_first_api_proof_dossier_prefers_telegram_ready_post_over_meta():
+    dossier = _social_first_api_proof_dossier(
+        [
+            {
+                "id": "post-facebook",
+                "platform": "facebook",
+                "status": "needs_review",
+            },
+            {
+                "id": "post-telegram",
+                "platform": "telegram",
+                "status": "needs_review",
+            },
+        ],
+        [
+            _channel_readiness("facebook", "api", True, "ready"),
+            _channel_readiness("telegram", "api", True, "ready"),
+        ],
+        plan_item_count=2,
+    )
+
+    assert dossier["status"] == "review_and_approve"
+    assert dossier["candidate_post_id"] == "post-telegram"
+    assert dossier["recommended_platform"] == "telegram"
+    assert dossier["ready_api_channels"][0]["platform"] == "telegram"
+
+
 def test_social_launch_preflight_blocks_due_api_posts_when_live_preflight_fails(monkeypatch):
     monkeypatch.delenv("SOCIAL_POST_DISPATCH_ENABLED", raising=False)
     payload = _build_social_launch_preflight_payload(
