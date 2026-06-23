@@ -180,6 +180,10 @@ type SocialPublishEvidence = {
     stop_before_final_publish?: boolean;
     browser_final_click_allowed?: boolean;
     final_publish_policy?: string;
+    completion_required_fields?: string[];
+    preview_required?: boolean;
+    operator_next_action_ru?: string;
+    operator_next_action_en?: string;
     owner_next_action_ru?: string;
     owner_next_action_en?: string;
   };
@@ -11215,6 +11219,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               const placementTaskId = String(placementPacket?.automation_task_id || post.automation_task_id || '').trim();
                               const placementOutboxId = String(placementPacket?.openclaw_outbox_id || '').trim();
                               const placementLedgerId = String(placementPacket?.agent_action_ledger_id || supervisedLedgerId || '').trim();
+                              const placementOperatorNextAction = String(
+                                isRu
+                                  ? placementPacket?.operator_next_action_ru || supervisedPayload?.operator_next_action_ru || ''
+                                  : placementPacket?.operator_next_action_en || supervisedPayload?.operator_next_action_en || ''
+                              ).trim();
+                              const placementCompletionFields = Array.isArray(placementPacket?.completion_required_fields)
+                                ? placementPacket.completion_required_fields.filter(Boolean).map(String).slice(0, 5)
+                                : [];
                               const placementReadyChips = [
                                 placementPacket?.target_ready
                                   ? (isRu ? 'цель готова' : 'target ready')
@@ -11452,6 +11464,34 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                                 <div>
                                                   <span className="font-semibold">ledger:</span>{' '}
                                                   <span className="font-mono">{placementLedgerId}</span>
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                          ) : null}
+                                          {placementOperatorNextAction || placementCompletionFields.length > 0 || placementPacket.preview_required ? (
+                                            <div className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] leading-5 text-amber-900">
+                                              {placementOperatorNextAction ? (
+                                                <div>
+                                                  <span className="font-semibold">
+                                                    {isRu ? 'Как выполнить: ' : 'How to execute: '}
+                                                  </span>
+                                                  {placementOperatorNextAction}
+                                                </div>
+                                              ) : null}
+                                              {placementPacket.preview_required ? (
+                                                <div>
+                                                  <span className="font-semibold">
+                                                    {isRu ? 'Предпросмотр: ' : 'Preview: '}
+                                                  </span>
+                                                  {isRu ? 'обязателен перед финальным кликом' : 'required before the final click'}
+                                                </div>
+                                              ) : null}
+                                              {placementCompletionFields.length > 0 ? (
+                                                <div>
+                                                  <span className="font-semibold">
+                                                    {isRu ? 'Вернуть результат: ' : 'Return result: '}
+                                                  </span>
+                                                  {placementCompletionFields.join(', ')}
                                                 </div>
                                               ) : null}
                                             </div>

@@ -5776,6 +5776,7 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
     capability_status = openclaw_browser_capability_status()
     manual_handoff = _manual_publish_handoff_payload(post, target, "browser_capability_unavailable")
     safety_contract = _social_supervised_safety_contract()
+    completion_contract = _social_supervised_completion_contract()
     handoff_state = _social_supervised_handoff_state(post, task_payload, capability_status)
     return {
         "automation_task_id": automation_task_id,
@@ -5802,6 +5803,9 @@ def _supervised_publish_metadata(cursor: Any, post: dict[str, Any], automation_t
             "final_publish_policy": "human_final_click_required",
             "handoff_state": handoff_state,
             "safety_contract": safety_contract,
+            "completion_contract": completion_contract,
+            "operator_next_action_ru": str(task_payload.get("operator_next_action_ru") or "").strip(),
+            "operator_next_action_en": str(task_payload.get("operator_next_action_en") or "").strip(),
             "fallback_reasons": ["captcha", "login_required", "changed_ui", "browser_capability_unavailable"],
             "openclaw_capability_status": capability_status,
         },
@@ -5868,6 +5872,7 @@ def _build_openclaw_supervised_task_payload(
     target_payload = target if isinstance(target, dict) else {}
     text = str(post.get("platform_text") or post.get("base_text") or "").strip()
     safety_contract = _social_supervised_safety_contract()
+    completion_contract = _social_supervised_completion_contract()
     return {
         "schema": "localos_social_supervised_publish_task_v1",
         "task_id": str(automation_task_id or "").strip(),
@@ -5879,6 +5884,9 @@ def _build_openclaw_supervised_task_payload(
         "stop_before_final_publish": True,
         "auto_final_click_allowed": False,
         "safety_contract": safety_contract,
+        "completion_contract": completion_contract,
+        "operator_next_action_ru": "Заполнить форму, показать предпросмотр и остановиться до финальной публикации; результат вернуть как preview_ready или manual_fallback.",
+        "operator_next_action_en": "Fill the form, show the preview, and stop before final publishing; return preview_ready or manual_fallback.",
         "status": "ready_for_supervised_or_manual_handoff",
         "platform": platform,
         "platform_label": platform_label(platform),
@@ -5925,6 +5933,43 @@ def _build_openclaw_supervised_task_payload(
             "manual_instruction_ru": "Скопируйте текст из LocalOS, разместите его на площадке вручную и отметьте публикацию размещённой.",
             "manual_instruction_en": "Copy the text from LocalOS, publish it manually on the platform, and mark the post as published.",
         },
+    }
+
+
+def _social_supervised_completion_contract() -> dict[str, Any]:
+    return {
+        "schema": "localos_social_supervised_completion_contract_v1",
+        "success_state": "preview_ready",
+        "fallback_state": "manual_fallback_required",
+        "preview_required": True,
+        "final_publish_click_owner": "human",
+        "browser_final_click_allowed": False,
+        "external_publish_performed_by_task": False,
+        "required_result_fields": [
+            "status",
+            "preview_available",
+            "target_url",
+            "filled_text",
+            "blocked_reason",
+        ],
+        "allowed_result_statuses": [
+            "preview_ready",
+            "manual_fallback_required",
+            "blocked_by_login",
+            "blocked_by_captcha",
+            "blocked_by_changed_ui",
+            "blocked_by_missing_target",
+        ],
+        "manual_fallback_triggers": [
+            "captcha",
+            "login_required",
+            "changed_ui",
+            "missing_target_url",
+            "browser_capability_unavailable",
+            "unexpected_external_prompt",
+        ],
+        "owner_completion_instruction_ru": "После предпросмотра человек сам нажимает финальную публикацию и отмечает пост размещённым в LocalOS.",
+        "owner_completion_instruction_en": "After preview, a human clicks the final publish button and marks the post as published in LocalOS.",
     }
 
 
@@ -6115,6 +6160,11 @@ def _enqueue_social_supervised_openclaw_outbox(
             or task_payload.get("safety_contract")
             or _social_supervised_safety_contract()
         )
+        completion_contract = _json_dict(
+            supervised_payload.get("completion_contract")
+            or task_payload.get("completion_contract")
+            or _social_supervised_completion_contract()
+        )
         post_id = str(updated_post.get("id") or "").strip()
         business_id = str(updated_post.get("business_id") or "").strip()
         outbox_id = _new_id()
@@ -6129,6 +6179,17 @@ def _enqueue_social_supervised_openclaw_outbox(
             "openclaw_task": task_payload,
             "handoff_state": handoff_state,
             "safety_contract": safety_contract,
+            "completion_contract": completion_contract,
+            "operator_next_action_ru": str(
+                supervised_payload.get("operator_next_action_ru")
+                or task_payload.get("operator_next_action_ru")
+                or "Заполнить форму, показать предпросмотр и остановиться до финальной публикации; результат вернуть как preview_ready или manual_fallback."
+            ).strip(),
+            "operator_next_action_en": str(
+                supervised_payload.get("operator_next_action_en")
+                or task_payload.get("operator_next_action_en")
+                or "Fill the form, show the preview, and stop before final publishing; return preview_ready or manual_fallback."
+            ).strip(),
             "external_publish_performed": False,
             "provider_write_performed": False,
             "browser_final_click_allowed": False,
@@ -9789,6 +9850,7 @@ def _social_supervised_placement_packet(
     if not isinstance(checklist_en, list):
         checklist_en = []
     handoff_state = _json_dict(supervised.get("handoff_state"))
+    completion_contract = _json_dict(supervised.get("completion_contract") or _social_supervised_completion_contract())
     return {
         "schema": "localos_social_supervised_placement_packet_v1",
         "platform": platform,
@@ -9811,6 +9873,13 @@ def _social_supervised_placement_packet(
         "stop_before_final_publish": bool(supervised.get("stop_before_final_publish", True)),
         "browser_final_click_allowed": False,
         "final_publish_policy": "human_final_click_required",
+        "completion_contract": completion_contract,
+        "completion_required_fields": completion_contract.get("required_result_fields")
+        if isinstance(completion_contract.get("required_result_fields"), list)
+        else [],
+        "preview_required": bool(completion_contract.get("preview_required", True)),
+        "operator_next_action_ru": str(supervised.get("operator_next_action_ru") or "").strip(),
+        "operator_next_action_en": str(supervised.get("operator_next_action_en") or "").strip(),
         "owner_next_action_ru": (
             "Откройте площадку, вставьте готовый текст, проверьте предпросмотр и нажмите финальную публикацию только сами."
         ),
