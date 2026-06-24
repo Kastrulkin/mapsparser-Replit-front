@@ -1052,6 +1052,21 @@ type SocialLaunchPreflight = {
     fast_start_message_en?: string;
     safe_path_ru?: string[];
     safe_path_en?: string[];
+    pre_proof_checks?: Array<{
+      key?: string;
+      platform?: string;
+      label_ru?: string;
+      label_en?: string;
+      status?: string;
+      message_ru?: string;
+      message_en?: string;
+      action_ru?: string;
+      action_en?: string;
+      settings_path?: string;
+      endpoint?: string;
+      external_post_published?: boolean;
+      required_before_first_publish?: boolean;
+    }>;
     message_ru?: string;
     message_en?: string;
     next_action_ru?: string;
@@ -9177,6 +9192,43 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       </li>
                                     ))}
                                   </ol>
+                                ) : null}
+                                {(socialLaunchPreflight.first_api_publish_readiness.pre_proof_checks || []).length > 0 ? (
+                                  <div
+                                    data-testid="social-first-api-pre-proof-checks"
+                                    className="mt-2 rounded-lg border border-white/10 bg-white/10 px-2 py-2"
+                                  >
+                                    <div className="font-semibold text-white">
+                                      {isRu ? 'Проверка перед первым API-proof' : 'Check before first API proof'}
+                                    </div>
+                                    <div className="mt-1 space-y-2">
+                                      {(socialLaunchPreflight.first_api_publish_readiness.pre_proof_checks || []).slice(0, 3).map((check) => (
+                                        <div key={`first-api-pre-proof:${String(check.key || check.platform || '')}`} className="rounded-md bg-white/10 px-2 py-1.5 text-slate-100">
+                                          <div className="font-semibold text-white">
+                                            {isRu
+                                              ? String(check.label_ru || 'Проверить API-канал без публикации')
+                                              : String(check.label_en || 'Check API channel without publishing')}
+                                          </div>
+                                          <div className="mt-0.5">
+                                            {isRu ? String(check.message_ru || '') : String(check.message_en || '')}
+                                          </div>
+                                          <div className="mt-0.5">
+                                            <span className="font-semibold text-white">{isRu ? 'Что сделать: ' : 'Next: '}</span>
+                                            {isRu ? String(check.action_ru || '') : String(check.action_en || '')}
+                                          </div>
+                                          {check.endpoint ? (
+                                            <div className="mt-0.5 text-[10px] text-slate-200">
+                                              {String(check.endpoint)}
+                                              {' · '}
+                                              {check.external_post_published === false
+                                                ? (isRu ? 'без публикации' : 'no publish')
+                                                : ''}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
                                 ) : null}
                               </div>
                               <div className="mt-1 font-medium text-white">

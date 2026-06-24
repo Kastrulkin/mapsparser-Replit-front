@@ -3569,6 +3569,7 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert "provider_post_id/provider_post_url" in payload["first_api_publish_readiness"]["proof_check_ru"]
     assert "заявки" in payload["first_api_publish_readiness"]["metrics_followup_ru"]
     assert "shortest path" in payload["first_api_publish_readiness"]["recommended_start_reason_en"]
+    assert payload["first_api_publish_readiness"]["pre_proof_checks"][0]["key"] == "telegram_publish_target_probe"
     assert payload["recommended_env"]["dispatch"]["SOCIAL_POST_DISPATCH_BUSINESS_ID"] == "biz-1"
     assert payload["recommended_env"]["metrics"]["SOCIAL_POST_METRICS_BUSINESS_ID"] == "biz-1"
     assert payload["safety"]["approval_required"] is True
@@ -3814,6 +3815,10 @@ def test_social_first_api_publish_readiness_exposes_fast_start_and_safe_path():
     assert readiness["safe_path_ru"][0] == "Проверить API-каналы без публикации."
     assert "provider_post_id/provider_post_url" in readiness["safe_path_ru"][-1]
     assert readiness["external_publish_requires_approval"] is True
+    assert readiness["pre_proof_checks"][0]["key"] == "telegram_publish_target_probe"
+    assert readiness["pre_proof_checks"][0]["endpoint"] == "/api/business/telegram-bot/publish-target-probe"
+    assert readiness["pre_proof_checks"][0]["external_post_published"] is False
+    assert "не отправляет social post" in readiness["pre_proof_checks"][0]["message_ru"]
 
 
 def test_social_first_api_publish_readiness_keeps_non_fast_channel_when_it_is_the_only_live_candidate():

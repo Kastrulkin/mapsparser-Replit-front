@@ -2018,6 +2018,7 @@ def _social_first_api_publish_readiness(
         "fast_start_message_en": _social_first_api_fast_start_message(status, fast_start_ready_platforms, fast_start_blocked_platforms, False),
         "safe_path_ru": _social_first_api_safe_path(True),
         "safe_path_en": _social_first_api_safe_path(False),
+        "pre_proof_checks": _social_first_api_pre_proof_checks(recommended_start_platform),
         "message_ru": _social_first_api_publish_message(status, ready_platforms, blocked_platforms, True),
         "message_en": _social_first_api_publish_message(status, ready_platforms, blocked_platforms, False),
         "next_action_ru": _social_first_api_publish_next_action(status, blocked_platforms, True),
@@ -2036,6 +2037,63 @@ def _social_first_api_publish_readiness(
         "publish_path_ru": "Только после предпросмотра, подтверждения, расписания и наступления даты.",
         "publish_path_en": "Only after preview, human approval, queueing, and the due date.",
     }
+
+
+def _social_first_api_pre_proof_checks(recommended_platform: dict[str, Any]) -> list[dict[str, Any]]:
+    platform = str(recommended_platform.get("platform") or "").strip()
+    if platform == "telegram":
+        return [
+            {
+                "key": "telegram_publish_target_probe",
+                "platform": "telegram",
+                "label_ru": "Проверить цель публикации Telegram",
+                "label_en": "Check Telegram publish target",
+                "status": "recommended_before_first_proof",
+                "message_ru": "Перед первым API-proof выполните read-only проверку: getMe, getChat и getChatMember. Она не отправляет social post наружу.",
+                "message_en": "Before the first API proof, run the read-only check: getMe, getChat, and getChatMember. It does not send a social post externally.",
+                "action_ru": "Откройте настройки Telegram и нажмите “Проверить цель публикации”.",
+                "action_en": "Open Telegram settings and click “Check publish target”.",
+                "settings_path": "/dashboard/settings?focus=telegram",
+                "endpoint": "/api/business/telegram-bot/publish-target-probe",
+                "external_post_published": False,
+                "required_before_first_publish": True,
+            }
+        ]
+    if platform == "vk":
+        return [
+            {
+                "key": "vk_wall_post_preflight",
+                "platform": "vk",
+                "label_ru": "Проверить VK перед первым постом",
+                "label_en": "Check VK before the first post",
+                "status": "recommended_before_first_proof",
+                "message_ru": "Перед первым API-proof проверьте токен, group_id/owner_id и право wall.post через live API-preflight без публикации.",
+                "message_en": "Before the first API proof, check token, group_id/owner_id, and wall.post permission through live API preflight without publishing.",
+                "action_ru": "Откройте настройки VK или выполните live API-проверку в контент-плане.",
+                "action_en": "Open VK settings or run the live API check in the content plan.",
+                "settings_path": "/dashboard/settings?focus=vk",
+                "endpoint": "/api/business/<business_id>/social-posts/api-channel-preflight",
+                "external_post_published": False,
+                "required_before_first_publish": True,
+            }
+        ]
+    return [
+        {
+            "key": "live_api_preflight",
+            "platform": platform,
+            "label_ru": "Проверить API-канал без публикации",
+            "label_en": "Check API channel without publishing",
+            "status": "recommended_before_first_proof",
+            "message_ru": "Перед первым API-proof выполните live preflight: он проверяет готовность канала и ничего не публикует.",
+            "message_en": "Before the first API proof, run a live preflight: it checks channel readiness and publishes nothing.",
+            "action_ru": "Нажмите “Проверить API” в контент-плане.",
+            "action_en": "Click “Check API” in the content plan.",
+            "settings_path": "",
+            "endpoint": "/api/business/<business_id>/social-posts/api-channel-preflight",
+            "external_post_published": False,
+            "required_before_first_publish": bool(platform),
+        }
+    ] if platform else []
 
 
 def _social_preferred_first_api_platform(

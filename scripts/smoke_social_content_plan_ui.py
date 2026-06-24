@@ -177,6 +177,8 @@ REQUIRED_COPY = {
     "launch first api plan test id": 'data-testid="social-first-api-launch-plan"',
     "launch first api plan copy": "План первого API-поста",
     "launch first api plan contract ru": "first_api_launch_plan_ru",
+    "launch first api pre proof test id": 'data-testid="social-first-api-pre-proof-checks"',
+    "launch first api pre proof copy": "Проверка перед первым API-proof",
     "launch first api reason contract": "recommended_start_reason_ru",
     "launch first api proof contract": "proof_check_ru",
     "launch first api proof copy": "provider_post_id/provider_post_url",
@@ -528,6 +530,9 @@ REQUIRED_BACKEND_PRODUCTION_READINESS_COPY = {
     "schedule attention backend contract": "localos_social_schedule_attention_v1",
     "schedule attention overdue status": "overdue_before_queue",
     "schedule attention overdue copy": "Дата публикации уже в прошлом",
+    "first api pre proof contract": "pre_proof_checks",
+    "first api telegram target probe": "telegram_publish_target_probe",
+    "first api target probe no publish": "не отправляет social post",
     "production readiness maps guard": "maps_are_supervised_or_manual",
 }
 
