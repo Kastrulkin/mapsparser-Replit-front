@@ -10621,6 +10621,35 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   ? channel.setup_summary_ru || channel.next_action_ru || channel.message_ru
                                   : channel.setup_summary_en || channel.next_action_en || channel.message_en}
                               </div>
+                              {channel.target_setup?.schema ? (
+                                <div
+                                  data-testid={`social-channel-guide-target-setup-${String(channel.platform || '')}`}
+                                  className={channel.ready
+                                    ? 'mt-2 rounded-lg bg-emerald-50 px-2 py-1.5 text-[11px] leading-4 text-emerald-900'
+                                    : 'mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-900'}
+                                >
+                                  <div className={channel.ready ? 'font-semibold text-emerald-950' : 'font-semibold text-amber-950'}>
+                                    {isRu
+                                      ? String(channel.target_setup.target_label_ru || 'Цель публикации')
+                                      : String(channel.target_setup.target_label_en || 'Publish target')}
+                                  </div>
+                                  <div className="mt-1">
+                                    {isRu
+                                      ? String(channel.target_setup.summary_ru || '')
+                                      : String(channel.target_setup.summary_en || '')}
+                                  </div>
+                                  <div className="mt-1 text-slate-600">
+                                    {isRu
+                                      ? String(channel.target_setup.not_a_target_ru || '')
+                                      : String(channel.target_setup.not_a_target_en || '')}
+                                  </div>
+                                  <div className="mt-1 font-medium">
+                                    {isRu
+                                      ? String(channel.target_setup.proof_ru || '')
+                                      : String(channel.target_setup.proof_en || '')}
+                                  </div>
+                                </div>
+                              ) : null}
                             </div>
                           ))}
                           {socialChannelConnectionGuide.supervisedChannels.length > 0 ? (

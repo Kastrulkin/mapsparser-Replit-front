@@ -189,6 +189,7 @@ REQUIRED_COPY = {
     "channel check needed label": "Нужно",
     "channel-specific setup action": "Открыть настройку канала",
     "channel target setup test id": "social-channel-target-setup-",
+    "visible channel guide target setup test id": "social-channel-guide-target-setup-",
     "channel target setup schema": "localos_social_channel_target_setup_v1",
     "channel target setup not owner bot": "not_a_target_ru",
     "channel target setup proof": "proof_ru",
