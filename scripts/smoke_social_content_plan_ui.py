@@ -470,8 +470,13 @@ REQUIRED_SETTINGS_DATA_CONTRACT = {
 REQUIRED_TELEGRAM_SETTINGS_COPY = {
     "telegram first api setup test id": 'data-testid="telegram-first-api-post-setup"',
     "telegram first api heading": "Первый API-пост начинается с Telegram",
+    "telegram first api global bot path": "глобальный бот LocalOS + chat_id",
     "telegram first api requirements": "bot token и chat_id",
     "telegram first api no silent publish": "не уйдут наружу",
+    "telegram global bot transport status": 'data-testid="telegram-global-bot-transport-status"',
+    "telegram global bot save chat only": 'data-testid="telegram-global-bot-save-chat-only"',
+    "telegram global bot save copy": "Можно сохранить только chat_id",
+    "telegram global bot no separate token": "отдельный bot token не обязателен",
     "telegram publish target label": "Канал или чат для публикаций",
     "telegram publish chat id need": "Для постов из контент-плана нужен telegram_chat_id",
     "telegram publish chat id placeholder": "@channelname или -1001234567890",

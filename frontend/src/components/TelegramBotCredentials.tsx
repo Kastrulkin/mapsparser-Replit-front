@@ -53,6 +53,8 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
   const [showToken, setShowToken] = useState(false);
   const [saving, setSaving] = useState(false);
   const [configured, setConfigured] = useState(false);
+  const [globalBotConfigured, setGlobalBotConfigured] = useState(false);
+  const [publishTransport, setPublishTransport] = useState('missing');
   const [maskedToken, setMaskedToken] = useState<string | null>(null);
   const [configuredChatId, setConfiguredChatId] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
@@ -64,6 +66,8 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
     setChatId('');
     setShowToken(false);
     setConfigured(Boolean(business?.telegram_bot_token_configured));
+    setGlobalBotConfigured(false);
+    setPublishTransport('missing');
     setMaskedToken(business?.telegram_bot_token_masked || null);
     setConfiguredChatId(business?.telegram_chat_id || null);
     setPublishTargetProbe(null);
@@ -87,6 +91,8 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
         const data = await response.json();
         if (response.ok && data?.success) {
           setConfigured(Boolean(data.configured));
+          setGlobalBotConfigured(Boolean(data.global_bot_configured));
+          setPublishTransport(data.publish_transport || 'missing');
           setMaskedToken(data.masked_token || null);
           setConfiguredChatId(data.telegram_chat_id || null);
           setChatId(data.telegram_chat_id || '');
@@ -110,10 +116,10 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
       return;
     }
 
-    if (!configured && !botToken.trim()) {
+    if (!configured && !globalBotConfigured && !botToken.trim()) {
       toast({
         title: t.common.error,
-        description: t.dashboard.settings.telegram2.errorEmpty,
+        description: 'Для публикаций нужен глобальный бот LocalOS или token вашего Telegram-бота.',
         variant: 'destructive',
       });
       return;
@@ -152,8 +158,9 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
       if (response.ok) {
         setBotToken('');
         setShowToken(false);
-        setConfigured(true);
-        setMaskedToken('Сохранён');
+        setConfigured(Boolean(payload.telegram_bot_token) || configured);
+        setMaskedToken(payload.telegram_bot_token ? 'Сохранён' : maskedToken);
+        setPublishTransport(payload.telegram_bot_token ? 'business_bot' : (globalBotConfigured ? 'global_owner_bot' : publishTransport));
         setConfiguredChatId(chatId.trim());
         setPublishTargetProbe(null);
         toast({
@@ -206,7 +213,7 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
       } else {
         toast({
           title: t.common.error,
-          description: 'Токен Telegram бота не подключён или недоступен.',
+          description: 'Telegram transport или цель публикации недоступны. Проверьте глобальный бот, bot token и chat_id.',
           variant: 'destructive',
         });
       }
@@ -256,13 +263,16 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
         >
           <div className="font-semibold text-blue-950">Первый API-пост начинается с Telegram</div>
           <div className="mt-1">
-            Чтобы LocalOS смог опубликовать пост из контент-плана по расписанию, нужны два поля:
-            bot token и chat_id канала или чата. Без них посты останутся на проверке и не уйдут наружу.
+            Чтобы LocalOS смог опубликовать пост из контент-плана по расписанию, нужен глобальный бот LocalOS + chat_id канала или чата.
+            Если хотите свой брендированный бот, добавьте bot token и chat_id. Без цели публикации посты останутся на проверке и не уйдут наружу.
           </div>
           <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
-            <div className={`rounded-xl bg-white px-3 py-2 ring-1 ${configured ? 'text-emerald-800 ring-emerald-100' : 'text-amber-800 ring-amber-100'}`}>
-              <span className="font-semibold">{configured ? 'Готово: ' : 'Нужно: '}</span>
-              bot token
+            <div
+              data-testid="telegram-global-bot-transport-status"
+              className={`rounded-xl bg-white px-3 py-2 ring-1 ${configured || globalBotConfigured ? 'text-emerald-800 ring-emerald-100' : 'text-amber-800 ring-amber-100'}`}
+            >
+              <span className="font-semibold">{configured || globalBotConfigured ? 'Готово: ' : 'Нужно: '}</span>
+              {configured ? 'bot token бизнеса' : (globalBotConfigured ? 'глобальный бот LocalOS' : 'bot token или глобальный бот')}
             </div>
             <div className={`rounded-xl bg-white px-3 py-2 ring-1 ${configuredChatId ? 'text-emerald-800 ring-emerald-100' : 'text-amber-800 ring-amber-100'}`}>
               <span className="font-semibold">{configuredChatId ? 'Готово: ' : 'Нужно: '}</span>
@@ -278,7 +288,9 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
               ? 'Проверка статуса токена...'
               : configured
                 ? `Токен подключён (${maskedToken || 'скрыт'})`
-                : 'Токен пока не подключён'}
+                : globalBotConfigured
+                  ? 'Используется глобальный бот LocalOS'
+                  : 'Токен пока не подключён'}
           </div>
           <div className="relative">
             <Input
@@ -300,8 +312,23 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
             </Button>
           </div>
           <p className="text-xs text-slate-500">
-            {t.dashboard.settings.telegram2.tokenHelp}
+            {globalBotConfigured
+              ? 'Для первого API-proof отдельный bot token не обязателен: LocalOS может использовать глобальный бот, если указан chat_id цели публикации.'
+              : t.dashboard.settings.telegram2.tokenHelp}
           </p>
+          {globalBotConfigured ? (
+            <div
+              data-testid="telegram-global-bot-save-chat-only"
+              className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900"
+            >
+              <div className="font-semibold text-emerald-950">Можно сохранить только chat_id</div>
+              <div className="mt-1">
+                Глобальный бот LocalOS уже доступен как transport
+                {publishTransport ? ` (${publishTransport})` : ''}.
+                Добавьте его в канал/группу, укажите chat_id и запустите проверку цели без отправки сообщения.
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-2">
@@ -440,7 +467,7 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
           </Button>
           <Button
             onClick={handleSave}
-            disabled={saving || (!configured && !botToken.trim()) || !chatId.trim()}
+            disabled={saving || (!configured && !globalBotConfigured && !botToken.trim()) || !chatId.trim()}
             className="bg-slate-900 text-white hover:bg-slate-800"
           >
             {saving ? (

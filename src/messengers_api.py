@@ -931,6 +931,7 @@ def telegram_bot_status():
 
         token_raw = _row_get(row, 'telegram_bot_token', 1)
         chat_id = str(_row_get(row, 'telegram_chat_id', 2) or "").strip()
+        transport = _resolve_telegram_publish_probe_token(token_raw)
         db.close()
         return jsonify(
             {
@@ -938,6 +939,10 @@ def telegram_bot_status():
                 "configured": bool(str(token_raw or "").strip()),
                 "masked_token": mask_telegram_bot_token(token_raw) or None,
                 "telegram_chat_id": chat_id or None,
+                "global_bot_configured": str(transport.get("token_source") or "") == "global_owner_bot",
+                "publish_transport": str(transport.get("token_source") or "missing"),
+                "publish_transport_label_ru": str(transport.get("token_label_ru") or ""),
+                "publish_transport_label_en": str(transport.get("token_label_en") or ""),
             }
         )
     except Exception as e:
