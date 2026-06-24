@@ -6069,6 +6069,34 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             : 'Safe order: check the API channel without publishing → open preview → human approval → queue it.'}
                         </div>
                       </div>
+                      {socialFirstApiPublishReadiness.setupFocus?.target_setup?.schema ? (
+                        <div
+                          data-testid={`social-overview-channel-target-setup-${String(socialFirstApiPublishReadiness.setupFocus.platform || '')}`}
+                          data-schema={String(socialFirstApiPublishReadiness.setupFocus.target_setup.schema || 'localos_social_channel_target_setup_v1')}
+                          className="mt-2 rounded-lg border border-white/10 bg-white/10 px-2.5 py-2 text-slate-100"
+                        >
+                          <div className="font-semibold text-white">
+                            {isRu
+                              ? String(socialFirstApiPublishReadiness.setupFocus.target_setup.target_label_ru || 'Цель публикации')
+                              : String(socialFirstApiPublishReadiness.setupFocus.target_setup.target_label_en || 'Publish target')}
+                          </div>
+                          <div className="mt-1">
+                            {isRu
+                              ? String(socialFirstApiPublishReadiness.setupFocus.target_setup.summary_ru || '')
+                              : String(socialFirstApiPublishReadiness.setupFocus.target_setup.summary_en || '')}
+                          </div>
+                          <div className="mt-1 text-slate-300">
+                            {isRu
+                              ? String(socialFirstApiPublishReadiness.setupFocus.target_setup.not_a_target_ru || '')
+                              : String(socialFirstApiPublishReadiness.setupFocus.target_setup.not_a_target_en || '')}
+                          </div>
+                          <div className="mt-1 font-medium text-white">
+                            {isRu
+                              ? String(socialFirstApiPublishReadiness.setupFocus.target_setup.proof_ru || '')
+                              : String(socialFirstApiPublishReadiness.setupFocus.target_setup.proof_en || '')}
+                          </div>
+                        </div>
+                      ) : null}
                       {socialFirstApiPublishReadiness.blockedLabels.length > 0 ? (
                         <div className="mt-1 text-amber-100">
                           <span className="font-semibold">{isRu ? 'Сначала исправить: ' : 'Fix first: '}</span>
