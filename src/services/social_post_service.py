@@ -7345,15 +7345,47 @@ def _telegram_publish_error_state(status_code: int = 0, description: str = "") -
     return "failed", "telegram_api_error"
 
 
+def _resolve_telegram_publish_transport(business: dict[str, Any]) -> dict[str, Any]:
+    business_token = decode_telegram_bot_token(business.get("telegram_bot_token"))
+    if business_token:
+        return {
+            "bot_token": business_token,
+            "token_present": True,
+            "token_source": "business_bot",
+            "token_label_ru": "бот бизнеса",
+            "token_label_en": "business bot",
+        }
+    global_token = str(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+    if global_token:
+        return {
+            "bot_token": global_token,
+            "token_present": True,
+            "token_source": "global_owner_bot",
+            "token_label_ru": "глобальный бот LocalOS",
+            "token_label_en": "global LocalOS bot",
+        }
+    return {
+        "bot_token": "",
+        "token_present": False,
+        "token_source": "missing",
+        "token_label_ru": "бот не найден",
+        "token_label_en": "bot not found",
+    }
+
+
 def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     business = _load_business_publish_context(cursor, str(post.get("business_id") or ""))
-    bot_token = decode_telegram_bot_token(business.get("telegram_bot_token"))
+    transport = _resolve_telegram_publish_transport(business)
+    bot_token = str(transport.get("bot_token") or "").strip()
     chat_id = str(business.get("telegram_chat_id") or "").strip()
     if not bot_token or not chat_id:
         return {
             "status": "needs_manual_publish",
-            "last_error": "Для Telegram нужны telegram_bot_token и telegram_chat_id бизнеса.",
-            "metadata_json": {"provider_status": "telegram_connection_missing"},
+            "last_error": "Для Telegram нужен бот LocalOS или telegram_bot_token бизнеса и telegram_chat_id цели публикации.",
+            "metadata_json": {
+                "provider_status": "telegram_connection_missing",
+                "telegram_transport": str(transport.get("token_source") or "missing"),
+            },
         }
     text = str(post.get("platform_text") or post.get("base_text") or "").strip()
     if not text:
@@ -7397,6 +7429,7 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
                 "provider_post_url": _telegram_post_url(chat_id, message_id),
                 "metadata_json": {
                     "provider_status": "telegram_published",
+                    "telegram_transport": str(transport.get("token_source") or ""),
                     "provider_write_performed": True,
                     "external_publish_performed": True,
                     "telegram_response": parsed,
@@ -7605,17 +7638,28 @@ def _publish_google_business_post(cursor: Any, post: dict[str, Any]) -> dict[str
 
 def _telegram_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, Any]:
     business = _load_business_publish_context(cursor, business_id)
-    bot_token = decode_telegram_bot_token(business.get("telegram_bot_token"))
+    transport = _resolve_telegram_publish_transport(business)
+    bot_token = str(transport.get("bot_token") or "").strip()
     chat_id = str(business.get("telegram_chat_id") or "").strip()
-    checks = _telegram_connection_checks(bool(bot_token), bool(chat_id))
+    checks = _telegram_connection_checks(bool(bot_token), bool(chat_id), str(transport.get("token_source") or ""))
     if not bot_token or not chat_id:
+        message_ru = (
+            "Telegram: глобальный бот LocalOS доступен, осталось указать telegram_chat_id цели публикации."
+            if bot_token and not chat_id and str(transport.get("token_source")) == "global_owner_bot"
+            else "Для Telegram нужен бот LocalOS или telegram_bot_token бизнеса и telegram_chat_id цели публикации."
+        )
+        message_en = (
+            "Telegram: the global LocalOS bot is available; set the publish-target telegram_chat_id."
+            if bot_token and not chat_id and str(transport.get("token_source")) == "global_owner_bot"
+            else "Telegram needs the LocalOS bot or a business telegram_bot_token plus the publish-target telegram_chat_id."
+        )
         return _api_channel_preflight_result(
             "telegram",
             False,
             "missing_keys",
             checks,
-            "Для Telegram нужны telegram_bot_token и telegram_chat_id бизнеса.",
-            "Telegram needs business telegram_bot_token and telegram_chat_id.",
+            message_ru,
+            message_en,
         )
     bot_probe = _telegram_safe_api_probe(bot_token, "getMe")
     chat_probe = _telegram_safe_api_probe(bot_token, "getChat", {"chat_id": chat_id})
@@ -7656,8 +7700,8 @@ def _telegram_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, 
         ready,
         "ready" if ready else failed_status,
         checks,
-        "Telegram готов к API-публикации после подтверждения." if ready else str(permission_probe.get("message_ru") or "Telegram ключи заполнены, но live-проверка не прошла."),
-        "Telegram is ready for API publishing after approval." if ready else str(permission_probe.get("message_en") or "Telegram keys exist, but live preflight failed."),
+        f"Telegram готов к API-публикации через {transport.get('token_label_ru')} после подтверждения." if ready else str(permission_probe.get("message_ru") or "Telegram ключи заполнены, но live-проверка не прошла."),
+        f"Telegram is ready for API publishing through the {transport.get('token_label_en')} after approval." if ready else str(permission_probe.get("message_en") or "Telegram keys exist, but live preflight failed."),
     )
 
 
@@ -9263,7 +9307,8 @@ def _queue_preflight_error(platform: str, status: str) -> str:
 
 def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, Any]]:
     business = _load_business_publish_context(cursor, business_id)
-    telegram_token_present = bool(decode_telegram_bot_token(business.get("telegram_bot_token")))
+    telegram_transport = _resolve_telegram_publish_transport(business)
+    telegram_token_present = bool(telegram_transport.get("token_present"))
     telegram_chat_present = bool(str(business.get("telegram_chat_id") or "").strip())
     owner_telegram_present = bool(str(business.get("owner_telegram_id") or "").strip())
     telegram_app_account = _find_active_external_account(cursor, business_id, ("telegram_app",))
@@ -9286,10 +9331,15 @@ def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, An
             "api",
             telegram_ready,
             "ready" if telegram_ready else "missing_keys",
-            _telegram_connection_checks(telegram_token_present, telegram_chat_present),
+            _telegram_connection_checks(
+                telegram_token_present,
+                telegram_chat_present,
+                str(telegram_transport.get("token_source") or ""),
+            ),
             {
                 "owner_telegram_present": owner_telegram_present,
                 "telegram_app_present": telegram_app_present,
+                "telegram_transport": str(telegram_transport.get("token_source") or ""),
             },
         ),
         _channel_readiness(
@@ -9379,6 +9429,7 @@ def _channel_readiness_target_setup(
     context = target_context or {}
     owner_telegram_present = bool(context.get("owner_telegram_present"))
     telegram_app_present = bool(context.get("telegram_app_present"))
+    telegram_transport = str(context.get("telegram_transport") or "").strip()
     not_a_target_ru = (
         "Владелец уже привязан в Telegram для управления LocalOS и уведомлений, но это не цель публикации поста."
         if owner_telegram_present and not telegram_app_present
@@ -9405,10 +9456,11 @@ def _channel_readiness_target_setup(
         "owner_telegram_present": owner_telegram_present,
         "telegram_app_present": telegram_app_present,
         "supervised_transport_present": telegram_app_present,
+        "telegram_transport": telegram_transport,
         "target_kind": "publish_target_chat",
         "target_label_ru": "Канал или группа для поста",
         "target_label_en": "Post target channel or group",
-        "required_fields": ["telegram_bot_token", "telegram_chat_id"],
+        "required_fields": ["telegram_chat_id"] if telegram_transport == "global_owner_bot" else ["telegram_bot_token", "telegram_chat_id"],
         "not_a_target_ru": not_a_target_ru,
         "not_a_target_en": not_a_target_en,
         "summary_ru": (
@@ -9431,7 +9483,11 @@ def _channel_readiness_target_setup(
             else [
                 "Добавьте бота в канал или группу, где должен выйти пост.",
                 "Дайте боту право отправлять сообщения или публиковать в канал.",
-                "Укажите telegram_bot_token и telegram_chat_id в настройках бизнеса.",
+                (
+                    "Укажите telegram_chat_id в настройках бизнеса; глобальный бот LocalOS уже может быть transport."
+                    if telegram_transport == "global_owner_bot"
+                    else "Укажите telegram_bot_token и telegram_chat_id в настройках бизнеса."
+                ),
                 "Запустите live API-проверку без отправки поста.",
             ]
         ),
@@ -9445,7 +9501,11 @@ def _channel_readiness_target_setup(
             else [
                 "Add the bot to the channel or group where the post should appear.",
                 "Give the bot permission to send messages or publish to the channel.",
-                "Set telegram_bot_token and telegram_chat_id in business settings.",
+                (
+                    "Set telegram_chat_id in business settings; the global LocalOS bot can already be the transport."
+                    if telegram_transport == "global_owner_bot"
+                    else "Set telegram_bot_token and telegram_chat_id in business settings."
+                ),
                 "Run the live API check without sending a post.",
             ]
         ),
@@ -9475,15 +9535,25 @@ def _connection_check(
     }
 
 
-def _telegram_connection_checks(token_present: bool, chat_present: bool) -> list[dict[str, Any]]:
+def _telegram_connection_checks(token_present: bool, chat_present: bool, token_source: str = "") -> list[dict[str, Any]]:
+    source = str(token_source or "").strip()
+    token_detail_ru = "токен найден" if token_present else "добавьте telegram_bot_token"
+    token_detail_en = "token found" if token_present else "add telegram_bot_token"
+    if token_present and source == "global_owner_bot":
+        token_detail_ru = "доступен глобальный бот LocalOS"
+        token_detail_en = "global LocalOS bot is available"
+    elif token_present and source == "business_bot":
+        token_detail_ru = "токен бота бизнеса найден"
+        token_detail_en = "business bot token found"
     return [
         _connection_check(
             "telegram_bot_token",
             token_present,
             "Токен бота",
             "Bot token",
-            "токен найден" if token_present else "добавьте telegram_bot_token",
-            "token found" if token_present else "add telegram_bot_token",
+            token_detail_ru,
+            token_detail_en,
+            source or ("ok" if token_present else "missing"),
         ),
         _connection_check(
             "telegram_chat_id",

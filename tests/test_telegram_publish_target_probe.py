@@ -1,4 +1,14 @@
-from messengers_api import _telegram_publish_target_probe_payload
+from messengers_api import _resolve_telegram_publish_probe_token, _telegram_publish_target_probe_payload
+
+
+def test_telegram_publish_target_probe_can_use_global_owner_bot(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "global-token")
+
+    transport = _resolve_telegram_publish_probe_token(None)
+
+    assert transport["bot_token"] == "global-token"
+    assert transport["token_source"] == "global_owner_bot"
+    assert "глобальный бот LocalOS" in transport["token_label_ru"]
 
 
 def test_telegram_publish_target_probe_payload_keeps_no_publish_invariant():

@@ -2192,6 +2192,51 @@ def test_telegram_api_channel_preflight_checks_bot_and_chat_without_publish(monk
     ]
 
 
+def test_telegram_api_channel_preflight_can_use_global_owner_bot_without_publish(monkeypatch):
+    class FakeResponse:
+        status = 200
+
+        def __init__(self, payload):
+            self.payload = payload
+
+        def read(self):
+            return json.dumps(self.payload).encode("utf-8")
+
+        def close(self):
+            pass
+
+    requested_urls = []
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "global-token")
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_business_publish_context",
+        lambda cursor, business_id: {"telegram_bot_token": None, "telegram_chat_id": "@localos_test"},
+    )
+    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "")
+
+    def fake_urlopen(req, timeout=10):
+        requested_urls.append(req.full_url)
+        if "getChat" in req.full_url and "getChatMember" not in req.full_url:
+            return FakeResponse({"ok": True, "result": {"id": "@localos_test", "type": "channel"}})
+        if "getChatMember" in req.full_url:
+            return FakeResponse({"ok": True, "result": {"status": "administrator", "can_post_messages": True}})
+        return FakeResponse({"ok": True, "result": {"id": 100}})
+
+    monkeypatch.setattr(social_post_service, "telegram_urlopen", fake_urlopen)
+
+    result = social_post_service._telegram_api_channel_preflight(object(), "biz-1")
+
+    assert result["ready"] is True
+    assert result["read_only"] is True
+    assert result["external_publish_performed"] is False
+    assert "глобальный бот LocalOS" in result["message_ru"]
+    assert "global LocalOS bot" in result["message_en"]
+    assert result["connection_checks"][0]["state"] == "global_owner_bot"
+    assert "доступен глобальный бот LocalOS" in result["connection_checks"][0]["detail_ru"]
+    assert all("sendMessage" not in url for url in requested_urls)
+    assert all("botglobal-token" in url for url in requested_urls)
+
+
 def test_telegram_api_channel_preflight_blocks_channel_without_post_permission(monkeypatch):
     class FakeResponse:
         status = 200
@@ -2445,7 +2490,7 @@ def test_preview_dispatch_decision_blocks_api_when_preflight_missing(monkeypatch
         "_queue_preflight_block",
         lambda cursor, post: {
             "status": "needs_manual_publish",
-            "last_error": "Для Telegram нужны telegram_bot_token и telegram_chat_id бизнеса.",
+            "last_error": "Для Telegram нужен бот LocalOS или telegram_bot_token бизнеса и telegram_chat_id цели публикации.",
             "metadata_json": {"queue_preflight_status": "missing_keys"},
         },
     )
@@ -2721,7 +2766,7 @@ def test_queue_social_post_api_preflight_fallback_does_not_create_supervised_led
         "_queue_preflight_block",
         lambda cursor, post: {
             "status": "needs_manual_publish",
-            "last_error": "Для Telegram нужны telegram_bot_token и telegram_chat_id бизнеса.",
+            "last_error": "Для Telegram нужен бот LocalOS или telegram_bot_token бизнеса и telegram_chat_id цели публикации.",
             "metadata_json": {"queue_preflight_status": "missing_keys"},
         },
     )
@@ -2734,7 +2779,7 @@ def test_queue_social_post_api_preflight_fallback_does_not_create_supervised_led
     post = queue_social_post("user-1", "post-api")
 
     assert post["status"] == "needs_manual_publish"
-    assert post["last_error"] == "Для Telegram нужны telegram_bot_token и telegram_chat_id бизнеса."
+    assert post["last_error"] == "Для Telegram нужен бот LocalOS или telegram_bot_token бизнеса и telegram_chat_id цели публикации."
     assert post["metadata_json"]["queue_preflight_status"] == "missing_keys"
     assert FakeQueueFallbackDB.last_conn.committed is True
 
@@ -3063,6 +3108,55 @@ def test_publish_telegram_post_sends_message_and_records_provider_evidence(monke
     payload = json.loads(requests[0].data.decode("utf-8"))
     assert payload["chat_id"] == "@localos_channel"
     assert payload["text"] == "Пост для Telegram"
+
+
+def test_publish_telegram_post_can_use_global_owner_bot_when_chat_target_is_set(monkeypatch):
+    class FakeTelegramResponse:
+        status = 200
+
+        def read(self):
+            return json.dumps({"ok": True, "result": {"message_id": 43}}).encode("utf-8")
+
+        def close(self):
+            pass
+
+    requests = []
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "global-token")
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_business_publish_context",
+        lambda cursor, business_id: {
+            "telegram_bot_token": None,
+            "telegram_chat_id": "@localos_channel",
+        },
+    )
+    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "")
+    monkeypatch.setattr(
+        social_post_service,
+        "telegram_urlopen",
+        lambda req, timeout=15: (requests.append(req) or FakeTelegramResponse()),
+    )
+
+    result = social_post_service._publish_telegram_post(
+        object(),
+        {
+            "id": "post-telegram",
+            "business_id": "biz-1",
+            "platform": "telegram",
+            "platform_text": "Пост через глобальный бот",
+        },
+    )
+
+    assert result["status"] == "published"
+    assert result["provider_post_id"] == "43"
+    assert result["provider_post_url"] == "https://t.me/localos_channel/43"
+    assert result["metadata_json"]["telegram_transport"] == "global_owner_bot"
+    assert result["metadata_json"]["provider_write_performed"] is True
+    assert len(requests) == 1
+    assert requests[0].full_url == "https://api.telegram.org/botglobal-token/sendMessage"
+    payload = json.loads(requests[0].data.decode("utf-8"))
+    assert payload["chat_id"] == "@localos_channel"
+    assert payload["text"] == "Пост через глобальный бот"
 
 
 def test_publish_vk_post_calls_wall_post_and_records_provider_evidence(monkeypatch):
@@ -4235,7 +4329,7 @@ def test_social_publish_evidence_explains_recoverable_failure():
         {
             "platform": "telegram",
             "status": "needs_manual_publish",
-            "last_error": "Для Telegram нужны telegram_bot_token и telegram_chat_id бизнеса.",
+            "last_error": "Для Telegram нужен бот LocalOS или telegram_bot_token бизнеса и telegram_chat_id цели публикации.",
             "metadata_json": {"queue_preflight_status": "missing_keys"},
         }
     )

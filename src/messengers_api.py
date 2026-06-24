@@ -175,6 +175,31 @@ def _telegram_publish_target_probe(bot_token: str, chat_id: str) -> dict:
     return _telegram_publish_target_probe_payload(status, ready, [], get_me, get_chat, member_probe)
 
 
+def _resolve_telegram_publish_probe_token(token_raw: str | None) -> dict:
+    business_token = decode_telegram_bot_token(token_raw)
+    if business_token:
+        return {
+            "bot_token": business_token,
+            "token_source": "business_bot",
+            "token_label_ru": "бот бизнеса",
+            "token_label_en": "business bot",
+        }
+    global_token = str(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+    if global_token:
+        return {
+            "bot_token": global_token,
+            "token_source": "global_owner_bot",
+            "token_label_ru": "глобальный бот LocalOS",
+            "token_label_en": "global LocalOS bot",
+        }
+    return {
+        "bot_token": "",
+        "token_source": "missing",
+        "token_label_ru": "бот не найден",
+        "token_label_en": "bot not found",
+    }
+
+
 def _telegram_publish_target_probe_payload(
     status: str,
     ready: bool,
@@ -964,14 +989,15 @@ def telegram_bot_publish_target_probe():
         chat_id = str(_row_get(row, 'telegram_chat_id', 2) or "").strip()
         db.close()
 
-        bot_token = decode_telegram_bot_token(token_raw)
-        probe = _telegram_publish_target_probe(bot_token, chat_id)
+        transport = _resolve_telegram_publish_probe_token(token_raw)
+        probe = _telegram_publish_target_probe(str(transport.get("bot_token") or ""), chat_id)
         return jsonify(
             {
                 "success": True,
                 "business_id": business_id,
                 "telegram_chat_id": chat_id or None,
                 "masked_token": mask_telegram_bot_token(token_raw) or None,
+                "telegram_transport": str(transport.get("token_source") or "missing"),
                 "probe": probe,
                 "ready": bool(probe.get("ready")),
                 "status": str(probe.get("status") or "").strip(),
