@@ -784,6 +784,8 @@ def _load_daily_plan(cursor, business_id, services, matrix, target_date=None):
         """,
         tuple(params),
     )
+    booking_rows = cursor.fetchall() or []
+    booking_description = list(cursor.description or [])
     events = _load_events(cursor, business_id, date_value, date_value)
     events_by_booking = {}
     for event in events:
@@ -792,9 +794,9 @@ def _load_daily_plan(cursor, business_id, services, matrix, target_date=None):
             events_by_booking.setdefault(booking_id, []).append(event)
     service_by_id = {item.get("id"): item for item in services}
     plan = []
-    for row in cursor.fetchall() or []:
+    for row in booking_rows:
         row_map = {}
-        for index, desc in enumerate(cursor.description or []):
+        for index, desc in enumerate(booking_description):
             row_map[desc[0]] = _row_value(row, desc[0], index)
         service_id = str(row_map.get("service_id") or "")
         service_name = str(row_map.get("service_name") or "")

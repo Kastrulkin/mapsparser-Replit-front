@@ -7243,8 +7243,17 @@ def get_network_stats(network_id):
             db.close()
             return jsonify({"error": "Нет доступа к этой сети"}), 403
 
-        # Получаем точки сети
-        cursor.execute("SELECT id, name FROM businesses WHERE network_id = %s", (network_id,))
+        # Получаем точки сети. Рейтинг/отзывы нужны как базовый источник для
+        # демо-сетей и старых карточек без внешнего кеша метрик.
+        business_columns_for_locations = _table_columns(cursor, "businesses")
+        location_fields = ["id", "name"]
+        for optional_field in ("rating", "reviews_count", "updated_at"):
+            if optional_field in business_columns_for_locations:
+                location_fields.append(optional_field)
+        cursor.execute(
+            f"SELECT {', '.join(location_fields)} FROM businesses WHERE network_id = %s",
+            (network_id,),
+        )
         raw_locations = cursor.fetchall()
         locations = [_row_to_dict(cursor, row) for row in raw_locations]
         location_ids = [loc.get("id") for loc in locations if loc.get("id")]
@@ -7310,6 +7319,14 @@ def get_network_stats(network_id):
         masters_revenue = {}
         locations_revenue = {(loc.get("name") or "Неизвестно"): 0 for loc in locations}
 
+        def _network_table_exists(table_name):
+            cursor.execute("SELECT to_regclass(%s) AS table_name", (f"public.{str(table_name).lower()}",))
+            table_row = cursor.fetchone()
+            table_data = _row_to_dict(cursor, table_row) if table_row else {}
+            return bool(table_data.get("table_name"))
+
+        has_masters_table = _network_table_exists("masters")
+
         for row in transactions:
             row_data = _row_to_dict(cursor, row) if row else {}
             services_json = row_data.get("services")
@@ -7332,10 +7349,13 @@ def get_network_stats(network_id):
 
             # По мастерам
             if master_id:
-                cursor.execute("SELECT name FROM masters WHERE id = %s", (master_id,))
-                master_row = cursor.fetchone()
-                master_dict = _row_to_dict(cursor, master_row) if master_row else None
-                master_name = master_dict.get("name") if master_dict else f"Мастер {master_id[:8]}"
+                if has_masters_table:
+                    cursor.execute("SELECT name FROM masters WHERE id = %s", (master_id,))
+                    master_row = cursor.fetchone()
+                    master_dict = _row_to_dict(cursor, master_row) if master_row else None
+                    master_name = master_dict.get("name") if master_dict else f"Мастер {master_id[:8]}"
+                else:
+                    master_name = f"Мастер {str(master_id)[:8]}"
                 masters_revenue[master_name] = masters_revenue.get(master_name, 0) + amount
 
             # По точкам
@@ -7354,28 +7374,159 @@ def get_network_stats(network_id):
         # Рейтинги и отзывы по данным Яндекс.Карт (если есть кеш-поля)
         ratings = []
         try:
-            cursor.execute(
-                """
-                SELECT id, name, yandex_rating, yandex_reviews_total, yandex_reviews_30d, yandex_last_sync
-                FROM businesses
-                WHERE network_id = %s AND (is_active = TRUE OR is_active = 1 OR is_active IS NULL)
-                """,
-                (network_id,),
-            )
-            for row in cursor.fetchall():
-                row_data = _row_to_dict(cursor, row) if row else {}
-                ratings.append(
-                    {
-                        "business_id": row_data.get("id"),
-                        "name": row_data.get("name"),
-                        "rating": row_data.get("yandex_rating"),
-                        "reviews_total": row_data.get("yandex_reviews_total"),
-                        "reviews_30d": row_data.get("yandex_reviews_30d"),
-                        "last_sync": row_data.get("yandex_last_sync"),
-                    }
+            business_columns = _table_columns(cursor, "businesses")
+            has_yandex_cache = {
+                "yandex_rating",
+                "yandex_reviews_total",
+                "yandex_reviews_30d",
+                "yandex_last_sync",
+            }.issubset(business_columns)
+            if has_yandex_cache:
+                cursor.execute(
+                    """
+                    SELECT id, name, yandex_rating, yandex_reviews_total, yandex_reviews_30d, yandex_last_sync
+                    FROM businesses
+                    WHERE network_id = %s AND (is_active = TRUE OR is_active = 1 OR is_active IS NULL)
+                    """,
+                    (network_id,),
                 )
-        except Exception:
+                for row in cursor.fetchall():
+                    row_data = _row_to_dict(cursor, row) if row else {}
+                    ratings.append(
+                        {
+                            "business_id": row_data.get("id"),
+                            "name": row_data.get("name"),
+                            "rating": row_data.get("yandex_rating"),
+                            "reviews_total": row_data.get("yandex_reviews_total"),
+                            "reviews_30d": row_data.get("yandex_reviews_30d"),
+                            "last_sync": row_data.get("yandex_last_sync"),
+                        }
+                    )
+            else:
+                has_external_stats = _network_table_exists("externalbusinessstats")
+                has_map_parse = _network_table_exists("mapparseresults")
+                if has_external_stats and has_map_parse:
+                    rating_sql = """
+                        SELECT b.id, b.name,
+                               COALESCE(es.rating, b.rating, NULLIF(mpr.rating, '')::DOUBLE PRECISION) AS rating,
+                               COALESCE(es.reviews_total, b.reviews_count, mpr.reviews_count) AS reviews_total,
+                               0 AS reviews_30d,
+                               COALESCE(es.updated_at, mpr.created_at, b.updated_at) AS last_sync
+                        FROM businesses b
+                        LEFT JOIN LATERAL (
+                            SELECT rating, reviews_total, updated_at
+                            FROM externalbusinessstats
+                            WHERE business_id = b.id
+                            ORDER BY date DESC, updated_at DESC
+                            LIMIT 1
+                        ) es ON TRUE
+                        LEFT JOIN LATERAL (
+                            SELECT rating, reviews_count, created_at
+                            FROM mapparseresults
+                            WHERE business_id = b.id
+                            ORDER BY created_at DESC
+                            LIMIT 1
+                        ) mpr ON TRUE
+                        WHERE b.network_id = %s AND (b.is_active = TRUE OR b.is_active = 1 OR b.is_active IS NULL)
+                    """
+                elif has_external_stats:
+                    rating_sql = """
+                        SELECT b.id, b.name,
+                               COALESCE(es.rating, b.rating) AS rating,
+                               COALESCE(es.reviews_total, b.reviews_count) AS reviews_total,
+                               0 AS reviews_30d,
+                               COALESCE(es.updated_at, b.updated_at) AS last_sync
+                        FROM businesses b
+                        LEFT JOIN LATERAL (
+                            SELECT rating, reviews_total, updated_at
+                            FROM externalbusinessstats
+                            WHERE business_id = b.id
+                            ORDER BY date DESC, updated_at DESC
+                            LIMIT 1
+                        ) es ON TRUE
+                        WHERE b.network_id = %s AND (b.is_active = TRUE OR b.is_active = 1 OR b.is_active IS NULL)
+                    """
+                elif has_map_parse:
+                    rating_sql = """
+                        SELECT b.id, b.name,
+                               COALESCE(b.rating, NULLIF(mpr.rating, '')::DOUBLE PRECISION) AS rating,
+                               COALESCE(b.reviews_count, mpr.reviews_count) AS reviews_total,
+                               0 AS reviews_30d,
+                               COALESCE(mpr.created_at, b.updated_at) AS last_sync
+                        FROM businesses b
+                        LEFT JOIN LATERAL (
+                            SELECT rating, reviews_count, created_at
+                            FROM mapparseresults
+                            WHERE business_id = b.id
+                            ORDER BY created_at DESC
+                            LIMIT 1
+                        ) mpr ON TRUE
+                        WHERE b.network_id = %s AND (b.is_active = TRUE OR b.is_active = 1 OR b.is_active IS NULL)
+                    """
+                else:
+                    rating_sql = """
+                        SELECT b.id, b.name, b.rating, b.reviews_count AS reviews_total,
+                               0 AS reviews_30d, b.updated_at AS last_sync
+                        FROM businesses b
+                        WHERE b.network_id = %s AND (b.is_active = TRUE OR b.is_active = 1 OR b.is_active IS NULL)
+                    """
+                cursor.execute(rating_sql, (network_id,))
+                for row in cursor.fetchall():
+                    row_data = _row_to_dict(cursor, row) if row else {}
+                    ratings.append(
+                        {
+                            "business_id": row_data.get("id"),
+                            "name": row_data.get("name"),
+                            "rating": row_data.get("rating"),
+                            "reviews_total": row_data.get("reviews_total"),
+                            "reviews_30d": row_data.get("reviews_30d"),
+                            "last_sync": row_data.get("last_sync"),
+                        }
+                    )
+        except Exception as ratings_error:
+            print(f"⚠️ Не удалось собрать рейтинги сети: {ratings_error}")
             ratings = []
+
+        if not ratings:
+            try:
+                for loc in locations:
+                    if loc.get("rating") is None and loc.get("reviews_count") is None:
+                        continue
+                    ratings.append(
+                        {
+                            "business_id": loc.get("id"),
+                            "name": loc.get("name"),
+                            "rating": loc.get("rating"),
+                            "reviews_total": loc.get("reviews_count"),
+                            "reviews_30d": 0,
+                            "last_sync": loc.get("updated_at"),
+                        }
+                    )
+                if not ratings:
+                    cursor.execute(
+                        """
+                        SELECT id, name, rating, reviews_count AS reviews_total, 0 AS reviews_30d, updated_at AS last_sync
+                        FROM businesses
+                        WHERE network_id = %s AND (is_active = TRUE OR is_active = 1 OR is_active IS NULL)
+                        ORDER BY name
+                        """,
+                        (network_id,),
+                    )
+                    for row in cursor.fetchall():
+                        row_data = _row_to_dict(cursor, row) if row else {}
+                        ratings.append(
+                            {
+                                "business_id": row_data.get("id"),
+                                "name": row_data.get("name"),
+                                "rating": row_data.get("rating"),
+                                "reviews_total": row_data.get("reviews_total"),
+                                "reviews_30d": row_data.get("reviews_30d"),
+                                "last_sync": row_data.get("last_sync"),
+                            }
+                        )
+            except Exception as ratings_fallback_error:
+                print(f"⚠️ Не удалось собрать fallback рейтинги сети: {ratings_fallback_error}")
+                ratings = []
 
         bad_reviews = []
 
