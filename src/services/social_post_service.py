@@ -7876,7 +7876,7 @@ def _load_business_publish_context(cursor: Any, business_id: str) -> dict[str, A
         SELECT {", ".join(select_parts)}
         FROM businesses
         {owner_join}
-        WHERE id = %s
+        WHERE businesses.id = %s
         LIMIT 1
         """,
         (business_id,),
