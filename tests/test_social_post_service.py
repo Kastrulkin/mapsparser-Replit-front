@@ -2113,8 +2113,11 @@ def test_telegram_api_channel_preflight_checks_bot_and_chat_without_publish(monk
     class FakeResponse:
         status = 200
 
+        def __init__(self, payload):
+            self.payload = payload
+
         def read(self):
-            return json.dumps({"ok": True, "result": {"id": 100}}).encode("utf-8")
+            return json.dumps(self.payload).encode("utf-8")
 
         def close(self):
             pass
@@ -2126,10 +2129,19 @@ def test_telegram_api_channel_preflight_checks_bot_and_chat_without_publish(monk
         lambda cursor, business_id: {"telegram_bot_token": "encrypted", "telegram_chat_id": "@localos_test"},
     )
     monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "telegram-token")
+
+    def fake_urlopen(req, timeout=10):
+        requested_urls.append(req.full_url)
+        if "getChat" in req.full_url and "getChatMember" not in req.full_url:
+            return FakeResponse({"ok": True, "result": {"id": "@localos_test", "type": "channel"}})
+        if "getChatMember" in req.full_url:
+            return FakeResponse({"ok": True, "result": {"status": "administrator", "can_post_messages": True}})
+        return FakeResponse({"ok": True, "result": {"id": 100}})
+
     monkeypatch.setattr(
         social_post_service,
         "telegram_urlopen",
-        lambda req, timeout=10: (requested_urls.append(req.full_url) or FakeResponse()),
+        fake_urlopen,
     )
 
     result = social_post_service._telegram_api_channel_preflight(object(), "biz-1")
@@ -2139,8 +2151,53 @@ def test_telegram_api_channel_preflight_checks_bot_and_chat_without_publish(monk
     assert result["external_publish_performed"] is False
     assert any("getMe" in url for url in requested_urls)
     assert any("getChat" in url for url in requested_urls)
+    assert any("getChatMember" in url for url in requested_urls)
     assert all("sendMessage" not in url for url in requested_urls)
-    assert [item["key"] for item in result["connection_checks"]][-2:] == ["telegram_get_me", "telegram_get_chat"]
+    assert [item["key"] for item in result["connection_checks"]][-3:] == [
+        "telegram_get_me",
+        "telegram_get_chat",
+        "telegram_publish_permission_live",
+    ]
+
+
+def test_telegram_api_channel_preflight_blocks_channel_without_post_permission(monkeypatch):
+    class FakeResponse:
+        status = 200
+
+        def __init__(self, payload):
+            self.payload = payload
+
+        def read(self):
+            return json.dumps(self.payload).encode("utf-8")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_business_publish_context",
+        lambda cursor, business_id: {"telegram_bot_token": "encrypted", "telegram_chat_id": "@localos_test"},
+    )
+    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "telegram-token")
+
+    def fake_urlopen(req, timeout=10):
+        if "getChat" in req.full_url and "getChatMember" not in req.full_url:
+            return FakeResponse({"ok": True, "result": {"id": "@localos_test", "type": "channel"}})
+        if "getChatMember" in req.full_url:
+            return FakeResponse({"ok": True, "result": {"status": "member", "can_post_messages": False}})
+        return FakeResponse({"ok": True, "result": {"id": 100}})
+
+    monkeypatch.setattr(social_post_service, "telegram_urlopen", fake_urlopen)
+
+    result = social_post_service._telegram_api_channel_preflight(object(), "biz-1")
+
+    assert result["ready"] is False
+    assert result["status"] == "missing_permissions"
+    assert result["external_publish_performed"] is False
+    assert result["connection_checks"][-1]["key"] == "telegram_publish_permission_live"
+    assert result["connection_checks"][-1]["ok"] is False
+    assert "can_post_messages=False" in result["connection_checks"][-1]["detail_ru"]
+    assert "не имеет права" in result["message_ru"]
 
 
 def test_vk_api_channel_preflight_uses_read_only_wall_get(monkeypatch):

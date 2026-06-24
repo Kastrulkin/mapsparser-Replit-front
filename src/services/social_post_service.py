@@ -7479,6 +7479,7 @@ def _telegram_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, 
         )
     bot_probe = _telegram_safe_api_probe(bot_token, "getMe")
     chat_probe = _telegram_safe_api_probe(bot_token, "getChat", {"chat_id": chat_id})
+    permission_probe = _telegram_publish_permission_probe(bot_token, chat_id, bot_probe, chat_probe)
     checks = checks + [
         _connection_check(
             "telegram_get_me",
@@ -7498,15 +7499,25 @@ def _telegram_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, 
             "getChat passed" if chat_probe.get("ok") else str(chat_probe.get("error_en") or "Telegram getChat failed"),
             "ok" if chat_probe.get("ok") else str(chat_probe.get("status") or "failed"),
         ),
+        _connection_check(
+            "telegram_publish_permission_live",
+            bool(permission_probe.get("ok")),
+            "Право публикации",
+            "Publishing permission",
+            str(permission_probe.get("detail_ru") or ""),
+            str(permission_probe.get("detail_en") or ""),
+            str(permission_probe.get("status") or "failed"),
+        ),
     ]
-    ready = bool(bot_probe.get("ok")) and bool(chat_probe.get("ok"))
+    ready = bool(bot_probe.get("ok")) and bool(chat_probe.get("ok")) and bool(permission_probe.get("ok"))
+    failed_status = "missing_permissions" if bot_probe.get("ok") and chat_probe.get("ok") else "live_probe_failed"
     return _api_channel_preflight_result(
         "telegram",
         ready,
-        "ready" if ready else "live_probe_failed",
+        "ready" if ready else failed_status,
         checks,
-        "Telegram готов к API-публикации после подтверждения." if ready else "Telegram ключи заполнены, но live-проверка не прошла.",
-        "Telegram is ready for API publishing after approval." if ready else "Telegram keys exist, but live preflight failed.",
+        "Telegram готов к API-публикации после подтверждения." if ready else str(permission_probe.get("message_ru") or "Telegram ключи заполнены, но live-проверка не прошла."),
+        "Telegram is ready for API publishing after approval." if ready else str(permission_probe.get("message_en") or "Telegram keys exist, but live preflight failed."),
     )
 
 
@@ -7535,8 +7546,71 @@ def _telegram_safe_api_probe(bot_token: str, method: str, params: dict[str, Any]
     except Exception:
         return _api_probe_error("telegram", 0, str(sys.exc_info()[1]), "unexpected_error")
     if 200 <= status_code < 300 and bool(parsed.get("ok")):
-        return {"ok": True, "status": "ok"}
+        result = parsed.get("result")
+        return {"ok": True, "status": "ok", "result": result if isinstance(result, dict) else result}
     return _api_probe_error("telegram", status_code, str(parsed.get("description") or body or "Telegram API error"))
+
+
+def _telegram_publish_permission_probe(
+    bot_token: str,
+    chat_id: str,
+    bot_probe: dict[str, Any],
+    chat_probe: dict[str, Any],
+) -> dict[str, Any]:
+    if not bot_probe.get("ok") or not chat_probe.get("ok"):
+        return {
+            "ok": False,
+            "status": "blocked",
+            "message_ru": "Telegram: сначала должны пройти getMe и getChat.",
+            "message_en": "Telegram: getMe and getChat must pass first.",
+            "detail_ru": "проверка прав невозможна без доступного бота и чата",
+            "detail_en": "permission check requires a reachable bot and chat",
+        }
+    bot_result = bot_probe.get("result") if isinstance(bot_probe.get("result"), dict) else {}
+    chat_result = chat_probe.get("result") if isinstance(chat_probe.get("result"), dict) else {}
+    bot_id = str(bot_result.get("id") or "").strip()
+    chat_type = str(chat_result.get("type") or "").strip()
+    if not bot_id:
+        return {
+            "ok": False,
+            "status": "missing_bot_identity",
+            "message_ru": "Telegram: getMe не вернул id бота для проверки прав.",
+            "message_en": "Telegram: getMe did not return the bot id needed for the permission check.",
+            "detail_ru": "id бота не найден в ответе getMe",
+            "detail_en": "bot id is missing from getMe response",
+        }
+    member_probe = _telegram_safe_api_probe(bot_token, "getChatMember", {"chat_id": chat_id, "user_id": bot_id})
+    if not member_probe.get("ok"):
+        return {
+            "ok": False,
+            "status": str(member_probe.get("status") or "permission_probe_failed"),
+            "message_ru": "Telegram: бот или chat_id найдены, но право публикации не подтвердилось.",
+            "message_en": "Telegram: bot and chat exist, but publishing permission was not confirmed.",
+            "detail_ru": str(member_probe.get("error_ru") or "getChatMember не прошёл"),
+            "detail_en": str(member_probe.get("error_en") or "getChatMember failed"),
+        }
+    member_result = member_probe.get("result") if isinstance(member_probe.get("result"), dict) else {}
+    member_status = str(member_result.get("status") or "").strip()
+    can_post_messages = bool(member_result.get("can_post_messages"))
+    if chat_type == "channel":
+        allowed = member_status == "creator" or (member_status == "administrator" and can_post_messages)
+        return {
+            "ok": allowed,
+            "status": "ok" if allowed else "missing_permissions",
+            "message_ru": "Telegram: бот не имеет права публиковать в выбранный канал." if not allowed else "Telegram: бот может публиковать в выбранный канал.",
+            "message_en": "Telegram: bot cannot publish to the selected channel." if not allowed else "Telegram: bot can publish to the selected channel.",
+            "detail_ru": "бот администратор канала с правом публикации" if allowed else f"статус бота: {member_status or 'unknown'}, can_post_messages={can_post_messages}",
+            "detail_en": "bot is channel admin with posting permission" if allowed else f"bot status: {member_status or 'unknown'}, can_post_messages={can_post_messages}",
+        }
+    allowed = member_status in {"creator", "administrator", "member"}
+    return {
+        "ok": allowed,
+        "status": "ok" if allowed else "missing_permissions",
+        "message_ru": "Telegram: бот может писать в выбранный чат/группу." if allowed else "Telegram: бот не состоит в выбранном чате или не может писать туда.",
+        "message_en": "Telegram: bot can post to the selected chat/group." if allowed else "Telegram: bot is not an active member of the selected chat or cannot post there.",
+        "detail_ru": f"статус бота: {member_status or 'unknown'}",
+        "detail_en": f"bot status: {member_status or 'unknown'}",
+    }
 
 
 def _vk_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, Any]:
@@ -9180,9 +9254,9 @@ def _telegram_connection_checks(token_present: bool, chat_present: bool) -> list
             token_present and chat_present,
             "Права на публикацию",
             "Publishing permission",
-            "проверится при первом publish" if token_present and chat_present else "проверка невозможна без токена и chat_id",
-            "checked on first publish" if token_present and chat_present else "cannot check without token and chat_id",
-            "deferred" if token_present and chat_present else "blocked",
+            "проверьте live API-проверкой без публикации" if token_present and chat_present else "проверка невозможна без токена и chat_id",
+            "run the live API check without publishing" if token_present and chat_present else "cannot check without token and chat_id",
+            "needs_live_probe" if token_present and chat_present else "blocked",
         ),
     ]
 
