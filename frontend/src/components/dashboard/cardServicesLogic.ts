@@ -367,7 +367,8 @@ export const buildServicesQualityAudit = (
 
 export const formatServiceSource = (service: ServiceLike) => {
   const source = String(service?.source || '').trim().toLowerCase();
-  if (!source) return 'Ручная';
+  if (!source) return 'LocalOS';
+  if (source === 'manual' || source === 'localos') return 'LocalOS';
   if (source === 'yandex_maps') return 'Яндекс Карты';
   if (source === 'yandex_business') return 'Яндекс Бизнес';
   if (source === '2gis') return '2ГИС';
