@@ -437,8 +437,8 @@ def planned_counts():
     location_count = len(LOCATIONS)
     service_count = len(SERVICES) * location_count
     source_count = len(MAP_SOURCES)
-    finance_entry_count = len(NETWORK_MONTH_REVENUE) * location_count * 11
-    income_tx_count = len(NETWORK_MONTH_REVENUE) * location_count * 18
+    finance_entry_count = len(NETWORK_MONTH_REVENUE) * (location_count + 1) * 11
+    income_tx_count = len(NETWORK_MONTH_REVENUE) * (location_count * 18 + 12)
     booking_count = location_count * 36
     return {
         "users": 1,
@@ -640,6 +640,10 @@ def seed_user_network_businesses(cursor, password):
         "city": "Санкт-Петербург",
         "country": "Россия",
         "timezone": "Europe/Moscow",
+        "geo_lat": 59.9343,
+        "geo_lon": 30.3351,
+        "rating": 4.5,
+        "reviews_count": sum(item["reviews"] for item in LOCATIONS),
         "created_at": now,
         "updated_at": now,
     }
@@ -668,8 +672,8 @@ def seed_user_network_businesses(cursor, password):
                 "city": "Санкт-Петербург",
                 "country": "Россия",
                 "timezone": "Europe/Moscow",
-                "latitude": item["lat"],
-                "longitude": item["lon"],
+                "geo_lat": item["lat"],
+                "geo_lon": item["lon"],
                 "rating": item["rating"],
                 "reviews_count": item["reviews"],
                 "categories": ["Груминг", "Зоосалон", "Уход за животными"],
@@ -836,6 +840,69 @@ def seed_finance(cursor, service_map, master_map):
                     },
                 )
 
+    for month_key, network_revenue in NETWORK_MONTH_REVENUE.items():
+        for category, share in income_categories:
+            amount = round(network_revenue * share, 2)
+            upsert_row(
+                cursor,
+                "finance_entries",
+                {
+                    "id": stable_id(f"finance-entry:{NETWORK_ID}:{month_key}:revenue:{category}"),
+                    "business_id": NETWORK_ID,
+                    "date": f"{month_key}-28",
+                    "type": "revenue",
+                    "category": category,
+                    "amount": amount,
+                    "source": DEMO_SOURCE,
+                    "comment": f"DEMO: агрегированная выручка сети {NETWORK_NAME} за {month_key}, категория {category}.",
+                    "external_id": f"demo:{NETWORK_ID}:{month_key}:revenue:{category}",
+                    "duplicate_key": stable_id(f"dup:{NETWORK_ID}:{month_key}:revenue:{category}"),
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow(),
+                },
+            )
+        for category, share in expense_categories:
+            amount = round(network_revenue * share, 2)
+            upsert_row(
+                cursor,
+                "finance_entries",
+                {
+                    "id": stable_id(f"finance-entry:{NETWORK_ID}:{month_key}:expense:{category}"),
+                    "business_id": NETWORK_ID,
+                    "date": f"{month_key}-28",
+                    "type": "expense",
+                    "category": category,
+                    "amount": amount,
+                    "source": DEMO_SOURCE,
+                    "comment": f"DEMO: агрегированный расход сети {NETWORK_NAME} за {month_key}, категория {category}.",
+                    "external_id": f"demo:{NETWORK_ID}:{month_key}:expense:{category}",
+                    "duplicate_key": stable_id(f"dup:{NETWORK_ID}:{month_key}:expense:{category}"),
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow(),
+                },
+            )
+        days = month_dates(month_key)
+        for tx_index in range(12):
+            tx_date = days[(tx_index * 2 + 5) % len(days)]
+            amount = round(network_revenue / 12 * rng.uniform(0.82, 1.18), 2)
+            insert_row(
+                cursor,
+                "financialtransactions",
+                {
+                    "id": stable_id(f"financial-tx:{NETWORK_ID}:{month_key}:{tx_index}"),
+                    "user_id": USER_ID,
+                    "business_id": NETWORK_ID,
+                    "transaction_date": tx_date.isoformat(),
+                    "amount": amount,
+                    "description": f"DEMO: агрегированная оплата услуг сети {NETWORK_NAME}",
+                    "transaction_type": "income",
+                    "client_type": "network_demo",
+                    "services": json.dumps(["Груминг собак СПб", "Допродажи и товары"], ensure_ascii=False),
+                    "notes": "DEMO: агрегированная транзакция для финансов сети",
+                    "created_at": datetime.utcnow(),
+                },
+            )
+
 
 def seed_map_metrics(cursor):
     ensure_external_business_services_table(cursor)
@@ -953,7 +1020,10 @@ def seed_map_metrics(cursor):
             )
             for offset in range(6):
                 stat_date = date(2026, 1 + offset, 28)
-                reviews_total = source_reviews + offset * (3 - min(source_index, 2))
+                review_step = max(2, int(source_reviews * 0.035))
+                reviews_total = max(8, source_reviews - (5 - offset) * review_step)
+                rating_step = 0.035 if location["rating"] >= 4.5 else 0.055
+                monthly_rating = max(1.0, min(5.0, round(source_rating - (5 - offset) * rating_step, 1)))
                 upsert_row(
                     cursor,
                     "externalbusinessstats",
@@ -966,11 +1036,11 @@ def seed_map_metrics(cursor):
                         "views_total": int((4200 + location["reviews"] * 4 + offset * 230) * source["views_ratio"]),
                         "clicks_total": int((360 + location["reviews"] * 0.8 + offset * 28) * source["views_ratio"]),
                         "actions_total": int((120 + location["reviews"] * 0.35 + offset * 12) * source["views_ratio"]),
-                        "rating": source_rating,
+                        "rating": monthly_rating,
                         "reviews_total": reviews_total,
-                        "photos_count": max(5, int(location["photos"] * (1.0 - source_index * 0.18))),
-                        "news_count": max(0, location["news"] - source_index),
-                        "unanswered_reviews_count": source_unanswered,
+                        "photos_count": max(5, int(location["photos"] * (0.78 + offset * 0.045 - source_index * 0.08))),
+                        "news_count": max(0, location["news"] - source_index - max(0, 4 - offset)),
+                        "unanswered_reviews_count": max(0, source_unanswered + (5 - offset) * (source_index + 1)),
                         "raw_payload": json.dumps({"demo": True, "source": source["source"]}, ensure_ascii=False),
                         "created_at": datetime.utcnow(),
                         "updated_at": datetime.utcnow(),

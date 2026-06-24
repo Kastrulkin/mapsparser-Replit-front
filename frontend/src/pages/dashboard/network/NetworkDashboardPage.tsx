@@ -126,7 +126,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                         mapUrl: String(loc.yandex_url || '').trim() || null,
                         rating: roundRating(rating),
                         ratingTrend: 0,
-                        status: 'active',
+                        status: rating < 4.2 ? 'problem' : 'active',
                         reviews: Number.isFinite(reviews) ? reviews : 0,
                         negativePercent: 0,
                         recentReviews: [],

@@ -21,7 +21,9 @@ import {
   Info,
   Sparkles,
   Search,
-  Wand2
+  Wand2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -252,6 +254,7 @@ export const CardOverviewPage = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [isNetworkMaster, setIsNetworkMaster] = useState(false);
   const [operationsLearning, setOperationsLearning] = useState<Record<string, any>>({});
+  const [isOperationsLearningExpanded, setIsOperationsLearningExpanded] = useState(false);
   const previousParseStatusRef = useRef(parseStatus);
 
   useEffect(() => {
@@ -1164,62 +1167,6 @@ export const CardOverviewPage = () => {
             </TabsTrigger>
           </TabsList>
 
-          {user?.is_superadmin && !isContentPlanMode && (
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 p-4">
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-indigo-900">Обучение ИИ (30 дней)</h3>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center rounded-full text-indigo-500 transition-colors hover:text-indigo-700"
-                          aria-label={aiLearningTooltip}
-                        >
-                          <Info className="h-4 w-4" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-sm text-xs leading-5">
-                        {aiLearningTooltip}
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <p className="text-xs text-indigo-700">Улучшения по услугам, отзывам и новостям</p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-indigo-200 text-indigo-800 hover:bg-indigo-100"
-                  onClick={loadOperationsLearning}
-                >
-                  Обновить
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
-                {[
-                  { key: 'services.optimize', label: 'Оптимизация услуг' },
-                  { key: 'reviews.reply', label: 'Ответы на отзывы' },
-                  { key: 'news.generate', label: 'Генерация новостей' },
-                ].map((row) => {
-                  const metric = operationsLearning[row.key] || {};
-                  return (
-                    <div key={row.key} className="rounded-lg border border-indigo-100 bg-white p-3">
-                      <div className="font-medium text-gray-900">{row.label}</div>
-                      <div className="text-xs text-gray-600 mt-1">
-                        raw: {metric.accepted_raw_pct ?? 0}% · edited: {metric.edited_before_accept_pct ?? 0}%
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        Принято: {metric.accepted_total ?? 0} · prompt: {metric.prompt_version || '—'}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-
           <TabsContent value="competitors" className="space-y-6">
             <CompetitorsTab
               manualCompetitorUrl={manualCompetitorUrl}
@@ -1552,6 +1499,76 @@ export const CardOverviewPage = () => {
             <KeywordsTab businessId={currentBusinessId} />
           </TabsContent>
         </Tabs>
+        {user?.is_superadmin && !isContentPlanMode && (
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-3 text-left"
+              onClick={() => setIsOperationsLearningExpanded((value) => !value)}
+              aria-expanded={isOperationsLearningExpanded}
+            >
+              <span>
+                <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  Обучение ИИ (30 дней)
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        className="inline-flex items-center justify-center rounded-full text-slate-400 transition-colors hover:text-slate-700"
+                        aria-label={aiLearningTooltip}
+                      >
+                        <Info className="h-4 w-4" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-sm text-xs leading-5">
+                      {aiLearningTooltip}
+                    </TooltipContent>
+                  </Tooltip>
+                </span>
+                <span className="mt-1 block text-xs text-slate-500">
+                  Внутренние метрики улучшения услуг, отзывов и новостей
+                </span>
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
+                {isOperationsLearningExpanded ? 'Свернуть' : 'Развернуть'}
+                {isOperationsLearningExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </button>
+            {isOperationsLearningExpanded && (
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <div className="mb-3 flex items-center justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-slate-200 text-slate-700 hover:bg-slate-50"
+                    onClick={loadOperationsLearning}
+                  >
+                    Обновить
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-3">
+                  {[
+                    { key: 'services.optimize', label: 'Оптимизация услуг' },
+                    { key: 'reviews.reply', label: 'Ответы на отзывы' },
+                    { key: 'news.generate', label: 'Генерация новостей' },
+                  ].map((row) => {
+                    const metric = operationsLearning[row.key] || {};
+                    return (
+                      <div key={row.key} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                        <div className="font-medium text-slate-900">{row.label}</div>
+                        <div className="mt-1 text-xs text-slate-600">
+                          raw: {metric.accepted_raw_pct ?? 0}% · edited: {metric.edited_before_accept_pct ?? 0}%
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          Принято: {metric.accepted_total ?? 0} · prompt: {metric.prompt_version || '—'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         {editingService ? (
           <CardServiceEditDialog
             copy={serviceControlsCopy}
