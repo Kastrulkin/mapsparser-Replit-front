@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
@@ -11,11 +11,73 @@ import { UserTokenUsageSummary } from '@/components/UserTokenUsageSummary';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
-  DashboardActionPanel,
-  DashboardCompactMetricsRow,
   DashboardPageHeader,
   DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
+
+type ProfileStatusItem = {
+  label: string;
+  value: ReactNode;
+  hint?: string;
+  tone?: 'default' | 'positive' | 'warning';
+};
+
+const ProfileStatusStrip = ({
+  items,
+  action,
+  note,
+  title,
+}: {
+  items: ProfileStatusItem[];
+  action: ReactNode;
+  note: ReactNode;
+  title: string;
+}) => (
+  <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm">
+    <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+          {title}
+        </div>
+        <div className="mt-1 text-sm leading-6 text-slate-600">
+          {note}
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-2">
+        {action}
+      </div>
+    </div>
+    <div className="grid gap-px bg-slate-100 md:grid-cols-2 2xl:grid-cols-4">
+      {items.map((item) => (
+        <div key={item.label} className="min-w-0 bg-white px-5 py-4">
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                'h-2.5 w-2.5 rounded-full',
+                item.tone === 'positive'
+                  ? 'bg-emerald-400'
+                  : item.tone === 'warning'
+                    ? 'bg-amber-400'
+                    : 'bg-slate-300'
+              )}
+            />
+            <div className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              {item.label}
+            </div>
+          </div>
+          <div className="mt-2 truncate text-lg font-semibold text-slate-950">
+            {item.value}
+          </div>
+          {item.hint ? (
+            <div className="mt-1 line-clamp-2 text-sm leading-5 text-slate-600">
+              {item.hint}
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  </section>
+);
 
 const defaultBusinessTypeOptions: Array<{ type_key: string; label: string }> = [
   { type_key: 'beauty_salon', label: 'Салон красоты' },
@@ -84,6 +146,7 @@ export const ProfilePage = () => {
   const { toast } = useToast();
   const isRu = language === 'ru';
   const previousParseStatusRef = useRef<string>('idle');
+  const businessInfoSectionRef = useRef<HTMLElement | null>(null);
 
   // Функция для преобразования значения типа бизнеса в читаемый текст
   const getBusinessTypeLabel = (type: string): string => {
@@ -863,6 +926,84 @@ export const ProfilePage = () => {
     return /^https?:\/\//i.test(value) ? value : `https://${value}`;
   })();
 
+  const scrollToBusinessInfo = () => {
+    setEditClientInfo(true);
+    window.requestAnimationFrame(() => {
+      businessInfoSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const isAuditReady = parseStatus === 'completed' || parseStatus === 'done';
+  const primaryProfileAction = (() => {
+    if (!hasSavedMapLinks) {
+      return {
+        label: isRu ? 'Добавить ссылку на карту' : 'Add map link',
+        title: isRu ? 'Откроет редактирование блока бизнеса и ссылок на карты.' : 'Opens business and map link editing.',
+        onClick: scrollToBusinessInfo,
+        disabled: false,
+        icon: MapPin,
+      };
+    }
+    if (hasUnsavedClientInfoChanges) {
+      return {
+        label: isRu ? 'Сохранить изменения' : 'Save changes',
+        title: isRu ? 'Сохранит данные бизнеса перед запуском аудита.' : 'Saves business data before running the audit.',
+        onClick: handleSaveClientInfo,
+        disabled: savingClientInfo,
+        icon: CheckCircle2,
+      };
+    }
+    if (isAuditReady) {
+      return {
+        label: isRu ? 'Открыть прогресс' : 'Open progress',
+        title: isRu ? 'Откроет аудит, показатели и историю изменений.' : 'Opens audit, metrics, and change history.',
+        onClick: () => navigate('/dashboard/progress'),
+        disabled: false,
+        icon: FileSearch,
+      };
+    }
+    return {
+      label: refreshingAudit ? (isRu ? 'Собираем данные...' : 'Collecting data...') : (isRu ? 'Собрать данные' : 'Collect data'),
+      title: isRu ? 'Запускает сбор данных по карте и создаёт аудит карточки.' : 'Starts map data collection and creates the listing audit.',
+      onClick: handleStartAudit,
+      disabled: !canStartAudit || refreshingAudit,
+      icon: RefreshCw,
+    };
+  })();
+
+  const PrimaryProfileIcon = primaryProfileAction.icon;
+  const profileStatusItems: ProfileStatusItem[] = [
+    {
+      label: t.dashboard.profile.completion,
+      value: `${profileCompletion}%`,
+      hint: profileCompletion === 100
+        ? (isRu ? 'Данные заполнены.' : 'Details completed.')
+        : (isRu ? 'Осталось заполнить базовые поля.' : 'Complete the remaining basics.'),
+      tone: profileCompletion >= 85 ? 'positive' : 'warning',
+    },
+    {
+      label: isRu ? 'Карта' : 'Map',
+      value: hasSavedMapLinks ? (isRu ? 'Подключена' : 'Connected') : (isRu ? 'Нужна ссылка' : 'Link needed'),
+      hint: hasSavedMapLinks
+        ? (isRu ? 'Можно обновлять данные.' : 'Data can be refreshed.')
+        : (isRu ? 'Добавьте Яндекс, 2ГИС или Google.' : 'Add Yandex, 2GIS, or Google.'),
+      tone: hasSavedMapLinks ? 'positive' : 'warning',
+    },
+    {
+      label: isRu ? 'Аудит' : 'Audit',
+      value: parseStatusLabel,
+      hint: parseStatusHelpText,
+      tone: isAuditReady ? 'positive' : hasSavedMapLinks ? 'default' : 'warning',
+    },
+    {
+      label: isRu ? 'Режим' : 'Mode',
+      value: isNetworkMaster ? (isRu ? 'Сеть' : 'Network') : isNetwork ? (isRu ? 'Точка сети' : 'Location') : (isRu ? 'Один бизнес' : 'Single business'),
+      hint: isNetworkMaster
+        ? (isRu ? 'Данные собираются по точкам сети.' : 'Data is collected by location.')
+        : (isRu ? 'Обычный режим кабинета.' : 'Standard dashboard mode.'),
+    },
+  ];
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-10">
       <DashboardPageHeader
@@ -871,28 +1012,16 @@ export const ProfilePage = () => {
         title={t.dashboard.profile.title}
         description={t.dashboard.profile.subtitle}
         actions={(
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate('/dashboard/card')}
-              className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
-              title={isRu ? 'Открывает раздел работы с картами, услугами, отзывами и SEO.' : 'Opens the maps workspace with services, reviews, and SEO tools.'}
-            >
-              <ArrowRight className="mr-2 h-4 w-4" />
-              {isRu ? 'Работа с картами' : 'Maps workspace'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate('/dashboard/progress')}
-              className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
-              title={isRu ? 'Открывает раздел с аудитом, показателями и историей изменений.' : 'Opens the section with the audit, metrics, and change history.'}
-            >
-              <FileSearch className="mr-2 h-4 w-4" />
-              {isRu ? 'Открыть прогресс' : 'Open progress'}
-            </Button>
-          </>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate('/dashboard/card')}
+            className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
+            title={isRu ? 'Открывает раздел работы с картами, услугами, отзывами и SEO.' : 'Opens the maps workspace with services, reviews, and SEO tools.'}
+          >
+            <ArrowRight className="mr-2 h-4 w-4" />
+            {isRu ? 'Работа с картами' : 'Maps workspace'}
+          </Button>
         )}
       />
 
@@ -910,90 +1039,32 @@ export const ProfilePage = () => {
         </div>
       )}
 
-      <DashboardCompactMetricsRow
-        items={[
-          {
-            label: t.dashboard.profile.completion,
-            value: `${profileCompletion}%`,
-            hint: profileCompletion === 100
-              ? (isRu ? 'Профиль готов к работе.' : 'The profile is ready to use.')
-              : (isRu ? 'Заполните недостающие поля, чтобы не тормозить запуск аудита.' : 'Complete the missing fields so the audit can start smoothly.'),
-            tone: profileCompletion >= 85 ? 'positive' : 'warning',
-          },
-          {
-            label: isRu ? 'Ссылка на карту' : 'Map link',
-            value: hasSavedMapLinks ? (isRu ? 'Сохранена' : 'Saved') : (isRu ? 'Не добавлена' : 'Missing'),
-            hint: hasSavedMapLinks
-              ? (isRu ? 'Можно запускать сбор данных.' : 'Data collection can be started.')
-              : (isRu ? 'Без ссылки аудит не соберётся.' : 'The audit cannot run without a link.'),
-            tone: hasSavedMapLinks ? 'positive' : 'warning',
-          },
-          {
-            label: isRu ? 'Статус аудита' : 'Audit status',
-            value: parseStatusLabel,
-            hint: parseStatusHelpText,
-          },
-          {
-            label: isRu ? 'Сеть' : 'Network',
-            value: isNetworkMaster ? (isRu ? 'Материнская точка' : 'Parent location') : isNetwork ? (isRu ? 'Точка сети' : 'Network location') : (isRu ? 'Одиночный бизнес' : 'Single business'),
-            hint: isNetworkMaster
-              ? (isRu ? 'Для сети доступны общие данные и переключение по точкам.' : 'Shared network data and location switching are available.')
-              : (isRu ? 'Обычный рабочий режим кабинета.' : 'Standard dashboard mode.'),
-          },
-        ]}
-      />
-
-      <DashboardActionPanel
-        tone="sky"
-        title={isRu ? 'Следующий шаг' : 'Next step'}
-        description={isRu ? (
-          <>
-            Если аудит ещё не запускался, сохраните ссылку на карту и нажмите <span className="font-semibold">«Собрать данные и создать аудит»</span>.
-            Если данные уже есть, переходите в <span className="font-semibold">«Прогресс»</span> или в <span className="font-semibold">«Работа с картами»</span>.
-          </>
-        ) : (
-          <>
-            If the audit has not been started yet, save the map link and click <span className="font-semibold">“Collect data and create audit”</span>.
-            If the data is already available, continue in <span className="font-semibold">Progress</span> or <span className="font-semibold">Maps workspace</span>.
-          </>
-        )}
-        status={(
-          <span>
-            {isRu ? 'Сейчас: ' : 'Now: '}
-            <span className="font-semibold">{parseStatusLabel}</span>
-          </span>
-        )}
-        actions={(
-          <>
-            <Button
-              type="button"
-              onClick={handleStartAudit}
-              disabled={!canStartAudit || refreshingAudit}
-              className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
-              title={isRu ? 'Запускает сбор данных по карте и создаёт аудит карточки.' : 'Starts map data collection and creates the listing audit.'}
-            >
-              <RefreshCw className={cn('mr-2 h-4 w-4', refreshingAudit ? 'animate-spin' : '')} />
-              {refreshingAudit
-                ? (isRu ? 'Запускаем сбор...' : 'Starting collection...')
-                : (isRu ? 'Собрать данные и создать аудит' : 'Collect data and create audit')}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate('/dashboard/progress')}
-              className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
-            >
-              <FileSearch className="mr-2 h-4 w-4" />
-              {isRu ? 'Открыть прогресс' : 'Open progress'}
-            </Button>
-          </>
+      <ProfileStatusStrip
+        items={profileStatusItems}
+        title={isRu ? 'Статус профиля' : 'Profile status'}
+        note={
+          isRu
+            ? 'Здесь задаются исходные данные бизнеса. После сохранения LocalOS использует их в картах, аудите, новостях и SEO.'
+            : 'This page stores the business source data used for maps, audits, posts, and SEO.'
+        }
+        action={(
+          <Button
+            type="button"
+            onClick={primaryProfileAction.onClick}
+            disabled={primaryProfileAction.disabled}
+            className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
+            title={primaryProfileAction.title}
+          >
+            <PrimaryProfileIcon className={cn('mr-2 h-4 w-4', refreshingAudit && PrimaryProfileIcon === RefreshCw ? 'animate-spin' : '')} />
+            {primaryProfileAction.label}
+          </Button>
         )}
       />
 
       {/* Профиль пользователя */}
       <DashboardSection
         title={t.dashboard.profile.userProfile}
-        description="Контактные данные владельца и основного пользователя аккаунта."
+        description={isRu ? 'Кто управляет аккаунтом и получает рабочие уведомления.' : 'Who manages the account and receives work notifications.'}
         actions={!editMode && currentBusiness && currentBusiness.owner_id === user?.id ? (
           <Button onClick={() => setEditMode(true)} variant="outline" className="gap-2">
             <Edit2 className="w-4 h-4" />
@@ -1001,23 +1072,7 @@ export const ProfilePage = () => {
           </Button>
         ) : null}
       >
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
-              <User className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">
-                {t.dashboard.profile.userProfile}
-              </h2>
-              {currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id && (
-                <span className="text-sm font-medium text-gray-500">
-                  {t.dashboard.profile.owner}
-                </span>
-              )}
-            </div>
-          </div>
-
+        <div className="mb-6 flex justify-end">
           {currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 text-sm font-medium">
               <ShieldCheck className="w-4 h-4" />
@@ -1104,6 +1159,7 @@ export const ProfilePage = () => {
 
       {/* Информация о бизнесе */}
       <DashboardSection
+        ref={businessInfoSectionRef}
         title={t.dashboard.profile.businessInfo}
         description={businessInfoHelperText}
         actions={
@@ -1148,25 +1204,12 @@ export const ProfilePage = () => {
           </div>
         }
       >
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl">
-              <Building2 className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                {t.dashboard.profile.businessInfo}
-                {isNetwork && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
-                    <Network className="w-3 h-3" />
-                    Network
-                  </span>
-                )}
-              </h2>
-            </div>
+        {isNetwork && (
+          <div className="mb-6 inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-700 ring-1 ring-orange-100">
+            <Network className="h-4 w-4" />
+            {isRu ? 'Точка сети' : 'Network location'}
           </div>
-
-        </div>
+        )}
         {hasUnsavedClientInfoChanges && (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/90 p-4 text-sm leading-6 text-amber-900">
             {isRu
@@ -1422,91 +1465,48 @@ export const ProfilePage = () => {
             )}
 
             {hasMapLinks && (
-              <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50/80 p-4 md:p-5">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 rounded-xl bg-white/80 p-2 text-blue-600 shadow-sm">
-                    <RefreshCw className="h-5 w-5" />
+              <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-sky-950">
+                    {isRu ? 'Ссылка на карту добавлена' : 'Map link added'}
                   </div>
-                  <div className="flex-1 space-y-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-blue-950">
-                        {isRu ? 'Что делать дальше после добавления ссылки' : 'What to do after adding the map link'}
-                      </h3>
-                      <p className="mt-1 text-sm leading-6 text-blue-900/90">
-                        {isRu ? (
-                          <>
-                            1. Перейдите во вкладку <span className="font-semibold">«Работа с картами»</span> и нажмите
-                            <span className="font-semibold"> «Обновить данные карточки»</span>, чтобы спарсить фактические данные с карты.
-                          </>
-                        ) : (
-                          <>
-                            1. Go to <span className="font-semibold">“Maps Management”</span> and click
-                            <span className="font-semibold"> “Refresh card data”</span> to collect the actual listing data from the map.
-                          </>
-                        )}
-                      </p>
-                      <p className="mt-1 text-sm leading-6 text-blue-900/90">
-                        {isRu ? (
-                          <>
-                            2. После парсинга откройте вкладку <span className="font-semibold">«Прогресс»</span>:
-                            там отображается аудит текущего состояния карточки вместе со статистикой бизнеса.
-                          </>
-                        ) : (
-                          <>
-                            2. After parsing, open the <span className="font-semibold">“Progress”</span> tab:
-                            it shows the current card audit together with business statistics.
-                          </>
-                        )}
-                      </p>
-                      <p className="mt-1 text-sm leading-6 text-blue-900/90">
-                        {isRu ? (
-                          <>
-                            3. Когда сбор завершится, LocalOS покажет уведомление, что аудит готов.
-                          </>
-                        ) : (
-                          <>
-                            3. When the collection finishes, LocalOS will show a notification that the audit is ready.
-                          </>
-                        )}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        onClick={handleStartAudit}
-                        disabled={!canStartAudit || refreshingAudit}
-                        className="bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-300"
-                        title={isRu ? 'Запускает сбор данных по карте и создаёт аудит карточки.' : 'Starts map data collection and creates the listing audit.'}
-                      >
-                        <RefreshCw className={cn('mr-2 h-4 w-4', refreshingAudit ? 'animate-spin' : '')} />
-                        {refreshingAudit
-                          ? (isRu ? 'Запускаем сбор...' : 'Starting collection...')
-                          : (isRu ? 'Собрать данные и создать аудит' : 'Collect data and create audit')}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => navigate('/dashboard/card')}
-                        className="border-blue-200 bg-white text-blue-800 hover:bg-blue-100"
-                        title={isRu ? 'Открывает раздел работы с картами, где можно обновить данные карточки, услуги и отзывы.' : 'Opens maps management where you can refresh listing data, services, and reviews.'}
-                      >
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        {isRu ? 'Перейти в «Работа с картами»' : 'Go to Maps Management'}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => navigate('/dashboard/progress')}
-                        className="border-blue-200 bg-white text-blue-800 hover:bg-blue-100"
-                        title={isRu ? 'Открывает аудит, статистику бизнеса и историю изменений после завершения сбора.' : 'Opens the audit, business metrics, and change history after the collection finishes.'}
-                      >
-                        <FileSearch className="mr-2 h-4 w-4" />
-                        {isRu ? 'Открыть «Прогресс»' : 'Open “Progress”'}
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </div>
+                  <div className="mt-1 text-sm leading-6 text-sky-900/85">
+                    {isRu
+                      ? 'Сохраните изменения и соберите данные карточки, чтобы увидеть аудит и рекомендации.'
+                      : 'Save changes and collect listing data to see the audit and recommendations.'}
                   </div>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    onClick={hasUnsavedClientInfoChanges ? handleSaveClientInfo : handleStartAudit}
+                    disabled={hasUnsavedClientInfoChanges ? savingClientInfo : (!canStartAudit || refreshingAudit)}
+                    className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
+                    title={hasUnsavedClientInfoChanges
+                      ? (isRu ? 'Сохранит текущие изменения.' : 'Saves the current changes.')
+                      : (isRu ? 'Запускает сбор данных по карте и создаёт аудит карточки.' : 'Starts map data collection and creates the listing audit.')}
+                  >
+                    {hasUnsavedClientInfoChanges ? (
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                    ) : (
+                      <RefreshCw className={cn('mr-2 h-4 w-4', refreshingAudit ? 'animate-spin' : '')} />
+                    )}
+                    {hasUnsavedClientInfoChanges
+                      ? (isRu ? 'Сохранить' : 'Save')
+                      : refreshingAudit
+                        ? (isRu ? 'Собираем...' : 'Collecting...')
+                        : (isRu ? 'Собрать данные' : 'Collect data')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => navigate('/dashboard/card')}
+                    className="border-sky-200 bg-white text-sky-900 hover:bg-sky-100"
+                    title={isRu ? 'Открывает раздел работы с картами, услугами, отзывами и SEO.' : 'Opens maps management with services, reviews, and SEO.'}
+                  >
+                    <ArrowRight className="mr-2 h-4 w-4" />
+                    {isRu ? 'К картам' : 'Maps'}
+                  </Button>
                 </div>
               </div>
             )}
