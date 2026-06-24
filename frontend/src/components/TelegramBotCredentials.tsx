@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Bot, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Bot, Eye, EyeOff, Info } from 'lucide-react';
 
 interface TelegramBotCredentialsProps {
   businessId: string | null;
@@ -274,6 +274,20 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
           <p className="text-xs text-slate-500">
             Для канала добавьте бота администратором и укажите username канала или числовой chat_id. Без этого LocalOS подготовит пост, но не сможет отправить его по API.
           </p>
+          <div
+            data-testid="telegram-publish-target-distinction"
+            className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900"
+          >
+            <div className="flex items-start gap-2">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <div>
+                <div className="font-semibold text-amber-950">Важно для живого теста Telegram</div>
+                <div className="mt-1">
+                  @LocalOspro_bot и miniapp могут управлять LocalOS и слать уведомления, но публикация поста из контент-плана идёт в выбранный chat_id канала или чата. Номер телефона сам по себе не является целью публикации; отправка человеку через Telegram app — отдельный supervised/outreach transport proof.
+                </div>
+              </div>
+            </div>
+          </div>
           <p className="text-xs font-medium text-slate-700">
             После сохранения LocalOS сразу обновит готовность каналов для постов из контент-плана.
           </p>
