@@ -486,7 +486,7 @@ def planned_counts():
     source_count = len(MAP_SOURCES)
     finance_entry_count = len(NETWORK_MONTH_REVENUE) * (location_count + 1) * 11
     income_tx_count = len(NETWORK_MONTH_REVENUE) * (location_count * 18 + 12)
-    booking_count = location_count * 36
+    booking_count = location_count * 36 + 18
     return {
         "users": 1,
         "networks": 1,
@@ -1246,6 +1246,48 @@ def seed_bookings(cursor, service_map, master_map):
     rng = random.Random(7)
     statuses = ["completed", "completed", "completed", "confirmed", "pending", "cancelled"]
     today = date.today()
+    network_service_source = stable_id(f"business:{LOCATIONS[0]['key']}")
+    network_services = list(service_map[network_service_source].items())
+    for index in range(18):
+        if index < 6:
+            booking_date = today
+            status = "confirmed"
+        elif index < 12:
+            booking_date = today + timedelta(days=index - 5)
+            status = "pending" if index % 2 else "confirmed"
+        else:
+            booking_date = today - timedelta(days=index - 10)
+            status = statuses[index % len(statuses)]
+        service_name, service_id = network_services[index % len(network_services)]
+        hour = 10 + (index % 8)
+        minute = 0 if index % 2 == 0 else 30
+        booking_dt = datetime.combine(booking_date, time(hour, minute))
+        client = CLIENT_NAMES[index % len(CLIENT_NAMES)]
+        pet = PET_NAMES[(index * 3) % len(PET_NAMES)]
+        insert_row(
+            cursor,
+            "bookings",
+            {
+                "id": stable_id(f"booking:{NETWORK_ID}:crm:{index}"),
+                "business_id": NETWORK_ID,
+                "client_phone": f"+7998{rng.randint(1000000, 9999999)}",
+                "client_name": client,
+                "client_email": f"demo-crm-client-{index}@example.invalid",
+                "service_id": service_id,
+                "service_name": service_name,
+                "booking_date": booking_date.isoformat(),
+                "booking_time": booking_dt,
+                "booking_time_local": booking_dt,
+                "source": "yclients_crm",
+                "status": status,
+                "notes": f"DEMO: запись из подключенной CRM. Питомец {pet}.",
+                "conversation_id": stable_id(f"conversation:{NETWORK_ID}:crm:{index}"),
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+                "master_id": None,
+            },
+        )
+
     for location in LOCATIONS:
         business_id = stable_id(f"business:{location['key']}")
         services = list(service_map[business_id].items())

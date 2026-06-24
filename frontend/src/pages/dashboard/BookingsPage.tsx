@@ -137,6 +137,18 @@ export const BookingsPage = () => {
     }
   };
 
+  const getSourceBadge = (source: string) => {
+    const normalized = String(source || '').toLowerCase();
+    if (normalized.includes('crm') || normalized.includes('yclients')) {
+      return (
+        <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+          CRM подключена
+        </Badge>
+      );
+    }
+    return <Badge variant="outline">{source || 'LocalOS'}</Badge>;
+  };
+
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
@@ -243,7 +255,7 @@ export const BookingsPage = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{booking.source}</Badge>
+                        {getSourceBadge(booking.source)}
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(booking.status)}
@@ -290,4 +302,3 @@ export const BookingsPage = () => {
     </div>
   );
 };
-
