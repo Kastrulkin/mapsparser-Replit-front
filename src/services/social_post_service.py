@@ -9473,6 +9473,12 @@ def _channel_readiness_message(platform: str, status: str, is_ru: bool) -> str:
             if is_ru
             else f"{label}: connection looks ready, but API publishing is not enabled yet; manual placement will be used."
         )
+    if platform_key == "telegram" and status == "missing_keys":
+        return (
+            "Telegram: укажите bot token и chat_id цели публикации. Owner-bot/миниапп подходят для управления LocalOS, но не заменяют канал или чат для поста."
+            if is_ru
+            else "Telegram: set the bot token and publish-target chat_id. The owner bot/mini app can manage LocalOS, but does not replace the channel or chat for the post."
+        )
     return f"{label}: нужны ключи или настройки канала." if is_ru else f"{label}: keys or channel settings are required."
 
 
@@ -9505,9 +9511,9 @@ def _channel_readiness_next_action(platform: str, status: str, is_ru: bool) -> s
         )
     if platform_key == "telegram" and status_key == "missing_keys":
         return (
-            "Добавьте telegram_bot_token и telegram_chat_id в настройках бизнеса."
+            "Добавьте telegram_bot_token и telegram_chat_id канала/группы, куда должен выйти пост."
             if is_ru
-            else "Add telegram_bot_token and telegram_chat_id in business settings."
+            else "Add telegram_bot_token and the channel/group telegram_chat_id where the post should appear."
         )
     if platform_key == "vk":
         if status_key == "missing_permissions":

@@ -2798,6 +2798,9 @@ def test_channel_readiness_exposes_owner_next_action():
     maps = _channel_readiness("yandex_maps", "manual", False, "manual_fallback")
 
     assert "telegram_bot_token" in telegram["next_action_en"]
+    assert "цели публикации" in telegram["message_ru"]
+    assert "Owner-bot/миниапп" in telegram["message_ru"]
+    assert "channel/group telegram_chat_id" in telegram["next_action_en"]
     assert "wall.post" in vk["next_action_en"]
     assert "Instagram business account" in meta["next_action_en"]
     assert "ручного действия" in maps["next_action_ru"]
