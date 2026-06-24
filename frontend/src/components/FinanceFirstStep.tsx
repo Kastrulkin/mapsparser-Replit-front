@@ -176,11 +176,11 @@ const workplaceLabels: Record<string, string> = {
   other: 'Другое',
 };
 
-const starterSteps = [
-  { key: 'entry', title: '1. Деньги', text: 'Выручка и основные расходы за выбранный период.' },
-  { key: 'service', title: '2. Услуги', text: 'Цена, длительность, материалы и выплата мастеру.' },
-  { key: 'staff', title: '3. Мастера', text: 'Выручка, часы, визиты, неявки и повторная запись.' },
-  { key: 'workplace', title: '4. Кресла', text: 'Сколько мест доступно, занято и сколько они приносят.' },
+const dataInputModes = [
+  { key: 'entry', title: 'Деньги', text: 'Выручка и расходы' },
+  { key: 'service', title: 'Услуга', text: 'Цена, маржа, длительность' },
+  { key: 'staff', title: 'Мастер', text: 'Визиты и часы' },
+  { key: 'workplace', title: 'Рабочее место', text: 'Доступность и загрузка' },
 ];
 
 const dateToInputValue = (date: Date) => date.toISOString().slice(0, 10);
@@ -691,10 +691,15 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
             <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
               <Card id="finance-quick-input" className="border-slate-200/80 shadow-sm">
                 <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <ClipboardList className="h-4 w-4 text-slate-500" />
-                    Ввод данных
-                  </CardTitle>
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <ClipboardList className="h-4 w-4 text-slate-500" />
+                      Добавить данные
+                    </CardTitle>
+                    <div className="mt-1 text-sm text-slate-500">
+                      Вносите по одному блоку: деньги, услугу, мастера или рабочее место.
+                    </div>
+                  </div>
                   <Button variant="outline" onClick={fillDemoSalon} className="gap-2">
                     <PlayCircle className="h-4 w-4" />
                     Пример
@@ -705,31 +710,35 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
                     value={manualPeriod}
                     onChange={setManualPeriod}
                   />
-                  <div className="mb-4 grid gap-3 md:grid-cols-4">
-                    {starterSteps.map((step) => (
+                  <div className="mb-4">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Что добавить
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    {dataInputModes.map((step) => (
                       <button
                         key={step.key}
                         type="button"
                         onClick={() => setActiveInputStep(step.key)}
                         className={cn(
-                          'rounded-2xl border bg-white p-3 text-left text-sm transition hover:border-slate-300',
-                          activeInputStep === step.key ? 'border-slate-950 ring-2 ring-slate-200' : 'border-slate-200',
+                          'rounded-2xl border px-4 py-3 text-left text-sm transition hover:border-slate-300',
+                          activeInputStep === step.key
+                            ? 'border-slate-950 bg-slate-950 text-white shadow-sm'
+                            : 'border-slate-200 bg-white text-slate-700',
                         )}
                       >
-                        <div className="font-semibold text-slate-950">{step.title}</div>
-                        <div className="mt-1 leading-5 text-slate-600">{step.text}</div>
+                        <div className={cn('font-semibold', activeInputStep === step.key ? 'text-white' : 'text-slate-950')}>
+                          {step.title}
+                        </div>
+                        <div className={cn('mt-1 truncate text-xs', activeInputStep === step.key ? 'text-slate-200' : 'text-slate-500')}>
+                          {step.text}
+                        </div>
                       </button>
                     ))}
+                    </div>
                   </div>
                   <Tabs value={activeInputStep} onValueChange={setActiveInputStep}>
-                    <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-4">
-                      <TabsTrigger value="entry">Доходы и расходы</TabsTrigger>
-                      <TabsTrigger value="service">Услуги</TabsTrigger>
-                      <TabsTrigger value="staff">Мастера</TabsTrigger>
-                      <TabsTrigger value="workplace">Рабочие места</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="entry" className="space-y-4 pt-4">
+                    <TabsContent value="entry" className="space-y-4 pt-0">
                       <div className="grid gap-3 md:grid-cols-3">
                         <MoneyField label="Выручка" value={entry.revenue} onChange={(value) => setEntry({ ...entry, revenue: value })} />
                         <MoneyField label="Аренда" value={entry.rent} onChange={(value) => setEntry({ ...entry, rent: value })} />
@@ -741,7 +750,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
                       <SaveButton disabled={saving} onClick={() => saveManualData('entry')} />
                     </TabsContent>
 
-                    <TabsContent value="service" className="space-y-4 pt-4">
+                    <TabsContent value="service" className="space-y-4 pt-0">
                       <div className="grid gap-3 md:grid-cols-4">
                         <TextField label="Услуга" value={service.service_name} onChange={(value) => setService({ ...service, service_name: value })} />
                         <TextField label="Категория" value={service.category} onChange={(value) => setService({ ...service, category: value })} />
@@ -755,7 +764,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
                       <SaveButton disabled={saving} onClick={() => saveManualData('service')} />
                     </TabsContent>
 
-                    <TabsContent value="staff" className="space-y-4 pt-4">
+                    <TabsContent value="staff" className="space-y-4 pt-0">
                       <div className="grid gap-3 md:grid-cols-4">
                         <TextField label="Мастер" value={staff.staff_name} onChange={(value) => setStaff({ ...staff, staff_name: value })} />
                         <TextField label="Роль" value={staff.role} onChange={(value) => setStaff({ ...staff, role: value })} />
@@ -769,7 +778,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
                       <SaveButton disabled={saving} onClick={() => saveManualData('staff')} />
                     </TabsContent>
 
-                    <TabsContent value="workplace" className="space-y-4 pt-4">
+                    <TabsContent value="workplace" className="space-y-4 pt-0">
                       <div className="grid gap-3 md:grid-cols-3">
                         <TextField label="Название места" value={workplace.name} onChange={(value) => setWorkplace({ ...workplace, name: value })} />
                         <div className="space-y-2">
@@ -888,6 +897,8 @@ const ManualPeriodContext: React.FC<{
   value: ManualPeriodValue;
   onChange: (value: ManualPeriodValue) => void;
 }> = ({ value, onChange }) => {
+  const [open, setOpen] = React.useState(false);
+
   const changeType = (periodType: string) => {
     if (periodType === 'day') {
       onChange({ ...value, periodType, start: value.date, end: value.date });
@@ -915,36 +926,44 @@ const ManualPeriodContext: React.FC<{
   };
 
   return (
-    <div className="mb-5 rounded-2xl border border-sky-200 bg-sky-50/70 p-4 ring-1 ring-sky-100">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="text-sm font-semibold text-slate-950">Период, к которому относятся данные</div>
-          <div className="mt-1 text-sm text-slate-600">
-            Сохранение привяжет значения к периоду: <span className="font-medium text-slate-950">{formatPeriodLabel({ start: value.start, end: value.end })}</span>
+    <Collapsible open={open} onOpenChange={setOpen} className="mb-5 rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Период данных</div>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-700">
+            <span className="font-medium text-slate-950">{formatPeriodLabel({ start: value.start, end: value.end })}</span>
+            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+              Источник: вручную
+            </span>
           </div>
         </div>
-        <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-          Источник: вручную
-        </span>
+        <CollapsibleTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-2">
+            <ChevronDown className={cn('h-4 w-4 transition-transform', open ? 'rotate-180' : '')} />
+            {open ? 'Скрыть период' : 'Изменить период'}
+          </Button>
+        </CollapsibleTrigger>
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-5">
-        <div className="space-y-2">
-          <Label>Тип периода</Label>
-          <Select value={value.periodType} onValueChange={changeType}>
-            <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="day">День</SelectItem>
-              <SelectItem value="month">Месяц</SelectItem>
-              <SelectItem value="custom">Произвольный период</SelectItem>
-            </SelectContent>
-          </Select>
+      <CollapsibleContent>
+        <div className="mt-4 grid gap-3 md:grid-cols-5">
+          <div className="space-y-2">
+            <Label>Тип периода</Label>
+            <Select value={value.periodType} onValueChange={changeType}>
+              <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="day">День</SelectItem>
+                <SelectItem value="month">Месяц</SelectItem>
+                <SelectItem value="custom">Произвольный период</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DateField label={value.periodType === 'month' ? 'Месяц по дате' : 'Дата'} value={value.date} onChange={changeDate} />
+          <DateField label="Начало периода" value={value.start} onChange={(start) => onChange({ ...value, periodType: 'custom', start })} />
+          <DateField label="Конец периода" value={value.end} onChange={(end) => onChange({ ...value, periodType: 'custom', end })} />
+          <TextField label="Комментарий" value={value.comment} onChange={(comment) => onChange({ ...value, comment })} />
         </div>
-        <DateField label={value.periodType === 'month' ? 'Месяц по дате' : 'Дата'} value={value.date} onChange={changeDate} />
-        <DateField label="Начало периода" value={value.start} onChange={(start) => onChange({ ...value, periodType: 'custom', start })} />
-        <DateField label="Конец периода" value={value.end} onChange={(end) => onChange({ ...value, periodType: 'custom', end })} />
-        <TextField label="Комментарий" value={value.comment} onChange={(comment) => onChange({ ...value, comment })} />
-      </div>
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 };
 
