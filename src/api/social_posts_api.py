@@ -3,12 +3,15 @@ from __future__ import annotations
 import os
 import sys
 import time
+import urllib.error
+import urllib.request
 from collections import defaultdict, deque
 from typing import Deque
 
 from flask import Blueprint, jsonify, request
 
 from auth_system import verify_session
+from core.telegram_network import resolve_telegram_http_proxy, telegram_urlopen
 from services.social_post_service import (
     apply_social_post_recommendation,
     approve_social_post,
@@ -101,10 +104,98 @@ def social_post_runtime_status_payload() -> dict[str, object]:
     return {
         "dispatch": dispatch_status,
         "metrics": metrics_status,
+        "telegram_transport": _telegram_transport_status_payload(),
         "owner_status": _social_runtime_owner_status(dispatch_status, metrics_status),
         "approval_required": True,
         "browser_final_click_allowed": False,
     }
+
+
+def _telegram_transport_status_payload() -> dict[str, object]:
+    proxy = resolve_telegram_http_proxy()
+    token_present = bool(str(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip())
+    probe_enabled = _bool_env("SOCIAL_POST_TELEGRAM_TRANSPORT_PROBE_ENABLED", True)
+    payload: dict[str, object] = {
+        "schema": "localos_telegram_transport_status_v1",
+        "proxy_configured": bool(proxy),
+        "proxy_mode": "configured" if proxy else "direct",
+        "bot_token_present": token_present,
+        "read_only_probe_enabled": probe_enabled,
+        "read_only_probe_performed": False,
+        "ready": False,
+        "status": "probe_disabled",
+        "summary_ru": "Read-only проверка Telegram transport выключена.",
+        "summary_en": "Read-only Telegram transport probe is disabled.",
+        "next_action_ru": "Включите проверку transport перед первым Telegram proof.",
+        "next_action_en": "Enable the transport probe before the first Telegram proof.",
+    }
+    if not probe_enabled:
+        return payload
+
+    payload["read_only_probe_performed"] = True
+    req = urllib.request.Request("https://api.telegram.org", method="GET")
+    try:
+        resp = telegram_urlopen(req, timeout=max(1, min(_int_env("SOCIAL_POST_TELEGRAM_TRANSPORT_PROBE_TIMEOUT_SEC", 3), 10)))
+        try:
+            status_code = int(getattr(resp, "status", 0) or 0)
+        finally:
+            resp.close()
+    except urllib.error.HTTPError:
+        error = sys.exc_info()[1]
+        status_code = int(getattr(error, "code", 0) or 0)
+        if 200 <= status_code < 400:
+            payload.update(
+                {
+                    "ready": True,
+                    "status": "ready",
+                    "http_status": status_code,
+                    "summary_ru": "Telegram transport отвечает на read-only проверку.",
+                    "summary_en": "Telegram transport responds to the read-only probe.",
+                    "next_action_ru": "Можно запускать Telegram getMe/getChat preflight без отправки сообщений.",
+                    "next_action_en": "You can run Telegram getMe/getChat preflight without sending messages.",
+                }
+            )
+            return payload
+        payload.update(
+            {
+                "ready": False,
+                "status": "http_error",
+                "http_status": status_code,
+                "summary_ru": f"Telegram transport вернул HTTP {status_code}.",
+                "summary_en": f"Telegram transport returned HTTP {status_code}.",
+                "next_action_ru": "Проверьте Telegram proxy/service перед первым publish proof.",
+                "next_action_en": "Check the Telegram proxy/service before the first publish proof.",
+            }
+        )
+        return payload
+    except Exception:
+        error = sys.exc_info()[1]
+        payload.update(
+            {
+                "ready": False,
+                "status": type(error).__name__,
+                "error": str(error)[:240],
+                "summary_ru": "Telegram transport не прошёл read-only проверку.",
+                "summary_en": "Telegram transport did not pass the read-only probe.",
+                "next_action_ru": "Проверьте localos-telegram-proxy.service и config.json, затем повторите preflight.",
+                "next_action_en": "Check localos-telegram-proxy.service and config.json, then rerun preflight.",
+            }
+        )
+        return payload
+
+    ready = 200 <= status_code < 400
+    payload.update(
+        {
+            "ready": ready,
+            "status": "ready" if ready else "unexpected_http_status",
+            "http_status": status_code,
+            "summary_ru": "Telegram transport отвечает на read-only проверку." if ready else f"Telegram transport вернул HTTP {status_code}.",
+            "summary_en": "Telegram transport responds to the read-only probe." if ready else f"Telegram transport returned HTTP {status_code}.",
+            "next_action_ru": "Можно запускать Telegram getMe/getChat preflight без отправки сообщений." if ready else "Проверьте Telegram proxy/service перед первым publish proof.",
+            "next_action_en": "You can run Telegram getMe/getChat preflight without sending messages." if ready else "Check the Telegram proxy/service before the first publish proof.",
+        }
+    )
+    return payload
 
 
 def _social_runtime_owner_status(dispatch_status: dict[str, object], metrics_status: dict[str, object]) -> dict[str, object]:

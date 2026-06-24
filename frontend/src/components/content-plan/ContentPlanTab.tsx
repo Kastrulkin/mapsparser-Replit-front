@@ -1157,6 +1157,21 @@ type SocialRuntimeStatus = {
     requires_business_scope?: boolean;
     blocked_without_scope?: boolean;
   };
+  telegram_transport?: {
+    schema?: string;
+    ready?: boolean;
+    status?: string;
+    proxy_configured?: boolean;
+    proxy_mode?: string;
+    bot_token_present?: boolean;
+    read_only_probe_enabled?: boolean;
+    read_only_probe_performed?: boolean;
+    http_status?: number;
+    summary_ru?: string;
+    summary_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+  };
   approval_required?: boolean;
   browser_final_click_allowed?: boolean;
 };
@@ -8691,6 +8706,37 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 {isRu
                                   ? 'Сбор реакций включён, но LocalOS не будет вызывать внешние API без SOCIAL_POST_METRICS_BUSINESS_ID или явного allow-all.'
                                   : 'Metrics collection is enabled, but LocalOS will not call external APIs without SOCIAL_POST_METRICS_BUSINESS_ID or explicit allow-all.'}
+                              </div>
+                            ) : null}
+                            {socialRuntimeStatus.telegram_transport ? (
+                              <div
+                                data-testid="social-runtime-telegram-transport"
+                                data-schema={String(socialRuntimeStatus.telegram_transport.schema || 'localos_telegram_transport_status_v1')}
+                                className={[
+                                  'rounded-lg border px-2 py-1.5 text-[11px] leading-4',
+                                  socialRuntimeStatus.telegram_transport.ready
+                                    ? 'border-emerald-300/30 bg-emerald-400/10 text-emerald-50'
+                                    : 'border-amber-300/30 bg-amber-400/10 text-amber-50',
+                                ].join(' ')}
+                              >
+                                <div className="flex items-center justify-between gap-3 font-semibold">
+                                  <span>{isRu ? 'Telegram transport' : 'Telegram transport'}</span>
+                                  <span>
+                                    {socialRuntimeStatus.telegram_transport.ready
+                                      ? (isRu ? 'готов' : 'ready')
+                                      : (isRu ? 'требует проверки' : 'needs check')}
+                                  </span>
+                                </div>
+                                <div className="mt-1">
+                                  {isRu
+                                    ? String(socialRuntimeStatus.telegram_transport.summary_ru || '')
+                                    : String(socialRuntimeStatus.telegram_transport.summary_en || '')}
+                                </div>
+                                <div className="mt-1 font-medium">
+                                  {isRu
+                                    ? String(socialRuntimeStatus.telegram_transport.next_action_ru || '')
+                                    : String(socialRuntimeStatus.telegram_transport.next_action_en || '')}
+                                </div>
                               </div>
                             ) : null}
                           </div>

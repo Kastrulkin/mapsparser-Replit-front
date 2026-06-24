@@ -1,6 +1,12 @@
 from flask import Flask
+import pytest
 
 from src.api import social_posts_api
+
+
+@pytest.fixture(autouse=True)
+def disable_runtime_telegram_transport_probe(monkeypatch):
+    monkeypatch.setenv("SOCIAL_POST_TELEGRAM_TRANSPORT_PROBE_ENABLED", "0")
 
 
 def test_social_post_write_rate_limit_allows_first_request(monkeypatch):
@@ -94,6 +100,7 @@ def test_social_post_runtime_status_reflects_worker_flags(monkeypatch):
     assert payload["owner_status"]["metrics_status"] == "metrics_disabled"
     assert payload["owner_status"]["external_publish_requires_approval"] is True
     assert payload["owner_status"]["browser_final_click_allowed"] is False
+    assert payload["telegram_transport"]["schema"] == "localos_telegram_transport_status_v1"
 
 
 def test_social_post_runtime_status_blocks_enabled_unscoped_dispatch(monkeypatch):
@@ -110,6 +117,49 @@ def test_social_post_runtime_status_blocks_enabled_unscoped_dispatch(monkeypatch
     assert payload["dispatch"]["blocked_without_scope"] is True
     assert payload["owner_status"]["status"] == "dispatch_guarded_without_scope"
     assert "SOCIAL_POST_DISPATCH_BUSINESS_ID" in payload["owner_status"]["next_action_ru"]
+
+
+def test_social_post_runtime_status_reports_ready_telegram_transport(monkeypatch):
+    class Response:
+        status = 302
+
+        def close(self):
+            return None
+
+    monkeypatch.setenv("TELEGRAM_HTTP_PROXY", "http://host.docker.internal:2081")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("SOCIAL_POST_TELEGRAM_TRANSPORT_PROBE_ENABLED", "1")
+    monkeypatch.setattr(social_posts_api, "telegram_urlopen", lambda req, timeout=3: Response())
+
+    payload = social_posts_api.social_post_runtime_status_payload()
+
+    transport = payload["telegram_transport"]
+    assert transport["proxy_configured"] is True
+    assert transport["bot_token_present"] is True
+    assert transport["read_only_probe_performed"] is True
+    assert transport["ready"] is True
+    assert transport["status"] == "ready"
+    assert transport["http_status"] == 302
+
+
+def test_social_post_runtime_status_reports_broken_telegram_transport(monkeypatch):
+    def fail_probe(req, timeout=3):
+        raise ConnectionResetError("connection reset")
+
+    monkeypatch.setenv("TELEGRAM_HTTP_PROXY", "http://host.docker.internal:2081")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("SOCIAL_POST_TELEGRAM_TRANSPORT_PROBE_ENABLED", "1")
+    monkeypatch.setattr(social_posts_api, "telegram_urlopen", fail_probe)
+
+    payload = social_posts_api.social_post_runtime_status_payload()
+
+    transport = payload["telegram_transport"]
+    assert transport["proxy_configured"] is True
+    assert transport["bot_token_present"] is True
+    assert transport["read_only_probe_performed"] is True
+    assert transport["ready"] is False
+    assert transport["status"] == "ConnectionResetError"
+    assert "localos-telegram-proxy.service" in transport["next_action_ru"]
 
 
 def test_social_post_runtime_status_allows_explicit_unscoped_dispatch(monkeypatch):
