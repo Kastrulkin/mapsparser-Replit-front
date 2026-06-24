@@ -631,11 +631,11 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
         <Tabs value={activeFinanceTab} onValueChange={setActiveFinanceTab}>
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 lg:grid-cols-6">
             <TabsTrigger value="overview">Обзор</TabsTrigger>
-            <TabsTrigger value="data">Данные</TabsTrigger>
+            <TabsTrigger value="data">Ввести</TabsTrigger>
             <TabsTrigger value="services">Услуги</TabsTrigger>
             <TabsTrigger value="team">Команда</TabsTrigger>
             <TabsTrigger value="workplaces">Рабочие места</TabsTrigger>
-            <TabsTrigger value="settings">Настройки</TabsTrigger>
+            <TabsTrigger value="settings">Импорт</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-5 pt-5">
@@ -651,23 +651,13 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
                 onClose={() => setSelectedMetric(null)}
               />
             ) : null}
-            <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
-              <FinanceAttentionCards
-                recommendations={dashboard?.recommendations || []}
-                kpis={kpis}
-                onOpenPlan={() => {
-                  document.getElementById('finance-next-action')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-              />
-              <FinanceNextAction
-                dataState={dataState}
-                missing={quality?.missing || []}
-                onSecondary={() => {
-                  setActiveFinanceTab('data');
-                  document.getElementById('finance-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-              />
-            </div>
+            <FinanceAttentionCards
+              recommendations={dashboard?.recommendations || []}
+              kpis={kpis}
+              onOpenPlan={() => {
+                document.getElementById('finance-next-action')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            />
             <ImpactPanel impact={impact} />
             <div id="finance-next-action">
               <DashboardSection
@@ -1173,6 +1163,7 @@ const FinanceHeader: React.FC<{
 }> = ({ period, periodPreset, actualPeriod, quality, onPeriodPresetChange, onPeriodChange, onRefresh, loading, disabled }) => {
   const missing = quality?.missing || [];
   const isAllTime = periodPreset === 'all_time';
+  const showCustomDates = periodPreset === 'custom';
   const displayedPeriod = actualPeriod
     ? { start: actualPeriod.start_date, end: actualPeriod.end_date }
     : period;
@@ -1194,7 +1185,7 @@ const FinanceHeader: React.FC<{
             <SelectItem value="custom">Свой период</SelectItem>
           </SelectContent>
         </Select>
-        {!isAllTime ? (
+        {showCustomDates ? (
           <>
             <Input
               type="date"
@@ -1213,7 +1204,7 @@ const FinanceHeader: React.FC<{
           </>
         ) : null}
         <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
-          {isAllTime ? `Всё время: ${formatPeriodLabel(displayedPeriod)}` : formatPeriodLabel(displayedPeriod)}
+          {isAllTime ? 'Всё время' : formatPeriodLabel(displayedPeriod)}
         </span>
         <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
           Качество: {quality ? `${quality.score}/100` : 'н/д'}
@@ -1402,11 +1393,11 @@ const FinanceAttentionCards: React.FC<{
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-slate-950">Красные зоны</div>
+          <div className="text-sm font-semibold text-slate-950">На что смотреть в первую очередь</div>
           <div className="mt-1 text-sm text-slate-500">Три показателя, которые быстрее всего влияют на деньги.</div>
         </div>
         <Button variant="outline" size="sm" onClick={onOpenPlan}>
-          План
+          Действия
         </Button>
       </div>
       <div className="mt-4 divide-y divide-slate-100">
@@ -1421,7 +1412,7 @@ const FinanceAttentionCards: React.FC<{
               <div className="mt-0.5 text-slate-500">{item.impact}</div>
             </div>
             <Button variant="ghost" size="sm" className="justify-start md:justify-center" onClick={onOpenPlan}>
-              Что сделать
+              Открыть
             </Button>
           </div>
         ))}
@@ -1815,37 +1806,50 @@ const formatMetric = (metric: string, value: KpiValue) => {
   return numberValue(value);
 };
 
-const ImpactPanel: React.FC<{ impact: FinanceImpact | null }> = ({ impact }) => (
-  <Card className="border-slate-200/80 shadow-sm">
-    <CardHeader>
-      <CardTitle className="text-base">Влияние действий</CardTitle>
-    </CardHeader>
-    <CardContent className="space-y-3 text-sm">
-      {impact ? (
-        <>
-          <div className="rounded-2xl bg-slate-50 p-4 text-slate-700">
-            Отмечено действий: <span className="font-semibold text-slate-950">{impact.completed_actions_count}</span>. Сравниваем текущий период с предыдущим таким же периодом.
+const ImpactPanel: React.FC<{ impact: FinanceImpact | null }> = ({ impact }) => {
+  const [open, setOpen] = useState(false);
+  const completedCount = impact?.completed_actions_count || 0;
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <Card className="border-slate-200/80 shadow-sm">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-base">Что изменилось после действий</CardTitle>
+            <div className="mt-1 text-sm text-slate-500">
+              {impact
+                ? `Отмечено действий: ${completedCount}. Сравниваем с предыдущим таким же периодом.`
+                : 'Сравнение появится после данных за два периода и отмеченных действий.'}
+            </div>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {(impact.deltas || []).slice(0, 6).map((item) => (
-              <div key={item.metric} className="rounded-2xl border border-slate-200 bg-white p-3">
-                <div className="text-xs uppercase tracking-[0.12em] text-slate-500">{metricLabels[item.metric] || item.metric}</div>
-                <div className="mt-1 font-semibold text-slate-950">{formatMetric(item.metric, item.current)}</div>
-                <div className={cn('mt-1 text-xs', item.direction === 'up' ? 'text-emerald-700' : item.direction === 'down' ? 'text-rose-700' : 'text-slate-500')}>
-                  {item.delta == null ? 'нет сравнения' : `${item.direction === 'up' ? '+' : ''}${formatMetric(item.metric, item.delta)}`}
-                </div>
+          <CollapsibleTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2" disabled={!impact}>
+              <ChevronDown className={cn('h-4 w-4 transition-transform', open ? 'rotate-180' : '')} />
+              {open ? 'Скрыть' : 'Показать'}
+            </Button>
+          </CollapsibleTrigger>
+        </CardHeader>
+        <CollapsibleContent>
+          <CardContent className="space-y-3 text-sm">
+            {impact ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(impact.deltas || []).slice(0, 6).map((item) => (
+                  <div key={item.metric} className="rounded-2xl border border-slate-200 bg-white p-3">
+                    <div className="text-xs uppercase tracking-[0.12em] text-slate-500">{metricLabels[item.metric] || item.metric}</div>
+                    <div className="mt-1 font-semibold text-slate-950">{formatMetric(item.metric, item.current)}</div>
+                    <div className={cn('mt-1 text-xs', item.direction === 'up' ? 'text-emerald-700' : item.direction === 'down' ? 'text-rose-700' : 'text-slate-500')}>
+                      {item.delta == null ? 'нет сравнения' : `${item.direction === 'up' ? '+' : ''}${formatMetric(item.metric, item.delta)}`}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </>
-      ) : (
-        <div className="rounded-2xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-          Данных для сравнения пока нет.
-        </div>
-      )}
-    </CardContent>
-  </Card>
-);
+            ) : null}
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
+};
 
 const HistoryPanel: React.FC<{
   history: FinanceHistoryPoint[];
