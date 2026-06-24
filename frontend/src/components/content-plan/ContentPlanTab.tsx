@@ -811,6 +811,42 @@ type SocialMetricsLearningPacket = {
   next_action_en?: string;
 };
 
+type SocialTelegramPublishTargetProbe = {
+  ready?: boolean;
+  status?: string;
+  message_ru?: string;
+  message_en?: string;
+  next_action_ru?: string;
+  next_action_en?: string;
+  target_summary_ru?: string;
+  target_summary_en?: string;
+  external_post_published?: boolean;
+  send_message_performed?: boolean;
+  target_evidence?: {
+    schema?: string;
+    bot?: {
+      username?: string;
+      display_name?: string;
+    };
+    target?: {
+      type?: string;
+      display_name?: string;
+    };
+    permission?: {
+      member_status?: string;
+      publish_allowed?: boolean;
+    };
+  };
+  checks?: Array<{
+    key?: string;
+    ok?: boolean;
+    label_ru?: string;
+    label_en?: string;
+    detail_ru?: string;
+    detail_en?: string;
+  }>;
+};
+
 type SocialLaunchPreflight = {
   business_id?: string;
   status?: string;
@@ -1678,6 +1714,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [socialDispatchExecutionReport, setSocialDispatchExecutionReport] = useState<SocialDispatchExecutionReport | null>(null);
   const [socialMetricsLearningPacket, setSocialMetricsLearningPacket] = useState<SocialMetricsLearningPacket | null>(null);
   const [socialLaunchPreflight, setSocialLaunchPreflight] = useState<SocialLaunchPreflight | null>(null);
+  const [socialTelegramPublishTargetProbe, setSocialTelegramPublishTargetProbe] = useState<SocialTelegramPublishTargetProbe | null>(null);
   const [socialRuntimeStatus, setSocialRuntimeStatus] = useState<SocialRuntimeStatus | null>(null);
   const [socialPostsLoading, setSocialPostsLoading] = useState(false);
   const [socialTextEdits, setSocialTextEdits] = useState<Record<string, string>>({});
@@ -4008,6 +4045,62 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     } catch (preflightError) {
       const message = preflightError instanceof Error ? preflightError.message : (isRu ? 'Не удалось проверить API-каналы' : 'Could not check API channels');
       setError(message);
+    } finally {
+      setSocialBusyAction('');
+    }
+  };
+
+  const checkTelegramPublishTargetProbe = async () => {
+    if (!businessId) return;
+    setSocialBusyAction('telegram-publish-target-probe');
+    setError('');
+    setActionSummary(null);
+    try {
+      const response = await newAuth.makeRequest('/business/telegram-bot/publish-target-probe', {
+        method: 'POST',
+        body: JSON.stringify({ business_id: businessId }),
+      });
+      const probe = response.probe && typeof response.probe === 'object'
+        ? response.probe
+        : {
+          ready: Boolean(response.ready),
+          status: response.status,
+          message_ru: response.message_ru,
+          message_en: response.message_en,
+          next_action_ru: response.next_action_ru,
+          next_action_en: response.next_action_en,
+          target_summary_ru: response.target_summary_ru,
+          target_summary_en: response.target_summary_en,
+          external_post_published: response.external_post_published,
+          send_message_performed: response.send_message_performed,
+          target_evidence: response.target_evidence,
+          checks: response.checks,
+        };
+      setSocialTelegramPublishTargetProbe(probe);
+      setActionSummary({
+        tone: probe.ready ? 'success' : 'warning',
+        text_ru: probe.ready
+          ? 'Telegram-цель проверена без отправки сообщений: можно готовить первый API-proof после preview, approval и расписания.'
+          : 'Telegram-цель проверена без отправки сообщений: перед первым API-proof нужно исправить цель публикации.',
+        text_en: probe.ready
+          ? 'Telegram target checked without sending messages: the first API proof can proceed after preview, approval, and queueing.'
+          : 'Telegram target checked without sending messages: fix the publish target before the first API proof.',
+        details_ru: probe.target_summary_ru || probe.message_ru || probe.next_action_ru || '',
+        details_en: probe.target_summary_en || probe.message_en || probe.next_action_en || '',
+      });
+    } catch (probeError) {
+      const message = probeError instanceof Error ? probeError.message : (isRu ? 'Не удалось проверить цель Telegram' : 'Could not check Telegram target');
+      setError(message);
+      setSocialTelegramPublishTargetProbe({
+        ready: false,
+        status: 'request_failed',
+        message_ru: message,
+        message_en: message,
+        next_action_ru: 'Проверьте настройки Telegram и повторите безопасную проверку.',
+        next_action_en: 'Check Telegram settings and run the safe check again.',
+        external_post_published: false,
+        send_message_performed: false,
+      });
     } finally {
       setSocialBusyAction('');
     }
@@ -9225,31 +9318,119 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       {isRu ? 'Проверка перед первым API-proof' : 'Check before first API proof'}
                                     </div>
                                     <div className="mt-1 space-y-2">
-                                      {(socialLaunchPreflight.first_api_publish_readiness.pre_proof_checks || []).slice(0, 3).map((check) => (
-                                        <div key={`first-api-pre-proof:${String(check.key || check.platform || '')}`} className="rounded-md bg-white/10 px-2 py-1.5 text-slate-100">
-                                          <div className="font-semibold text-white">
-                                            {isRu
-                                              ? String(check.label_ru || 'Проверить API-канал без публикации')
-                                              : String(check.label_en || 'Check API channel without publishing')}
-                                          </div>
-                                          <div className="mt-0.5">
-                                            {isRu ? String(check.message_ru || '') : String(check.message_en || '')}
-                                          </div>
-                                          <div className="mt-0.5">
-                                            <span className="font-semibold text-white">{isRu ? 'Что сделать: ' : 'Next: '}</span>
-                                            {isRu ? String(check.action_ru || '') : String(check.action_en || '')}
-                                          </div>
-                                          {check.endpoint ? (
-                                            <div className="mt-0.5 text-[10px] text-slate-200">
-                                              {String(check.endpoint)}
-                                              {' · '}
-                                              {check.external_post_published === false
-                                                ? (isRu ? 'без публикации' : 'no publish')
-                                                : ''}
+                                      {(socialLaunchPreflight.first_api_publish_readiness.pre_proof_checks || []).slice(0, 3).map((check) => {
+                                        const isTelegramTargetProbe = String(check.endpoint || '') === '/api/business/telegram-bot/publish-target-probe'
+                                          || String(check.key || '').includes('telegram_publish_target');
+                                        return (
+                                          <div key={`first-api-pre-proof:${String(check.key || check.platform || '')}`} className="rounded-md bg-white/10 px-2 py-1.5 text-slate-100">
+                                            <div className="font-semibold text-white">
+                                              {isRu
+                                                ? String(check.label_ru || 'Проверить API-канал без публикации')
+                                                : String(check.label_en || 'Check API channel without publishing')}
                                             </div>
-                                          ) : null}
-                                        </div>
-                                      ))}
+                                            <div className="mt-0.5">
+                                              {isRu ? String(check.message_ru || '') : String(check.message_en || '')}
+                                            </div>
+                                            <div className="mt-0.5">
+                                              <span className="font-semibold text-white">{isRu ? 'Что сделать: ' : 'Next: '}</span>
+                                              {isRu ? String(check.action_ru || '') : String(check.action_en || '')}
+                                            </div>
+                                            {check.endpoint ? (
+                                              <div className="mt-0.5 text-[10px] text-slate-200">
+                                                {String(check.endpoint)}
+                                                {' · '}
+                                                {check.external_post_published === false
+                                                  ? (isRu ? 'без публикации' : 'no publish')
+                                                  : ''}
+                                              </div>
+                                            ) : null}
+                                            {isTelegramTargetProbe ? (
+                                              <div className="mt-2 rounded-md border border-sky-200/20 bg-sky-950/20 px-2 py-2">
+                                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                                  <div>
+                                                    <div className="font-semibold text-white">
+                                                      {isRu ? 'Telegram-цель поста' : 'Telegram post target'}
+                                                    </div>
+                                                    <div className="mt-0.5 text-[11px] text-sky-50">
+                                                      {isRu
+                                                        ? 'Read-only проверка: бот, цель и право писать. Сообщение не отправляется.'
+                                                        : 'Read-only check: bot, target, and write permission. No message is sent.'}
+                                                    </div>
+                                                  </div>
+                                                  <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    data-testid="social-run-telegram-publish-target-probe"
+                                                    disabled={!businessId || socialBusyAction === 'telegram-publish-target-probe'}
+                                                    onClick={checkTelegramPublishTargetProbe}
+                                                    className="h-8 rounded-md bg-white text-slate-900 hover:bg-slate-100"
+                                                  >
+                                                    {socialBusyAction === 'telegram-publish-target-probe'
+                                                      ? (isRu ? 'Проверяем...' : 'Checking...')
+                                                      : (isRu ? 'Проверить цель Telegram' : 'Check Telegram target')}
+                                                  </Button>
+                                                </div>
+                                                {socialTelegramPublishTargetProbe ? (
+                                                  <div
+                                                    data-testid="social-telegram-publish-target-probe-result"
+                                                    className={[
+                                                      'mt-2 rounded-md border px-2 py-2 text-[11px]',
+                                                      socialTelegramPublishTargetProbe.ready
+                                                        ? 'border-emerald-200/30 bg-emerald-950/25 text-emerald-50'
+                                                        : 'border-amber-200/30 bg-amber-950/25 text-amber-50',
+                                                    ].join(' ')}
+                                                  >
+                                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                                      <div className="font-semibold text-white">
+                                                        {socialTelegramPublishTargetProbe.ready
+                                                          ? (isRu ? 'Готово к API-proof' : 'Ready for API proof')
+                                                          : (isRu ? 'Нужно действие перед API-proof' : 'Action needed before API proof')}
+                                                      </div>
+                                                      <span className="rounded-full bg-white/15 px-2 py-0.5 font-semibold text-white">
+                                                        {String(socialTelegramPublishTargetProbe.status || 'checked')}
+                                                      </span>
+                                                    </div>
+                                                    <div className="mt-1">
+                                                      {isRu
+                                                        ? String(socialTelegramPublishTargetProbe.message_ru || socialTelegramPublishTargetProbe.next_action_ru || '')
+                                                        : String(socialTelegramPublishTargetProbe.message_en || socialTelegramPublishTargetProbe.next_action_en || '')}
+                                                    </div>
+                                                    {(socialTelegramPublishTargetProbe.target_summary_ru || socialTelegramPublishTargetProbe.target_summary_en) ? (
+                                                      <div
+                                                        data-testid="social-telegram-publish-target-evidence"
+                                                        className="mt-1 rounded bg-white/15 px-2 py-1 font-medium text-white"
+                                                      >
+                                                        {isRu
+                                                          ? String(socialTelegramPublishTargetProbe.target_summary_ru || '')
+                                                          : String(socialTelegramPublishTargetProbe.target_summary_en || socialTelegramPublishTargetProbe.target_summary_ru || '')}
+                                                      </div>
+                                                    ) : null}
+                                                    <div className="mt-1 grid gap-1 sm:grid-cols-3">
+                                                      <div className="rounded bg-white/10 px-2 py-1">
+                                                        <span className="font-semibold text-white">{isRu ? 'Бот: ' : 'Bot: '}</span>
+                                                        {socialTelegramPublishTargetProbe.target_evidence?.bot?.username
+                                                          ? `@${socialTelegramPublishTargetProbe.target_evidence.bot.username}`
+                                                          : String(socialTelegramPublishTargetProbe.target_evidence?.bot?.display_name || (isRu ? 'не определён' : 'unknown'))}
+                                                      </div>
+                                                      <div className="rounded bg-white/10 px-2 py-1">
+                                                        <span className="font-semibold text-white">{isRu ? 'Цель: ' : 'Target: '}</span>
+                                                        {String(socialTelegramPublishTargetProbe.target_evidence?.target?.display_name || (isRu ? 'не определена' : 'unknown'))}
+                                                      </div>
+                                                      <div className="rounded bg-white/10 px-2 py-1">
+                                                        <span className="font-semibold text-white">{isRu ? 'Отправка: ' : 'Send: '}</span>
+                                                        {socialTelegramPublishTargetProbe.send_message_performed === false
+                                                          ? (isRu ? 'не выполнялась' : 'not performed')
+                                                          : (isRu ? 'не запускать без approval' : 'requires approval')}
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                ) : null}
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   </div>
                                 ) : null}
