@@ -207,6 +207,8 @@ REQUIRED_COPY = {
     "approval preview no publish": "Подтверждение только фиксирует проверку текста",
     "approval preview next step": "после этого отдельный шаг - “Поставить в расписание”",
     "approval preview second action": "Подтвердить тексты",
+    "schedule attention test id": "social-post-schedule-attention-",
+    "schedule attention heading": "Проверьте дату публикации",
     "post publish rehearsal action": "Проверить запуск",
     "post publish rehearsal panel": "Проверка запуска",
     "post publish rehearsal no publish": "наружу ничего не отправлено",
@@ -523,6 +525,9 @@ REQUIRED_BACKEND_PRODUCTION_READINESS_COPY = {
     "production readiness scoped cycle": "ready_for_first_scoped_cycle",
     "production readiness dispatch warning": "dispatch_runtime_not_aligned",
     "production readiness api blocker": "api_preflight_blocked",
+    "schedule attention backend contract": "localos_social_schedule_attention_v1",
+    "schedule attention overdue status": "overdue_before_queue",
+    "schedule attention overdue copy": "Дата публикации уже в прошлом",
     "production readiness maps guard": "maps_are_supervised_or_manual",
 }
 

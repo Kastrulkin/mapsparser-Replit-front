@@ -39,6 +39,7 @@ from services.social_post_service import (
     _social_first_api_proof_dossier,
     _social_first_api_publish_readiness,
     _social_openclaw_browser_readiness,
+    _social_schedule_attention,
     _api_preflight_blocked_due_posts,
     _status_after_social_text_edit,
     _channel_readiness,
@@ -1022,6 +1023,33 @@ def test_next_action_separates_review_api_and_supervised_states():
     assert next_action_for_social_post({"status": "queued", "platform": "telegram"}) == "wait_for_scheduled_publish"
     assert next_action_for_social_post({"status": "queued", "platform": "two_gis"}) == "wait_for_scheduled_supervised_publish"
     assert next_action_for_social_post({"status": "needs_supervised_publish", "platform": "two_gis"}) == "open_supervised_publish"
+
+
+def test_schedule_attention_warns_before_queueing_past_posts():
+    attention = _social_schedule_attention(
+        {
+            "status": "needs_review",
+            "scheduled_for": date.today() - timedelta(days=1),
+        }
+    )
+
+    assert attention["status"] == "overdue_before_queue"
+    assert attention["requires_attention"] is True
+    assert attention["scheduled_for_is_past"] is True
+    assert "прошлом" in attention["message_ru"]
+
+
+def test_schedule_attention_marks_queued_due_posts_without_blocking():
+    attention = _social_schedule_attention(
+        {
+            "status": "queued",
+            "scheduled_for": date.today() - timedelta(days=1),
+        }
+    )
+
+    assert attention["status"] == "due_now"
+    assert attention["requires_attention"] is False
+    assert attention["scheduled_for_is_past"] is True
 
 
 def test_social_text_edit_resets_approval_boundary():

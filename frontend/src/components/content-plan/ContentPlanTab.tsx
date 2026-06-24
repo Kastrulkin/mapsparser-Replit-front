@@ -121,6 +121,16 @@ type SocialPost = {
   automation_task_id?: string;
   last_error?: string;
   next_action?: string;
+  schedule_attention?: {
+    schema?: string;
+    status?: string;
+    requires_attention?: boolean;
+    scheduled_for_is_past?: boolean;
+    message_ru?: string;
+    message_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+  };
   publish_evidence?: SocialPublishEvidence;
   metadata_json?: SocialPostMetadata;
   views?: number;
@@ -12329,19 +12339,31 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 isRu,
                               );
                               const preflightStatus = String(post.metadata_json?.queue_preflight_status || post.metadata_json?.provider_status || '').trim();
-                                const preflightMessage = String(
-                                  isRu
-                                    ? post.metadata_json?.queue_preflight_message_ru || post.metadata_json?.provider_note || ''
-                                    : post.metadata_json?.queue_preflight_message_en || post.metadata_json?.provider_note || ''
-                                ).trim();
-                                const nextActionLabel = _socialNextActionLabel(post.next_action || '', isRu);
-                                const hasNextAction = Boolean(String(post.next_action || '').trim());
-                                const evidenceTitle = String(isRu ? publishEvidence?.title_ru || '' : publishEvidence?.title_en || '').trim();
-                                const evidenceSummary = String(isRu ? publishEvidence?.summary_ru || '' : publishEvidence?.summary_en || '').trim();
-                                const evidenceNextAction = String(isRu ? publishEvidence?.next_action_ru || '' : publishEvidence?.next_action_en || '').trim();
-                                const evidenceProofUrl = String(publishEvidence?.proof_url || post.provider_post_url || '').trim();
-                                const evidenceProofId = String(publishEvidence?.proof_id || post.provider_post_id || '').trim();
-                                const evidenceProviderStatus = String(publishEvidence?.provider_status || '').trim();
+                              const preflightMessage = String(
+                                isRu
+                                  ? post.metadata_json?.queue_preflight_message_ru || post.metadata_json?.provider_note || ''
+                                  : post.metadata_json?.queue_preflight_message_en || post.metadata_json?.provider_note || ''
+                              ).trim();
+                              const nextActionLabel = _socialNextActionLabel(post.next_action || '', isRu);
+                              const hasNextAction = Boolean(String(post.next_action || '').trim());
+                              const evidenceTitle = String(isRu ? publishEvidence?.title_ru || '' : publishEvidence?.title_en || '').trim();
+                              const evidenceSummary = String(isRu ? publishEvidence?.summary_ru || '' : publishEvidence?.summary_en || '').trim();
+                              const evidenceNextAction = String(isRu ? publishEvidence?.next_action_ru || '' : publishEvidence?.next_action_en || '').trim();
+                              const evidenceProofUrl = String(publishEvidence?.proof_url || post.provider_post_url || '').trim();
+                              const evidenceProofId = String(publishEvidence?.proof_id || post.provider_post_id || '').trim();
+                              const evidenceProviderStatus = String(publishEvidence?.provider_status || '').trim();
+                              const scheduleAttention = post.schedule_attention || {};
+                              const scheduleNeedsAttention = Boolean(scheduleAttention.requires_attention);
+                              const scheduleAttentionMessage = String(
+                                isRu
+                                  ? scheduleAttention.message_ru || ''
+                                  : scheduleAttention.message_en || ''
+                              ).trim();
+                              const scheduleAttentionNextAction = String(
+                                isRu
+                                  ? scheduleAttention.next_action_ru || ''
+                                  : scheduleAttention.next_action_en || ''
+                              ).trim();
                               const evidenceProofSource = String(publishEvidence?.proof_source || '').trim();
                               const evidenceProofQuality = String(publishEvidence?.proof_quality || '').trim();
                               const rehearsalSummary = String(isRu ? publishRehearsal?.summary_ru || '' : publishRehearsal?.summary_en || '').trim();
@@ -12410,6 +12432,23 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                         {isRu ? 'Следующий шаг' : 'Next action'}
                                       </div>
                                       <div>{nextActionLabel}</div>
+                                    </div>
+                                  ) : null}
+                                  {scheduleNeedsAttention ? (
+                                    <div
+                                      data-testid={`social-post-schedule-attention-${post.id}`}
+                                      className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900"
+                                    >
+                                      <div className="font-semibold text-amber-950">
+                                        {isRu ? 'Проверьте дату публикации' : 'Check publish date'}
+                                      </div>
+                                      {scheduleAttentionMessage ? <div>{scheduleAttentionMessage}</div> : null}
+                                      {scheduleAttentionNextAction ? (
+                                        <div className="mt-1">
+                                          <span className="font-semibold">{isRu ? 'Что сделать: ' : 'Next: '}</span>
+                                          {scheduleAttentionNextAction}
+                                        </div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                   <div className="mt-3 space-y-2">

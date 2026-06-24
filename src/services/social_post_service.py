@@ -10755,7 +10755,79 @@ def _serialize_social_post(cursor: Any, row: Any) -> dict[str, Any]:
     data["platform_label"] = platform_label(str(data.get("platform") or ""))
     data["next_action"] = next_action_for_social_post(data)
     data["publish_evidence"] = _social_publish_evidence(data)
+    data["schedule_attention"] = _social_schedule_attention(data)
     return data
+
+
+def _social_schedule_attention(post: dict[str, Any]) -> dict[str, Any]:
+    status = str(post.get("status") or "").strip()
+    scheduled_at = _parse_social_scheduled_at(post.get("scheduled_for"))
+    if not scheduled_at:
+        return {
+            "schema": "localos_social_schedule_attention_v1",
+            "status": "unscheduled",
+            "requires_attention": status in {"approved", "queued"},
+            "scheduled_for_is_past": False,
+            "message_ru": "Дата публикации не задана.",
+            "message_en": "No scheduled publish date is set.",
+            "next_action_ru": "Укажите дату перед постановкой в расписание.",
+            "next_action_en": "Set a publish date before queueing.",
+        }
+    now = datetime.now(timezone.utc)
+    is_past = scheduled_at <= now
+    if is_past and status in {"draft", "needs_review", "approved"}:
+        return {
+            "schema": "localos_social_schedule_attention_v1",
+            "status": "overdue_before_queue",
+            "requires_attention": True,
+            "scheduled_for_is_past": True,
+            "message_ru": "Дата публикации уже в прошлом.",
+            "message_en": "The scheduled publish date is already in the past.",
+            "next_action_ru": "Перед постановкой в очередь перенесите дату или осознанно запускайте как немедленную публикацию.",
+            "next_action_en": "Move the date forward before queueing, or intentionally run it as an immediate publish.",
+        }
+    if is_past and status == "queued":
+        return {
+            "schema": "localos_social_schedule_attention_v1",
+            "status": "due_now",
+            "requires_attention": False,
+            "scheduled_for_is_past": True,
+            "message_ru": "Пост уже due: worker может взять его в ближайший цикл.",
+            "message_en": "This post is due: the worker can pick it up on the next cycle.",
+            "next_action_ru": "Проверьте readiness канала перед запуском worker dispatch.",
+            "next_action_en": "Check channel readiness before running worker dispatch.",
+        }
+    return {
+        "schema": "localos_social_schedule_attention_v1",
+        "status": "scheduled",
+        "requires_attention": False,
+        "scheduled_for_is_past": False,
+        "message_ru": "Дата публикации в будущем.",
+        "message_en": "The publish date is in the future.",
+        "next_action_ru": "Проверьте текст, подтвердите и поставьте в расписание.",
+        "next_action_en": "Review the copy, approve it, and queue the post.",
+    }
+
+
+def _parse_social_scheduled_at(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, date):
+        parsed = datetime.combine(value, datetime.min.time())
+    else:
+        raw = str(value or "").strip()
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            try:
+                parsed = datetime.combine(date.fromisoformat(raw[:10]), datetime.min.time())
+            except ValueError:
+                return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _social_publish_evidence(post: dict[str, Any]) -> dict[str, Any]:
