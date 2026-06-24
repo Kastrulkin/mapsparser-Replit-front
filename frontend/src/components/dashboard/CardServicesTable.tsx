@@ -402,6 +402,10 @@ export function CardServicesTable({
                       {selectedService.price ? <span>{formatPrice(selectedService.price)}</span> : null}
                       {selectedUpdatedAt ? <span>Обновлено {formatDate(selectedUpdatedAt, locale)}</span> : null}
                     </div>
+                    <div className="mt-4 max-w-3xl rounded-2xl bg-slate-50/80 px-4 py-3 ring-1 ring-slate-100">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Текущее описание</div>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">{selectedService.description || 'Описание пока не заполнено.'}</p>
+                    </div>
                     </div>
                     <Button
                       type="button"
@@ -459,41 +463,24 @@ export function CardServicesTable({
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-100">
-                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Текущее описание</div>
-                    <p className="mt-2 text-sm leading-6 text-slate-700">{selectedService.description || 'Описание пока не заполнено.'}</p>
-                  </div>
-                  <div className="rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-100">
-                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Запросы для поиска</div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {selectedKeywords.length > 0 ? (
-                        selectedKeywords.slice(0, 8).map((keyword) => (
-                          <span key={keyword} className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    <span className="font-semibold uppercase tracking-[0.14em] text-slate-400">SEO-запросы</span>
+                    {selectedKeywords.length > 0 ? (
+                      <>
+                        {selectedKeywords.slice(0, 4).map((keyword) => (
+                          <span key={keyword} className="rounded-full bg-slate-50 px-2.5 py-1 font-medium text-slate-600 ring-1 ring-slate-200">
                             {keyword}
                           </span>
-                        ))
-                      ) : (
-                        <span className="text-sm text-slate-500">Запросы ещё не подобраны.</span>
-                      )}
-                    </div>
+                        ))}
+                        {selectedKeywords.length > 4 ? (
+                          <span className="text-slate-400">+{selectedKeywords.length - 4}</span>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span>ещё не подобраны</span>
+                    )}
                   </div>
                 </div>
-
-                {selectedQuality.needsReview || selectedQuality.manualReview ? (
-                  <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 p-4">
-                    <div className="text-sm font-semibold text-amber-900">Что требует внимания</div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {selectedQuality.issueLabels.slice(0, 5).map((label) => (
-                        <span key={label} className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
 
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -530,6 +517,19 @@ export function CardServicesTable({
                       <p className="mt-3 text-sm leading-6 text-slate-500">SEO-вариант появится после оптимизации.</p>
                     )}
                   </div>
+
+                  {selectedQuality.needsReview || selectedQuality.manualReview ? (
+                    <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 p-4">
+                      <div className="text-sm font-semibold text-amber-900">Что требует внимания</div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {selectedQuality.issueLabels.slice(0, 5).map((label) => (
+                          <span key={label} className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
                     <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
