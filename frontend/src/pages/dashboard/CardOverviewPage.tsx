@@ -255,6 +255,7 @@ export const CardOverviewPage = () => {
   const [isNetworkMaster, setIsNetworkMaster] = useState(false);
   const [operationsLearning, setOperationsLearning] = useState<Record<string, any>>({});
   const [isOperationsLearningExpanded, setIsOperationsLearningExpanded] = useState(false);
+  const [isCardDataGuideExpanded, setIsCardDataGuideExpanded] = useState(false);
   const previousParseStatusRef = useRef(parseStatus);
 
   useEffect(() => {
@@ -1022,57 +1023,76 @@ export const CardOverviewPage = () => {
               ]}
             />
 
-            <DashboardActionPanel
-              className="mt-6"
-              tone="amber"
-              title={firstRunCopy.title}
-              description={!hasConfiguredMapLink
-                ? firstRunCopy.bodyMissingMap
-                : (isRu ? (
-                  <>
-                    Обновляйте карточку здесь, а аудит и историю изменений проверяйте в <span className="font-semibold">«Прогрессе»</span>.
-                    Если нужно изменить ссылку или точку входа, это делается через <span className="font-semibold">«Профиль и бизнес»</span>.
-                  </>
-                ) : (
-                  <>
-                    Refresh the listing here, and review the audit and history in <span className="font-semibold">Progress</span>.
-                    If you need to change the source link, do it in <span className="font-semibold">Profile &amp; Business</span>.
-                  </>
-                ))}
-              status={(
-                <span>
-                  {isRu ? 'Сейчас: ' : 'Now: '}
-                  <span className="font-semibold">{parseStatusLabel}</span>
-                  {hasConfiguredMapLink && !canRefreshCardData && mapSources.length > 0
-                    ? (isRu ? ' · Обновление сейчас поддержано для Яндекс и 2ГИС.' : ' · Refresh is currently supported for Yandex and 2GIS.')
-                    : ''}
-                  {parseStatusHelpText ? (
-                    <span className="mt-1 block font-normal text-slate-600">{parseStatusHelpText}</span>
-                  ) : null}
+            <div className="mt-6 rounded-3xl border border-amber-200/80 bg-amber-50/85 p-4 shadow-sm sm:p-5">
+              <button
+                type="button"
+                className="flex w-full flex-col gap-3 text-left sm:flex-row sm:items-center sm:justify-between"
+                onClick={() => setIsCardDataGuideExpanded((value) => !value)}
+                aria-expanded={isCardDataGuideExpanded}
+              >
+                <span className="min-w-0">
+                  <span className="block text-lg font-semibold text-slate-950">{firstRunCopy.title}</span>
+                  <span className="mt-1 block text-sm text-slate-700">
+                    {isRu ? 'Сейчас: ' : 'Now: '}
+                    <span className="font-semibold">{parseStatusLabel}</span>
+                    {hasConfiguredMapLink && !canRefreshCardData && mapSources.length > 0
+                      ? (isRu ? ' · Обновление сейчас поддержано для Яндекс и 2ГИС.' : ' · Refresh is currently supported for Yandex and 2GIS.')
+                      : ''}
+                  </span>
                 </span>
-              )}
-              actions={!hasConfiguredMapLink ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => navigate('/dashboard/profile')}
-                  className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
-                  title={isRu ? 'Открывает раздел, где нужно сохранить ссылку на карту перед первым аудитом.' : 'Opens the section where you need to save the map link before the first audit.'}
-                >
-                  <ArrowRight className="mr-2 h-4 w-4" />
-                  {firstRunCopy.goToProfile}
-                </Button>
-              ) : (
-                <a
-                  href="/dashboard/progress"
-                  title={isRu ? 'Открывает аудит карточки, бизнес-метрики и историю изменений после сбора данных.' : 'Opens the listing audit, business metrics, and change history after data collection.'}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
-                >
-                  <TrendingUp className="h-4 w-4" />
-                  {isRu ? 'Открыть прогресс' : 'Open progress'}
-                </a>
-              )}
-            />
+                <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white/80 px-3 py-2 text-sm font-medium text-slate-800">
+                  {isCardDataGuideExpanded ? (isRu ? 'Свернуть' : 'Collapse') : (isRu ? 'Развернуть' : 'Expand')}
+                  {isCardDataGuideExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </span>
+              </button>
+              {isCardDataGuideExpanded ? (
+                <div className="mt-4 border-t border-amber-200/70 pt-4">
+                  <div className="max-w-3xl text-sm leading-7 text-slate-700">
+                    {!hasConfiguredMapLink
+                      ? firstRunCopy.bodyMissingMap
+                      : (isRu ? (
+                        <>
+                          Обновляйте карточку здесь, а аудит и историю изменений проверяйте в <span className="font-semibold">«Прогрессе»</span>.
+                          Если нужно изменить ссылку или точку входа, это делается через <span className="font-semibold">«Профиль и бизнес»</span>.
+                        </>
+                      ) : (
+                        <>
+                          Refresh the listing here, and review the audit and history in <span className="font-semibold">Progress</span>.
+                          If you need to change the source link, do it in <span className="font-semibold">Profile &amp; Business</span>.
+                        </>
+                      ))}
+                  </div>
+                  {parseStatusHelpText ? (
+                    <div className="mt-3 rounded-2xl bg-white/70 px-4 py-3 text-sm text-slate-600 ring-1 ring-black/5">
+                      {parseStatusHelpText}
+                    </div>
+                  ) : null}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {!hasConfiguredMapLink ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => navigate('/dashboard/profile')}
+                        className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
+                        title={isRu ? 'Открывает раздел, где нужно сохранить ссылку на карту перед первым аудитом.' : 'Opens the section where you need to save the map link before the first audit.'}
+                      >
+                        <ArrowRight className="mr-2 h-4 w-4" />
+                        {firstRunCopy.goToProfile}
+                      </Button>
+                    ) : (
+                      <a
+                        href="/dashboard/progress"
+                        title={isRu ? 'Открывает аудит карточки, бизнес-метрики и историю изменений после сбора данных.' : 'Opens the listing audit, business metrics, and change history after data collection.'}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
+                      >
+                        <TrendingUp className="h-4 w-4" />
+                        {isRu ? 'Открыть прогресс' : 'Open progress'}
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </>
         )}
 
