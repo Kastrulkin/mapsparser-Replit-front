@@ -3617,6 +3617,8 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert payload["first_cycle_proof_packet"]["api_proof_ready"] is True
     assert payload["first_cycle_proof_packet"]["dispatch_business_id"] == "biz-1"
     assert payload["first_cycle_proof_packet"]["candidate_platform_label"] == "Telegram"
+    assert payload["first_cycle_proof_packet"]["external_publish_confirmation_phrase"] == "ПУБЛИКУЮ"
+    assert "ПУБЛИКУЮ" in payload["first_cycle_proof_packet"]["external_publish_confirmation_ru"]
     assert payload["first_cycle_proof_packet"]["browser_final_click_allowed"] is False
     assert "provider_post_id/provider_post_url" in payload["first_cycle_proof_packet"]["after_run_checks_ru"][1]
     assert payload["proof_requirements"]["schema"] == "localos_social_proof_requirements_v1"

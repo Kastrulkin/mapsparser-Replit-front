@@ -927,6 +927,9 @@ type SocialLaunchPreflight = {
     ui_run_once_allowed?: boolean;
     requires_human_confirmation?: boolean;
     external_publish_requires_approval?: boolean;
+    external_publish_confirmation_phrase?: string;
+    external_publish_confirmation_ru?: string;
+    external_publish_confirmation_en?: string;
     browser_final_click_allowed?: boolean;
     maps_are_supervised_or_manual?: boolean;
     dispatch_business_id?: string;
@@ -9679,6 +9682,24 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   {isRu ? 'чеклист' : 'checklist'}
                                 </div>
                               </div>
+                              {socialLaunchPreflight.first_cycle_proof_packet.external_publish_confirmation_phrase ? (
+                                <div
+                                  data-testid="social-first-cycle-confirmation-phrase"
+                                  className="mt-2 rounded-md border border-white/10 bg-white/10 px-2 py-1.5 text-slate-100"
+                                >
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Фраза подтверждения внешней публикации' : 'External publish confirmation phrase'}
+                                  </div>
+                                  <div className="mt-1">
+                                    {isRu
+                                      ? String(socialLaunchPreflight.first_cycle_proof_packet.external_publish_confirmation_ru || '')
+                                      : String(socialLaunchPreflight.first_cycle_proof_packet.external_publish_confirmation_en || '')}
+                                  </div>
+                                  <div className="mt-1 inline-flex rounded-md bg-white/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-white">
+                                    {String(socialLaunchPreflight.first_cycle_proof_packet.external_publish_confirmation_phrase || '')}
+                                  </div>
+                                </div>
+                              ) : null}
                               {socialLaunchPreflight.first_cycle_proof_packet.ready_to_run_once ? (
                                 <div className="mt-2 rounded-md bg-white/10 px-2 py-1.5 text-slate-100">
                                   <div className="font-semibold text-white">

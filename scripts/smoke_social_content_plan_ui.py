@@ -105,6 +105,8 @@ REQUIRED_COPY = {
     "worker first cycle proof packet contract": "first_cycle_proof_packet",
     "worker first cycle proof packet schema": "localos_social_first_cycle_proof_packet_v1",
     "worker first cycle proof packet after checks": "Что проверить после цикла",
+    "worker first cycle confirmation phrase test id": 'data-testid="social-first-cycle-confirmation-phrase"',
+    "worker first cycle confirmation phrase heading": "Фраза подтверждения внешней публикации",
     "live validation checklist contract": "live_validation_checklist",
     "live validation checklist test id": 'data-testid="social-live-validation-checklist"',
     "live validation checklist heading": "Чеклист живой проверки",
@@ -533,6 +535,8 @@ REQUIRED_BACKEND_PRODUCTION_READINESS_COPY = {
     "first api pre proof contract": "pre_proof_checks",
     "first api telegram target probe": "telegram_publish_target_probe",
     "first api target probe no publish": "не отправляет social post",
+    "first cycle confirmation phrase contract": "external_publish_confirmation_phrase",
+    "first cycle confirmation phrase copy": "Если цикл может опубликовать API-посты",
     "production readiness maps guard": "maps_are_supervised_or_manual",
 }
 

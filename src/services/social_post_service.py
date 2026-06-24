@@ -1140,6 +1140,13 @@ def _social_first_cycle_proof_packet(
         "ui_run_once_allowed": bool(first_api_proof_gate.get("ui_run_once_allowed")),
         "requires_human_confirmation": True,
         "external_publish_requires_approval": True,
+        "external_publish_confirmation_phrase": _social_external_publish_confirmation_phrase(),
+        "external_publish_confirmation_ru": (
+            f"Если цикл может опубликовать API-посты, перед запуском нужно ввести фразу: {_social_external_publish_confirmation_phrase()}."
+        ),
+        "external_publish_confirmation_en": (
+            f"If the cycle can publish API posts, type this phrase before running it: {_social_external_publish_confirmation_phrase()}."
+        ),
         "browser_final_click_allowed": False,
         "maps_are_supervised_or_manual": True,
         "dispatch_business_id": str(dispatch_env.get("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip(),
