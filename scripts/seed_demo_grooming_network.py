@@ -486,6 +486,10 @@ def planned_counts():
     source_count = len(MAP_SOURCES)
     finance_entry_count = len(NETWORK_MONTH_REVENUE) * (location_count + 1) * 11
     income_tx_count = len(NETWORK_MONTH_REVENUE) * (location_count * 18 + 12)
+    finance_service_metric_count = len(NETWORK_MONTH_REVENUE) * (location_count * 10 + 10)
+    finance_staff_metric_count = len(NETWORK_MONTH_REVENUE) * (location_count * len(MASTERS) + location_count)
+    finance_workplace_count = location_count * 3 + location_count
+    finance_workplace_metric_count = len(NETWORK_MONTH_REVENUE) * (location_count * 3 + location_count)
     booking_count = location_count * 36 + 18
     return {
         "users": 1,
@@ -497,6 +501,10 @@ def planned_counts():
         "external_reviews": location_count * source_count * 6,
         "finance_entries": finance_entry_count,
         "financialtransactions": income_tx_count,
+        "finance_service_metrics": finance_service_metric_count,
+        "finance_staff_metrics": finance_staff_metric_count,
+        "finance_workplaces": finance_workplace_count,
+        "finance_workplace_metrics": finance_workplace_metric_count,
         "bookings": booking_count,
         "average_ticket_matrices": location_count,
         "average_ticket_packages": location_count * 5,
@@ -555,6 +563,10 @@ def write_backup(cursor, backup_dir):
         ("businesses", "id = ANY(%s)", [business_ids]),
         ("userservices", "business_id = ANY(%s)", [business_ids]),
         ("finance_entries", "business_id = ANY(%s)", [business_ids]),
+        ("finance_service_metrics", "business_id = ANY(%s)", [business_ids]),
+        ("finance_staff_metrics", "business_id = ANY(%s)", [business_ids]),
+        ("finance_workplaces", "business_id = ANY(%s)", [business_ids]),
+        ("finance_workplace_metrics", "business_id = ANY(%s)", [business_ids]),
         ("financialtransactions", "business_id = ANY(%s)", [business_ids]),
         ("bookings", "business_id = ANY(%s)", [business_ids]),
         ("cards", "business_id = ANY(%s)", [business_ids]),
@@ -579,6 +591,12 @@ def write_backup(cursor, backup_dir):
             backup["tables"][table_name] = []
             continue
         backup["tables"][table_name] = fetch_all(cursor, table_name, where_sql, params)
+    if table_exists(cursor, "roidata"):
+        roidata_columns = table_columns(cursor, "roidata")
+        if "user_id" in roidata_columns:
+            backup["tables"]["roidata"] = fetch_all(cursor, "roidata", "user_id = %s", [USER_ID])
+        elif "business_id" in roidata_columns:
+            backup["tables"]["roidata"] = fetch_all(cursor, "roidata", "business_id = %s", [NETWORK_ID])
     backup_dir.mkdir(parents=True, exist_ok=True)
     path = backup_dir / f"demo_grooming_network_backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
     path.write_text(json.dumps(backup, ensure_ascii=False, indent=2, default=json_default), encoding="utf-8")
@@ -591,6 +609,8 @@ def delete_if_exists(cursor, table_name, where_sql, params):
     columns = table_columns(cursor, table_name)
     lower_where = where_sql.lower()
     if "business_id" in lower_where and "business_id" not in columns:
+        return
+    if "user_id" in lower_where and "user_id" not in columns:
         return
     if "lead_id" in lower_where and "lead_id" not in columns:
         return
@@ -613,9 +633,12 @@ def refresh_demo_area(cursor):
         "averageticketmatrices",
         "bookings",
         "finance_entries",
+        "finance_service_metrics",
+        "finance_staff_metrics",
+        "finance_workplace_metrics",
+        "finance_workplaces",
         "financialtransactions",
         "financialmetrics",
-        "roidata",
         "masters",
         "externalbusinessservices",
         "externalbusinessreviews",
@@ -631,6 +654,7 @@ def refresh_demo_area(cursor):
         "userservices",
     ]:
         delete_if_exists(cursor, table_name, "business_id = ANY(%s)", [business_ids])
+    delete_if_exists(cursor, "roidata", "user_id = %s", [USER_ID])
     delete_if_exists(cursor, "businesses", "owner_id = %s AND (network_id = %s OR id = %s)", [USER_ID, NETWORK_ID, NETWORK_ID])
     delete_if_exists(cursor, "networks", "id = %s", [NETWORK_ID])
 
@@ -954,6 +978,264 @@ def seed_finance(cursor, service_map, master_map):
                     "created_at": datetime.utcnow(),
                 },
             )
+
+
+def month_range(month_key):
+    start = date.fromisoformat(f"{month_key}-01")
+    next_month = date(start.year + (1 if start.month == 12 else 0), 1 if start.month == 12 else start.month + 1, 1)
+    end = next_month - timedelta(days=1)
+    return start.isoformat(), end.isoformat()
+
+
+def seed_finance_detail_metrics(cursor):
+    service_weights = [0.19, 0.15, 0.13, 0.11, 0.1, 0.09, 0.08, 0.06, 0.05, 0.04]
+    selected_services = SERVICES[:10]
+    location_workplaces = {}
+
+    for location in LOCATIONS:
+        business_id = stable_id(f"business:{location['key']}")
+        location_workplaces[business_id] = []
+        for index in range(3):
+            workplace_id = stable_id(f"finance-workplace:{business_id}:{index}")
+            location_workplaces[business_id].append(workplace_id)
+            upsert_row(
+                cursor,
+                "finance_workplaces",
+                {
+                    "id": workplace_id,
+                    "business_id": business_id,
+                    "name": f"Груминг-стол {index + 1}",
+                    "type": "other",
+                    "is_active": True,
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow(),
+                },
+            )
+
+        for month_index, (month_key, network_revenue) in enumerate(NETWORK_MONTH_REVENUE.items()):
+            period_start, period_end = month_range(month_key)
+            location_revenue = round(network_revenue * location["revenue_share"], 2)
+            location_quality = float(location["rating"]) - 4.2
+            visit_total = 0
+            gross_profit_total = 0.0
+
+            for service_index, service_row in enumerate(selected_services):
+                service_name, category, _description, price, _keywords = service_row
+                revenue = round(location_revenue * service_weights[service_index], 2)
+                visits = max(1, int(round(revenue / price)))
+                material_rate = 0.07 + (service_index % 4) * 0.012
+                payout_rate = 0.31 + (service_index % 3) * 0.035
+                if service_index in {3, 9}:
+                    payout_rate += 0.08
+                material_cost = round(revenue * material_rate, 2)
+                staff_payout = round(revenue * payout_rate, 2)
+                visit_total += visits
+                gross_profit_total += revenue - material_cost - staff_payout
+                upsert_row(
+                    cursor,
+                    "finance_service_metrics",
+                    {
+                        "id": stable_id(f"finance-service:{business_id}:{month_key}:{service_index}"),
+                        "business_id": business_id,
+                        "period_start": period_start,
+                        "period_end": period_end,
+                        "service_name": service_name,
+                        "category": category,
+                        "revenue": revenue,
+                        "visits_count": visits,
+                        "avg_price": price,
+                        "duration_minutes": 45 + (service_index % 5) * 20,
+                        "material_cost": material_cost,
+                        "staff_payout": staff_payout,
+                        "source": DEMO_SOURCE,
+                        "external_id": f"demo:{business_id}:{month_key}:service:{service_index}",
+                        "duplicate_key": stable_id(f"dup:{business_id}:{month_key}:service:{service_index}"),
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow(),
+                    },
+                )
+
+            available_minutes_per_master = 22 * 8 * 60
+            occupancy_base = 0.58 + month_index * 0.025 + location_quality * 0.04
+            for master_index, master_name in enumerate(MASTERS):
+                master_revenue = round(location_revenue * (0.3 if master_index == 0 else 0.26 if master_index == 1 else 0.23 if master_index == 2 else 0.21), 2)
+                master_visits = max(1, int(round(visit_total * (0.29 if master_index == 0 else 0.26 if master_index == 1 else 0.24 if master_index == 2 else 0.21))))
+                booked_minutes = int(available_minutes_per_master * min(0.92, occupancy_base + master_index * 0.018))
+                no_show = max(1, int(round(master_visits * (0.065 - min(location_quality, 0.6) * 0.025 + master_index * 0.004))))
+                rebooking = max(1, int(round(master_visits * (0.42 + min(location_quality, 0.7) * 0.12 - master_index * 0.015))))
+                upsert_row(
+                    cursor,
+                    "finance_staff_metrics",
+                    {
+                        "id": stable_id(f"finance-staff:{business_id}:{month_key}:{master_index}"),
+                        "business_id": business_id,
+                        "period_start": period_start,
+                        "period_end": period_end,
+                        "staff_name": master_name,
+                        "role": "Грумер",
+                        "revenue": master_revenue,
+                        "visits_count": master_visits,
+                        "booked_minutes": booked_minutes,
+                        "available_minutes": available_minutes_per_master,
+                        "no_show_count": no_show,
+                        "rebooking_count": rebooking,
+                        "source": DEMO_SOURCE,
+                        "external_id": f"demo:{business_id}:{month_key}:staff:{master_index}",
+                        "duplicate_key": stable_id(f"dup:{business_id}:{month_key}:staff:{master_index}"),
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow(),
+                    },
+                )
+
+            for workplace_index, workplace_id in enumerate(location_workplaces[business_id]):
+                available_minutes = 22 * 9 * 60
+                booked_minutes = int(available_minutes * min(0.94, occupancy_base + workplace_index * 0.03))
+                workplace_revenue = round(location_revenue * (0.4 if workplace_index == 0 else 0.34 if workplace_index == 1 else 0.26), 2)
+                workplace_profit = round(gross_profit_total * (0.4 if workplace_index == 0 else 0.34 if workplace_index == 1 else 0.26), 2)
+                upsert_row(
+                    cursor,
+                    "finance_workplace_metrics",
+                    {
+                        "id": stable_id(f"finance-workplace-metric:{business_id}:{month_key}:{workplace_index}"),
+                        "business_id": business_id,
+                        "workplace_id": workplace_id,
+                        "period_start": period_start,
+                        "period_end": period_end,
+                        "available_minutes": available_minutes,
+                        "booked_minutes": booked_minutes,
+                        "revenue": workplace_revenue,
+                        "gross_profit": workplace_profit,
+                        "source": DEMO_SOURCE,
+                        "external_id": f"demo:{business_id}:{month_key}:workplace:{workplace_index}",
+                        "duplicate_key": stable_id(f"dup:{business_id}:{month_key}:workplace:{workplace_index}"),
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow(),
+                    },
+                )
+
+    for location in LOCATIONS:
+        workplace_id = stable_id(f"finance-workplace:{NETWORK_ID}:{location['key']}")
+        upsert_row(
+            cursor,
+            "finance_workplaces",
+            {
+                "id": workplace_id,
+                "business_id": NETWORK_ID,
+                "name": location["name"].replace("Рога и копыта — ", "Точка "),
+                "type": "other",
+                "is_active": True,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+            },
+        )
+
+    for month_index, (month_key, network_revenue) in enumerate(NETWORK_MONTH_REVENUE.items()):
+        period_start, period_end = month_range(month_key)
+        for service_index, service_row in enumerate(selected_services):
+            service_name, category, _description, price, _keywords = service_row
+            revenue = round(network_revenue * service_weights[service_index], 2)
+            visits = max(1, int(round(revenue / price)))
+            material_cost = round(revenue * (0.075 + (service_index % 4) * 0.01), 2)
+            staff_payout = round(revenue * (0.34 + (service_index % 3) * 0.025), 2)
+            upsert_row(
+                cursor,
+                "finance_service_metrics",
+                {
+                    "id": stable_id(f"finance-service:{NETWORK_ID}:{month_key}:{service_index}"),
+                    "business_id": NETWORK_ID,
+                    "period_start": period_start,
+                    "period_end": period_end,
+                    "service_name": service_name,
+                    "category": category,
+                    "revenue": revenue,
+                    "visits_count": visits,
+                    "avg_price": price,
+                    "duration_minutes": 45 + (service_index % 5) * 20,
+                    "material_cost": material_cost,
+                    "staff_payout": staff_payout,
+                    "source": DEMO_SOURCE,
+                    "external_id": f"demo:{NETWORK_ID}:{month_key}:service:{service_index}",
+                    "duplicate_key": stable_id(f"dup:{NETWORK_ID}:{month_key}:service:{service_index}"),
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow(),
+                },
+            )
+
+        for location in LOCATIONS:
+            location_revenue = round(network_revenue * location["revenue_share"], 2)
+            visits = max(1, int(round(location_revenue / 3600)))
+            available_minutes = len(MASTERS) * 22 * 8 * 60
+            quality = float(location["rating"]) - 4.2
+            booked_minutes = int(available_minutes * min(0.93, 0.59 + month_index * 0.025 + quality * 0.04))
+            upsert_row(
+                cursor,
+                "finance_staff_metrics",
+                {
+                    "id": stable_id(f"finance-staff:{NETWORK_ID}:{month_key}:{location['key']}"),
+                    "business_id": NETWORK_ID,
+                    "period_start": period_start,
+                    "period_end": period_end,
+                    "staff_name": location["name"].replace("Рога и копыта — ", "Команда "),
+                    "role": "Команда точки",
+                    "revenue": location_revenue,
+                    "visits_count": visits,
+                    "booked_minutes": booked_minutes,
+                    "available_minutes": available_minutes,
+                    "no_show_count": max(1, int(round(visits * (0.07 - min(quality, 0.7) * 0.025)))),
+                    "rebooking_count": max(1, int(round(visits * (0.43 + min(quality, 0.7) * 0.11)))),
+                    "source": DEMO_SOURCE,
+                    "external_id": f"demo:{NETWORK_ID}:{month_key}:staff:{location['key']}",
+                    "duplicate_key": stable_id(f"dup:{NETWORK_ID}:{month_key}:staff:{location['key']}"),
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow(),
+                },
+            )
+
+            workplace_id = stable_id(f"finance-workplace:{NETWORK_ID}:{location['key']}")
+            gross_profit = round(location_revenue * 0.52, 2)
+            upsert_row(
+                cursor,
+                "finance_workplace_metrics",
+                {
+                    "id": stable_id(f"finance-workplace-metric:{NETWORK_ID}:{month_key}:{location['key']}"),
+                    "business_id": NETWORK_ID,
+                    "workplace_id": workplace_id,
+                    "period_start": period_start,
+                    "period_end": period_end,
+                    "available_minutes": available_minutes,
+                    "booked_minutes": booked_minutes,
+                    "revenue": location_revenue,
+                    "gross_profit": gross_profit,
+                    "source": DEMO_SOURCE,
+                    "external_id": f"demo:{NETWORK_ID}:{month_key}:workplace:{location['key']}",
+                    "duplicate_key": stable_id(f"dup:{NETWORK_ID}:{month_key}:workplace:{location['key']}"),
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow(),
+                },
+            )
+
+
+def seed_roi(cursor):
+    investment = 420000
+    returns = 1380000
+    roi_percentage = round((returns - investment) * 100 / investment, 2)
+    upsert_row(
+        cursor,
+        "roidata",
+        {
+            "id": stable_id("roi:demo-grooming:2026-h1"),
+            "user_id": USER_ID,
+            "business_id": NETWORK_ID,
+            "investment_amount": investment,
+            "returns_amount": returns,
+            "investment": investment,
+            "revenue": returns,
+            "roi_percentage": roi_percentage,
+            "period_start": "2026-01-01",
+            "period_end": "2026-06-30",
+            "created_at": datetime.utcnow(),
+        },
+    )
 
 
 def build_demo_competitors(location):
@@ -1583,6 +1865,8 @@ def apply_seed(args):
         service_map = seed_services(cursor)
         master_map = seed_masters(cursor)
         seed_finance(cursor, service_map, master_map)
+        seed_finance_detail_metrics(cursor)
+        seed_roi(cursor)
         seed_map_metrics(cursor)
         seed_wordstat_keywords(cursor)
         seed_bookings(cursor, service_map, master_map)
