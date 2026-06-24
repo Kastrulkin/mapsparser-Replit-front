@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, ArrowUpRight, RefreshCw } from 'lucide-react';
@@ -11,10 +11,63 @@ import { useLanguage } from '@/i18n/LanguageContext';
 import { NetworkDashboardPage } from './network/NetworkDashboardPage';
 import {
   DashboardActionPanel,
-  DashboardCompactMetricsRow,
   DashboardPageHeader,
   DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
+
+type ProgressStatusItem = {
+  label: string;
+  value: ReactNode;
+  hint?: string;
+  tone?: 'default' | 'positive' | 'warning';
+};
+
+const ProgressStatusStrip = ({
+  items,
+  action,
+}: {
+  items: ProgressStatusItem[];
+  action?: ReactNode;
+}) => (
+  <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-3 shadow-sm">
+    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] xl:items-center">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className="rounded-2xl bg-slate-50/80 px-3 py-2.5 ring-1 ring-slate-100"
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className={
+                item.tone === 'positive'
+                  ? 'h-2 w-2 rounded-full bg-emerald-500'
+                  : item.tone === 'warning'
+                    ? 'h-2 w-2 rounded-full bg-amber-500'
+                    : 'h-2 w-2 rounded-full bg-slate-300'
+              }
+            />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              {item.label}
+            </span>
+          </div>
+          <div className="mt-1 truncate text-base font-semibold text-slate-950">
+            {item.value}
+          </div>
+          {item.hint ? (
+            <div className="mt-0.5 line-clamp-1 text-xs text-slate-500">
+              {item.hint}
+            </div>
+          ) : null}
+        </div>
+      ))}
+      {action ? (
+        <div className="flex md:col-span-2 xl:col-span-1 xl:justify-end">
+          {action}
+        </div>
+      ) : null}
+    </div>
+  </div>
+);
 
 const PROGRESS_FIRST_RUN_COPY: Record<string, {
   preAuditTitle: string;
@@ -516,7 +569,7 @@ export const ProgressPage = () => {
         description={t.dashboard?.progress?.subtitle || 'Общая картина бизнеса, текущее состояние карточки и история парсинга.'}
       />
 
-      <DashboardCompactMetricsRow
+      <ProgressStatusStrip
         items={[
           {
             label: isRu ? 'Ссылка на карту' : 'Map link',
@@ -546,6 +599,22 @@ export const ProgressPage = () => {
               : (isRu ? 'Без карты аудит и история не заполнятся.' : 'Without a map link, the audit and history remain empty.'),
           },
         ]}
+        action={(
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate(hasConfiguredMapLink ? '/dashboard/card' : '/dashboard/profile')}
+            className="w-full border-slate-200 bg-white text-slate-800 hover:bg-slate-100 xl:w-auto"
+            title={hasConfiguredMapLink
+              ? (isRu ? 'Открывает раздел работы с картами, где можно обновить данные карточки и запустить новый сбор.' : 'Opens maps management where you can refresh listing data and start a new collection.')
+              : (isRu ? 'Открывает профиль бизнеса, где нужно сначала сохранить ссылку на карту.' : 'Opens the business profile where you need to save the map link first.')}
+          >
+            {hasConfiguredMapLink ? <RefreshCw className="mr-2 h-4 w-4" /> : <ArrowRight className="mr-2 h-4 w-4" />}
+            {hasConfiguredMapLink
+              ? (isRu ? 'Работа с картами' : 'Maps workspace')
+              : firstRunCopy.goToProfile}
+          </Button>
+        )}
       />
 
       {!isMapLinkLoading && !hasConfiguredMapLink && (
@@ -577,41 +646,6 @@ export const ProgressPage = () => {
           <NetworkDashboardPage embedded businessId={currentBusinessId} />
         </DashboardSection>
       )}
-
-      <DashboardActionPanel
-        tone="indigo"
-        title={firstRunCopy.whereAuditTitle}
-        description={isRu ? (
-          <>
-            {!hasConfiguredMapLink
-              ? firstRunCopy.whereAuditNoMapBody
-              : <>Ниже показан аудит карточки и техническая история сборов. Если нужны свежие данные, перейдите в <span className="font-semibold">«Работа с картами»</span> и запустите обновление карточки.</>}
-          </>
-        ) : (
-          <>
-            {!hasConfiguredMapLink
-              ? firstRunCopy.whereAuditNoMapBody
-              : <>Below you can see the current card audit and parsing history. If you need fresh listing data, go to <span className="font-semibold">Maps Management</span> and run a listing refresh.</>}
-          </>
-        )}
-        status={<span className="font-semibold">{parseStatusLabel}</span>}
-        actions={(
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate(hasConfiguredMapLink ? '/dashboard/card' : '/dashboard/profile')}
-            className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
-            title={hasConfiguredMapLink
-              ? (isRu ? 'Открывает раздел работы с картами, где можно обновить данные карточки и запустить новый сбор.' : 'Opens maps management where you can refresh listing data and start a new collection.')
-              : (isRu ? 'Открывает профиль бизнеса, где нужно сначала сохранить ссылку на карту.' : 'Opens the business profile where you need to save the map link first.')}
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            {hasConfiguredMapLink
-              ? (isRu ? 'Перейти в «Работа с картами»' : 'Go to Maps Management')
-              : firstRunCopy.goToProfile}
-          </Button>
-        )}
-      />
 
       <BusinessHealthWidget businessId={currentBusinessId} className="mb-0" />
 
