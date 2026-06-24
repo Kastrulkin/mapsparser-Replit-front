@@ -222,7 +222,89 @@ def _telegram_publish_target_probe_payload(
         "external_post_published": False,
         "social_post_published": False,
         "proof_kind": "telegram_publish_target_probe",
+        "target_evidence": _telegram_publish_target_evidence(status, ready, get_me, get_chat, member_probe),
+        "target_summary_ru": _telegram_publish_target_summary(status, ready, get_me, get_chat, member_probe, True),
+        "target_summary_en": _telegram_publish_target_summary(status, ready, get_me, get_chat, member_probe, False),
+        "send_message_performed": False,
     }
+
+
+def _telegram_publish_target_evidence(
+    status: str,
+    ready: bool,
+    get_me: dict,
+    get_chat: dict,
+    member_probe: dict,
+) -> dict:
+    bot = get_me.get("result") if isinstance(get_me.get("result"), dict) else {}
+    chat = get_chat.get("result") if isinstance(get_chat.get("result"), dict) else {}
+    member = member_probe.get("result") if isinstance(member_probe.get("result"), dict) else {}
+    chat_title = str(chat.get("title") or chat.get("first_name") or chat.get("username") or "").strip()
+    chat_username = str(chat.get("username") or "").strip()
+    bot_username = str(bot.get("username") or "").strip()
+    return {
+        "schema": "localos_telegram_publish_target_evidence_v1",
+        "ready": bool(ready),
+        "status": str(status or "").strip(),
+        "read_only": True,
+        "external_post_published": False,
+        "send_message_performed": False,
+        "bot": {
+            "id": str(bot.get("id") or "").strip(),
+            "username": bot_username,
+            "display_name": str(bot.get("first_name") or bot_username or "").strip(),
+        },
+        "target": {
+            "id": str(chat.get("id") or "").strip(),
+            "type": str(chat.get("type") or "").strip(),
+            "title": chat_title,
+            "username": chat_username,
+            "display_name": chat_title or (f"@{chat_username}" if chat_username else ""),
+        },
+        "permission": {
+            "member_status": str(member.get("status") or "").strip(),
+            "can_post_messages": bool(member.get("can_post_messages")),
+            "probe_ok": bool(member_probe.get("ok")),
+            "publish_allowed": bool(ready),
+        },
+        "not_a_phone_target": True,
+    }
+
+
+def _telegram_publish_target_summary(
+    status: str,
+    ready: bool,
+    get_me: dict,
+    get_chat: dict,
+    member_probe: dict,
+    is_ru: bool,
+) -> str:
+    evidence = _telegram_publish_target_evidence(status, ready, get_me, get_chat, member_probe)
+    bot_username = str((evidence.get("bot") or {}).get("username") or "").strip()
+    target = evidence.get("target") if isinstance(evidence.get("target"), dict) else {}
+    target_name = str(target.get("display_name") or target.get("id") or "").strip()
+    target_type = str(target.get("type") or "").strip()
+    if ready:
+        if is_ru:
+            return f"Бот @{bot_username or 'unknown'} может писать в {target_type or 'chat'} {target_name or 'без названия'}."
+        return f"Bot @{bot_username or 'unknown'} can write to {target_type or 'chat'} {target_name or 'untitled'}."
+    if status == "missing_settings":
+        return (
+            "Для Telegram-поста нужен chat_id канала/группы/чата; номер телефона сам по себе не является целью публикации."
+            if is_ru
+            else "A Telegram post needs a channel/group/chat chat_id; a phone number alone is not a publish target."
+        )
+    if target_name:
+        return (
+            f"Цель {target_name} найдена, но право публикации не подтверждено."
+            if is_ru
+            else f"Target {target_name} is reachable, but publishing permission is not confirmed."
+        )
+    return (
+        "Цель Telegram не подтверждена read-only проверкой."
+        if is_ru
+        else "Telegram target was not confirmed by the read-only check."
+    )
 
 
 def _telegram_probe_check(
@@ -895,6 +977,10 @@ def telegram_bot_publish_target_probe():
                 "status": str(probe.get("status") or "").strip(),
                 "message_ru": str(probe.get("message_ru") or "").strip(),
                 "next_action_ru": str(probe.get("next_action_ru") or "").strip(),
+                "target_evidence": probe.get("target_evidence") if isinstance(probe.get("target_evidence"), dict) else {},
+                "target_summary_ru": str(probe.get("target_summary_ru") or "").strip(),
+                "target_summary_en": str(probe.get("target_summary_en") or "").strip(),
+                "send_message_performed": False,
                 "external_post_published": False,
             }
         )

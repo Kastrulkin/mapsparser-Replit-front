@@ -21,6 +21,23 @@ type TelegramPublishTargetProbe = {
   message_ru?: string;
   next_action_ru?: string;
   external_post_published?: boolean;
+  send_message_performed?: boolean;
+  target_summary_ru?: string;
+  target_evidence?: {
+    schema?: string;
+    bot?: {
+      username?: string;
+      display_name?: string;
+    };
+    target?: {
+      type?: string;
+      display_name?: string;
+    };
+    permission?: {
+      member_status?: string;
+      publish_allowed?: boolean;
+    };
+  };
   checks?: Array<{
     key?: string;
     ok?: boolean;
@@ -337,11 +354,43 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
                   <div className="mt-1">
                     {publishTargetProbe.message_ru || 'Проверка завершена без отправки поста наружу.'}
                   </div>
+                  {publishTargetProbe.target_summary_ru ? (
+                    <div
+                      data-testid="telegram-publish-target-evidence"
+                      className="mt-2 rounded-lg bg-white px-2 py-1 font-medium text-slate-700"
+                    >
+                      {publishTargetProbe.target_summary_ru}
+                    </div>
+                  ) : null}
                 </div>
                 <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold">
                   {publishTargetProbe.status || 'checked'}
                 </span>
               </div>
+              {publishTargetProbe.target_evidence?.target?.display_name || publishTargetProbe.target_evidence?.bot?.username ? (
+                <div className="mt-2 grid gap-1 sm:grid-cols-3">
+                  <div className="rounded-lg bg-white px-2 py-1">
+                    <div className="font-semibold text-slate-800">Бот</div>
+                    <div className="mt-0.5 text-slate-600">
+                      {publishTargetProbe.target_evidence?.bot?.username
+                        ? `@${publishTargetProbe.target_evidence.bot.username}`
+                        : publishTargetProbe.target_evidence?.bot?.display_name || 'не определён'}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-white px-2 py-1">
+                    <div className="font-semibold text-slate-800">Цель поста</div>
+                    <div className="mt-0.5 text-slate-600">
+                      {publishTargetProbe.target_evidence?.target?.display_name || 'не определена'}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-white px-2 py-1">
+                    <div className="font-semibold text-slate-800">Право писать</div>
+                    <div className="mt-0.5 text-slate-600">
+                      {publishTargetProbe.target_evidence?.permission?.publish_allowed ? 'подтверждено' : 'не подтверждено'}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               {Array.isArray(publishTargetProbe.checks) && publishTargetProbe.checks.length > 0 ? (
                 <div className="mt-2 grid gap-1 sm:grid-cols-3">
                   {publishTargetProbe.checks.slice(0, 3).map((check) => (
@@ -365,6 +414,7 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
               </div>
               <div className="mt-1 text-slate-600">
                 Проверка не отправляет social post и не заменяет preview → подтверждение → расписание.
+                {publishTargetProbe.send_message_performed === false ? ' Сообщение не отправлялось.' : ''}
               </div>
             </div>
           ) : null}
