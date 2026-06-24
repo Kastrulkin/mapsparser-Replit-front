@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { RefObject } from 'react';
 import { CheckCircle2, Edit3, Search, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { KeywordMatchLevel, KeywordScore } from '@/components/dashboard/cardServicesLogic';
 import { getServiceQuality } from '@/components/dashboard/cardServicesLogic';
 
@@ -414,19 +415,6 @@ export function CardServicesTable({
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button
-                      variant="outline"
-                      onClick={() => onEnrichKeywords(selectedId)}
-                      disabled={enrichingServiceId === selectedId}
-                      className="border-slate-200 text-slate-700"
-                    >
-                      {enrichingServiceId === selectedId ? (
-                        <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
-                      ) : (
-                        <Search className="mr-2 h-4 w-4" />
-                      )}
-                      Найти запросы
-                    </Button>
-                    <Button
                       onClick={() => onOptimizeService(selectedId)}
                       disabled={!automationAllowed || optimizingServiceId === selectedId || selectedQuality.manualReview}
                       className="bg-slate-950 text-white hover:bg-slate-800"
@@ -443,6 +431,30 @@ export function CardServicesTable({
                       <Edit3 className="mr-2 h-4 w-4" />
                       {copy.edit}
                     </Button>
+                    <TooltipProvider delayDuration={180}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex">
+                            <Button
+                              variant="ghost"
+                              onClick={() => onEnrichKeywords(selectedId)}
+                              disabled={enrichingServiceId === selectedId}
+                              className="text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                            >
+                              {enrichingServiceId === selectedId ? (
+                                <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
+                              ) : (
+                                <Search className="mr-2 h-4 w-4" />
+                              )}
+                              Подобрать SEO-запросы
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-xs text-xs leading-5">
+                          Найдёт безопасные Wordstat-запросы для этой услуги и сохранит их в блок «Запросы для поиска». Карточки на картах не меняет.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     <Button variant="ghost" onClick={() => onDeleteService(selectedId)} className="text-slate-400 hover:bg-red-50 hover:text-red-600">
                       <Trash2 className="h-4 w-4" />
                     </Button>
