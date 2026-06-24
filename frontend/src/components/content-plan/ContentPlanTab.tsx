@@ -683,6 +683,16 @@ type SocialDispatchExecutionReport = {
     summary_en?: string;
     next_action_ru?: string;
     next_action_en?: string;
+    learning_actions?: Array<{
+      key?: string;
+      order?: number;
+      enabled?: boolean;
+      label_ru?: string;
+      label_en?: string;
+      summary_ru?: string;
+      summary_en?: string;
+      primary_metric?: boolean;
+    }>;
   };
   after_run_proof_packet?: {
     schema?: string;
@@ -10075,6 +10085,40 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   ? String(socialDispatchExecutionReport.post_publish_learning_gate.next_action_ru || '')
                                   : String(socialDispatchExecutionReport.post_publish_learning_gate.next_action_en || '')}
                               </div>
+                              {(socialDispatchExecutionReport.post_publish_learning_gate.learning_actions || []).length > 0 ? (
+                                <div
+                                  data-testid="social-post-publish-learning-actions"
+                                  className="mt-2 rounded-md bg-white/10 px-2 py-1.5"
+                                >
+                                  <div className="font-semibold text-white">
+                                    {isRu ? 'Порядок после публикации' : 'After-publish sequence'}
+                                  </div>
+                                  <ol className="mt-1 space-y-1">
+                                    {(socialDispatchExecutionReport.post_publish_learning_gate.learning_actions || [])
+                                      .slice()
+                                      .sort((left, right) => Number(left.order || 0) - Number(right.order || 0))
+                                      .slice(0, 4)
+                                      .map((action) => (
+                                        <li key={`publish-learning-action:${String(action.key || action.label_ru || action.label_en || '')}`} className="flex gap-1.5 text-slate-100">
+                                          <span className="font-semibold text-white">{Number(action.order || 0) || ''}</span>
+                                          <span>
+                                            <span className="font-semibold text-white">
+                                              {isRu ? String(action.label_ru || '') : String(action.label_en || '')}
+                                            </span>
+                                            {action.primary_metric ? (
+                                              <span className="ml-1 rounded-full bg-emerald-400/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-50">
+                                                {isRu ? 'главный KPI' : 'main KPI'}
+                                              </span>
+                                            ) : null}
+                                            <span className="block text-slate-200">
+                                              {isRu ? String(action.summary_ru || '') : String(action.summary_en || '')}
+                                            </span>
+                                          </span>
+                                        </li>
+                                      ))}
+                                  </ol>
+                                </div>
+                              ) : null}
                             </div>
                           ) : null}
                           <div

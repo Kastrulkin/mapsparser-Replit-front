@@ -4236,7 +4236,82 @@ def _social_post_publish_learning_gate(
         "summary_en": _social_post_publish_learning_gate_summary(status, False),
         "next_action_ru": _social_post_publish_learning_gate_next_action(status, True),
         "next_action_en": _social_post_publish_learning_gate_next_action(status, False),
+        "learning_actions": _social_post_publish_learning_actions(status),
     }
+
+
+def _social_post_publish_learning_actions(status: str) -> list[dict[str, Any]]:
+    if status in {"ready_for_metrics_and_attribution", "published_without_api_proof"}:
+        return [
+            {
+                "key": "collect_reactions",
+                "order": 1,
+                "enabled": True,
+                "label_ru": "Собрать реакции",
+                "label_en": "Collect reactions",
+                "summary_ru": "Обновить просмотры, комментарии и доступные provider-метрики без новой публикации.",
+                "summary_en": "Update views, comments, and available provider metrics without publishing again.",
+                "primary_metric": False,
+            },
+            {
+                "key": "record_leads",
+                "order": 2,
+                "enabled": True,
+                "label_ru": "Отметить заявки/обращения",
+                "label_en": "Record leads/inquiries",
+                "summary_ru": "Главный KPI: заявки и обращения важнее охватов и лайков.",
+                "summary_en": "Main KPI: leads and inquiries matter more than reach and likes.",
+                "primary_metric": True,
+            },
+            {
+                "key": "recommend_next_plan",
+                "order": 3,
+                "enabled": True,
+                "label_ru": "Предложить изменения следующего плана",
+                "label_en": "Suggest next-plan changes",
+                "summary_ru": "LocalOS предлагает изменения, но не применяет их без подтверждения.",
+                "summary_en": "LocalOS suggests changes but does not apply them without approval.",
+                "primary_metric": False,
+            },
+        ]
+    if status == "finish_supervised_or_manual_publish":
+        return [
+            {
+                "key": "finish_manual_or_supervised_publish",
+                "order": 1,
+                "enabled": True,
+                "label_ru": "Завершить ручное/контролируемое размещение",
+                "label_en": "Finish manual/supervised placement",
+                "summary_ru": "Сначала разместите пост на площадке человеком и сохраните ссылку или ID.",
+                "summary_en": "Publish on the platform as a human first and save the URL or ID.",
+                "primary_metric": False,
+            }
+        ]
+    if status == "fix_failed_publish":
+        return [
+            {
+                "key": "recover_failed_publish",
+                "order": 1,
+                "enabled": True,
+                "label_ru": "Исправить ошибку публикации",
+                "label_en": "Recover failed publish",
+                "summary_ru": "Проверьте ключи, права или переведите пост в ручной режим.",
+                "summary_en": "Check keys, permissions, or move the post to manual flow.",
+                "primary_metric": False,
+            }
+        ]
+    return [
+        {
+            "key": "publish_first",
+            "order": 1,
+            "enabled": False,
+            "label_ru": "Сначала опубликовать пост",
+            "label_en": "Publish a post first",
+            "summary_ru": "Сбор результата появится после published или ручной отметки размещения.",
+            "summary_en": "Result collection appears after published status or manual publish marking.",
+            "primary_metric": False,
+        }
+    ]
 
 
 def _social_post_publish_learning_gate_summary(status: str, is_ru: bool) -> str:

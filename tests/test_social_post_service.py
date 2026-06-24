@@ -1596,6 +1596,10 @@ def test_social_dispatch_execution_report_keeps_owner_proof_and_safety():
     assert report["post_publish_learning_gate"]["can_collect_metrics"] is True
     assert report["post_publish_learning_gate"]["api_proof_ready"] is True
     assert report["post_publish_learning_gate"]["primary_metric_ru"] == "Заявки и обращения"
+    assert report["post_publish_learning_gate"]["learning_actions"][0]["key"] == "collect_reactions"
+    assert report["post_publish_learning_gate"]["learning_actions"][1]["key"] == "record_leads"
+    assert report["post_publish_learning_gate"]["learning_actions"][1]["primary_metric"] is True
+    assert report["post_publish_learning_gate"]["learning_actions"][2]["key"] == "recommend_next_plan"
     assert "Собрать реакции" in report["post_publish_learning_gate"]["next_action_ru"]
     assert "ручные/контролируемые" in report["next_action_ru"]
 
