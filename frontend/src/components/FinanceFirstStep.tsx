@@ -835,7 +835,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
           </TabsContent>
 
           <TabsContent value="workplaces" className="space-y-5 pt-5">
-            <FinanceVisuals history={[]} workplaces={dashboard?.workplaces || []} services={[]} />
+            <FinanceVisuals history={history} workplaces={dashboard?.workplaces || []} services={dashboard?.services || []} />
             <FinanceTable
               title="Рабочие места"
               icon={Armchair}
@@ -1860,6 +1860,14 @@ const FinanceVisuals: React.FC<{
   workplaces: Array<Record<string, KpiValue | string>>;
   services: Array<Record<string, KpiValue | string>>;
 }> = ({ history, workplaces, services }) => {
+  const shortChartLabel = (value: unknown) => {
+    const text = String(value || '').replace(/^Рога и копыта\s*[—-]\s*/i, '').trim();
+    if (text.length <= 14) return text;
+    const words = text.split(/\s+/).filter(Boolean);
+    const short = words.slice(0, 2).join(' ');
+    return short.length > 14 ? `${short.slice(0, 13)}…` : short;
+  };
+
   const trendData = history
     .map((item) => ({
       label: item.label,
@@ -1922,7 +1930,7 @@ const FinanceVisuals: React.FC<{
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={workplaceData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#64748b' }} interval={0} height={52} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={shortChartLabel} interval={0} height={52} />
             <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(value) => `${Math.round(Number(value) / 1000)}к`} />
             <Tooltip formatter={(value, name) => [name === 'revenuePerHour' ? tooltipMoney(value) : tooltipPercent(value), name === 'revenuePerHour' ? 'Выручка/час' : 'Загрузка']} />
             <Bar dataKey="revenuePerHour" fill="#0f172a" radius={[8, 8, 0, 0]} />
@@ -1939,7 +1947,7 @@ const FinanceVisuals: React.FC<{
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={serviceData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#64748b' }} interval={0} height={52} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={shortChartLabel} interval={0} height={52} />
             <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
             <Tooltip formatter={(value, name) => [name === 'revenuePerHour' ? tooltipMoney(value) : tooltipPercent(value), name === 'revenuePerHour' ? 'Выручка/час' : 'Маржа']} />
             <Bar dataKey="margin" fill="#059669" radius={[8, 8, 0, 0]} />
