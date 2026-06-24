@@ -151,6 +151,39 @@ NETWORK_MONTH_REVENUE = {
     "2026-06": 3600000,
 }
 
+GROOMING_WORDSTAT_KEYWORDS = [
+    ("груминг собак", "grooming", 18500),
+    ("груминг собак спб", "grooming", 9400),
+    ("груминг кошек", "grooming", 8200),
+    ("зоосалон спб", "grooming", 7600),
+    ("стрижка собак", "grooming", 6900),
+    ("стрижка собак спб", "grooming", 5200),
+    ("стрижка кошек", "grooming", 4300),
+    ("тримминг собак", "grooming", 3900),
+    ("экспресс линька для собак", "grooming", 2600),
+    ("вычесывание кошек", "grooming", 2100),
+    ("стрижка когтей собак", "grooming", 1900),
+    ("стрижка когтей кошек", "grooming", 1600),
+    ("мытье собак в зоосалоне", "grooming", 1450),
+    ("spa уход для собак", "grooming", 1200),
+    ("уход за лапами собак", "grooming", 980),
+    ("грумер для собак", "grooming", 920),
+    ("выставочный груминг собак", "grooming", 780),
+    ("первый груминг щенка", "grooming", 650),
+]
+
+GROOMING_BAD_WORDSTAT_KEYWORDS = [
+    "укладка волос Санкт-Петербург",
+    "удаление волос Санкт-Петербург",
+    "полумаска Санкт-Петербург",
+    "кто снял маску сегодня в шоу маска Санкт-Петербург",
+    "маска 7 сезон кто снял маску Санкт-Петербург",
+    "собака сломала ноготь Санкт-Петербург",
+    "акне у кошек причины и лечение Санкт-Петербург",
+    "собака сломала ноготь",
+    "акне у кошек причины и лечение",
+]
+
 
 CLIENT_NAMES = [
     "Анна Смирнова", "Мария Петрова", "Ольга Кузнецова", "Екатерина Волкова", "Ирина Соколова",
@@ -516,6 +549,8 @@ def write_backup(cursor, backup_dir):
         ("externalbusinessreviews", "business_id = ANY(%s)", [business_ids]),
         ("externalbusinessservices", "business_id = ANY(%s)", [business_ids]),
         ("businessmaplinks", "business_id = ANY(%s)", [business_ids]),
+        ("wordstatkeywordscustom", "business_id = ANY(%s)", [business_ids]),
+        ("wordstatkeywordsexcluded", "business_id = ANY(%s)", [business_ids]),
         ("masters", "business_id = ANY(%s)", [business_ids]),
         ("averageticketmatrices", "business_id = ANY(%s)", [business_ids]),
         ("averageticketevents", "business_id = ANY(%s)", [business_ids]),
@@ -576,6 +611,8 @@ def refresh_demo_area(cursor):
         "cards",
         "mapparseresults",
         "businessmaplinks",
+        "wordstatkeywordscustom",
+        "wordstatkeywordsexcluded",
         "userservices",
     ]:
         delete_if_exists(cursor, table_name, "business_id = ANY(%s)", [business_ids])
@@ -1046,6 +1083,7 @@ def seed_map_metrics(cursor):
                         "updated_at": datetime.utcnow(),
                     },
                 )
+
             for service_index, service in enumerate(SERVICES):
                 name, category, description, price, keywords = service
                 source_suffix = "" if source["key"] == "yandex" else f" · {source['label']}"
@@ -1090,6 +1128,46 @@ def seed_map_metrics(cursor):
                         "created_at": datetime.utcnow(),
                         "updated_at": datetime.utcnow(),
                     },
+                )
+
+
+def seed_wordstat_keywords(cursor):
+    target_business_ids = [NETWORK_ID] + business_ids()
+    if table_exists(cursor, "wordstatkeywordscustom"):
+        for business_id in target_business_ids:
+            for keyword, category, views in GROOMING_WORDSTAT_KEYWORDS:
+                cursor.execute(
+                    """
+                    INSERT INTO wordstatkeywordscustom (id, business_id, keyword, views, category, updated_at, created_at)
+                    VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ON CONFLICT (business_id, keyword)
+                    DO UPDATE SET
+                        views = EXCLUDED.views,
+                        category = EXCLUDED.category,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (
+                        stable_id(f"wordstat-custom:{business_id}:{keyword.lower()}"),
+                        business_id,
+                        keyword,
+                        views,
+                        category,
+                    ),
+                )
+    if table_exists(cursor, "wordstatkeywordsexcluded"):
+        for business_id in target_business_ids:
+            for keyword in GROOMING_BAD_WORDSTAT_KEYWORDS:
+                cursor.execute(
+                    """
+                    INSERT INTO wordstatkeywordsexcluded (id, business_id, keyword, created_at)
+                    VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (business_id, keyword) DO NOTHING
+                    """,
+                    (
+                        stable_id(f"wordstat-excluded:{business_id}:{keyword.lower()}"),
+                        business_id,
+                        keyword,
+                    ),
                 )
 
 
@@ -1393,6 +1471,7 @@ def apply_seed(args):
         master_map = seed_masters(cursor)
         seed_finance(cursor, service_map, master_map)
         seed_map_metrics(cursor)
+        seed_wordstat_keywords(cursor)
         seed_bookings(cursor, service_map, master_map)
         seed_average_ticket(cursor, service_map)
         seed_partners(cursor)

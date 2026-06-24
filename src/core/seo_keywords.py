@@ -20,8 +20,12 @@ BEAUTY_BUSINESS_TYPES = {
 BEAUTY_CATEGORIES = {"barber", "cosmetology", "eyebrows", "nails", "spa", "beauty", "hair", "makeup", "lashes"}
 BEAUTY_TERMS = {
     "маникюр", "педикюр", "ногти", "ногт", "барбер", "косметолог", "ресниц", "бров", "спа", "стрижк", "окрашив",
-    "эпиляц", "биоревитал", "мезотерап", "гель лак", "гел лак", "мелирован", "наращиван",
+    "эпиляц", "биоревитал", "мезотерап", "гель лак", "гел лак", "мелирован", "наращиван", "волос",
     "парикмахер", "завив", "биозавив", "hair", "lash", "nail",
+}
+PET_CARE_TERMS = {
+    "грум", "зоосалон", "собак", "пес", "пса", "кошка", "кошек", "кошк", "кот", "кота", "котов",
+    "питом", "шерст", "когт", "тримминг", "линьк", "puppy", "pet",
 }
 
 BUSINESS_TYPE_HINTS = {
@@ -57,6 +61,16 @@ BUSINESS_TYPE_HINTS = {
     "gym": ["спортзал", "фитнес", "тренировки", "тренажерный зал"],
     "shawarma": ["шаверма", "шаурма", "быстрое питание", "фастфуд"],
     "theater": ["театр", "спектакль", "сцена", "билеты"],
+    "grooming_salon": [
+        "груминг собак", "груминг кошек", "зоосалон", "стрижка собак", "стрижка кошек",
+        "тримминг собак", "вычёсывание кошек", "экспресс линька", "стрижка когтей",
+        "уход за лапами", "грумер", "pet grooming",
+    ],
+    "grooming_salon_network": [
+        "груминг собак", "груминг кошек", "зоосалон", "стрижка собак", "стрижка кошек",
+        "тримминг собак", "вычёсывание кошек", "экспресс линька", "стрижка когтей",
+        "уход за лапами", "грумер", "pet grooming",
+    ],
 }
 
 
@@ -87,10 +101,14 @@ def extract_terms(text: str) -> list[str]:
 
 def is_beauty_keyword(keyword_text: str, category: str = "") -> bool:
     category_l = (category or "").strip().lower()
+    if category_l in {"grooming", "pet_services", "pets"}:
+        return False
     if category_l in BEAUTY_CATEGORIES:
         return True
     keyword_l = (keyword_text or "").lower()
     normalized = keyword_l.replace("-", " ")
+    if any(term in normalized for term in PET_CARE_TERMS):
+        return False
     return any(term in normalized for term in BEAUTY_TERMS)
 
 
