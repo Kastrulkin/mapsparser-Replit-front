@@ -377,34 +377,55 @@ export function CardServicesTable({
           {isDetailVisible ? (
           <div className="min-w-0 bg-white p-4 lg:bg-gradient-to-br lg:from-white lg:to-slate-50/80 lg:p-5">
             {selectedService && selectedQuality && selectedStatus ? (
-              <div className="space-y-5 rounded-[1.75rem] border border-slate-200/90 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.10)] ring-1 ring-white">
-                <div className="space-y-4 border-b border-slate-100 pb-5">
+              <div className="space-y-4 rounded-[1.75rem] border border-slate-200/90 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.10)] ring-1 ring-white">
+                <div className="space-y-3 border-b border-slate-100 pb-4">
                   <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${selectedStatus.className}`}>
+                    <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${selectedStatus.className}`}>
                         {selectedStatus.label}
                       </span>
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                         {formatServiceSource(selectedService)}
                       </span>
                       {selectedGroup.duplicateCount > 1 ? (
-                        <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200">
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
                           дубликатов: {selectedGroup.duplicateCount}
                         </span>
                       ) : null}
                     </div>
-                    <h3 className="max-w-4xl text-2xl font-semibold leading-tight tracking-tight text-slate-950">
+                    <h3 className="max-w-4xl text-xl font-semibold leading-tight tracking-tight text-slate-950">
                       {selectedService.name || 'Без названия'}
                     </h3>
-                    <div className="mt-2 flex flex-wrap gap-2 text-sm text-slate-500">
+                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
                       {selectedService.category ? <span>{selectedService.category}</span> : null}
                       {selectedService.price ? <span>{formatPrice(selectedService.price)}</span> : null}
                       {selectedUpdatedAt ? <span>Обновлено {formatDate(selectedUpdatedAt, locale)}</span> : null}
                     </div>
-                    <div className="mt-4 max-w-3xl rounded-2xl bg-slate-50/80 px-4 py-3 ring-1 ring-slate-100">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Текущее описание</div>
-                      <p className="mt-1 text-sm leading-6 text-slate-600">{selectedService.description || 'Описание пока не заполнено.'}</p>
+                    <div className="mt-3 grid gap-2 rounded-2xl bg-slate-50/80 px-3 py-2.5 ring-1 ring-slate-100 xl:grid-cols-[minmax(0,1fr)_minmax(14rem,0.72fr)]">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Текущее описание</div>
+                        <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-slate-600">{selectedService.description || 'Описание пока не заполнено.'}</p>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">SEO-запросы</div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {selectedKeywords.length > 0 ? (
+                            <>
+                              {selectedKeywords.slice(0, 3).map((keyword) => (
+                                <span key={keyword} className="max-w-[13rem] truncate rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+                                  {keyword}
+                                </span>
+                              ))}
+                              {selectedKeywords.length > 3 ? (
+                                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-400 ring-1 ring-slate-200">+{selectedKeywords.length - 3}</span>
+                              ) : null}
+                            </>
+                          ) : (
+                            <span className="text-xs text-slate-500">ещё не подобраны</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     </div>
                     <Button
@@ -417,11 +438,12 @@ export function CardServicesTable({
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button
                       onClick={() => onOptimizeService(selectedId)}
                       disabled={!automationAllowed || optimizingServiceId === selectedId || selectedQuality.manualReview}
-                      className="bg-slate-950 text-white hover:bg-slate-800"
+                      size="sm"
+                      className="h-9 bg-slate-950 text-white hover:bg-slate-800"
                       title={selectedQuality.manualReview ? 'Нужна ручная проверка' : !automationAllowed ? automationLockedMessage : copy.optimize}
                     >
                       {optimizingServiceId === selectedId ? (
@@ -431,7 +453,7 @@ export function CardServicesTable({
                       )}
                       {copy.optimize}
                     </Button>
-                    <Button variant="outline" onClick={() => onEditService(selectedService)} className="border-slate-200 text-slate-700">
+                    <Button size="sm" variant="outline" onClick={() => onEditService(selectedService)} className="h-9 border-slate-200 text-slate-700">
                       <Edit3 className="mr-2 h-4 w-4" />
                       {copy.edit}
                     </Button>
@@ -440,10 +462,11 @@ export function CardServicesTable({
                         <TooltipTrigger asChild>
                           <span className="inline-flex">
                             <Button
+                              size="sm"
                               variant="ghost"
                               onClick={() => onEnrichKeywords(selectedId)}
                               disabled={enrichingServiceId === selectedId}
-                              className="text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                              className="h-9 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                             >
                               {enrichingServiceId === selectedId ? (
                                 <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
@@ -459,38 +482,21 @@ export function CardServicesTable({
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
-                    <Button variant="ghost" onClick={() => onDeleteService(selectedId)} className="text-slate-400 hover:bg-red-50 hover:text-red-600">
+                    <Button size="sm" variant="ghost" onClick={() => onDeleteService(selectedId)} className="h-9 text-slate-400 hover:bg-red-50 hover:text-red-600">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    <span className="font-semibold uppercase tracking-[0.14em] text-slate-400">SEO-запросы</span>
-                    {selectedKeywords.length > 0 ? (
-                      <>
-                        {selectedKeywords.slice(0, 4).map((keyword) => (
-                          <span key={keyword} className="rounded-full bg-slate-50 px-2.5 py-1 font-medium text-slate-600 ring-1 ring-slate-200">
-                            {keyword}
-                          </span>
-                        ))}
-                        {selectedKeywords.length > 4 ? (
-                          <span className="text-slate-400">+{selectedKeywords.length - 4}</span>
-                        ) : null}
-                      </>
-                    ) : (
-                      <span>ещё не подобраны</span>
-                    )}
-                  </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-3">
                     <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                       <Sparkles className="h-3.5 w-3.5" />
                       Предложенное название
                     </div>
                     {selectedService.optimized_name ? (
                       <>
-                        <div className="mt-3 flex flex-wrap gap-1.5">
+                        <div className="mt-2 flex flex-wrap gap-1.5">
                           {isDraftSimilarToCurrent(selectedOptimizedName, selectedService.name || '') ? (
                             <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
                               похоже на текущее
@@ -501,9 +507,9 @@ export function CardServicesTable({
                         <textarea
                           value={selectedOptimizedName}
                           onChange={(event) => onOptimizedNameDraftChange(selectedId, event.target.value)}
-                          className="mt-3 min-h-[76px] w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-300 focus:bg-white focus:ring-2 focus:ring-slate-200"
+                          className="mt-2 min-h-[52px] w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-300 focus:bg-white focus:ring-2 focus:ring-slate-200"
                         />
-                        <div className="mt-3 flex gap-2">
+                        <div className="mt-2 flex gap-2">
                           <Button size="sm" onClick={() => void onAcceptOptimizedName(selectedService)} className="bg-slate-950 text-white hover:bg-slate-800">
                             <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
                             {copy.accept}
@@ -519,7 +525,7 @@ export function CardServicesTable({
                   </div>
 
                   {selectedQuality.needsReview || selectedQuality.manualReview ? (
-                    <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 p-4">
+                    <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 p-3">
                       <div className="text-sm font-semibold text-amber-900">Что требует внимания</div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {selectedQuality.issueLabels.slice(0, 5).map((label) => (
@@ -531,14 +537,14 @@ export function CardServicesTable({
                     </div>
                   ) : null}
 
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-3">
                     <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                       <Sparkles className="h-3.5 w-3.5" />
                       Предложенное описание
                     </div>
                     {selectedService.optimized_description ? (
                       <>
-                        <div className="mt-3 flex flex-wrap gap-1.5">
+                        <div className="mt-2 flex flex-wrap gap-1.5">
                           {isDraftSimilarToCurrent(selectedOptimizedDescription, selectedService.description || '') ? (
                             <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
                               похоже на текущее
@@ -549,9 +555,9 @@ export function CardServicesTable({
                         <textarea
                           value={selectedOptimizedDescription}
                           onChange={(event) => onOptimizedDescriptionDraftChange(selectedId, event.target.value)}
-                          className="mt-3 min-h-[140px] w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm leading-6 text-slate-900 outline-none transition focus:border-slate-300 focus:bg-white focus:ring-2 focus:ring-slate-200"
+                          className="mt-2 min-h-[104px] w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm leading-6 text-slate-900 outline-none transition focus:border-slate-300 focus:bg-white focus:ring-2 focus:ring-slate-200"
                         />
-                        <div className="mt-3 flex gap-2">
+                        <div className="mt-2 flex gap-2">
                           <Button size="sm" onClick={() => void onAcceptOptimizedDescription(selectedService)} className="bg-slate-950 text-white hover:bg-slate-800">
                             <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
                             {copy.accept}
