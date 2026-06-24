@@ -157,7 +157,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
   return (
     <DashboardSection
       title="Импорт финансовых данных"
-      description="Загрузите CSV/XLSX по шаблону: LocalOS покажет preview, ошибки и пропустит дубли при повторной загрузке."
+      description="Загрузите CSV/XLSX по шаблону или статистику YCLIENTS/Altegio по дням: LocalOS покажет preview, ошибки и пропустит дубли при повторной загрузке."
       actions={
         <Button variant="outline" className="gap-2" onClick={() => window.open(`/api/finance/import-template?profile=${templateProfile}`, '_blank')}>
           <Download className="h-4 w-4" />
@@ -190,10 +190,10 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
             </div>
 
             <div className="space-y-2">
-              <Label>CSV или XLSX</Label>
+              <Label>CSV, TSV или XLSX</Label>
               <Input
                 type="file"
-                accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                accept=".csv,.tsv,.txt,.xlsx,.xls,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 onChange={(event) => {
                   const selected = event.target.files && event.target.files.length > 0 ? event.target.files[0] : null;
                   setFile(selected);
@@ -206,7 +206,11 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
                 <div className="text-sm text-slate-500">
                   Выбран файл: {file.name} · {Math.max(Math.round(file.size / 1024), 1)} КБ
                 </div>
-              ) : null}
+              ) : (
+                <div className="text-sm text-slate-500">
+                  Поддерживаются и широкие выгрузки статистики с колонками вроде «1 июня (нал)», «1 июня (б/н)», «1 июня (Всего)».
+                </div>
+              )}
             </div>
 
             <div className="grid gap-2 text-sm sm:grid-cols-3">

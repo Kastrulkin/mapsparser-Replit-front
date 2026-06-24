@@ -22,6 +22,7 @@ def test_finance_import_templates_include_crm_and_workplace_profiles() -> None:
     assert "manual" in templates
     assert "yclients" in templates
     assert "workplaces" in templates
+    assert "yclients_stats" in templates
 
     crm_rows = parse_finance_file("yclients.csv", finance_import_template_csv("yclients").encode("utf-8"))
     workplace_rows = parse_finance_file("workplaces.csv", finance_import_template_csv("workplaces").encode("utf-8"))
@@ -29,6 +30,35 @@ def test_finance_import_templates_include_crm_and_workplace_profiles() -> None:
     assert crm_rows[0]["record_type"] == "service"
     assert crm_rows[1]["record_type"] == "staff"
     assert workplace_rows[0]["record_type"] == "workplace"
+
+
+def test_finance_import_reads_yclients_daily_stats_utf16_tsv() -> None:
+    content = "\n".join(
+        [
+            "Статья\t1 мая (нал)\t1 мая (б/н)\t1 мая (Всего)\t2 мая (нал)\t2 мая (б/н)\t2 мая (Всего)\tВсего",
+            "Доходы\t100\t200\t300\t0\t0\t0\t300",
+            "Оказание услуг\t100\t200\t300\t0\t0\t0\t300",
+            "Продажа товаров\t0\t0\t0\t50\t75,50\t125,50\t125,50",
+            "Закупка материалов\t0\t0\t20\t0\t0\t0\t20",
+            "Остаток на конец дня\t1\t2\t3\t4\t5\t6\t9",
+        ]
+    ).encode("utf-16")
+
+    rows = parse_finance_file("май.csv", content)
+    result = normalize_finance_import_rows(rows)
+
+    assert result["errors"] == []
+    assert result["total"] == 3
+    assert result["rows"][0]["record_type"] == "entry"
+    assert result["rows"][0]["date"].endswith("-05-01")
+    assert result["rows"][0]["type"] == "revenue"
+    assert result["rows"][0]["category"] == "services"
+    assert result["rows"][0]["amount"] == 300
+    assert result["rows"][1]["date"].endswith("-05-02")
+    assert result["rows"][1]["category"] == "retail"
+    assert result["rows"][1]["amount"] == 125.5
+    assert result["rows"][2]["type"] == "expense"
+    assert result["rows"][2]["category"] == "materials"
 
 
 def test_finance_import_normalizes_service_and_workplace_rows() -> None:

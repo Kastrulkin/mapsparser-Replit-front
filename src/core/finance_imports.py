@@ -5,12 +5,46 @@ import hashlib
 import importlib
 import io
 import json
+import re
 from datetime import datetime
 from typing import Any
 
 
 ENTRY_TYPES = {"revenue", "expense"}
 WORKPLACE_TYPES = {"hair_chair", "nail_place", "cosmetology_room", "massage_room", "other"}
+
+RU_MONTHS_GENITIVE = {
+    "января": 1,
+    "февраля": 2,
+    "марта": 3,
+    "апреля": 4,
+    "мая": 5,
+    "июня": 6,
+    "июля": 7,
+    "августа": 8,
+    "сентября": 9,
+    "октября": 10,
+    "ноября": 11,
+    "декабря": 12,
+}
+
+YCLIENTS_STATS_REVENUE_ROWS = {
+    "оказание услуг": "services",
+    "пополнение счета": "account_topup",
+    "продажа абонементов": "subscriptions",
+    "продажа сертификатов": "certificates",
+    "продажа товаров": "retail",
+    "прочие доходы": "other_revenue",
+}
+
+YCLIENTS_STATS_EXPENSE_ROWS = {
+    "закупка материалов": "materials",
+    "закупка товаров": "goods_purchase",
+    "зарплата персонала": "payroll",
+    "комиссия за эквайринг": "acquiring_fee",
+    "налоги и сборы": "taxes",
+    "прочие расходы": "other_expense",
+}
 
 FIELD_ALIASES = {
     "record_type": ["record_type", "type_record", "тип записи", "тип строки", "раздел"],
@@ -84,6 +118,10 @@ IMPORT_TEMPLATE_PROFILES = {
     "workplaces": {
         "label": "Кресла и кабинеты",
         "description": "Шаблон для загрузки рабочих мест, доступных часов, занятости и прибыли.",
+    },
+    "yclients_stats": {
+        "label": "YCLIENTS / Altegio статистика",
+        "description": "Широкая выгрузка статистики по дням: Статья, 1 июня (нал), 1 июня (б/н), 1 июня (Всего).",
     },
 }
 
@@ -213,15 +251,94 @@ def parse_finance_file(filename: str, content: bytes) -> list[dict[str, Any]]:
 
 
 def _parse_csv(content: bytes) -> list[dict[str, Any]]:
-    text = content.decode("utf-8-sig", errors="ignore")
+    text = _decode_text_content(content)
     sample = text[:2048]
     delimiter = ","
     try:
         delimiter = csv.Sniffer().sniff(sample, delimiters=",;\t").delimiter
     except Exception:
         delimiter = ";"
+
+    plain_rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
+    stats_rows = _parse_yclients_stats_rows(plain_rows)
+    if stats_rows:
+        return stats_rows
+
     reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
     return [_clean_row(row) for row in reader]
+
+
+def _decode_text_content(content: bytes) -> str:
+    if content.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return content.decode("utf-16")
+    text = content.decode("utf-8-sig", errors="ignore")
+    if "\x00" in text:
+        try:
+            return content.decode("utf-16")
+        except Exception:
+            return text.replace("\x00", "")
+    return text
+
+
+def _parse_yclients_stats_rows(rows: list[list[str]]) -> list[dict[str, Any]]:
+    if not rows:
+        return []
+
+    header = [_normalize_header(cell) for cell in rows[0]]
+    if not header or header[0] != "статья":
+        return []
+
+    day_columns = []
+    for index, title in enumerate(header):
+        match = re.match(r"^(\d{1,2})\s+([а-яё]+)\s+\(([^)]+)\)$", title)
+        if not match:
+            continue
+        payment_marker = _normalize_header(match.group(3))
+        month_number = RU_MONTHS_GENITIVE.get(_normalize_header(match.group(2)))
+        if payment_marker != "всего" or not month_number:
+            continue
+        day_columns.append((index, int(match.group(1)), month_number))
+
+    if not day_columns:
+        return []
+
+    year = datetime.now().year
+    result = []
+    for row in rows[1:]:
+        if not row:
+            continue
+        row_name = _normalize_header(row[0])
+        row_type = ""
+        category = ""
+        if row_name in YCLIENTS_STATS_REVENUE_ROWS:
+            row_type = "revenue"
+            category = YCLIENTS_STATS_REVENUE_ROWS[row_name]
+        elif row_name in YCLIENTS_STATS_EXPENSE_ROWS:
+            row_type = "expense"
+            category = YCLIENTS_STATS_EXPENSE_ROWS[row_name]
+        else:
+            continue
+
+        label = str(row[0] or "").strip()
+        for index, day, month_number in day_columns:
+            raw_amount = row[index] if index < len(row) else ""
+            amount = _money(raw_amount)
+            if amount is None or amount == 0:
+                continue
+            date_value = datetime(year, month_number, day).date().isoformat()
+            result.append(
+                {
+                    "record_type": "entry",
+                    "date": date_value,
+                    "type": row_type,
+                    "category": category,
+                    "amount": str(amount),
+                    "external_id": f"yclients-stats:{date_value}:{row_type}:{category}",
+                    "comment": f"YCLIENTS статистика: {label}",
+                }
+            )
+
+    return result
 
 
 def _parse_excel(content: bytes) -> list[dict[str, Any]]:
