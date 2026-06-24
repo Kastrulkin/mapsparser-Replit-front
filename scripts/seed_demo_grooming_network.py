@@ -208,6 +208,20 @@ PARTNERS = [
 ]
 
 
+COMPETITORS = [
+    ("Пушистый Стиль", "Груминг, зоосалон", 4.7, 214, "pushistyy-stil"),
+    ("Барбос & Мурка", "Зоосалон", 4.5, 168, "barbos-murka"),
+    ("Лапки в порядке", "Стрижка собак и кошек", 4.8, 241, "lapki-v-poryadke"),
+    ("Шерсть и Нос", "Груминг собак", 4.4, 126, "sherst-i-nos"),
+    ("Котопёс SPA", "SPA-уход для животных", 4.6, 193, "kotopes-spa"),
+    ("Мокрый хвост", "Мытьё и экспресс-линька", 4.2, 88, "mokryy-khvost"),
+    ("Грумерская №1", "Груминг-салон", 4.9, 306, "grumerskaya-1"),
+    ("Усы Лапы Хвост", "Уход за животными", 4.3, 117, "usy-lapy-khvost"),
+    ("Пёс в порядке", "Стрижка собак", 4.6, 152, "pes-v-poryadke"),
+    ("Кошкин дом груминг", "Груминг кошек", 4.5, 139, "koshkin-dom-grooming"),
+]
+
+
 MAP_SOURCES = [
     {
         "key": "yandex",
@@ -487,6 +501,7 @@ def planned_counts():
         "average_ticket_matrices": location_count,
         "average_ticket_packages": location_count * 5,
         "partnership_leads": len(PARTNERS),
+        "card_competitors_per_business": len(COMPETITORS),
     }
 
 
@@ -941,8 +956,63 @@ def seed_finance(cursor, service_map, master_map):
             )
 
 
+def build_demo_competitors(location):
+    location_key = str(location.get("key") or "network")
+    competitors = []
+    for index, item in enumerate(COMPETITORS):
+        name, category, rating, reviews, slug = item
+        reviews_adjustment = 0 if location_key == "network" else (len(location_key) + index * 7) % 31
+        competitors.append(
+            {
+                "id": stable_id(f"competitor:{location_key}:{slug}"),
+                "name": name,
+                "category": category,
+                "rating": rating,
+                "reviews": reviews + reviews_adjustment,
+                "url": f"https://yandex.ru/maps/org/demo_{slug}_{location_key}",
+                "source": DEMO_SOURCE,
+                "comment": "DEMO: выдуманный конкурент для вкладки «Конкуренты».",
+            }
+        )
+    return competitors
+
+
 def seed_map_metrics(cursor):
     ensure_external_business_services_table(cursor)
+    network_competitors = build_demo_competitors({"key": "network"})
+    upsert_row(
+        cursor,
+        "cards",
+        {
+            "id": stable_id(f"card:{NETWORK_ID}"),
+            "business_id": NETWORK_ID,
+            "user_id": USER_ID,
+            "url": MAP_SOURCES[0]["url_template"].format(key="network"),
+            "title": NETWORK_NAME,
+            "address": "Санкт-Петербург, сеть груминговых салонов",
+            "phone": DEMO_PHONE,
+            "site": "https://localos.pro",
+            "rating": 4.5,
+            "reviews_count": sum(item["reviews"] for item in LOCATIONS),
+            "categories": "Груминг, зоосалон, уход за животными",
+            "overview": "DEMO: материнская карточка сети груминговых салонов.",
+            "products": "Груминг собак; стрижка собак; вычёсывание кошек; SPA-уход",
+            "news": "DEMO: сетевые новости и акции",
+            "photos": "DEMO: фото по точкам сети",
+            "competitors": network_competitors,
+            "seo_score": 78,
+            "ai_analysis": {"demo": True, "network": True},
+            "recommendations": [
+                "Сравнить цены по ключевым услугам с конкурентами",
+                "Отслеживать новости и акции конкурентов",
+                "Выделить сильные точки сети в карточках",
+            ],
+            "version": 1,
+            "is_latest": True,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        },
+    )
     for source in MAP_SOURCES:
         upsert_row(
             cursor,
@@ -978,6 +1048,7 @@ def seed_map_metrics(cursor):
                 "products": "Груминг собак; стрижка собак; вычёсывание кошек; SPA-уход",
                 "news": f"Свежих публикаций: {location['news']}",
                 "photos": f"Фото в карточке: {location['photos']}",
+                "competitors": build_demo_competitors(location),
                 "seo_score": 86 if location["rating"] >= 4.6 else 62,
                 "ai_analysis": {"demo": True, "rating": location["rating"], "reviews": location["reviews"]},
                 "recommendations": [
