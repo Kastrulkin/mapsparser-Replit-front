@@ -7643,14 +7643,15 @@ def _telegram_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, 
     chat_id = str(business.get("telegram_chat_id") or "").strip()
     checks = _telegram_connection_checks(bool(bot_token), bool(chat_id), str(transport.get("token_source") or ""))
     if not bot_token or not chat_id:
+        global_bot_missing_chat = bool(bot_token) and not chat_id and str(transport.get("token_source")) == "global_owner_bot"
         message_ru = (
             "Telegram: глобальный бот LocalOS доступен, осталось указать telegram_chat_id цели публикации."
-            if bot_token and not chat_id and str(transport.get("token_source")) == "global_owner_bot"
+            if global_bot_missing_chat
             else "Для Telegram нужен бот LocalOS или telegram_bot_token бизнеса и telegram_chat_id цели публикации."
         )
         message_en = (
             "Telegram: the global LocalOS bot is available; set the publish-target telegram_chat_id."
-            if bot_token and not chat_id and str(transport.get("token_source")) == "global_owner_bot"
+            if global_bot_missing_chat
             else "Telegram needs the LocalOS bot or a business telegram_bot_token plus the publish-target telegram_chat_id."
         )
         return _api_channel_preflight_result(
@@ -7660,6 +7661,7 @@ def _telegram_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, 
             checks,
             message_ru,
             message_en,
+            ["telegram_chat_id"] if global_bot_missing_chat else None,
         )
     bot_probe = _telegram_safe_api_probe(bot_token, "getMe")
     chat_probe = _telegram_safe_api_probe(bot_token, "getChat", {"chat_id": chat_id})
@@ -7935,6 +7937,7 @@ def _api_channel_preflight_result(
     checks: list[dict[str, Any]],
     message_ru: str,
     message_en: str,
+    missing_fields: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "platform": platform,
@@ -7943,7 +7946,7 @@ def _api_channel_preflight_result(
         "ready": bool(ready),
         "status": str(status or "").strip(),
         "settings_path": _channel_readiness_settings_path(platform),
-        "missing_fields": _channel_readiness_missing_fields(platform, status),
+        "missing_fields": missing_fields if missing_fields is not None else _channel_readiness_missing_fields(platform, status),
         "message_ru": str(message_ru or "").strip(),
         "message_en": str(message_en or "").strip(),
         "connection_checks": checks,
@@ -9395,6 +9398,15 @@ def _channel_readiness(
     connection_checks: list[dict[str, Any]] | None = None,
     target_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    target_setup = _channel_readiness_target_setup(platform, status, ready, target_context)
+    missing_fields = _channel_readiness_missing_fields(platform, status)
+    if (
+        str(platform or "").strip() == "telegram"
+        and not ready
+        and isinstance(target_setup.get("required_fields"), list)
+        and target_setup.get("required_fields")
+    ):
+        missing_fields = [str(field) for field in target_setup.get("required_fields") or []]
     return {
         "platform": platform,
         "platform_label": platform_label(platform),
@@ -9409,10 +9421,10 @@ def _channel_readiness(
         "setup_summary_en": _channel_readiness_setup_summary(platform, status, False),
         "setup_steps_ru": _channel_readiness_setup_steps(platform, status, True),
         "setup_steps_en": _channel_readiness_setup_steps(platform, status, False),
-        "missing_fields": _channel_readiness_missing_fields(platform, status),
+        "missing_fields": missing_fields,
         "settings_path": _channel_readiness_settings_path(platform),
         "connection_checks": connection_checks or [],
-        "target_setup": _channel_readiness_target_setup(platform, status, ready, target_context),
+        "target_setup": target_setup,
     }
 
 

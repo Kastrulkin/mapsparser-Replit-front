@@ -2237,6 +2237,25 @@ def test_telegram_api_channel_preflight_can_use_global_owner_bot_without_publish
     assert all("botglobal-token" in url for url in requested_urls)
 
 
+def test_telegram_api_channel_preflight_with_global_bot_only_needs_chat_id(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "global-token")
+    monkeypatch.setattr(
+        social_post_service,
+        "_load_business_publish_context",
+        lambda cursor, business_id: {"telegram_bot_token": None, "telegram_chat_id": ""},
+    )
+    monkeypatch.setattr(social_post_service, "decode_telegram_bot_token", lambda value: "")
+
+    result = social_post_service._telegram_api_channel_preflight(object(), "biz-1")
+
+    assert result["ready"] is False
+    assert result["status"] == "missing_keys"
+    assert result["missing_fields"] == ["telegram_chat_id"]
+    assert "глобальный бот LocalOS доступен" in result["message_ru"]
+    assert result["connection_checks"][0]["state"] == "global_owner_bot"
+    assert result["connection_checks"][1]["key"] == "telegram_chat_id"
+
+
 def test_telegram_api_channel_preflight_blocks_channel_without_post_permission(monkeypatch):
     class FakeResponse:
         status = 200
@@ -2935,6 +2954,21 @@ def test_telegram_target_setup_distinguishes_miniapp_transport_from_publish_targ
     assert "selected chat_id" in telegram["target_setup"]["not_a_target_en"]
     assert "telegram_chat_id" in telegram["target_setup"]["required_fields"]
     assert telegram["ready"] is False
+
+
+def test_telegram_target_setup_with_global_bot_only_requires_chat_id():
+    telegram = _channel_readiness(
+        "telegram",
+        "api",
+        False,
+        "missing_keys",
+        target_context={"telegram_transport": "global_owner_bot"},
+    )
+
+    assert telegram["target_setup"]["telegram_transport"] == "global_owner_bot"
+    assert telegram["target_setup"]["required_fields"] == ["telegram_chat_id"]
+    assert telegram["missing_fields"] == ["telegram_chat_id"]
+    assert "глобальный бот LocalOS" in telegram["target_setup"]["steps_ru"][2]
 
 
 def test_channel_readiness_can_expose_safe_connection_checks():
