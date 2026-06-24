@@ -1,0 +1,6 @@
+[product-ui] agents first-layer copy guard
+OK: agents product UI first-layer copy guard passed
+[product-ui] python guard syntax
+[product-ui] agents mocked cockpit render
+OK: agents product UI mock cockpit rendered
+[product-ui] OK

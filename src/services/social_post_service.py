@@ -9407,20 +9407,41 @@ def _channel_readiness(
         and target_setup.get("required_fields")
     ):
         missing_fields = [str(field) for field in target_setup.get("required_fields") or []]
+    message_ru = _channel_readiness_message(platform, status, True)
+    message_en = _channel_readiness_message(platform, status, False)
+    next_action_ru = _channel_readiness_next_action(platform, status, True)
+    next_action_en = _channel_readiness_next_action(platform, status, False)
+    setup_summary_ru = _channel_readiness_setup_summary(platform, status, True)
+    setup_summary_en = _channel_readiness_setup_summary(platform, status, False)
+    setup_steps_ru = _channel_readiness_setup_steps(platform, status, True)
+    setup_steps_en = _channel_readiness_setup_steps(platform, status, False)
+    if (
+        str(platform or "").strip() == "telegram"
+        and str(status or "").strip() == "missing_keys"
+        and str(target_setup.get("telegram_transport") or "") == "global_owner_bot"
+    ):
+        message_ru = "Telegram: глобальный бот LocalOS доступен; осталось указать chat_id канала или чата для поста."
+        message_en = "Telegram: the global LocalOS bot is available; set the channel or chat chat_id for the post."
+        next_action_ru = "Укажите telegram_chat_id цели публикации, затем запустите проверку Telegram без отправки сообщения."
+        next_action_en = "Set the publish-target telegram_chat_id, then run the Telegram check without sending a message."
+        setup_summary_ru = "Для Telegram осталось указать chat_id канала/группы, куда должен выйти пост."
+        setup_summary_en = "For Telegram, only the channel/group chat_id remains before the first proof."
+        setup_steps_ru = [str(item) for item in target_setup.get("steps_ru") or setup_steps_ru]
+        setup_steps_en = [str(item) for item in target_setup.get("steps_en") or setup_steps_en]
     return {
         "platform": platform,
         "platform_label": platform_label(platform),
         "publish_mode": publish_mode,
         "ready": bool(ready),
         "status": status,
-        "message_ru": _channel_readiness_message(platform, status, True),
-        "message_en": _channel_readiness_message(platform, status, False),
-        "next_action_ru": _channel_readiness_next_action(platform, status, True),
-        "next_action_en": _channel_readiness_next_action(platform, status, False),
-        "setup_summary_ru": _channel_readiness_setup_summary(platform, status, True),
-        "setup_summary_en": _channel_readiness_setup_summary(platform, status, False),
-        "setup_steps_ru": _channel_readiness_setup_steps(platform, status, True),
-        "setup_steps_en": _channel_readiness_setup_steps(platform, status, False),
+        "message_ru": message_ru,
+        "message_en": message_en,
+        "next_action_ru": next_action_ru,
+        "next_action_en": next_action_en,
+        "setup_summary_ru": setup_summary_ru,
+        "setup_summary_en": setup_summary_en,
+        "setup_steps_ru": setup_steps_ru,
+        "setup_steps_en": setup_steps_en,
         "missing_fields": missing_fields,
         "settings_path": _channel_readiness_settings_path(platform),
         "connection_checks": connection_checks or [],

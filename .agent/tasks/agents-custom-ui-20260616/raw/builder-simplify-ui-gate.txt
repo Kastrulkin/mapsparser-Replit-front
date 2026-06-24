@@ -1,0 +1,5 @@
+[product-ui] agents first-layer copy guard
+OK: agents product UI first-layer copy guard passed
+[product-ui] python guard syntax
+[product-ui] skip mocked cockpit render: local frontend is not running on 127.0.0.1:3000
+[product-ui] OK

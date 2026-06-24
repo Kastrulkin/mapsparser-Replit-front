@@ -1,0 +1,169 @@
+OK: frontend/dist integrity check passed
+JS: /assets/index-NwrtCAXx.js
+CSS: /assets/index-BJmnE2sp.css
+OK: frontend/dist integrity check passed
+JS: /public-audit/assets/index-CIrDIDXc.js
+CSS: /public-audit/assets/index-BJmnE2sp.css
+Deploying frontend dist to root@80.78.242.105:/opt/seo-app
+Keeping previous asset files in place to avoid breaking open tabs that still reference older lazy chunks.
+ Container seo-app-postgres-1 Running 
+ Container seo-app-app-1 Running 
+ Container seo-app-postgres-1 Waiting 
+ Container seo-app-postgres-1 Healthy 
+tar: ./images/articles: file changed as we read it
+tar: ./assets: file changed as we read it
+tar: .: file changed as we read it
+tar: ./images/articles: file changed as we read it
+tar: ./assets: file changed as we read it
+tar: .: file changed as we read it
+Verification:
+1) docker compose ps
+NAME                 IMAGE            COMMAND                  SERVICE    CREATED        STATUS                 PORTS
+seo-app-app-1        seo-app-app      "/app/entrypoint.sh …"   app        7 hours ago    Up 55 minutes          0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+seo-app-postgres-1   postgres:16      "docker-entrypoint.s…"   postgres   2 months ago   Up 6 weeks (healthy)   5432/tcp
+seo-app-worker-1     seo-app-worker   "/app/entrypoint.sh …"   worker     7 hours ago    Up 55 minutes          
+2) docker compose logs --since 10m app
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:41:52] "GET /assets/tabs-Dd0mkVDR.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:41:52] "GET /assets/table-Cs0A7LVL.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:41:52] "GET /assets/AverageTicketPage-B8wjv8qN.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:41:52] "GET /assets/textarea-Dm-b-GP3.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:41:52] "GET /assets/input-YPBSq9hO.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:41:52] "GET /api/average-ticket/overview?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:13] "GET /assets/ROICalculator-BUTq6DIb.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:13] "GET /assets/FinancePage-D_fgwXLp.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:13] "GET /assets/card-CZeJDmGI.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:13] "GET /assets/charts-CwHkbclU.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:13] "GET /assets/checkbox-CqR38_80.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:13] "GET /api/finance/dashboard?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3&from=2026-03-01&to=2026-06-16 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:20] "GET /assets/PartnershipSearchPage-DHufZNQ8.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:20] "GET /assets/prospectingAsync-BXcUZDmn.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:20] "GET /api/admin/ai/learning-metrics?intent=partnership_outreach HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:20] "GET /api/partnership/send-batches?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:20] "GET /api/partnership/health?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 500 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:20] "GET /api/partnership/funnel?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3&window_days=30 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:20] "GET /api/partnership/drafts?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:20] "GET /api/partnership/blockers-summary?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3&window_days=30 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:20] "GET /api/partnership/leads?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:20] "GET /api/partnership/outcomes-summary?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3&window_days=30 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:20] "GET /api/partnership/source-quality-summary?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3&window_days=30 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:20] "GET /api/partnership/ralph-loop-summary?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3&window_days=7 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:22] "GET /assets/ChatsPage-B-AX3r-e.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:22] "GET /assets/scroll-area-B0TRBYn_.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:22] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/ai-agents HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:22] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/conversations?agent_id=a0cb75fb-0d0d-4f21-9cb5-28b6a29f71f0 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:23] "GET /assets/BookingsPage-BAG6i6WB.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:24] "GET /api/bookings?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:25] "GET /assets/ProgressPage-DOAx_5cb.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:25] "GET /assets/AuditDisplayPrimitives-Bt5te6G5.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:25] "GET /assets/NetworkDashboardPage-Ba0iSA_s.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:25] "GET /assets/NetworkHealthDashboard-BQN5zF1i.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:25] "GET /assets/alert-DtBDCUXp.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:25] "GET /assets/maps-D3XnRG9c.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:25] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/network-locations HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:26] "GET /api/client-info?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:26] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:26] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/public-audit-links HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:26] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/map-parses?refresh=0 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:26] "GET /api/network/health?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:26] "GET /api/network/locations-alerts?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:26] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/card-audit?refresh=0 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:31] "GET /assets/CardOverviewPage-E2W846zD.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:31] "GET /assets/NewsGenerator-Do1XLT7p.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:31] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/external/posts HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:31] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/network-locations HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:31] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/external/summary HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:31] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/competitors/manual HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:31] "GET /api/admin/ai/learning-metrics?intent=operations HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:31] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:31] "GET /api/client-info?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:31] "GET /api/services/list?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:32] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/network-locations HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:32] "GET /api/business-types HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:32] "GET /api/token-usage?months=1&business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:32] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:32] "GET /api/client-info?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:32] "GET /api/billing/status?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:33] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/ai-agents/manage HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:33] "GET /api/agent-blueprints/legacy-migration-plan?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:33] "GET /api/agent-blueprints?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:33] "GET /api/auth/me HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:33] "GET /api/agent-blueprints?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:33] "GET /api/agent-blueprints/708b93af-bb24-431b-af21-97bdc6fa70f6/sources/catalog HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:33] "GET /api/agent-blueprints/708b93af-bb24-431b-af21-97bdc6fa70f6 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:33] "GET /api/agent-blueprints/708b93af-bb24-431b-af21-97bdc6fa70f6/review HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:33] "GET /api/agent-blueprints/708b93af-bb24-431b-af21-97bdc6fa70f6/integrations HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:36] "GET /assets/OperatorPage-DES_hQBo.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:43] "POST /api/operator/chat HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:50] "GET /assets/NotFound-DjfC4rz3.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:42:55] "GET /api/auth/me HTTP/1.0" 200 -
+app-1  | /usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:1110: InsecureRequestWarning: Unverified HTTPS request is being made to host 'ngw.devices.sberbank.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+app-1  |   warnings.warn(
+app-1  | /usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:1110: InsecureRequestWarning: Unverified HTTPS request is being made to host 'gigachat.devices.sberbank.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+app-1  |   warnings.warn(
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:43:02] "POST /api/operator/chat HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:43:22] "GET /api/agent-blueprints?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:43:22] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/ai-agents/manage HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:43:22] "GET /api/agent-blueprints/legacy-migration-plan?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:43:22] "GET /api/auth/me HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:43:22] "GET /api/agent-blueprints/708b93af-bb24-431b-af21-97bdc6fa70f6/integrations HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:43:22] "GET /api/agent-blueprints?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:43:22] "GET /api/agent-blueprints/708b93af-bb24-431b-af21-97bdc6fa70f6/review HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:43:22] "GET /api/agent-blueprints/708b93af-bb24-431b-af21-97bdc6fa70f6/sources/catalog HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:43:22] "GET /api/agent-blueprints/708b93af-bb24-431b-af21-97bdc6fa70f6 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:47:51] "GET /api/average-ticket/overview?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:26] "GET /dashboard/agents HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:26] "GET /assets/radix-CcUoXPhU.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:26] "GET /assets/vendor-Bd6D5Py9.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:26] "GET /assets/index-DeP4uIKc.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/index-BJmnE2sp.css HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/icons-CNICknfM.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/query-4qgXgvfz.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/router-0HhFJHfj.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/ru-vNwBxKOM.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/auth_new-C9_tYoOh.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/DashboardLayout-D5X11xHl.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/LanguageSwitcher-BDpBvcYk.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/select-D7iNe8EI.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/api-Bhbs2s3U.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/BusinessSwitcher-B7QkHOVd.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/networkRepresentative-CRdnvs4A.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /api/auth/me HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /api/auth/me HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/dialog-CIgjW-wq.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/AgentBlueprintsPage-WnkKS6b2.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/DashboardPrimitives-CAz0bqnK.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/api-Cic1JMzt.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:27] "GET /assets/logo-BY03Vnee.png HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:28] "GET /api/agent-blueprints?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:28] "GET /api/business/edbd961a-273f-4f15-836e-33aacc0aa0e3/ai-agents/manage HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:28] "GET /api/agent-blueprints/legacy-migration-plan?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:28] "GET /api/auth/me HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:28] "GET /api/agent-blueprints/708b93af-bb24-431b-af21-97bdc6fa70f6/integrations HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:28] "GET /api/agent-blueprints/708b93af-bb24-431b-af21-97bdc6fa70f6/review HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:28] "GET /api/agent-blueprints?business_id=edbd961a-273f-4f15-836e-33aacc0aa0e3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:28] "GET /api/agent-blueprints/708b93af-bb24-431b-af21-97bdc6fa70f6 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [16/Jun/2026 12:48:28] "GET /api/agent-blueprints/708b93af-bb24-431b-af21-97bdc6fa70f6/sources/catalog HTTP/1.0" 200 -
+3) curl -I http://localhost:8000
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.11.15
+Date: Tue, 16 Jun 2026 12:48:56 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 5532
+Cache-Control: no-cache, no-store, must-revalidate
+Pragma: no-cache
+Expires: 0
+Access-Control-Allow-Origin: http://127.0.0.1:3000
+Access-Control-Allow-Credentials: true
+Vary: Origin
+Connection: close
+
+  0  5532    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+4) targeted frontend checks
+93:  <script type="module" crossorigin src="/assets/index-NwrtCAXx.js"></script>
+99:  <link rel="stylesheet" crossorigin href="/assets/index-BJmnE2sp.css">
+7:    <script type="module" crossorigin src="/public-audit/assets/index-CIrDIDXc.js"></script>
+9:    <link rel="stylesheet" crossorigin href="/public-audit/assets/index-BJmnE2sp.css">
+52:  <script type="module" crossorigin src="/assets/index-NwrtCAXx.js"></script>
+Frontend dist deployed to /opt/seo-app/frontend/dist and /opt/seo-app/frontend/public-dist

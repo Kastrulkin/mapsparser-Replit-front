@@ -1,0 +1,40 @@
+{
+  "task_id": "agents-custom-ui-20260616",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Dashboard agents UI is understandable for universal custom-agent creation: no connections crash, one clear next step, readiness map, localized first-layer labels, safe test wording, and no technical architecture terms in the normal product layer.",
+      "status": "PASS",
+      "proof": [
+        "Frontend build: .agent/tasks/agents-custom-ui-20260616/raw/build.txt",
+        "Product UI gate: .agent/tasks/agents-custom-ui-20260616/raw/lint.txt",
+        "Mocked browser smoke with connections tab click: .agent/tasks/agents-custom-ui-20260616/raw/test-integration.txt",
+        "Dist integrity checks: .agent/tasks/agents-custom-ui-20260616/raw/dist-integrity.txt and raw/public-dist-integrity.txt",
+        "Frontend-only deploy: .agent/tasks/agents-custom-ui-20260616/raw/deploy.txt",
+        "Live in-app browser verification: .agent/tasks/agents-custom-ui-20260616/raw/live-browser.txt"
+      ],
+      "gaps": [
+        "No backend behavior changed; this task was limited to the product UI layer and smoke coverage."
+      ]
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "scripts/smoke_agents_product_ui_mock.py",
+    ".agent/tasks/agents-custom-ui-20260616/evidence.md",
+    ".agent/tasks/agents-custom-ui-20260616/evidence.json",
+    ".agent/tasks/agents-custom-ui-20260616/verdict.json",
+    ".agent/tasks/agents-custom-ui-20260616/raw/live-browser.txt"
+  ],
+  "commands_for_fresh_verifier": [
+    "(cd frontend && npm run build:all)",
+    "scripts/ci_gate_product_ui.sh",
+    "python3 scripts/smoke_agents_product_ui_mock.py --screenshot .agent/tasks/agents-custom-ui-20260616/raw/screenshot-1.png",
+    "scripts/verify_frontend_dist_integrity.sh frontend/dist",
+    "scripts/verify_frontend_dist_integrity.sh frontend/public-dist frontend/public-dist/public-audit/index.html"
+  ],
+  "known_gaps": [
+    "Existing unrelated production log line GET /api/partnership/health ... 500 belongs to the partnership screen, not /dashboard/agents."
+  ]
+}

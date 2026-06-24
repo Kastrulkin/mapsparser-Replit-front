@@ -1,0 +1,97 @@
+{
+  "task_id": "partnership-partner-pipeline-20260617",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Partner cards store source company, identity, Yandex state, parse state, audit URL and linked lead id.",
+      "status": "PASS",
+      "proof": [
+        "alembic_migrations/versions/20260617_add_partnership_partner_cards.py",
+        "src/api/admin_prospecting.py::_ensure_partnership_partner_cards_table"
+      ],
+      "gaps": [
+        "Frontend UI is not included in this phase."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Residential-complex partners are skipped and not synced into leads.",
+      "status": "PASS",
+      "proof": [
+        "src/api/admin_prospecting.py::_normalize_partner_kind",
+        "tests/test_partnership_partner_cards.py"
+      ],
+      "gaps": [
+        "Heuristic classification is safest when caller sends partner_kind explicitly."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Partner cards sync into prospectingleads candidate stage with source-company metadata.",
+      "status": "PASS",
+      "proof": [
+        "src/api/admin_prospecting.py::_sync_partner_card_to_lead",
+        "prospectingleads partner_source_company_id/name/partner_id migration columns"
+      ],
+      "gaps": [
+        "Not exercised against live database in this run."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Partner cards can enqueue parsing through existing parsequeue flow.",
+      "status": "PASS",
+      "proof": [
+        "src/api/admin_prospecting.py::_process_partner_card_parse",
+        "POST /api/partnership/partners/<partner_id>/parse"
+      ],
+      "gaps": [
+        "Parse worker execution was not run locally."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Partner cards can generate a public audit and store its URL.",
+      "status": "PASS",
+      "proof": [
+        "src/api/admin_prospecting.py::_process_partner_card_audit",
+        "src/api/admin_prospecting.py::_create_admin_public_audit_for_lead"
+      ],
+      "gaps": [
+        "Public page click-through was not browser-tested."
+      ]
+    },
+    {
+      "id": "AC6",
+      "text": "Batch process reports enrichment counters.",
+      "status": "PASS",
+      "proof": [
+        "POST /api/partnership/partners/bulk-process"
+      ],
+      "gaps": [
+        "Yandex live matching depends on provider credentials."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/api/admin_prospecting.py",
+    "alembic_migrations/versions/20260617_add_partnership_partner_cards.py",
+    "tests/test_partnership_partner_cards.py",
+    "docs/api/endpoints.md",
+    ".agent/tasks/partnership-partner-pipeline-20260617/spec.md",
+    ".agent/tasks/partnership-partner-pipeline-20260617/evidence.md",
+    ".agent/tasks/partnership-partner-pipeline-20260617/evidence.json",
+    ".agent/tasks/partnership-partner-pipeline-20260617/verdict.json"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/api/admin_prospecting.py alembic_migrations/versions/20260617_add_partnership_partner_cards.py",
+    "python3 -m pytest -q tests/test_partnership_partner_cards.py tests/test_admin_prospecting_audit_payload.py tests/test_prospecting_service_normalize.py",
+    "scripts/proof_loop.sh validate partnership-partner-pipeline-20260617"
+  ],
+  "known_gaps": [
+    "Frontend UI for partner-card pipeline is pending.",
+    "No production data was changed.",
+    "Actual enrichment for Весёлая расчёска, Органика, Новамед requires an approved run and configured provider."
+  ]
+}

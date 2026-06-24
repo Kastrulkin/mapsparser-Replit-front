@@ -2,6 +2,10 @@
 
 These scenarios are safe starting points for LocalOS-aware agents.
 
+For the account-level starter gallery, use the canonical 10 examples in
+[Popular account examples](popular-account-examples.md). The list below remains
+the broader agent use-case map.
+
 ## 1. Audit a Map Card
 
 The agent receives a map URL or `business_id`, fetches audit data, summarizes the top issues, and prepares a short action plan.

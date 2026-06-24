@@ -1,0 +1,2 @@
+OK: agents product UI mock cockpit rendered
+Screenshot: .agent/tasks/agents-custom-ui-20260616/raw/builder-simplify-screenshot.png

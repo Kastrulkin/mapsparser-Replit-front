@@ -47,6 +47,20 @@ blueprints**. Коммуникационный агент, агент напом
 Коммуникационный агент описывается как `AgentBlueprint` с категорией
 `communications`, а не как отдельная runtime-сущность. Пример:
 
+### Default Account Examples
+
+Каждый аккаунт должен иметь доступ к 10 популярным примерам агентов: daily
+owner digest, negative review reply draft, card posts from signals, service SEO
+cleanup, partnership outreach draft, competitor website monitor through
+browser_use, Google Sheets leads to Telegram, WhatsApp/Telegram FAQ miner,
+finance import assistant and tomorrow bookings check. Каноничный список и
+правила seed/backfill находятся в `docs/agents/popular-account-examples.md`.
+
+Эти примеры являются стартовыми draft/templates, а не active blueprints. Их
+нельзя запускать автоматически, списывать кредиты за сам факт показа или
+создавать повторно при каждом backfill. Создание реального агента из примера
+проходит обычный путь: preview, connection preflight, approval, billing и audit.
+
 ```text
 Пользователь: "Сделай агента, который напоминает клиентам о записи и сообщает,
 что у нас есть пакетное предложение."

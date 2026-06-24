@@ -2968,6 +2968,10 @@ def test_telegram_target_setup_with_global_bot_only_requires_chat_id():
     assert telegram["target_setup"]["telegram_transport"] == "global_owner_bot"
     assert telegram["target_setup"]["required_fields"] == ["telegram_chat_id"]
     assert telegram["missing_fields"] == ["telegram_chat_id"]
+    assert "глобальный бот LocalOS доступен" in telegram["message_ru"]
+    assert "Укажите telegram_chat_id" in telegram["next_action_ru"]
+    assert "only the channel/group chat_id" in telegram["setup_summary_en"]
+    assert "Set telegram_chat_id" in telegram["setup_steps_en"][2]
     assert "глобальный бот LocalOS" in telegram["target_setup"]["steps_ru"][2]
 
 

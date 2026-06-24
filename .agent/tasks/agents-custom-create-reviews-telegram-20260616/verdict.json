@@ -1,0 +1,31 @@
+{
+  "task_id": "agents-custom-create-reviews-telegram-20260616",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Created the custom reviews-to-Telegram agent, ran a safe test, and verified pending human approval with no console errors."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Required connection/provider choices are visible in the main builder flow."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Final browser snapshot contains no visible old technical terms in the user overview."
+    }
+  ],
+  "commands_run": [
+    "npm run build:all",
+    "scripts/deploy_frontend_dist.sh",
+    "production docker/curl checks",
+    "browser checks on /dashboard/agents"
+  ],
+  "artifacts_used": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    ".agent/tasks/agents-custom-create-reviews-telegram-20260616/evidence.md"
+  ]
+}

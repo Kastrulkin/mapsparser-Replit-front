@@ -21,6 +21,10 @@ The safe pattern is:
 - Route Telegram/WhatsApp messages through configured AI-agent webhooks.
 - Help superadmin review industry-pattern proposals.
 
+Every account should also have a visible starter pack of common draft examples.
+See [Popular account examples](popular-account-examples.md) for the canonical
+10 examples and seed/backfill rules.
+
 ## LocalOS Operator
 
 [LocalOS Operator](localos-operator.md) is the beta main control layer above the dashboard. It treats web chat and Telegram as two surfaces for the same governed Operator core.
@@ -106,6 +110,7 @@ The Operator model keeps one context, one permission system, one credit/usage le
 - [Tool registry](tool-registry.md)
 - [Planning and goal loops](planning-and-goals.md)
 - [Agent use cases](use-cases.md)
+- [Popular account examples](popular-account-examples.md)
 - [Approval policy](approval-policy.md)
 - [Agent API security model](security-model.md)
 - [API endpoints](../api/endpoints.md)

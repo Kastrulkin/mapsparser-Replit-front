@@ -1,0 +1,29 @@
+{
+  "task_id": "agents-custom-ui-20260616",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Agents UI first-layer copy guard, mocked render, connections-tab runtime smoke, dist integrity checks, frontend-only deploy, and live in-app browser verification passed."
+    }
+  ],
+  "commands_run": [
+    "(cd frontend && npm run build:all)",
+    "scripts/ci_gate_product_ui.sh",
+    "python3 scripts/smoke_agents_product_ui_mock.py --screenshot .agent/tasks/agents-custom-ui-20260616/raw/screenshot-1.png",
+    "scripts/verify_frontend_dist_integrity.sh frontend/dist",
+    "scripts/verify_frontend_dist_integrity.sh frontend/public-dist frontend/public-dist/public-audit/index.html",
+    "bash scripts/deploy_frontend_dist.sh",
+    "in-app browser reload and connections-tab verification"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-custom-ui-20260616/raw/build.txt",
+    ".agent/tasks/agents-custom-ui-20260616/raw/lint.txt",
+    ".agent/tasks/agents-custom-ui-20260616/raw/test-integration.txt",
+    ".agent/tasks/agents-custom-ui-20260616/raw/dist-integrity.txt",
+    ".agent/tasks/agents-custom-ui-20260616/raw/public-dist-integrity.txt",
+    ".agent/tasks/agents-custom-ui-20260616/raw/deploy.txt",
+    ".agent/tasks/agents-custom-ui-20260616/raw/screenshot-1.png"
+  ]
+}

@@ -1,0 +1,14 @@
+Live browser verification after frontend deploy:
+
+Page: https://localos.pro/dashboard/agents
+Visible first layer:
+- Мои агенты
+- Создать агента
+- Следующий шаг
+
+Connections tab:
+- Clicked the workspace-level `Подключения` button.
+- `Подключения агента` became visible.
+- No `Что-то пошло не так` error boundary.
+- No first-layer technical leak among: safe preview, preflight, compiled workflow, Policy, approval gate, provider route, billing ledger, production run, OpenClaw.
+- Console error count: 0.

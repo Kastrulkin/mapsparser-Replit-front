@@ -1,0 +1,45 @@
+{
+  "task_id": "agents-custom-create-reviews-telegram-20260616",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "A user can create a custom agent for checking new company reviews, drafting a reply, and sending the review plus draft to Telegram without automatic publication.",
+      "status": "PASS",
+      "proof": [
+        "Created a custom Riderra agent in the production browser flow.",
+        "Ran a safe test that produced a pending human decision without accepting it or sending externally.",
+        "Final browser check: hasCreatedAgent=true, hasPendingDecision=true, consoleErrors=0."
+      ],
+      "gaps": [
+        "Pending decision intentionally left unaccepted."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Required connection/provider choices are visible in the main builder flow.",
+      "status": "PASS",
+      "proof": [
+        "Inline route/connection choice panel added and used to complete creation."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Created-agent overview uses product language and hides internal technical terms.",
+      "status": "PASS",
+      "proof": [
+        "Final browser check found no visible OpenClaw, Boundary, provider route, preflight, Preview run, Production run, Последний run, or маршрут.",
+        "Visible labels show отзывы компании, Telegram, профиль бизнеса; Последний запуск; Выбрать способ подключения."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx"
+  ],
+  "commands_for_fresh_verifier": [],
+  "known_gaps": [
+    "The pending human decision was not accepted to avoid external side effects."
+  ]
+}

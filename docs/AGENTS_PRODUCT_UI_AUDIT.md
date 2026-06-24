@@ -17,6 +17,11 @@ needs attention now, and what the next safe action is.
 It is not primarily a raw blueprint editor, migration console, OpenClaw panel,
 or action ledger.
 
+If an account has no agents or the user opens the create dialog, the screen
+should offer the canonical 10 popular examples from
+`docs/agents/popular-account-examples.md`. They must behave as draft/templates,
+not active automations.
+
 ## Current Information Architecture
 
 - `Cockpit`: header actions, summary cards, agent list, selected agent overview.
@@ -52,6 +57,7 @@ capability names, provider executors, migration states, or raw runtime traces.
 | Small-screen tab overflow controlled | done | selected-agent tabs use horizontal scroll and fixed shrink behavior. |
 | Long agent lists do not push detail infinitely | done | agent list has bounded height and internal scroll. |
 | Create flow names the safety review clearly | done | copy uses "Проверка будущего агента" and "Создать после проверки". |
+| Popular starter examples have a canon | done | `docs/agents/popular-account-examples.md` defines the 10 account-level draft examples and seed/backfill rules. |
 | Approval explained in user language | done | overview and approval cards explain what waits and why. |
 | Voice/persona no longer a separate product world | done | `AIAgents` are shown as "Голос и стиль". |
 | Learning loop is versioned and inspectable | done | learning history, diff activation, rollback, and version events are central in the agent card. |

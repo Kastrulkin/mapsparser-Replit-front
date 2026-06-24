@@ -88,6 +88,14 @@ Use when a business or operator wants repeatable automation with approvals, conn
 
 LocalOS supports agent creation, compiled workflow previews, provider route selection, datahub sources, connector activation gates, run journals, approval queues, billing ledgers, and controlled execution through LocalOS/OpenClaw boundaries. Agents must not bypass approval for external sends, publications, payments, destructive changes, or third-party actions on behalf of a business.
 
+Every account should expose a starter gallery of 10 popular supervised examples:
+owner digest to Telegram, negative review reply drafts, card posts from signals,
+service SEO cleanup, partnership outreach drafts, competitor website monitoring
+through browser use, Google Sheets leads to Telegram, WhatsApp/Telegram FAQ
+mining, finance import assistance, and tomorrow bookings checks. These are
+inactive draft/templates until the user reviews, connects required services and
+creates a real agent.
+
 ## 12. Monitor Parser Reliability
 
 Status: `available/internal`
