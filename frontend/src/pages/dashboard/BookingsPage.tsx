@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Calendar, Phone, Mail, User } from 'lucide-react';
+import { Ban, BarChart3, Calendar, FileText, Lightbulb, Loader2, Mail, Newspaper, Phone, Repeat, User } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 
 interface Booking {
@@ -27,16 +27,18 @@ export const BookingsPage = () => {
   const { currentBusinessId } = useOutletContext<any>();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const { toast } = useToast();
   const { t, language } = useLanguage();
 
   const STATUS_OPTIONS = [
     { value: 'all', label: t.dashboard.bookings.status.all },
-    { value: 'pending', label: t.dashboard.bookings.status.pendingFilter },
-    { value: 'confirmed', label: t.dashboard.bookings.status.confirmed },
-    { value: 'cancelled', label: t.dashboard.bookings.status.cancelled },
-    { value: 'completed', label: t.dashboard.bookings.status.completed },
+    { value: 'pending', label: 'Не разобрано' },
+    { value: 'confirmed', label: 'Учтено в статистике' },
+    { value: 'cancelled', label: 'Исключено' },
+    { value: 'no_show', label: 'No-show' },
+    { value: 'returning_client', label: 'Повторные клиенты' },
   ];
 
   useEffect(() => {
@@ -84,7 +86,8 @@ export const BookingsPage = () => {
     }
   };
 
-  const updateBookingStatus = async (bookingId: string, newStatus: string) => {
+  const updateBookingStatus = async (bookingId: string, newStatus: string, successMessage: string) => {
+    setUpdatingBookingId(bookingId);
     try {
       const token = localStorage.getItem('auth_token');
       const response = await fetch(`/api/bookings/${bookingId}`, {
@@ -99,7 +102,7 @@ export const BookingsPage = () => {
       if (response.ok) {
         toast({
           title: t.success,
-          description: t.dashboard.bookings.messages.updateSuccess,
+          description: successMessage,
         });
         fetchBookings();
       } else {
@@ -116,7 +119,13 @@ export const BookingsPage = () => {
         description: t.dashboard.bookings.messages.updateError,
         variant: 'destructive',
       });
+    } finally {
+      setUpdatingBookingId(null);
     }
+  };
+
+  const showPlanningToast = (title: string, description: string) => {
+    toast({ title, description });
   };
 
   const getStatusBadge = (status: string) => {
@@ -125,13 +134,16 @@ export const BookingsPage = () => {
 
     switch (status) {
       case 'pending':
-        return <Badge className="bg-yellow-500">{t.dashboard.bookings.status.pending}</Badge>;
+        return <Badge className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">Не разобрано</Badge>;
       case 'confirmed':
-        return <Badge className="bg-green-500">{t.dashboard.bookings.status.confirmed}</Badge>;
-      case 'cancelled':
-        return <Badge className="bg-red-500">{t.dashboard.bookings.status.cancelled}</Badge>;
       case 'completed':
-        return <Badge className="bg-blue-500">{t.dashboard.bookings.status.completed}</Badge>;
+        return <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">В статистике</Badge>;
+      case 'cancelled':
+        return <Badge className="border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-100">Исключено</Badge>;
+      case 'no_show':
+        return <Badge className="border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-50">No-show</Badge>;
+      case 'returning_client':
+        return <Badge className="border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50">Повторный клиент</Badge>;
       default:
         return <Badge>{label}</Badge>;
     }
@@ -169,7 +181,7 @@ export const BookingsPage = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t.dashboard.bookings.title}</h1>
-          <p className="text-gray-600 mt-1">{t.dashboard.bookings.subtitle}</p>
+          <p className="text-gray-600 mt-1">Аналитический слой по записям из CRM: статистика, контент, допродажи и планирование.</p>
         </div>
         <div className="flex items-center gap-4">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -190,11 +202,15 @@ export const BookingsPage = () => {
         </div>
       </div>
 
+      <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+        Записи загружены из CRM и используются для статистики, контента, допродаж и планирования. LocalOS не меняет запись в CRM.
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>{t.dashboard.bookings.list}</CardTitle>
           <CardDescription>
-            {t.dashboard.bookings.total} {bookings.length}
+            {t.dashboard.bookings.total} {bookings.length}. Источник остаётся CRM, решения ниже влияют только на аналитику LocalOS.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -216,8 +232,8 @@ export const BookingsPage = () => {
                     <TableHead>{t.dashboard.bookings.table.service}</TableHead>
                     <TableHead>{t.dashboard.bookings.table.dateTime}</TableHead>
                     <TableHead>{t.dashboard.bookings.table.source}</TableHead>
-                    <TableHead>{t.dashboard.bookings.table.status}</TableHead>
-                    <TableHead>{t.dashboard.bookings.table.actions}</TableHead>
+                    <TableHead>Использование</TableHead>
+                    <TableHead>Использовать для</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -261,34 +277,83 @@ export const BookingsPage = () => {
                         {getStatusBadge(booking.status)}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
-                          {booking.status === 'pending' && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => updateBookingStatus(booking.id, 'confirmed')}
-                              >
-                                {t.dashboard.bookings.actions.confirm}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => updateBookingStatus(booking.id, 'cancelled')}
-                              >
-                                {t.dashboard.bookings.actions.cancel}
-                              </Button>
-                            </>
-                          )}
-                          {booking.status === 'confirmed' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => updateBookingStatus(booking.id, 'completed')}
-                            >
-                              {t.dashboard.bookings.actions.complete}
-                            </Button>
-                          )}
+                        <div className="flex max-w-[520px] flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            disabled={updatingBookingId === booking.id}
+                            onClick={() => updateBookingStatus(booking.id, 'confirmed', 'Запись будет учитываться в загрузке, среднем чеке и спросе по услугам.')}
+                          >
+                            <BarChart3 className="h-3.5 w-3.5" />
+                            Учесть
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            disabled={updatingBookingId === booking.id}
+                            onClick={() => updateBookingStatus(booking.id, 'cancelled', 'Запись исключена из аналитики LocalOS. В CRM ничего не изменилось.')}
+                          >
+                            <Ban className="h-3.5 w-3.5" />
+                            Исключить
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            disabled={updatingBookingId === booking.id}
+                            onClick={() => updateBookingStatus(booking.id, 'no_show', 'Запись отмечена как no-show для статистики потерь.')}
+                          >
+                            <Calendar className="h-3.5 w-3.5" />
+                            No-show
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            disabled={updatingBookingId === booking.id}
+                            onClick={() => updateBookingStatus(booking.id, 'returning_client', 'Запись отмечена как повторный клиент для удержания и LTV.')}
+                          >
+                            <Repeat className="h-3.5 w-3.5" />
+                            Повторный
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            onClick={() => showPlanningToast(
+                              'Тема для контент-плана',
+                              `Можно добавить тему по услуге «${booking.service_name || 'услуга'}» в очередь публикаций.`,
+                            )}
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            В контент-план
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            onClick={() => showPlanningToast(
+                              'Идея новости',
+                              `LocalOS может подготовить новость по спросу на «${booking.service_name || 'услугу'}».`,
+                            )}
+                          >
+                            <Newspaper className="h-3.5 w-3.5" />
+                            Новость
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            onClick={() => showPlanningToast(
+                              'Идея допродажи',
+                              `Используйте эту запись как сигнал для связки услуги «${booking.service_name || 'услуга'}» с подходящим дополнением.`,
+                            )}
+                          >
+                            <Lightbulb className="h-3.5 w-3.5" />
+                            Допродажа
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
