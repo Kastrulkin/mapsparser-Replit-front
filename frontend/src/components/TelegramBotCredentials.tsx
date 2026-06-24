@@ -15,6 +15,20 @@ interface TelegramBotCredentialsProps {
   onSaved?: () => void;
 }
 
+type TelegramPublishTargetProbe = {
+  ready?: boolean;
+  status?: string;
+  message_ru?: string;
+  next_action_ru?: string;
+  external_post_published?: boolean;
+  checks?: Array<{
+    key?: string;
+    ok?: boolean;
+    label_ru?: string;
+    detail_ru?: string;
+  }>;
+};
+
 export const TelegramBotCredentials = ({ businessId, business, onSaved }: TelegramBotCredentialsProps) => {
   const { t } = useLanguage();
   const [botToken, setBotToken] = useState('');
@@ -25,6 +39,7 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
   const [maskedToken, setMaskedToken] = useState<string | null>(null);
   const [configuredChatId, setConfiguredChatId] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
+  const [publishTargetProbe, setPublishTargetProbe] = useState<TelegramPublishTargetProbe | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -34,6 +49,7 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
     setConfigured(Boolean(business?.telegram_bot_token_configured));
     setMaskedToken(business?.telegram_bot_token_masked || null);
     setConfiguredChatId(business?.telegram_chat_id || null);
+    setPublishTargetProbe(null);
   }, [business?.id, business?.telegram_bot_token_configured, business?.telegram_bot_token_masked, business?.telegram_chat_id]);
 
   useEffect(() => {
@@ -122,6 +138,7 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
         setConfigured(true);
         setMaskedToken('Сохранён');
         setConfiguredChatId(chatId.trim());
+        setPublishTargetProbe(null);
         toast({
           title: t.common.success,
           description: 'Telegram подключён для публикаций из контент-плана.',
@@ -149,20 +166,24 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
     if (!businessId) return;
     try {
       setLoadingStatus(true);
+      setPublishTargetProbe(null);
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`/api/business/telegram-bot/status?business_id=${encodeURIComponent(businessId)}`, {
+      const response = await fetch('/api/business/telegram-bot/publish-target-probe', {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ business_id: businessId }),
       });
       const data = await response.json();
-      if (response.ok && data?.success && data.configured) {
+      if (response.ok && data?.success) {
         setConfiguredChatId(data.telegram_chat_id || null);
+        setPublishTargetProbe(data.probe || null);
         toast({
-          title: 'Подключение активно',
-          description: data.telegram_chat_id
-            ? `Telegram bot token подключён (${data.masked_token || 'скрыт'}), chat_id сохранён.`
-            : 'Telegram bot token подключён, но для публикаций нужен telegram_chat_id.',
+          title: data.ready ? 'Цель публикации готова' : 'Цель публикации требует внимания',
+          description: data.message_ru || data.next_action_ru || 'Проверка Telegram завершена.',
+          variant: data.ready ? 'default' : 'destructive',
         });
         onSaved?.();
       } else {
@@ -178,6 +199,13 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
         title: t.common.error,
         description: message,
         variant: 'destructive',
+      });
+      setPublishTargetProbe({
+        ready: false,
+        status: 'request_failed',
+        message_ru: message,
+        next_action_ru: 'Проверьте сеть, токен и повторите проверку.',
+        external_post_published: false,
       });
     } finally {
       setLoadingStatus(false);
@@ -291,6 +319,55 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
           <p className="text-xs font-medium text-slate-700">
             После сохранения LocalOS сразу обновит готовность каналов для постов из контент-плана.
           </p>
+          {publishTargetProbe ? (
+            <div
+              data-testid="telegram-publish-target-probe-result"
+              className={[
+                'rounded-xl border px-3 py-2 text-xs leading-5',
+                publishTargetProbe.ready
+                  ? 'border-emerald-100 bg-emerald-50 text-emerald-900'
+                  : 'border-amber-100 bg-amber-50 text-amber-900',
+              ].join(' ')}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className={publishTargetProbe.ready ? 'font-semibold text-emerald-950' : 'font-semibold text-amber-950'}>
+                    {publishTargetProbe.ready ? 'Telegram цель готова к первому API-proof' : 'Telegram цель ещё не готова к публикации'}
+                  </div>
+                  <div className="mt-1">
+                    {publishTargetProbe.message_ru || 'Проверка завершена без отправки поста наружу.'}
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold">
+                  {publishTargetProbe.status || 'checked'}
+                </span>
+              </div>
+              {Array.isArray(publishTargetProbe.checks) && publishTargetProbe.checks.length > 0 ? (
+                <div className="mt-2 grid gap-1 sm:grid-cols-3">
+                  {publishTargetProbe.checks.slice(0, 3).map((check) => (
+                    <div
+                      key={`telegram-probe-check:${String(check.key || '')}`}
+                      className="rounded-lg bg-white px-2 py-1"
+                    >
+                      <div className={check.ok ? 'font-semibold text-emerald-800' : 'font-semibold text-amber-800'}>
+                        {check.ok ? 'Готово: ' : 'Нужно: '}
+                        {check.label_ru || check.key}
+                      </div>
+                      <div className="mt-0.5 text-slate-600">
+                        {check.detail_ru || ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div className="mt-2 font-medium">
+                Дальше: {publishTargetProbe.next_action_ru || 'вернитесь в контент-план и проверьте готовность каналов.'}
+              </div>
+              <div className="mt-1 text-slate-600">
+                Проверка не отправляет social post и не заменяет preview → подтверждение → расписание.
+              </div>
+            </div>
+          ) : null}
           <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
             <div className="font-semibold text-sky-950">После подключения Telegram</div>
             <div className="mt-1">
@@ -309,7 +386,7 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
             onClick={handleTestConnection}
             disabled={loadingStatus || !businessId}
           >
-            {loadingStatus ? 'Проверка...' : 'Проверить подключение'}
+            {loadingStatus ? 'Проверка...' : 'Проверить цель публикации'}
           </Button>
           <Button
             onClick={handleSave}

@@ -8,15 +8,21 @@ API endpoints для ChatGPT интеграции
 """
 from flask import Blueprint, request, jsonify
 import os
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from database_manager import DatabaseManager, get_db_connection
 from auth_system import CONSENT_VERSION, verify_session
 from core.email_delivery import send_verification_email
 from subscription_manager import get_automation_block_message, has_paid_automation_access
 from timezone_utils import get_timezone_from_address
 from core.telegram_token_store import (
+    decode_telegram_bot_token,
     encode_telegram_bot_token,
     mask_telegram_bot_token,
 )
+from core.telegram_network import telegram_urlopen
 from core.channel_router import (
     load_business_channel_context,
     build_channel_statuses,
@@ -72,6 +78,244 @@ def _row_to_dict(row):
     if hasattr(row, 'keys'):
         return {key: row[key] for key in row.keys()}
     return {}
+
+
+def _telegram_bot_api_request(bot_token: str, method: str, params: dict | None = None) -> dict:
+    token = str(bot_token or "").strip()
+    if not token:
+        return {"ok": False, "status": "missing_token", "error": "Telegram bot token is empty"}
+    query = urllib.parse.urlencode(params or {})
+    suffix = f"?{query}" if query else ""
+    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/{method}{suffix}", method="GET")
+    try:
+        resp = telegram_urlopen(req, timeout=10)
+        try:
+            body = resp.read().decode("utf-8", errors="ignore")
+            parsed = json.loads(body or "{}")
+            status_code = int(getattr(resp, "status", 500))
+        finally:
+            resp.close()
+    except urllib.error.HTTPError:
+        error = sys.exc_info()[1]
+        body = ""
+        try:
+            body = error.read().decode("utf-8", errors="ignore")
+        except Exception:
+            body = str(error)
+        return {
+            "ok": False,
+            "status": "telegram_http_error",
+            "status_code": int(getattr(error, "code", 0) or 0),
+            "error": body or str(error),
+        }
+    except (urllib.error.URLError, TimeoutError):
+        error = sys.exc_info()[1]
+        return {"ok": False, "status": "telegram_network_error", "error": str(error)}
+    except Exception:
+        error = sys.exc_info()[1]
+        return {"ok": False, "status": "telegram_probe_error", "error": str(error)}
+    if 200 <= status_code < 300 and bool(parsed.get("ok")):
+        return {"ok": True, "status": "ok", "result": parsed.get("result") or {}}
+    return {
+        "ok": False,
+        "status": "telegram_api_error",
+        "status_code": status_code,
+        "error": str(parsed.get("description") or body or "Telegram API error"),
+        "result": parsed.get("result") or {},
+    }
+
+
+def _telegram_publish_target_probe(bot_token: str, chat_id: str) -> dict:
+    clean_chat_id = str(chat_id or "").strip()
+    if not str(bot_token or "").strip() or not clean_chat_id:
+        missing = []
+        if not str(bot_token or "").strip():
+            missing.append("telegram_bot_token")
+        if not clean_chat_id:
+            missing.append("telegram_chat_id")
+        return _telegram_publish_target_probe_payload(
+            "missing_settings",
+            False,
+            missing,
+            {},
+            {},
+            {},
+        )
+    get_me = _telegram_bot_api_request(bot_token, "getMe")
+    if not bool(get_me.get("ok")):
+        return _telegram_publish_target_probe_payload("bot_probe_failed", False, [], get_me, {}, {})
+    bot_id = str((get_me.get("result") or {}).get("id") or "").strip()
+    get_chat = _telegram_bot_api_request(bot_token, "getChat", {"chat_id": clean_chat_id})
+    if not bool(get_chat.get("ok")):
+        return _telegram_publish_target_probe_payload("chat_probe_failed", False, [], get_me, get_chat, {})
+    member_probe = {}
+    if bot_id:
+        member_probe = _telegram_bot_api_request(
+            bot_token,
+            "getChatMember",
+            {"chat_id": clean_chat_id, "user_id": bot_id},
+        )
+    member = member_probe.get("result") if isinstance(member_probe.get("result"), dict) else {}
+    member_status = str(member.get("status") or "").strip()
+    can_post = bool(member.get("can_post_messages"))
+    chat = get_chat.get("result") if isinstance(get_chat.get("result"), dict) else {}
+    chat_type = str(chat.get("type") or "").strip()
+    if member_status in {"creator", "administrator"} and (can_post or chat_type != "channel"):
+        status = "ready"
+        ready = True
+    elif chat_type in {"group", "supergroup"} and member_status in {"member", "creator", "administrator"}:
+        status = "ready"
+        ready = True
+    elif member_probe and not bool(member_probe.get("ok")):
+        status = "permission_probe_failed"
+        ready = False
+    else:
+        status = "missing_publish_permission"
+        ready = False
+    return _telegram_publish_target_probe_payload(status, ready, [], get_me, get_chat, member_probe)
+
+
+def _telegram_publish_target_probe_payload(
+    status: str,
+    ready: bool,
+    missing_fields: list[str],
+    get_me: dict,
+    get_chat: dict,
+    member_probe: dict,
+) -> dict:
+    checks = [
+        _telegram_probe_check(
+            "telegram_bot_token",
+            bool(get_me.get("ok")),
+            "Бот отвечает",
+            "Bot responds",
+            "getMe прошёл" if get_me.get("ok") else _telegram_probe_error_text(get_me, "Добавьте или обновите bot token."),
+            "getMe passed" if get_me.get("ok") else _telegram_probe_error_text(get_me, "Add or refresh the bot token."),
+        ),
+        _telegram_probe_check(
+            "telegram_chat_id",
+            bool(get_chat.get("ok")),
+            "Цель публикации доступна",
+            "Publish target is reachable",
+            "getChat прошёл" if get_chat.get("ok") else _telegram_probe_error_text(get_chat, "Укажите chat_id канала или чата."),
+            "getChat passed" if get_chat.get("ok") else _telegram_probe_error_text(get_chat, "Set the channel or chat chat_id."),
+        ),
+        _telegram_probe_check(
+            "telegram_publish_permission",
+            bool(ready),
+            "Право писать в цель",
+            "Permission to write",
+            _telegram_publish_target_probe_permission_detail(status, True),
+            _telegram_publish_target_probe_permission_detail(status, False),
+        ),
+    ]
+    return {
+        "schema": "localos_telegram_publish_target_probe_v1",
+        "ready": bool(ready),
+        "status": str(status or "").strip(),
+        "missing_fields": missing_fields,
+        "checks": checks,
+        "message_ru": _telegram_publish_target_probe_message(status, ready, True),
+        "message_en": _telegram_publish_target_probe_message(status, ready, False),
+        "next_action_ru": _telegram_publish_target_probe_next_action(status, True),
+        "next_action_en": _telegram_publish_target_probe_next_action(status, False),
+        "external_post_published": False,
+        "social_post_published": False,
+        "proof_kind": "telegram_publish_target_probe",
+    }
+
+
+def _telegram_probe_check(
+    key: str,
+    ok: bool,
+    label_ru: str,
+    label_en: str,
+    detail_ru: str,
+    detail_en: str,
+) -> dict:
+    return {
+        "key": key,
+        "ok": bool(ok),
+        "state": "ok" if ok else "needs_attention",
+        "label_ru": label_ru,
+        "label_en": label_en,
+        "detail_ru": detail_ru,
+        "detail_en": detail_en,
+    }
+
+
+def _telegram_probe_error_text(probe: dict, fallback: str) -> str:
+    error = str(probe.get("error") or "").strip()
+    if error:
+        return error[:240]
+    return fallback
+
+
+def _telegram_publish_target_probe_permission_detail(status: str, is_ru: bool) -> str:
+    clean = str(status or "").strip()
+    if clean == "ready":
+        return "бот может писать в выбранный chat_id" if is_ru else "the bot can write to the selected chat_id"
+    if clean == "missing_settings":
+        return "сначала нужны bot token и telegram_chat_id" if is_ru else "bot token and telegram_chat_id are required first"
+    if clean == "permission_probe_failed":
+        return (
+            "LocalOS не смог проверить права бота; проверьте, что бот добавлен в канал/чат."
+            if is_ru
+            else "LocalOS could not verify bot permissions; check that the bot is added to the channel/chat."
+        )
+    return (
+        "для канала добавьте бота администратором с правом публикации"
+        if is_ru
+        else "for a channel, grant the bot admin posting permission"
+    )
+
+
+def _telegram_publish_target_probe_message(status: str, ready: bool, is_ru: bool) -> str:
+    if ready:
+        return (
+            "Telegram цель публикации готова: следующий proof можно делать через preview → подтверждение → расписание."
+            if is_ru
+            else "Telegram publish target is ready: the next proof can go through preview → approval → queue."
+        )
+    if status == "missing_settings":
+        return "Для проверки нужны bot token и telegram_chat_id." if is_ru else "Bot token and telegram_chat_id are required for the check."
+    if status == "chat_probe_failed":
+        return (
+            "Бот отвечает, но выбранный chat_id недоступен."
+            if is_ru
+            else "The bot responds, but the selected chat_id is not reachable."
+        )
+    if status == "bot_probe_failed":
+        return "Telegram bot token не прошёл live-проверку." if is_ru else "Telegram bot token failed the live check."
+    return (
+        "Telegram подключение найдено, но право публикации в выбранную цель не подтверждено."
+        if is_ru
+        else "Telegram connection exists, but posting permission to the selected target is not confirmed."
+    )
+
+
+def _telegram_publish_target_probe_next_action(status: str, is_ru: bool) -> str:
+    if status == "ready":
+        return (
+            "Подготовьте один пост из контент-плана, проверьте preview, подтвердите и поставьте в расписание."
+            if is_ru
+            else "Prepare one content-plan post, review preview, approve it, and queue it."
+        )
+    if status == "missing_settings":
+        return "Сохраните bot token и telegram_chat_id." if is_ru else "Save the bot token and telegram_chat_id."
+    if status == "bot_probe_failed":
+        return "Проверьте bot token у BotFather и сохраните заново." if is_ru else "Check the bot token in BotFather and save it again."
+    if status == "chat_probe_failed":
+        return (
+            "Укажите username канала или числовой chat_id и добавьте бота в этот канал/чат."
+            if is_ru
+            else "Set the channel username or numeric chat_id and add the bot to that channel/chat."
+        )
+    return (
+        "Для канала добавьте бота администратором с правом публикации, затем повторите проверку."
+        if is_ru
+        else "For a channel, grant the bot admin posting permission, then rerun the check."
+    )
 
 
 def _claim_public_audit_business(cursor, audit_slug: str, user_id: str, requested_name: str = ''):
@@ -591,6 +835,72 @@ def telegram_bot_status():
         )
     except Exception as e:
         print(f"❌ Ошибка статуса Telegram бота: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@messengers_bp.route('/api/business/telegram-bot/publish-target-probe', methods=['POST'])
+def telegram_bot_publish_target_probe():
+    """Live-проверка цели публикации Telegram без отправки social post наружу."""
+    try:
+        user_data = require_auth()
+        if not user_data:
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        data = request.get_json(silent=True) or {}
+        business_id = str(data.get("business_id") or "").strip()
+        if not business_id:
+            return jsonify({"error": "business_id обязателен"}), 400
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'businesses'
+            """
+        )
+        cols = {(_row_get(r, "column_name", 0) or "").lower() for r in (cursor.fetchall() or [])}
+        has_chat_id = "telegram_chat_id" in cols
+        select_sql = (
+            "SELECT owner_id, telegram_bot_token, telegram_chat_id FROM Businesses WHERE id = %s"
+            if has_chat_id
+            else "SELECT owner_id, telegram_bot_token, NULL as telegram_chat_id FROM Businesses WHERE id = %s"
+        )
+        cursor.execute(select_sql, (business_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        owner_id = _row_get(row, 'owner_id', 0)
+        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        token_raw = _row_get(row, 'telegram_bot_token', 1)
+        chat_id = str(_row_get(row, 'telegram_chat_id', 2) or "").strip()
+        db.close()
+
+        bot_token = decode_telegram_bot_token(token_raw)
+        probe = _telegram_publish_target_probe(bot_token, chat_id)
+        return jsonify(
+            {
+                "success": True,
+                "business_id": business_id,
+                "telegram_chat_id": chat_id or None,
+                "masked_token": mask_telegram_bot_token(token_raw) or None,
+                "probe": probe,
+                "ready": bool(probe.get("ready")),
+                "status": str(probe.get("status") or "").strip(),
+                "message_ru": str(probe.get("message_ru") or "").strip(),
+                "next_action_ru": str(probe.get("next_action_ru") or "").strip(),
+                "external_post_published": False,
+            }
+        )
+    except Exception:
+        e = sys.exc_info()[1]
+        print(f"❌ Ошибка проверки цели публикации Telegram: {e}")
         return jsonify({"error": str(e)}), 500
 
 
