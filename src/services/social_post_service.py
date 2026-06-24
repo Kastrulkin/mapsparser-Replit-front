@@ -9207,6 +9207,66 @@ def _channel_readiness(
         "missing_fields": _channel_readiness_missing_fields(platform, status),
         "settings_path": _channel_readiness_settings_path(platform),
         "connection_checks": connection_checks or [],
+        "target_setup": _channel_readiness_target_setup(platform, status, ready),
+    }
+
+
+def _channel_readiness_target_setup(platform: str, status: str, ready: bool) -> dict[str, Any]:
+    platform_key = str(platform or "").strip()
+    status_key = str(status or "").strip()
+    if platform_key != "telegram":
+        return {}
+    return {
+        "schema": "localos_social_channel_target_setup_v1",
+        "platform": "telegram",
+        "status": status_key,
+        "ready": bool(ready),
+        "target_kind": "publish_target_chat",
+        "target_label_ru": "Канал или группа для поста",
+        "target_label_en": "Post target channel or group",
+        "required_fields": ["telegram_bot_token", "telegram_chat_id"],
+        "not_a_target_ru": "Owner-bot и миниапп нужны для управления LocalOS и уведомлений; они не являются целью публикации поста.",
+        "not_a_target_en": "The owner bot and mini app manage LocalOS and notifications; they are not the post publish target.",
+        "summary_ru": (
+            "Telegram готов: перед первым постом запустите live API-проверку без публикации."
+            if ready
+            else "До первого Telegram-поста укажите bot token и chat_id канала или группы, куда должен выйти пост."
+        ),
+        "summary_en": (
+            "Telegram is ready: run the live API check without publishing before the first post."
+            if ready
+            else "Before the first Telegram post, set the bot token and the channel or group chat_id where the post should appear."
+        ),
+        "steps_ru": (
+            [
+                "Запустите live API-проверку без публикации.",
+                "Проверьте preview поста.",
+                "Утвердите и поставьте пост в расписание.",
+            ]
+            if ready
+            else [
+                "Добавьте бота в канал или группу, где должен выйти пост.",
+                "Дайте боту право отправлять сообщения или публиковать в канал.",
+                "Укажите telegram_bot_token и telegram_chat_id в настройках бизнеса.",
+                "Запустите live API-проверку без отправки поста.",
+            ]
+        ),
+        "steps_en": (
+            [
+                "Run the live API check without publishing.",
+                "Review the post preview.",
+                "Approve and queue the post.",
+            ]
+            if ready
+            else [
+                "Add the bot to the channel or group where the post should appear.",
+                "Give the bot permission to send messages or publish to the channel.",
+                "Set telegram_bot_token and telegram_chat_id in business settings.",
+                "Run the live API check without sending a post.",
+            ]
+        ),
+        "proof_ru": "Первый настоящий proof: published social_post с provider_post_id/provider_post_url.",
+        "proof_en": "First real proof: a published social_post with provider_post_id/provider_post_url.",
     }
 
 

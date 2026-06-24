@@ -2801,7 +2801,12 @@ def test_channel_readiness_exposes_owner_next_action():
     assert "цели публикации" in telegram["message_ru"]
     assert "Owner-bot/миниапп" in telegram["message_ru"]
     assert "channel/group telegram_chat_id" in telegram["next_action_en"]
+    assert telegram["target_setup"]["schema"] == "localos_social_channel_target_setup_v1"
+    assert telegram["target_setup"]["target_kind"] == "publish_target_chat"
+    assert "не являются целью публикации" in telegram["target_setup"]["not_a_target_ru"]
+    assert "provider_post_id/provider_post_url" in telegram["target_setup"]["proof_ru"]
     assert "wall.post" in vk["next_action_en"]
+    assert vk["target_setup"] == {}
     assert "Instagram business account" in meta["next_action_en"]
     assert "ручного действия" in maps["next_action_ru"]
     assert "bot token" in telegram["setup_summary_en"]

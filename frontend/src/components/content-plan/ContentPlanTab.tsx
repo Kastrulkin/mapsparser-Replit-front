@@ -1178,6 +1178,26 @@ type SocialChannelReadiness = {
   missing_fields?: string[];
   settings_path?: string;
   connection_checks?: SocialChannelConnectionCheck[];
+  target_setup?: SocialChannelTargetSetup;
+};
+
+type SocialChannelTargetSetup = {
+  schema?: string;
+  platform?: string;
+  status?: string;
+  ready?: boolean;
+  target_kind?: string;
+  target_label_ru?: string;
+  target_label_en?: string;
+  required_fields?: string[];
+  not_a_target_ru?: string;
+  not_a_target_en?: string;
+  summary_ru?: string;
+  summary_en?: string;
+  steps_ru?: string[];
+  steps_en?: string[];
+  proof_ru?: string;
+  proof_en?: string;
 };
 
 type SocialFirstApiProofDossier = {
@@ -10733,6 +10753,46 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 {isRu ? 'Что сделать: ' : 'Next: '}
                               </span>
                               {isRu ? channel.next_action_ru : channel.next_action_en}
+                            </div>
+                          ) : null}
+                          {channel.target_setup?.schema ? (
+                            <div
+                              data-testid={`social-channel-target-setup-${String(channel.platform || '')}`}
+                              data-schema={String(channel.target_setup.schema || 'localos_social_channel_target_setup_v1')}
+                              className={channel.ready ? 'mt-2 rounded-lg border border-emerald-100 bg-white/80 px-2 py-1.5 text-[11px] leading-4 text-emerald-900' : 'mt-2 rounded-lg border border-amber-100 bg-white/80 px-2 py-1.5 text-[11px] leading-4 text-amber-900'}
+                            >
+                              <div className={channel.ready ? 'font-semibold text-emerald-950' : 'font-semibold text-amber-950'}>
+                                {isRu
+                                  ? String(channel.target_setup.target_label_ru || 'Цель публикации')
+                                  : String(channel.target_setup.target_label_en || 'Publish target')}
+                              </div>
+                              <div className="mt-1">
+                                {isRu
+                                  ? String(channel.target_setup.summary_ru || '')
+                                  : String(channel.target_setup.summary_en || '')}
+                              </div>
+                              {(isRu ? channel.target_setup.not_a_target_ru : channel.target_setup.not_a_target_en) ? (
+                                <div className="mt-1 text-slate-600">
+                                  {isRu
+                                    ? String(channel.target_setup.not_a_target_ru || '')
+                                    : String(channel.target_setup.not_a_target_en || '')}
+                                </div>
+                              ) : null}
+                              {((isRu ? channel.target_setup.steps_ru : channel.target_setup.steps_en) || []).length > 0 ? (
+                                <ol className="mt-1 space-y-1">
+                                  {((isRu ? channel.target_setup.steps_ru : channel.target_setup.steps_en) || []).slice(0, 4).map((step, index) => (
+                                    <li key={`${channel.platform}-target-setup-${index}`} className="flex gap-1.5">
+                                      <span className="mt-[1px] shrink-0 font-semibold">{index + 1}.</span>
+                                      <span>{step}</span>
+                                    </li>
+                                  ))}
+                                </ol>
+                              ) : null}
+                              <div className="mt-1 font-medium">
+                                {isRu
+                                  ? String(channel.target_setup.proof_ru || '')
+                                  : String(channel.target_setup.proof_en || '')}
+                              </div>
                             </div>
                           ) : null}
                           {(channel.connection_checks || []).length > 0 ? (
