@@ -672,6 +672,28 @@ export const en = {
           business: "Business"
         }
       },
+      seoKeywords: {
+        title: "SEO Keywords",
+        subtitle: "Top search queries from Yandex.Wordstat used for AI optimization.",
+        update: "Update Data",
+        updating: "Updating...",
+        all: "All Keywords",
+        loading: "Loading keywords...",
+        empty: "No keywords found. Click \"Update Data\" to fetch from Wordstat.",
+        columns: {
+          keyword: "Keyword",
+          category: "Category",
+          views: "Monthly Views",
+          updated: "Last Updated"
+        },
+        categories: {
+          grooming: "Grooming",
+          other: "Other",
+          custom: "Custom",
+          cosmetology: "Cosmetology",
+          beauty: "Beauty"
+        }
+      },
       newsGenerator: {
         title: "News Generator",
         subtitle: "Create news for your business card based on your services or transactions",

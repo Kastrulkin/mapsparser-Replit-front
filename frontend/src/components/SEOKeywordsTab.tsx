@@ -30,7 +30,7 @@ interface SEOKeywordsTabProps {
 }
 
 export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
-    const { t } = useLanguage();
+    const { language, t } = useLanguage();
     const [loading, setLoading] = useState(false);
     const [updating, setUpdating] = useState(false);
     const [keywords, setKeywords] = useState<Keyword[]>([]);
@@ -357,16 +357,67 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         return true;
     });
 
+    const seoCopy = t.dashboard.card.seoKeywords || {};
+    const fallbackSeoCopy = language === 'ru'
+        ? {
+            title: 'SEO-запросы',
+            subtitle: 'Популярные поисковые запросы из Яндекс.Wordstat, которые используются для ИИ-оптимизации.',
+            update: 'Обновить данные',
+            updating: 'Обновляем...',
+            all: 'Все запросы',
+            loading: 'Загружаем запросы...',
+            empty: 'Запросы не найдены. Нажмите «Обновить данные», чтобы загрузить Wordstat.',
+            columns: {
+                keyword: 'Запрос',
+                category: 'Категория',
+                views: 'Показов в месяц',
+                updated: 'Обновлено',
+            },
+            categories: {
+                grooming: 'Груминг',
+                other: 'Другое',
+                custom: 'Свои',
+            },
+        }
+        : {
+            title: 'SEO Keywords',
+            subtitle: 'Top search queries from Yandex.Wordstat used for AI optimization.',
+            update: 'Update Data',
+            updating: 'Updating...',
+            all: 'All Keywords',
+            loading: 'Loading keywords...',
+            empty: 'No keywords found. Click "Update Data" to fetch from Wordstat.',
+            columns: {
+                keyword: 'Keyword',
+                category: 'Category',
+                views: 'Monthly Views',
+                updated: 'Last Updated',
+            },
+            categories: {
+                grooming: 'Grooming',
+                other: 'Other',
+                custom: 'Custom',
+            },
+        };
+
+    const getSeoText = (key: 'title' | 'subtitle' | 'update' | 'updating' | 'all' | 'loading' | 'empty') => seoCopy[key] || fallbackSeoCopy[key];
+    const getSeoColumnText = (key: 'keyword' | 'category' | 'views' | 'updated') => seoCopy.columns?.[key] || fallbackSeoCopy.columns[key];
+    const formatCategory = (category: string) => {
+        const normalized = String(category || 'other').trim().toLowerCase();
+        const categoryLabels = seoCopy.categories || fallbackSeoCopy.categories;
+        return categoryLabels[normalized] || (normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : fallbackSeoCopy.categories.other);
+    };
+
     return (
         <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-6")}>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                         <TrendingUp className="w-6 h-6 text-indigo-600" />
-                        {t.dashboard.card.seoKeywords?.title || 'SEO Keywords'}
+                        {getSeoText('title')}
                     </h2>
                     <p className="text-gray-500 mt-1">
-                        {t.dashboard.card.seoKeywords?.subtitle || 'Top search queries from Yandex.Wordstat used for AI optimization.'}
+                        {getSeoText('subtitle')}
                     </p>
                 </div>
                 <Button
@@ -375,7 +426,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                     className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md"
                 >
                     <RefreshCw className={cn("w-4 h-4 mr-2", updating && "animate-spin")} />
-                    {updating ? (t.dashboard.card.seoKeywords?.updating || "Updating...") : (t.dashboard.card.seoKeywords?.update || "Update Data")}
+                    {updating ? getSeoText('updating') : getSeoText('update')}
                 </Button>
             </div>
 
@@ -404,7 +455,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                                 : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
                         )}
                     >
-                        {cat === 'all' ? (t.dashboard.card.seoKeywords?.all || 'All Keywords') : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                        {cat === 'all' ? getSeoText('all') : formatCategory(cat)}
                         {cat !== 'all' && <span className="ml-2 text-xs opacity-60">({grouped[cat]?.length || 0})</span>}
                     </button>
                 ))}
@@ -564,10 +615,10 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                 <table className="min-w-full divide-y divide-gray-100">
                     <thead className="bg-gray-50/50">
                         <tr>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.seoKeywords?.columns?.keyword || 'Keyword'}</th>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.seoKeywords?.columns?.category || 'Category'}</th>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.seoKeywords?.columns?.views || 'Monthly Views'}</th>
-                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.seoKeywords?.columns?.updated || 'Last Updated'}</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{getSeoColumnText('keyword')}</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{getSeoColumnText('category')}</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{getSeoColumnText('views')}</th>
+                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">{getSeoColumnText('updated')}</th>
                             <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Действия</th>
                         </tr>
                     </thead>
@@ -577,7 +628,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                                 <td colSpan={5} className="px-6 py-8 text-center">
                                     <div className="flex justify-center items-center gap-2 text-gray-500">
                                         <div className="animate-spin rounded-full h-5 w-5 border-2 border-indigo-600 border-t-transparent"></div>
-                                        <span>{t.dashboard.card.seoKeywords?.loading || "Loading keywords..."}</span>
+                                        <span>{getSeoText('loading')}</span>
                                     </div>
                                 </td>
                             </tr>
@@ -588,7 +639,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                                         <div className="p-3 bg-gray-50 rounded-full">
                                             <Search className="w-8 h-8 text-gray-300" />
                                         </div>
-                                        <p>{t.dashboard.card.seoKeywords?.empty || 'No keywords found. Click "Update Data" to fetch from Wordstat.'}</p>
+                                        <p>{getSeoText('empty')}</p>
                                     </div>
                                 </td>
                             </tr>
@@ -598,7 +649,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{(k as any).keyword_with_city || k.keyword}</td>
                                     <td className="px-6 py-4 text-sm text-gray-500">
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                            {k.category}
+                                            {formatCategory(k.category)}
                                         </span>
                                         {k.negative_blocked && (
                                             <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
