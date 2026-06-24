@@ -205,28 +205,65 @@ def _load_business(cursor, business_id):
 def _load_services(cursor, business_id):
     cursor.execute(
         """
-        SELECT id, category, name, optimized_name, description, optimized_description, price
-        FROM userservices
-        WHERE business_id = %s AND (is_active IS TRUE OR is_active IS NULL)
-        ORDER BY category NULLS LAST, name NULLS LAST
+        SELECT id, network_id
+        FROM businesses
+        WHERE id = %s
+        LIMIT 1
         """,
         (business_id,),
     )
+    business_row = cursor.fetchone()
+    network_id = str(_row_value(business_row, "network_id", 1) or "").strip()
+    is_network_parent = bool(network_id and network_id == str(business_id))
+
+    if is_network_parent:
+        cursor.execute(
+            """
+            SELECT us.id, us.category, us.name, us.optimized_name, us.description,
+                   us.optimized_description, us.price, b.name AS source_business_name
+            FROM userservices us
+            JOIN businesses b ON b.id = us.business_id
+            WHERE b.network_id = %s
+              AND b.id <> %s
+              AND (us.is_active IS TRUE OR us.is_active IS NULL)
+            ORDER BY us.category NULLS LAST, us.name NULLS LAST, b.name NULLS LAST
+            """,
+            (business_id, business_id),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT id, category, name, optimized_name, description, optimized_description, price,
+                   NULL AS source_business_name
+            FROM userservices
+            WHERE business_id = %s AND (is_active IS TRUE OR is_active IS NULL)
+            ORDER BY category NULLS LAST, name NULLS LAST
+            """,
+            (business_id,),
+        )
+    rows = cursor.fetchall() or []
+    seen = set()
     services = []
-    for row in cursor.fetchall() or []:
+    for row in rows:
+        category = str(_row_value(row, "category", 1) or "Без категории")
+        name = str(_row_value(row, "name", 2) or "")
+        dedupe_key = (_norm(category), _norm(name))
+        if is_network_parent and dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
         services.append(
             {
                 "id": str(_row_value(row, "id", 0) or ""),
-                "category": str(_row_value(row, "category", 1) or "Без категории"),
-                "name": str(_row_value(row, "name", 2) or ""),
+                "category": category,
+                "name": name,
                 "optimized_name": str(_row_value(row, "optimized_name", 3) or ""),
                 "description": str(_row_value(row, "description", 4) or ""),
                 "optimized_description": str(_row_value(row, "optimized_description", 5) or ""),
                 "price": str(_row_value(row, "price", 6) or ""),
+                "source_business_name": str(_row_value(row, "source_business_name", 7) or ""),
             }
         )
     return [item for item in services if item["id"] and item["name"]]
-
 
 def _services_hash(services):
     compact = [
