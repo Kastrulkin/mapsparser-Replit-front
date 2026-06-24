@@ -484,6 +484,8 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
     return items;
   }, [dashboard?.recommendations, hasFinanceData, quality?.missing]);
   const primaryAction = getPrimaryFinanceAction(dataState, quality?.missing || []);
+  const actionPlanRecommendations = (dashboard?.recommendations || []).slice(0, 3);
+  const hiddenActionPlanCount = Math.max((dashboard?.recommendations || []).length - actionPlanRecommendations.length, 0);
 
   const fillDemoSalon = () => {
     setEntry({
@@ -668,21 +670,38 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
             </div>
             <ImpactPanel impact={impact} />
             <div id="finance-next-action">
-              <DashboardSection title="План действий" description="Подробные рекомендации скрыты до клика, чтобы обзор не превращался в полотно.">
-                <div className="grid gap-3 md:grid-cols-2">
-                  {(dashboard?.recommendations || []).map((item) => (
-                    <RecommendationCard
-                      key={item.code}
-                      item={item}
-                      completedActions={completedActions}
-                      savingActionKey={savingActionKey}
-                      onToggleAction={toggleAction}
-                    />
-                  ))}
-                  {(dashboard?.recommendations || []).length === 0 ? (
-                    <FinanceEmptyState missing={quality?.missing || []} />
-                  ) : null}
-                </div>
+              <DashboardSection
+                title="Что сделать дальше"
+                description="Начните с первого пункта. LocalOS показывает только ближайшие действия, которые влияют на деньги."
+              >
+                {actionPlanRecommendations.length > 0 ? (
+                  <div className="space-y-3">
+                    {hiddenActionPlanCount > 0 ? (
+                      <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200">
+                        Показаны 3 главных действия. Ещё {hiddenActionPlanCount} появятся после выполнения приоритетных шагов.
+                      </div>
+                    ) : null}
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {actionPlanRecommendations.map((item) => (
+                        <RecommendationCard
+                          key={item.code}
+                          item={item}
+                          completedActions={completedActions}
+                          savingActionKey={savingActionKey}
+                          onToggleAction={toggleAction}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <FinanceEmptyState
+                    missing={quality?.missing || []}
+                    onAddData={() => {
+                      setActiveFinanceTab('data');
+                      document.getElementById('finance-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                  />
+                )}
               </DashboardSection>
             </div>
           </TabsContent>
@@ -1435,11 +1454,18 @@ const FinanceNextAction: React.FC<{
   </div>
 );
 
-const FinanceEmptyState: React.FC<{ missing: string[] }> = ({ missing }) => (
-  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-    <div className="font-semibold">Что нужно заполнить для полного расчёта</div>
+const FinanceEmptyState: React.FC<{ missing: string[]; onAddData: () => void }> = ({ missing, onAddData }) => (
+  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+    <div className="font-semibold text-slate-950">План появится после данных</div>
     <div className="mt-1">
-      {missing.length > 0 ? missing.slice(0, 6).join(', ') : 'Выручку, расходы, услуги, мастеров и рабочие места.'}
+      {missing.length > 0
+        ? `Сначала добавьте: ${missing.slice(0, 3).join(', ')}.`
+        : 'Сначала добавьте выручку, расходы, услуги, мастеров или рабочие места.'}
+    </div>
+    <div className="mt-3">
+      <Button size="sm" onClick={onAddData}>
+        Добавить данные
+      </Button>
     </div>
   </div>
 );
