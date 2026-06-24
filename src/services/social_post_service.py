@@ -555,6 +555,18 @@ def _build_social_launch_preflight_payload(
         launch_runbook,
         runtime_alignment,
     )
+    proof_requirements = _social_proof_requirements(
+        first_api_publish_readiness,
+        first_api_proof_gate,
+        launch_gate,
+        channel_readiness,
+        runtime_alignment,
+        workflow_counts,
+        due_count,
+        external_publish_count,
+        controlled_count,
+        manual_count,
+    )
     return {
         "business_id": scope,
         "status": status,
@@ -564,6 +576,7 @@ def _build_social_launch_preflight_payload(
         "first_api_proof_gate": first_api_proof_gate,
         "live_validation_checklist": live_validation_checklist,
         "first_cycle_proof_packet": first_cycle_proof_packet,
+        "proof_requirements": proof_requirements,
         "channel_readiness": channel_readiness,
         "channel_summary": channel_summary,
         "dispatch_preview": dispatch_preview,
@@ -612,6 +625,488 @@ def _build_social_launch_preflight_payload(
         "next_action_ru": _social_launch_preflight_next_action(status, scope, True),
         "next_action_en": _social_launch_preflight_next_action(status, scope, False),
     }
+
+
+def _social_proof_requirements(
+    first_api_publish_readiness: dict[str, Any],
+    first_api_proof_gate: dict[str, Any],
+    launch_gate: dict[str, Any],
+    channel_readiness: list[dict[str, Any]],
+    runtime_alignment: dict[str, Any],
+    workflow_counts: dict[str, Any],
+    due_count: int,
+    external_publish_count: int,
+    controlled_count: int,
+    manual_count: int,
+) -> dict[str, Any]:
+    api_status = _social_api_proof_requirement_status(
+        first_api_publish_readiness,
+        first_api_proof_gate,
+        workflow_counts,
+        due_count,
+        external_publish_count,
+    )
+    maps_status = _social_maps_proof_requirement_status(channel_readiness, controlled_count, manual_count)
+    metrics_status = _social_metrics_proof_requirement_status(runtime_alignment, workflow_counts)
+    groups = [
+        _social_proof_requirement_group(
+            "telegram_vk_api_proof",
+            api_status,
+            "Telegram/VK API proof",
+            "Telegram/VK API proof",
+            _social_api_proof_requirement_summary(api_status, first_api_publish_readiness, first_api_proof_gate, True),
+            _social_api_proof_requirement_summary(api_status, first_api_publish_readiness, first_api_proof_gate, False),
+            _social_api_proof_requirement_next_action(api_status, first_api_publish_readiness, first_api_proof_gate, True),
+            _social_api_proof_requirement_next_action(api_status, first_api_publish_readiness, first_api_proof_gate, False),
+            _social_api_proof_requirement_steps(api_status, first_api_publish_readiness, True),
+            _social_api_proof_requirement_steps(api_status, first_api_publish_readiness, False),
+        ),
+        _social_proof_requirement_group(
+            "maps_supervised_handoff",
+            maps_status,
+            "Яндекс/2ГИС handoff",
+            "Yandex/2GIS handoff",
+            _social_maps_proof_requirement_summary(maps_status, channel_readiness, controlled_count, manual_count, True),
+            _social_maps_proof_requirement_summary(maps_status, channel_readiness, controlled_count, manual_count, False),
+            _social_maps_proof_requirement_next_action(maps_status, True),
+            _social_maps_proof_requirement_next_action(maps_status, False),
+            _social_maps_proof_requirement_steps(maps_status, True),
+            _social_maps_proof_requirement_steps(maps_status, False),
+        ),
+        _social_proof_requirement_group(
+            "metrics_and_recommendation",
+            metrics_status,
+            "Метрики и заявки",
+            "Metrics and leads",
+            _social_metrics_proof_requirement_summary(metrics_status, runtime_alignment, workflow_counts, True),
+            _social_metrics_proof_requirement_summary(metrics_status, runtime_alignment, workflow_counts, False),
+            _social_metrics_proof_requirement_next_action(metrics_status, runtime_alignment, True),
+            _social_metrics_proof_requirement_next_action(metrics_status, runtime_alignment, False),
+            _social_metrics_proof_requirement_steps(metrics_status, True),
+            _social_metrics_proof_requirement_steps(metrics_status, False),
+        ),
+    ]
+    ready_groups = sum(1 for group in groups if str(group.get("state") or "") in {"ready", "complete"})
+    attention_groups = sum(1 for group in groups if str(group.get("state") or "") in {"needs_setup", "needs_channel", "needs_manual_fallback"})
+    if ready_groups == len(groups):
+        status = "ready_for_live_proof"
+    elif attention_groups:
+        status = "needs_setup"
+    else:
+        status = "in_progress"
+    return {
+        "schema": "localos_social_proof_requirements_v1",
+        "status": status,
+        "ready_groups": ready_groups,
+        "total_groups": len(groups),
+        "groups": groups,
+        "title_ru": "Что осталось для живого теста",
+        "title_en": "What remains for the live proof",
+        "summary_ru": _social_proof_requirements_summary(status, ready_groups, len(groups), True),
+        "summary_en": _social_proof_requirements_summary(status, ready_groups, len(groups), False),
+        "next_action_ru": _social_proof_requirements_next_action(groups, True),
+        "next_action_en": _social_proof_requirements_next_action(groups, False),
+        "external_publish_requires_approval": True,
+        "browser_final_click_allowed": False,
+        "maps_are_supervised_or_manual": True,
+        "primary_metric_ru": "Заявки и обращения",
+        "primary_metric_en": "Leads and inquiries",
+    }
+
+
+def _social_proof_requirement_group(
+    key: str,
+    state: str,
+    title_ru: str,
+    title_en: str,
+    summary_ru: str,
+    summary_en: str,
+    next_action_ru: str,
+    next_action_en: str,
+    checklist_ru: list[str],
+    checklist_en: list[str],
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "state": state,
+        "title_ru": title_ru,
+        "title_en": title_en,
+        "summary_ru": summary_ru,
+        "summary_en": summary_en,
+        "next_action_ru": next_action_ru,
+        "next_action_en": next_action_en,
+        "checklist_ru": checklist_ru,
+        "checklist_en": checklist_en,
+    }
+
+
+def _social_api_proof_requirement_status(
+    first_api_publish_readiness: dict[str, Any],
+    first_api_proof_gate: dict[str, Any],
+    workflow_counts: dict[str, Any],
+    due_count: int,
+    external_publish_count: int,
+) -> str:
+    if bool(first_api_proof_gate.get("allowed")) and int(external_publish_count or 0) > 0:
+        return "ready"
+    if int(external_publish_count or 0) > 0 or int(due_count or 0) > 0:
+        return "needs_run_once"
+    if int(workflow_counts.get("queued_total") or 0) > 0:
+        return "waiting_for_due_time"
+    if int(workflow_counts.get("approved_not_queued") or 0) > 0:
+        return "needs_queue"
+    if int(workflow_counts.get("needs_review") or 0) > 0:
+        return "needs_approval"
+    if bool(first_api_publish_readiness.get("ready")):
+        return "needs_post"
+    return "needs_channel"
+
+
+def _social_api_proof_requirement_summary(
+    state: str,
+    first_api_publish_readiness: dict[str, Any],
+    first_api_proof_gate: dict[str, Any],
+    is_ru: bool,
+) -> str:
+    platform = _social_proof_platform_label(first_api_publish_readiness, first_api_proof_gate)
+    if state == "ready":
+        return (
+            f"{platform}: есть due API-пост, можно запускать один scoped цикл и проверять provider_post_id/provider_post_url."
+            if is_ru
+            else f"{platform}: a due API post exists; run one scoped cycle and verify provider_post_id/provider_post_url."
+        )
+    if state == "needs_run_once":
+        return (
+            "Есть due-публикации, но перед запуском проверьте live preflight и явное подтверждение."
+            if is_ru
+            else "There are due posts, but check live preflight and explicit confirmation before running."
+        )
+    if state == "waiting_for_due_time":
+        return (
+            "Пост уже в расписании, ждёт даты публикации или ручного scoped run-once."
+            if is_ru
+            else "A post is queued and waits for its due time or a manual scoped run-once."
+        )
+    if state == "needs_queue":
+        return "Текст утверждён, но ещё не поставлен в расписание." if is_ru else "Copy is approved but not queued yet."
+    if state == "needs_approval":
+        return "Есть черновики: сначала preview, правки и human approval." if is_ru else "Drafts exist: first preview, edit, and human approval."
+    if state == "needs_post":
+        return (
+            f"{platform} готов по ключам; подготовьте первый пост из контент-плана."
+            if is_ru
+            else f"{platform} is ready by keys; prepare the first content-plan post."
+        )
+    return (
+        "Для первого proof подключите Telegram или VK: нужны token/chat_id или VK token/group_id/wall.post."
+        if is_ru
+        else "For the first proof, connect Telegram or VK: token/chat_id or VK token/group_id/wall.post are required."
+    )
+
+
+def _social_api_proof_requirement_next_action(
+    state: str,
+    first_api_publish_readiness: dict[str, Any],
+    first_api_proof_gate: dict[str, Any],
+    is_ru: bool,
+) -> str:
+    if state == "ready":
+        return (
+            "Запустите один scoped worker/run-once после подтверждения и проверьте provider proof."
+            if is_ru
+            else "Run one scoped worker/run-once after confirmation and check provider proof."
+        )
+    if state == "needs_run_once":
+        return (
+            "Откройте проверку запуска и выполните ограниченный run-once только для этого бизнеса."
+            if is_ru
+            else "Open launch check and run one scoped cycle only for this business."
+        )
+    if state == "waiting_for_due_time":
+        return "Дождитесь scheduled_for или запустите scoped run-once." if is_ru else "Wait for scheduled_for or run a scoped cycle."
+    if state == "needs_queue":
+        return "Нажмите “Поставить в расписание” для утверждённого API-поста." if is_ru else "Click Queue for the approved API post."
+    if state == "needs_approval":
+        return "Откройте preview, сохраните правки и подтвердите текст." if is_ru else "Open preview, save edits, and approve the copy."
+    if state == "needs_post":
+        return str(first_api_publish_readiness.get("next_action_ru" if is_ru else "next_action_en") or "").strip()
+    gate_action = str(first_api_proof_gate.get("next_action_ru" if is_ru else "next_action_en") or "").strip()
+    return gate_action or (
+        "Подключите Telegram/VK и повторите live API-проверку без публикации."
+        if is_ru
+        else "Connect Telegram/VK and rerun live API preflight without publishing."
+    )
+
+
+def _social_api_proof_requirement_steps(
+    state: str,
+    first_api_publish_readiness: dict[str, Any],
+    is_ru: bool,
+) -> list[str]:
+    if state in {"ready", "needs_run_once"}:
+        return [
+            "Проверить launch preflight и business scope.",
+            "Запустить один цикл только после явного подтверждения.",
+            "Проверить provider_post_id/provider_post_url после публикации.",
+        ] if is_ru else [
+            "Check launch preflight and business scope.",
+            "Run one cycle only after explicit confirmation.",
+            "Verify provider_post_id/provider_post_url after publishing.",
+        ]
+    checklist = first_api_publish_readiness.get("first_post_checklist_ru" if is_ru else "first_post_checklist_en")
+    if isinstance(checklist, list) and checklist:
+        return [str(item or "").strip() for item in checklist if str(item or "").strip()]
+    return [
+        "Подключить Telegram или VK.",
+        "Подготовить первый пост.",
+        "Preview → approval → queue → proof.",
+    ] if is_ru else [
+        "Connect Telegram or VK.",
+        "Prepare the first post.",
+        "Preview → approval → queue → proof.",
+    ]
+
+
+def _social_maps_proof_requirement_status(
+    channel_readiness: list[dict[str, Any]],
+    controlled_count: int,
+    manual_count: int,
+) -> str:
+    if int(controlled_count or 0) > 0:
+        return "ready"
+    map_channels = [
+        item for item in channel_readiness
+        if str(item.get("platform") or "").strip() in BROWSER_OR_MANUAL_PLATFORMS
+    ]
+    if any(str(item.get("status") or "").strip() == "supervised_ready" for item in map_channels):
+        return "needs_map_post"
+    if int(manual_count or 0) > 0:
+        return "needs_manual_fallback"
+    return "manual_available"
+
+
+def _social_maps_proof_requirement_summary(
+    state: str,
+    channel_readiness: list[dict[str, Any]],
+    controlled_count: int,
+    manual_count: int,
+    is_ru: bool,
+) -> str:
+    if state == "ready":
+        return (
+            f"Готово к controlled handoff: due задач для карт {int(controlled_count or 0)}."
+            if is_ru
+            else f"Ready for controlled handoff: due map tasks {int(controlled_count or 0)}."
+        )
+    if state == "needs_map_post":
+        return (
+            "OpenClaw browser-use выглядит доступным: подготовьте и поставьте в расписание пост для Яндекс/2ГИС."
+            if is_ru
+            else "OpenClaw browser-use looks available: prepare and queue a Yandex/2GIS post."
+        )
+    if state == "needs_manual_fallback":
+        return (
+            f"Есть ручные/заблокированные размещения: {int(manual_count or 0)}. Это не ломает весь план."
+            if is_ru
+            else f"Manual or blocked placements: {int(manual_count or 0)}. This does not break the whole plan."
+        )
+    labels = [
+        str(item.get("platform_label") or "").strip()
+        for item in channel_readiness
+        if str(item.get("platform") or "").strip() in BROWSER_OR_MANUAL_PLATFORMS
+    ]
+    joined = ", ".join([label for label in labels if label])
+    return (
+        f"{joined or 'Яндекс/2ГИС'} пока в ручном/контролируемом режиме; финальный клик остаётся за человеком."
+        if is_ru
+        else f"{joined or 'Yandex/2GIS'} stays manual/supervised for now; the final click remains human-owned."
+    )
+
+
+def _social_maps_proof_requirement_next_action(state: str, is_ru: bool) -> str:
+    if state == "ready":
+        return (
+            "Откройте controlled placement и проверьте, что задача останавливается перед финальной кнопкой."
+            if is_ru
+            else "Open controlled placement and verify that the task stops before final publish."
+        )
+    if state == "needs_map_post":
+        return (
+            "Подготовьте пост для Яндекс/2ГИС и поставьте его в расписание."
+            if is_ru
+            else "Prepare a Yandex/2GIS post and queue it."
+        )
+    if state == "needs_manual_fallback":
+        return (
+            "Используйте copy-ready текст, разместите вручную и отметьте публикацию в LocalOS."
+            if is_ru
+            else "Use the copy-ready text, publish manually, and mark it in LocalOS."
+        )
+    return (
+        "Проверьте OpenClaw browser-use; если capability нет, продолжайте через manual handoff."
+        if is_ru
+        else "Check OpenClaw browser-use; if capability is absent, continue with manual handoff."
+    )
+
+
+def _social_maps_proof_requirement_steps(state: str, is_ru: bool) -> list[str]:
+    if state == "ready":
+        return [
+            "Открыть controlled handoff.",
+            "Проверить текст/медиа и target URL.",
+            "Остановиться перед финальной кнопкой; финальный шаг подтверждает человек.",
+        ] if is_ru else [
+            "Open controlled handoff.",
+            "Check copy/media and target URL.",
+            "Stop before the final button; a human confirms the final step.",
+        ]
+    return [
+        "Проверить OpenClaw browser-use capability.",
+        "Подготовить map-specific текст.",
+        "При сбое captcha/login/changed UI перейти в manual fallback.",
+    ] if is_ru else [
+        "Check OpenClaw browser-use capability.",
+        "Prepare map-specific copy.",
+        "If captcha/login/changed UI blocks the flow, move to manual fallback.",
+    ]
+
+
+def _social_metrics_proof_requirement_status(runtime_alignment: dict[str, Any], workflow_counts: dict[str, Any]) -> str:
+    metrics_alignment = _json_dict(runtime_alignment.get("metrics"))
+    published = int(workflow_counts.get("published") or 0)
+    if published > 0 and bool(metrics_alignment.get("can_collect_this_business")):
+        return "ready"
+    if published > 0:
+        return "needs_metrics_scope"
+    return "waiting_for_publish"
+
+
+def _social_metrics_proof_requirement_summary(
+    state: str,
+    runtime_alignment: dict[str, Any],
+    workflow_counts: dict[str, Any],
+    is_ru: bool,
+) -> str:
+    published = int(workflow_counts.get("published") or 0)
+    if state == "ready":
+        return (
+            f"Есть опубликованные посты ({published}) и metrics worker может собирать этот бизнес."
+            if is_ru
+            else f"Published posts exist ({published}) and the metrics worker can collect this business."
+        )
+    if state == "needs_metrics_scope":
+        return (
+            f"Опубликовано постов: {published}. Осталось настроить scoped сбор метрик и отметить заявки/обращения."
+            if is_ru
+            else f"Published posts: {published}. Configure scoped metrics collection and record leads/inquiries."
+        )
+    metrics_alignment = _json_dict(runtime_alignment.get("metrics"))
+    if bool(metrics_alignment.get("enabled")):
+        return (
+            "Сбор метрик включён, но сначала нужен опубликованный пост с provider proof."
+            if is_ru
+            else "Metrics collection is enabled, but first a published post with provider proof is needed."
+        )
+    return (
+        "После первого proof включите сбор метрик и ручную разметку заявок/обращений."
+        if is_ru
+        else "After the first proof, enable metrics collection and manual lead/inquiry attribution."
+    )
+
+
+def _social_metrics_proof_requirement_next_action(
+    state: str,
+    runtime_alignment: dict[str, Any],
+    is_ru: bool,
+) -> str:
+    if state == "ready":
+        return (
+            "Запустите сбор метрик, отметьте заявки/обращения и сформируйте рекомендацию на следующую неделю."
+            if is_ru
+            else "Run metrics collection, record leads/inquiries, and generate next-week recommendations."
+        )
+    if state == "needs_metrics_scope":
+        alignment = _json_dict(runtime_alignment.get("metrics"))
+        message = str(alignment.get("message_ru" if is_ru else "message_en") or "").strip()
+        return message or (
+            "Настройте SOCIAL_POST_METRICS_BUSINESS_ID для этого бизнеса."
+            if is_ru
+            else "Set SOCIAL_POST_METRICS_BUSINESS_ID for this business."
+        )
+    return (
+        "Сначала доведите один API или supervised пост до published."
+        if is_ru
+        else "First get one API or supervised post to published."
+    )
+
+
+def _social_metrics_proof_requirement_steps(state: str, is_ru: bool) -> list[str]:
+    if state == "ready":
+        return [
+            "Собрать API/manual metrics snapshot.",
+            "Отметить lead или inquiry как главный сигнал.",
+            "Сгенерировать next-week recommendation без авто-применения.",
+        ] if is_ru else [
+            "Collect an API/manual metrics snapshot.",
+            "Record a lead or inquiry as the primary signal.",
+            "Generate next-week recommendation without auto-apply.",
+        ]
+    return [
+        "Дождаться первого published поста.",
+        "Включить scoped metrics collector.",
+        "Заявки/обращения учитывать выше охвата и лайков.",
+    ] if is_ru else [
+        "Wait for the first published post.",
+        "Enable scoped metrics collector.",
+        "Rank leads/inquiries above reach and likes.",
+    ]
+
+
+def _social_proof_platform_label(
+    first_api_publish_readiness: dict[str, Any],
+    first_api_proof_gate: dict[str, Any],
+) -> str:
+    candidate = _json_dict(first_api_proof_gate.get("candidate"))
+    candidate_label = str(candidate.get("platform_label") or "").strip()
+    if candidate_label:
+        return candidate_label
+    platform = first_api_publish_readiness.get("recommended_start_platform")
+    if isinstance(platform, dict):
+        label = str(platform.get("platform_label") or platform.get("platform") or "").strip()
+        if label:
+            return label
+    return "Telegram/VK"
+
+
+def _social_proof_requirements_summary(status: str, ready_groups: int, total_groups: int, is_ru: bool) -> str:
+    if status == "ready_for_live_proof":
+        return (
+            "Все блоки готовы к живому proof-loop: публикация, handoff карт и сбор результата."
+            if is_ru
+            else "All blocks are ready for the live proof loop: publish, map handoff, and result collection."
+        )
+    if status == "needs_setup":
+        return (
+            f"Готово {int(ready_groups or 0)} из {int(total_groups or 0)} блоков; начните с Telegram/VK и не скрывайте ручной режим карт."
+            if is_ru
+            else f"{int(ready_groups or 0)} of {int(total_groups or 0)} blocks are ready; start with Telegram/VK and keep map manual mode explicit."
+        )
+    return (
+        f"Готово {int(ready_groups or 0)} из {int(total_groups or 0)} блоков; следующий шаг зависит от текущей очереди."
+        if is_ru
+        else f"{int(ready_groups or 0)} of {int(total_groups or 0)} blocks are ready; the next step depends on the current queue."
+    )
+
+
+def _social_proof_requirements_next_action(groups: list[dict[str, Any]], is_ru: bool) -> str:
+    for group in groups:
+        if str(group.get("state") or "") not in {"ready", "complete"}:
+            return str(group.get("next_action_ru" if is_ru else "next_action_en") or "").strip()
+    return (
+        "Запустите один scoped цикл, затем соберите метрики и заявки."
+        if is_ru
+        else "Run one scoped cycle, then collect metrics and leads."
+    )
 
 
 def _social_first_cycle_proof_packet(

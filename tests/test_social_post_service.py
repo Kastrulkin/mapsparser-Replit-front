@@ -3509,6 +3509,18 @@ def test_social_launch_preflight_payload_recommends_scoped_env_and_keeps_safety_
     assert payload["first_cycle_proof_packet"]["candidate_platform_label"] == "Telegram"
     assert payload["first_cycle_proof_packet"]["browser_final_click_allowed"] is False
     assert "provider_post_id/provider_post_url" in payload["first_cycle_proof_packet"]["after_run_checks_ru"][1]
+    assert payload["proof_requirements"]["schema"] == "localos_social_proof_requirements_v1"
+    assert payload["proof_requirements"]["ready_groups"] == 2
+    assert payload["proof_requirements"]["total_groups"] == 3
+    assert payload["proof_requirements"]["external_publish_requires_approval"] is True
+    assert payload["proof_requirements"]["browser_final_click_allowed"] is False
+    proof_groups = {item["key"]: item for item in payload["proof_requirements"]["groups"]}
+    assert proof_groups["telegram_vk_api_proof"]["state"] == "ready"
+    assert "provider_post_id/provider_post_url" in proof_groups["telegram_vk_api_proof"]["summary_ru"]
+    assert proof_groups["maps_supervised_handoff"]["state"] == "ready"
+    assert "финальной кнопкой" in proof_groups["maps_supervised_handoff"]["checklist_ru"][2]
+    assert proof_groups["metrics_and_recommendation"]["state"] == "waiting_for_publish"
+    assert "Заявки и обращения" in payload["proof_requirements"]["primary_metric_ru"]
     live_checklist = {item["key"]: item for item in payload["live_validation_checklist"]}
     assert live_checklist["open_real_plan"]["status"] == "done"
     assert live_checklist["ready_to_run_one_cycle"]["status"] == "current"

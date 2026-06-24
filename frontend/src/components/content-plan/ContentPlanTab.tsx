@@ -934,6 +934,35 @@ type SocialLaunchPreflight = {
     blocked_reason_en?: string;
     runtime_status?: string;
   };
+  proof_requirements?: {
+    schema?: string;
+    status?: string;
+    ready_groups?: number;
+    total_groups?: number;
+    title_ru?: string;
+    title_en?: string;
+    summary_ru?: string;
+    summary_en?: string;
+    next_action_ru?: string;
+    next_action_en?: string;
+    primary_metric_ru?: string;
+    primary_metric_en?: string;
+    external_publish_requires_approval?: boolean;
+    browser_final_click_allowed?: boolean;
+    maps_are_supervised_or_manual?: boolean;
+    groups?: Array<{
+      key?: string;
+      state?: string;
+      title_ru?: string;
+      title_en?: string;
+      summary_ru?: string;
+      summary_en?: string;
+      next_action_ru?: string;
+      next_action_en?: string;
+      checklist_ru?: string[];
+      checklist_en?: string[];
+    }>;
+  };
   live_validation_checklist?: Array<{
     key?: string;
     status?: 'done' | 'current' | 'attention' | 'pending' | string;
@@ -4454,6 +4483,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           : undefined,
         first_cycle_proof_packet: response.first_cycle_proof_packet && typeof response.first_cycle_proof_packet === 'object'
           ? response.first_cycle_proof_packet
+          : undefined,
+        proof_requirements: response.proof_requirements && typeof response.proof_requirements === 'object'
+          ? response.proof_requirements
           : undefined,
         workflow_stage_counts: response.workflow_stage_counts && typeof response.workflow_stage_counts === 'object'
           ? response.workflow_stage_counts
@@ -8817,6 +8849,113 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   ? String(socialLaunchPreflight.production_readiness.next_action_ru || '')
                                   : String(socialLaunchPreflight.production_readiness.next_action_en || '')}
                               </div>
+                            </div>
+                          ) : null}
+                          {socialLaunchPreflight.proof_requirements ? (
+                            <div
+                              data-testid="social-proof-requirements"
+                              data-schema={String(socialLaunchPreflight.proof_requirements.schema || 'localos_social_proof_requirements_v1')}
+                              className={[
+                                'mt-2 rounded-lg border px-2 py-2 text-[11px] leading-5',
+                                String(socialLaunchPreflight.proof_requirements.status || '') === 'ready_for_live_proof'
+                                  ? 'border-emerald-200/30 bg-emerald-400/10 text-emerald-50'
+                                  : 'border-sky-200/30 bg-sky-400/10 text-sky-50',
+                              ].join(' ')}
+                            >
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <div className="font-semibold text-white">
+                                    {isRu
+                                      ? String(socialLaunchPreflight.proof_requirements.title_ru || 'Что осталось для живого теста')
+                                      : String(socialLaunchPreflight.proof_requirements.title_en || 'What remains for the live proof')}
+                                  </div>
+                                  <div className="mt-1">
+                                    {isRu
+                                      ? String(socialLaunchPreflight.proof_requirements.summary_ru || '')
+                                      : String(socialLaunchPreflight.proof_requirements.summary_en || '')}
+                                  </div>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white">
+                                  {Number(socialLaunchPreflight.proof_requirements.ready_groups || 0)}
+                                  {'/'}
+                                  {Number(socialLaunchPreflight.proof_requirements.total_groups || 0)}
+                                </span>
+                              </div>
+                              <div className="mt-2 grid gap-2 lg:grid-cols-3">
+                                {(socialLaunchPreflight.proof_requirements.groups || []).slice(0, 3).map((group) => {
+                                  const state = String(group.state || '');
+                                  const ready = state === 'ready' || state === 'complete';
+                                  const attention = state === 'needs_setup' || state === 'needs_channel' || state === 'needs_manual_fallback';
+                                  const stateClass = ready
+                                    ? 'border-emerald-200/30 bg-emerald-400/10 text-emerald-50'
+                                    : attention
+                                      ? 'border-amber-200/30 bg-amber-400/10 text-amber-50'
+                                      : 'border-white/10 bg-white/10 text-slate-100';
+                                  const checklist = isRu ? group.checklist_ru : group.checklist_en;
+                                  return (
+                                    <div
+                                      key={`proof-requirement:${String(group.key || '')}`}
+                                      className={['rounded-lg border px-2 py-2', stateClass].join(' ')}
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="font-semibold text-white">
+                                          {isRu
+                                            ? String(group.title_ru || (
+                                              String(group.key || '') === 'telegram_vk_api_proof'
+                                                ? 'Telegram/VK API proof'
+                                                : String(group.key || '') === 'maps_supervised_handoff'
+                                                  ? 'Яндекс/2ГИС handoff'
+                                                  : String(group.key || '') === 'metrics_and_recommendation'
+                                                    ? 'Метрики и заявки'
+                                                    : ''
+                                            ))
+                                            : String(group.title_en || '')}
+                                        </span>
+                                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white">
+                                          {state || 'pending'}
+                                        </span>
+                                      </div>
+                                      <div className="mt-1">
+                                        {isRu ? String(group.summary_ru || '') : String(group.summary_en || '')}
+                                      </div>
+                                      {Array.isArray(checklist) && checklist.length > 0 ? (
+                                        <ul className="mt-2 space-y-1">
+                                          {checklist.slice(0, 3).map((step, index) => (
+                                            <li key={`proof-step:${String(group.key || '')}:${index}:${step}`} className="flex gap-1.5">
+                                              <span className="font-semibold text-white">{index + 1}.</span>
+                                              <span>{step}</span>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      ) : null}
+                                      <div className="mt-2 font-medium text-white">
+                                        {isRu ? 'Дальше: ' : 'Next: '}
+                                        {isRu ? String(group.next_action_ru || '') : String(group.next_action_en || '')}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <div className="mt-2 rounded-md bg-white/10 px-2 py-1 text-slate-100">
+                                <span className="font-semibold text-white">
+                                  {isRu ? 'Главный KPI: ' : 'Primary KPI: '}
+                                </span>
+                                {isRu
+                                  ? String(socialLaunchPreflight.proof_requirements.primary_metric_ru || 'Заявки и обращения')
+                                  : String(socialLaunchPreflight.proof_requirements.primary_metric_en || 'Leads and inquiries')}
+                                {' · '}
+                                {isRu
+                                  ? 'внешняя публикация только после подтверждения, карты без финального автоклика.'
+                                  : 'external publish only after approval, maps without final auto-click.'}
+                              </div>
+                              {(socialLaunchPreflight.proof_requirements.next_action_ru || socialLaunchPreflight.proof_requirements.next_action_en) ? (
+                                <div className="mt-2 font-medium text-white">
+                                  {isRu ? 'Ближайший шаг: ' : 'Closest next step: '}
+                                  {isRu
+                                    ? String(socialLaunchPreflight.proof_requirements.next_action_ru || '')
+                                    : String(socialLaunchPreflight.proof_requirements.next_action_en || '')}
+                                </div>
+                              ) : null}
                             </div>
                           ) : null}
                           {socialLaunchPreflight.first_api_publish_readiness ? (
