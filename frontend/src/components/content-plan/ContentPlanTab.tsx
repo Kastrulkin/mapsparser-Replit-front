@@ -1240,6 +1240,8 @@ type SocialChannelTargetSetup = {
   status?: string;
   ready?: boolean;
   owner_telegram_present?: boolean;
+  telegram_app_present?: boolean;
+  supervised_transport_present?: boolean;
   target_kind?: string;
   target_label_ru?: string;
   target_label_en?: string;
@@ -6142,6 +6144,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               {isRu ? 'Владелец подключён в Telegram' : 'Owner Telegram is linked'}
                             </div>
                           ) : null}
+                          {socialFirstApiPublishReadiness.setupFocus.target_setup.telegram_app_present ? (
+                            <div
+                              data-testid="social-overview-telegram-app-linked"
+                              className="ml-1 mt-1 inline-flex rounded-full bg-violet-400/20 px-2 py-0.5 text-[11px] font-semibold text-violet-50"
+                            >
+                              {isRu ? 'Telegram app подключён' : 'Telegram app linked'}
+                            </div>
+                          ) : null}
                           <div className="mt-1">
                             {isRu
                               ? String(socialFirstApiPublishReadiness.setupFocus.target_setup.summary_ru || '')
@@ -10851,6 +10861,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                       {isRu ? 'Владелец подключён' : 'Owner linked'}
                                     </div>
                                   ) : null}
+                                  {channel.target_setup.telegram_app_present ? (
+                                    <div
+                                      data-testid={`social-channel-guide-telegram-app-linked-${String(channel.platform || '')}`}
+                                      className="ml-1 mt-1 inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800"
+                                    >
+                                      {isRu ? 'Telegram app подключён' : 'Telegram app linked'}
+                                    </div>
+                                  ) : null}
                                   <div className="mt-1">
                                     {isRu
                                       ? String(channel.target_setup.summary_ru || '')
@@ -11019,6 +11037,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                   className="mt-1 inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800"
                                 >
                                   {isRu ? 'Владелец подключён в Telegram' : 'Owner Telegram is linked'}
+                                </div>
+                              ) : null}
+                              {channel.target_setup.telegram_app_present ? (
+                                <div
+                                  data-testid={`social-channel-telegram-app-linked-${String(channel.platform || '')}`}
+                                  className="ml-1 mt-1 inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800"
+                                >
+                                  {isRu ? 'Telegram app подключён' : 'Telegram app linked'}
                                 </div>
                               ) : null}
                               <div className="mt-1">

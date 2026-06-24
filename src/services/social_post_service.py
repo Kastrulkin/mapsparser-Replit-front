@@ -9266,6 +9266,8 @@ def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, An
     telegram_token_present = bool(decode_telegram_bot_token(business.get("telegram_bot_token")))
     telegram_chat_present = bool(str(business.get("telegram_chat_id") or "").strip())
     owner_telegram_present = bool(str(business.get("owner_telegram_id") or "").strip())
+    telegram_app_account = _find_active_external_account(cursor, business_id, ("telegram_app",))
+    telegram_app_present = bool(telegram_app_account)
     telegram_ready = telegram_token_present and telegram_chat_present
     vk_account = _find_active_external_account(cursor, business_id, ("vk", "vk_group", "vk_business"))
     vk_auth = _external_account_auth_data(vk_account)
@@ -9285,7 +9287,10 @@ def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, An
             telegram_ready,
             "ready" if telegram_ready else "missing_keys",
             _telegram_connection_checks(telegram_token_present, telegram_chat_present),
-            {"owner_telegram_present": owner_telegram_present},
+            {
+                "owner_telegram_present": owner_telegram_present,
+                "telegram_app_present": telegram_app_present,
+            },
         ),
         _channel_readiness(
             "vk",
@@ -9373,15 +9378,24 @@ def _channel_readiness_target_setup(
         return {}
     context = target_context or {}
     owner_telegram_present = bool(context.get("owner_telegram_present"))
+    telegram_app_present = bool(context.get("telegram_app_present"))
     not_a_target_ru = (
         "Владелец уже привязан в Telegram для управления LocalOS и уведомлений, но это не цель публикации поста."
-        if owner_telegram_present
-        else "Owner-bot и миниапп нужны для управления LocalOS и уведомлений; они не являются целью публикации поста."
+        if owner_telegram_present and not telegram_app_present
+        else (
+            "Telegram app/miniapp подключён как supervised transport для управления и сообщений, но пост из контент-плана всё равно публикуется в выбранный chat_id."
+            if telegram_app_present
+            else "Owner-bot и миниапп нужны для управления LocalOS и уведомлений; они не являются целью публикации поста."
+        )
     )
     not_a_target_en = (
         "The owner is already linked in Telegram for LocalOS control and notifications, but that is not the post publish target."
-        if owner_telegram_present
-        else "The owner bot and mini app manage LocalOS and notifications; they are not the post publish target."
+        if owner_telegram_present and not telegram_app_present
+        else (
+            "Telegram app/mini app is connected as a supervised transport for control and messages, but content-plan posts still publish to the selected chat_id."
+            if telegram_app_present
+            else "The owner bot and mini app manage LocalOS and notifications; they are not the post publish target."
+        )
     )
     return {
         "schema": "localos_social_channel_target_setup_v1",
@@ -9389,6 +9403,8 @@ def _channel_readiness_target_setup(
         "status": status_key,
         "ready": bool(ready),
         "owner_telegram_present": owner_telegram_present,
+        "telegram_app_present": telegram_app_present,
+        "supervised_transport_present": telegram_app_present,
         "target_kind": "publish_target_chat",
         "target_label_ru": "Канал или группа для поста",
         "target_label_en": "Post target channel or group",
