@@ -45,9 +45,12 @@ export const normalizeParseRefreshPolicy = (value: any): ParseRefreshPolicy => {
   };
 };
 
-export const loadCardExternalSummary = (businessId: string, scopeNetwork: boolean) => {
-  const scopeQuery = scopeNetwork ? '?scope=network' : '';
-  return jsonRequest(`/api/business/${businessId}/external/summary${scopeQuery}`);
+export const loadCardExternalSummary = (businessId: string, scopeNetwork: boolean, source = 'all') => {
+  const query = new URLSearchParams();
+  if (scopeNetwork) query.set('scope', 'network');
+  if (source && source !== 'all') query.set('source', source);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return jsonRequest(`/api/business/${businessId}/external/summary${suffix}`);
 };
 
 export const loadCardServices = (params: {

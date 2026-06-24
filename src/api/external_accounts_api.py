@@ -89,6 +89,19 @@ def _network_business_filter(column_name):
     return f"{column_name} IN (SELECT id FROM businesses WHERE network_id = %s OR id = %s)"
 
 
+def _map_source_filter_sql(column_name: str, source_filter_raw: str) -> str:
+    source = str(source_filter_raw or "").strip().lower()
+    if source in {"yandex", "yandex_maps", "yandex_business"}:
+        return f"LOWER(COALESCE({column_name}, '')) IN ('yandex_maps', 'yandex_business', 'apify_yandex')"
+    if source in {"2gis", "two_gis"}:
+        return f"LOWER(COALESCE({column_name}, '')) IN ('2gis', 'apify_2gis', 'two_gis')"
+    if source in {"google", "google_maps", "google_business"}:
+        return f"LOWER(COALESCE({column_name}, '')) IN ('google_maps', 'google_business', 'apify_google')"
+    if source in {"apple", "apple_maps", "apple_business"}:
+        return f"LOWER(COALESCE({column_name}, '')) IN ('apple_maps', 'apple_business', 'apify_apple')"
+    return ""
+
+
 @external_accounts_bp.route("/api/yclients/marketplace/disconnect", methods=["POST", "GET"])
 def yclients_marketplace_disconnect():
     """
@@ -1248,6 +1261,7 @@ def get_external_reviews(business_id):
             return jsonify({"success": True, "reviews": [], "total": 0, "with_response": 0, "without_response": 0})
 
         requested_scope = str(request.args.get("scope") or "").strip().lower()
+        source_filter_raw = str(request.args.get("source") or "").strip().lower()
         business_row, network_id, aggregate_network = _resolve_network_scope_for_business(cursor, business_id, requested_scope)
 
         review_query = """
@@ -1269,6 +1283,9 @@ def get_external_reviews(business_id):
         else:
             review_query += " WHERE r.business_id = %s "
             review_params.append(business_id)
+        source_filter_sql = _map_source_filter_sql("r.source", source_filter_raw)
+        if source_filter_sql:
+            review_query += f" AND {source_filter_sql} "
 
         review_query += " ORDER BY COALESCE(r.published_at, r.created_at) DESC, r.created_at DESC "
         cursor.execute(review_query, tuple(review_params))
@@ -1309,6 +1326,7 @@ def get_external_reviews(business_id):
             "without_response": sum(1 for x in reviews if not x["has_response"]),
             "scope": "network" if aggregate_network else "business",
             "network_id": network_id if aggregate_network else None,
+            "source": source_filter_raw or "all",
         })
 
     except Exception as e:
@@ -1390,6 +1408,7 @@ def get_external_summary(business_id):
             })
 
         requested_scope = str(request.args.get("scope") or "").strip().lower()
+        source_filter_raw = str(request.args.get("source") or "").strip().lower()
         business_row, network_id, aggregate_network = _resolve_network_scope_for_business(cursor, business_id, requested_scope)
 
         stats_query = """
@@ -1398,6 +1417,9 @@ def get_external_summary(business_id):
             WHERE 1 = 1
         """
         stats_params = []
+        stats_source_filter = _map_source_filter_sql("source", source_filter_raw)
+        if stats_source_filter:
+            stats_query += f" AND {stats_source_filter} "
         if aggregate_network:
             stats_query += """
               AND {network_filter}
@@ -1485,9 +1507,12 @@ def get_external_summary(business_id):
                    SUM(CASE WHEN response_text IS NOT NULL AND response_text != '' THEN 1 ELSE 0 END) AS with_response,
                    SUM(CASE WHEN response_text IS NULL OR response_text = '' THEN 1 ELSE 0 END) AS without_response
             FROM externalbusinessreviews
-            WHERE LOWER(COALESCE(source, '')) IN ('yandex_business', 'yandex_maps', 'apify_yandex')
+            WHERE 1 = 1
         """
         reviews_summary_params = []
+        reviews_source_filter = _map_source_filter_sql("source", source_filter_raw)
+        if reviews_source_filter:
+            reviews_summary_query += f" AND {reviews_source_filter} "
         if aggregate_network:
             reviews_summary_query += """
               AND {network_filter}
@@ -1598,6 +1623,7 @@ def get_external_summary(business_id):
             "competitors": parse_row.get("competitors") if parse_row else None,
             "scope": "network" if aggregate_network else "business",
             "network_id": network_id if aggregate_network else None,
+            "source": source_filter_raw or "all",
         })
 
     except Exception as e:

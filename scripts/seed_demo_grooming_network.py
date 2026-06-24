@@ -175,6 +175,40 @@ PARTNERS = [
 ]
 
 
+MAP_SOURCES = [
+    {
+        "key": "yandex",
+        "source": "yandex_business",
+        "map_type": "yandex_maps",
+        "label": "Яндекс Карты",
+        "url_template": "https://yandex.ru/maps/org/roga_i_kopyta_{key}",
+        "rating_delta": 0.0,
+        "reviews_ratio": 1.0,
+        "views_ratio": 1.0,
+    },
+    {
+        "key": "2gis",
+        "source": "2gis",
+        "map_type": "2gis",
+        "label": "2ГИС",
+        "url_template": "https://2gis.ru/spb/firm/demo-roga-i-kopyta-{key}",
+        "rating_delta": -0.1,
+        "reviews_ratio": 0.68,
+        "views_ratio": 0.74,
+    },
+    {
+        "key": "google",
+        "source": "google_business",
+        "map_type": "google_maps",
+        "label": "Google Maps",
+        "url_template": "https://maps.google.com/?cid=demo-roga-i-kopyta-{key}",
+        "rating_delta": 0.05,
+        "reviews_ratio": 0.42,
+        "views_ratio": 0.58,
+    },
+]
+
+
 def stable_id(part):
     return str(uuid.uuid5(DEMO_NAMESPACE, str(part)))
 
@@ -372,9 +406,37 @@ def ensure_bookings_table(cursor):
     )
 
 
+def ensure_external_business_services_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS externalbusinessservices (
+            id TEXT PRIMARY KEY,
+            business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+            source TEXT NOT NULL,
+            external_id TEXT,
+            category TEXT,
+            name TEXT,
+            description TEXT,
+            price TEXT,
+            keywords JSONB DEFAULT '[]'::jsonb,
+            raw_payload JSONB DEFAULT '{}'::jsonb,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_externalbusinessservices_business_source
+        ON externalbusinessservices(business_id, source)
+        """
+    )
+
+
 def planned_counts():
     location_count = len(LOCATIONS)
     service_count = len(SERVICES) * location_count
+    source_count = len(MAP_SOURCES)
     finance_entry_count = len(NETWORK_MONTH_REVENUE) * location_count * 11
     income_tx_count = len(NETWORK_MONTH_REVENUE) * location_count * 18
     booking_count = location_count * 36
@@ -384,6 +446,8 @@ def planned_counts():
         "parent_business": 1,
         "location_businesses": location_count,
         "services": service_count,
+        "external_map_services": service_count * source_count,
+        "external_reviews": location_count * source_count * 6,
         "finance_entries": finance_entry_count,
         "financialtransactions": income_tx_count,
         "bookings": booking_count,
@@ -447,8 +511,10 @@ def write_backup(cursor, backup_dir):
         ("bookings", "business_id = ANY(%s)", [business_ids]),
         ("cards", "business_id = ANY(%s)", [business_ids]),
         ("mapparseresults", "business_id = ANY(%s)", [business_ids]),
+        ("externalbusinessaccounts", "business_id = ANY(%s)", [business_ids]),
         ("externalbusinessstats", "business_id = ANY(%s)", [business_ids]),
         ("externalbusinessreviews", "business_id = ANY(%s)", [business_ids]),
+        ("externalbusinessservices", "business_id = ANY(%s)", [business_ids]),
         ("businessmaplinks", "business_id = ANY(%s)", [business_ids]),
         ("masters", "business_id = ANY(%s)", [business_ids]),
         ("averageticketmatrices", "business_id = ANY(%s)", [business_ids]),
@@ -501,8 +567,10 @@ def refresh_demo_area(cursor):
         "financialmetrics",
         "roidata",
         "masters",
+        "externalbusinessservices",
         "externalbusinessreviews",
         "externalbusinessstats",
+        "externalbusinessaccounts",
         "externalbusinessposts",
         "externalbusinessphotos",
         "cards",
@@ -517,26 +585,28 @@ def refresh_demo_area(cursor):
 
 def seed_user_network_businesses(cursor, password):
     now = datetime.utcnow().isoformat()
+    user_row = {
+        "id": USER_ID,
+        "email": DEMO_EMAIL,
+        "name": DEMO_USER_NAME,
+        "phone": DEMO_PHONE,
+        "is_active": True,
+        "is_verified": True,
+        "email_verified_at": now,
+        "personal_data_consent_at": now,
+        "personal_data_consent_version": CONSENT_VERSION,
+        "privacy_accepted_at": now,
+        "terms_accepted_at": now,
+        "credits_balance": 100000,
+        "created_at": now,
+        "updated_at": now,
+    }
+    if password:
+        user_row["password_hash"] = hash_password(password)
     upsert_row(
         cursor,
         "users",
-        {
-            "id": USER_ID,
-            "email": DEMO_EMAIL,
-            "password_hash": hash_password(password),
-            "name": DEMO_USER_NAME,
-            "phone": DEMO_PHONE,
-            "is_active": True,
-            "is_verified": True,
-            "email_verified_at": now,
-            "personal_data_consent_at": now,
-            "personal_data_consent_version": CONSENT_VERSION,
-            "privacy_accepted_at": now,
-            "terms_accepted_at": now,
-            "credits_balance": 100000,
-            "created_at": now,
-            "updated_at": now,
-        },
+        user_row,
     )
     upsert_row(
         cursor,
@@ -766,50 +836,23 @@ def seed_finance(cursor, service_map, master_map):
 
 
 def seed_map_metrics(cursor):
-    for location in LOCATIONS:
-        business_id = stable_id(f"business:{location['key']}")
-        url = f"https://yandex.ru/maps/org/demo_{location['key']}"
+    ensure_external_business_services_table(cursor)
+    for source in MAP_SOURCES:
         upsert_row(
             cursor,
             "businessmaplinks",
             {
-                "id": stable_id(f"maplink:{business_id}"),
+                "id": stable_id(f"maplink:{NETWORK_ID}:{source['key']}"),
                 "user_id": USER_ID,
-                "business_id": business_id,
-                "url": url,
-                "map_type": "yandex_maps",
+                "business_id": NETWORK_ID,
+                "url": source["url_template"].format(key="network"),
+                "map_type": source["map_type"],
                 "created_at": datetime.utcnow(),
             },
         )
-        upsert_row(
-            cursor,
-            "mapparseresults",
-            {
-                "id": stable_id(f"mapparse:{business_id}"),
-                "business_id": business_id,
-                "url": url,
-                "map_type": "yandex_maps",
-                "rating": str(location["rating"]),
-                "reviews_count": location["reviews"],
-                "unanswered_reviews_count": location["unanswered"],
-                "news_count": location["news"],
-                "photos_count": location["photos"],
-                "services_count": location["services"],
-                "analysis_json": {
-                    "demo": True,
-                    "summary": f"Точка с рейтингом {location['rating']} и разным уровнем заполнения карточки.",
-                },
-                "products": "Груминг собак, стрижка когтей, вычёсывание кошек, SPA-уход",
-                "title": location["name"],
-                "address": location["address"],
-                "is_verified": True,
-                "phone": location["phone"],
-                "website": "https://localos.pro",
-                "posts_count": location["news"],
-                "profile_completeness": 80 if location["rating"] >= 4.6 else 58,
-                "created_at": datetime.utcnow(),
-            },
-        )
+    for location in LOCATIONS:
+        business_id = stable_id(f"business:{location['key']}")
+        primary_url = MAP_SOURCES[0]["url_template"].format(key=location["key"])
         upsert_row(
             cursor,
             "cards",
@@ -817,7 +860,7 @@ def seed_map_metrics(cursor):
                 "id": stable_id(f"card:{business_id}"),
                 "business_id": business_id,
                 "user_id": USER_ID,
-                "url": url,
+                "url": primary_url,
                 "title": location["name"],
                 "address": location["address"],
                 "phone": location["phone"],
@@ -842,51 +885,140 @@ def seed_map_metrics(cursor):
                 "updated_at": datetime.utcnow(),
             },
         )
-        for offset in range(6):
-            stat_date = date(2026, 1 + offset, 28)
+        for source_index, source in enumerate(MAP_SOURCES):
+            url = source["url_template"].format(key=location["key"])
+            source_rating = max(1.0, min(5.0, round(location["rating"] + source["rating_delta"], 1)))
+            source_reviews = max(8, int(location["reviews"] * source["reviews_ratio"]))
+            source_unanswered = max(0, int(location["unanswered"] * (1.0 + source_index * 0.35)))
             upsert_row(
                 cursor,
-                "externalbusinessstats",
+                "businessmaplinks",
                 {
-                    "id": stable_id(f"external-stat:{business_id}:{stat_date.isoformat()}"),
+                    "id": stable_id(f"maplink:{business_id}:{source['key']}"),
+                    "user_id": USER_ID,
                     "business_id": business_id,
-                    "source": "yandex_business",
-                    "date": stat_date.isoformat(),
-                    "views_total": int(4200 + location["reviews"] * 4 + offset * 230),
-                    "clicks_total": int(360 + location["reviews"] * 0.8 + offset * 28),
-                    "actions_total": int(120 + location["reviews"] * 0.35 + offset * 12),
-                    "rating": location["rating"],
-                    "reviews_total": location["reviews"] + offset * 3,
-                    "photos_count": location["photos"],
-                    "news_count": location["news"],
-                    "unanswered_reviews_count": location["unanswered"],
-                    "raw_payload": json.dumps({"demo": True}, ensure_ascii=False),
+                    "url": url,
+                    "map_type": source["map_type"],
+                    "created_at": datetime.utcnow(),
+                },
+            )
+            upsert_row(
+                cursor,
+                "externalbusinessaccounts",
+                {
+                    "id": stable_id(f"external-account:{business_id}:{source['key']}"),
+                    "business_id": business_id,
+                    "source": source["source"],
+                    "external_id": f"demo-{source['key']}-{location['key']}",
+                    "display_name": f"{location['name']} · {source['label']}",
+                    "is_active": True,
+                    "last_sync_at": datetime.utcnow(),
+                    "last_error": None,
                     "created_at": datetime.utcnow(),
                     "updated_at": datetime.utcnow(),
                 },
             )
-        for review_index in range(8):
-            rating = 5 if review_index < 5 else 4 if location["rating"] >= 4.3 else 3
-            response_text = "" if review_index < min(location["unanswered"], 5) else "Спасибо за отзыв! Будем рады видеть вас снова."
             upsert_row(
                 cursor,
-                "externalbusinessreviews",
+                "mapparseresults",
                 {
-                    "id": stable_id(f"review:{business_id}:{review_index}"),
+                    "id": stable_id(f"mapparse:{business_id}:{source['key']}"),
                     "business_id": business_id,
-                    "source": "yandex_business",
-                    "external_review_id": f"demo-{location['key']}-{review_index}",
-                    "rating": rating,
-                    "author_name": CLIENT_NAMES[(review_index + len(location["key"])) % len(CLIENT_NAMES)],
-                    "text": "DEMO: отзыв о груминге, аккуратности мастера и удобстве записи.",
-                    "published_at": datetime(2026, 6, max(1, 20 - review_index)),
-                    "response_text": response_text,
-                    "response_at": datetime(2026, 6, 22) if response_text else None,
-                    "raw_payload": json.dumps({"demo": True}, ensure_ascii=False),
+                    "url": url,
+                    "map_type": source["map_type"],
+                    "source": source["source"],
+                    "rating": str(source_rating),
+                    "reviews_count": source_reviews,
+                    "unanswered_reviews_count": source_unanswered,
+                    "news_count": max(0, location["news"] - source_index),
+                    "photos_count": max(5, int(location["photos"] * (1.0 - source_index * 0.18))),
+                    "services_count": len(SERVICES),
+                    "analysis_json": {
+                        "demo": True,
+                        "source": source["source"],
+                        "summary": f"DEMO: {source['label']} для точки сети с рейтингом {source_rating}.",
+                    },
+                    "products": "Груминг собак, стрижка когтей, вычёсывание кошек, SPA-уход",
+                    "title": location["name"],
+                    "address": location["address"],
+                    "is_verified": True,
+                    "phone": location["phone"],
+                    "website": "https://localos.pro",
+                    "posts_count": max(0, location["news"] - source_index),
+                    "profile_completeness": 80 if source_rating >= 4.6 else 58,
                     "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow(),
                 },
             )
+            for offset in range(6):
+                stat_date = date(2026, 1 + offset, 28)
+                reviews_total = source_reviews + offset * (3 - min(source_index, 2))
+                upsert_row(
+                    cursor,
+                    "externalbusinessstats",
+                    {
+                        "id": stable_id(f"external-stat:{business_id}:{source['key']}:{stat_date.isoformat()}"),
+                        "business_id": business_id,
+                        "account_id": stable_id(f"external-account:{business_id}:{source['key']}"),
+                        "source": source["source"],
+                        "date": stat_date.isoformat(),
+                        "views_total": int((4200 + location["reviews"] * 4 + offset * 230) * source["views_ratio"]),
+                        "clicks_total": int((360 + location["reviews"] * 0.8 + offset * 28) * source["views_ratio"]),
+                        "actions_total": int((120 + location["reviews"] * 0.35 + offset * 12) * source["views_ratio"]),
+                        "rating": source_rating,
+                        "reviews_total": reviews_total,
+                        "photos_count": max(5, int(location["photos"] * (1.0 - source_index * 0.18))),
+                        "news_count": max(0, location["news"] - source_index),
+                        "unanswered_reviews_count": source_unanswered,
+                        "raw_payload": json.dumps({"demo": True, "source": source["source"]}, ensure_ascii=False),
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow(),
+                    },
+                )
+            for service_index, service in enumerate(SERVICES):
+                name, category, description, price, keywords = service
+                source_suffix = "" if source["key"] == "yandex" else f" · {source['label']}"
+                upsert_row(
+                    cursor,
+                    "externalbusinessservices",
+                    {
+                        "id": stable_id(f"external-service:{business_id}:{source['key']}:{service_index}"),
+                        "business_id": business_id,
+                        "source": source["source"],
+                        "external_id": f"demo-{source['key']}-{location['key']}-{service_index}",
+                        "category": category,
+                        "name": f"{name}{source_suffix}",
+                        "description": f"DEMO {source['label']}: {description}",
+                        "price": str(price),
+                        "keywords": keywords,
+                        "raw_payload": {"demo": True, "source": source["source"], "map": source["label"]},
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow(),
+                    },
+                )
+            for review_index in range(6):
+                rating = 5 if review_index < 3 else 4 if source_rating >= 4.3 else 3
+                response_text = "" if review_index < min(source_unanswered, 3) else "Спасибо за отзыв! Будем рады видеть вас снова."
+                upsert_row(
+                    cursor,
+                    "externalbusinessreviews",
+                    {
+                        "id": stable_id(f"review:{business_id}:{source['key']}:{review_index}"),
+                        "business_id": business_id,
+                        "account_id": stable_id(f"external-account:{business_id}:{source['key']}"),
+                        "source": source["source"],
+                        "external_review_id": f"demo-{source['key']}-{location['key']}-{review_index}",
+                        "rating": rating,
+                        "author_name": CLIENT_NAMES[(review_index + source_index + len(location["key"])) % len(CLIENT_NAMES)],
+                        "text": f"DEMO {source['label']}: отзыв о груминге, аккуратности мастера и удобстве записи.",
+                        "published_at": datetime(2026, 6, max(1, 20 - review_index - source_index)),
+                        "response_text": response_text,
+                        "response_at": datetime(2026, 6, 22) if response_text else None,
+                        "lang": "ru",
+                        "raw_payload": json.dumps({"demo": True, "source": source["source"]}, ensure_ascii=False),
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow(),
+                    },
+                )
 
 
 def seed_bookings(cursor, service_map, master_map):
@@ -1173,12 +1305,15 @@ def seed_partners(cursor):
 
 
 def apply_seed(args):
-    password = demo_password()
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         ensure_bookings_table(cursor)
         ensure_average_ticket_tables(cursor)
+        ensure_external_business_services_table(cursor)
+        cursor.execute("SELECT id FROM users WHERE id = %s OR email = %s LIMIT 1", (USER_ID, DEMO_EMAIL))
+        existing_user = cursor.fetchone()
+        password = None if existing_user else demo_password()
         backup_path = write_backup(cursor, Path(args.backup_dir))
         refresh_demo_area(cursor)
         seed_user_network_businesses(cursor, password)
@@ -1192,7 +1327,7 @@ def apply_seed(args):
         conn.commit()
         print("DEMO_GROOMING_NETWORK_APPLIED")
         print(f"email={DEMO_EMAIL}")
-        print(f"password={password}")
+        print(f"password={password if password else 'unchanged'}")
         print(f"user_id={USER_ID}")
         print(f"network_id={NETWORK_ID}")
         print(f"backup={backup_path}")

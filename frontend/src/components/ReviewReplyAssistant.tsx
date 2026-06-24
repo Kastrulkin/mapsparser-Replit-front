@@ -117,7 +117,10 @@ export default function ReviewReplyAssistant({
     if (!currentBusinessId) return;
     setLoadingReviews(true);
     try {
-      const query = aggregateScope === 'network' ? '?scope=network' : '';
+      const params = new URLSearchParams();
+      if (aggregateScope === 'network') params.set('scope', 'network');
+      if (selectedSource && selectedSource !== 'all') params.set('source', selectedSource);
+      const query = params.toString() ? `?${params.toString()}` : '';
       const data = await newAuth.makeRequest(`/business/${currentBusinessId}/external/reviews${query}`);
       if (data.success) {
         const nextReviews = data.reviews || [];
@@ -142,7 +145,7 @@ export default function ReviewReplyAssistant({
   useEffect(() => {
     loadExamples();
     loadExternalReviews();
-  }, [currentBusinessId, aggregateScope]);
+  }, [currentBusinessId, aggregateScope, selectedSource]);
 
   useEffect(() => {
     setReviewFilter(initialFilter);

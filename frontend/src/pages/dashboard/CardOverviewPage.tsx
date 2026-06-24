@@ -293,7 +293,7 @@ export const CardOverviewPage = () => {
     if (!currentBusinessId) return;
     setLoadingSummary(true);
     try {
-      const { data } = await loadCardExternalSummary(currentBusinessId, isNetworkRepresentative);
+      const { data } = await loadCardExternalSummary(currentBusinessId, isNetworkRepresentative, selectedSource);
       if (data.success) {
         setRating(data.rating);
         setReviewsTotal(data.reviews_total || 0);
