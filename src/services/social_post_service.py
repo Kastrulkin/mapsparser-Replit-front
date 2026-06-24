@@ -7859,16 +7859,23 @@ def _load_business_publish_context(cursor: Any, business_id: str) -> dict[str, A
     if not business_id:
         return {}
     columns = _table_columns(cursor, "businesses")
-    select_parts = ["id", "name"]
-    for column in ("telegram_bot_token", "telegram_chat_id"):
+    select_parts = ["businesses.id id", "businesses.name name"]
+    for column in ("owner_id", "telegram_bot_token", "telegram_chat_id"):
         if column in columns:
-            select_parts.append(column)
+            select_parts.append(f"businesses.{column} {column}")
         else:
-            select_parts.append(f"NULL AS {column}")
+            select_parts.append(f"NULL {column}")
+    owner_join = ""
+    if "owner_id" in columns:
+        select_parts.append("u.telegram_id owner_telegram_id")
+        owner_join = "LEFT JOIN users u ON u.id = businesses.owner_id"
+    else:
+        select_parts.append("NULL owner_telegram_id")
     cursor.execute(
         f"""
         SELECT {", ".join(select_parts)}
         FROM businesses
+        {owner_join}
         WHERE id = %s
         LIMIT 1
         """,
@@ -9118,6 +9125,7 @@ def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, An
     business = _load_business_publish_context(cursor, business_id)
     telegram_token_present = bool(decode_telegram_bot_token(business.get("telegram_bot_token")))
     telegram_chat_present = bool(str(business.get("telegram_chat_id") or "").strip())
+    owner_telegram_present = bool(str(business.get("owner_telegram_id") or "").strip())
     telegram_ready = telegram_token_present and telegram_chat_present
     vk_account = _find_active_external_account(cursor, business_id, ("vk", "vk_group", "vk_business"))
     vk_auth = _external_account_auth_data(vk_account)
@@ -9137,6 +9145,7 @@ def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, An
             telegram_ready,
             "ready" if telegram_ready else "missing_keys",
             _telegram_connection_checks(telegram_token_present, telegram_chat_present),
+            {"owner_telegram_present": owner_telegram_present},
         ),
         _channel_readiness(
             "vk",
@@ -9189,6 +9198,7 @@ def _channel_readiness(
     ready: bool,
     status: str,
     connection_checks: list[dict[str, Any]] | None = None,
+    target_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "platform": platform,
@@ -9207,26 +9217,44 @@ def _channel_readiness(
         "missing_fields": _channel_readiness_missing_fields(platform, status),
         "settings_path": _channel_readiness_settings_path(platform),
         "connection_checks": connection_checks or [],
-        "target_setup": _channel_readiness_target_setup(platform, status, ready),
+        "target_setup": _channel_readiness_target_setup(platform, status, ready, target_context),
     }
 
 
-def _channel_readiness_target_setup(platform: str, status: str, ready: bool) -> dict[str, Any]:
+def _channel_readiness_target_setup(
+    platform: str,
+    status: str,
+    ready: bool,
+    target_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     platform_key = str(platform or "").strip()
     status_key = str(status or "").strip()
     if platform_key != "telegram":
         return {}
+    context = target_context or {}
+    owner_telegram_present = bool(context.get("owner_telegram_present"))
+    not_a_target_ru = (
+        "Владелец уже привязан в Telegram для управления LocalOS и уведомлений, но это не цель публикации поста."
+        if owner_telegram_present
+        else "Owner-bot и миниапп нужны для управления LocalOS и уведомлений; они не являются целью публикации поста."
+    )
+    not_a_target_en = (
+        "The owner is already linked in Telegram for LocalOS control and notifications, but that is not the post publish target."
+        if owner_telegram_present
+        else "The owner bot and mini app manage LocalOS and notifications; they are not the post publish target."
+    )
     return {
         "schema": "localos_social_channel_target_setup_v1",
         "platform": "telegram",
         "status": status_key,
         "ready": bool(ready),
+        "owner_telegram_present": owner_telegram_present,
         "target_kind": "publish_target_chat",
         "target_label_ru": "Канал или группа для поста",
         "target_label_en": "Post target channel or group",
         "required_fields": ["telegram_bot_token", "telegram_chat_id"],
-        "not_a_target_ru": "Owner-bot и миниапп нужны для управления LocalOS и уведомлений; они не являются целью публикации поста.",
-        "not_a_target_en": "The owner bot and mini app manage LocalOS and notifications; they are not the post publish target.",
+        "not_a_target_ru": not_a_target_ru,
+        "not_a_target_en": not_a_target_en,
         "summary_ru": (
             "Telegram готов: перед первым постом запустите live API-проверку без публикации."
             if ready

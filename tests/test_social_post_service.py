@@ -2826,6 +2826,22 @@ def test_channel_readiness_exposes_owner_next_action():
     assert facebook["settings_path"] == "/dashboard/settings?focus=facebook"
 
 
+def test_telegram_target_setup_distinguishes_owner_control_chat_from_publish_target():
+    telegram = _channel_readiness(
+        "telegram",
+        "api",
+        False,
+        "missing_keys",
+        target_context={"owner_telegram_present": True},
+    )
+
+    assert telegram["target_setup"]["owner_telegram_present"] is True
+    assert "Владелец уже привязан в Telegram" in telegram["target_setup"]["not_a_target_ru"]
+    assert "not the post publish target" in telegram["target_setup"]["not_a_target_en"]
+    assert "telegram_chat_id" in telegram["target_setup"]["required_fields"]
+    assert telegram["ready"] is False
+
+
 def test_channel_readiness_can_expose_safe_connection_checks():
     checks = _telegram_connection_checks(token_present=True, chat_present=False)
     readiness = _channel_readiness("telegram", "api", False, "missing_keys", checks)
