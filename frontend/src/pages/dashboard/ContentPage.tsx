@@ -216,6 +216,19 @@ const getPostStatusLabel = (status?: string) => {
   return 'Черновик';
 };
 
+const getPostNextAction = (post: SocialPost) => {
+  const normalized = String(post.status || '').toLowerCase();
+  if (normalized === 'needs_review') return 'Проверьте текст и нажмите «Утвердить».';
+  if (normalized === 'approved') return 'Можно поставить в расписание.';
+  if (normalized === 'queued') return 'Ждёт своей даты.';
+  if (normalized === 'publishing') return 'Публикуем сейчас.';
+  if (normalized === 'published') return 'Публикация вышла.';
+  if (normalized === 'needs_supervised_publish') return 'Откройте контролируемое размещение.';
+  if (normalized === 'needs_manual_publish') return 'Нужно разместить вручную.';
+  if (normalized === 'failed') return post.last_error || 'Нужно обновить подключение или попробовать снова.';
+  return 'Сначала проверьте текст.';
+};
+
 const getItemStatusLabel = (item: PlanItem, posts: SocialPost[]) => {
   if (posts.some((post) => String(post.status || '') === 'failed')) return 'Не удалось';
   if (posts.some((post) => String(post.status || '') === 'needs_supervised_publish' || String(post.status || '') === 'needs_manual_publish')) {
@@ -996,7 +1009,7 @@ export function ContentPage() {
               <div>
                 <SheetHeader>
                   <SheetTitle className="text-2xl">Публикация</SheetTitle>
-                  <SheetDescription>Текст, preview и подтверждение перед выходом наружу.</SheetDescription>
+                  <SheetDescription>Текст, предпросмотр и подтверждение перед выходом наружу.</SheetDescription>
                 </SheetHeader>
                 <div className="mt-6 space-y-4">
                   <Input
@@ -1070,27 +1083,43 @@ export function ContentPage() {
                   </label>
                   <div className="mt-4">
                     <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Каналы</div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {(hasPosts ? selectedPosts : CHANNELS.slice(0, 5)).map((itemOrPost) => {
-                        const label = 'platform' in itemOrPost ? platformShortLabel(itemOrPost) : itemOrPost.label;
-                        return (
-                          <span key={label} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                            {label}
+                    {hasPosts ? (
+                      <div className="mt-2 space-y-2">
+                        {selectedPosts.map((post) => {
+                          const statusLabel = getPostStatusLabel(post.status);
+                          return (
+                            <div key={post.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-sm font-semibold text-slate-900">{platformShortLabel(post)}</span>
+                                <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1', getStatusClassName(statusLabel))}>
+                                  {statusLabel}
+                                </span>
+                              </div>
+                              <div className="mt-1 text-xs leading-5 text-slate-500">{getPostNextAction(post)}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {CHANNELS.slice(0, 5).map((channel) => (
+                          <span key={channel.key} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                            {channel.label}
                           </span>
-                        );
-                      })}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-4">
-                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Статус</div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {(hasPosts ? selectedPosts : [{ id: 'draft', status: itemHasText(item) ? 'needs_review' : 'draft' }]).map((post) => (
-                        <span key={post.id} className={cn('rounded-full px-3 py-1 text-xs font-semibold ring-1', getStatusClassName(getPostStatusLabel(post.status)))}>
-                          {getPostStatusLabel(post.status)}
+                  {!hasPosts ? (
+                    <div className="mt-4">
+                      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Статус</div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <span className={cn('rounded-full px-3 py-1 text-xs font-semibold ring-1', getStatusClassName(itemHasText(item) ? 'Нужно проверить' : 'Черновик'))}>
+                          {itemHasText(item) ? 'Нужно проверить' : 'Черновик'}
                         </span>
-                      ))}
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
                 </div>
                 <div className="grid gap-2">
                   <Button type="button" variant="outline" onClick={saveSelectedItem} disabled={Boolean(busyAction)} className="rounded-2xl">
