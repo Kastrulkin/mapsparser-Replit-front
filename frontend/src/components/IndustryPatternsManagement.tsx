@@ -5,7 +5,7 @@ import { Card, CardContent } from './ui/card';
 import { newAuth } from '../lib/auth_new';
 import { useToast } from '../hooks/use-toast';
 
-type PatternTab = 'pending' | 'active' | 'revision' | 'impact';
+type PatternTab = 'matrix' | 'pending' | 'active' | 'revision' | 'impact';
 
 type PatternProposal = {
   id: string;
@@ -101,6 +101,33 @@ type PatternAdminEvent = {
   metadata?: Record<string, unknown>;
 };
 
+type MatrixOption = {
+  value: string;
+  label: string;
+};
+
+type MatrixTechnique = {
+  industry_key?: string;
+  pattern_type?: string;
+  pattern_text?: string;
+  version?: string;
+  activated_at?: string;
+};
+
+type MatrixRow = {
+  industry_key: string;
+  industry_label: string;
+  objective_key: string;
+  objective_label: string;
+  prompt_type: string;
+  default_prompt: string;
+  effective_prompt: string;
+  has_override: boolean;
+  updated_at?: string;
+  updated_by?: string;
+  learned_techniques?: MatrixTechnique[];
+};
+
 type ConfirmAction = {
   title: string;
   description: string;
@@ -141,6 +168,7 @@ const ROLLBACK_REASONS = [
 ];
 
 const PATTERN_TABS: Array<{ id: PatternTab; label: string }> = [
+  { id: 'matrix', label: 'Matrix' },
   { id: 'pending', label: 'Pending' },
   { id: 'active', label: 'Active' },
   { id: 'revision', label: 'На доработке' },
@@ -175,11 +203,16 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 };
 
 export const IndustryPatternsManagement: React.FC<IndustryPatternsManagementProps> = ({ apiClient = newAuth }) => {
-  const [activeTab, setActiveTab] = useState<PatternTab>('pending');
+  const [activeTab, setActiveTab] = useState<PatternTab>('matrix');
   const [industry, setIndustry] = useState('all');
   const [patternType, setPatternType] = useState('all');
+  const [matrixObjective, setMatrixObjective] = useState('all');
   const [query, setQuery] = useState('');
   const [summary, setSummary] = useState<any>(null);
+  const [matrixRows, setMatrixRows] = useState<MatrixRow[]>([]);
+  const [matrixIndustries, setMatrixIndustries] = useState<MatrixOption[]>([]);
+  const [matrixObjectives, setMatrixObjectives] = useState<MatrixOption[]>([]);
+  const [matrixDrafts, setMatrixDrafts] = useState<Record<string, string>>({});
   const [proposals, setProposals] = useState<PatternProposal[]>([]);
   const [versions, setVersions] = useState<PatternVersion[]>([]);
   const [health, setHealth] = useState<PatternHealth[]>([]);
@@ -216,12 +249,32 @@ export const IndustryPatternsManagement: React.FC<IndustryPatternsManagementProp
     setHealth(data.health || []);
   }, [apiClient, industry, patternType]);
 
+  const loadMatrix = useCallback(async () => {
+    const params = new URLSearchParams({ industry_key: industry, objective_key: matrixObjective });
+    const data = await apiClient.makeRequest(`/admin/industry-patterns/publication-matrix?${params.toString()}`);
+    const rows: MatrixRow[] = data.rows || [];
+    setMatrixRows(rows);
+    setMatrixIndustries(data.industries || []);
+    setMatrixObjectives(data.objectives || []);
+    setMatrixDrafts((prev) => {
+      const next = { ...prev };
+      rows.forEach((row) => {
+        if (next[row.prompt_type] === undefined) {
+          next[row.prompt_type] = row.effective_prompt || row.default_prompt || '';
+        }
+      });
+      return next;
+    });
+  }, [apiClient, industry, matrixObjective]);
+
   const reload = useCallback(async () => {
     setLoading(true);
     try {
       await loadSummary();
       await loadAdminEvents();
-      if (activeTab === 'active' || activeTab === 'impact') {
+      if (activeTab === 'matrix') {
+        await loadMatrix();
+      } else if (activeTab === 'active' || activeTab === 'impact') {
         await loadVersions();
       } else {
         await loadProposals();
@@ -235,7 +288,7 @@ export const IndustryPatternsManagement: React.FC<IndustryPatternsManagementProp
     } finally {
       setLoading(false);
     }
-  }, [activeTab, loadAdminEvents, loadProposals, loadSummary, loadVersions, toast]);
+  }, [activeTab, loadAdminEvents, loadMatrix, loadProposals, loadSummary, loadVersions, toast]);
 
   useEffect(() => {
     reload();
@@ -278,6 +331,20 @@ export const IndustryPatternsManagement: React.FC<IndustryPatternsManagementProp
       item.version || '',
     ].join(' ').toLowerCase().includes(normalized));
   }, [activeTab, healthByVersion, query, versions]);
+
+  const filteredMatrixRows = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return matrixRows;
+    return matrixRows.filter((item) => [
+      item.industry_label,
+      item.industry_key,
+      item.objective_label,
+      item.objective_key,
+      item.effective_prompt,
+      item.default_prompt,
+      ...(item.learned_techniques || []).map((technique) => technique.pattern_text || ''),
+    ].join(' ').toLowerCase().includes(normalized));
+  }, [matrixRows, query]);
 
   const runAction = async (action: () => Promise<void>, success: string) => {
     setActionLoading(true);
@@ -421,6 +488,77 @@ export const IndustryPatternsManagement: React.FC<IndustryPatternsManagementProp
     });
   };
 
+  const saveMatrixRow = (row: MatrixRow) => runAction(
+    () => apiClient.makeRequest('/admin/industry-patterns/publication-matrix', {
+      method: 'PUT',
+      body: JSON.stringify({
+        industry_key: row.industry_key,
+        objective_key: row.objective_key,
+        prompt_text: matrixDrafts[row.prompt_type] || row.effective_prompt || row.default_prompt,
+      }),
+    }),
+    'Базовые правила сохранены',
+  );
+
+  const resetMatrixDraft = (row: MatrixRow) => {
+    setMatrixDrafts((prev) => ({ ...prev, [row.prompt_type]: row.default_prompt || '' }));
+  };
+
+  const renderMatrixRow = (row: MatrixRow) => {
+    const techniques = row.learned_techniques || [];
+    return (
+      <div key={row.prompt_type} className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+              <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">{row.industry_label}</span>
+              <span className="rounded-md bg-blue-50 px-2 py-1 text-blue-700">{row.objective_label}</span>
+              <span className={row.has_override ? 'rounded-md bg-emerald-50 px-2 py-1 text-emerald-700' : 'rounded-md bg-slate-50 px-2 py-1 text-slate-500'}>
+                {row.has_override ? 'из базы' : 'default'}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">{row.prompt_type}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button size="sm" variant="outline" className="rounded-md" onClick={() => resetMatrixDraft(row)}>
+              Вернуть default
+            </Button>
+            <Button size="sm" className="rounded-md" onClick={() => saveMatrixRow(row)} disabled={actionLoading}>
+              Сохранить
+            </Button>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 lg:grid-cols-[1.3fr_0.7fr]">
+          <div>
+            <div className="mb-2 text-sm font-semibold text-slate-950">Базовые правила</div>
+            <textarea
+              value={matrixDrafts[row.prompt_type] ?? row.effective_prompt ?? row.default_prompt}
+              onChange={(event) => setMatrixDrafts((prev) => ({ ...prev, [row.prompt_type]: event.target.value }))}
+              className="min-h-64 w-full rounded-lg border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-900 outline-none focus:border-slate-400"
+            />
+          </div>
+          <div>
+            <div className="mb-2 text-sm font-semibold text-slate-950">Выученные техники Ralph loop</div>
+            <div className="space-y-2">
+              {techniques.length > 0 ? techniques.map((technique, index) => (
+                <div key={`${row.prompt_type}-${index}`} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <div className="mb-1 text-xs font-semibold text-slate-500">
+                    {typeLabel(technique.pattern_type)} · {technique.version || 'active'}
+                  </div>
+                  <div className="text-sm leading-6 text-slate-800">{technique.pattern_text || '-'}</div>
+                </div>
+              )) : (
+                <div className="rounded-lg border border-dashed border-slate-200 p-3 text-sm text-slate-500">
+                  Ralph loop пока не активировал техник для этой ниши.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderProposal = (proposal: PatternProposal) => (
     <div key={proposal.id} className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -559,11 +697,19 @@ export const IndustryPatternsManagement: React.FC<IndustryPatternsManagementProp
             />
           </div>
           <select value={industry} onChange={(event) => setIndustry(event.target.value)} className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm">
-            {INDUSTRY_FILTERS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            {(activeTab === 'matrix' && matrixIndustries.length > 0 ? [{ value: 'all', label: 'Все' }, ...matrixIndustries] : INDUSTRY_FILTERS)
+              .map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select>
-          <select value={patternType} onChange={(event) => setPatternType(event.target.value)} className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm">
-            {TYPE_FILTERS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-          </select>
+          {activeTab === 'matrix' ? (
+            <select value={matrixObjective} onChange={(event) => setMatrixObjective(event.target.value)} className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm">
+              <option value="all">Все публикации</option>
+              {matrixObjectives.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+          ) : (
+            <select value={patternType} onChange={(event) => setPatternType(event.target.value)} className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm">
+              {TYPE_FILTERS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+          )}
           <Button variant="outline" className="h-10 rounded-md" onClick={reload} disabled={loading}>
             <RefreshCcw className="mr-1.5 h-4 w-4" />
             Обновить
@@ -575,7 +721,11 @@ export const IndustryPatternsManagement: React.FC<IndustryPatternsManagementProp
         </div>
       </div>
 
-      {activeTab === 'pending' || activeTab === 'revision' ? (
+      {activeTab === 'matrix' ? (
+        <div className="space-y-3">
+          {filteredMatrixRows.length > 0 ? filteredMatrixRows.map(renderMatrixRow) : <Empty text="Правил матрицы нет" />}
+        </div>
+      ) : activeTab === 'pending' || activeTab === 'revision' ? (
         <div className="space-y-3">
           {filteredProposals.length > 0 ? filteredProposals.map(renderProposal) : <Empty text="Предложений нет" />}
         </div>

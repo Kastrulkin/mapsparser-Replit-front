@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 
 from auth_system import verify_session
 from database_manager import get_db_connection
+from core.industry_patterns import INDUSTRY_PROFILES
 from core.industry_pattern_recalibration import (
     build_monthly_industry_pattern_impact_report,
     create_industry_pattern_version_proposal,
@@ -18,6 +19,11 @@ from core.industry_pattern_recalibration import (
     run_monthly_industry_pattern_recalibration,
     summarize_industry_pattern_admin_safety,
     summarize_industry_pattern_health,
+)
+from services.content_plan_service import (
+    PUBLICATION_OBJECTIVES,
+    _content_matrix_prompt_key,
+    _publication_objective_prompt_block,
 )
 
 
@@ -108,6 +114,184 @@ def _version_from_row(row):
         "created_at": str(_row_value(row, "created_at", 9, "") or ""),
         "source_proposal_id": str(_row_value(row, "source_proposal_id", 10, "") or ""),
     }
+
+
+def _ensure_ai_prompts_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS aiprompts (
+            id TEXT PRIMARY KEY,
+            prompt_type TEXT UNIQUE NOT NULL,
+            prompt_text TEXT NOT NULL,
+            description TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_by TEXT
+        )
+        """
+    )
+
+
+def _matrix_prompt_from_row(row):
+    return {
+        "prompt_type": str(_row_value(row, "prompt_type", 0, "") or ""),
+        "prompt_text": str(_row_value(row, "prompt_text", 1, "") or ""),
+        "description": str(_row_value(row, "description", 2, "") or ""),
+        "updated_at": str(_row_value(row, "updated_at", 3, "") or ""),
+        "updated_by": str(_row_value(row, "updated_by", 4, "") or ""),
+    }
+
+
+def _load_content_matrix_overrides(cursor):
+    _ensure_ai_prompts_table(cursor)
+    cursor.execute(
+        """
+        SELECT prompt_type, prompt_text, description, updated_at, updated_by
+        FROM aiprompts
+        WHERE prompt_type LIKE 'content_matrix.%'
+        ORDER BY prompt_type
+        """
+    )
+    return {
+        str(item.get("prompt_type") or ""): item
+        for item in [_matrix_prompt_from_row(row) for row in cursor.fetchall() or []]
+        if str(item.get("prompt_type") or "")
+    }
+
+
+def _load_content_matrix_learned_patterns(conn, cursor):
+    ensure_industry_pattern_tables(conn)
+    cursor.execute(
+        """
+        SELECT industry_key, pattern_type, pattern_text, version, activated_at
+        FROM industry_pattern_versions
+        WHERE status = 'active'
+          AND pattern_type IN ('news', 'service')
+        ORDER BY COALESCE(activated_at, created_at) DESC
+        LIMIT 200
+        """
+    )
+    grouped = {}
+    for row in cursor.fetchall() or []:
+        industry_key = str(_row_value(row, "industry_key", 0, "") or "")
+        pattern_type = str(_row_value(row, "pattern_type", 1, "") or "")
+        item = {
+            "industry_key": industry_key,
+            "pattern_type": pattern_type,
+            "pattern_text": str(_row_value(row, "pattern_text", 2, "") or ""),
+            "version": str(_row_value(row, "version", 3, "") or ""),
+            "activated_at": str(_row_value(row, "activated_at", 4, "") or ""),
+        }
+        grouped.setdefault(industry_key, []).append(item)
+    return grouped
+
+
+def _matrix_row(industry_key, objective_key, overrides, learned_by_industry):
+    default_prompt = _publication_objective_prompt_block(industry_key, {"content_type": objective_key})
+    prompt_type = _content_matrix_prompt_key(industry_key, objective_key)
+    override = overrides.get(prompt_type) or {}
+    learned = list(learned_by_industry.get(industry_key) or [])
+    if industry_key != "local_business":
+        learned.extend(learned_by_industry.get("local_business") or [])
+    return {
+        "industry_key": industry_key,
+        "industry_label": str((INDUSTRY_PROFILES.get(industry_key) or {}).get("label") or industry_key),
+        "objective_key": objective_key,
+        "objective_label": str((PUBLICATION_OBJECTIVES.get(objective_key) or {}).get("label") or objective_key),
+        "prompt_type": prompt_type,
+        "default_prompt": default_prompt,
+        "effective_prompt": str(override.get("prompt_text") or default_prompt),
+        "has_override": bool(override.get("prompt_text")),
+        "updated_at": str(override.get("updated_at") or ""),
+        "updated_by": str(override.get("updated_by") or ""),
+        "learned_techniques": learned[:8],
+    }
+
+
+@admin_industry_patterns_bp.route("/api/admin/industry-patterns/publication-matrix", methods=["GET"])
+def industry_patterns_publication_matrix():
+    _, error = _require_superadmin()
+    if error:
+        return error
+    industry_key = _clean_filter(request.args.get("industry_key"), "all")
+    objective_key = _clean_filter(request.args.get("objective_key"), "all")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        overrides = _load_content_matrix_overrides(cursor)
+        learned_by_industry = _load_content_matrix_learned_patterns(conn, cursor)
+        industries = sorted(INDUSTRY_PROFILES.keys())
+        objectives = list(PUBLICATION_OBJECTIVES.keys())
+        rows = [
+            _matrix_row(industry, objective, overrides, learned_by_industry)
+            for industry in industries
+            for objective in objectives
+            if (industry_key == "all" or industry == industry_key)
+            and (objective_key == "all" or objective == objective_key)
+        ]
+        return jsonify({
+            "success": True,
+            "industries": [
+                {"value": key, "label": str((INDUSTRY_PROFILES.get(key) or {}).get("label") or key)}
+                for key in industries
+            ],
+            "objectives": [
+                {"value": key, "label": str((PUBLICATION_OBJECTIVES.get(key) or {}).get("label") or key)}
+                for key in objectives
+            ],
+            "rows": rows,
+        })
+    finally:
+        conn.close()
+
+
+@admin_industry_patterns_bp.route("/api/admin/industry-patterns/publication-matrix", methods=["PUT"])
+def industry_patterns_update_publication_matrix():
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+    data = _request_json()
+    industry_key = str(data.get("industry_key") or "").strip()
+    objective_key = str(data.get("objective_key") or "").strip()
+    prompt_text = str(data.get("prompt_text") or "").strip()
+    if industry_key not in INDUSTRY_PROFILES or objective_key not in PUBLICATION_OBJECTIVES:
+        return _json_response({"success": False, "error": "Invalid matrix key"}, 400)
+    if not prompt_text:
+        return _json_response({"success": False, "error": "Prompt text is required"}, 400)
+    prompt_type = _content_matrix_prompt_key(industry_key, objective_key)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        _ensure_ai_prompts_table(cursor)
+        cursor.execute(
+            """
+            INSERT INTO aiprompts (id, prompt_type, prompt_text, description, updated_by)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (prompt_type) DO UPDATE
+            SET prompt_text = EXCLUDED.prompt_text,
+                description = EXCLUDED.description,
+                updated_by = EXCLUDED.updated_by,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                f"prompt_{prompt_type}",
+                prompt_type,
+                prompt_text,
+                f"Content matrix: {industry_key} x {objective_key}",
+                _user_id(user_data) or None,
+            ),
+        )
+        record_industry_pattern_admin_event(
+            conn,
+            actor_id=_user_id(user_data),
+            action="content_matrix_updated",
+            target_type="content_matrix",
+            target_id=prompt_type,
+            metadata={"industry_key": industry_key, "objective_key": objective_key},
+        )
+        conn.commit()
+        return jsonify({"success": True, "prompt_type": prompt_type})
+    finally:
+        conn.close()
 
 
 @admin_industry_patterns_bp.route("/api/admin/industry-patterns/summary", methods=["GET"])

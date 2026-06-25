@@ -235,6 +235,39 @@ const createMockApi = (): IndustryPatternsApiClient => ({
       };
     }
 
+    if (endpoint.startsWith('/admin/industry-patterns/publication-matrix')) {
+      return {
+        industries: [
+          { value: 'beauty', label: 'Beauty / салон / косметология' },
+          { value: 'culture', label: 'Культурный центр / события' },
+        ],
+        objectives: [
+          { value: 'announcement', label: 'Анонс' },
+          { value: 'faq', label: 'FAQ' },
+        ],
+        rows: [
+          {
+            industry_key: 'culture',
+            industry_label: 'Культурный центр / события',
+            objective_key: 'announcement',
+            objective_label: 'Анонс',
+            prompt_type: 'content_matrix.culture.announcement',
+            default_prompt: 'Тип публикации: Анонс\nПиши только про одно событие.\nНе описывай культурный центр.',
+            effective_prompt: 'Тип публикации: Анонс\nПиши только про одно событие.\nНе описывай культурный центр.',
+            has_override: false,
+            learned_techniques: [
+              {
+                industry_key: 'culture',
+                pattern_type: 'news',
+                pattern_text: 'Для культурных событий сохранять название, дату, время и формат события.',
+                version: '2026.06.1',
+              },
+            ],
+          },
+        ],
+      };
+    }
+
     if (endpoint.includes('/rollback-preview/')) {
       return { preview: rollbackPreview };
     }

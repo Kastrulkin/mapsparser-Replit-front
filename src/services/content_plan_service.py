@@ -2793,6 +2793,25 @@ def _publication_objective_prompt_block(industry_key: str, item: dict[str, Any])
     return "\n".join(lines)
 
 
+def _content_matrix_prompt_key(industry_key: str, objective_key: str) -> str:
+    clean_industry = re.sub(r"[^0-9a-z_]+", "_", str(industry_key or "local_business").strip().lower())
+    clean_objective = re.sub(r"[^0-9a-z_]+", "_", str(objective_key or "news").strip().lower())
+    return f"content_matrix.{clean_industry or 'local_business'}.{clean_objective or 'news'}"
+
+
+def _load_publication_matrix_override(cursor: Any, industry_key: str, objective_key: str) -> str:
+    prompt_key = _content_matrix_prompt_key(industry_key, objective_key)
+    try:
+        cursor.execute(
+            "SELECT prompt_text FROM aiprompts WHERE prompt_type = %s LIMIT 1",
+            (prompt_key,),
+        )
+        row = cursor.fetchone()
+        return str(_row_get(row, "prompt_text", 0, "") or "").strip()
+    except Exception:
+        return ""
+
+
 def _fallback_draft_text(
     business_name: str,
     item: dict[str, Any],
@@ -3209,7 +3228,11 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         if active_pattern_text:
             industry_pattern_context += f"\n{active_pattern_text}"
         source_kind = str(item.get("source_kind") or "").strip()
-        publication_objective_context = _publication_objective_prompt_block(industry_key, item)
+        publication_objective_key = _normalize_publication_objective(item)
+        publication_objective_context = (
+            _load_publication_matrix_override(cursor, industry_key, publication_objective_key)
+            or _publication_objective_prompt_block(industry_key, item)
+        )
         prompt = (
             "Ты — маркетолог локального бизнеса. Напиши короткую новость для публикации на картах. "
             "До 700 символов.\n\n"
@@ -3234,7 +3257,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             "Факты о бизнесе:\n"
             f"{_build_content_plan_business_fact_block(business_facts)}\n\n"
             "Факты о публикации:\n"
-            f"Тип публикации: {_normalize_publication_objective(item)}\n"
+            f"Тип публикации: {publication_objective_key}\n"
             f"Тема: {str(item.get('theme') or '').strip()}\n"
             f"Цель: {str(item.get('goal') or '').strip()}\n"
             f"Источник идеи: {source_kind} / {str(item.get('source_ref') or '').strip()}\n"
