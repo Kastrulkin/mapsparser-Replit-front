@@ -577,9 +577,13 @@ export function ContentPage() {
     setBusyAction('queue');
     setError('');
     try {
-      const postIds = (postsByItem[selectedItem.id] || []).map((post) => post.id).filter(Boolean);
+      const posts = postsByItem[selectedItem.id] || [];
+      const postIds = posts
+        .filter((post) => String(post.status || '').toLowerCase() === 'approved')
+        .map((post) => post.id)
+        .filter(Boolean);
       if (postIds.length === 0) {
-        setError('Сначала подготовьте и утвердите каналы.');
+        setError('Сначала утвердите публикацию. После этого её можно будет поставить в расписание.');
         return;
       }
       await newAuth.makeRequest('/social-posts/bulk-queue', {
@@ -1023,6 +1027,8 @@ export function ContentPage() {
     const channelCount = hasPosts ? selectedPosts.length : CHANNELS.length;
     const needsReviewChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Нужно проверить').length;
     const readyTextChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Текст готов').length;
+    const approvedPostCount = selectedPosts.filter((post) => String(post.status || '').toLowerCase() === 'approved').length;
+    const canQueueSelectedItem = approvedPostCount > 0 && needsReviewChannelCount === 0;
     const channelSummary = hasPosts
       ? needsReviewChannelCount > 0
         ? `Нужно проверить: ${needsReviewChannelCount}`
@@ -1175,12 +1181,21 @@ export function ContentPage() {
                   <Button type="button" onClick={approveSelectedItem} disabled={Boolean(busyAction)} className="rounded-2xl bg-slate-950 text-white hover:bg-slate-800">
                     {busyAction === 'approve' ? 'Утверждаем...' : 'Утвердить'}
                   </Button>
-                  <Button type="button" onClick={queueSelectedItem} disabled={Boolean(busyAction)} className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700">
+                  <Button
+                    type="button"
+                    onClick={queueSelectedItem}
+                    disabled={Boolean(busyAction) || !canQueueSelectedItem}
+                    className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"
+                  >
                     {busyAction === 'queue' ? 'Ставим...' : 'Запланировать'}
                   </Button>
                 </div>
                 <p className="text-xs leading-5 text-slate-500">
-                  Наружу ничего не отправится без проверки и расписания. Яндекс и 2ГИС остаются контролируемым размещением.
+                  {canQueueSelectedItem
+                    ? 'После расписания API-каналы пойдут по дате, Яндекс и 2ГИС останутся контролируемым размещением.'
+                    : needsReviewChannelCount > 0
+                      ? 'Следующий шаг: проверьте текст и нажмите «Утвердить». После этого появится расписание.'
+                      : 'Наружу ничего не отправится без проверки и расписания. Яндекс и 2ГИС остаются контролируемым размещением.'}
                 </p>
               </div>
             </div>
