@@ -20,6 +20,8 @@ from src.services.content_plan_service import (
     _fallback_draft_text,
     _merge_seo_keyword_lists,
     _network_location_targets_from_context,
+    _normalize_publication_objective,
+    _publication_objective_prompt_block,
     _json_ready,
     _relevant_service_names_for_item,
     _resolve_scope_target_meta,
@@ -149,6 +151,46 @@ def test_content_plan_templates_detect_requested_business_types():
     assert detect_content_plan_template_key({"name": "Лукойл", "categories": ""}) == "gas_station"
 
 
+def test_publication_objective_maps_event_posts_to_business_tasks():
+    assert _normalize_publication_objective(
+        {
+            "content_type": "event",
+            "theme": "Анонс события: 4 июля, 19:00 — Комик против ИИ",
+            "goal": "Привести людей на конкретное событие",
+        }
+    ) == "announcement"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "event",
+            "theme": "Напоминание: 4 июля — Комик против ИИ",
+            "goal": "Напомнить о событии",
+        }
+    ) == "reminder"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "event",
+            "theme": "Афиша июля",
+            "goal": "Показать ближайшие события одной публикацией",
+        }
+    ) == "agenda"
+
+
+def test_culture_publication_prompt_uses_objective_specific_rules():
+    block = _publication_objective_prompt_block(
+        "culture",
+        {
+            "content_type": "event",
+            "theme": "Анонс события: 4 июля, 19:00 — Комик против ИИ",
+            "goal": "Дать понятный анонс события",
+        },
+    )
+
+    assert "Тип публикации: Анонс" in block
+    assert "Пиши только про одно событие" in block
+    assert "Не описывай культурный центр" in block
+    assert "Одна публикация = одна идея" in block
+
+
 def test_content_plan_skeleton_uses_kids_hair_salon_template():
     plan = build_content_plan_skeleton(
         {
@@ -222,7 +264,8 @@ def test_content_plan_katok_site_description_prevents_school_fallback(monkeypatc
     draft = _fallback_draft_text("Каток", item, facts, "ru")
 
     assert facts["is_cultural_space"] is True
-    assert "культурный центр" in draft.lower()
+    assert not draft.lower().startswith("каток — культурный центр")
+    assert "ближайшее событие" in draft.lower()
     assert "школ" not in draft.lower()
     assert _content_plan_draft_needs_fallback("Каток — школа и пространство для детей и подростков.", facts) is True
 

@@ -2602,6 +2602,197 @@ def _content_plan_language_instruction(language: str) -> str:
     )
 
 
+PUBLICATION_OBJECTIVES: dict[str, dict[str, Any]] = {
+    "announcement": {
+        "label": "Анонс",
+        "goal": "Привести людей на конкретное событие.",
+        "rules": (
+            "Пиши только про одно событие.",
+            "Сохрани название, дату, время, формат и возрастное ограничение, если они есть в фактах.",
+            "Создай интерес к событию, но не выдумывай программу, участников, цены или условия входа.",
+            "Не описывай бизнес или площадку вместо события.",
+        ),
+    },
+    "agenda": {
+        "label": "Афиша",
+        "goal": "Показать ближайшие события одной публикацией.",
+        "rules": (
+            "Сделай короткую подборку ближайших подтверждённых событий.",
+            "На каждое событие дай одну понятную мысль: что это и для кого.",
+            "Не превращай афишу в рекламный текст о площадке.",
+        ),
+    },
+    "news": {
+        "label": "Новость",
+        "goal": "Сообщить о произошедшем изменении.",
+        "rules": (
+            "Пиши только о факте, который уже произошёл или точно подтверждён.",
+            "Не используй новость для анонса будущего события.",
+            "Не растягивай новость в общий рассказ о бизнесе.",
+        ),
+    },
+    "story": {
+        "label": "История",
+        "goal": "Передать атмосферу, эмоцию или закулисный контекст.",
+        "rules": (
+            "Главная цель — атмосфера, а не продажа.",
+            "Расскажи одну короткую историю: подготовка, впечатление гостя, момент события или деталь пространства.",
+            "Не добавляй факты, которых нет в исходных данных.",
+        ),
+    },
+    "case": {
+        "label": "Кейс",
+        "goal": "Показать результат или понятную историю клиента.",
+        "rules": (
+            "Покажи исходную задачу, действие и результат только по подтверждённым фактам.",
+            "Не выдумывай цифры, до/после, медицинский или финансовый эффект.",
+        ),
+    },
+    "advice": {
+        "label": "Совет",
+        "goal": "Дать пользу без прямой продажи.",
+        "rules": (
+            "Дай один практический совет.",
+            "Не начинай с продажи и не превращай совет в список услуг.",
+            "В конце можно мягко сказать, где уточнить детали.",
+        ),
+    },
+    "promo": {
+        "label": "Акция",
+        "goal": "Мотивировать прийти сейчас.",
+        "rules": (
+            "Используй акцию только если скидка, цена, подарок или срок есть в фактах.",
+            "Если фактов акции нет, напиши нейтральный повод прийти без слова «акция».",
+        ),
+    },
+    "seasonal": {
+        "label": "Сезонная публикация",
+        "goal": "Использовать календарный или локальный повод.",
+        "rules": (
+            "Свяжи тему с текущим сезоном, датой или локальным поводом.",
+            "Не добавляй сезонность, если она не следует из темы или источника идеи.",
+        ),
+    },
+    "faq": {
+        "label": "FAQ",
+        "goal": "Ответить на один популярный вопрос.",
+        "rules": (
+            "Ответь на один вопрос, не на несколько сразу.",
+            "Пиши коротко и практично.",
+            "Если точного ответа нет в фактах, скажи, что детали можно уточнить по контактам.",
+        ),
+    },
+    "behind_scenes": {
+        "label": "Behind the scenes",
+        "goal": "Показать процесс, подготовку или работу команды.",
+        "rules": (
+            "Покажи один процесс: подготовку, репетицию, настройку, сборку или работу команды.",
+            "Не выдумывай закулисье, если оно не следует из темы или фактов.",
+        ),
+    },
+    "selection": {
+        "label": "Подборка",
+        "goal": "Помочь выбрать из нескольких вариантов.",
+        "rules": (
+            "Сделай короткую подборку из подтверждённых услуг, событий или вариантов.",
+            "У каждого пункта должна быть своя причина выбрать.",
+            "Не добавляй варианты, которых нет в фактах.",
+        ),
+    },
+    "reminder": {
+        "label": "Напоминание",
+        "goal": "Напомнить о близком событии или действии.",
+        "rules": (
+            "Пиши коротко: что, когда и что сделать сейчас.",
+            "Не пересказывай всю афишу и не описывай бизнес.",
+            "Сохрани дату и время, если они есть в теме.",
+        ),
+    },
+}
+
+
+def _normalized_publication_blob(item: dict[str, Any]) -> str:
+    return " ".join(
+        str(item.get(key) or "")
+        for key in ("content_type", "source_kind", "theme", "goal", "source_ref", "seo_keyword")
+    ).lower().replace("ё", "е")
+
+
+def _normalize_publication_objective(item: dict[str, Any]) -> str:
+    blob = _normalized_publication_blob(item)
+    content_type = str(item.get("content_type") or "").strip().lower()
+    if any(marker in blob for marker in ("напомин", "через два дня", "завтра", "сегодня")):
+        return "reminder"
+    if any(marker in blob for marker in ("ближайшее событие", "одно событие", "конкретное событие")):
+        return "announcement"
+    if any(marker in blob for marker in ("афиша", "подборк", "ближайшие события", "события июля", "5 ", "3 ", "4 идеи")):
+        return "agenda"
+    if any(marker in blob for marker in ("анонс", "событие", "концерт", "лекци", "стендап", "спектак", "выставк")) or content_type == "event":
+        return "announcement"
+    if any(marker in blob for marker in ("faq", "вопрос", "можно ли", "как проходит", "что взять", "когда откры")):
+        return "faq"
+    if any(marker in blob for marker in ("behind", "за кулис", "репетиц", "подготовк", "процесс")):
+        return "behind_scenes"
+    if any(marker in blob for marker in ("истори", "атмосфер", "впечатлен", "community", "space")):
+        return "story"
+    if any(marker in blob for marker in ("кейс", "до после", "результат клиента")):
+        return "case"
+    if any(marker in blob for marker in ("совет", "как выбрать", "как подготов")):
+        return "advice"
+    if any(marker in blob for marker in ("акци", "скидк", "промо", "sale")) or content_type == "sales":
+        return "promo"
+    if "seasonal" in blob or "сезон" in blob:
+        return "seasonal"
+    if any(marker in blob for marker in ("новост", "появил", "открыл", "изменил", "обновил")):
+        return "news"
+    if content_type in {"service", "seo", "audit"}:
+        return "advice"
+    return "news"
+
+
+def _publication_objective_prompt_block(industry_key: str, item: dict[str, Any]) -> str:
+    objective_key = _normalize_publication_objective(item)
+    objective = PUBLICATION_OBJECTIVES.get(objective_key) or PUBLICATION_OBJECTIVES["news"]
+    industry_specific: list[str] = []
+    if str(industry_key or "") == "culture":
+        if objective_key == "announcement":
+            industry_specific = [
+                "Ты опытный культурный редактор.",
+                "Для культурного центра анонс должен вызывать желание прийти на конкретное мероприятие.",
+                "Не описывай культурный центр и не перечисляй всю афишу.",
+                "Создай интригу и передай атмосферу без выдуманных деталей.",
+            ]
+        elif objective_key in {"agenda", "selection"}:
+            industry_specific = [
+                "Для культурного центра афиша помогает выбрать событие, а не рекламирует площадку.",
+                "По одному короткому предложению на каждое событие.",
+            ]
+        elif objective_key in {"story", "behind_scenes"}:
+            industry_specific = [
+                "Для культурного центра история должна передавать атмосферу события, подготовки или впечатлений.",
+                "Главная цель — эмоция и контекст, не продажа.",
+            ]
+        elif objective_key == "faq":
+            industry_specific = [
+                "Для культурного центра FAQ отвечает на практический вопрос посетителя: вход, дети, время, парковка, запись.",
+            ]
+    lines = [
+        f"Тип публикации: {objective['label']}",
+        f"Бизнес-задача: {objective['goal']}",
+        "Правила типа публикации:",
+        *[f"- {rule}" for rule in objective.get("rules") or ()],
+        "Общие правила контент-движка:",
+        "- Одна публикация = одна идея.",
+        "- Не начинай публикацию с описания компании.",
+        "- Не повторяй описание карточки.",
+        "- Не перечисляй все услуги или все направления.",
+        "- Не используй рекламные штампы.",
+    ]
+    if industry_specific:
+        lines.extend(["Правила ниши:", *[f"- {rule}" for rule in industry_specific]])
+    return "\n".join(lines)
+
+
 def _fallback_draft_text(
     business_name: str,
     item: dict[str, Any],
@@ -2657,17 +2848,33 @@ def _fallback_draft_text(
         return " ".join(lines)
 
     if bool(facts.get("is_cultural_space")):
-        site_description = str(facts.get("site_description") or facts.get("description") or "").strip()
+        objective_key = _normalize_publication_objective(item)
         directions = ", ".join(service_names[:5])
+        clean_theme = theme.rstrip(".")
+        clean_goal = goal.rstrip(".")
+        if objective_key in {"announcement", "reminder"}:
+            return (
+                f"{clean_theme}. "
+                f"{clean_goal + '. ' if clean_goal else 'Это событие из афиши площадки. '}"
+                "Подробности, расписание и запись можно уточнить по контактам в карточке."
+            )
+        if objective_key in {"agenda", "selection"} and directions:
+            return (
+                f"В ближайшей афише: {directions}. "
+                "Выберите событие по настроению и проверьте дату, время и условия посещения в карточке."
+            )
+        if objective_key in {"story", "behind_scenes"}:
+            return (
+                f"{clean_theme}. "
+                "Такие публикации помогают почувствовать атмосферу события ещё до визита. "
+                "Подробности и ближайшие даты можно уточнить по контактам в карточке."
+            )
         if directions:
             return (
-                f"{business_name} — культурный центр. "
-                f"{site_description.rstrip('.') + '. ' if site_description else ''}"
-                f"В афише и направлениях: {directions}. "
+                f"{clean_theme}. В афише и направлениях: {directions}. "
                 "Подробности, расписание и запись можно уточнить по контактам в карточке."
             )
         return (
-            f"{business_name} — культурный центр: концерты, лекции, стендап, мастер-классы и камерные события. "
             f"{theme.rstrip('.') + '.' if theme else 'В карточке можно уточнить ближайшие события.'} "
             "Подробности, расписание и запись можно уточнить по контактам в карточке."
         )
@@ -3002,16 +3209,21 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         if active_pattern_text:
             industry_pattern_context += f"\n{active_pattern_text}"
         source_kind = str(item.get("source_kind") or "").strip()
+        publication_objective_context = _publication_objective_prompt_block(industry_key, item)
         prompt = (
             "Ты — маркетолог локального бизнеса. Напиши короткую новость для публикации на картах. "
             "До 700 символов.\n\n"
             f"{_content_plan_language_instruction(normalized_language)}\n\n"
+            "Тип публикации и бизнес-задача:\n"
+            f"{publication_objective_context}\n\n"
             "Жёсткие правила:\n"
             "- не возвращай JSON, markdown, эмодзи, хештеги, фигурные скобки или технические символы;\n"
             "- не выдумывай цены, скидки, акции, режим работы, бесплатные консультации, адрес, район, центр города;\n"
             "- не выдумывай пол, возраст или тип аудитории, если этого нет в фактах;\n"
             "- не трактуй название/бренд как услугу или категорию, если это не подтверждено типом бизнеса, категориями или темой;\n"
             "- не добавляй лекции, концерты, мастерские, события, команду, специалистов, атмосферу или оборудование, если этого нет в фактах;\n"
+            "- не начинай публикацию с описания компании или карточки;\n"
+            "- одна публикация должна раскрывать только одну мысль;\n"
             "- не используй пустые рекламные клише вроде уютное пространство, профессиональная команда, без забот, идеальный выбор;\n"
             "- не используй сезонность, если источник идеи не seasonal;\n"
             "- главная тема новости обязана совпадать с полем «Тема» ниже;\n"
@@ -3022,6 +3234,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             "Факты о бизнесе:\n"
             f"{_build_content_plan_business_fact_block(business_facts)}\n\n"
             "Факты о публикации:\n"
+            f"Тип публикации: {_normalize_publication_objective(item)}\n"
             f"Тема: {str(item.get('theme') or '').strip()}\n"
             f"Цель: {str(item.get('goal') or '').strip()}\n"
             f"Источник идеи: {source_kind} / {str(item.get('source_ref') or '').strip()}\n"

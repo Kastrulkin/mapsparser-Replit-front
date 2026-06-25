@@ -57,7 +57,7 @@ CONTENT_PLAN_TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "culture_event_center": {
         "label": "Культурный центр / пространство событий",
-        "industry_key": "local_business",
+        "industry_key": "culture",
         "markers": ("культурный центр", "художественная галерея", "каток", "афиша", "лекция", "концерт"),
         "topics": (
             {
