@@ -1073,7 +1073,21 @@ export function ContentPage() {
     const needsReviewChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Нужно проверить').length;
     const readyTextChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Текст готов').length;
     const approvedPostCount = selectedPosts.filter((post) => String(post.status || '').toLowerCase() === 'approved').length;
+    const scheduledPostCount = selectedPosts.filter((post) => (
+      ['queued', 'needs_supervised_publish', 'needs_manual_publish', 'published'].includes(String(post.status || '').toLowerCase())
+    )).length;
     const canQueueSelectedItem = approvedPostCount > 0 && needsReviewChannelCount === 0;
+    const canApproveSelectedItem = hasDraftText && (!hasPosts || needsReviewChannelCount > 0);
+    const approveButtonLabel = busyAction === 'approve'
+      ? 'Утверждаем...'
+      : canApproveSelectedItem
+        ? 'Утвердить'
+        : 'Текст утверждён';
+    const queueButtonLabel = busyAction === 'queue'
+      ? 'Ставим...'
+      : scheduledPostCount > 0 && approvedPostCount === 0
+        ? 'Запланировано'
+        : 'Запланировать';
     const channelSummary = hasPosts
       ? needsReviewChannelCount > 0
         ? `Нужно проверить: ${needsReviewChannelCount}`
@@ -1223,8 +1237,13 @@ export function ContentPage() {
                   <Button type="button" variant="outline" onClick={prepareSelectedItem} disabled={Boolean(busyAction)} className="rounded-2xl">
                     {busyAction === 'prepare' ? 'Готовим...' : 'Подготовить каналы'}
                   </Button>
-                  <Button type="button" onClick={approveSelectedItem} disabled={Boolean(busyAction)} className="rounded-2xl bg-slate-950 text-white hover:bg-slate-800">
-                    {busyAction === 'approve' ? 'Утверждаем...' : 'Утвердить'}
+                  <Button
+                    type="button"
+                    onClick={approveSelectedItem}
+                    disabled={Boolean(busyAction) || !canApproveSelectedItem}
+                    className="rounded-2xl bg-slate-950 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-500"
+                  >
+                    {approveButtonLabel}
                   </Button>
                   <Button
                     type="button"
@@ -1232,7 +1251,7 @@ export function ContentPage() {
                     disabled={Boolean(busyAction) || !canQueueSelectedItem}
                     className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"
                   >
-                    {busyAction === 'queue' ? 'Ставим...' : 'Запланировать'}
+                    {queueButtonLabel}
                   </Button>
                 </div>
                 <p className="text-xs leading-5 text-slate-500">
