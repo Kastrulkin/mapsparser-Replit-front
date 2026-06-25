@@ -632,7 +632,24 @@ export function ContentPage() {
         .map((post) => post.id)
         .filter(Boolean);
       if (postIds.length === 0) {
-        setError('Сначала утвердите публикацию. После этого её можно будет поставить в расписание.');
+        if (posts.length === 0) {
+          setError('Сначала нажмите «Подготовить каналы». После этого LocalOS создаст варианты для площадок.');
+        } else if (posts.some((post) => String(post.status || '').toLowerCase() === 'needs_review')) {
+          setError('Сначала проверьте текст и нажмите «Утвердить». После этого появится расписание.');
+        } else if (posts.some((post) => isAutomaticSendBlockedStatus(post.status))) {
+          const blockedPosts = posts.filter((post) => isAutomaticSendBlockedStatus(post.status));
+          const blockedLabels = blockedPosts.map((post) => platformShortLabel(post)).filter(Boolean).join(', ');
+          const firstError = String(blockedPosts[0]?.last_error || '').trim();
+          setError(
+            firstError
+              ? `${blockedLabels || 'Каналы'} не готовы: ${firstError}`
+              : `${blockedLabels || 'Каналы'} не готовы. Подключите API-каналы или используйте контролируемое размещение.`,
+          );
+        } else if (posts.some((post) => isQueuedOrHandledStatus(post.status))) {
+          setError('Эта публикация уже поставлена в расписание или ждёт контролируемого размещения.');
+        } else {
+          setError('Сначала выберите и подготовьте каналы для этой публикации.');
+        }
         return;
       }
       const response = await newAuth.makeRequest('/social-posts/bulk-queue', {
@@ -1104,7 +1121,10 @@ export function ContentPage() {
     const readyTextChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Текст готов').length;
     const approvedPostCount = selectedPosts.filter((post) => String(post.status || '').toLowerCase() === 'approved').length;
     const scheduledPostCount = selectedPosts.filter((post) => isQueuedOrHandledStatus(post.status)).length;
+    const blockedChannelCount = selectedPosts.filter((post) => isAutomaticSendBlockedStatus(post.status)).length;
+    const scheduleAlreadyHandled = scheduledPostCount > 0 && approvedPostCount === 0 && needsReviewChannelCount === 0;
     const canQueueSelectedItem = approvedPostCount > 0 && needsReviewChannelCount === 0;
+    const queueNeedsAttention = hasPosts && !canQueueSelectedItem && !scheduleAlreadyHandled;
     const canApproveSelectedItem = hasDraftText && (!hasPosts || needsReviewChannelCount > 0);
     const approveButtonLabel = busyAction === 'approve'
       ? 'Утверждаем...'
@@ -1117,6 +1137,17 @@ export function ContentPage() {
         ? 'Запланировано'
         : 'Запланировать отправку';
     const queueTooltip = 'Отправляет автоматически через выбранные каналы. Если канал не подключён или не выбран, LocalOS покажет, что нужно настроить.';
+    const queueHelpText = canQueueSelectedItem
+      ? 'Если выбранные каналы не подключены, LocalOS покажет, что нужно настроить перед отправкой.'
+      : !hasPosts
+        ? 'Сначала нажмите «Подготовить каналы», чтобы LocalOS создал варианты для площадок.'
+        : needsReviewChannelCount > 0
+          ? 'Следующий шаг: проверьте текст и нажмите «Утвердить». После этого появится расписание.'
+          : blockedChannelCount > 0
+            ? 'Автоотправка не запланирована: часть каналов требует подключения, ручного действия или контролируемого размещения.'
+            : scheduleAlreadyHandled
+              ? 'Публикация уже стоит в расписании или ждёт контролируемого размещения.'
+              : 'Сейчас нет каналов, готовых к отправке. Подготовьте каналы или проверьте их состояние.';
     const channelSummary = hasPosts
       ? needsReviewChannelCount > 0
         ? `Нужно проверить: ${needsReviewChannelCount}`
@@ -1281,8 +1312,13 @@ export function ContentPage() {
                           <Button
                             type="button"
                             onClick={queueSelectedItem}
-                            disabled={Boolean(busyAction) || !canQueueSelectedItem}
-                            className="w-full rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"
+                            disabled={Boolean(busyAction) || scheduleAlreadyHandled}
+                            className={cn(
+                              'w-full rounded-2xl text-white disabled:bg-slate-200 disabled:text-slate-500',
+                              canQueueSelectedItem
+                                ? 'bg-emerald-600 hover:bg-emerald-700'
+                                : 'bg-slate-950 hover:bg-slate-800',
+                            )}
                           >
                             {queueButtonLabel}
                           </Button>
@@ -1294,12 +1330,25 @@ export function ContentPage() {
                     </Tooltip>
                   </TooltipProvider>
                 </div>
+                {queueNeedsAttention ? (
+                  <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                    <div className="font-semibold">Отправка пока не запланирована</div>
+                    <div className="mt-1">{queueHelpText}</div>
+                  </div>
+                ) : null}
+                {error ? (
+                  <div className="rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-xs leading-5 text-red-800">
+                    <div className="font-semibold">Что нужно сделать</div>
+                    <div className="mt-1">{error}</div>
+                  </div>
+                ) : null}
+                {actionMessage ? (
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-medium leading-5 text-emerald-800">
+                    {actionMessage}
+                  </div>
+                ) : null}
                 <p className="text-xs leading-5 text-slate-500">
-                  {canQueueSelectedItem
-                    ? 'Если выбранные каналы не подключены, LocalOS покажет, что нужно настроить перед отправкой.'
-                    : needsReviewChannelCount > 0
-                      ? 'Следующий шаг: проверьте текст и нажмите «Утвердить». После этого появится расписание.'
-                      : 'Наружу ничего не отправится без проверки и расписания. Яндекс и 2ГИС остаются контролируемым размещением.'}
+                  {queueHelpText}
                 </p>
               </div>
             </div>
