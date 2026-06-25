@@ -173,6 +173,41 @@ def test_publication_objective_maps_event_posts_to_business_tasks():
             "goal": "Показать ближайшие события одной публикацией",
         }
     ) == "agenda"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "behind_scenes",
+            "theme": "За кулисами подготовки концерта",
+            "goal": "Показать репетицию, свет, звук и живой процесс",
+        }
+    ) == "behind_scenes"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "author_story",
+            "theme": "История автора: лектор нового цикла",
+            "goal": "Заинтересовать личностью участника события",
+        }
+    ) == "author_story"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "space",
+            "theme": "Атмосфера одного вечера",
+            "goal": "Передать ощущения без афиши",
+        }
+    ) == "atmosphere"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "quote",
+            "theme": "Цитата лектора",
+            "goal": "Построить пост вокруг одной сильной мысли",
+        }
+    ) == "quote"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "community",
+            "theme": "Итоги прошедшего события",
+            "goal": "Рассказать, что происходило после мероприятия",
+        }
+    ) == "photo_report"
 
 
 def test_culture_publication_prompt_uses_objective_specific_rules():
@@ -189,6 +224,27 @@ def test_culture_publication_prompt_uses_objective_specific_rules():
     assert "Пиши только про одно событие" in block
     assert "Не описывай культурный центр" in block
     assert "Одна публикация = одна идея" in block
+    assert "Сначала определи контекст" in block
+    assert "Не используй фразы" in block
+    assert "Мы приглашаем" in block
+    assert "Уточнить можно" in block
+    assert "не пропустите" in block
+    assert "Главная задача — заинтересовать" in block
+
+
+def test_culture_publication_prompt_handles_life_context_types():
+    block = _publication_objective_prompt_block(
+        "culture",
+        {
+            "content_type": "behind_scenes",
+            "theme": "За кулисами подготовки события",
+            "goal": "Показать репетицию и настройку света",
+        },
+    )
+
+    assert "Тип публикации: Behind the scenes" in block
+    assert "Покажи подготовку" in block
+    assert "ощущение живого процесса" in block
 
 
 def test_content_plan_skeleton_uses_kids_hair_salon_template():
@@ -266,6 +322,9 @@ def test_content_plan_katok_site_description_prevents_school_fallback(monkeypatc
     assert facts["is_cultural_space"] is True
     assert not draft.lower().startswith("каток — культурный центр")
     assert "ближайшее событие" in draft.lower()
+    assert "уточнить можно" not in draft.lower()
+    assert "культурный центр" not in draft.lower()
+    assert "Дата, время и запись — в карточке." in draft
     assert "школ" not in draft.lower()
     assert _content_plan_draft_needs_fallback("Каток — школа и пространство для детей и подростков.", facts) is True
 
