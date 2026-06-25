@@ -143,6 +143,9 @@ def test_content_plan_templates_detect_requested_business_types():
         }
     ) == "kids_hair_salon"
     assert detect_content_plan_template_key(
+        {"name": "Точка красоты", "business_type": "Салон красоты", "categories": '["маникюр", "окрашивание"]'}
+    ) == "beauty_salon"
+    assert detect_content_plan_template_key(
         {"name": "Каток", "categories": '["Культурный центр", "художественная галерея"]'}
     ) == "culture_event_center"
     assert detect_content_plan_template_key({"name": "Riderra (Tallinn)", "categories": ""}) == "airport_transfer"
@@ -208,6 +211,34 @@ def test_publication_objective_maps_event_posts_to_business_tasks():
             "goal": "Рассказать, что происходило после мероприятия",
         }
     ) == "photo_report"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "before_after",
+            "theme": "До / После: преображение клиента",
+            "goal": "Продать результат",
+        }
+    ) == "before_after"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "review",
+            "theme": "Новый отзыв клиента",
+            "goal": "Социальное доказательство",
+        }
+    ) == "review_social_proof"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "master_work",
+            "theme": "Работа мастера: почему выбран медный цвет",
+            "goal": "Показать экспертизу мастера",
+        }
+    ) == "master_work"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "myth",
+            "theme": "Миф или правда: частое мытьё портит волосы?",
+            "goal": "Обучить",
+        }
+    ) == "myth"
 
 
 def test_culture_publication_prompt_uses_objective_specific_rules():
@@ -245,6 +276,48 @@ def test_culture_publication_prompt_handles_life_context_types():
     assert "Тип публикации: Behind the scenes" in block
     assert "Покажи подготовку" in block
     assert "ощущение живого процесса" in block
+
+
+def test_beauty_publication_prompt_uses_marketing_funnel_rules():
+    block = _publication_objective_prompt_block(
+        "beauty",
+        {
+            "content_type": "before_after",
+            "theme": "До / После: преображение клиента",
+            "goal": "Показать результат услуги",
+        },
+    )
+
+    assert "Тип публикации: До / После" in block
+    assert "маркетинговую цель публикации" in block
+    assert "привлечение, доверие, запись, возврат, удержание или сарафан" in block
+    assert "Пиши про преображение клиента" in block
+    assert "Не используй фразы" in block
+    assert "Успейте записаться" in block
+
+
+def test_beauty_publication_prompt_handles_service_and_social_proof_contexts():
+    service_block = _publication_objective_prompt_block(
+        "beauty",
+        {
+            "content_type": "service_intro",
+            "theme": "Знакомство с услугой",
+            "goal": "Для кого услуга и какую проблему решает",
+        },
+    )
+    review_block = _publication_objective_prompt_block(
+        "beauty",
+        {
+            "content_type": "review",
+            "theme": "Новый отзыв клиента",
+            "goal": "Показать социальное доказательство",
+        },
+    )
+
+    assert "Тип публикации: Знакомство с услугой" in service_block
+    assert "для кого услуга" in service_block
+    assert "Тип публикации: Отзыв" in review_block
+    assert "не копируй его дословно" in review_block
 
 
 def test_content_plan_skeleton_uses_kids_hair_salon_template():
@@ -327,6 +400,27 @@ def test_content_plan_katok_site_description_prevents_school_fallback(monkeypatc
     assert "Дата, время и запись — в карточке." in draft
     assert "школ" not in draft.lower()
     assert _content_plan_draft_needs_fallback("Каток — школа и пространство для детей и подростков.", facts) is True
+
+
+def test_beauty_fallback_draft_stays_on_marketing_objective():
+    item = {
+        "content_type": "before_after",
+        "theme": "До / После: преображение клиента",
+        "goal": "Показать результат услуги через ощущения клиента.",
+        "seo_keyword": "салон красоты",
+    }
+    facts = {
+        "business_type": "Салон красоты",
+        "categories": "салон красоты, маникюр, окрашивание",
+        "services": "- Окрашивание\n- Стрижка\n- Маникюр",
+    }
+
+    draft = _fallback_draft_text("Точка красоты", item, facts, "ru")
+
+    assert "ощущение клиента" in draft
+    assert "реальные фото" in draft
+    assert "маникюру, педикюру, бровям" not in draft.lower()
+    assert not draft.lower().startswith("в салоне")
 
 
 def test_content_plan_skeleton_uses_transfer_fast_food_and_gas_station_templates():
