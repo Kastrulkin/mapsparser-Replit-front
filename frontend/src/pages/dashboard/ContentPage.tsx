@@ -230,6 +230,19 @@ const getPostNextAction = (post: SocialPost) => {
   return 'Сначала проверьте текст.';
 };
 
+const getChannelStatusLabel = (status?: string) => {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'approved') return 'Текст готов';
+  return getPostStatusLabel(status);
+};
+
+const getChannelNextAction = (post: SocialPost) => {
+  const normalized = String(post.status || '').toLowerCase();
+  if (normalized === 'approved') return 'Можно планировать. Подключение проверим перед публикацией.';
+  if (normalized === 'queued') return 'Запланировано. Если канал не подключён, появится понятный шаг.';
+  return getPostNextAction(post);
+};
+
 const getItemStatusLabel = (item: PlanItem, posts: SocialPost[]) => {
   if (posts.some((post) => String(post.status || '') === 'failed')) return 'Не удалось';
   if (posts.some((post) => String(post.status || '') === 'needs_supervised_publish' || String(post.status || '') === 'needs_manual_publish')) {
@@ -1008,11 +1021,14 @@ export function ContentPage() {
     const failedPost = selectedPosts.find((post) => String(post.status || '') === 'failed');
     const hasDraftText = Boolean(String(draftEdits[item?.id || ''] ?? item?.draft_text ?? '').trim());
     const channelCount = hasPosts ? selectedPosts.length : CHANNELS.length;
-    const needsReviewChannelCount = selectedPosts.filter((post) => getPostStatusLabel(post.status) === 'Нужно проверить').length;
+    const needsReviewChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Нужно проверить').length;
+    const readyTextChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Текст готов').length;
     const channelSummary = hasPosts
       ? needsReviewChannelCount > 0
         ? `Нужно проверить: ${needsReviewChannelCount}`
-        : `${channelCount} каналов готовы`
+        : readyTextChannelCount > 0
+          ? `Текст готов: ${readyTextChannelCount}`
+          : `${channelCount} каналов в плане`
       : `${channelCount} каналов после подготовки`;
     const channelDetailsId = item ? `content-channels-${item.id}` : 'content-channels';
     return (
@@ -1113,7 +1129,7 @@ export function ContentPage() {
                       hasPosts ? (
                         <div id={channelDetailsId} className="mt-2 space-y-2">
                           {selectedPosts.map((post) => {
-                            const statusLabel = getPostStatusLabel(post.status);
+                            const statusLabel = getChannelStatusLabel(post.status);
                             return (
                               <div key={post.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
                                 <div className="flex items-center justify-between gap-2">
@@ -1122,7 +1138,7 @@ export function ContentPage() {
                                     {statusLabel}
                                   </span>
                                 </div>
-                                <div className="mt-1 text-xs leading-5 text-slate-500">{getPostNextAction(post)}</div>
+                                <div className="mt-1 text-xs leading-5 text-slate-500">{getChannelNextAction(post)}</div>
                               </div>
                             );
                           })}
