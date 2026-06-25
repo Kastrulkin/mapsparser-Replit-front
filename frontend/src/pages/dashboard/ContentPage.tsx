@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   Eye,
   FileText,
@@ -289,6 +290,7 @@ export function ContentPage() {
     return saved === 'week' || saved === 'list' || saved === 'month' ? saved : 'month';
   });
   const [selectedItemId, setSelectedItemId] = useState('');
+  const [channelDetailsOpen, setChannelDetailsOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [themeEdits, setThemeEdits] = useState<Record<string, string>>({});
   const [dateEdits, setDateEdits] = useState<Record<string, string>>({});
@@ -397,6 +399,10 @@ export function ContentPage() {
   useEffect(() => {
     void loadContent();
   }, [currentBusinessId]);
+
+  useEffect(() => {
+    setChannelDetailsOpen(false);
+  }, [selectedItemId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1001,6 +1007,14 @@ export function ContentPage() {
     const hasPosts = selectedPosts.length > 0;
     const failedPost = selectedPosts.find((post) => String(post.status || '') === 'failed');
     const hasDraftText = Boolean(String(draftEdits[item?.id || ''] ?? item?.draft_text ?? '').trim());
+    const channelCount = hasPosts ? selectedPosts.length : CHANNELS.length;
+    const needsReviewChannelCount = selectedPosts.filter((post) => getPostStatusLabel(post.status) === 'Нужно проверить').length;
+    const channelSummary = hasPosts
+      ? needsReviewChannelCount > 0
+        ? `Нужно проверить: ${needsReviewChannelCount}`
+        : `${channelCount} каналов готовы`
+      : `${channelCount} каналов после подготовки`;
+    const channelDetailsId = item ? `content-channels-${item.id}` : 'content-channels';
     return (
       <Sheet open={Boolean(item)} onOpenChange={(open) => { if (!open) setSelectedItemId(''); }}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-4xl">
@@ -1082,33 +1096,47 @@ export function ContentPage() {
                     />
                   </label>
                   <div className="mt-4">
-                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Каналы</div>
-                    {hasPosts ? (
-                      <div className="mt-2 space-y-2">
-                        {selectedPosts.map((post) => {
-                          const statusLabel = getPostStatusLabel(post.status);
-                          return (
-                            <div key={post.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-sm font-semibold text-slate-900">{platformShortLabel(post)}</span>
-                                <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1', getStatusClassName(statusLabel))}>
-                                  {statusLabel}
-                                </span>
+                    <button
+                      type="button"
+                      onClick={() => setChannelDetailsOpen((open) => !open)}
+                      aria-expanded={channelDetailsOpen}
+                      aria-controls={channelDetailsId}
+                      className="flex min-h-10 w-full items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2 text-left transition-colors hover:bg-slate-100"
+                    >
+                      <span>
+                        <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Каналы</span>
+                        <span className="mt-0.5 block text-sm font-semibold text-slate-900">{channelSummary}</span>
+                      </span>
+                      <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-500 transition-transform', channelDetailsOpen ? 'rotate-180' : '')} />
+                    </button>
+                    {channelDetailsOpen ? (
+                      hasPosts ? (
+                        <div id={channelDetailsId} className="mt-2 space-y-2">
+                          {selectedPosts.map((post) => {
+                            const statusLabel = getPostStatusLabel(post.status);
+                            return (
+                              <div key={post.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-sm font-semibold text-slate-900">{platformShortLabel(post)}</span>
+                                  <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1', getStatusClassName(statusLabel))}>
+                                    {statusLabel}
+                                  </span>
+                                </div>
+                                <div className="mt-1 text-xs leading-5 text-slate-500">{getPostNextAction(post)}</div>
                               </div>
-                              <div className="mt-1 text-xs leading-5 text-slate-500">{getPostNextAction(post)}</div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {CHANNELS.slice(0, 5).map((channel) => (
-                          <span key={channel.key} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                            {channel.label}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div id={channelDetailsId} className="mt-2 flex flex-wrap gap-2">
+                          {CHANNELS.map((channel) => (
+                            <span key={channel.key} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                              {channel.label}
+                            </span>
+                          ))}
+                        </div>
+                      )
+                    ) : null}
                   </div>
                   {!hasPosts ? (
                     <div className="mt-4">
