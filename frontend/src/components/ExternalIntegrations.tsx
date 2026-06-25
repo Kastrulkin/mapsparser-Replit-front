@@ -69,6 +69,21 @@ interface SocialOpenClawReadiness {
   diagnostics_en?: string[];
 }
 
+interface SocialTelegramTransport {
+  schema?: string;
+  ready?: boolean;
+  status?: string | null;
+  proxy_configured?: boolean;
+  proxy_mode?: string | null;
+  bot_token_present?: boolean;
+  read_only_probe_enabled?: boolean;
+  read_only_probe_performed?: boolean;
+  summary_ru?: string | null;
+  summary_en?: string | null;
+  next_action_ru?: string | null;
+  next_action_en?: string | null;
+}
+
 interface ExternalIntegrationsProps {
   currentBusinessId: string | null;
   readinessRefreshKey?: number;
@@ -94,6 +109,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const [socialReadiness, setSocialReadiness] = useState<SocialChannelReadiness[]>([]);
   const [socialReadinessSummary, setSocialReadinessSummary] = useState<Record<string, number>>({});
   const [socialOpenClawReadiness, setSocialOpenClawReadiness] = useState<SocialOpenClawReadiness | null>(null);
+  const [socialTelegramTransport, setSocialTelegramTransport] = useState<SocialTelegramTransport | null>(null);
   const [socialReadinessLoading, setSocialReadinessLoading] = useState(false);
   const socialReadinessRef = useRef<HTMLDivElement | null>(null);
   const googleCardRef = useRef<HTMLDivElement | null>(null);
@@ -147,6 +163,12 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const telegramChecklistHint = telegramUsesGlobalBot
     ? 'глобальный бот LocalOS + telegram_chat_id цели'
     : 'telegram_bot_token бизнеса или глобальный бот + telegram_chat_id';
+  const telegramTransportSummary = language === 'ru'
+    ? socialTelegramTransport?.summary_ru
+    : socialTelegramTransport?.summary_en;
+  const telegramTransportNextAction = language === 'ru'
+    ? socialTelegramTransport?.next_action_ru
+    : socialTelegramTransport?.next_action_en;
 
   useEffect(() => {
     let target: HTMLDivElement | null = null;
@@ -200,6 +222,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
       setSocialReadiness([]);
       setSocialReadinessSummary({});
       setSocialOpenClawReadiness(null);
+      setSocialTelegramTransport(null);
       return;
     }
     setSocialReadinessLoading(true);
@@ -223,10 +246,26 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
           ? data.openclaw_browser_readiness
           : null,
       );
+      try {
+        const runtimeRes = await fetch('/api/social-posts/runtime-status', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const runtimeData = await runtimeRes.json();
+        setSocialTelegramTransport(
+          runtimeRes.ok && runtimeData.success && runtimeData.telegram_transport && typeof runtimeData.telegram_transport === 'object'
+            ? runtimeData.telegram_transport
+            : null,
+        );
+      } catch {
+        setSocialTelegramTransport(null);
+      }
     } catch (e: any) {
       setSocialReadiness([]);
       setSocialReadinessSummary({});
       setSocialOpenClawReadiness(null);
+      setSocialTelegramTransport(null);
       toast({
         title: t.error,
         description: e.message || 'Не удалось получить готовность каналов публикации',
@@ -612,6 +651,47 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
                     <span className="font-semibold text-slate-950">Meta:</span> Page/IG business + права
                   </div>
                 </div>
+                {socialTelegramTransport ? (
+                  <div
+                    data-testid="social-settings-telegram-transport"
+                    data-schema={String(socialTelegramTransport.schema || 'localos_telegram_transport_status_v1')}
+                    className={[
+                      'mt-3 rounded-xl border px-3 py-3 text-xs leading-5',
+                      socialTelegramTransport.ready
+                        ? 'border-emerald-100 bg-emerald-50 text-emerald-900'
+                        : 'border-amber-100 bg-amber-50 text-amber-900',
+                    ].join(' ')}
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="font-semibold text-slate-950">Telegram transport</div>
+                        <div className="mt-1">
+                          {telegramTransportSummary || 'Read-only проверка Telegram transport не дала результата.'}
+                        </div>
+                      </div>
+                      <span
+                        className={[
+                          'inline-flex w-max rounded-full px-2.5 py-1 text-[11px] font-semibold',
+                          socialTelegramTransport.ready
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800',
+                        ].join(' ')}
+                      >
+                        {socialTelegramTransport.ready ? 'готов к API-proof' : 'проверить до API-proof'}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-medium text-slate-600">
+                      <span>{socialTelegramTransport.proxy_configured ? 'proxy задан' : 'proxy не задан'}</span>
+                      <span>{socialTelegramTransport.bot_token_present ? 'bot token есть' : 'bot token не найден'}</span>
+                      <span>{socialTelegramTransport.read_only_probe_performed ? 'read-only probe выполнен' : 'probe не выполнялся'}</span>
+                    </div>
+                    {telegramTransportNextAction ? (
+                      <div className="mt-2 font-medium text-slate-700">
+                        {telegramTransportNextAction}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-sky-100 bg-white px-3 py-2 text-xs leading-5 text-sky-900">
                   <span className="font-semibold text-sky-950">После подключения:</span>
                   <span>Вернуться в контент-план, нажмите “Проверить готовность”, затем пройдите предпросмотр → подтверждение → расписание.</span>
