@@ -13,7 +13,7 @@ export const DESIGN_TOKENS = {
     glass: {
         default: "bg-white/70 backdrop-blur-md border border-white/20 shadow-xl",
         dark: "bg-black/70 backdrop-blur-md border border-white/10 shadow-xl",
-        hover: "hover:bg-white/80 transition-all duration-300",
+        hover: "hover:bg-white/80 transition-[background-color,box-shadow] duration-300",
     },
     // Gradients for special elements
     gradients: {

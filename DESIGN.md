@@ -69,6 +69,19 @@ For product dashboards:
 
 Marketing pages may use more motion and visual variance, but product screens should stay operational.
 
+### Interface Polish
+
+After the screen job, state model, and main action are clear, polish the interface through small details:
+
+- nested rounded surfaces must use concentric radius: outer radius = inner radius + padding;
+- icons should be aligned optically, not only geometrically; icon buttons and text-with-icon buttons may need small padding corrections;
+- use borders for separation and form/input affordance; use subtle layered shadows or ring-like shadows for elevation and depth where appropriate;
+- interactive controls should have at least a `40x40px` hit area, ideally `44x44px`, without overlapping neighboring controls;
+- dynamic dashboard numbers, counters, prices, timers, KPI columns, and changing totals must use tabular numbers;
+- headings should use balanced wrapping where supported; short descriptions and card text should avoid orphan words where practical;
+- images and previews should have a subtle inset outline so they stay readable on varied backgrounds;
+- press feedback may use a restrained `scale(0.96)` on buttons where it does not distract from operational work.
+
 ## LocalOS UI Workflow
 
 Use this six-step loop:
@@ -106,6 +119,11 @@ Before shipping product UI, check:
 - Empty states explain the next step.
 - Long Russian and English text does not overflow.
 - Mobile and small laptop layouts are explicitly considered.
+- Motion is quiet, interruptible, and tied to feedback or state change.
+- CSS transitions specify exact properties instead of `transition: all`.
+- `will-change` is used only for observed first-frame stutter, and only for compositor-friendly properties such as `transform`, `opacity`, or `filter`.
+- Dynamic numbers use tabular numerals where layout shift would be visible.
+- Small icon controls have a real hit area of at least `40x40px`.
 
 ## Agents UI Rules
 

@@ -43,7 +43,9 @@ This file is the canonical instruction set for AI agents in this repository.
 - For frontend runtime errors, prioritize browser console stack + app logs.
 
 ## 6. Documentation Structure
-- Workflow rules are in `.cursor/rules/*.mdc`.
+- `AGENTS.md` is the canonical rulebook for Codex and other AI agents in this repository.
+- Product UI and UX rules are in `DESIGN.md`; read it before changing dashboard, cockpit, builder, form, approval, run-history, or agent-management screens.
+- `.cursor/rules/*.mdc` is a legacy Cursor compatibility layer. Do not treat it as the primary source when it conflicts with `AGENTS.md`, `README.md`, `DESIGN.md`, or current runtime reality.
 - Working logs/templates are in `.cursor/docs/*.md`.
 - If README and rule files conflict, follow README + current runtime reality.
 

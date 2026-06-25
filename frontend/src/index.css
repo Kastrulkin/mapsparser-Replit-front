@@ -107,11 +107,36 @@
     @apply border-border;
   }
 
+  html {
+    @apply antialiased;
+  }
+
   body {
     @apply bg-background text-foreground;
   }
 
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p,
+  li,
+  figcaption,
+  blockquote {
+    text-wrap: pretty;
+  }
+
+  :where(.tabular-nums, .font-mono) {
+    font-variant-numeric: tabular-nums;
+  }
+
   .btn-iridescent {
-    @apply bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500 bg-[length:200%_auto] border border-orange-300/50 text-white shadow-lg shadow-orange-500/20 transition-all duration-300 hover:bg-[position:100%_0] hover:scale-[1.02] active:scale-[0.98] font-semibold;
+    @apply bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500 bg-[length:200%_auto] border border-orange-300/50 text-white shadow-lg shadow-orange-500/20 transition-[background-position,box-shadow,transform] duration-300 hover:bg-[position:100%_0] hover:scale-[1.02] active:scale-[0.96] font-semibold motion-reduce:transition-none motion-reduce:hover:scale-100 motion-reduce:active:scale-100;
+  }
+
+  .media-outline {
+    @apply outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10;
   }
 }

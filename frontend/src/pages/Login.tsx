@@ -101,6 +101,7 @@ const Login = () => {
     sendReset: isRu ? 'Восстановить пароль' : 'Reset password',
     sendingReset: isRu ? 'Отправка...' : 'Sending...',
   };
+  const tabButtonClass = "min-h-10 flex-1 rounded-md px-4 py-2 text-sm font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100";
 
   const looksLikeUrl = (value: string) => {
     const text = value.trim().toLowerCase();
@@ -321,8 +322,9 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="flex min-h-screen items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             {copy.loginTitle}
@@ -336,27 +338,33 @@ const Login = () => {
           {/* Табы */}
           <div className="flex space-x-1 mb-6">
             <button
+              type="button"
+              aria-pressed={tab === 'login'}
               onClick={() => setTab('login')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${tab === 'login'
-                  ? 'bg-indigo-100 text-indigo-700'
+              className={`${tabButtonClass} ${tab === 'login'
+                  ? 'bg-indigo-100 text-indigo-700 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
               {copy.loginTab}
             </button>
             <button
+              type="button"
+              aria-pressed={tab === 'register'}
               onClick={() => setTab('register')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${tab === 'register'
-                  ? 'bg-indigo-100 text-indigo-700'
+              className={`${tabButtonClass} ${tab === 'register'
+                  ? 'bg-indigo-100 text-indigo-700 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
               {copy.registerTab}
             </button>
             <button
+              type="button"
+              aria-pressed={tab === 'reset'}
               onClick={() => setTab('reset')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${tab === 'reset'
-                  ? 'bg-indigo-100 text-indigo-700'
+              className={`${tabButtonClass} ${tab === 'reset'
+                  ? 'bg-indigo-100 text-indigo-700 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
@@ -573,7 +581,7 @@ const Login = () => {
                   <p className="mt-1">{copy.checkEmailHint}</p>
                   <button
                     type="button"
-                    className="mt-3 text-sm font-medium text-emerald-800 underline disabled:opacity-50"
+                    className="mt-3 inline-flex min-h-10 items-center text-sm font-medium text-emerald-800 underline transition-[color,opacity] duration-150 ease-out hover:text-emerald-950 disabled:opacity-50"
                     disabled={resendingVerification}
                     onClick={handleResendVerification}
                   >
@@ -612,6 +620,7 @@ const Login = () => {
               </Button>
             </form>
           )}
+        </div>
         </div>
       </div>
       <Footer />
