@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
@@ -23,13 +24,13 @@ import {
   Search
 } from 'lucide-react';
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
-import ContentPlanTab from '@/components/content-plan/ContentPlanTab';
 
 type ServiceLite = { id: string; name: string };
 type SeoKeywordLite = { keyword: string; views?: number };
 type NewsWorkspaceMode = 'news' | 'plan';
 
 export default function NewsGenerator({ services, businessId, externalPosts, initialWorkspaceMode = 'news' }: { services: ServiceLite[]; businessId?: string; externalPosts?: any[]; initialWorkspaceMode?: NewsWorkspaceMode }) {
+  const navigate = useNavigate();
   const [workspaceMode, setWorkspaceMode] = useState<NewsWorkspaceMode>(initialWorkspaceMode);
   const [useService, setUseService] = useState(false);
   const [useTransaction, setUseTransaction] = useState(false);
@@ -313,7 +314,10 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
       </div>
 
       {workspaceMode === 'plan' ? (
-        <ContentPlanTab businessId={businessId} />
+        <MapsPublicationsWidget
+          externalPosts={externalPosts}
+          onOpenContent={() => navigate('/dashboard/content')}
+        />
       ) : null}
 
       {workspaceMode === 'news' ? (
@@ -787,6 +791,60 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
       </div>
       </>
       ) : null}
+    </div>
+  );
+}
+
+function MapsPublicationsWidget({ externalPosts, onOpenContent }: { externalPosts?: any[]; onOpenContent: () => void }) {
+  const visiblePosts = Array.isArray(externalPosts) ? externalPosts.slice(0, 3) : [];
+  const fallbackPosts = [
+    { id: 'sample-published', date: '3 июля', title: 'Публикация опубликована', state: 'done' },
+    { id: 'sample-planned', date: '10 июля', title: 'Публикация запланирована', state: 'done' },
+    { id: 'sample-review', date: 'завтра', title: 'Следующая публикация требует проверки', state: 'attention' },
+  ];
+  const posts = visiblePosts.length > 0
+    ? visiblePosts.map((post, index) => ({
+      id: String(post.id || index),
+      date: String(post.published_at || post.scheduled_for || post.created_at || 'скоро').slice(0, 10),
+      title: String(post.title || post.text || post.generated_text || 'Публикация для карты'),
+      state: post.approved || post.published_at ? 'done' : 'attention',
+    }))
+    : fallbackPosts;
+
+  return (
+    <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-2xl">
+          <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <Calendar className="h-4 w-4" />
+            Публикации
+          </div>
+          <h4 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
+            Публикации теперь живут в разделе “Контент”
+          </h4>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Здесь остаётся быстрый обзор для Яндекс Карт. План, календарь, соцсети, проверка и размещение управляются в едином центре.
+          </p>
+        </div>
+        <Button type="button" onClick={onOpenContent} className="rounded-2xl bg-slate-950 px-5 py-6 text-white hover:bg-slate-800">
+          Все публикации
+          <ExternalLink className="ml-2 h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="mt-6 grid gap-3 md:grid-cols-3">
+        {posts.map((post) => (
+          <div key={post.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+              {post.state === 'done' ? <Check className="h-4 w-4 text-emerald-600" /> : <Sparkles className="h-4 w-4 text-amber-600" />}
+              {post.date}
+            </div>
+            <div className="mt-2 line-clamp-2 text-sm leading-5 text-slate-600">
+              {post.title}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

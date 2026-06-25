@@ -49,6 +49,11 @@ const CardOverviewPage = lazy(() =>
     default: module.CardOverviewPage,
   })),
 );
+const ContentPage = lazy(() =>
+  import("./pages/dashboard/ContentPage").then((module) => ({
+    default: module.ContentPage,
+  })),
+);
 const ProgressPage = lazy(() =>
   import("./pages/dashboard/ProgressPage").then((module) => ({
     default: module.ProgressPage,
@@ -173,7 +178,8 @@ const AppShell = () => {
             <Route index element={<Navigate to="/dashboard/profile" replace />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="card" element={<CardOverviewPage />} />
-            <Route path="content-plan" element={<Navigate to="/dashboard/card?tab=news&mode=plan" replace />} />
+            <Route path="content" element={<ContentPage />} />
+            <Route path="content-plan" element={<Navigate to="/dashboard/content" replace />} />
             <Route path="progress" element={<ProgressPage />} />
             <Route path="finance" element={<FinancePage />} />
             <Route path="average-ticket" element={<AverageTicketPage />} />

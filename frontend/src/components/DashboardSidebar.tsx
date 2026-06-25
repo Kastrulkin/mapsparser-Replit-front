@@ -79,6 +79,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         : 'Manage listing data, services, reviews, and start data refresh.',
     },
     {
+      id: 'content',
+      label: language === 'ru' ? 'Контент' : 'Content',
+      icon: Calendar,
+      path: '/dashboard/content',
+      tooltip: language === 'ru'
+        ? 'Единый календарь публикаций: что готово, что проверить и что выйдет дальше.'
+        : 'Unified publication calendar: what is ready, what needs review, and what goes next.',
+    },
+    {
       id: 'progress',
       label: t.dashboard.sidebar.progress,
       icon: TrendingUp,
