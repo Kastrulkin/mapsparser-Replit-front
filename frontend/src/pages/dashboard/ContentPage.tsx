@@ -13,6 +13,7 @@ import {
   Plus,
   Sparkles,
   Star,
+  Wand2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -153,10 +154,19 @@ const DEFAULT_CREATE_DRAFT: CreatePlanDraft = {
   },
 };
 
+const normalizeIsoDate = (value?: string) => {
+  const rawValue = String(value || '').trim();
+  if (!rawValue) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(rawValue)) return rawValue.slice(0, 10);
+  const parsed = new Date(rawValue);
+  return Number.isNaN(parsed.getTime()) ? '' : toIsoDate(parsed);
+};
+
 const formatDate = (value?: string) => {
   if (!value) return 'Дата не выбрана';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
+  const normalized = normalizeIsoDate(value);
+  const date = normalized ? new Date(`${normalized}T00:00:00`) : new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
   return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(date);
 };
 
@@ -190,7 +200,7 @@ const getWeekDays = (anchor: Date) => {
   });
 };
 
-const getItemDateKey = (item: PlanItem) => String(item.scheduled_for || '').slice(0, 10);
+const getItemDateKey = (item: PlanItem) => normalizeIsoDate(item.scheduled_for);
 
 const itemHasText = (item: PlanItem) => String(item.draft_text || '').trim().length > 0;
 
@@ -414,6 +424,31 @@ export function ContentPage() {
       if (plan?.id) await loadSocialPosts(plan.id);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Не удалось сохранить публикацию');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const generateSelectedDraft = async () => {
+    if (!selectedItem) return;
+    setBusyAction('generate-draft');
+    setError('');
+    setActionMessage('');
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}/generate-draft`, {
+        method: 'POST',
+        body: JSON.stringify({ language: 'ru' }),
+      });
+      const plan = response.plan || null;
+      setCurrentPlan(plan);
+      if (plan?.id) await loadSocialPosts(plan.id);
+      const refreshedItem = Array.isArray(plan?.items)
+        ? plan.items.find((nextItem: PlanItem) => nextItem.id === selectedItem.id)
+        : null;
+      setDraftEdits((prev) => ({ ...prev, [selectedItem.id]: String(refreshedItem?.draft_text || '') }));
+      setActionMessage('Текст готов. Проверьте его и утвердите публикацию.');
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : 'Не удалось сгенерировать текст');
     } finally {
       setBusyAction('');
     }
@@ -952,6 +987,7 @@ export function ContentPage() {
     const item = selectedItem;
     const hasPosts = selectedPosts.length > 0;
     const failedPost = selectedPosts.find((post) => String(post.status || '') === 'failed');
+    const hasDraftText = Boolean(String(draftEdits[item?.id || ''] ?? item?.draft_text ?? '').trim());
     return (
       <Sheet open={Boolean(item)} onOpenChange={(open) => { if (!open) setSelectedItemId(''); }}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-4xl">
@@ -968,6 +1004,35 @@ export function ContentPage() {
                     onChange={(event: React.ChangeEvent<HTMLInputElement>) => setThemeEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
                     className="h-12 rounded-2xl border-slate-200 text-base font-semibold"
                   />
+                  <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-950">
+                        {hasDraftText ? 'Текст уже есть' : 'Текста ещё нет'}
+                      </div>
+                      <div className="mt-1 text-sm text-slate-500">
+                        {hasDraftText ? 'Можно поправить вручную или попросить LocalOS написать заново.' : 'LocalOS напишет новость по теме из контент-плана.'}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant={hasDraftText ? 'outline' : 'default'}
+                      onClick={generateSelectedDraft}
+                      disabled={Boolean(busyAction)}
+                      className={cn('rounded-2xl', !hasDraftText ? 'bg-slate-950 text-white hover:bg-slate-800' : '')}
+                    >
+                      {busyAction === 'generate-draft' ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Пишем...
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="mr-2 h-4 w-4" />
+                          {hasDraftText ? 'Сгенерировать заново' : 'Сгенерировать текст'}
+                        </>
+                      )}
+                    </Button>
+                  </div>
                   <Textarea
                     value={draftEdits[item.id] ?? item.draft_text ?? ''}
                     onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraftEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
