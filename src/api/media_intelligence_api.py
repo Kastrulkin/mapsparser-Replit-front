@@ -9,13 +9,17 @@ from database_manager import DatabaseManager
 from services.ai_runtime import (
     VISION_CAPABILITY,
     analyze_photo_runtime,
+    estimate_photo_analysis_economics,
+    is_capability_enabled,
     list_capability_settings,
     set_capability_enabled,
 )
 from services.media_intelligence import (
     build_photo_coverage,
+    create_photo_asset_version,
     list_photo_assets,
     load_business,
+    record_photo_usage,
     recommend_media_for_post,
     upsert_photo_asset,
 )
@@ -130,6 +134,15 @@ def media_photos_create():
         ok, error_response = _require_business(cursor, business_id, user_data)
         if not ok:
             return error_response
+        if not is_capability_enabled(cursor, business_id, VISION_CAPABILITY):
+            return jsonify(
+                {
+                    "success": False,
+                    "status": "vision_disabled",
+                    "error": "Работа с фотографиями выключена.",
+                    "next_action": "Включите интеллектуальную работу с фотографиями в настройках ИИ.",
+                }
+            ), 409
         photo = upsert_photo_asset(
             cursor,
             business_id=business_id,
@@ -178,16 +191,101 @@ def media_photo_analyze(asset_id: str):
         if result.get("success"):
             db.conn.commit()
             return jsonify(result)
-        db.conn.rollback()
+        if result.get("status") in {"analysis_failed", "image_required"}:
+            db.conn.commit()
+        else:
+            db.conn.rollback()
         status_code = 402 if result.get("status") == "insufficient_credits" else 400
         if result.get("status") == "vision_disabled":
             status_code = 409
+        if result.get("status") == "analysis_failed":
+            status_code = 502
         return jsonify(result), status_code
     except Exception:
         db.conn.rollback()
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
     finally:
         db.close()
+
+
+@media_intelligence_bp.route("/photos/<asset_id>/version", methods=["POST"])
+def media_photo_new_version(asset_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        ok, error_response = _require_business(cursor, business_id, user_data)
+        if not ok:
+            return error_response
+        photo = create_photo_asset_version(
+            cursor,
+            business_id=business_id,
+            photo_asset_id=str(asset_id or "").strip(),
+            user_id=_user_id(user_data),
+            original_url=str(payload.get("original_url") or "").strip(),
+            content_hash=str(payload.get("content_hash") or "").strip(),
+            metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "photo": photo})
+    except ValueError:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 404
+    except Exception:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+@media_intelligence_bp.route("/photos/<asset_id>/usage", methods=["POST"])
+def media_photo_usage(asset_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        ok, error_response = _require_business(cursor, business_id, user_data)
+        if not ok:
+            return error_response
+        record_photo_usage(
+            cursor,
+            business_id=business_id,
+            photo_asset_id=str(asset_id or "").strip(),
+            usage_type=str(payload.get("usage_type") or "publication"),
+            target_id=str(payload.get("target_id") or "").strip(),
+            target_platform=str(payload.get("target_platform") or "").strip(),
+            metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
+        )
+        db.conn.commit()
+        return jsonify({"success": True})
+    except Exception:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+@media_intelligence_bp.route("/economics/photo-analysis", methods=["POST"])
+def media_photo_economics():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    economics = estimate_photo_analysis_economics(
+        photo_count=payload.get("photo_count"),
+        provider_total_cost=payload.get("provider_total_cost"),
+        credit_price=payload.get("credit_price"),
+        multiplier=payload.get("multiplier") or 10,
+    )
+    return jsonify({"success": True, "economics": economics})
 
 
 @media_intelligence_bp.route("/coverage", methods=["GET"])

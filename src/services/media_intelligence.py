@@ -196,11 +196,69 @@ def serialize_photo_asset(cursor: Any, row: dict[str, Any]) -> dict[str, Any]:
         "service_tags": _json_value(row.get("service_tags"), []),
         "suitable_platforms": _json_value(row.get("suitable_platforms"), []),
         "asset_version": int(row.get("asset_version") or 1),
+        "analysis_status": row.get("analysis_status") or "not_analyzed",
+        "analysis_error": row.get("analysis_error"),
+        "analysis_attempts": int(row.get("analysis_attempts") or 0),
+        "last_analyzed_at": row.get("last_analyzed_at"),
+        "content_hash": row.get("content_hash"),
+        "meta_storage_key": row.get("meta_storage_key"),
         "metadata_json": _json_value(row.get("metadata_json"), {}),
         "last_used_at": row.get("last_used_at"),
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
     }
+
+
+def create_photo_asset_version(
+    cursor: Any,
+    *,
+    business_id: str,
+    photo_asset_id: str,
+    user_id: str,
+    original_url: str = "",
+    content_hash: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    updates: list[str] = [
+        "asset_version = asset_version + 1",
+        "analysis_status = 'not_analyzed'",
+        "analysis_error = NULL",
+        "analysis_attempts = 0",
+        "last_analyzed_at = NULL",
+        "category = NULL",
+        "quality_score = 0",
+        "freshness_score = 0",
+        "orientation = NULL",
+        "people_count = 0",
+        "service_tags = '[]'::jsonb",
+        "suitable_platforms = '[]'::jsonb",
+        "meta_storage_key = NULL",
+        "metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb",
+        "updated_at = NOW()",
+    ]
+    params: list[Any] = [Json({"version_update": {"by": user_id, **(metadata or {})}})]
+    clean_url = _clean_text(original_url)
+    clean_hash = _clean_text(content_hash)
+    if clean_url:
+        updates.append("original_url = %s")
+        params.append(clean_url)
+    if clean_hash:
+        updates.append("content_hash = %s")
+        params.append(clean_hash)
+    params.extend([photo_asset_id, business_id])
+    cursor.execute(
+        f"""
+        UPDATE photo_assets
+        SET {", ".join(updates)}
+        WHERE id = %s AND business_id = %s
+        RETURNING *
+        """,
+        tuple(params),
+    )
+    row = _row_to_dict(cursor, cursor.fetchone())
+    if not row:
+        raise ValueError("Фото не найдено")
+    return serialize_photo_asset(cursor, row)
 
 
 def build_photo_coverage(cursor: Any, business_id: str) -> dict[str, Any]:

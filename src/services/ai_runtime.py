@@ -4,8 +4,10 @@ import base64
 import hashlib
 import json
 import re
+import sys
 import uuid
 import urllib.request
+import time
 from typing import Any
 
 from psycopg2.extras import Json
@@ -18,6 +20,7 @@ PHOTO_ANALYSIS_ACTION_KEY = "photo_analysis"
 PHOTO_ANALYSIS_CREDITS = 2
 VISION_PROVIDER = "gigachat_vision"
 VISION_CAPABILITY = "vision_enabled"
+PHOTO_ANALYSIS_MAX_ATTEMPTS = 3
 
 
 def _stable_hash(value: Any) -> str:
@@ -272,6 +275,111 @@ def _load_cache(
     return result
 
 
+def estimate_photo_analysis_credits(photo_count: Any) -> dict[str, Any]:
+    try:
+        count = int(photo_count or 0)
+    except Exception:
+        count = 0
+    count = max(count, 0)
+    return {
+        "action_type": PHOTO_ANALYSIS_ACTION_KEY,
+        "photo_count": count,
+        "credits_per_photo": PHOTO_ANALYSIS_CREDITS,
+        "estimated_credits": count * PHOTO_ANALYSIS_CREDITS,
+        "rule": "photo_analysis = 2 credits per new photo analysis",
+    }
+
+
+def estimate_photo_analysis_economics(
+    *,
+    photo_count: Any,
+    provider_total_cost: Any,
+    credit_price: Any,
+    multiplier: Any = 10,
+) -> dict[str, Any]:
+    credits = estimate_photo_analysis_credits(photo_count)
+    try:
+        provider_cost = float(provider_total_cost or 0)
+    except Exception:
+        provider_cost = 0.0
+    try:
+        one_credit_price = float(credit_price or 0)
+    except Exception:
+        one_credit_price = 0.0
+    try:
+        margin_multiplier = float(multiplier or 0)
+    except Exception:
+        margin_multiplier = 0.0
+    count = int(credits["photo_count"])
+    charged_credits = int(credits["estimated_credits"])
+    revenue = charged_credits * one_credit_price
+    target_min_revenue = provider_cost * margin_multiplier
+    return {
+        **credits,
+        "provider_total_cost": provider_cost,
+        "provider_cost_per_photo": provider_cost / count if count else 0,
+        "credit_price": one_credit_price,
+        "estimated_revenue": revenue,
+        "target_min_revenue": target_min_revenue,
+        "margin_ratio": revenue / provider_cost if provider_cost else None,
+        "needs_meter_adjustment": bool(provider_cost and revenue < target_min_revenue),
+    }
+
+
+def _mark_photo_analysis_status(
+    cursor: Any,
+    *,
+    business_id: str,
+    asset_id: str,
+    status: str,
+    error: str = "",
+    increment_attempts: bool = False,
+    meta_storage_key: str = "",
+) -> None:
+    cursor.execute(
+        f"""
+        UPDATE photo_assets
+        SET analysis_status = %s,
+            analysis_error = %s,
+            analysis_attempts = analysis_attempts + %s,
+            last_analyzed_at = CASE WHEN %s THEN NOW() ELSE last_analyzed_at END,
+            meta_storage_key = COALESCE(NULLIF(%s, ''), meta_storage_key),
+            updated_at = NOW()
+        WHERE id = %s AND business_id = %s
+        """,
+        (
+            status,
+            error or None,
+            1 if increment_attempts else 0,
+            status == "analyzed",
+            meta_storage_key,
+            asset_id,
+            business_id,
+        ),
+    )
+
+
+def _release_photo_analysis_reservation(
+    cursor: Any,
+    *,
+    reservation: dict[str, Any],
+    business_id: str,
+    user_id: str,
+    external_id: str,
+) -> None:
+    reservation_id = str(reservation.get("reservation_id") or "")
+    if not reservation_id:
+        return
+    finalize_reserved_action_credits(
+        cursor,
+        reservation_id=reservation_id,
+        business_id=business_id,
+        user_id=user_id,
+        finalization_mode="release",
+        external_id=external_id,
+    )
+
+
 def _record_usage_event(
     cursor: Any,
     *,
@@ -394,27 +502,85 @@ def analyze_photo_runtime(
         }
 
     clean_image_base64 = str(image_base64 or "").strip()
-    if not clean_image_base64:
-        clean_image_base64 = _download_image_as_base64(image_url or asset.get("original_url") or "")
-    if not clean_image_base64:
-        finalize_reserved_action_credits(
+    try:
+        if not clean_image_base64:
+            clean_image_base64 = _download_image_as_base64(image_url or asset.get("original_url") or "")
+    except Exception:
+        _release_photo_analysis_reservation(
             cursor,
-            reservation_id=str(reservation.get("reservation_id") or ""),
+            reservation=reservation,
             business_id=business_id,
             user_id=user_id,
-            finalization_mode="release",
+            external_id=f"photo-analysis-download-failed:{asset_id}:{asset_version}",
+        )
+        message = str(sys.exc_info()[1])[:500] or "Не удалось загрузить фото."
+        _mark_photo_analysis_status(
+            cursor,
+            business_id=business_id,
+            asset_id=asset_id,
+            status="analysis_failed",
+            error=message,
+        )
+        return {
+            "success": False,
+            "status": "analysis_failed",
+            "message": "Не удалось автоматически проанализировать фотографию.",
+            "retry_available": True,
+            "charged_credits": 0,
+            "details": message,
+        }
+    if not clean_image_base64:
+        _release_photo_analysis_reservation(
+            cursor,
+            reservation=reservation,
+            business_id=business_id,
+            user_id=user_id,
             external_id=f"photo-analysis-empty:{asset_id}:{asset_version}",
         )
         return {"success": False, "status": "image_required", "message": "Нужен файл или URL фото для анализа."}
 
     client = get_gigachat_client()
-    response_text = client.analyze_screenshot(
-        clean_image_base64,
-        prompt,
-        task_type="ai_agent_marketing",
-        business_id=business_id,
-        user_id=user_id,
-    )
+    response_text = ""
+    last_error = ""
+    for attempt in range(1, PHOTO_ANALYSIS_MAX_ATTEMPTS + 1):
+        try:
+            response_text = client.analyze_screenshot(
+                clean_image_base64,
+                prompt,
+                task_type="ai_agent_marketing",
+                business_id=business_id,
+                user_id=user_id,
+            )
+            last_error = ""
+            break
+        except Exception:
+            last_error = str(sys.exc_info()[1])[:500] or "VisionProvider error"
+            if attempt < PHOTO_ANALYSIS_MAX_ATTEMPTS:
+                time.sleep(0.2 * attempt)
+    if last_error:
+        _release_photo_analysis_reservation(
+            cursor,
+            reservation=reservation,
+            business_id=business_id,
+            user_id=user_id,
+            external_id=f"photo-analysis-provider-failed:{asset_id}:{asset_version}",
+        )
+        _mark_photo_analysis_status(
+            cursor,
+            business_id=business_id,
+            asset_id=asset_id,
+            status="analysis_failed",
+            error=last_error,
+            increment_attempts=True,
+        )
+        return {
+            "success": False,
+            "status": "analysis_failed",
+            "message": "Не удалось автоматически проанализировать фотографию.",
+            "retry_available": True,
+            "attempts": PHOTO_ANALYSIS_MAX_ATTEMPTS,
+            "charged_credits": 0,
+        }
     analysis = _normalize_photo_analysis(_extract_json_object(response_text), clean_context)
     usage_event_id = _record_usage_event(
         cursor,
@@ -443,6 +609,11 @@ def analyze_photo_runtime(
         """
         UPDATE photo_assets
         SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb,
+            analysis_status = 'analyzed',
+            analysis_error = NULL,
+            analysis_attempts = analysis_attempts + 1,
+            last_analyzed_at = NOW(),
+            meta_storage_key = %s,
             category = %s,
             quality_score = %s,
             freshness_score = %s,
@@ -455,6 +626,7 @@ def analyze_photo_runtime(
         """,
         (
             Json({"analysis": analysis}),
+            f"photo-assets/{business_id}/{asset_id}/v{asset_version}/photo.meta.json",
             analysis["category"],
             analysis["quality_score"],
             analysis["freshness_score"],
