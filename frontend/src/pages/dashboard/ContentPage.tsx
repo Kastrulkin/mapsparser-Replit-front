@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
 
@@ -84,6 +85,8 @@ type SocialPost = {
   platform_text?: string;
   base_text?: string;
   last_error?: string;
+  publish_mode?: string;
+  external_account_id?: string;
 };
 
 type SocialSummary = {
@@ -241,6 +244,16 @@ const getChannelNextAction = (post: SocialPost) => {
   if (normalized === 'approved') return 'Можно планировать. Подключение проверим перед публикацией.';
   if (normalized === 'queued') return 'Запланировано. Если канал не подключён, появится понятный шаг.';
   return getPostNextAction(post);
+};
+
+const isAutomaticSendBlockedStatus = (status?: string) => {
+  const normalized = String(status || '').toLowerCase();
+  return normalized === 'needs_manual_publish' || normalized === 'failed';
+};
+
+const isQueuedOrHandledStatus = (status?: string) => {
+  const normalized = String(status || '').toLowerCase();
+  return normalized === 'queued' || normalized === 'needs_supervised_publish' || normalized === 'published';
 };
 
 const getItemStatusLabel = (item: PlanItem, posts: SocialPost[]) => {
@@ -611,6 +624,7 @@ export function ContentPage() {
     if (!selectedItem || !currentPlan?.id) return;
     setBusyAction('queue');
     setError('');
+    setActionMessage('');
     try {
       const posts = postsByItem[selectedItem.id] || [];
       const postIds = posts
@@ -621,11 +635,27 @@ export function ContentPage() {
         setError('Сначала утвердите публикацию. После этого её можно будет поставить в расписание.');
         return;
       }
-      await newAuth.makeRequest('/social-posts/bulk-queue', {
+      const response = await newAuth.makeRequest('/social-posts/bulk-queue', {
         method: 'POST',
         body: JSON.stringify({ post_ids: postIds }),
       });
+      const queuedPosts = Array.isArray(response.posts) ? response.posts : [];
+      const blockedPosts = queuedPosts.filter((post: SocialPost) => isAutomaticSendBlockedStatus(post.status));
+      const handledPosts = queuedPosts.filter((post: SocialPost) => isQueuedOrHandledStatus(post.status));
       await loadSocialPosts(currentPlan.id);
+      if (blockedPosts.length > 0) {
+        const blockedLabels = blockedPosts.map((post: SocialPost) => platformShortLabel(post)).filter(Boolean).join(', ');
+        const firstError = String(blockedPosts[0]?.last_error || '').trim();
+        setError(
+          firstError
+            ? `${blockedLabels || 'Каналы'} не готовы: ${firstError}`
+            : `${blockedLabels || 'Каналы'} не готовы. Сначала подключите API-ключи, выберите канал или разрешите контролируемое размещение.`,
+        );
+        return;
+      }
+      if (handledPosts.length > 0) {
+        setActionMessage(`Отправка запланирована: ${handledPosts.length}.`);
+      }
     } catch (queueError) {
       setError(queueError instanceof Error ? queueError.message : 'Не удалось поставить в расписание');
     } finally {
@@ -1073,9 +1103,7 @@ export function ContentPage() {
     const needsReviewChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Нужно проверить').length;
     const readyTextChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Текст готов').length;
     const approvedPostCount = selectedPosts.filter((post) => String(post.status || '').toLowerCase() === 'approved').length;
-    const scheduledPostCount = selectedPosts.filter((post) => (
-      ['queued', 'needs_supervised_publish', 'needs_manual_publish', 'published'].includes(String(post.status || '').toLowerCase())
-    )).length;
+    const scheduledPostCount = selectedPosts.filter((post) => isQueuedOrHandledStatus(post.status)).length;
     const canQueueSelectedItem = approvedPostCount > 0 && needsReviewChannelCount === 0;
     const canApproveSelectedItem = hasDraftText && (!hasPosts || needsReviewChannelCount > 0);
     const approveButtonLabel = busyAction === 'approve'
@@ -1087,7 +1115,8 @@ export function ContentPage() {
       ? 'Ставим...'
       : scheduledPostCount > 0 && approvedPostCount === 0
         ? 'Запланировано'
-        : 'Запланировать';
+        : 'Запланировать отправку';
+    const queueTooltip = 'Отправляет автоматически через выбранные каналы. Если канал не подключён или не выбран, LocalOS покажет, что нужно настроить.';
     const channelSummary = hasPosts
       ? needsReviewChannelCount > 0
         ? `Нужно проверить: ${needsReviewChannelCount}`
@@ -1245,18 +1274,29 @@ export function ContentPage() {
                   >
                     {approveButtonLabel}
                   </Button>
-                  <Button
-                    type="button"
-                    onClick={queueSelectedItem}
-                    disabled={Boolean(busyAction) || !canQueueSelectedItem}
-                    className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"
-                  >
-                    {queueButtonLabel}
-                  </Button>
+                  <TooltipProvider delayDuration={150}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="block">
+                          <Button
+                            type="button"
+                            onClick={queueSelectedItem}
+                            disabled={Boolean(busyAction) || !canQueueSelectedItem}
+                            className="w-full rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"
+                          >
+                            {queueButtonLabel}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[260px] text-sm leading-5">
+                        {queueTooltip}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
                 <p className="text-xs leading-5 text-slate-500">
                   {canQueueSelectedItem
-                    ? 'После расписания API-каналы пойдут по дате, Яндекс и 2ГИС останутся контролируемым размещением.'
+                    ? 'Если выбранные каналы не подключены, LocalOS покажет, что нужно настроить перед отправкой.'
                     : needsReviewChannelCount > 0
                       ? 'Следующий шаг: проверьте текст и нажмите «Утвердить». После этого появится расписание.'
                       : 'Наружу ничего не отправится без проверки и расписания. Яндекс и 2ГИС остаются контролируемым размещением.'}
