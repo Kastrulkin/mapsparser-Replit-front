@@ -3,7 +3,7 @@ import { useOutletContext, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { newAuth } from '@/lib/auth_new';
-import { Network, MapPin, User, Building2, Clock, Mail, Phone, Edit2, ShieldCheck, AlertTriangle, CheckCircle2, ArrowRight, FileSearch, RefreshCw, Plus, Trash2, Info, ExternalLink } from 'lucide-react';
+import { Network, MapPin, User, Building2, Clock, Mail, Phone, Edit2, ShieldCheck, AlertTriangle, CheckCircle2, ArrowRight, FileSearch, RefreshCw, Plus, Trash2, Info, ExternalLink, ImageIcon, Sparkles } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { cn } from '@/lib/utils';
 import { SubscriptionManagement } from '@/components/SubscriptionManagement';
@@ -210,6 +210,9 @@ export const ProfilePage = () => {
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [businessTypes, setBusinessTypes] = useState<Array<{ type_key: string; label: string }>>([]);
   const [isNetworkMaster, setIsNetworkMaster] = useState(false);
+  const [photoIntelligenceEnabled, setPhotoIntelligenceEnabled] = useState(false);
+  const [photoIntelligenceLoading, setPhotoIntelligenceLoading] = useState(false);
+  const [photoIntelligenceSaving, setPhotoIntelligenceSaving] = useState(false);
   const hasMapLinks = (clientInfo.mapLinks || []).some((link) => String(link?.url || '').trim().length > 0);
   const hasSavedMapLinks = (savedClientInfo.mapLinks || []).some((link) => String(link?.url || '').trim().length > 0);
   const effectiveBusinessId = currentBusinessId || (Array.isArray(businesses) && businesses.length === 1 ? businesses[0]?.id || null : null);
@@ -553,6 +556,46 @@ export const ProfilePage = () => {
   useEffect(() => {
     void loadParseStatus();
   }, [effectiveBusinessId]);
+
+  const loadPhotoIntelligenceSettings = async () => {
+    if (!effectiveBusinessId) return;
+    setPhotoIntelligenceLoading(true);
+    try {
+      const data = await newAuth.makeRequest(`/media-intelligence/settings?business_id=${encodeURIComponent(effectiveBusinessId)}`, { method: 'GET' });
+      setPhotoIntelligenceEnabled(Boolean(data?.photo_intelligence?.enabled));
+    } catch {
+      setPhotoIntelligenceEnabled(false);
+    } finally {
+      setPhotoIntelligenceLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadPhotoIntelligenceSettings();
+  }, [effectiveBusinessId]);
+
+  const togglePhotoIntelligence = async () => {
+    if (!effectiveBusinessId) return;
+    const nextEnabled = !photoIntelligenceEnabled;
+    setPhotoIntelligenceSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await newAuth.makeRequest('/media-intelligence/settings', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: effectiveBusinessId,
+          vision_enabled: nextEnabled,
+        }),
+      });
+      setPhotoIntelligenceEnabled(nextEnabled);
+      setSuccess(nextEnabled ? 'Интеллектуальная работа с фотографиями включена.' : 'Интеллектуальная работа с фотографиями выключена.');
+    } catch (settingsError) {
+      setError(settingsError instanceof Error ? settingsError.message : 'Не удалось обновить настройку фотографий');
+    } finally {
+      setPhotoIntelligenceSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (parseStatus !== 'processing' && parseStatus !== 'queued') {
@@ -1060,6 +1103,60 @@ export const ProfilePage = () => {
           </Button>
         )}
       />
+
+      <DashboardSection
+        title={isRu ? 'ИИ и фотографии' : 'AI and photos'}
+        description={
+          isRu
+            ? 'LocalOS сможет выбирать лучшие фото для публикаций, подсказывать чего не хватает и готовить визуал под каналы.'
+            : 'LocalOS can pick stronger photos for posts, show what is missing, and prepare visuals for channels.'
+        }
+        actions={(
+          <Button
+            type="button"
+            onClick={togglePhotoIntelligence}
+            disabled={!effectiveBusinessId || photoIntelligenceSaving || photoIntelligenceLoading}
+            className={cn(
+              'gap-2',
+              photoIntelligenceEnabled
+                ? 'bg-slate-900 text-white hover:bg-slate-800'
+                : 'bg-emerald-600 text-white hover:bg-emerald-700'
+            )}
+          >
+            {photoIntelligenceSaving || photoIntelligenceLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {photoIntelligenceEnabled ? (isRu ? 'Выключить' : 'Turn off') : (isRu ? 'Включить' : 'Turn on')}
+          </Button>
+        )}
+      >
+        <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
+          <div className="rounded-2xl bg-slate-50 p-5">
+            <div className="flex items-start gap-3">
+              <div className="rounded-2xl bg-white p-3 text-slate-900 shadow-sm ring-1 ring-slate-200">
+                <ImageIcon className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-base font-semibold text-slate-950">
+                  {photoIntelligenceEnabled ? (isRu ? 'Работа с фотографиями включена' : 'Photo intelligence is on') : (isRu ? 'Работа с фотографиями выключена' : 'Photo intelligence is off')}
+                </div>
+                <div className="mt-1 text-sm leading-6 text-slate-600">
+                  {isRu
+                    ? 'После включения LocalOS будет анализировать фото только по вашему действию, сохранять результат и не тратить кредиты повторно на то же фото.'
+                    : 'When enabled, LocalOS analyzes photos only after your action, stores the result, and does not spend credits again for the same photo.'}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              {isRu ? 'Стоимость' : 'Cost'}
+            </div>
+            <div className="mt-2 text-2xl font-semibold text-slate-950">2</div>
+            <div className="mt-1 text-sm text-slate-600">
+              {isRu ? 'кредита за анализ одного нового фото' : 'credits per new photo analysis'}
+            </div>
+          </div>
+        </div>
+      </DashboardSection>
 
       {/* Профиль пользователя */}
       <DashboardSection

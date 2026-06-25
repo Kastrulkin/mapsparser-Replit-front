@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock3,
+  ImageIcon,
   Eye,
   FileText,
   Lightbulb,
@@ -97,6 +98,30 @@ type SocialSummary = {
   needs_manual_publish?: number;
   published?: number;
   failed?: number;
+};
+
+type PhotoAsset = {
+  id?: string;
+  original_url?: string;
+  category?: string;
+  quality_score?: number;
+  freshness_score?: number;
+  orientation?: string;
+  why?: string;
+};
+
+type MediaRecommendation = {
+  status?: string;
+  title?: string;
+  message?: string;
+  selected_asset?: PhotoAsset | null;
+  alternatives?: PhotoAsset[];
+  coverage?: {
+    coverage_percent?: number;
+    missing_text?: string;
+    total_assets?: number;
+  };
+  platform_hints?: string[];
 };
 
 type CalendarView = 'month' | 'week' | 'list';
@@ -355,6 +380,8 @@ export function ContentPage() {
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [themeEdits, setThemeEdits] = useState<Record<string, string>>({});
   const [dateEdits, setDateEdits] = useState<Record<string, string>>({});
+  const [mediaRecommendations, setMediaRecommendations] = useState<Record<string, MediaRecommendation>>({});
+  const [mediaLoadingItemId, setMediaLoadingItemId] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [createStep, setCreateStep] = useState<ModalStep>('setup');
   const [createDraft, setCreateDraft] = useState<CreatePlanDraft>(DEFAULT_CREATE_DRAFT);
@@ -466,6 +493,12 @@ export function ContentPage() {
   }, [selectedItemId]);
 
   useEffect(() => {
+    if (!selectedItemId || !currentBusinessId) return;
+    if (mediaRecommendations[selectedItemId]) return;
+    void loadMediaRecommendation(selectedItemId);
+  }, [selectedItemId, currentBusinessId]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(CONTENT_VIEW_STORAGE_KEY, view);
   }, [view]);
@@ -484,6 +517,28 @@ export function ContentPage() {
     setDraftEdits((prev) => ({ ...prev, [item.id]: String(item.draft_text || '') }));
     setThemeEdits((prev) => ({ ...prev, [item.id]: String(item.theme || item.goal || '') }));
     setDateEdits((prev) => ({ ...prev, [item.id]: getItemDateKey(item) }));
+  };
+
+  const loadMediaRecommendation = async (itemId: string) => {
+    if (!currentBusinessId || !itemId) return;
+    setMediaLoadingItemId(itemId);
+    try {
+      const response = await newAuth.makeRequest(`/media-intelligence/posts/${encodeURIComponent(itemId)}/recommendation?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
+      if (response?.recommendation) {
+        setMediaRecommendations((prev) => ({ ...prev, [itemId]: response.recommendation }));
+      }
+    } catch (mediaError) {
+      setMediaRecommendations((prev) => ({
+        ...prev,
+        [itemId]: {
+          status: 'unavailable',
+          title: 'Фото пока не подобрано',
+          message: mediaError instanceof Error ? mediaError.message : 'LocalOS не смог проверить фото для публикации.',
+        },
+      }));
+    } finally {
+      setMediaLoadingItemId('');
+    }
   };
 
   const saveSelectedItem = async () => {
@@ -1156,6 +1211,8 @@ export function ContentPage() {
           : `${channelCount} каналов в плане`
       : `${channelCount} каналов после подготовки`;
     const channelDetailsId = item ? `content-channels-${item.id}` : 'content-channels';
+    const mediaRecommendation = item ? mediaRecommendations[item.id] : null;
+    const selectedPhoto = mediaRecommendation?.selected_asset || null;
     return (
       <Sheet open={Boolean(item)} onOpenChange={(open) => { if (!open) setSelectedItemId(''); }}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-4xl">
@@ -1212,6 +1269,52 @@ export function ContentPage() {
                     <div className="rounded-2xl bg-white p-4 text-sm leading-6 text-slate-700 shadow-sm">
                       {draftEdits[item.id] || item.draft_text || 'Здесь появится текст, который увидит клиент.'}
                     </div>
+                  </div>
+                  <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          <ImageIcon className="h-4 w-4" />
+                          Фото
+                        </div>
+                        <div className="mt-2 text-lg font-semibold text-slate-950">
+                          {mediaLoadingItemId === item.id ? 'Подбираем фото...' : mediaRecommendation?.title || 'Фото не выбрано'}
+                        </div>
+                        <div className="mt-1 text-sm leading-6 text-slate-500">
+                          {mediaLoadingItemId === item.id
+                            ? 'LocalOS смотрит доступные фото и подскажет, что лучше использовать.'
+                            : mediaRecommendation?.message || 'Добавьте фото к бизнесу, и LocalOS подскажет лучший визуал для публикации.'}
+                        </div>
+                      </div>
+                      <Button type="button" variant="outline" onClick={() => { void loadMediaRecommendation(item.id); }} disabled={mediaLoadingItemId === item.id} className="shrink-0 rounded-2xl">
+                        {mediaLoadingItemId === item.id ? 'Проверяем...' : 'Обновить'}
+                      </Button>
+                    </div>
+                    {selectedPhoto?.original_url ? (
+                      <div className="mt-4 grid gap-4 sm:grid-cols-[140px_1fr]">
+                        <img src={selectedPhoto.original_url} alt="Подобранное фото" className="h-32 w-full rounded-2xl object-cover shadow-sm ring-1 ring-slate-200" />
+                        <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                          <div className="font-semibold text-slate-900">Почему подходит</div>
+                          <div className="mt-1 leading-6">{selectedPhoto.why || mediaRecommendation?.message || 'Фото подходит по задаче публикации.'}</div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">качество {Math.round(Number(selectedPhoto.quality_score || 0))}%</span>
+                            {selectedPhoto.category ? <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">{selectedPhoto.category}</span> : null}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                    {mediaRecommendation?.coverage?.missing_text ? (
+                      <div className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+                        {mediaRecommendation.coverage.missing_text}
+                      </div>
+                    ) : null}
+                    {Array.isArray(mediaRecommendation?.platform_hints) && mediaRecommendation.platform_hints.length > 0 ? (
+                      <div className="mt-3 space-y-1 text-xs leading-5 text-slate-500">
+                        {mediaRecommendation.platform_hints.slice(0, 2).map((hint) => (
+                          <div key={hint}>• {hint}</div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                   {failedPost ? (
                     <div className="rounded-3xl border border-red-100 bg-red-50 p-4 text-sm text-red-800">

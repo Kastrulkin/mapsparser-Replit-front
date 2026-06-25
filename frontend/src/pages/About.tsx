@@ -281,13 +281,14 @@ const About = () => {
                 <div className="text-sm text-gray-600 mb-4">
                   {isRu ? "1200 ₽/месяц (240 кредитов)" : t.about.pricingStarterPrice}
                 </div>
-                {isRu ? <div className="text-sm text-gray-600 mb-3">Хватит чтобы:</div> : null}
+                {isRu ? <div className="text-sm text-gray-600 mb-3">Примерно хватит на:</div> : null}
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {isRu ? "настроить услуги на картах" : t.about.pricingStarterPoint1}</div>
-                  <div>- {isRu ? "ответить на отзывы" : t.about.pricingStarterPoint2}</div>
-                  <div>- {isRu ? "создать новости для публикации" : t.about.pricingStarterPoint3}</div>
-                  <div>- {isRu ? "проверить конкурента" : t.about.pricingStarterPoint4}</div>
+                  <div>- {isRu ? "100–120 коротких публикаций" : t.about.pricingStarterPoint1}</div>
+                  <div>- {isRu ? "около 200 ответов на отзывы" : t.about.pricingStarterPoint2}</div>
+                  <div>- {isRu ? "60–100 анализов фото*" : t.about.pricingStarterPoint3}</div>
+                  <div>- {isRu ? "или любую комбинацию действий" : t.about.pricingStarterPoint4}</div>
                 </div>
+                {isRu ? <div className="mb-6 text-xs leading-5 text-gray-500">* Интеллектуальная работа с фотографиями включается отдельно и расходует кредиты только при анализе нового фото.</div> : null}
                 <Button
                   variant="default"
                   size="lg"
