@@ -239,6 +239,27 @@ def test_publication_objective_maps_event_posts_to_business_tasks():
             "goal": "Обучить",
         }
     ) == "myth"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "first_haircut",
+            "theme": "Первая стрижка без слёз",
+            "goal": "Убрать страх родителей",
+        }
+    ) == "first_haircut"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "seasonal",
+            "theme": "1 сентября: подготовка к школе",
+            "goal": "Связать стрижку с важным днём ребёнка",
+        }
+    ) == "school_preparation"
+    assert _normalize_publication_objective(
+        {
+            "content_type": "faq",
+            "theme": "Что делать, если ребёнок боится?",
+            "goal": "Снять страх родителей",
+        }
+    ) == "fear_reassurance"
 
 
 def test_culture_publication_prompt_uses_objective_specific_rules():
@@ -320,6 +341,50 @@ def test_beauty_publication_prompt_handles_service_and_social_proof_contexts():
     assert "не копируй его дословно" in review_block
 
 
+def test_kids_hair_publication_prompt_uses_family_life_context():
+    block = _publication_objective_prompt_block(
+        "kids_hair",
+        {
+            "content_type": "first_haircut",
+            "theme": "Первая стрижка без слёз",
+            "goal": "Убрать страх родителей",
+        },
+    )
+
+    assert "Тип публикации: Первая стрижка" in block
+    assert "Покупатель — родитель, получатель услуги — ребёнок" in block
+    assert "Никогда не продавай стрижку как процедуру" in block
+    assert "семейное событие" in block
+    assert "Не используй фразы" in block
+    assert "Успейте" in block
+
+
+def test_kids_hair_publication_prompt_handles_school_and_fear_contexts():
+    school_block = _publication_objective_prompt_block(
+        "kids_hair",
+        {
+            "content_type": "seasonal",
+            "theme": "1 сентября: подготовка к школе",
+            "goal": "Напомнить о важном дне",
+        },
+    )
+    fear_block = _publication_objective_prompt_block(
+        "kids_hair",
+        {
+            "content_type": "faq",
+            "theme": "Что делать, если ребёнок боится?",
+            "goal": "Снять страх родителей",
+        },
+    )
+
+    assert "Тип публикации: Подготовка к школе" in school_block
+    assert "важным днём" in school_block
+    assert "Не дави" in school_block
+    assert "Тип публикации: Развенчание страхов" in fear_block
+    assert "можно сделать паузу" in fear_block
+    assert "не обесценивай страх" in fear_block
+
+
 def test_content_plan_skeleton_uses_kids_hair_salon_template():
     plan = build_content_plan_skeleton(
         {
@@ -340,8 +405,10 @@ def test_content_plan_skeleton_uses_kids_hair_salon_template():
     )
 
     assert plan["meta"]["template_key"] == "kids_hair_salon"
+    assert plan["meta"]["industry_key"] == "kids_hair"
     assert any(item["source_kind"] == "industry_template" for item in plan["items"])
-    assert any("детская стрижка" in item["goal"].lower() for item in plan["items"])
+    assert any(item["content_type"] == "first_haircut" for item in plan["items"])
+    assert any("семейное событие" in item["goal"].lower() for item in plan["items"])
 
 
 def test_content_plan_skeleton_uses_event_center_template_for_katok():
@@ -419,6 +486,28 @@ def test_beauty_fallback_draft_stays_on_marketing_objective():
 
     assert "ощущение клиента" in draft
     assert "реальные фото" in draft
+    assert "маникюру, педикюру, бровям" not in draft.lower()
+    assert not draft.lower().startswith("в салоне")
+
+
+def test_kids_hair_fallback_draft_stays_on_parent_and_child_context():
+    item = {
+        "content_type": "first_haircut",
+        "theme": "Первая стрижка без слёз",
+        "goal": "Убрать страх родителей.",
+        "seo_keyword": "первая стрижка ребенка",
+    }
+    facts = {
+        "business_type": "Салон красоты",
+        "categories": "детская парикмахерская, детская стрижка",
+        "services": "- Детская стрижка\n- Первая стрижка",
+    }
+
+    draft = _fallback_draft_text("Весёлая расчёска", item, facts, "ru")
+
+    assert "спокойное семейное событие" in draft
+    assert "ребёнок" in draft
+    assert "родители" in draft
     assert "маникюру, педикюру, бровям" not in draft.lower()
     assert not draft.lower().startswith("в салоне")
 

@@ -706,6 +706,7 @@ def build_content_plan_skeleton(
             ),
             "template_key": template_profile.get("template_key") or "",
             "template_label": template_profile.get("label") or "",
+            "industry_key": template_profile.get("industry_key") or "",
             "template_version": template_profile.get("version") or "",
         },
     }
