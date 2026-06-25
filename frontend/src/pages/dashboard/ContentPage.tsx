@@ -1530,44 +1530,44 @@ export function ContentPage() {
             </div>
 
             <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="space-y-4">
                 <div>
                   <div className="text-sm font-semibold text-slate-950">Что сделать сейчас</div>
-                  <div className="mt-1 text-sm leading-6 text-slate-500">
+                  <div className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
                     Быстро проверьте ближайшее, подтвердите готовое и закройте раздел.
                   </div>
                 </div>
-                <div className="grid w-full min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:max-w-3xl xl:flex-1">
+                <div className="grid w-full min-w-0 gap-2 md:grid-cols-3">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={openNearestReview}
                     disabled={!items.length || Boolean(busyAction)}
-                    className="h-auto min-h-12 min-w-0 justify-start whitespace-normal rounded-2xl border-slate-200 bg-white px-4 py-3 text-left leading-snug text-slate-800 hover:bg-slate-50"
+                    className="h-12 min-w-0 justify-center gap-2 rounded-2xl border-slate-200 bg-white px-4 text-slate-800 transition-transform hover:bg-slate-50 active:scale-[0.96]"
                   >
                     <Eye className="h-4 w-4 shrink-0" />
-                    <span className="min-w-0">Проверить ближайшие</span>
+                    <span className="truncate">Проверить ближайшие</span>
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     onClick={approveReadyPosts}
                     disabled={reviewReadyPosts.length === 0 || Boolean(busyAction)}
-                    className="h-auto min-h-12 min-w-0 justify-start whitespace-normal rounded-2xl border-slate-200 bg-white px-4 py-3 text-left leading-snug text-slate-800 hover:bg-slate-50 disabled:opacity-45"
+                    className="h-12 min-w-0 justify-center gap-2 rounded-2xl border-slate-200 bg-white px-4 text-slate-800 transition-transform hover:bg-slate-50 active:scale-[0.96] disabled:opacity-45"
                   >
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    <span className="min-w-0">
-                      {busyAction === 'bulk-approve' ? 'Утверждаем...' : `Утвердить всё готовое · ${reviewReadyPosts.length}`}
+                    <span className="truncate">
+                      {busyAction === 'bulk-approve' ? 'Утверждаем...' : `Утвердить готовое · ${reviewReadyPosts.length}`}
                     </span>
                   </Button>
                   <Button
                     type="button"
                     onClick={queueApprovedPosts}
                     disabled={approvedPosts.length === 0 || Boolean(busyAction)}
-                    className="h-auto min-h-12 min-w-0 justify-start whitespace-normal rounded-2xl bg-slate-950 px-4 py-3 text-left leading-snug text-white hover:bg-slate-800 disabled:bg-slate-300"
+                    className="h-12 min-w-0 justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-white transition-transform hover:bg-slate-800 active:scale-[0.96] disabled:bg-slate-300"
                   >
                     <CalendarDays className="h-4 w-4 shrink-0" />
-                    <span className="min-w-0">
+                    <span className="truncate">
                       {busyAction === 'bulk-queue' ? 'Планируем...' : `Запланировать · ${approvedPosts.length}`}
                     </span>
                   </Button>
