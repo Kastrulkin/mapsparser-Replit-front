@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { DragEventHandler } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -79,6 +80,13 @@ type DeferredPayload = {
   deferredUntil: string;
 };
 
+type LeadBasicsPatch = {
+  name: string;
+  category: string;
+  city: string;
+  address: string;
+};
+
 const mutedPillClass = 'inline-flex max-w-full items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600';
 const compactMetaClass = 'truncate text-[11px] text-slate-500';
 
@@ -93,6 +101,112 @@ const shortStatusLabel = (value?: string) => {
   if (normalized === 'postponed' || normalized === 'deferred') return 'Отложен';
   if (normalized === 'not_relevant' || normalized === 'disqualified') return 'Неактуален';
   return value || '—';
+};
+
+const isPlaceholderPartnerName = (value?: string) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return !normalized || normalized === 'новый партнёр' || normalized === 'новый партнер' || normalized === 'без названия';
+};
+
+const getLeadBasicsDraft = (lead: PipelineLead): LeadBasicsPatch => ({
+  name: String(lead.name || '').trim(),
+  category: String(lead.category || '').trim(),
+  city: String(lead.city || '').trim(),
+  address: String(lead.address || '').trim(),
+});
+
+const EditableLeadBasics = ({
+  lead,
+  loading,
+  onSave,
+}: {
+  lead: PipelineLead;
+  loading: boolean;
+  onSave: (leadId: string, patch: LeadBasicsPatch) => Promise<void>;
+}) => {
+  const shouldStartEditing = isPlaceholderPartnerName(lead.name);
+  const [isEditing, setIsEditing] = useState(shouldStartEditing);
+  const [draft, setDraft] = useState<LeadBasicsPatch>(() => getLeadBasicsDraft(lead));
+
+  useEffect(() => {
+    setDraft(getLeadBasicsDraft(lead));
+  }, [lead.id, lead.name, lead.category, lead.city, lead.address]);
+
+  useEffect(() => {
+    if (shouldStartEditing) setIsEditing(true);
+  }, [lead.id, shouldStartEditing]);
+
+  const hasChanges =
+    draft.name !== String(lead.name || '').trim() ||
+    draft.category !== String(lead.category || '').trim() ||
+    draft.city !== String(lead.city || '').trim() ||
+    draft.address !== String(lead.address || '').trim();
+
+  const save = async () => {
+    await onSave(lead.id, draft);
+    setIsEditing(false);
+  };
+
+  if (!isEditing) {
+    return (
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="break-words text-base font-semibold leading-snug text-foreground">{lead.name || 'Без названия'}</div>
+            <div className="mt-1 line-clamp-2 text-sm text-slate-500">{lead.category || '—'} · {lead.city || '—'}</div>
+            <div className="mt-1 line-clamp-1 text-sm text-slate-400">{lead.address || 'Адрес не указан'}</div>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)} disabled={loading} className="shrink-0 text-slate-500">
+            Править
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-3">
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-sky-900">
+        Данные партнёра
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        <Input
+          value={draft.name}
+          onChange={(event) => setDraft((previous) => ({ ...previous, name: event.target.value }))}
+          placeholder="Название партнёра"
+          className="bg-white"
+        />
+        <Input
+          value={draft.category}
+          onChange={(event) => setDraft((previous) => ({ ...previous, category: event.target.value }))}
+          placeholder="Категория"
+          className="bg-white"
+        />
+        <Input
+          value={draft.city}
+          onChange={(event) => setDraft((previous) => ({ ...previous, city: event.target.value }))}
+          placeholder="Город"
+          className="bg-white"
+        />
+        <Input
+          value={draft.address}
+          onChange={(event) => setDraft((previous) => ({ ...previous, address: event.target.value }))}
+          placeholder="Адрес"
+          className="bg-white"
+        />
+      </div>
+      <div className="mt-2 flex flex-wrap justify-end gap-2">
+        {!shouldStartEditing ? (
+          <Button size="sm" variant="ghost" onClick={() => { setDraft(getLeadBasicsDraft(lead)); setIsEditing(false); }} disabled={loading}>
+            Отмена
+          </Button>
+        ) : null}
+        <Button size="sm" onClick={() => void save()} disabled={loading || !draft.name.trim() || !hasChanges} className="bg-slate-950 text-white hover:bg-slate-800">
+          Сохранить данные
+        </Button>
+      </div>
+    </div>
+  );
 };
 
 type PartnershipLeadCardProps = {
@@ -395,6 +509,7 @@ type PartnershipPipelineListProps = {
   onRunMatch: (leadId: string) => void;
   onPrepareSalesRoom: (leadId: string, dataMode: 'audited' | 'template') => void;
   onMarkManualContact: (leadId: string) => void;
+  onSaveLeadBasics: (leadId: string, patch: LeadBasicsPatch) => Promise<void>;
   onUpdateLeadStage: (leadId: string, stage: string, message: string, deferred: DeferredPayload) => void;
   onDeleteLead: (leadId: string) => void;
   onClearLastGeoSearch: () => void;
@@ -459,6 +574,7 @@ export const PartnershipPipelineList = ({
   onRunMatch,
   onPrepareSalesRoom,
   onMarkManualContact,
+  onSaveLeadBasics,
   onUpdateLeadStage,
   onDeleteLead,
   onClearLastGeoSearch,
@@ -611,9 +727,7 @@ export const PartnershipPipelineList = ({
                 <div className="flex min-w-0 items-start gap-3">
                   <input className="mt-1" type="checkbox" checked={selectedLeadIds.includes(lead.id)} onChange={(event) => onToggleLeadSelection(lead.id, event.target.checked)} />
                   <div className="min-w-0 flex-1">
-                    <div className="break-words text-base font-semibold leading-snug text-foreground">{lead.name || 'Без названия'}</div>
-                    <div className="mt-1 line-clamp-2 text-sm text-slate-500">{lead.category || '—'} · {lead.city || '—'}</div>
-                    <div className="mt-1 line-clamp-1 text-sm text-slate-400">{lead.address || 'Адрес не указан'}</div>
+                    <EditableLeadBasics lead={lead} loading={loading} onSave={onSaveLeadBasics} />
                     {lead.deferred_reason ? <div className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">Отложено: {lead.deferred_reason}</div> : null}
                     {lead.deferred_until ? <div className="mt-1 text-xs text-amber-800">Вернуться: {new Date(String(lead.deferred_until)).toLocaleDateString('ru-RU')}</div> : null}
                     <div className="mt-2 flex flex-wrap gap-1.5">

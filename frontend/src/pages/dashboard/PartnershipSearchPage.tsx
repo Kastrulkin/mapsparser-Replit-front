@@ -1347,6 +1347,27 @@ export const PartnershipSearchPage: React.FC = () => {
     });
   };
 
+  const saveLeadBasics = async (
+    leadId: string,
+    patch: { name: string; category: string; city: string; address: string }
+  ) => {
+    if (!currentBusinessId) return;
+    const normalizedPatch = {
+      name: patch.name.trim(),
+      category: patch.category.trim(),
+      city: patch.city.trim(),
+      address: patch.address.trim(),
+    };
+    await runPartnershipAction('Не удалось сохранить данные партнёра', async () => {
+      await patchPartnershipLead(currentBusinessId, leadId, normalizedPatch);
+      setItems((previous) =>
+        previous.map((item) => (item.id === leadId ? { ...item, ...normalizedPatch } : item))
+      );
+      setMessage('Данные партнёра сохранены');
+      await refreshOperationalData();
+    });
+  };
+
   const toggleLeadSelection = (leadId: string, checked: boolean) => {
     setSelectedLeadIds((prev) => {
       if (checked) return prev.includes(leadId) ? prev : [...prev, leadId];
@@ -2469,6 +2490,7 @@ export const PartnershipSearchPage: React.FC = () => {
               onRunMatch={(leadId) => void runMatch(leadId)}
               onPrepareSalesRoom={(leadId, dataMode) => void prepareSalesRoom(leadId, dataMode)}
               onMarkManualContact={(leadId) => void markManualContact(leadId)}
+              onSaveLeadBasics={(leadId, patch) => saveLeadBasics(leadId, patch)}
               onUpdateLeadStage={(leadId, stageValue, successMessage, deferred) => void updateLeadStage(leadId, stageValue, successMessage, deferred)}
               onDeleteLead={(leadId) => void deleteLead(leadId)}
               onClearLastGeoSearch={() => {
