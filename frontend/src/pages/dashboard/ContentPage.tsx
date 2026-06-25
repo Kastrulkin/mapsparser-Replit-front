@@ -255,10 +255,45 @@ const getItemStatusLabel = (item: PlanItem, posts: SocialPost[]) => {
   return 'Черновик';
 };
 
+const getCalendarItemState = (item: PlanItem, posts: SocialPost[]) => {
+  const statuses = posts.map((post) => String(post.status || '').toLowerCase());
+  if (statuses.includes('failed')) {
+    return { status: 'Не удалось', action: 'Исправить' };
+  }
+  if (statuses.includes('needs_supervised_publish') || statuses.includes('needs_manual_publish')) {
+    return { status: 'Текст утверждён', action: 'Нужно разместить' };
+  }
+  if (statuses.includes('queued')) {
+    return { status: 'Запланировано', action: 'Ждёт даты' };
+  }
+  if (posts.length > 0 && statuses.every((status) => status === 'published')) {
+    return { status: 'Опубликовано', action: 'Готово' };
+  }
+  if (statuses.includes('approved')) {
+    return { status: 'Текст утверждён', action: 'Выберите каналы' };
+  }
+  if (statuses.includes('needs_review')) {
+    return { status: 'Текст готов', action: 'Утвердить текст' };
+  }
+  if (itemHasText(item)) {
+    return { status: 'Текст готов', action: 'Подготовить каналы' };
+  }
+  return { status: 'Черновик', action: 'Написать текст' };
+};
+
 const getStatusClassName = (label: string) => {
   if (label === 'Опубликовано') return 'bg-emerald-50 text-emerald-700 ring-emerald-100';
   if (label === 'Запланировано') return 'bg-blue-50 text-blue-700 ring-blue-100';
   if (label === 'Утверждено') return 'bg-violet-50 text-violet-700 ring-violet-100';
+  if (label === 'Текст утверждён') return 'bg-emerald-50 text-emerald-700 ring-emerald-100';
+  if (label === 'Текст готов') return 'bg-sky-50 text-sky-700 ring-sky-100';
+  if (label === 'Выберите каналы') return 'bg-amber-50 text-amber-800 ring-amber-100';
+  if (label === 'Утвердить текст') return 'bg-amber-50 text-amber-800 ring-amber-100';
+  if (label === 'Подготовить каналы') return 'bg-slate-100 text-slate-700 ring-slate-200';
+  if (label === 'Написать текст') return 'bg-slate-100 text-slate-600 ring-slate-200';
+  if (label === 'Ждёт даты') return 'bg-blue-50 text-blue-700 ring-blue-100';
+  if (label === 'Готово') return 'bg-emerald-50 text-emerald-700 ring-emerald-100';
+  if (label === 'Исправить') return 'bg-red-50 text-red-700 ring-red-100';
   if (label === 'Нужно проверить') return 'bg-amber-50 text-amber-800 ring-amber-100';
   if (label === 'Нужно разместить') return 'bg-orange-50 text-orange-800 ring-orange-100';
   if (label === 'Не удалось') return 'bg-red-50 text-red-700 ring-red-100';
@@ -817,7 +852,7 @@ export function ContentPage() {
 
   const renderCalendarCard = (item: PlanItem) => {
     const posts = postsByItem[item.id] || [];
-    const label = getItemStatusLabel(item, posts);
+    const calendarState = getCalendarItemState(item, posts);
     const channels = posts.slice(0, 3).map(platformShortLabel);
     return (
       <button
@@ -836,9 +871,14 @@ export function ContentPage() {
             </span>
           ))}
         </div>
-        <span className={cn('mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1', getStatusClassName(label))}>
-          {label}
-        </span>
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1', getStatusClassName(calendarState.status))}>
+            {calendarState.status}
+          </span>
+          <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1', getStatusClassName(calendarState.action))}>
+            {calendarState.action}
+          </span>
+        </div>
       </button>
     );
   };
@@ -886,7 +926,7 @@ export function ContentPage() {
       <div className="divide-y divide-slate-100">
         {items.map((item) => {
           const posts = postsByItem[item.id] || [];
-          const label = getItemStatusLabel(item, posts);
+          const calendarState = getCalendarItemState(item, posts);
           return (
             <button
               key={item.id}
@@ -898,9 +938,14 @@ export function ContentPage() {
                 <div className="text-sm font-semibold text-slate-950">{item.theme || item.goal || 'Публикация'}</div>
                 <div className="mt-1 text-sm text-slate-500">{formatDate(item.scheduled_for)} · {(posts.length || getSelectedCount(createDraft.channels))} каналов</div>
               </div>
-              <span className={cn('inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1', getStatusClassName(label))}>
-                {label}
-              </span>
+              <div className="flex flex-wrap gap-2">
+                <span className={cn('inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1', getStatusClassName(calendarState.status))}>
+                  {calendarState.status}
+                </span>
+                <span className={cn('inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1', getStatusClassName(calendarState.action))}>
+                  {calendarState.action}
+                </span>
+              </div>
             </button>
           );
         })}
