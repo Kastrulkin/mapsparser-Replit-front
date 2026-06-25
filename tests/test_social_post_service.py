@@ -27,6 +27,7 @@ from services.social_post_service import (
     _collect_vk_post_metrics,
     _provider_metrics_placeholder,
     _preview_dispatch_decision,
+    _preview_social_post_for_platform,
     _dispatch_preview_first_cycle_steps,
     _telegram_publish_error_state,
     _queue_preflight_block,
@@ -76,6 +77,7 @@ from services.social_post_service import (
     record_social_post_attribution_events,
     run_scoped_social_dispatch_once,
     run_scoped_social_metrics_once,
+    _upsert_social_post,
     _vk_post_url,
 )
 
@@ -527,6 +529,49 @@ class FakePreparePreviewDB:
 
     def close(self):
         pass
+
+
+class FakeUpsertSocialPostCursor:
+    def __init__(self):
+        self.last_query = ""
+        self.last_params = ()
+        self.description = (
+            ("id",),
+            ("business_id",),
+            ("content_plan_id",),
+            ("content_plan_item_id",),
+            ("platform",),
+            ("publish_mode",),
+            ("status",),
+            ("base_text",),
+            ("platform_text",),
+            ("approved_at",),
+            ("approval_id",),
+            ("media_json",),
+            ("metadata_json",),
+        )
+        self.row = (
+            "post-1",
+            "biz-1",
+            "plan-1",
+            "item-1",
+            "telegram",
+            "api",
+            "approved",
+            "Готовый текст",
+            "Готовый текст",
+            "2026-06-19T10:00:00+00:00",
+            "approval-1",
+            "[]",
+            "{}",
+        )
+
+    def execute(self, query, params=None):
+        self.last_query = str(query)
+        self.last_params = tuple(params or ())
+
+    def fetchone(self):
+        return self.row
 
 
 class FakeApproveGuardConn:
@@ -1014,6 +1059,79 @@ def test_preview_social_posts_for_item_is_read_only(monkeypatch):
     assert payload["posts"][1]["publish_mode"] in {"openclaw_browser", "local_supervised_browser", "manual"}
     assert FakePreparePreviewDB.last_conn.committed is False
     assert FakePreparePreviewDB.last_conn.rolled_back is False
+
+
+def test_prepare_preview_preserves_approved_post_when_text_is_unchanged():
+    preview = _preview_social_post_for_platform(
+        {
+            "id": "item-1",
+            "plan_id": "plan-1",
+            "business_id": "biz-1",
+            "scheduled_for": date.today(),
+        },
+        "telegram",
+        "Готовый текст",
+        {
+            "id": "post-1",
+            "status": "approved",
+            "base_text": "Готовый текст",
+            "platform_text": "Готовый текст",
+            "media_json": [],
+        },
+    )
+
+    assert preview["status"] == "approved"
+    assert preview["prepare_action"] == "preserve_approved"
+    assert preview["platform_text"] == "Готовый текст"
+
+
+def test_prepare_preview_resets_approved_post_when_text_changed():
+    preview = _preview_social_post_for_platform(
+        {
+            "id": "item-1",
+            "plan_id": "plan-1",
+            "business_id": "biz-1",
+            "scheduled_for": date.today(),
+        },
+        "telegram",
+        "Новый текст",
+        {
+            "id": "post-1",
+            "status": "approved",
+            "base_text": "Старый текст",
+            "platform_text": "Старый текст",
+            "media_json": [],
+        },
+    )
+
+    assert preview["status"] == "needs_review"
+    assert preview["prepare_action"] == "would_update"
+    assert preview["platform_text"] == "Новый текст"
+
+
+def test_prepare_upsert_preserves_approval_only_when_text_is_unchanged():
+    cursor = FakeUpsertSocialPostCursor()
+
+    post = _upsert_social_post(
+        cursor,
+        "user-1",
+        {
+            "id": "item-1",
+            "plan_id": "plan-1",
+            "business_id": "biz-1",
+            "scheduled_for": date.today(),
+        },
+        "telegram",
+        "Готовый текст",
+    )
+
+    normalized_sql = " ".join(cursor.last_query.split()).lower()
+    assert post["status"] == "approved"
+    assert "when social_posts.status = 'approved'" in normalized_sql
+    assert "coalesce(social_posts.base_text, '') = coalesce(excluded.base_text, '')" in normalized_sql
+    assert "approved_at = case" in normalized_sql
+    assert "else null" in normalized_sql
+    assert "approval_id = case" in normalized_sql
 
 
 def test_next_action_separates_review_api_and_supervised_states():

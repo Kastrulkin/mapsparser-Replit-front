@@ -6599,12 +6599,38 @@ def _upsert_social_post(cursor: Any, user_id: str, item: dict[str, Any], platfor
         ON CONFLICT (content_plan_item_id, platform)
         DO UPDATE SET
             scheduled_for = EXCLUDED.scheduled_for,
-            base_text = CASE WHEN social_posts.status = 'published' THEN social_posts.base_text ELSE EXCLUDED.base_text END,
-            platform_text = CASE WHEN social_posts.status = 'published' THEN social_posts.platform_text ELSE EXCLUDED.platform_text END,
+            base_text = CASE
+                WHEN social_posts.status IN ('published', 'queued', 'publishing') THEN social_posts.base_text
+                ELSE EXCLUDED.base_text
+            END,
+            platform_text = CASE
+                WHEN social_posts.status IN ('published', 'queued', 'publishing') THEN social_posts.platform_text
+                ELSE EXCLUDED.platform_text
+            END,
             publish_mode = EXCLUDED.publish_mode,
             status = CASE
                 WHEN social_posts.status IN ('published', 'queued', 'publishing') THEN social_posts.status
+                WHEN social_posts.status = 'approved'
+                  AND COALESCE(social_posts.base_text, '') = COALESCE(EXCLUDED.base_text, '')
+                  AND COALESCE(social_posts.platform_text, '') = COALESCE(EXCLUDED.platform_text, '')
+                THEN social_posts.status
                 ELSE EXCLUDED.status
+            END,
+            approved_at = CASE
+                WHEN social_posts.status IN ('published', 'queued', 'publishing') THEN social_posts.approved_at
+                WHEN social_posts.status = 'approved'
+                  AND COALESCE(social_posts.base_text, '') = COALESCE(EXCLUDED.base_text, '')
+                  AND COALESCE(social_posts.platform_text, '') = COALESCE(EXCLUDED.platform_text, '')
+                THEN social_posts.approved_at
+                ELSE NULL
+            END,
+            approval_id = CASE
+                WHEN social_posts.status IN ('published', 'queued', 'publishing') THEN social_posts.approval_id
+                WHEN social_posts.status = 'approved'
+                  AND COALESCE(social_posts.base_text, '') = COALESCE(EXCLUDED.base_text, '')
+                  AND COALESCE(social_posts.platform_text, '') = COALESCE(EXCLUDED.platform_text, '')
+                THEN social_posts.approval_id
+                ELSE NULL
             END,
             metadata_json = EXCLUDED.metadata_json,
             updated_at = NOW()
@@ -6666,7 +6692,11 @@ def _preview_social_post_for_platform(
     preview_platform_text = platform_text
     if existing_post:
         prepare_action = "would_update"
-        if existing_status in {"published", "queued", "publishing"}:
+        text_unchanged = (
+            str(existing_post.get("base_text") or "").strip() == str(base_text or "").strip()
+            and str(existing_post.get("platform_text") or "").strip() == str(platform_text or "").strip()
+        )
+        if existing_status in {"published", "queued", "publishing"} or (existing_status == "approved" and text_unchanged):
             prepare_action = f"preserve_{existing_status}"
             preview_status = existing_status
             preview_base_text = str(existing_post.get("base_text") or base_text or "").strip()
