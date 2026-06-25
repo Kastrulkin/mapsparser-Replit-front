@@ -43,6 +43,10 @@ interface SocialChannelReadiness {
   setup_steps_ru?: string[];
   setup_steps_en?: string[];
   missing_fields?: string[];
+  target_setup?: {
+    telegram_transport?: string | null;
+    required_fields?: string[];
+  } | null;
   settings_path?: string | null;
 }
 
@@ -129,6 +133,20 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const openClawDiagnostics = language === 'ru'
     ? socialOpenClawReadiness?.diagnostics_ru
     : socialOpenClawReadiness?.diagnostics_en;
+  const telegramReadiness = socialReadiness.find((channel) => channel.platform === 'telegram') || null;
+  const telegramTargetSetup = telegramReadiness?.target_setup;
+  const telegramRequiredFields = Array.isArray(telegramTargetSetup?.required_fields)
+    ? telegramTargetSetup.required_fields
+    : telegramReadiness?.missing_fields;
+  const telegramUsesGlobalBot = telegramTargetSetup?.telegram_transport === 'global_owner_bot'
+    || (
+      Array.isArray(telegramRequiredFields)
+      && telegramRequiredFields.length === 1
+      && telegramRequiredFields[0] === 'telegram_chat_id'
+    );
+  const telegramChecklistHint = telegramUsesGlobalBot
+    ? 'глобальный бот LocalOS + telegram_chat_id цели'
+    : 'telegram_bot_token бизнеса или глобальный бот + telegram_chat_id';
 
   useEffect(() => {
     let target: HTMLDivElement | null = null;
@@ -582,7 +600,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
                 ) : null}
                 <div className="mt-3 grid gap-2 text-xs md:grid-cols-2 xl:grid-cols-4">
                   <div className="rounded-xl bg-white px-3 py-2 text-slate-700 ring-1 ring-slate-200">
-                    <span className="font-semibold text-slate-950">Telegram:</span> telegram_bot_token + telegram_chat_id
+                    <span className="font-semibold text-slate-950">Telegram:</span> {telegramChecklistHint}
                   </div>
                   <div className="rounded-xl bg-white px-3 py-2 text-slate-700 ring-1 ring-slate-200">
                     <span className="font-semibold text-slate-950">VK:</span> access_token + group_id/owner_id + wall.post

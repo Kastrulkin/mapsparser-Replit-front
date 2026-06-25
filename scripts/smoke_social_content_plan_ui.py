@@ -430,7 +430,7 @@ REQUIRED_DATA_CONTRACT = {
 
 REQUIRED_SETTINGS_COPY = {
     "settings publishing checklist": "Чеклист публикаций",
-    "settings telegram requirements": "telegram_bot_token + telegram_chat_id",
+    "settings telegram requirements": "глобальный бот LocalOS + telegram_chat_id цели",
     "settings google focused card": 'data-testid="social-settings-google-card"',
     "settings vk focused card": 'data-testid="social-settings-vk-card"',
     "settings channel readiness focused card": 'data-testid="social-settings-channel-readiness"',
