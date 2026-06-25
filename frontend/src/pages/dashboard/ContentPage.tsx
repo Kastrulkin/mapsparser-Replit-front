@@ -1385,35 +1385,39 @@ export function ContentPage() {
                     Быстро проверьте ближайшее, подтвердите готовое и закройте раздел.
                   </div>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-3">
+                <div className="grid w-full min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:max-w-3xl xl:flex-1">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={openNearestReview}
                     disabled={!items.length || Boolean(busyAction)}
-                    className="justify-start rounded-2xl border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+                    className="h-auto min-h-12 min-w-0 justify-start whitespace-normal rounded-2xl border-slate-200 bg-white px-4 py-3 text-left leading-snug text-slate-800 hover:bg-slate-50"
                   >
-                    <Eye className="mr-2 h-4 w-4" />
-                    Проверить ближайшие
+                    <Eye className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0">Проверить ближайшие</span>
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     onClick={approveReadyPosts}
                     disabled={reviewReadyPosts.length === 0 || Boolean(busyAction)}
-                    className="justify-start rounded-2xl border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-45"
+                    className="h-auto min-h-12 min-w-0 justify-start whitespace-normal rounded-2xl border-slate-200 bg-white px-4 py-3 text-left leading-snug text-slate-800 hover:bg-slate-50 disabled:opacity-45"
                   >
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    {busyAction === 'bulk-approve' ? 'Утверждаем...' : `Утвердить всё готовое · ${reviewReadyPosts.length}`}
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0">
+                      {busyAction === 'bulk-approve' ? 'Утверждаем...' : `Утвердить всё готовое · ${reviewReadyPosts.length}`}
+                    </span>
                   </Button>
                   <Button
                     type="button"
                     onClick={queueApprovedPosts}
                     disabled={approvedPosts.length === 0 || Boolean(busyAction)}
-                    className="justify-start rounded-2xl bg-slate-950 text-white hover:bg-slate-800 disabled:bg-slate-300"
+                    className="h-auto min-h-12 min-w-0 justify-start whitespace-normal rounded-2xl bg-slate-950 px-4 py-3 text-left leading-snug text-white hover:bg-slate-800 disabled:bg-slate-300"
                   >
-                    <CalendarDays className="mr-2 h-4 w-4" />
-                    {busyAction === 'bulk-queue' ? 'Планируем...' : `Запланировать · ${approvedPosts.length}`}
+                    <CalendarDays className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0">
+                      {busyAction === 'bulk-queue' ? 'Планируем...' : `Запланировать · ${approvedPosts.length}`}
+                    </span>
                   </Button>
                 </div>
               </div>
