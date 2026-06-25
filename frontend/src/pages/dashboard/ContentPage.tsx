@@ -259,6 +259,7 @@ export function ContentPage() {
   const [loading, setLoading] = useState(false);
   const [busyAction, setBusyAction] = useState('');
   const [error, setError] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
   const [view, setView] = useState<CalendarView>(() => {
     if (typeof window === 'undefined') return 'month';
     const saved = window.localStorage.getItem(CONTENT_VIEW_STORAGE_KEY);
@@ -299,6 +300,23 @@ export function ContentPage() {
       .filter((item) => getItemDateKey(item) >= today)
       .sort((left, right) => getItemDateKey(left).localeCompare(getItemDateKey(right)))[0] || null;
   }, [items]);
+  const nearestReviewItem = useMemo(() => {
+    const today = toIsoDate(new Date());
+    return [...items]
+      .filter((item) => {
+        const status = getItemStatusLabel(item, postsByItem[item.id] || []);
+        return status === 'Нужно проверить' || status === 'Черновик' || getItemDateKey(item) >= today;
+      })
+      .sort((left, right) => getItemDateKey(left).localeCompare(getItemDateKey(right)))[0] || null;
+  }, [items, postsByItem]);
+  const reviewReadyPosts = useMemo(
+    () => socialPosts.filter((post) => String(post.status || '') === 'needs_review'),
+    [socialPosts],
+  );
+  const approvedPosts = useMemo(
+    () => socialPosts.filter((post) => String(post.status || '') === 'approved'),
+    [socialPosts],
+  );
   const monthDays = useMemo(() => getMonthDays(new Date()), []);
   const weekDays = useMemo(() => getWeekDays(new Date()), []);
   const visibleDays = view === 'week' ? weekDays : monthDays;
@@ -396,6 +414,50 @@ export function ContentPage() {
       if (plan?.id) await loadSocialPosts(plan.id);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Не удалось сохранить публикацию');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const openNearestReview = () => {
+    const target = nearestReviewItem || nextItem || items[0];
+    if (!target) return;
+    openItem(target);
+  };
+
+  const approveReadyPosts = async () => {
+    if (!currentPlan?.id || reviewReadyPosts.length === 0) return;
+    setBusyAction('bulk-approve');
+    setError('');
+    setActionMessage('');
+    try {
+      await newAuth.makeRequest('/social-posts/bulk-approve', {
+        method: 'POST',
+        body: JSON.stringify({ post_ids: reviewReadyPosts.map((post) => post.id) }),
+      });
+      await loadSocialPosts(currentPlan.id);
+      setActionMessage(`Утверждено публикаций: ${reviewReadyPosts.length}. Следующий шаг — запланировать.`);
+    } catch (approveError) {
+      setError(approveError instanceof Error ? approveError.message : 'Не удалось утвердить публикации');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const queueApprovedPosts = async () => {
+    if (!currentPlan?.id || approvedPosts.length === 0) return;
+    setBusyAction('bulk-queue');
+    setError('');
+    setActionMessage('');
+    try {
+      await newAuth.makeRequest('/social-posts/bulk-queue', {
+        method: 'POST',
+        body: JSON.stringify({ post_ids: approvedPosts.map((post) => post.id) }),
+      });
+      await loadSocialPosts(currentPlan.id);
+      setActionMessage(`Запланировано публикаций: ${approvedPosts.length}. LocalOS выполнит их по датам.`);
+    } catch (queueError) {
+      setError(queueError instanceof Error ? queueError.message : 'Не удалось поставить публикации в расписание');
     } finally {
       setBusyAction('');
     }
@@ -1026,6 +1088,12 @@ export function ContentPage() {
         </div>
       ) : null}
 
+      {actionMessage ? (
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          {actionMessage}
+        </div>
+      ) : null}
+
       {generating ? renderGenerating() : null}
 
       {!generating && !loading && items.length === 0 ? renderEmptyState() : null}
@@ -1048,6 +1116,48 @@ export function ContentPage() {
                 <div className="rounded-3xl bg-white/10 px-5 py-4">
                   <div className="text-sm text-slate-400">Следующая публикация</div>
                   <div className="mt-1 text-2xl font-semibold">{nextItem ? formatDate(nextItem.scheduled_for) : 'нет даты'}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-950">Что сделать сейчас</div>
+                  <div className="mt-1 text-sm leading-6 text-slate-500">
+                    Быстро проверьте ближайшее, подтвердите готовое и закройте раздел.
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={openNearestReview}
+                    disabled={!items.length || Boolean(busyAction)}
+                    className="justify-start rounded-2xl border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Проверить ближайшие
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={approveReadyPosts}
+                    disabled={reviewReadyPosts.length === 0 || Boolean(busyAction)}
+                    className="justify-start rounded-2xl border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-45"
+                  >
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    {busyAction === 'bulk-approve' ? 'Утверждаем...' : `Утвердить всё готовое · ${reviewReadyPosts.length}`}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={queueApprovedPosts}
+                    disabled={approvedPosts.length === 0 || Boolean(busyAction)}
+                    className="justify-start rounded-2xl bg-slate-950 text-white hover:bg-slate-800 disabled:bg-slate-300"
+                  >
+                    <CalendarDays className="mr-2 h-4 w-4" />
+                    {busyAction === 'bulk-queue' ? 'Планируем...' : `Запланировать · ${approvedPosts.length}`}
+                  </Button>
                 </div>
               </div>
             </div>
