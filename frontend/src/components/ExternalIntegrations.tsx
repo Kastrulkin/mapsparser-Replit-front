@@ -30,6 +30,10 @@ interface GoogleLocation {
   primary_category?: string | null;
 }
 
+interface GoogleLocationsError extends Error {
+  activationUrl?: string;
+}
+
 interface SocialChannelReadiness {
   platform: string;
   platform_label?: string | null;
@@ -104,6 +108,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const [googleLocations, setGoogleLocations] = useState<GoogleLocation[]>([]);
   const [selectedGoogleLocation, setSelectedGoogleLocation] = useState('');
   const [googleLocationsMessage, setGoogleLocationsMessage] = useState<string | null>(null);
+  const [googleLocationsActionUrl, setGoogleLocationsActionUrl] = useState<string | null>(null);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [vkAccessToken, setVkAccessToken] = useState('');
   const [vkOwnerId, setVkOwnerId] = useState('');
@@ -317,6 +322,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     if (!currentBusinessId) return;
     setGoogleBusy(true);
     setGoogleLocationsMessage(null);
+    setGoogleLocationsActionUrl(null);
     try {
       const token = newAuth.getToken();
       if (!token) return;
@@ -325,7 +331,11 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Не удалось получить карточки Google");
+        const error = new Error(data.error || "Не удалось получить карточки Google") as GoogleLocationsError;
+        if (data.activation_url) {
+          error.activationUrl = String(data.activation_url);
+        }
+        throw error;
       }
       const locations = data.locations || [];
       setGoogleLocations(locations);
@@ -342,6 +352,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     } catch (e: any) {
       setGoogleLocations([]);
       setGoogleLocationsMessage(e.message || 'Не удалось получить карточки Google Business Profile');
+      setGoogleLocationsActionUrl(e.activationUrl || null);
       toast({
         title: t.error,
         description: e.message || "Ошибка загрузки карточек Google",
@@ -955,7 +966,17 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
                       </select>
                       {googleLocationsMessage ? (
                         <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-                          {googleLocationsMessage}
+                          <div>{googleLocationsMessage}</div>
+                          {googleLocationsActionUrl ? (
+                            <a
+                              href={googleLocationsActionUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-2 inline-flex min-h-10 items-center rounded-lg bg-white px-3 py-2 font-semibold text-amber-950 shadow-sm ring-1 ring-amber-200 transition-colors hover:bg-amber-100"
+                            >
+                              Включить API в Google Cloud
+                            </a>
+                          ) : null}
                         </div>
                       ) : null}
                     </>

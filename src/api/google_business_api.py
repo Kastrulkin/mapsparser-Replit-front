@@ -9,6 +9,7 @@ from flask import Blueprint, request, jsonify, redirect
 from database_manager import DatabaseManager
 from auth_system import verify_session
 from google_business_auth import GoogleBusinessAuth
+from google_business_api import GoogleBusinessAPIError
 from google_business_sync_worker import GoogleBusinessSyncWorker
 from auth_encryption import encrypt_auth_data, decrypt_auth_data
 from core.helpers import get_business_owner_id
@@ -37,6 +38,22 @@ def _auth_data_column(cursor) -> str:
     )
     columns = {_row_value(row, "column_name", 0) for row in cursor.fetchall()}
     return "auth_data_encrypted" if "auth_data_encrypted" in columns else "auth_data"
+
+def _google_business_error_response(error: Exception):
+    message = str(error)
+    if "SERVICE_DISABLED" in message or "mybusinessaccountmanagement.googleapis.com" in message:
+        return jsonify({
+            "success": False,
+            "status": "google_business_api_disabled",
+            "error": "В Google Cloud project не включён My Business Account Management API. Карточки в Google аккаунте есть, но LocalOS пока не может прочитать их через API.",
+            "next_action": "Откройте Google Cloud Console для project 304042072643 и включите My Business Account Management API.",
+            "activation_url": "https://console.developers.google.com/apis/api/mybusinessaccountmanagement.googleapis.com/overview?project=304042072643",
+        }), 502
+    return jsonify({
+        "success": False,
+        "status": "google_business_api_error",
+        "error": message or "Не удалось получить карточки Google Business Profile",
+    }), 502
 
 def _public_location(location: dict) -> dict:
     address = location.get("storefrontAddress") if isinstance(location.get("storefrontAddress"), dict) else {}
@@ -318,7 +335,10 @@ def google_locations(business_id):
         if not account:
             return jsonify({"error": "Google аккаунт не найден или не активен"}), 404
         worker = GoogleBusinessSyncWorker()
-        locations = [_public_location(item) for item in worker.list_locations(account)]
+        try:
+            locations = [_public_location(item) for item in worker.list_locations(account)]
+        except GoogleBusinessAPIError as error:
+            return _google_business_error_response(error)
         return jsonify({"success": True, "locations": locations})
     finally:
         db.close()
