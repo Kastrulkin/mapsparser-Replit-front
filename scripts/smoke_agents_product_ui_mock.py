@@ -821,12 +821,17 @@ async def run_smoke(url, screenshot):
         required = [
             "Мои агенты",
             "Создать агента",
-            "Проверить решения",
-            "Следующий шаг",
-            "Что делает",
-            "Доступы",
-            "Тест",
-            "Ждёт решения человека",
+            "Сегодня",
+            "Требует внимания",
+            "Агенты",
+            "Что сделали агенты за последние 24 часа",
+            "Следующие решения и настройки",
+            "Ждёт решения",
+            "Почему этому можно доверять",
+            "Обзор",
+            "История",
+            "Сценарий",
+            "Настройки",
         ]
         body_lower = body.lower()
         missing = [item for item in required if item.lower() not in body_lower]
@@ -991,19 +996,17 @@ async def run_smoke(url, screenshot):
                         connected_body = await page.locator("body").inner_text(timeout=10000)
                         if "Все обязательные подключения готовы" not in connected_body and "WhatsApp готово" not in connected_body:
                             missing.append("WhatsApp connected state")
-                        preview_button = page.get_by_role("button", name="Проверить на примере")
-                        if await preview_button.count() == 0:
-                            missing.append("enabled preview run button")
+                        scenario_button = page.get_by_role("button", name="Сценарий")
+                        if await scenario_button.count() == 0:
+                            missing.append("scenario tab button")
                         else:
-                            await preview_button.first.click()
-                            await page.wait_for_timeout(1200)
-                            result_body = await page.locator("body").inner_text(timeout=10000)
-                            if "Результат" not in result_body:
-                                missing.append("preview result workspace")
-                            if "completed" not in result_body.lower() and "готов" not in result_body.lower():
-                                missing.append("preview run completed state")
-                            if "Черновик FAQ по WhatsApp-вопросам" not in result_body and "Как агент дошёл до результата" not in result_body:
-                                missing.append("preview run result details")
+                            await scenario_button.first.click()
+                            await page.wait_for_timeout(700)
+                            scenario_body = await page.locator("body").inner_text(timeout=10000)
+                            if "Что будет делать агент" not in scenario_body:
+                                missing.append("scenario human pipeline")
+                            if "Показать техническое представление" not in scenario_body:
+                                missing.append("secondary technical view")
 
         if console_errors:
             leaked.append(f"console errors: {console_errors[:2]}")
