@@ -1,0 +1,28 @@
+{
+  "task_id": "agents-implementation-roadmap-20260626",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Phase 1 implementation shipped: capability registry endpoint, docs/status corrections, tests, build, and backend deploy passed. Remaining roadmap items require credentials/user-connected Google or broader future phases."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/api/capabilities_api.py scripts/smoke_partnership_flow.py",
+    "scripts/ci_gate_partnership.sh",
+    "venv/bin/python -m pytest -q tests/test_capabilities_api_phase1.py -rs",
+    "venv/bin/python -m pytest -q tests/test_agent_blueprint_layer.py",
+    "npm --prefix frontend run build",
+    "scripts/deploy_backend_src.sh",
+    "ssh root@80.78.242.105 'cd /opt/seo-app && docker compose ps && curl -I http://localhost:8000'",
+    "ssh root@80.78.242.105 'curl -s -i http://localhost:8000/api/agents/capabilities?business_id=test'"
+  ],
+  "artifacts_used": [
+    "src/api/capabilities_api.py",
+    "tests/test_capabilities_api_phase1.py",
+    "tests/test_agent_blueprint_layer.py",
+    "docs/DOCUMENTATION_GAPS.md",
+    "docs/PARTNERSHIP_ROADMAP_BACKLOG.md"
+  ]
+}

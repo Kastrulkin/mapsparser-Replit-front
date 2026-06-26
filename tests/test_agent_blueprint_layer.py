@@ -6649,7 +6649,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Preflight и preview run" in agents_page_source
     assert "preview_mode: true" in agents_page_source
     assert "external_side_effects_allowed: false" in agents_page_source
-    assert "Preview run без внешних действий" in agents_page_source
+    assert "Тест без отправки" in agents_page_source
     assert "preflightResponse.data?.next_binding_key" in agents_page_source
     assert "setWorkspaceMode('connections')" in agents_page_source
     assert "activationGate" in agents_page_source
@@ -6795,7 +6795,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Последний run" in agents_page_source
     assert "решений" in agents_page_source
     assert "Данные агента" in agents_page_source
-    assert "изменить логику" in agents_page_source
+    assert "Что будет делать агент" in agents_page_source
     assert "Голос и стиль" in agents_page_source
     assert "AgentVoiceStylePanel" in agents_page_source
     assert "AIAgents показываются как голоса" in agents_page_source

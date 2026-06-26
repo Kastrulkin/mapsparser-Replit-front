@@ -96,7 +96,7 @@
 ---
 
 ## Sprint P4: UI “Поиск партнёрств” MVP
-Статус: backend API done (11.03.2026), user UI pending
+Статус: user UI implemented in `/dashboard/partnerships`; backend API done (11.03.2026), workspace UI active in current codebase
 ### Задачи
 - Добавить пункт меню `Поиск партнёрств`.
 - Экран ручного импорта ссылок компаний.
@@ -115,11 +115,14 @@
 
 ### Критерии приёмки
 - Пользователь добавляет список ссылок и ведёт стадии вручную.
+- Текущая реализация: `frontend/src/pages/dashboard/PartnershipSearchPage.tsx`,
+  `frontend/src/components/prospecting/PartnershipRawIntakeControls.tsx`,
+  `frontend/src/components/prospecting/PartnershipPipelineSections.tsx`.
 
 ---
 
 ## Sprint P5: Partnership Pipeline
-Статус: backend API done (11.03.2026), UI orchestration pending
+Статус: backend API done (11.03.2026), UI orchestration implemented for import/audit/match/draft/batch/outcome workspace
 ### Задачи
 - Стадии:
   - `imported`
@@ -139,6 +142,11 @@
 
 ### Критерии приёмки
 - Один lead проходит end-to-end по стадиям без ручного SQL.
+- Текущая проверка: `scripts/smoke_partnership_flow.py` покрывает
+  import-links -> import-file -> parse -> audit -> match -> draft -> approve ->
+  batch -> outcome -> summary/health/export. В local mode smoke требует
+  `AUTH_TOKEN`, `BUSINESS_ID`, `MAP_URL`; без них CI gate выполняет syntax/compile
+  checks и явно пропускает live smoke.
 
 ---
 

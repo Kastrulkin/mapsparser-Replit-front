@@ -41,14 +41,17 @@ Recommended next step:
 
 ## Capability Registry Endpoint
 
-Status: `gap`
+Status: `available`
 
-There is no endpoint that tells an agent which capabilities are enabled for a business.
+`GET /api/agents/capabilities?business_id=...` returns the business-scoped
+capability registry for the authenticated user. The response includes capability
+risk, approval requirement, provider candidates, connector requirements, current
+configured provider status, and safety rules. Secrets are not returned.
 
 Recommended next step:
 
-- `GET /api/agents/capabilities?business_id=...`;
-- return status, required scopes, approval requirement, and provider availability.
+- add this endpoint to the generated OpenAPI contract;
+- expose it in external-agent docs after agent-token scopes are implemented.
 
 ## Unified Approval API
 

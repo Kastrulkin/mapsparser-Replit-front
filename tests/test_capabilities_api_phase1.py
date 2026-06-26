@@ -113,6 +113,39 @@ def test_capabilities_execute_returns_pending_human(capabilities_client):
     assert body.get("approval", {}).get("status") == "pending_human"
 
 
+def test_agent_capability_registry_is_business_scoped_and_redacted(capabilities_client):
+    info = capabilities_client
+    r = info["client"].get(
+        f"/api/agents/capabilities?business_id={info['business_id']}",
+        headers=_auth_headers(),
+    )
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["success"] is True
+    assert body["schema"] == "localos_agent_capability_registry_v1"
+    assert body["business_id"] == info["business_id"]
+    assert body["rules"]["external_actions_require_approval"] is True
+    assert body["rules"]["secrets_redacted"] is True
+
+    capabilities = {item["capability"]: item for item in body["capabilities"]}
+    assert "google_sheets.read_rows" in capabilities
+    sheets = capabilities["google_sheets.read_rows"]
+    assert sheets["approval_required"] is False
+    assert any(provider["provider"] == "native_localos" for provider in sheets["providers"])
+    assert any(connector["provider"] == "google_sheets" for connector in sheets["connectors"])
+    assert "auth_data" not in json.dumps(body).lower()
+    assert "token" not in json.dumps(body).lower()
+
+    wrong = info["client"].get(
+        f"/api/agents/capabilities?business_id={info['foreign_business_id']}",
+        headers=_auth_headers(),
+    )
+    assert wrong.status_code == 403
+    wrong_body = wrong.get_json()
+    assert wrong_body["success"] is False
+    assert wrong_body["error_code"] == "TENANT_MISMATCH"
+
+
 def test_capabilities_execute_is_idempotent_for_same_key(capabilities_client):
     info = capabilities_client
     idem = str(uuid.uuid4())
@@ -2698,3 +2731,19 @@ def test_channel_router_dispatch_uses_maton_adapter(monkeypatch):
     assert called["api_key"] == "maton-key"
     assert called["text"] == "hello from test"
     assert called["kwargs"]["business_id"] == "biz-1"
+
+
+def test_agent_capability_registry_contract_is_registered_without_docker():
+    from pathlib import Path
+
+    source = Path("src/api/capabilities_api.py").read_text(encoding="utf-8")
+    docs = Path("docs/DOCUMENTATION_GAPS.md").read_text(encoding="utf-8")
+
+    assert '@capabilities_bp.route("/api/agents/capabilities", methods=["GET"])' in source
+    assert "localos_agent_capability_registry_v1" in source
+    assert "check_tenant_access" in source
+    assert "business_id is required" in source
+    assert "secrets_redacted" in source
+    assert "auth_data_encrypted" not in source[source.index("def _agent_capability_registry"):]
+    assert "Status: `available`" in docs
+    assert "`GET /api/agents/capabilities?business_id=...`" in docs

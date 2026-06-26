@@ -1,0 +1,37 @@
+{
+  "task_id": "agents-implementation-roadmap-20260626",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Phase 1: close a concrete external-agent gap and update implementation plan truth.",
+      "status": "PASS",
+      "proof": [
+        "Added GET /api/agents/capabilities?business_id=... with tenant guard and redacted provider/connector status.",
+        "Updated roadmap/doc gaps to match current implementation.",
+        "Tests/build/deploy checks passed; production route returns AUTH_REQUIRED without token."
+      ],
+      "gaps": [
+        "Not yet populated."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/api/capabilities_api.py",
+    "tests/test_capabilities_api_phase1.py",
+    "tests/test_agent_blueprint_layer.py",
+    "docs/DOCUMENTATION_GAPS.md",
+    "docs/PARTNERSHIP_ROADMAP_BACKLOG.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/api/capabilities_api.py scripts/smoke_partnership_flow.py",
+    "scripts/ci_gate_partnership.sh",
+    "venv/bin/python -m pytest -q tests/test_capabilities_api_phase1.py -rs",
+    "venv/bin/python -m pytest -q tests/test_agent_blueprint_layer.py",
+    "npm --prefix frontend run build"
+  ],
+  "known_gaps": [
+    "Live Google Sheets smoke requires connected Google OAuth and an authenticated business context.",
+    "Git push remains blocked by local credential/SSH configuration."
+  ]
+}

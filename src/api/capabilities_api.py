@@ -7,8 +7,10 @@ from typing import Any, Dict
 from flask import Blueprint, Response, jsonify, request
 
 from core.action_orchestrator import ActionOrchestrator
+from core.action_policy import check_tenant_access
 from database_manager import DatabaseManager
 from services.agent_capability_handlers import build_capability_catalog, build_capability_handlers
+from services.agent_provider_registry import integration_provider_catalog
 
 
 capabilities_bp = Blueprint("capabilities_api", __name__)
@@ -82,6 +84,14 @@ def _response(result: Dict[str, Any]):
     return jsonify(body), status
 
 
+def _user_id(user_data: Dict[str, Any]) -> str:
+    return str(user_data.get("user_id") or user_data.get("id") or "").strip()
+
+
+def _business_id_arg() -> str:
+    return str(request.args.get("business_id") or request.args.get("tenant_id") or "").strip()
+
+
 def _int_arg(name: str, default: int) -> int:
     try:
         return int(request.args.get(name) or default)
@@ -114,12 +124,163 @@ def _decision_with_user(action_id: str, user_data: Dict[str, Any]):
     return _response(PHASE1_ACTION_ORCHESTRATOR.resolve_human_decision(action_id, decision, user_data, reason))
 
 
+def _table_exists(cursor: Any, table_name: str) -> bool:
+    cursor.execute("SELECT to_regclass(%s)", (str(table_name).lower(),))
+    row = cursor.fetchone()
+    if not row:
+        return False
+    if isinstance(row, dict):
+        return bool(row.get("to_regclass") or row.get("reg") or row.get("?column?"))
+    if isinstance(row, (tuple, list)):
+        return bool(row[0])
+    return bool(row)
+
+
+def _business_provider_status(cursor: Any, business_id: str) -> Dict[str, Dict[str, Any]]:
+    status: Dict[str, Dict[str, Any]] = {}
+    if _table_exists(cursor, "agent_integrations"):
+        cursor.execute(
+            """
+            SELECT provider, status, COUNT(*) AS count
+            FROM agent_integrations
+            WHERE business_id = %s
+            GROUP BY provider, status
+            """,
+            (business_id,),
+        )
+        for row in cursor.fetchall() or []:
+            provider = str(row.get("provider") if isinstance(row, dict) else row[0] or "").strip()
+            item_status = str((row.get("status") if isinstance(row, dict) else row[1]) or "").strip() or "unknown"
+            count_value = (row.get("count") if isinstance(row, dict) else row[2]) or 0
+            count = int(count_value)
+            if provider:
+                status[provider] = {
+                    "provider": provider,
+                    "configured": item_status == "active",
+                    "status": item_status,
+                    "source": "agent_integrations",
+                    "count": count,
+                }
+    if _table_exists(cursor, "externalbusinessaccounts"):
+        cursor.execute(
+            """
+            SELECT source, COUNT(*) AS count
+            FROM externalbusinessaccounts
+            WHERE business_id = %s
+              AND COALESCE(is_active, TRUE) = TRUE
+            GROUP BY source
+            """,
+            (business_id,),
+        )
+        for row in cursor.fetchall() or []:
+            provider = str(row.get("source") if isinstance(row, dict) else row[0] or "").strip()
+            count_value = (row.get("count") if isinstance(row, dict) else row[1]) or 0
+            count = int(count_value)
+            if provider and provider not in status:
+                status[provider] = {
+                    "provider": provider,
+                    "configured": True,
+                    "status": "active",
+                    "source": "externalbusinessaccounts",
+                    "count": count,
+                }
+    return status
+
+
+def _agent_capability_registry(user_data: Dict[str, Any], business_id: str) -> Dict[str, Any]:
+    if not business_id:
+        return {"success": False, "error": "business_id is required", "code": "BUSINESS_ID_REQUIRED", "http_code": 400}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        tenant_check = check_tenant_access(cursor, business_id, _user_id(user_data), bool(user_data.get("is_superadmin")))
+        if not tenant_check.get("ok"):
+            return {
+                "success": False,
+                "status": "failed",
+                "error": tenant_check.get("reason") or "tenant access denied",
+                "error_code": tenant_check.get("code") or "TENANT_MISMATCH",
+                "http_code": 403 if tenant_check.get("code") == "TENANT_MISMATCH" else 404,
+            }
+        catalog = build_capability_catalog()
+        provider_status = _business_provider_status(cursor, business_id)
+        integration_catalog = integration_provider_catalog()
+        connector_by_capability: Dict[str, list[Dict[str, Any]]] = {}
+        for connector in integration_catalog:
+            for capability in connector.get("capabilities", []) if isinstance(connector.get("capabilities"), list) else []:
+                connector_by_capability.setdefault(str(capability), []).append(connector)
+
+        capabilities: list[Dict[str, Any]] = []
+        for name, item in sorted((catalog.get("capabilities") or {}).items()):
+            if item.get("alias_for"):
+                continue
+            provider_candidates = item.get("provider_candidates") if isinstance(item.get("provider_candidates"), list) else []
+            providers = []
+            for candidate in provider_candidates:
+                provider = str(candidate.get("provider") or "").strip()
+                configured = provider_status.get(provider, {})
+                providers.append({
+                    "provider": provider,
+                    "label": candidate.get("provider_label") or provider,
+                    "state": "configured" if configured.get("configured") else candidate.get("state"),
+                    "role": candidate.get("role"),
+                    "configured": bool(configured.get("configured")),
+                    "configured_source": configured.get("source") or "",
+                })
+            connectors = []
+            for connector in connector_by_capability.get(str(name), []):
+                provider = str(connector.get("provider") or "").strip()
+                configured = provider_status.get(provider, {})
+                connectors.append({
+                    "provider": provider,
+                    "title": connector.get("title") or provider,
+                    "status": "configured" if configured.get("configured") else connector.get("status"),
+                    "required_config": connector.get("required_config") or [],
+                    "configured": bool(configured.get("configured")),
+                })
+            capabilities.append({
+                "capability": name,
+                "risk": item.get("risk"),
+                "side_effects": item.get("side_effects"),
+                "approval_required": bool(item.get("approval_required")),
+                "enabled": any(provider.get("state") in {"available", "configured", "manual"} for provider in providers),
+                "providers": providers,
+                "connectors": connectors,
+                "timeout_seconds": item.get("timeout_seconds"),
+                "retry": item.get("retry"),
+                "audit": item.get("audit"),
+            })
+
+        return {
+            "success": True,
+            "schema": "localos_agent_capability_registry_v1",
+            "business_id": business_id,
+            "capabilities": capabilities,
+            "provider_status": sorted(provider_status.values(), key=lambda item: str(item.get("provider") or "")),
+            "rules": {
+                "external_actions_require_approval": True,
+                "secrets_redacted": True,
+                "writes_execute_only_through_orchestrator": True,
+            },
+        }
+    finally:
+        db.close()
+
+
 @capabilities_bp.route("/api/capabilities/catalog", methods=["GET"])
 def user_capabilities_catalog():
     user_data, error_response = _require_user()
     if error_response:
         return error_response
     return jsonify({"success": True, **build_capability_catalog()})
+
+
+@capabilities_bp.route("/api/agents/capabilities", methods=["GET"])
+def user_agent_capability_registry():
+    user_data, error_response = _require_user()
+    if error_response:
+        return error_response
+    return _response(_agent_capability_registry(user_data, _business_id_arg()))
 
 
 @capabilities_bp.route("/api/capabilities/execute", methods=["POST"])
