@@ -27,10 +27,15 @@ def _http_error_message(error: HttpError) -> str:
 class GoogleBusinessAPI:
     def __init__(self, credentials: Credentials):
         self.service = build('mybusinessaccountmanagement', 'v1', credentials=credentials)
-        self.locations_service = build('mybusiness', 'v4', credentials=credentials)
+        self.locations_service = None
+        try:
+            self.locations_service = build('mybusiness', 'v4', credentials=credentials)
+        except Exception as error:
+            print(f"⚠️ Legacy Google My Business v4 service недоступен: {error}")
         try:
             self.business_info_service = build('mybusinessbusinessinformation', 'v1', credentials=credentials)
-        except Exception:
+        except Exception as error:
+            print(f"⚠️ Google Business Information service недоступен: {error}")
             self.business_info_service = None
         self.accounts_service = self.service.accounts()
     
@@ -60,14 +65,18 @@ class GoogleBusinessAPI:
         except HttpError as e:
             self._handle_api_error("получения локаций через Business Information API", e)
             business_info_error = GoogleBusinessAPIError(_http_error_message(e))
-        try:
-            response = self.locations_service.accounts().locations().list(
-                parent=account_name
-            ).execute()
-            return response.get('locations', [])
-        except HttpError as e:
-            self._handle_api_error("получения локаций", e)
-            raise business_info_error or GoogleBusinessAPIError(_http_error_message(e)) from e
+        if self.locations_service:
+            try:
+                response = self.locations_service.accounts().locations().list(
+                    parent=account_name
+                ).execute()
+                return response.get('locations', [])
+            except HttpError as e:
+                self._handle_api_error("получения локаций", e)
+                raise business_info_error or GoogleBusinessAPIError(_http_error_message(e)) from e
+        if business_info_error:
+            raise business_info_error
+        raise GoogleBusinessAPIError("Google Business Profile locations API недоступен в текущей конфигурации.")
 
     def list_accessible_locations(self) -> List[Dict[str, Any]]:
         """Получить все доступные локации во всех аккаунтах пользователя."""
