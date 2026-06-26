@@ -151,7 +151,7 @@
 ---
 
 ## Sprint P6: Partnership Match Agent
-Статус: local backend MVP done (11.03.2026), reason-codes + score explanation added in LocalOS UI/API (16.03.2026), OpenClaw capability wiring pending
+Статус: local backend MVP done (11.03.2026), reason-codes + score explanation added in LocalOS UI/API (16.03.2026), OpenClaw capability wiring available through ActionOrchestrator (26.06.2026)
 ### Задачи
 - Ввести capability:
   - `partnership.audit_card`
@@ -171,10 +171,17 @@
   - `complement`
   - `risks`
   - `offer_angles`
+- Capability catalog and `/api/openclaw/capabilities/execute` know LocalOS names
+  `partnership.audit_card`, `partnership.match_services`,
+  `partnership.draft_offer` plus existing OpenClaw-facing aliases `partners.*`.
+- Capability handlers are draft/analysis only; external send still goes through
+  approved outreach batch.
 
 ---
 
 ## Sprint P7: Outbound Reuse for Partnership
+Статус: outreach reuse implemented; batch capability now filters by `intent` so
+client outreach and partnership outreach do not share the same batch selection.
 ### Задачи
 - Переиспользовать текущий drafts/batch/queue/send.
 - Развести client vs partnership по `intent` в UI.
@@ -187,6 +194,8 @@
 
 ### Критерии приёмки
 - Партнёрские отправки не смешиваются с клиентским аутричем.
+- `outreach.send_batch` accepts `intent=client_outreach|partnership_outreach`
+  and only queues approved drafts whose lead has the matching intent.
 
 ---
 

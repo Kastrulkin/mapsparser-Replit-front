@@ -2747,3 +2747,46 @@ def test_agent_capability_registry_contract_is_registered_without_docker():
     assert "auth_data_encrypted" not in source[source.index("def _agent_capability_registry"):]
     assert "Status: `available`" in docs
     assert "`GET /api/agents/capabilities?business_id=...`" in docs
+
+
+def test_partnership_capability_handlers_return_structured_draft_only_results():
+    from services.agent_capability_handlers import build_capability_handlers
+
+    handlers = build_capability_handlers()
+    match_result = handlers["partnership.match_services"](
+        {
+            "tenant_id": "biz-1",
+            "payload": {
+                "intent": "partnership_outreach",
+                "our_services": ["йога для беременных", "массаж спины"],
+                "partner_services": ["курсы для беременных", "семейная фотосессия"],
+            },
+        },
+        {"user_id": "user-1"},
+    )["result"]
+
+    assert match_result["status"] == "match_ready"
+    assert isinstance(match_result["match_score"], int)
+    assert isinstance(match_result["overlap"], list)
+    assert isinstance(match_result["complement"], dict)
+    assert isinstance(match_result["risks"], list)
+    assert isinstance(match_result["offer_angles"], list)
+    assert match_result["external_dispatch_performed"] is False
+
+    draft_result = handlers["partners.draft_first_offer"](
+        {
+            "tenant_id": "biz-1",
+            "payload": {
+                "intent": "partnership_outreach",
+                "business": {"name": "Local Studio"},
+                "lead": {"name": "Partner Studio"},
+                "match": {"offer_angles": ["запустить тестовую взаимную рекомендацию"]},
+            },
+        },
+        {"user_id": "user-1"},
+    )["result"]
+
+    assert draft_result["status"] == "draft_ready"
+    assert draft_result["draft"]["intent"] == "partnership_outreach"
+    assert draft_result["draft"]["requires_manual_approval_before_send"] is True
+    assert draft_result["external_dispatch_performed"] is False

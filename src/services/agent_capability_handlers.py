@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import uuid
 from typing import Any, Callable, Dict
 
@@ -90,6 +91,21 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "side_effects": "normalizes finance transaction proposals; LocalOS write requires a separate approval/apply flow",
         "approval_required": True,
     },
+    "partnership.audit_card": {
+        "risk": "localos_partnership_read",
+        "side_effects": "none; returns a structured partner-card audit snapshot",
+        "approval_required": False,
+    },
+    "partnership.match_services": {
+        "risk": "localos_partnership_analysis",
+        "side_effects": "none; returns structured partnership match analysis",
+        "approval_required": False,
+    },
+    "partnership.draft_offer": {
+        "risk": "draft",
+        "side_effects": "none; creates draft text only, sending requires a separate approved outreach batch",
+        "approval_required": False,
+    },
     "billing.reserve": {
         "risk": "billing",
         "side_effects": "ledger reservation is controlled by ActionOrchestrator",
@@ -116,6 +132,10 @@ LEGACY_CAPABILITY_ALIASES = {
     "finance.create_transaction": "finance.transaction.create",
     "finance.manual_entry": "finance.transaction.create",
     "finance.transaction.create_request": "finance.transaction.create",
+    "partners.audit_card": "partnership.audit_card",
+    "partners.match_services": "partnership.match_services",
+    "partners.draft_first_offer": "partnership.draft_offer",
+    "partners.draft_commercial_offer": "partnership.draft_offer",
     "billing.reserve/settle": "billing.reserve",
 }
 
@@ -161,6 +181,9 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "sheets.append_row_request": _handle_sheets_append_row_request,
         "google_sheets.read_rows": _handle_google_sheets_read_rows,
         "finance.transaction.create": _handle_finance_transaction_create,
+        "partnership.audit_card": _handle_partnership_audit_card,
+        "partnership.match_services": _handle_partnership_match_services,
+        "partnership.draft_offer": _handle_partnership_draft_offer,
         "billing.reserve": _handle_billing_reserve,
         "billing.settle": _handle_billing_settle,
     }
@@ -1160,6 +1183,206 @@ def _handle_finance_transaction_create(envelope: Dict[str, Any], user_data: Dict
         provider_write_performed=False,
         manual_apply_required=True,
         next_action="approve_finance_import",
+    )
+
+
+def _normalize_partnership_intent(payload: Dict[str, Any]) -> str:
+    intent = str(payload.get("intent") or "partnership_outreach").strip().lower()
+    return intent if intent in {"partnership_outreach", "client_outreach"} else "partnership_outreach"
+
+
+def _partnership_text_tokens(value: Any) -> set[str]:
+    return {item.lower() for item in re.findall(r"[a-zA-Zа-яА-ЯёЁ0-9]{4,}", str(value or ""))}
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item or "").strip() for item in value if str(item or "").strip()]
+
+
+def _partnership_services_from_snapshot(snapshot: Dict[str, Any]) -> list[str]:
+    services = snapshot.get("services_preview") if isinstance(snapshot.get("services_preview"), list) else []
+    names: list[str] = []
+    for item in services:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("current_name") or item.get("name") or item.get("title") or "").strip()
+        if name:
+            names.append(name)
+    return names
+
+
+def _normalize_partnership_match_payload(
+    raw_match: Dict[str, Any],
+    *,
+    own_services_count: int,
+    partner_services_count: int,
+) -> Dict[str, Any]:
+    try:
+        score = int(round(float(raw_match.get("match_score") or 0)))
+    except Exception:
+        score = 0
+    score = max(0, min(score, 100))
+    overlap = _string_list(raw_match.get("overlap"))[:30]
+    complement = raw_match.get("complement") if isinstance(raw_match.get("complement"), dict) else {}
+    our_strength = _string_list(complement.get("our_strength_tokens"))[:30]
+    partner_strength = _string_list(complement.get("partner_strength_tokens"))[:30]
+    risks = _string_list(raw_match.get("risks"))[:10]
+    offer_angles = _string_list(raw_match.get("offer_angles"))[:10]
+    reason_codes = []
+    if own_services_count <= 0:
+        reason_codes.append("NO_OUR_SERVICES")
+    if partner_services_count <= 0:
+        reason_codes.append("NO_PARTNER_SERVICES")
+    if own_services_count < 3 or partner_services_count < 3:
+        reason_codes.append("LOW_SIGNAL_DATA")
+    reason_codes.append("HAS_OVERLAP" if overlap else "NO_DIRECT_OVERLAP")
+    if partner_strength:
+        reason_codes.append("HAS_COMPLEMENT")
+    if score >= 70:
+        reason_codes.append("STRONG_MATCH")
+    elif score >= 40:
+        reason_codes.append("MEDIUM_MATCH")
+    else:
+        reason_codes.append("LOW_MATCH")
+    return {
+        "match_score": score,
+        "overlap": overlap,
+        "complement": {
+            "our_strength_tokens": our_strength,
+            "partner_strength_tokens": partner_strength,
+        },
+        "risks": risks,
+        "offer_angles": offer_angles,
+        "source_counts": {
+            "our_services": own_services_count,
+            "partner_services": partner_services_count,
+        },
+        "reason_codes": reason_codes,
+        "score_explanation": (
+            f"Сопоставлено услуг: ваши {own_services_count}, партнёра {partner_services_count}. "
+            f"Итоговый score {score}% рассчитан по пересечениям и комплементарности."
+        ),
+    }
+
+
+def _handle_partnership_audit_card(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _payload(envelope)
+    if _normalize_partnership_intent(payload) != "partnership_outreach":
+        return _result("validation_error", error_code="PARTNERSHIP_INTENT_REQUIRED")
+    lead = payload.get("lead") if isinstance(payload.get("lead"), dict) else {}
+    card = payload.get("card") if isinstance(payload.get("card"), dict) else {}
+    services = payload.get("services_preview") if isinstance(payload.get("services_preview"), list) else []
+    if not services and isinstance(lead.get("services_preview"), list):
+        services = lead.get("services_preview")
+    snapshot = {
+        "lead_id": str(payload.get("lead_id") or lead.get("id") or "").strip(),
+        "name": str(lead.get("name") or card.get("name") or payload.get("name") or "").strip(),
+        "category": str(lead.get("category") or card.get("category") or payload.get("category") or "").strip(),
+        "source_url": str(lead.get("source_url") or card.get("source_url") or payload.get("source_url") or "").strip(),
+        "services_preview": services if isinstance(services, list) else [],
+        "reviews_preview": payload.get("reviews_preview") if isinstance(payload.get("reviews_preview"), list) else [],
+        "contacts": {
+            "phone": str(lead.get("phone") or card.get("phone") or payload.get("phone") or "").strip(),
+            "email": str(lead.get("email") or card.get("email") or payload.get("email") or "").strip(),
+            "website": str(lead.get("website") or card.get("website") or payload.get("website") or "").strip(),
+            "telegram_url": str(lead.get("telegram_url") or payload.get("telegram_url") or "").strip(),
+            "whatsapp_url": str(lead.get("whatsapp_url") or payload.get("whatsapp_url") or "").strip(),
+        },
+        "intent": "partnership_outreach",
+    }
+    return _result(
+        "audit_ready",
+        snapshot=snapshot,
+        provider_write_performed=False,
+        external_dispatch_performed=False,
+    )
+
+
+def _handle_partnership_match_services(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _payload(envelope)
+    if _normalize_partnership_intent(payload) != "partnership_outreach":
+        return _result("validation_error", error_code="PARTNERSHIP_INTENT_REQUIRED")
+    audit_snapshot = payload.get("audit_snapshot") if isinstance(payload.get("audit_snapshot"), dict) else {}
+    own_services = _string_list(payload.get("our_services") or payload.get("own_services"))
+    partner_services = _string_list(payload.get("partner_services"))
+    if not partner_services:
+        partner_services = _partnership_services_from_snapshot(audit_snapshot)
+    raw_match = payload.get("match") if isinstance(payload.get("match"), dict) else {}
+    if not raw_match:
+        own_tokens = _partnership_text_tokens(" ".join(own_services))
+        partner_tokens = _partnership_text_tokens(" ".join(partner_services))
+        overlap_tokens = sorted(own_tokens & partner_tokens)
+        denominator = max(1, len(own_tokens | partner_tokens))
+        raw_match = {
+            "match_score": int(round((len(overlap_tokens) / denominator) * 100)),
+            "overlap": overlap_tokens,
+            "complement": {
+                "our_strength_tokens": sorted(own_tokens - partner_tokens),
+                "partner_strength_tokens": sorted(partner_tokens - own_tokens),
+            },
+            "risks": [
+                "Низкая точность, если у партнёра мало структурированных услуг."
+                if not partner_services
+                else "Проверьте каннибализацию по пересекающимся услугам."
+            ],
+            "offer_angles": [
+                "Кросс-рекомендации по непересекающимся услугам",
+                "Пакетные предложения с взаимной скидкой",
+                "Совместный контент для карт и соцсетей",
+            ],
+        }
+    match = _normalize_partnership_match_payload(
+        raw_match,
+        own_services_count=len(own_services),
+        partner_services_count=len(partner_services),
+    )
+    return _result(
+        "match_ready",
+        match=match,
+        match_score=match["match_score"],
+        overlap=match["overlap"],
+        complement=match["complement"],
+        risks=match["risks"],
+        offer_angles=match["offer_angles"],
+        provider_write_performed=False,
+        external_dispatch_performed=False,
+    )
+
+
+def _handle_partnership_draft_offer(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _payload(envelope)
+    if _normalize_partnership_intent(payload) != "partnership_outreach":
+        return _result("validation_error", error_code="PARTNERSHIP_INTENT_REQUIRED")
+    lead = payload.get("lead") if isinstance(payload.get("lead"), dict) else {}
+    business = payload.get("business") if isinstance(payload.get("business"), dict) else {}
+    match = payload.get("match") if isinstance(payload.get("match"), dict) else {}
+    business_name = str(business.get("name") or payload.get("business_name") or "мы").strip()
+    partner_name = str(lead.get("name") or payload.get("partner_name") or "ваша команда").strip()
+    channel = str(payload.get("channel") or "telegram").strip().lower()
+    tone = str(payload.get("tone") or "professional").strip()
+    offer_angles = _string_list(match.get("offer_angles") or payload.get("offer_angles"))
+    angle = offer_angles[0] if offer_angles else "обменяться клиентскими рекомендациями без сложного запуска"
+    draft_text = str(payload.get("draft_text") or "").strip()
+    if not draft_text:
+        draft_text = (
+            f"Здравствуйте! Я из {business_name}. Кажется, у {partner_name} и нас есть пересекающаяся аудитория. "
+            f"Предлагаю коротко обсудить, можем ли мы {angle}. "
+            "Если формат откликается, можем созвониться на 10 минут и понять, есть ли практичный тест."
+        )
+    return _result(
+        "draft_ready",
+        draft={
+            "text": draft_text,
+            "channel": channel,
+            "tone": tone,
+            "intent": "partnership_outreach",
+            "requires_manual_approval_before_send": True,
+        },
+        provider_write_performed=False,
+        external_dispatch_performed=False,
+        next_action="approve_partnership_draft",
     )
 
 

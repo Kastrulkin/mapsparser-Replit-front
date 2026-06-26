@@ -114,6 +114,21 @@ CAPABILITY_PROVIDER_MAP: Dict[str, List[Dict[str, Any]]] = {
         {"provider": "native_localos", "state": "available", "role": "domain_write_request"},
         {"provider": "manual", "state": "available", "role": "approval_queue"},
     ],
+    "partnership.audit_card": [
+        {"provider": "native_localos", "state": "available", "role": "partner_card_snapshot"},
+        {"provider": "openclaw", "state": "available", "role": "capability_boundary"},
+        {"provider": "manual", "state": "available", "role": "operator_review"},
+    ],
+    "partnership.match_services": [
+        {"provider": "native_localos", "state": "available", "role": "deterministic_match"},
+        {"provider": "openclaw", "state": "available", "role": "capability_boundary"},
+        {"provider": "manual", "state": "available", "role": "operator_review"},
+    ],
+    "partnership.draft_offer": [
+        {"provider": "native_localos", "state": "available", "role": "draft_store"},
+        {"provider": "openclaw", "state": "available", "role": "capability_boundary"},
+        {"provider": "manual", "state": "available", "role": "approval_queue"},
+    ],
     "billing.reserve": [
         {"provider": "native_localos", "state": "available", "role": "credit_reservation"},
         {"provider": "openclaw", "state": "available", "role": "ledger_boundary"},

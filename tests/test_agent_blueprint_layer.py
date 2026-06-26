@@ -233,6 +233,9 @@ def test_agent_blueprint_orchestrator_exposes_stage4_capability_map():
         "sheets.append_row_request",
         "google_sheets.read_rows",
         "finance.transaction.create",
+        "partnership.audit_card",
+        "partnership.match_services",
+        "partnership.draft_offer",
         "billing.reserve",
         "billing.settle",
     }
@@ -245,11 +248,15 @@ def test_agent_blueprint_orchestrator_exposes_stage4_capability_map():
     assert "communications.send" in orchestrator.handlers
     assert "google_sheets.append_row" in orchestrator.handlers
     assert "finance.manual_entry" in orchestrator.handlers
+    assert "partners.match_services" in orchestrator.handlers
+    assert "partners.draft_first_offer" in orchestrator.handlers
     catalog = build_capability_catalog()
     assert expected.issubset(set(catalog["capabilities"]))
     assert catalog["capabilities"]["reviews.reply"]["alias_for"] == "reviews.reply.draft"
     assert catalog["capabilities"]["google_sheets.append_row"]["alias_for"] == "sheets.append_row_request"
     assert catalog["capabilities"]["finance.manual_entry"]["alias_for"] == "finance.transaction.create"
+    assert catalog["capabilities"]["partners.match_services"]["alias_for"] == "partnership.match_services"
+    assert catalog["capabilities"]["partners.draft_first_offer"]["alias_for"] == "partnership.draft_offer"
     assert catalog["provider_registry"]["maton"]["status"] == "available"
     assert catalog["provider_registry"]["openclaw"]["status"] == "available"
     assert catalog["provider_registry"]["composio"]["status"] == "planned"
@@ -263,6 +270,11 @@ def test_agent_blueprint_orchestrator_exposes_stage4_capability_map():
         for item in catalog["capabilities"]["sheets.append_row_request"]["provider_candidates"]
     }
     assert {"native_localos", "composio", "manual"}.issubset(sheet_read_providers)
+    partnership_match_providers = {
+        item["provider"]
+        for item in catalog["capabilities"]["partnership.match_services"]["provider_candidates"]
+    }
+    assert {"native_localos", "openclaw", "manual"}.issubset(partnership_match_providers)
     assert integration_execution_boundary("google_sheets")["executor"] == "agent_sheet_provider_executor_v1"
     assert integration_execution_boundary("maton")["executor"] == "channel_router"
     assert integration_execution_boundary("localos_finance")["executor"] == "localos_finance_request_executor"

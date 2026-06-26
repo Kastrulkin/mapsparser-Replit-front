@@ -32,6 +32,11 @@ def _normalize_daily_limit(value: Any) -> int:
     return max(1, min(limit, MAX_DAILY_OUTREACH_BATCH))
 
 
+def _normalize_outreach_intent(value: Any) -> str:
+    intent = str(value or "client_outreach").strip().lower()
+    return intent if intent in {"client_outreach", "partnership_outreach"} else "client_outreach"
+
+
 def _has_channel_contact(row: dict[str, Any]) -> bool:
     channel = str(row.get("channel") or "").strip().lower()
     if channel == "manual":
@@ -73,6 +78,7 @@ def handle_outreach_send_batch(envelope: dict[str, Any], user_data: dict[str, An
 
     draft_ids = _normalize_draft_ids(payload.get("draft_ids"))
     requested_limit = _normalize_daily_limit(payload.get("daily_limit"))
+    intent = _normalize_outreach_intent(payload.get("intent"))
     actor_user_id = str(user_data.get("user_id") or user_data.get("id") or envelope.get("actor", {}).get("user_id") or "")
 
     conn = get_db_connection()
@@ -101,13 +107,14 @@ def handle_outreach_send_batch(envelope: dict[str, Any], user_data: dict[str, An
             JOIN prospectingleads l ON l.id = d.lead_id
             WHERE d.status = %s
               AND l.business_id = %s
+              AND COALESCE(l.intent, 'client_outreach') = %s
               AND NOT EXISTS (
                     SELECT 1
                     FROM outreachsendqueue q
                     WHERE q.draft_id = d.id
               )
         """
-        params: list[Any] = [DRAFT_APPROVED, business_id]
+        params: list[Any] = [DRAFT_APPROVED, business_id, intent]
         if draft_ids:
             query += " AND d.id = ANY(%s)"
             params.append(draft_ids)
@@ -123,6 +130,7 @@ def handle_outreach_send_batch(envelope: dict[str, Any], user_data: dict[str, An
                     "status": "blocked",
                     "reason_code": "NO_APPROVED_DRAFTS",
                     "requested_draft_ids": draft_ids,
+                    "intent": intent,
                     "external_dispatch_performed": False,
                 }
             }
@@ -163,11 +171,15 @@ def handle_outreach_send_batch(envelope: dict[str, Any], user_data: dict[str, An
                 UPDATE prospectingleads
                 SET status = %s,
                     pipeline_status = %s,
+                    partnership_stage = CASE
+                        WHEN COALESCE(intent, 'client_outreach') = 'partnership_outreach' THEN %s
+                        ELSE partnership_stage
+                    END,
                     updated_at = NOW()
                 WHERE id = %s
                   AND business_id = %s
                 """,
-                (QUEUED_FOR_SEND, PIPELINE_IN_PROGRESS, row.get("lead_id"), business_id),
+                (QUEUED_FOR_SEND, PIPELINE_IN_PROGRESS, QUEUED_FOR_SEND, row.get("lead_id"), business_id),
             )
 
         conn.commit()
@@ -178,6 +190,7 @@ def handle_outreach_send_batch(envelope: dict[str, Any], user_data: dict[str, An
                 "batch_id": batch_id,
                 "queue_count": len(valid_rows),
                 "draft_ids": queued_draft_ids,
+                "intent": intent,
                 "daily_limit": MAX_DAILY_OUTREACH_BATCH,
                 "requested_limit": requested_limit,
                 "external_dispatch_performed": False,
