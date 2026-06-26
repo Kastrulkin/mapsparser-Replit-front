@@ -5542,6 +5542,61 @@ def test_agent_preflight_merges_answer_config_into_selected_connection():
     assert preflight["items"][0]["integration_id"] == "sheets-1"
 
 
+def test_agent_preflight_allows_google_sheets_native_read_when_auth_ref_bound():
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def execute(self, query, params=None):
+            return None
+
+        def fetchall(self):
+            return [
+                {
+                    "id": "sheets-1",
+                    "provider": "google_sheets",
+                    "status": "active",
+                    "auth_ref": "google-account-1",
+                    "config_json": {"spreadsheet_id": "spreadsheet-1", "sheet_name": "Orders"},
+                }
+            ]
+
+    metadata = {
+        "required_integration_bindings": [
+            {
+                "key": "google_sheets_read",
+                "provider": "google_sheets",
+                "capability": "google_sheets.read_rows",
+                "required_config": ["spreadsheet_id", "sheet_name"],
+            }
+        ],
+        "agent_binding_integrations": {
+            "google_sheets_read": {
+                "integration_id": "sheets-1",
+                "provider": "google_sheets",
+            }
+        },
+        "custom_process": {
+            "google_sheets_read": {
+                "integration_id": "sheets-1",
+                "spreadsheet_id": "spreadsheet-1",
+                "sheet_name": "Orders",
+            },
+            "google_sheets": {
+                "integration_id": "sheets-1",
+                "spreadsheet_id": "spreadsheet-1",
+                "sheet_name": "Orders",
+            },
+        },
+    }
+
+    preflight = build_agent_integration_preflight(Cursor(), business_id="biz1", metadata=metadata, input_payload={})
+
+    assert preflight["ready"] is True
+    assert preflight["items"][0]["status"] == "ready"
+    assert preflight["items"][0]["resolution"] == "agent_integration_native_provider"
+    assert preflight["items"][0]["integration_id"] == "sheets-1"
+
+
 def test_activation_connection_blocker_keeps_binding_route_context():
     from api import agent_blueprints_api
 
@@ -6286,6 +6341,45 @@ def test_google_sheets_integration_config_preserves_read_write_operation():
 
     assert read_config["operation"] == "read_rows"
     assert invalid_config["operation"] == "read_write"
+
+
+def test_google_oauth_requests_sheets_scope_for_agent_runtime():
+    from pathlib import Path
+
+    from services.agent_google_sheets_adapter import SHEETS_SCOPE
+
+    source = Path("src/google_business_auth.py").read_text(encoding="utf-8")
+    assert SHEETS_SCOPE in source
+
+
+def test_google_sheets_integration_auto_binds_google_business_auth_ref():
+    from api import agent_blueprints_api
+
+    class Cursor:
+        def __init__(self):
+            self.last_result = None
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            params = params or ()
+            if "from externalbusinessaccounts" in normalized_query:
+                assert params[0] == "biz1"
+                self.last_result = {"id": "google-account-1"}
+                return None
+            raise AssertionError(f"Unhandled SQL: {query}")
+
+        def fetchone(self):
+            return self.last_result
+
+    assert (
+        agent_blueprints_api._resolve_agent_integration_auth_ref(
+            Cursor(),
+            "biz1",
+            "google_sheets",
+            "",
+        )
+        == "google-account-1"
+    )
 
 
 def test_maton_integration_config_is_delivery_bridge_with_caps():

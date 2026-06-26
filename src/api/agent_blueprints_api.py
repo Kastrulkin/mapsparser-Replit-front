@@ -797,7 +797,7 @@ def _load_direct_builder_connection_inventory(cursor, business_id: str) -> list[
             FROM externalbusinessaccounts
             WHERE business_id = %s
               AND is_active = TRUE
-              AND source IN ('maton', 'google_sheets', 'telegram_app')
+              AND source IN ('maton', 'google_sheets', 'google_business', 'telegram_app')
             ORDER BY updated_at DESC
             LIMIT 50
             """,
@@ -816,6 +816,8 @@ def _load_direct_builder_connection_inventory(cursor, business_id: str) -> list[
         elif source == "maton":
             provider = "maton"
             config = {"channel": "maton_bridge"}
+        elif source in {"google_sheets", "google_business"}:
+            provider = "google_sheets"
         result.append(
             {
                 "id": str(item.get("id") or ""),
@@ -823,6 +825,9 @@ def _load_direct_builder_connection_inventory(cursor, business_id: str) -> list[
                 "status": "active",
                 "display_name": str(item.get("display_name") or source or provider),
                 "config": config,
+                "auth_ref": str(item.get("id") or "") if source in {"google_sheets", "google_business", "maton"} else "",
+                "inventory_source": "external_business_account",
+                "credential_source": source,
             }
         )
     try:
@@ -999,6 +1004,7 @@ def _load_agent_external_auth_options(cursor, business_id: str) -> list[dict]:
         {
             "id": str(row.get("id") or ""),
             "source": str(row.get("source") or ""),
+            "provider": "google_sheets" if str(row.get("source") or "") in {"google_business", "google_sheets"} else str(row.get("source") or ""),
             "display_name": str(row.get("display_name") or row.get("external_id") or row.get("source") or ""),
             "updated_at": row.get("updated_at"),
         }
@@ -1609,6 +1615,47 @@ def _load_external_auth_option(cursor, business_id: str, source: str, account_id
     except Exception:
         row = None
     return dict(row) if row else {}
+
+
+def _resolve_agent_integration_auth_ref(cursor, business_id: str, provider: str, requested_auth_ref: str = "") -> str | None:
+    requested_auth_ref = str(requested_auth_ref or "").strip()
+    if requested_auth_ref:
+        cursor.execute(
+            """
+            SELECT id
+            FROM externalbusinessaccounts
+            WHERE business_id = %s
+              AND id = %s
+              AND is_active = TRUE
+            LIMIT 1
+            """,
+            (business_id, requested_auth_ref),
+        )
+        row = cursor.fetchone()
+        return str(row.get("id") if hasattr(row, "get") else row[0]) if row else None
+    if provider != "google_sheets":
+        return None
+    try:
+        cursor.execute(
+            """
+            SELECT id
+            FROM externalbusinessaccounts
+            WHERE business_id = %s
+              AND is_active = TRUE
+              AND source IN ('google_sheets', 'google_business')
+              AND COALESCE(auth_data_encrypted, '') <> ''
+            ORDER BY
+              CASE WHEN source = 'google_sheets' THEN 0 ELSE 1 END,
+              updated_at DESC NULLS LAST,
+              created_at DESC NULLS LAST
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        row = cursor.fetchone()
+    except Exception:
+        row = None
+    return str(row.get("id") if hasattr(row, "get") else row[0]) if row else None
 
 
 def _apply_agent_provider_route_metadata(
@@ -3231,7 +3278,7 @@ def save_agent_blueprint_integration(blueprint_id: str):
     if not integration_id:
         integration_id = str(uuid.uuid4())
     display_name = str(payload.get("display_name") or _agent_integration_provider_label(provider)).strip()
-    auth_ref = str(payload.get("auth_ref") or "").strip() or None
+    requested_auth_ref = str(payload.get("auth_ref") or "").strip()
 
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -3240,6 +3287,7 @@ def save_agent_blueprint_integration(blueprint_id: str):
         if access_error:
             return access_error
         business_id = str(blueprint.get("business_id") or "")
+        auth_ref = _resolve_agent_integration_auth_ref(cursor, business_id, provider, requested_auth_ref)
         cursor.execute(
             """
             SELECT id

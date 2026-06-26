@@ -202,7 +202,8 @@ def _load_external_account_credentials(cursor: Any, *, business_id: str, auth_re
 
 def _validate_sheets_credentials(credentials: Dict[str, Any]) -> None:
     scopes = credentials.get("scopes") if isinstance(credentials.get("scopes"), list) else []
-    if SHEETS_SCOPE not in [str(scope) for scope in scopes]:
+    scope_values = [str(scope) for scope in scopes]
+    if SHEETS_SCOPE not in scope_values:
         raise GoogleSheetsAdapterError("Google credentials do not include Sheets append scope.")
     if not str(credentials.get("token") or credentials.get("refresh_token") or "").strip():
         raise GoogleSheetsAdapterError("Google credentials do not include token or refresh token.")

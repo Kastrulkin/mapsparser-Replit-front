@@ -1,0 +1,67 @@
+{
+  "task_id": "google-sheets-reference-agent-20260626",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Google OAuth requests Google Sheets scope for the reference agent runtime.",
+      "status": "PASS",
+      "proof": [
+        "src/google_business_auth.py includes the Sheets scope.",
+        "Focused pytest passed."
+      ],
+      "gaps": [
+        "Existing OAuth accounts must reconnect to receive the new scope."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Saving a Google Sheets agent integration automatically binds active Google credentials.",
+      "status": "PASS",
+      "proof": [
+        "src/api/agent_blueprints_api.py resolves auth_ref from google_sheets/google_business external accounts.",
+        "test_google_sheets_integration_auto_binds_google_business_auth_ref passed."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Preflight is ready only with Google Sheets config and auth_ref.",
+      "status": "PASS",
+      "proof": [
+        "src/services/agent_integration_preflight.py requires auth_ref for native Google Sheets readiness.",
+        "test_agent_preflight_allows_google_sheets_native_read_when_auth_ref_bound passed."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Reference smoke exists for live read proof without Telegram/WhatsApp.",
+      "status": "PASS",
+      "proof": [
+        "scripts/smoke_google_sheets_reference_agent.py added and py_compile passed.",
+        "docs/agents/google-sheets-reference-agent.md documents PASS/BLOCKED states."
+      ],
+      "gaps": [
+        "Full provider-read PASS requires reconnecting Google with Sheets scope."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/google_business_auth.py",
+    "src/api/agent_blueprints_api.py",
+    "src/services/agent_integration_preflight.py",
+    "src/services/agent_google_sheets_adapter.py",
+    "tests/test_agent_blueprint_layer.py",
+    "scripts/smoke_google_sheets_reference_agent.py",
+    "docs/agents/google-sheets-reference-agent.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/google_business_auth.py src/api/agent_blueprints_api.py src/services/agent_integration_preflight.py src/services/agent_google_sheets_adapter.py scripts/smoke_google_sheets_reference_agent.py",
+    "venv/bin/python -m pytest -q tests/test_agent_blueprint_layer.py",
+    "git diff --check"
+  ],
+  "known_gaps": [
+    "Production live read remains blocked until Google is reconnected with Sheets OAuth scope."
+  ]
+}

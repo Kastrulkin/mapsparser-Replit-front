@@ -112,6 +112,15 @@ def _binding_preflight_item(
         resolved_config = _merge_default_config(default_config, metadata_config)
         missing_metadata_config = [key for key in required_config if not str(resolved_config.get(key) or "").strip()]
         if provider in ROUTE_REQUIRED_PROVIDERS and not route_provider and not missing_metadata_config:
+            if provider == "google_sheets" and _has_native_auth_ref(metadata_config, active_integrations):
+                return _base_item(
+                    binding,
+                    "ready",
+                    "agent_integration_native_provider",
+                    str(metadata_config.get("integration_id") or ""),
+                    [],
+                    "Google Sheets credential and sheet target are connected for native LocalOS read.",
+                )
             return _base_item(
                 binding,
                 "needs_connection",
@@ -165,6 +174,15 @@ def _binding_preflight_item(
         missing_config = [key for key in required_config if not str(resolved_config.get(key) or "").strip()]
         if not missing_config:
             if provider in ROUTE_REQUIRED_PROVIDERS:
+                if provider == "google_sheets" and str(integration.get("auth_ref") or "").strip():
+                    return _base_item(
+                        binding,
+                        "ready",
+                        "agent_integration_native_provider",
+                        str(integration.get("id") or ""),
+                        [],
+                        "Google Sheets credential and sheet target are connected for native LocalOS read.",
+                    )
                 return _base_item(
                     binding,
                     "needs_connection",
@@ -197,6 +215,16 @@ def _binding_preflight_item(
         )
     missing_config = required_config
     return _base_item(binding, "needs_connection", "missing_integration", "", missing_config, "")
+
+
+def _has_native_auth_ref(metadata_config: Dict[str, Any], active_integrations: List[Dict[str, Any]]) -> bool:
+    integration_id = str(metadata_config.get("integration_id") or "").strip()
+    for integration in active_integrations:
+        if integration_id and str(integration.get("id") or "").strip() != integration_id:
+            continue
+        if str(integration.get("auth_ref") or "").strip():
+            return True
+    return False
 
 
 def _merge_default_config(default_config: Dict[str, Any], selected_config: Dict[str, Any]) -> Dict[str, Any]:
