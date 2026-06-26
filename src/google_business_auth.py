@@ -16,7 +16,6 @@ class GoogleBusinessAuth:
         self.redirect_uri = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:8000/api/google/oauth/callback')
         self.scopes = [
             'https://www.googleapis.com/auth/business.manage',
-            'https://www.googleapis.com/auth/businessprofileperformance',
             'https://www.googleapis.com/auth/spreadsheets'
         ]
     

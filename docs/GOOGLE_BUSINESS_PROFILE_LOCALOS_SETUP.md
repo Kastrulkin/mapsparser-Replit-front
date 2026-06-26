@@ -56,7 +56,7 @@ Submitted on 2026-06-17.
 
 1. User opens external integrations.
 2. User clicks `Подключить Google`.
-3. LocalOS redirects to Google OAuth with `business.manage` and performance scopes.
+3. LocalOS redirects to Google OAuth with `business.manage` and Google Sheets scopes.
 4. Google callback stores encrypted credentials in `externalbusinessaccounts`.
 5. User loads accessible GBP locations.
 6. User selects the location that maps to the LocalOS business.
