@@ -100,6 +100,25 @@ def _get_google_account(cursor, business_id: str, account_id: str = None) -> dic
     account_row = cursor.fetchone()
     return dict(account_row) if account_row else None
 
+
+def _sync_google_sheets_agent_auth_refs(cursor, business_id: str, auth_ref: str) -> int:
+    normalized_business_id = str(business_id or "").strip()
+    normalized_auth_ref = str(auth_ref or "").strip()
+    if not normalized_business_id or not normalized_auth_ref:
+        return 0
+    cursor.execute(
+        """
+        UPDATE agent_integrations
+        SET auth_ref = %s, updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = %s
+          AND provider = 'google_sheets'
+          AND status = 'active'
+          AND COALESCE(auth_ref, '') = ''
+        """,
+        (normalized_auth_ref, normalized_business_id),
+    )
+    return int(getattr(cursor, "rowcount", 0) or 0)
+
 @google_business_bp.route('/api/google/oauth/authorize', methods=['GET', 'OPTIONS'])
 def google_oauth_authorize():
     """
@@ -213,11 +232,12 @@ def google_oauth_callback():
         
         if existing:
             # Обновляем существующий аккаунт
+            account_id = str(_row_value(existing, "id", 0) or "")
             cursor.execute("""
                 UPDATE externalbusinessaccounts
                 SET """ + auth_column + """ = %s, is_active = TRUE, last_sync_at = CURRENT_TIMESTAMP, last_error = NULL, updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
-            """, (encrypted_creds, _row_value(existing, "id", 0)))
+            """, (encrypted_creds, account_id))
         else:
             # Создаем новый аккаунт
             account_id = str(uuid.uuid4())
@@ -226,6 +246,7 @@ def google_oauth_callback():
                 (id, business_id, source, external_id, display_name, """ + auth_column + """, is_active, created_at, updated_at)
                 VALUES (%s, %s, 'google_business', %s, %s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """, (account_id, business_id, None, 'Google Business', encrypted_creds))
+        _sync_google_sheets_agent_auth_refs(cursor, business_id, account_id)
         
         db.conn.commit()
         db.close()

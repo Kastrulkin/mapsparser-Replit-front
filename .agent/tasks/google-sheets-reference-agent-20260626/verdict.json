@@ -10,7 +10,7 @@
     {
       "id": "AC2",
       "status": "PASS",
-      "reason": "Live provider-read proof requires user reconnection to grant the new Sheets scope; code path is ready."
+      "reason": "Live provider-read proof requires user reconnection to grant the new Sheets scope; OAuth callback now binds existing Google Sheets runtime integrations automatically."
     }
   ],
   "commands_run": [

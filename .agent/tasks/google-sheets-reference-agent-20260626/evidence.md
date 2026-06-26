@@ -18,9 +18,11 @@
 - Status: PASS
 - Proof:
   - `src/api/agent_blueprints_api.py` resolves missing Google Sheets `auth_ref` from active `google_sheets` or `google_business` external accounts with encrypted auth.
+  - `src/api/google_business_api.py` syncs successful Google OAuth callbacks into existing active Google Sheets integrations without `auth_ref`.
   - `tests/test_agent_blueprint_layer.py::test_google_sheets_integration_auto_binds_google_business_auth_ref` passed.
+  - `tests/test_agent_blueprint_layer.py::test_google_oauth_callback_syncs_google_sheets_runtime_auth_ref` passed.
 - Gaps:
-  - Production currently has a Google Sheets integration without auth_ref; it needs user OAuth reconnect/save.
+  - Production currently has a Google Sheets integration without auth_ref; it needs user OAuth reconnect.
 
 ### AC3
 - Status: PASS
@@ -54,5 +56,5 @@
 - .agent/tasks/google-sheets-reference-agent-20260626/raw/screenshot-1.png
 
 ## Known gaps
-- Production live read needs the user to reconnect Google after the new Sheets OAuth scope is deployed.
+- Production live read needs the user to reconnect Google after the new Sheets OAuth scope is deployed; OAuth callback now binds existing Google Sheets integrations automatically.
 - The reference smoke is read-only and does not create Telegram/WhatsApp delivery.

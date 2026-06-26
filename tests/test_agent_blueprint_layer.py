@@ -6382,6 +6382,17 @@ def test_google_sheets_integration_auto_binds_google_business_auth_ref():
     )
 
 
+def test_google_oauth_callback_syncs_google_sheets_runtime_auth_ref():
+    from pathlib import Path
+
+    source = Path("src/api/google_business_api.py").read_text(encoding="utf-8")
+    assert "def _sync_google_sheets_agent_auth_refs" in source
+    assert "UPDATE agent_integrations" in source
+    assert "provider = 'google_sheets'" in source
+    assert "COALESCE(auth_ref, '') = ''" in source
+    assert "_sync_google_sheets_agent_auth_refs(cursor, business_id, account_id)" in source
+
+
 def test_maton_integration_config_is_delivery_bridge_with_caps():
     from api import agent_blueprints_api
 

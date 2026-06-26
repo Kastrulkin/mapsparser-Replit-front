@@ -20,7 +20,9 @@
       "status": "PASS",
       "proof": [
         "src/api/agent_blueprints_api.py resolves auth_ref from google_sheets/google_business external accounts.",
-        "test_google_sheets_integration_auto_binds_google_business_auth_ref passed."
+        "src/api/google_business_api.py syncs Google OAuth callback account ids into existing Google Sheets integrations without auth_ref.",
+        "test_google_sheets_integration_auto_binds_google_business_auth_ref passed.",
+        "test_google_oauth_callback_syncs_google_sheets_runtime_auth_ref passed."
       ],
       "gaps": []
     },
@@ -50,6 +52,7 @@
   "changed_files": [
     "src/google_business_auth.py",
     "src/api/agent_blueprints_api.py",
+    "src/api/google_business_api.py",
     "src/services/agent_integration_preflight.py",
     "src/services/agent_google_sheets_adapter.py",
     "tests/test_agent_blueprint_layer.py",

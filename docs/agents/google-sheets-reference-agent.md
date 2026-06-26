@@ -25,6 +25,8 @@ and leave observable evidence in the run journal.
   `https://www.googleapis.com/auth/spreadsheets`.
 - `agent_integrations.provider = 'google_sheets'` must have `auth_ref` pointing
   to an active `externalbusinessaccounts` row.
+- After Google OAuth callback, existing active Google Sheets integrations for
+  the same business that do not yet have `auth_ref` are bound automatically.
 - The integration config must include `spreadsheet_id` and `sheet_name`.
 - `google_sheets.read_rows` may run without human approval because it is read
   only.

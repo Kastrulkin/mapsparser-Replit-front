@@ -1,2 +1,2 @@
-python3 -m py_compile src/google_business_auth.py src/api/agent_blueprints_api.py src/services/agent_integration_preflight.py src/services/agent_google_sheets_adapter.py scripts/smoke_google_sheets_reference_agent.py
+python3 -m py_compile src/google_business_auth.py src/api/google_business_api.py src/api/agent_blueprints_api.py src/services/agent_integration_preflight.py src/services/agent_google_sheets_adapter.py scripts/smoke_google_sheets_reference_agent.py
 PASS

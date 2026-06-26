@@ -1,5 +1,14 @@
 Focused Google Sheets agent tests:
-6 passed, 168 deselected in 0.87s
+7 passed, 168 deselected in 0.83s
 
 Production live provider read:
-Pending deploy and Google OAuth reconnect with Sheets scope.
+Blocked before user OAuth reconnect:
+{
+  "success": false,
+  "status": "blocked",
+  "stage": "oauth_binding",
+  "business_id": "edbd961a-273f-4f15-836e-33aacc0aa0e3",
+  "integration_id": "187f5120-684a-4583-8276-2c2068d00e03",
+  "reason": "google_sheets_integration_has_no_auth_ref",
+  "required": "Reconnect Google with Sheets scope or save the integration after OAuth so auth_ref is bound."
+}
