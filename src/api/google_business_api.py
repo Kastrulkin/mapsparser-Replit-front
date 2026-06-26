@@ -88,12 +88,12 @@ def _get_google_account(cursor, business_id: str, account_id: str = None) -> dic
     if account_id:
         cursor.execute("""
             SELECT * FROM externalbusinessaccounts
-            WHERE id = %s AND business_id = %s AND source = 'google_business' AND is_active = 1
+            WHERE id = %s AND business_id = %s AND source = 'google_business' AND is_active = TRUE
         """, (account_id, business_id))
     else:
         cursor.execute("""
             SELECT * FROM externalbusinessaccounts
-            WHERE business_id = %s AND source = 'google_business' AND is_active = 1
+            WHERE business_id = %s AND source = 'google_business' AND is_active = TRUE
             LIMIT 1
         """, (business_id,))
     
