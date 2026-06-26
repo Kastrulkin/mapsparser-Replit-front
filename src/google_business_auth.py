@@ -34,7 +34,8 @@ class GoogleBusinessAuth:
                     "redirect_uris": [self.redirect_uri]
                 }
             },
-            scopes=self.scopes
+            scopes=self.scopes,
+            autogenerate_code_verifier=False
         )
         flow.redirect_uri = self.redirect_uri
         return flow

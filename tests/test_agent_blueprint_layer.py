@@ -6350,6 +6350,7 @@ def test_google_oauth_requests_sheets_scope_for_agent_runtime():
 
     source = Path("src/google_business_auth.py").read_text(encoding="utf-8")
     assert SHEETS_SCOPE in source
+    assert "autogenerate_code_verifier=False" in source
 
 
 def test_google_sheets_integration_auto_binds_google_business_auth_ref():
