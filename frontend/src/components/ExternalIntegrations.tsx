@@ -3,11 +3,13 @@ import { Link } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { newAuth } from "@/lib/auth_new";
 import { useToast } from "@/components/ui/use-toast";
 import { useLanguage } from "@/i18n/LanguageContext";
 import OpenClawOutboxMetrics from "@/components/OpenClawOutboxMetrics";
 import { ChannelControlCenter } from "@/components/ChannelControlCenter";
+import { ImageIcon, Sparkles } from "lucide-react";
 
 interface ExternalAccount {
   id: string;
@@ -106,6 +108,9 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const [vkOwnerId, setVkOwnerId] = useState('');
   const [vkScope, setVkScope] = useState('wall');
   const [vkBusy, setVkBusy] = useState(false);
+  const [photoIntelligenceEnabled, setPhotoIntelligenceEnabled] = useState(false);
+  const [photoIntelligenceLoading, setPhotoIntelligenceLoading] = useState(false);
+  const [photoIntelligenceSaving, setPhotoIntelligenceSaving] = useState(false);
   const [socialReadiness, setSocialReadiness] = useState<SocialChannelReadiness[]>([]);
   const [socialReadinessSummary, setSocialReadinessSummary] = useState<Record<string, number>>({});
   const [socialOpenClawReadiness, setSocialOpenClawReadiness] = useState<SocialOpenClawReadiness | null>(null);
@@ -375,6 +380,60 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     }
   };
 
+  const loadPhotoIntelligenceSettings = async () => {
+    if (!currentBusinessId) {
+      setPhotoIntelligenceEnabled(false);
+      return;
+    }
+    setPhotoIntelligenceLoading(true);
+    try {
+      const data = await newAuth.makeRequest(`/media-intelligence/settings?business_id=${encodeURIComponent(currentBusinessId)}`, {
+        method: "GET",
+      });
+      setPhotoIntelligenceEnabled(Boolean(data?.photo_intelligence?.enabled));
+    } catch {
+      setPhotoIntelligenceEnabled(false);
+    } finally {
+      setPhotoIntelligenceLoading(false);
+    }
+  };
+
+  const handleTogglePhotoIntelligence = async (checked: boolean) => {
+    if (!currentBusinessId) {
+      toast({
+        title: t.error,
+        description: t.dashboard.settings.external.selectBusiness,
+        variant: "destructive",
+      });
+      return;
+    }
+    const previousValue = photoIntelligenceEnabled;
+    setPhotoIntelligenceEnabled(checked);
+    setPhotoIntelligenceSaving(true);
+    try {
+      await newAuth.makeRequest('/media-intelligence/settings', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          vision_enabled: checked,
+        }),
+      });
+      toast({
+        title: t.success,
+        description: checked ? 'Обработка фото включена' : 'Обработка фото выключена',
+      });
+    } catch (e: any) {
+      setPhotoIntelligenceEnabled(previousValue);
+      toast({
+        title: t.error,
+        description: e.message || 'Не удалось обновить обработку фото',
+        variant: "destructive",
+      });
+    } finally {
+      setPhotoIntelligenceSaving(false);
+    }
+  };
+
   const handleSyncGoogle = async () => {
     if (!currentBusinessId) return;
     setGoogleBusy(true);
@@ -410,6 +469,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   useEffect(() => {
     loadAccounts();
     loadSocialReadiness();
+    loadPhotoIntelligenceSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBusinessId, readinessRefreshKey]);
 
@@ -908,6 +968,51 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
               </p>
             </div>
           )}
+        </div>
+
+        {/* Photo intelligence */}
+        <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="rounded-2xl bg-white p-3 text-slate-900 shadow-sm ring-1 ring-slate-200">
+                <ImageIcon className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-slate-950">Обработка фото</h3>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+                  LocalOS сможет выбирать лучшие фото для публикаций, подсказывать чего не хватает и готовить визуал под каналы.
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-3 md:justify-end">
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${photoIntelligenceEnabled ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
+                {photoIntelligenceEnabled ? 'Включено' : 'Выключено'}
+              </span>
+              <Switch
+                checked={photoIntelligenceEnabled}
+                onCheckedChange={handleTogglePhotoIntelligence}
+                disabled={!currentBusinessId || photoIntelligenceLoading || photoIntelligenceSaving}
+                aria-label="Включить обработку фото"
+                className="data-[state=checked]:bg-emerald-600"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <div className="flex items-start gap-3">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+                <p className="text-sm leading-6 text-slate-600">
+                  Анализ запускается только после вашего действия. Результат сохраняется, поэтому повторная работа с тем же фото не списывает кредиты ещё раз.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Стоимость</div>
+              <div className="mt-1 text-2xl font-semibold text-slate-950">2</div>
+              <div className="text-sm text-slate-600">кредита за новое фото</div>
+            </div>
+          </div>
         </div>
 
         {/* VK */}
