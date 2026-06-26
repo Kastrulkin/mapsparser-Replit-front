@@ -9,6 +9,21 @@ from googleapiclient.errors import HttpError
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
+
+class GoogleBusinessAPIError(RuntimeError):
+    """Raised when Google Business Profile API cannot return required data."""
+
+
+def _http_error_message(error: HttpError) -> str:
+    status = getattr(getattr(error, "resp", None), "status", None)
+    reason = getattr(getattr(error, "resp", None), "reason", None)
+    detail = str(error).strip()
+    prefix = f"Google API {status}" if status else "Google API"
+    if reason:
+        prefix = f"{prefix}: {reason}"
+    return f"{prefix}. {detail}" if detail else prefix
+
+
 class GoogleBusinessAPI:
     def __init__(self, credentials: Credentials):
         self.service = build('mybusinessaccountmanagement', 'v1', credentials=credentials)
@@ -30,24 +45,29 @@ class GoogleBusinessAPI:
             return response.get('accounts', [])
         except HttpError as e:
             self._handle_api_error("получения аккаунтов", e)
-            return []
+            raise GoogleBusinessAPIError(_http_error_message(e)) from e
     
     def list_locations(self, account_name: str) -> List[Dict[str, Any]]:
         """Получить список локаций для аккаунта"""
+        business_info_error: GoogleBusinessAPIError | None = None
         try:
             if self.business_info_service:
                 response = self.business_info_service.accounts().locations().list(
                     parent=account_name,
                     readMask="name,title,storefrontAddress,primaryCategory,metadata"
                 ).execute()
-            else:
-                response = self.locations_service.accounts().locations().list(
-                    parent=account_name
-                ).execute()
+                return response.get('locations', [])
+        except HttpError as e:
+            self._handle_api_error("получения локаций через Business Information API", e)
+            business_info_error = GoogleBusinessAPIError(_http_error_message(e))
+        try:
+            response = self.locations_service.accounts().locations().list(
+                parent=account_name
+            ).execute()
             return response.get('locations', [])
         except HttpError as e:
             self._handle_api_error("получения локаций", e)
-            return []
+            raise business_info_error or GoogleBusinessAPIError(_http_error_message(e)) from e
 
     def list_accessible_locations(self) -> List[Dict[str, Any]]:
         """Получить все доступные локации во всех аккаунтах пользователя."""

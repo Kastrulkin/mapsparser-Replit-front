@@ -103,6 +103,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const [matonApiKey, setMatonApiKey] = useState('');
   const [googleLocations, setGoogleLocations] = useState<GoogleLocation[]>([]);
   const [selectedGoogleLocation, setSelectedGoogleLocation] = useState('');
+  const [googleLocationsMessage, setGoogleLocationsMessage] = useState<string | null>(null);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [vkAccessToken, setVkAccessToken] = useState('');
   const [vkOwnerId, setVkOwnerId] = useState('');
@@ -315,6 +316,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const handleLoadGoogleLocations = async () => {
     if (!currentBusinessId) return;
     setGoogleBusy(true);
+    setGoogleLocationsMessage(null);
     try {
       const token = newAuth.getToken();
       if (!token) return;
@@ -328,11 +330,18 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
       const locations = data.locations || [];
       setGoogleLocations(locations);
       if (locations.length === 1) setSelectedGoogleLocation(locations[0].name);
+      if (!locations.length) {
+        setGoogleLocationsMessage(
+          'Google подключён, но Business Profile API не вернул карточки. Проверьте, что этот Google аккаунт видит компании в business.google.com и имеет роль владельца или менеджера.'
+        );
+      }
       toast({
         title: t.success,
-        description: locations.length ? `Найдено карточек: ${locations.length}` : "Карточки Google не найдены",
+        description: locations.length ? `Найдено карточек: ${locations.length}` : "Google подключён, но карточки не вернулись",
       });
     } catch (e: any) {
+      setGoogleLocations([]);
+      setGoogleLocationsMessage(e.message || 'Не удалось получить карточки Google Business Profile');
       toast({
         title: t.error,
         description: e.message || "Ошибка загрузки карточек Google",
@@ -895,7 +904,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
             <div>
               <h3 className="text-base font-semibold text-slate-950">Google Business Profile</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-                Подключите Google-карточку, выберите нужную локацию и синхронизируйте отзывы. Публикация ответов, новостей и изменений остаётся только после ручного подтверждения.
+                Подключите именно Google Business Profile: карточки компаний, отзывы и новости. Это не подключение Google Таблиц или Google Документов.
               </p>
               {isGoogleFocused ? (
                 <p className="mt-2 rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs leading-5 text-sky-900">
@@ -930,19 +939,26 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
                       <div className="mt-0.5 break-all text-xs text-slate-500">{googleAccount.external_id}</div>
                     </div>
                   ) : (
-                    <select
-                      value={selectedGoogleLocation}
-                      onChange={(event) => setSelectedGoogleLocation(event.target.value)}
-                      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900"
-                      disabled={googleBusy || googleLocations.length === 0}
-                    >
-                      <option value="">Выберите карточку</option>
-                      {googleLocations.map((location) => (
-                        <option key={location.name} value={location.name}>
-                          {[location.title, location.address || location.primary_category].filter(Boolean).join(' · ')}
-                        </option>
-                      ))}
-                    </select>
+                    <>
+                      <select
+                        value={selectedGoogleLocation}
+                        onChange={(event) => setSelectedGoogleLocation(event.target.value)}
+                        className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900"
+                        disabled={googleBusy || googleLocations.length === 0}
+                      >
+                        <option value="">Выберите карточку компании</option>
+                        {googleLocations.map((location) => (
+                          <option key={location.name} value={location.name}>
+                            {[location.title, location.address || location.primary_category].filter(Boolean).join(' · ')}
+                          </option>
+                        ))}
+                      </select>
+                      {googleLocationsMessage ? (
+                        <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                          {googleLocationsMessage}
+                        </div>
+                      ) : null}
+                    </>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">

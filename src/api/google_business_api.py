@@ -44,8 +44,14 @@ def _public_location(location: dict) -> dict:
     category = location.get("primaryCategory") if isinstance(location.get("primaryCategory"), dict) else {}
     metadata = location.get("metadata") if isinstance(location.get("metadata"), dict) else {}
     title = location.get("title") or location.get("locationName") or location.get("name")
+    account_name = str(location.get("accountName") or "").strip()
+    location_name = str(location.get("name") or "").strip()
+    public_name = location_name
+    if account_name and location_name.startswith("locations/"):
+        public_name = f"{account_name}/{location_name}"
     return {
-        "name": location.get("name"),
+        "name": public_name,
+        "raw_name": location_name,
         "title": title,
         "address": ", ".join([line for line in lines if line]),
         "locality": address.get("locality"),
@@ -54,7 +60,7 @@ def _public_location(location: dict) -> dict:
         "primary_category": category.get("displayName") or category.get("categoryId"),
         "place_id": metadata.get("placeId"),
         "maps_uri": metadata.get("mapsUri"),
-        "account_name": location.get("accountName"),
+        "account_name": account_name,
         "account_display_name": location.get("accountDisplayName"),
     }
 
