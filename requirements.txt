@@ -14,6 +14,7 @@ playwright
 openai
 anthropic
 google-generativeai
+google-auth-oauthlib>=1.2.0
 googlemaps
 apify-client
 cryptography
