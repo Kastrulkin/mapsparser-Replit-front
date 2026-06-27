@@ -3008,6 +3008,20 @@ const stringifyBusinessValue = (value: unknown): string => {
   return '';
 };
 
+const isTechnicalApprovalPayload = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const keys = Object.keys(value);
+  return keys.some((key) => [
+    'approval_required',
+    'dispatch_state',
+    'external_dispatch_performed',
+    'approval_state',
+    'artifact_type',
+  ].includes(key)) || keys.some((key) => key.endsWith('_json'));
+};
+
 const buildEmployeeTestResult = (
   activeRun: AgentRun | null,
   pendingApproval?: AgentApproval | null,
@@ -3015,7 +3029,9 @@ const buildEmployeeTestResult = (
   const approvalItems = pendingApproval ? getApprovalPreviewItems(pendingApproval) : [];
   const artifact = activeRun?.artifacts?.[0] || activeRun?.observability?.artifacts?.items?.[0] || null;
   const previewSummary = activeRun?.observability?.preview_summary || {};
-  const artifactText = artifact?.payload_json ? stringifyBusinessValue(artifact.payload_json) : '';
+  const artifactText = artifact?.payload_json && !isTechnicalApprovalPayload(artifact.payload_json)
+    ? stringifyBusinessValue(artifact.payload_json)
+    : '';
   const summaryText = stringifyBusinessValue(previewSummary);
   const approvalText = approvalItems.map((item) => `${item.label}: ${item.value}`).join('\n');
   const output = approvalText || artifactText || summaryText || activeRun?.error_text || '';
@@ -3031,7 +3047,9 @@ const buildEmployeeTestResult = (
           : 'После теста здесь появится подготовленный результат.';
   return {
     summary,
-    output: output || 'Пока нет сохранённого результата. Запустите тест ещё раз.',
+    output: output || (pendingApproval
+      ? 'Результат подготовлен и ждёт вашего решения. Внешних действий ещё не было.'
+      : 'Пока нет сохранённого результата. Запустите тест ещё раз.'),
     previewItems: approvalItems,
     hasResult: Boolean(activeRun || pendingApproval || output),
   };
@@ -3444,6 +3462,7 @@ export const AgentBlueprintsPage = () => {
   const [recentPostCreateHandoff, setRecentPostCreateHandoff] = useState<AgentPostCreateHandoff | null>(null);
   const [showAdvancedAgentTools, setShowAdvancedAgentTools] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<AgentBlueprint | null>(null);
+  const [decisionNotice, setDecisionNotice] = useState<string | null>(null);
 
   useEffect(() => {
     setSystemAgentConfig(parseAgentConfig(currentBusiness));
@@ -3883,6 +3902,7 @@ export const AgentBlueprintsPage = () => {
     }
     setActionLoading(true);
     setError(null);
+    setDecisionNotice(null);
     try {
       const response = await api.post('/agent-blueprints', {
         business_id: currentBusinessId,
@@ -3917,6 +3937,7 @@ export const AgentBlueprintsPage = () => {
     }
     setActionLoading(true);
     setError(null);
+    setDecisionNotice(null);
     try {
       const response = await api.post('/agent-builder/sessions', {
         business_id: currentBusinessId,
@@ -4112,6 +4133,7 @@ export const AgentBlueprintsPage = () => {
     }
     setActionLoading(true);
     setError(null);
+    setDecisionNotice(null);
     try {
       const runInput = {
         schema: 'localos_agent_preview_input_v1',
@@ -4230,25 +4252,35 @@ export const AgentBlueprintsPage = () => {
 
   const decideApproval = async (decision: 'approve' | 'reject') => {
     const approval = selectedPendingApproval;
-    const runId = activeRun?.id || approval?.run_id || selectedBlueprint?.last_run_id || '';
+    const runId = approval?.run_id || activeRun?.id || selectedBlueprint?.last_run_id || '';
     if (!approval || !runId) {
       setError('Не удалось найти запуск для этого решения. Обновите страницу и попробуйте снова.');
       return;
     }
     setActionLoading(true);
     setError(null);
+    setDecisionNotice(null);
     try {
       const response = await api.post(`/agent-runs/${runId}/approvals/${approval.id}/${decision}`, {
         reason: decision === 'approve' ? 'Approved from dashboard' : 'Rejected from dashboard',
       });
-      setActiveRun(response.data?.run || null);
+      const updatedRun = response.data?.run || null;
+      if (updatedRun) {
+        setActiveRun(updatedRun);
+      } else {
+        await loadRun(runId);
+      }
       if (selectedBlueprint?.id) {
         await loadBlueprintDetails(selectedBlueprint.id);
         await loadBlueprintReview(selectedBlueprint.id);
       }
+      await loadBlueprints();
+      const nextPendingApproval = (updatedRun?.approvals || []).find((item: AgentApproval) => item.status === 'pending') || null;
+      setDecisionNotice(decision === 'approve' ? 'Решение принято. Агент продолжил работу.' : 'Результат отклонён. Агент остановлен для правки.');
+      setWorkspaceMode(nextPendingApproval ? 'results' : 'overview');
     } catch (requestError) {
       console.error(requestError);
-      setError('Не удалось применить решение.');
+      setError(getRequestErrorMessage(requestError, 'Не удалось применить решение.'));
     } finally {
       setActionLoading(false);
     }
@@ -4762,6 +4794,7 @@ export const AgentBlueprintsPage = () => {
   const openBlueprintMode = (blueprint: AgentBlueprint, mode: AgentWorkspaceMode) => {
     setSelectedBlueprintId(blueprint.id);
     setActiveRun(null);
+    setDecisionNotice(null);
     setWorkspaceMode(mode);
   };
   const attentionItems = useMemo(
@@ -4969,6 +5002,14 @@ export const AgentBlueprintsPage = () => {
         />
       ) : null}
 
+      {decisionNotice ? (
+        <DashboardActionPanel
+          title="Готово"
+          description={decisionNotice}
+          tone="sky"
+        />
+      ) : null}
+
       {false && recentCreatedAgentName ? (
         <div className="space-y-3">
           <DashboardActionPanel
@@ -5070,6 +5111,7 @@ export const AgentBlueprintsPage = () => {
               onOpen={(blueprint) => {
                 setSelectedBlueprintId(blueprint.id);
                 setActiveRun(null);
+                setDecisionNotice(null);
                 setWorkspaceMode('overview');
                 setRecentCreatedAgentName('');
                 setRecentPostCreateHandoff(null);
