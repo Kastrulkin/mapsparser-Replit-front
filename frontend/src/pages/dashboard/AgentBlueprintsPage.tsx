@@ -842,6 +842,8 @@ type EmployeeStatus = {
 
 type EmployeeNextActionKind = 'approve' | 'connect' | 'run_test' | 'enable' | 'open_result' | 'view_history';
 
+type EmployeeWorkspaceState = 'draft' | 'needs_connection' | 'ready_for_test' | 'running_test' | 'waiting_for_review' | 'working' | 'needs_attention' | 'error';
+
 type EmployeeNextAction = {
   kind: EmployeeNextActionKind;
   label: string;
@@ -855,6 +857,19 @@ type EmployeeTestResult = {
   output: string;
   previewItems: Array<{ label: string; value: string }>;
   hasResult: boolean;
+};
+
+type EmployeeResponsibility = {
+  key: string;
+  label: string;
+  done?: boolean;
+};
+
+type ManagerDaySummary = {
+  workingCount: number;
+  attentionCount: number;
+  todayEvents: number;
+  primaryText: string;
 };
 
 type AgentScenarioStep = {
@@ -2671,43 +2686,48 @@ const buildEmployeeStatus = (
   details?: AgentBlueprintDetails | null,
   pendingApproval?: AgentApproval | null,
 ): EmployeeStatus => {
-  const gate = details?.activation_gate;
-  const missingConnections = Number(gate?.preflight?.missing_count || 0);
-  const hasActiveVersion = Boolean(details?.active_version_id || blueprint.active_version_id || blueprint.active_version_number);
-  const hasPendingApproval = Boolean(pendingApproval || blueprint.pending_approvals_count || blueprint.last_run_status === 'waiting_approval');
-  if (hasPendingApproval) {
+  const workspaceState = buildEmployeeWorkspaceState(blueprint, details, pendingApproval);
+  if (workspaceState === 'waiting_for_review') {
     return {
       label: 'Ждёт решения',
       tone: 'amber',
       summary: 'Сотрудник подготовил результат и остановился, чтобы вы его проверили.',
     };
   }
-  if (blueprint.last_run_status === 'failed' || blueprint.status === 'error') {
+  if (workspaceState === 'error') {
     return {
       label: 'Ошибка',
       tone: 'rose',
       summary: 'Последняя работа остановилась. Нужна проверка результата.',
     };
   }
-  if (missingConnections > 0) {
+  if (workspaceState === 'needs_connection') {
+    const missingConnections = Number(details?.activation_gate?.preflight?.missing_count || 0);
     return {
       label: 'Нужны данные',
       tone: 'amber',
-      summary: `${missingConnections} ${missingConnections === 1 ? 'подключение нужно завершить' : 'подключения нужно завершить'}.`,
+      summary: `${missingConnections || 1} ${missingConnections === 1 ? 'подключение нужно завершить' : 'подключения нужно завершить'}.`,
     };
   }
-  if (!hasActiveVersion || blueprint.status === 'draft') {
+  if (workspaceState === 'draft') {
     return {
       label: 'Черновик',
       tone: 'slate',
       summary: 'Сотрудник создан, но ещё не включён в работу.',
     };
   }
-  if (gate?.preview_run_status?.ready === false) {
+  if (workspaceState === 'ready_for_test' || workspaceState === 'needs_attention') {
     return {
       label: 'Нужно проверить',
       tone: 'amber',
       summary: 'Перед включением нужен безопасный тест без внешних действий.',
+    };
+  }
+  if (workspaceState === 'running_test') {
+    return {
+      label: 'Нужно проверить',
+      tone: 'amber',
+      summary: 'Сотрудник выполняет тестовую проверку.',
     };
   }
   return {
@@ -2715,6 +2735,39 @@ const buildEmployeeStatus = (
     tone: 'emerald',
     summary: 'Сотрудник готов работать по опубликованному сценарию.',
   };
+};
+
+const buildEmployeeWorkspaceState = (
+  blueprint: AgentBlueprint,
+  details?: AgentBlueprintDetails | null,
+  pendingApproval?: AgentApproval | null,
+): EmployeeWorkspaceState => {
+  const gate = details?.activation_gate;
+  const missingConnections = Number(gate?.preflight?.missing_count || 0);
+  const hasActiveVersion = Boolean(details?.active_version_id || blueprint.active_version_id || blueprint.active_version_number);
+  const hasPendingApproval = Boolean(pendingApproval || blueprint.pending_approvals_count || blueprint.last_run_status === 'waiting_approval');
+  if (hasPendingApproval) {
+    return 'waiting_for_review';
+  }
+  if (blueprint.last_run_status === 'running') {
+    return 'running_test';
+  }
+  if (blueprint.last_run_status === 'failed' || blueprint.status === 'error') {
+    return 'error';
+  }
+  if (missingConnections > 0) {
+    return 'needs_connection';
+  }
+  if (!hasActiveVersion || blueprint.status === 'draft') {
+    return 'draft';
+  }
+  if (gate?.preview_run_status?.ready === false) {
+    return 'ready_for_test';
+  }
+  if (gate?.can_activate === true) {
+    return 'needs_attention';
+  }
+  return 'working';
 };
 
 const buildEmployeeLastActivity = (
@@ -2747,35 +2800,56 @@ const buildEmployeeNextAction = ({
   details?: AgentBlueprintDetails | null;
   pendingApproval?: AgentApproval | null;
 }): EmployeeNextAction => {
+  return buildEmployeePrimaryAction({ blueprint, details, pendingApproval });
+};
+
+const getMissingConnectorLabel = (
+  details?: AgentBlueprintDetails | null,
+) => {
   const gate = details?.activation_gate;
-  const missingConnections = Number(gate?.preflight?.missing_count || 0);
+  const missing = gate?.preflight?.missing?.[0] || gate?.preflight?.items?.find((item) => item.status !== 'ready' && item.status !== 'connected');
+  const provider = missing?.provider || gate?.connection_plan?.items?.find((item) => item.binding_status !== 'ready')?.provider || '';
+  return connectorLabel(provider || 'service');
+};
+
+const buildEmployeePrimaryAction = ({
+  blueprint,
+  details,
+  pendingApproval,
+}: {
+  blueprint: AgentBlueprint;
+  details?: AgentBlueprintDetails | null;
+  pendingApproval?: AgentApproval | null;
+}): EmployeeNextAction => {
+  const state = buildEmployeeWorkspaceState(blueprint, details, pendingApproval);
+  const gate = details?.activation_gate;
   const activationVersionId = gate?.active_version_id || details?.active_version_id || blueprint.active_version_id || '';
-  const hasActiveVersion = Boolean(activationVersionId || blueprint.active_version_number);
-  if (pendingApproval || Number(blueprint.pending_approvals_count || 0) > 0 || blueprint.last_run_status === 'waiting_approval') {
+  if (state === 'waiting_for_review') {
     return {
       kind: 'approve',
-      label: 'Approve Result',
+      label: 'Review Result',
       description: 'Проверьте подготовленный результат и решите, можно ли использовать его дальше.',
       targetMode: 'results',
     };
   }
-  if (missingConnections > 0) {
+  if (state === 'needs_connection') {
+    const label = getMissingConnectorLabel(details);
     return {
       kind: 'connect',
-      label: 'Connect Service',
+      label: `Connect ${label}`,
       description: 'Завершите одно недостающее подключение, чтобы сотрудник получил нужные данные.',
       targetMode: 'connections',
     };
   }
-  if (blueprint.last_run_status === 'failed' || blueprint.status === 'error') {
+  if (state === 'error') {
     return {
       kind: 'open_result',
-      label: 'Open Result',
+      label: 'Review Problem',
       description: 'Посмотрите последний бизнес-результат и причину остановки.',
       targetMode: 'results',
     };
   }
-  if (!hasActiveVersion || blueprint.status === 'draft') {
+  if (state === 'draft' || state === 'ready_for_test') {
     return {
       kind: 'run_test',
       label: 'Run Test',
@@ -2783,21 +2857,21 @@ const buildEmployeeNextAction = ({
       targetMode: 'results',
     };
   }
-  if (gate?.can_activate === true && activationVersionId) {
+  if (state === 'running_test') {
+    return {
+      kind: 'view_history',
+      label: 'Testing...',
+      description: 'Сотрудник выполняет тест. Дождитесь результата.',
+      targetMode: 'results',
+    };
+  }
+  if (state === 'needs_attention' && activationVersionId) {
     return {
       kind: 'enable',
-      label: 'Enable Agent',
+      label: 'Enable Employee',
       description: 'Включите сотрудника после успешной проверки результата.',
       targetMode: 'overview',
       versionId: activationVersionId,
-    };
-  }
-  if (gate?.preview_run_status?.ready === false) {
-    return {
-      kind: 'run_test',
-      label: 'Run Test',
-      description: 'Проверьте работу сотрудника на тестовом запуске.',
-      targetMode: 'results',
     };
   }
   return {
@@ -2805,6 +2879,102 @@ const buildEmployeeNextAction = ({
     label: 'View Last Result',
     description: 'Сотрудник работает. Можно открыть последний сохранённый результат.',
     targetMode: 'results',
+  };
+};
+
+const pushUniqueResponsibility = (
+  items: EmployeeResponsibility[],
+  label: string,
+  done = true,
+) => {
+  const normalized = label.trim();
+  if (!normalized || items.some((item) => item.label.toLowerCase() === normalized.toLowerCase())) {
+    return;
+  }
+  items.push({
+    key: `${items.length}-${normalized.toLowerCase().replace(/[^a-zа-я0-9]+/gi, '-')}`,
+    label: normalized,
+    done,
+  });
+};
+
+const buildEmployeeResponsibilities = (
+  blueprint: AgentBlueprint,
+  details?: AgentBlueprintDetails | null,
+): EmployeeResponsibility[] => {
+  const preview = getBlueprintBuilderPreview(details?.blueprint || blueprint);
+  const text = [
+    blueprint.name,
+    blueprint.category,
+    blueprint.description,
+    blueprint.active_goal,
+    blueprint.latest_goal,
+    preview?.understood_task,
+    ...(preview?.data_sources || []),
+  ].filter(Boolean).join(' ').toLowerCase();
+  const items: EmployeeResponsibility[] = [];
+  if (text.includes('google sheet') || text.includes('таблиц')) {
+    pushUniqueResponsibility(items, 'Read Google Sheet');
+  }
+  if (text.includes('telegram')) {
+    pushUniqueResponsibility(items, 'Prepare Telegram message');
+  }
+  if (text.includes('whatsapp')) {
+    pushUniqueResponsibility(items, 'Read WhatsApp questions');
+  }
+  if (text.includes('поезд') || text.includes('trip') || text.includes('заказ')) {
+    pushUniqueResponsibility(items, text.includes('поезд') || text.includes('trip') ? 'Find the right trip' : 'Find new orders');
+  }
+  if (blueprint.category === 'reviews' || text.includes('отзыв')) {
+    pushUniqueResponsibility(items, 'Prepare review reply draft');
+  }
+  if (blueprint.category === 'outreach' || text.includes('партн')) {
+    pushUniqueResponsibility(items, 'Prepare shortlist and draft message');
+  }
+  if (blueprint.category === 'tables') {
+    pushUniqueResponsibility(items, 'Save structured row');
+  }
+  pushUniqueResponsibility(items, 'Prepare result for owner review');
+  pushUniqueResponsibility(items, 'Wait for approval before external action');
+  return items.slice(0, 5);
+};
+
+const buildManagerDaySummary = (
+  blueprints: AgentBlueprint[],
+  detailsById: Record<string, AgentBlueprintDetails>,
+): ManagerDaySummary => {
+  const states = blueprints.map((blueprint) => buildEmployeeWorkspaceState(blueprint, detailsById[blueprint.id]));
+  const attentionCount = states.filter((state) => state === 'waiting_for_review' || state === 'needs_connection' || state === 'needs_attention' || state === 'error').length;
+  const workingCount = states.filter((state) => state === 'working').length;
+  const today = buildTodaySummary(blueprints, detailsById);
+  const todayEvents = today.completedRuns + today.preparedArtifacts + today.pendingApprovals + today.failedRuns;
+  return {
+    workingCount,
+    attentionCount,
+    todayEvents,
+    primaryText: attentionCount
+      ? `${attentionCount} ${attentionCount === 1 ? 'сотрудник ждёт вас' : 'сотрудника ждут вас'}`
+      : workingCount
+        ? 'Команда работает спокойно'
+        : 'Команду можно собрать из первого сотрудника',
+  };
+};
+
+const buildEmployeeWorkspaceStory = (
+  blueprint: AgentBlueprint,
+  details?: AgentBlueprintDetails | null,
+  pendingApproval?: AgentApproval | null,
+) => {
+  const state = buildEmployeeWorkspaceState(blueprint, details, pendingApproval);
+  const status = buildEmployeeStatus(blueprint, details, pendingApproval);
+  const attention = buildEmployeeAttentionItems(blueprint, details, pendingApproval);
+  return {
+    state,
+    status,
+    responsibilities: buildEmployeeResponsibilities(blueprint, details),
+    latestWork: buildEmployeeLastActivity(blueprint, details),
+    nextWork: blueprint.active_version_number ? 'По расписанию сотрудника' : 'После теста и включения',
+    attention,
   };
 };
 
@@ -4581,6 +4751,10 @@ export const AgentBlueprintsPage = () => {
     () => buildTodaySummary(blueprints, agentDetailsById),
     [agentDetailsById, blueprints],
   );
+  const managerDaySummary = useMemo(
+    () => buildManagerDaySummary(blueprints, agentDetailsById),
+    [agentDetailsById, blueprints],
+  );
   const selectedBusinessStatus = useMemo(
     () => selectedBlueprint ? buildAgentBusinessStatus(selectedBlueprint, blueprintDetails) : null,
     [blueprintDetails, selectedBlueprint],
@@ -4885,52 +5059,53 @@ export const AgentBlueprintsPage = () => {
       ) : null}
 
       {currentBusinessId ? (
-        <div className="grid gap-5 xl:grid-cols-[minmax(18rem,0.82fr)_minmax(0,1.45fr)]">
-          <EmployeeAgentsList
-            blueprints={blueprints}
-            detailsById={agentDetailsById}
-            selectedBlueprintId={selectedBlueprint?.id || null}
-            loading={loading}
-            onOpen={(blueprint) => {
-              setSelectedBlueprintId(blueprint.id);
-              setActiveRun(null);
-              setWorkspaceMode('overview');
-              setRecentCreatedAgentName('');
-              setRecentPostCreateHandoff(null);
-            }}
-          />
+        <div className="space-y-4">
+          <ManagerDayStrip summary={managerDaySummary} />
+          <div className="grid gap-5 lg:grid-cols-[20rem_minmax(0,1fr)]">
+            <EmployeeAgentsList
+              blueprints={blueprints}
+              detailsById={agentDetailsById}
+              selectedBlueprintId={selectedBlueprint?.id || null}
+              loading={loading}
+              onOpen={(blueprint) => {
+                setSelectedBlueprintId(blueprint.id);
+                setActiveRun(null);
+                setWorkspaceMode('overview');
+                setRecentCreatedAgentName('');
+                setRecentPostCreateHandoff(null);
+              }}
+            />
 
-          <div className="min-w-0 space-y-4">
-            {selectedBlueprint && selectedEmployeeAction ? (
-              workspaceMode === 'overview' || workspaceMode === 'run' ? (
-                <EmployeeAgentOverviewPanel
-                  blueprint={selectedBlueprint}
-                  details={blueprintDetails}
-                  pendingApproval={selectedPendingApproval}
-                  action={selectedEmployeeAction}
-                  actionLoading={actionLoading}
-                  onPrimaryAction={runEmployeePrimaryAction}
-                  onOpenHistory={() => setWorkspaceMode('results')}
-                  onOpenAdvanced={() => setWorkspaceMode('settings')}
-                />
-              ) : workspaceMode === 'results' ? (
-                activeRun || selectedPendingApproval ? (
-                  <EmployeeTestResultPanel
-                    activeRun={activeRun}
-                    pendingApproval={selectedPendingApproval}
-                    actionLoading={actionLoading}
-                    onApprove={() => decideApproval('approve')}
-                    onReject={() => decideApproval('reject')}
-                    onRunAgain={() => startRun(selectedBlueprint)}
-                  />
-                ) : (
-                  <EmployeeHistoryPanel
+            <main className="min-w-0 space-y-4">
+              {selectedBlueprint && selectedEmployeeAction ? (
+                workspaceMode === 'overview' || workspaceMode === 'run' ? (
+                  <EmployeeAgentOverviewPanel
+                    blueprint={selectedBlueprint}
                     details={blueprintDetails}
-                    activeRun={activeRun}
+                    pendingApproval={selectedPendingApproval}
+                    action={selectedEmployeeAction}
+                    actionLoading={actionLoading}
+                    onPrimaryAction={runEmployeePrimaryAction}
+                    onOpenAdvanced={() => setWorkspaceMode('settings')}
                   />
-                )
-              ) : (
-                <AgentDetailPanel
+                ) : workspaceMode === 'results' ? (
+                  activeRun || selectedPendingApproval ? (
+                    <EmployeeTestResultPanel
+                      activeRun={activeRun}
+                      pendingApproval={selectedPendingApproval}
+                      actionLoading={actionLoading}
+                      onApprove={() => decideApproval('approve')}
+                      onReject={() => decideApproval('reject')}
+                      onRunAgain={() => startRun(selectedBlueprint)}
+                    />
+                  ) : (
+                    <EmployeeHistoryPanel
+                      details={blueprintDetails}
+                      activeRun={activeRun}
+                    />
+                  )
+                ) : (
+                  <AgentDetailPanel
                   mode={workspaceMode}
                   blueprint={selectedBlueprint}
                   blueprintDetails={blueprintDetails}
@@ -5035,13 +5210,14 @@ export const AgentBlueprintsPage = () => {
                   onRunLimitChange={setRunLimit}
                   showAdvancedTools={showAdvancedAgentTools}
                 />
-              )
-            ) : (
-              <DashboardEmptyState
-                title="Создайте первого сотрудника"
-                description="После создания LocalOS сразу откроет карточку и покажет один следующий шаг."
-              />
-            )}
+                )
+              ) : (
+                <DashboardEmptyState
+                  title="Создайте первого сотрудника"
+                  description="После создания LocalOS сразу откроет карточку и покажет один следующий шаг."
+                />
+              )}
+            </main>
           </div>
         </div>
       ) : null}
@@ -7824,6 +8000,30 @@ const EmployeeStatusPill = ({ status }: { status: EmployeeStatus }) => (
   </span>
 );
 
+const ManagerDayStrip = ({ summary }: { summary: ManagerDaySummary }) => (
+  <section className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(8rem,0.45fr))]">
+    <div className={cn(
+      'rounded-2xl px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]',
+      summary.attentionCount ? 'bg-amber-50 text-amber-950' : 'bg-white text-slate-950',
+    )}>
+      <div className="text-xs font-semibold uppercase tracking-wide opacity-60">Сегодня</div>
+      <div className="mt-1 text-lg font-semibold leading-7 [text-wrap:balance]">{summary.primaryText}</div>
+    </div>
+    <div className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Работают</div>
+      <div className="mt-1 text-2xl font-semibold tabular-nums text-emerald-700">{summary.workingCount}</div>
+    </div>
+    <div className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ждут вас</div>
+      <div className={cn('mt-1 text-2xl font-semibold tabular-nums', summary.attentionCount ? 'text-amber-700' : 'text-slate-700')}>{summary.attentionCount}</div>
+    </div>
+    <div className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">События</div>
+      <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{summary.todayEvents}</div>
+    </div>
+  </section>
+);
+
 const EmployeeAgentsList = ({
   blueprints,
   detailsById,
@@ -7837,70 +8037,64 @@ const EmployeeAgentsList = ({
   loading: boolean;
   onOpen: (blueprint: AgentBlueprint) => void;
 }) => (
-  <section className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <aside className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)] lg:sticky lg:top-4">
+    <div className="flex items-center justify-between gap-3 px-1">
       <div>
-        <h2 className="text-lg font-semibold leading-7 text-slate-950 [text-wrap:balance]">Мои сотрудники</h2>
-        <p className="mt-1 text-sm leading-6 text-slate-600 [text-wrap:pretty]">
-          Каждый сотрудник ведёт одну понятную работу для бизнеса.
-        </p>
+        <h2 className="text-sm font-semibold leading-6 text-slate-950">Сотрудники</h2>
+        <p className="text-xs leading-5 text-slate-500">Быстрый список задач команды</p>
       </div>
-      <span className="inline-flex min-h-8 items-center rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-        {blueprints.length} {blueprints.length === 1 ? 'сотрудник' : 'сотрудников'}
+      <span className="inline-flex min-h-7 items-center rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-slate-600 ring-1 ring-slate-200">
+        {blueprints.length}
       </span>
     </div>
 
-    <div className="mt-4 grid gap-3">
+    <div className="mt-3 max-h-[calc(100vh-18rem)] min-h-72 overflow-y-auto pr-1">
       {loading ? (
-        <div className="flex min-h-24 items-center gap-2 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500 ring-1 ring-slate-100">
+        <div className="flex min-h-20 items-center gap-2 rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-500 ring-1 ring-slate-100">
           <Loader2 className="h-4 w-4 animate-spin" />
           Загружаем сотрудников...
         </div>
       ) : blueprints.length === 0 ? (
-        <div className="rounded-xl bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-600 ring-1 ring-slate-100">
-          Сотрудников пока нет. Создайте первого, и LocalOS сразу откроет его карточку с понятным следующим шагом.
+        <div className="rounded-xl bg-slate-50 px-3 py-4 text-sm leading-6 text-slate-600 ring-1 ring-slate-100">
+          Создайте первого сотрудника.
         </div>
       ) : (
         blueprints.map((blueprint) => {
           const details = detailsById[blueprint.id];
           const status = buildEmployeeStatus(blueprint, details);
+          const state = buildEmployeeWorkspaceState(blueprint, details);
           const selected = selectedBlueprintId === blueprint.id;
           return (
-            <div
+            <button
               key={blueprint.id}
+              type="button"
+              onClick={() => onOpen(blueprint)}
               className={cn(
-                'grid gap-3 rounded-xl px-4 py-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08)] transition-shadow md:grid-cols-[minmax(0,1fr)_auto] md:items-center',
-                selected ? 'bg-slate-950 text-white shadow-[0_0_0_1px_rgba(15,23,42,1)]' : 'bg-white hover:shadow-[0_12px_28px_rgba(15,23,42,0.08),0_0_0_1px_rgba(15,23,42,0.12)]',
+                'mb-1 grid min-h-[4.25rem] w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl px-3 py-2 text-left transition-shadow',
+                selected ? 'bg-slate-950 text-white shadow-[0_0_0_1px_rgba(15,23,42,1)]' : 'bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08)] hover:shadow-[0_6px_18px_rgba(15,23,42,0.08),0_0_0_1px_rgba(15,23,42,0.12)]',
+                !selected && (state === 'waiting_for_review' || state === 'needs_connection' || state === 'needs_attention') ? 'bg-amber-50/60' : '',
+                !selected && state === 'error' ? 'bg-rose-50/70' : '',
               )}
             >
-              <button type="button" className="min-w-0 text-left" onClick={() => onOpen(blueprint)}>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <div className={cn('truncate text-base font-semibold', selected ? 'text-white' : 'text-slate-950')}>
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className={cn('truncate text-sm font-semibold leading-5', selected ? 'text-white' : 'text-slate-950')}>
                     {blueprint.name}
                   </div>
-                  <EmployeeStatusPill status={status} />
                 </div>
-                <div className={cn('mt-2 line-clamp-2 text-sm leading-6', selected ? 'text-slate-300' : 'text-slate-600')}>
-                  {buildEmployeeDescription(blueprint, details)}
+                <div className={cn('mt-1 truncate text-xs leading-5', selected ? 'text-slate-300' : 'text-slate-500')}>
+                  {buildEmployeeLastActivity(blueprint, details)}
                 </div>
-                <div className={cn('mt-3 text-xs font-medium', selected ? 'text-slate-400' : 'text-slate-500')}>
-                  Последний раз: {buildEmployeeLastActivity(blueprint, details)}
-                </div>
-              </button>
-              <Button
-                type="button"
-                variant={selected ? 'secondary' : 'outline'}
-                className="min-h-10 active:scale-[0.96] transition-transform"
-                onClick={() => onOpen(blueprint)}
-              >
-                Open
-              </Button>
-            </div>
+              </div>
+              <span className={cn('inline-flex min-h-7 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', employeeToneClass[status.tone])}>
+                {status.label}
+              </span>
+            </button>
           );
         })
       )}
     </div>
-  </section>
+  </aside>
 );
 
 const EmployeeAnswerCard = ({
@@ -8078,6 +8272,49 @@ const EmployeeHistoryPanel = ({
   );
 };
 
+const EmployeeWorkspaceSection = ({
+  title,
+  children,
+  tone = 'default',
+}: {
+  title: string;
+  children: React.ReactNode;
+  tone?: 'default' | 'quiet' | 'attention' | 'error';
+}) => (
+  <section className={cn(
+    'rounded-2xl px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.08)]',
+    tone === 'default' ? 'bg-white' : '',
+    tone === 'quiet' ? 'bg-slate-50' : '',
+    tone === 'attention' ? 'bg-amber-50 text-amber-950 shadow-[0_1px_2px_rgba(120,53,15,0.05),0_0_0_1px_rgba(245,158,11,0.25)]' : '',
+    tone === 'error' ? 'bg-rose-50 text-rose-950 shadow-[0_1px_2px_rgba(127,29,29,0.05),0_0_0_1px_rgba(244,63,94,0.24)]' : '',
+  )}>
+    <div className="text-xs font-semibold uppercase tracking-wide opacity-60">{title}</div>
+    <div className="mt-2">{children}</div>
+  </section>
+);
+
+const EmployeeResponsibilitiesList = ({ items }: { items: EmployeeResponsibility[] }) => (
+  <div className="grid gap-2 sm:grid-cols-2">
+    {items.map((item) => (
+      <div key={item.key} className="flex min-h-10 items-start gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
+        <CheckCircle2 className={cn('mt-1 h-4 w-4 shrink-0', item.done === false ? 'text-slate-300' : 'text-emerald-600')} />
+        <span>{item.label}</span>
+      </div>
+    ))}
+  </div>
+);
+
+const employeeStateTitle = (state: EmployeeWorkspaceState) => ({
+  draft: 'Draft',
+  needs_connection: 'Needs connection',
+  ready_for_test: 'Ready for test',
+  running_test: 'Running test',
+  waiting_for_review: 'Waiting for review',
+  working: 'Working normally',
+  needs_attention: 'Needs attention',
+  error: 'Error',
+}[state]);
+
 const EmployeeAgentOverviewPanel = ({
   blueprint,
   details,
@@ -8085,7 +8322,6 @@ const EmployeeAgentOverviewPanel = ({
   action,
   actionLoading,
   onPrimaryAction,
-  onOpenHistory,
   onOpenAdvanced,
 }: {
   blueprint: AgentBlueprint;
@@ -8094,58 +8330,85 @@ const EmployeeAgentOverviewPanel = ({
   action: EmployeeNextAction;
   actionLoading: boolean;
   onPrimaryAction: () => void;
-  onOpenHistory: () => void;
   onOpenAdvanced: () => void;
 }) => {
-  const status = buildEmployeeStatus(blueprint, details, pendingApproval);
-  const attentionItems = buildEmployeeAttentionItems(blueprint, details, pendingApproval);
-  const healthy = status.label === 'Работает' && attentionItems.length === 0;
+  const story = buildEmployeeWorkspaceStory(blueprint, details, pendingApproval);
+  const healthy = story.state === 'working' && story.attention.length === 0;
+  const problem = story.state === 'error' || story.state === 'waiting_for_review' || story.state === 'needs_connection' || story.state === 'needs_attention';
+  const actionDisabled = actionLoading || story.state === 'running_test';
   return (
-    <div className="space-y-4">
-      {healthy ? (
-        <EmployeeRunningPanel blueprint={blueprint} details={details} pendingApproval={pendingApproval} />
-      ) : null}
-
+    <div className={cn('space-y-4', healthy ? 'max-w-4xl' : 'max-w-5xl')}>
       <section className={cn(
-        'rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]',
-        healthy ? 'lg:max-w-4xl' : '',
+        'rounded-3xl p-5 shadow-[0_18px_48px_rgba(15,23,42,0.08),0_0_0_1px_rgba(15,23,42,0.08)]',
+        problem ? 'bg-white' : 'bg-white',
       )}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <EmployeeStatusPill status={status} />
-              <span className="text-xs font-medium text-slate-500">ИИ-сотрудник</span>
+              <EmployeeStatusPill status={story.status} />
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                {employeeStateTitle(story.state)}
+              </span>
             </div>
-            <h1 className="mt-3 text-2xl font-semibold leading-8 text-slate-950 [text-wrap:balance]">{blueprint.name}</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 [text-wrap:pretty]">{status.summary}</p>
+            <h1 className="mt-3 text-3xl font-semibold leading-9 text-slate-950 [text-wrap:balance]">{blueprint.name}</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 [text-wrap:pretty]">{story.status.summary}</p>
           </div>
           <Button
             type="button"
-            className="min-h-11 shrink-0 active:scale-[0.96] transition-transform"
+            className={cn(
+              'min-h-12 shrink-0 px-5 active:scale-[0.96] transition-transform',
+              story.state === 'error' ? 'bg-rose-600 text-white hover:bg-rose-700' : '',
+            )}
             onClick={onPrimaryAction}
-            disabled={actionLoading}
+            disabled={actionDisabled}
           >
             {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : action.kind === 'connect' ? <Database className="mr-2 h-4 w-4" /> : action.kind === 'approve' ? <ShieldCheck className="mr-2 h-4 w-4" /> : action.kind === 'enable' ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
             {action.label}
           </Button>
         </div>
+      </section>
 
-        <div className="mt-5 grid gap-3 lg:grid-cols-4">
-          <EmployeeAnswerCard label="Что делает" value={buildEmployeeDescription(blueprint, details)} />
-          <EmployeeAnswerCard label="Работает ли" value={status.summary} tone={status.tone === 'emerald' ? 'emerald' : status.tone === 'rose' ? 'rose' : status.tone === 'amber' ? 'amber' : 'slate'} />
-          <EmployeeAnswerCard label="Последний раз" value={buildEmployeeLastActivity(blueprint, details || undefined)} />
-          <EmployeeAnswerCard label="Что сейчас" value={action.description} tone={action.kind === 'view_history' ? 'emerald' : 'amber'} />
-        </div>
+      <EmployeeWorkspaceSection title="Daily responsibilities">
+        <EmployeeResponsibilitiesList items={story.responsibilities} />
+      </EmployeeWorkspaceSection>
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Button type="button" variant="outline" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onOpenHistory}>
-            History
-          </Button>
-          <Button type="button" variant="ghost" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onOpenAdvanced}>
+      <EmployeeWorkspaceSection title="Current status" tone={story.state === 'error' ? 'error' : problem ? 'attention' : 'quiet'}>
+        <div className="text-base font-semibold leading-7 text-slate-950">{story.status.summary}</div>
+        <div className="mt-1 text-sm leading-6 opacity-75">{action.description}</div>
+      </EmployeeWorkspaceSection>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <EmployeeWorkspaceSection title="Latest completed work" tone={healthy ? 'quiet' : 'default'}>
+          <div className="text-sm font-semibold leading-6 text-slate-950">{story.latestWork}</div>
+        </EmployeeWorkspaceSection>
+        <EmployeeWorkspaceSection title="Next scheduled work" tone={healthy ? 'quiet' : 'default'}>
+          <div className="text-sm font-semibold leading-6 text-slate-950">{story.nextWork}</div>
+        </EmployeeWorkspaceSection>
+      </div>
+
+      {story.attention.length ? (
+        <EmployeeWorkspaceSection title="Requires your attention" tone={story.state === 'error' ? 'error' : 'attention'}>
+          <div className="grid gap-2">
+            {story.attention.map((item) => (
+              <div key={item.key} className="rounded-xl bg-white/70 px-3 py-3 text-sm leading-6 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+                <div className="font-semibold text-slate-950">{item.title}</div>
+                <div className="mt-1 opacity-80">{item.description}</div>
+              </div>
+            ))}
+          </div>
+        </EmployeeWorkspaceSection>
+      ) : null}
+
+      <EmployeeHistoryPanel details={details} activeRun={null} />
+
+      <details className="rounded-2xl bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.08)]">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-700">Advanced</summary>
+        <div className="mt-4">
+          <Button type="button" variant="outline" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onOpenAdvanced}>
             Advanced Settings
           </Button>
         </div>
-      </section>
+      </details>
     </div>
   );
 };

@@ -4,6 +4,7 @@
 import argparse
 import asyncio
 import json
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -821,15 +822,18 @@ async def run_smoke(url, screenshot):
         required = [
             "Мои агенты",
             "Создать агента",
-            "Мои сотрудники",
-            "ИИ-сотрудник",
-            "Что делает",
-            "Работает ли",
-            "Последний раз",
-            "Что сейчас",
-            "Approve Result",
-            "History",
-            "Advanced Settings",
+            "Сотрудники",
+            "Сегодня",
+            "Работают",
+            "Ждут вас",
+            "События",
+            "Daily responsibilities",
+            "Current status",
+            "Latest completed work",
+            "Next scheduled work",
+            "Requires your attention",
+            "Review Result",
+            "Advanced",
         ]
         body_lower = body.lower()
         missing = [item for item in required if item.lower() not in body_lower]
@@ -848,22 +852,16 @@ async def run_smoke(url, screenshot):
         ]
         leaked = [item for item in forbidden if item.lower() in body_lower]
 
-        primary_actions = page.get_by_role("button", name="Approve Result")
+        primary_actions = page.get_by_role("button", name="Review Result")
         if await primary_actions.count() != 1:
             missing.append("exactly one selected employee primary action")
 
-        history_button = page.get_by_role("button", name="History")
-        if await history_button.count() == 0:
-            missing.append("history button")
-        else:
-            await history_button.first.click()
-            await page.wait_for_timeout(700)
-            history_body = await page.locator("body").inner_text(timeout=10000)
-            history_body_lower = history_body.lower()
-            if "что сотрудник делал раньше" not in history_body_lower and "test result" not in history_body_lower:
-                missing.append("employee history or result story")
-            if "Execution" in history_body or "Planner" in history_body or "Provider" in history_body:
-                leaked.append("technical terms in history")
+        if "Что сотрудник делал раньше" not in body:
+            missing.append("embedded employee history story")
+        if "Read Google Sheet" not in body and "Prepare result for owner review" not in body:
+            missing.append("employee responsibilities")
+        if "Open" in body:
+            leaked.append("old row action label")
 
         create_buttons = page.get_by_role("button", name="Создать агента")
         if await create_buttons.count() == 0:
@@ -905,12 +903,12 @@ async def run_smoke(url, screenshot):
                 created_body_lower = created_body.lower()
                 if "Google Sheets → Telegram" not in created_body:
                     missing.append("created Google Sheets Telegram agent")
-                if "что делает" not in created_body_lower or "что сейчас" not in created_body_lower:
+                if "daily responsibilities" not in created_body_lower or "current status" not in created_body_lower:
                     missing.append("created agent opened overview")
                 if "Агент создан" in created_body:
                     leaked.append("old post-create banner still visible")
                 run_test_buttons = page.get_by_role("button", name="Run Test")
-                connect_buttons = page.get_by_role("button", name="Connect Service")
+                connect_buttons = page.get_by_role("button", name=re.compile(r"Connect"))
                 if await run_test_buttons.count() + await connect_buttons.count() != 1:
                     missing.append("one created-agent next action")
 
@@ -930,7 +928,7 @@ async def run_smoke(url, screenshot):
                 print("Leaked:", ", ".join(leaked))
             return 1
 
-        print("OK: agents employee-first UI mock rendered")
+        print("OK: agents workspace v2 mock rendered")
         if screenshot:
             print(f"Screenshot: {screenshot}")
         return 0
