@@ -855,6 +855,7 @@ type EmployeeNextAction = {
 type EmployeeTestResult = {
   summary: string;
   output: string;
+  resultPayload?: Record<string, unknown> | null;
   previewItems: Array<{ label: string; value: string }>;
   hasResult: boolean;
 };
@@ -2387,6 +2388,10 @@ const resultFieldLabels: Record<string, string> = {
   next_questions: 'Что уточнить',
   subject: 'Тема письма',
   body: 'Текст письма',
+  post_text: 'Текст поста',
+  draft_text: 'Черновик сообщения',
+  message: 'Сообщение',
+  text: 'Текст',
   checklist: 'Проверить перед использованием',
   exceptions: 'Исключения',
   rows_to_review: 'Строки к проверке',
@@ -2491,8 +2496,9 @@ const getApprovalPreviewItems = (approval?: AgentApproval | null) => {
       items.push({ label, value: text });
     }
   };
+  const preparedResult = extractBusinessResultPayload(payload);
   addValue('Что подготовил агент', payload.summary || payload.result_summary || payload.output_summary || payload.message_summary || payload.title);
-  addValue('Черновик / результат', payload.draft_text || payload.reply || payload.message || payload.text || payload.output || payload.result);
+  addValue('Черновик / результат', payload.draft_text || payload.reply || payload.message || payload.text || payload.output || preparedResult || payload.result);
   addValue('Что будет дальше', payload.next_step || payload.action || payload.delivery_state || payload.publish_state);
   if (Array.isArray(payload.reply_drafts) && payload.reply_drafts.length) {
     addValue('Черновики ответов', payload.reply_drafts);
@@ -3022,22 +3028,103 @@ const isTechnicalApprovalPayload = (value: unknown): boolean => {
   ].includes(key)) || keys.some((key) => key.endsWith('_json'));
 };
 
+const toPlainRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return Object.fromEntries(Object.entries(value));
+};
+
+const meaningfulResultKeys = [
+  'post_text',
+  'draft_text',
+  'message',
+  'text',
+  'body',
+  'subject',
+  'title',
+  'summary',
+  'result',
+  'items',
+  'facts',
+  'recommendations',
+  'reply_drafts',
+  'rows_to_review',
+];
+
+const extractBusinessResultPayload = (value: unknown): Record<string, unknown> | null => {
+  const record = toPlainRecord(value);
+  if (!record) {
+    return null;
+  }
+  const nestedResult = toPlainRecord(record.result);
+  if (nestedResult) {
+    return nestedResult;
+  }
+  const nestedArtifact = toPlainRecord(record.artifact);
+  if (nestedArtifact) {
+    const artifactResult = extractBusinessResultPayload(nestedArtifact);
+    if (artifactResult) {
+      return artifactResult;
+    }
+  }
+  const hasMeaningfulResult = meaningfulResultKeys.some((key) => record[key] !== undefined && record[key] !== null && record[key] !== '');
+  if (!hasMeaningfulResult || isTechnicalApprovalPayload(record)) {
+    return null;
+  }
+  return Object.fromEntries(
+    Object.entries(record).filter(([key, entryValue]) => (
+      meaningfulResultKeys.includes(key)
+      && entryValue !== ''
+      && entryValue !== null
+      && entryValue !== undefined
+    )),
+  );
+};
+
+const findPreparedResultPayload = (
+  activeRun: AgentRun | null,
+  pendingApproval?: AgentApproval | null,
+): Record<string, unknown> | null => {
+  const approvalPayload = pendingApproval?.payload_json || null;
+  const approvalResult = extractBusinessResultPayload(approvalPayload);
+  if (approvalResult) {
+    return approvalResult;
+  }
+  const artifacts = activeRun?.artifacts || [];
+  const preferredArtifact = artifacts.find((item) => item.artifact_type === 'agent_output_draft' || item.artifact_type === 'agent_final_result')
+    || artifacts.find((item) => extractBusinessResultPayload(item.payload_json));
+  return extractBusinessResultPayload(preferredArtifact?.payload_json || null);
+};
+
+const hasPreparedMessageText = (result: Record<string, unknown> | null): boolean => {
+  if (!result) {
+    return false;
+  }
+  return ['post_text', 'draft_text', 'message', 'text', 'body'].some((key) => {
+    const value = result[key];
+    return typeof value === 'string' && value.trim().length > 0;
+  });
+};
+
 const buildEmployeeTestResult = (
   activeRun: AgentRun | null,
   pendingApproval?: AgentApproval | null,
 ): EmployeeTestResult => {
   const approvalItems = pendingApproval ? getApprovalPreviewItems(pendingApproval) : [];
   const artifact = activeRun?.artifacts?.[0] || activeRun?.observability?.artifacts?.items?.[0] || null;
-  const previewSummary = activeRun?.observability?.preview_summary || {};
+  const resultPayload = findPreparedResultPayload(activeRun, pendingApproval);
   const artifactText = artifact?.payload_json && !isTechnicalApprovalPayload(artifact.payload_json)
     ? stringifyBusinessValue(artifact.payload_json)
     : '';
-  const summaryText = stringifyBusinessValue(previewSummary);
+  const summaryText = '';
   const approvalText = approvalItems.map((item) => `${item.label}: ${item.value}`).join('\n');
-  const output = approvalText || artifactText || summaryText || activeRun?.error_text || '';
+  const output = artifactText || approvalText || summaryText || activeRun?.error_text || '';
   const status = activeRun?.status || pendingApproval?.run_status || '';
   const summary = pendingApproval
-    ? approvalDecisionTitle(pendingApproval)
+    ? hasPreparedMessageText(resultPayload)
+      ? 'Проверьте подготовленный пост'
+      : approvalDecisionTitle(pendingApproval)
     : status === 'completed'
       ? 'Тест завершён. Сотрудник подготовил результат.'
       : status === 'failed'
@@ -3048,10 +3135,13 @@ const buildEmployeeTestResult = (
   return {
     summary,
     output: output || (pendingApproval
-      ? 'Результат подготовлен и ждёт вашего решения. Внешних действий ещё не было.'
+      ? resultPayload
+        ? 'Агент подготовил результат, но отдельный текст поста не найден. Проверьте поля результата ниже или уточните формат результата агента.'
+        : 'Агент дошёл до проверки, но не сохранил текст результата. Запустите тест ещё раз или уточните формат результата.'
       : 'Пока нет сохранённого результата. Запустите тест ещё раз.'),
+    resultPayload,
     previewItems: approvalItems,
-    hasResult: Boolean(activeRun || pendingApproval || output),
+    hasResult: Boolean(activeRun || pendingApproval || output || resultPayload),
   };
 };
 
@@ -8256,7 +8346,17 @@ const EmployeeTestResultPanel = ({
         </div>
       </div>
 
-      <div className="mt-5 rounded-xl bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-800 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] whitespace-pre-wrap">
+      {result.resultPayload ? (
+        <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Подготовленный результат</div>
+          <HumanResultView result={result.resultPayload} />
+        </div>
+      ) : null}
+
+      <div className={cn(
+        'rounded-xl px-4 py-4 text-sm leading-7 text-slate-700 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] whitespace-pre-wrap',
+        result.resultPayload ? 'mt-3 bg-white' : 'mt-5 bg-slate-50',
+      )}>
         {result.output}
       </div>
 
