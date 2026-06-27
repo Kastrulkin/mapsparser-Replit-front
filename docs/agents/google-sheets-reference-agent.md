@@ -19,6 +19,32 @@ The scenario intentionally does not require Telegram or WhatsApp delivery. The
 runtime must be able to read rows, prepare a result, stop before external action,
 and leave observable evidence in the run journal.
 
+## User-Facing Proof Flow
+
+In the agents interface this scenario should be presented as an AI employee, not
+as a workflow.
+
+Canonical story:
+
+```text
+ИИ-сотрудник читает таблицу поездок,
+выбирает поездку за 20 апреля,
+готовит результат,
+останавливается перед внешним действием.
+```
+
+The user-facing proof is:
+
+- the employee understood the task;
+- the employee read the trips table;
+- the employee selected the April 20 trip;
+- the employee prepared a result for review;
+- the employee stopped before any external send or publish;
+- the user sees one next action.
+
+Technical evidence still comes from the runtime contract below, but the
+interface must explain the proof in business language.
+
 ## Required Runtime Contract
 
 - Google OAuth credentials must include

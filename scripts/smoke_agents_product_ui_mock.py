@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render /dashboard/agents with mocked API data and verify the product cockpit."""
+"""Render /dashboard/agents with mocked API data and verify the employee-first agents UI."""
 
 import argparse
 import asyncio
@@ -821,17 +821,15 @@ async def run_smoke(url, screenshot):
         required = [
             "Мои агенты",
             "Создать агента",
-            "Сегодня",
-            "Требует внимания",
-            "Агенты",
-            "Что сделали агенты за последние 24 часа",
-            "Следующие решения и настройки",
-            "Ждёт решения",
-            "Почему этому можно доверять",
-            "Обзор",
-            "История",
-            "Сценарий",
-            "Настройки",
+            "Мои сотрудники",
+            "ИИ-сотрудник",
+            "Что делает",
+            "Работает ли",
+            "Последний раз",
+            "Что сейчас",
+            "Approve Result",
+            "History",
+            "Advanced Settings",
         ]
         body_lower = body.lower()
         missing = [item for item in required if item.lower() not in body_lower]
@@ -850,16 +848,22 @@ async def run_smoke(url, screenshot):
         ]
         leaked = [item for item in forbidden if item.lower() in body_lower]
 
-        connection_buttons = page.get_by_role("button", name="Подключения")
-        connection_count = await connection_buttons.count()
-        if connection_count:
-            await connection_buttons.nth(connection_count - 1).click()
+        primary_actions = page.get_by_role("button", name="Approve Result")
+        if await primary_actions.count() != 1:
+            missing.append("exactly one selected employee primary action")
+
+        history_button = page.get_by_role("button", name="History")
+        if await history_button.count() == 0:
+            missing.append("history button")
+        else:
+            await history_button.first.click()
             await page.wait_for_timeout(700)
-            body_after_connections = await page.locator("body").inner_text(timeout=10000)
-            if "Что-то пошло не так" in body_after_connections:
-                leaked.append("error boundary after connections click")
-            if "Подключения агента" not in body_after_connections:
-                missing.append("Подключения агента")
+            history_body = await page.locator("body").inner_text(timeout=10000)
+            history_body_lower = history_body.lower()
+            if "что сотрудник делал раньше" not in history_body_lower and "test result" not in history_body_lower:
+                missing.append("employee history or result story")
+            if "Execution" in history_body or "Planner" in history_body or "Provider" in history_body:
+                leaked.append("technical terms in history")
 
         create_buttons = page.get_by_role("button", name="Создать агента")
         if await create_buttons.count() == 0:
@@ -898,115 +902,17 @@ async def run_smoke(url, screenshot):
                 await draft_button.click()
                 await page.wait_for_timeout(1000)
                 created_body = await page.locator("body").inner_text(timeout=10000)
+                created_body_lower = created_body.lower()
                 if "Google Sheets → Telegram" not in created_body:
                     missing.append("created Google Sheets Telegram agent")
-                if "Агент создан" not in created_body:
-                    missing.append("post-create success banner")
-                if "Подключения" not in created_body and "Доступы" not in created_body:
-                    missing.append("post-create connection step")
-
-            await page.wait_for_timeout(500)
-            create_buttons = page.get_by_role("button", name="Создать агента")
-            if await create_buttons.count() == 0:
-                missing.append("second button: Создать агента")
-            else:
-                await create_buttons.first.click()
-                dialog = page.get_by_role("dialog", name="Создать агента")
-                await dialog.wait_for(state="visible", timeout=10000)
-                prompt_box = dialog.get_by_placeholder(
-                    "Например: мне нужен агент, который проверяет договоры, находит риски и готовит краткий отчёт"
-                )
-                await prompt_box.fill(
-                    "Через browser use открой сайт конкурента https://example.com, проверь изменения цен и акций "
-                    "и подготовь сообщение владельцу в Telegram."
-                )
-                await dialog.get_by_role("button", name="Начать диалог").click()
-                await page.wait_for_timeout(1000)
-                dialog_body = await dialog.inner_text(timeout=10000)
-                if "Создать агента" not in dialog_body:
-                    missing.append("browser-use draft-ready step")
-                draft_button = dialog.get_by_role("button", name="Создать агента")
-                if not await draft_button.is_enabled():
-                    missing.append("enabled browser-use draft create button")
-                else:
-                    await draft_button.click()
-                    await page.wait_for_timeout(1000)
-                    created_body = await page.locator("body").inner_text(timeout=10000)
-                    if "Мониторинг сайта конкурента" not in created_body:
-                        missing.append("created browser-use Telegram agent")
-                    if "Агент создан" not in created_body:
-                        missing.append("browser-use post-create success banner")
-                    if "Browser use" not in created_body:
-                        missing.append("browser-use connection panel")
-                    browser_url_box = page.get_by_placeholder("https://example.com")
-                    if await browser_url_box.count() == 0:
-                        missing.append("browser-use target URL field")
-                    else:
-                        await browser_url_box.first.fill("https://example.com")
-                        browser_save_button = page.get_by_role("button", name="Сохранить Browser use для выбранного шага")
-                        if await browser_save_button.count() == 0:
-                            browser_save_button = page.get_by_role("button", name="Сохранить Browser use")
-                        if await browser_save_button.count() == 0:
-                            missing.append("browser-use save button")
-                        else:
-                            await browser_save_button.first.click()
-                            await page.wait_for_timeout(1000)
-                            connected_body = await page.locator("body").inner_text(timeout=10000)
-                            if "Browser use готово" not in connected_body and "1/2" not in connected_body:
-                                missing.append("browser-use connected state")
-
-            await page.wait_for_timeout(500)
-            create_buttons = page.get_by_role("button", name="Создать агента")
-            if await create_buttons.count() == 0:
-                missing.append("third button: Создать агента")
-            else:
-                await create_buttons.first.click()
-                dialog = page.get_by_role("dialog", name="Создать агента")
-                await dialog.wait_for(state="visible", timeout=10000)
-                prompt_box = dialog.get_by_placeholder(
-                    "Например: мне нужен агент, который проверяет договоры, находит риски и готовит краткий отчёт"
-                )
-                await prompt_box.fill(
-                    "Каждую неделю собирай вопросы клиентов из WhatsApp, группируй их по темам и предлагай новые пункты FAQ."
-                )
-                await dialog.get_by_role("button", name="Начать диалог").click()
-                await page.wait_for_timeout(1000)
-                dialog_body = await dialog.inner_text(timeout=10000)
-                if "Создать агента" not in dialog_body:
-                    missing.append("whatsapp draft-ready step")
-                draft_button = dialog.get_by_role("button", name="Создать агента")
-                if not await draft_button.is_enabled():
-                    missing.append("enabled WhatsApp draft create button")
-                else:
-                    await draft_button.click()
-                    await page.wait_for_timeout(1000)
-                    created_body = await page.locator("body").inner_text(timeout=10000)
-                    if "Вопросы WhatsApp → FAQ" not in created_body:
-                        missing.append("created WhatsApp FAQ agent")
-                    if "WhatsApp" not in created_body:
-                        missing.append("WhatsApp connection panel")
-                    whatsapp_save_button = page.get_by_role("button", name="Сохранить WhatsApp для выбранного шага")
-                    if await whatsapp_save_button.count() == 0:
-                        whatsapp_save_button = page.get_by_role("button", name="Подключить WhatsApp")
-                    if await whatsapp_save_button.count() == 0:
-                        missing.append("WhatsApp save button")
-                    else:
-                        await whatsapp_save_button.first.click()
-                        await page.wait_for_timeout(1000)
-                        connected_body = await page.locator("body").inner_text(timeout=10000)
-                        if "Все обязательные подключения готовы" not in connected_body and "WhatsApp готово" not in connected_body:
-                            missing.append("WhatsApp connected state")
-                        scenario_button = page.get_by_role("button", name="Сценарий")
-                        if await scenario_button.count() == 0:
-                            missing.append("scenario tab button")
-                        else:
-                            await scenario_button.first.click()
-                            await page.wait_for_timeout(700)
-                            scenario_body = await page.locator("body").inner_text(timeout=10000)
-                            if "Что будет делать агент" not in scenario_body:
-                                missing.append("scenario human pipeline")
-                            if "Показать техническое представление" not in scenario_body:
-                                missing.append("secondary technical view")
+                if "что делает" not in created_body_lower or "что сейчас" not in created_body_lower:
+                    missing.append("created agent opened overview")
+                if "Агент создан" in created_body:
+                    leaked.append("old post-create banner still visible")
+                run_test_buttons = page.get_by_role("button", name="Run Test")
+                connect_buttons = page.get_by_role("button", name="Connect Service")
+                if await run_test_buttons.count() + await connect_buttons.count() != 1:
+                    missing.append("one created-agent next action")
 
         if console_errors:
             leaked.append(f"console errors: {console_errors[:2]}")
@@ -1024,7 +930,7 @@ async def run_smoke(url, screenshot):
                 print("Leaked:", ", ".join(leaked))
             return 1
 
-        print("OK: agents product UI mock cockpit rendered")
+        print("OK: agents employee-first UI mock rendered")
         if screenshot:
             print(f"Screenshot: {screenshot}")
         return 0

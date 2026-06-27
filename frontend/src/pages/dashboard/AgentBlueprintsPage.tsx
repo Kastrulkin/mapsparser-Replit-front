@@ -834,6 +834,29 @@ type AgentBusinessStatus = {
   nextRun: string;
 };
 
+type EmployeeStatus = {
+  label: 'Работает' | 'Нужны данные' | 'Ждёт решения' | 'Нужно проверить' | 'Ошибка' | 'Черновик';
+  tone: 'emerald' | 'amber' | 'rose' | 'slate';
+  summary: string;
+};
+
+type EmployeeNextActionKind = 'approve' | 'connect' | 'run_test' | 'enable' | 'open_result' | 'view_history';
+
+type EmployeeNextAction = {
+  kind: EmployeeNextActionKind;
+  label: string;
+  description: string;
+  targetMode: AgentWorkspaceMode;
+  versionId?: string;
+};
+
+type EmployeeTestResult = {
+  summary: string;
+  output: string;
+  previewItems: Array<{ label: string; value: string }>;
+  hasResult: boolean;
+};
+
 type AgentScenarioStep = {
   key: string;
   title: string;
@@ -2631,6 +2654,262 @@ const buildAgentBusinessStatus = (
   };
 };
 
+const buildEmployeeDescription = (
+  blueprint: AgentBlueprint,
+  details?: AgentBlueprintDetails | null,
+) => {
+  const preview = getBlueprintBuilderPreview(details?.blueprint || blueprint);
+  return preview?.understood_task
+    || blueprint.description
+    || blueprint.active_goal
+    || blueprint.latest_goal
+    || 'Выполняет поручение, которое вы описали при создании.';
+};
+
+const buildEmployeeStatus = (
+  blueprint: AgentBlueprint,
+  details?: AgentBlueprintDetails | null,
+  pendingApproval?: AgentApproval | null,
+): EmployeeStatus => {
+  const gate = details?.activation_gate;
+  const missingConnections = Number(gate?.preflight?.missing_count || 0);
+  const hasActiveVersion = Boolean(details?.active_version_id || blueprint.active_version_id || blueprint.active_version_number);
+  const hasPendingApproval = Boolean(pendingApproval || blueprint.pending_approvals_count || blueprint.last_run_status === 'waiting_approval');
+  if (hasPendingApproval) {
+    return {
+      label: 'Ждёт решения',
+      tone: 'amber',
+      summary: 'Сотрудник подготовил результат и остановился, чтобы вы его проверили.',
+    };
+  }
+  if (blueprint.last_run_status === 'failed' || blueprint.status === 'error') {
+    return {
+      label: 'Ошибка',
+      tone: 'rose',
+      summary: 'Последняя работа остановилась. Нужна проверка результата.',
+    };
+  }
+  if (missingConnections > 0) {
+    return {
+      label: 'Нужны данные',
+      tone: 'amber',
+      summary: `${missingConnections} ${missingConnections === 1 ? 'подключение нужно завершить' : 'подключения нужно завершить'}.`,
+    };
+  }
+  if (!hasActiveVersion || blueprint.status === 'draft') {
+    return {
+      label: 'Черновик',
+      tone: 'slate',
+      summary: 'Сотрудник создан, но ещё не включён в работу.',
+    };
+  }
+  if (gate?.preview_run_status?.ready === false) {
+    return {
+      label: 'Нужно проверить',
+      tone: 'amber',
+      summary: 'Перед включением нужен безопасный тест без внешних действий.',
+    };
+  }
+  return {
+    label: 'Работает',
+    tone: 'emerald',
+    summary: 'Сотрудник готов работать по опубликованному сценарию.',
+  };
+};
+
+const buildEmployeeLastActivity = (
+  blueprint: AgentBlueprint,
+  details?: AgentBlueprintDetails | null,
+) => {
+  const latestRun = details?.runs?.[0];
+  if (latestRun) {
+    const time = formatShortDate(latestRun.completed_at || latestRun.started_at);
+    if (latestRun.status === 'completed') {
+      return `Завершил работу${time ? ` · ${time}` : ''}`;
+    }
+    if (latestRun.status === 'waiting_approval') {
+      return `Подготовил результат и ждёт решения${time ? ` · ${time}` : ''}`;
+    }
+    if (latestRun.status === 'failed') {
+      return `Остановился с ошибкой${time ? ` · ${time}` : ''}`;
+    }
+    return `${humanizeStatus(latestRun.status)}${time ? ` · ${time}` : ''}`;
+  }
+  return formatLastRun(blueprint);
+};
+
+const buildEmployeeNextAction = ({
+  blueprint,
+  details,
+  pendingApproval,
+}: {
+  blueprint: AgentBlueprint;
+  details?: AgentBlueprintDetails | null;
+  pendingApproval?: AgentApproval | null;
+}): EmployeeNextAction => {
+  const gate = details?.activation_gate;
+  const missingConnections = Number(gate?.preflight?.missing_count || 0);
+  const activationVersionId = gate?.active_version_id || details?.active_version_id || blueprint.active_version_id || '';
+  const hasActiveVersion = Boolean(activationVersionId || blueprint.active_version_number);
+  if (pendingApproval || Number(blueprint.pending_approvals_count || 0) > 0 || blueprint.last_run_status === 'waiting_approval') {
+    return {
+      kind: 'approve',
+      label: 'Approve Result',
+      description: 'Проверьте подготовленный результат и решите, можно ли использовать его дальше.',
+      targetMode: 'results',
+    };
+  }
+  if (missingConnections > 0) {
+    return {
+      kind: 'connect',
+      label: 'Connect Service',
+      description: 'Завершите одно недостающее подключение, чтобы сотрудник получил нужные данные.',
+      targetMode: 'connections',
+    };
+  }
+  if (blueprint.last_run_status === 'failed' || blueprint.status === 'error') {
+    return {
+      kind: 'open_result',
+      label: 'Open Result',
+      description: 'Посмотрите последний бизнес-результат и причину остановки.',
+      targetMode: 'results',
+    };
+  }
+  if (!hasActiveVersion || blueprint.status === 'draft') {
+    return {
+      kind: 'run_test',
+      label: 'Run Test',
+      description: 'Запустите безопасную проверку без публикаций и внешних отправок.',
+      targetMode: 'results',
+    };
+  }
+  if (gate?.can_activate === true && activationVersionId) {
+    return {
+      kind: 'enable',
+      label: 'Enable Agent',
+      description: 'Включите сотрудника после успешной проверки результата.',
+      targetMode: 'overview',
+      versionId: activationVersionId,
+    };
+  }
+  if (gate?.preview_run_status?.ready === false) {
+    return {
+      kind: 'run_test',
+      label: 'Run Test',
+      description: 'Проверьте работу сотрудника на тестовом запуске.',
+      targetMode: 'results',
+    };
+  }
+  return {
+    kind: 'view_history',
+    label: 'View Last Result',
+    description: 'Сотрудник работает. Можно открыть последний сохранённый результат.',
+    targetMode: 'results',
+  };
+};
+
+const stringifyBusinessValue = (value: unknown): string => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 4)
+      .map((item) => stringifyBusinessValue(item))
+      .filter(Boolean)
+      .join('; ');
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value).slice(0, 6);
+    return entries
+      .map(([key, entryValue]) => {
+        const text = stringifyBusinessValue(entryValue);
+        return text ? `${humanizeMeta(key)}: ${text}` : '';
+      })
+      .filter(Boolean)
+      .join('; ');
+  }
+  return '';
+};
+
+const buildEmployeeTestResult = (
+  activeRun: AgentRun | null,
+  pendingApproval?: AgentApproval | null,
+): EmployeeTestResult => {
+  const approvalItems = pendingApproval ? getApprovalPreviewItems(pendingApproval) : [];
+  const artifact = activeRun?.artifacts?.[0] || activeRun?.observability?.artifacts?.items?.[0] || null;
+  const previewSummary = activeRun?.observability?.preview_summary || {};
+  const artifactText = artifact?.payload_json ? stringifyBusinessValue(artifact.payload_json) : '';
+  const summaryText = stringifyBusinessValue(previewSummary);
+  const approvalText = approvalItems.map((item) => `${item.label}: ${item.value}`).join('\n');
+  const output = approvalText || artifactText || summaryText || activeRun?.error_text || '';
+  const status = activeRun?.status || pendingApproval?.run_status || '';
+  const summary = pendingApproval
+    ? approvalDecisionTitle(pendingApproval)
+    : status === 'completed'
+      ? 'Тест завершён. Сотрудник подготовил результат.'
+      : status === 'failed'
+        ? 'Тест остановился. Результат требует проверки.'
+        : activeRun
+          ? 'Тест выполнен. Ниже бизнес-результат.'
+          : 'После теста здесь появится подготовленный результат.';
+  return {
+    summary,
+    output: output || 'Пока нет сохранённого результата. Запустите тест ещё раз.',
+    previewItems: approvalItems,
+    hasResult: Boolean(activeRun || pendingApproval || output),
+  };
+};
+
+const buildEmployeeHistoryStory = (
+  details: AgentBlueprintDetails | null,
+  activeRun: AgentRun | null,
+) => buildBusinessHistoryEvents(details, activeRun).map((event) => ({
+  ...event,
+  title: event.title === 'Запуск завершён' ? 'Выполнил задачу' : event.title,
+  description: userFacingAgentTechText(event.description),
+}));
+
+const buildEmployeeAttentionItems = (
+  blueprint: AgentBlueprint,
+  details?: AgentBlueprintDetails | null,
+  pendingApproval?: AgentApproval | null,
+) => {
+  const items: Array<{ key: string; title: string; description: string; tone: 'amber' | 'rose' }> = [];
+  const missingConnections = Number(details?.activation_gate?.preflight?.missing_count || 0);
+  if (pendingApproval || Number(blueprint.pending_approvals_count || 0) > 0) {
+    items.push({
+      key: 'approval',
+      title: 'Нужно ваше решение',
+      description: pendingApproval ? explainApproval(pendingApproval) : 'Сотрудник ждёт подтверждения результата.',
+      tone: 'amber',
+    });
+  }
+  if (missingConnections > 0) {
+    items.push({
+      key: 'connections',
+      title: 'Не хватает подключения',
+      description: `${missingConnections} ${missingConnections === 1 ? 'сервис нужно подключить' : 'сервиса нужно подключить'}, чтобы сотрудник мог работать.`,
+      tone: 'amber',
+    });
+  }
+  if (blueprint.last_run_status === 'failed' || blueprint.status === 'error') {
+    items.push({
+      key: 'failed',
+      title: 'Последняя работа остановилась',
+      description: 'Откройте результат и повторите тест после исправления.',
+      tone: 'rose',
+    });
+  }
+  return items;
+};
+
 const buildAttentionInbox = ({
   blueprints,
   selectedBlueprint,
@@ -3452,6 +3731,7 @@ export const AgentBlueprintsPage = () => {
         await loadSourceCatalog(blueprint.id);
         await loadAgentIntegrations(blueprint.id);
         setRecentCreatedAgentName(String(blueprint.name || 'Новый агент'));
+        setWorkspaceMode('overview');
       }
     } catch (requestError) {
       console.error(requestError);
@@ -3564,6 +3844,7 @@ export const AgentBlueprintsPage = () => {
         } else if (handoff?.next_binding_key) {
           setSelectedConnectionBindingKey(handoff.next_binding_key);
         }
+        setWorkspaceMode('overview');
       }
       setDialogBuilderInput('');
       setDialogBuilderReply('');
@@ -3573,12 +3854,7 @@ export const AgentBlueprintsPage = () => {
       setAcceptedBuilderCompilerPlan(false);
       setAcceptedBuilderProviderRoutes(false);
       setCreateWizardOpen(false);
-      const handoffMode = handoff?.workspace_mode || '';
-      setWorkspaceMode(
-        handoffMode === 'connections' || handoffMode === 'settings' || handoffMode === 'run'
-          ? handoffMode
-          : (response.data?.next_step === 'connect_required_integrations' ? 'connections' : 'run'),
-      );
+      setWorkspaceMode('overview');
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось создать агента из диалога.'));
@@ -3637,16 +3913,13 @@ export const AgentBlueprintsPage = () => {
         setRecentCreatedAgentName(String(blueprint.name || 'Новый агент'));
         setRecentPostCreateHandoff(handoff);
         if (handoff?.workspace_mode === 'connections') {
-          setWorkspaceMode('connections');
           if (handoff.next_binding_key) {
             setSelectedConnectionBindingKey(handoff.next_binding_key);
           }
         } else if (handoff?.workspace_mode === 'run') {
-          setWorkspaceMode('run');
           setSelectedConnectionBindingKey('');
-        } else {
-          setWorkspaceMode('settings');
         }
+        setWorkspaceMode('overview');
       }
       setAgentPrompt('');
       setBuilderSourceName('');
@@ -3700,7 +3973,7 @@ export const AgentBlueprintsPage = () => {
         if (nextBindingKey) {
           setSelectedConnectionBindingKey(nextBindingKey);
         }
-        setWorkspaceMode('connections');
+        setWorkspaceMode('overview');
         setError(formatPreflightBlock(preflight) || 'Перед запуском нужно подключить источники агента.');
         await loadBlueprintDetails(targetBlueprint.id);
         return;
@@ -4334,6 +4607,30 @@ export const AgentBlueprintsPage = () => {
     }),
     [blueprintDetails, blueprints, selectedBlueprint, selectedPendingApproval],
   );
+  const selectedEmployeeAction = useMemo(
+    () => selectedBlueprint
+      ? buildEmployeeNextAction({
+        blueprint: selectedBlueprint,
+        details: blueprintDetails,
+        pendingApproval: selectedPendingApproval,
+      })
+      : null,
+    [blueprintDetails, selectedBlueprint, selectedPendingApproval],
+  );
+  const runEmployeePrimaryAction = () => {
+    if (!selectedBlueprint || !selectedEmployeeAction) {
+      return;
+    }
+    if (selectedEmployeeAction.kind === 'run_test') {
+      void startRun(selectedBlueprint);
+      return;
+    }
+    if (selectedEmployeeAction.kind === 'enable' && selectedEmployeeAction.versionId) {
+      void activateVersion(selectedEmployeeAction.versionId, 'activate');
+      return;
+    }
+    setWorkspaceMode(selectedEmployeeAction.targetMode);
+  };
 
   return (
     <div className="space-y-5">
@@ -4498,7 +4795,7 @@ export const AgentBlueprintsPage = () => {
         />
       ) : null}
 
-      {recentCreatedAgentName ? (
+      {false && recentCreatedAgentName ? (
         <div className="space-y-3">
           <DashboardActionPanel
             title={userFacingAgentTechText(recentPostCreateHandoff?.title || 'Агент создан')}
@@ -4565,7 +4862,7 @@ export const AgentBlueprintsPage = () => {
         </div>
       ) : null}
 
-      {currentBusinessId ? (
+      {false && currentBusinessId ? (
         <AgentsTodaySection
           summary={todaySummary}
           loading={loading}
@@ -4573,7 +4870,7 @@ export const AgentBlueprintsPage = () => {
         />
       ) : null}
 
-      {currentBusinessId ? (
+      {false && currentBusinessId ? (
         <AgentsAttentionInbox
           items={attentionItems}
           loading={loading}
@@ -4588,6 +4885,168 @@ export const AgentBlueprintsPage = () => {
       ) : null}
 
       {currentBusinessId ? (
+        <div className="grid gap-5 xl:grid-cols-[minmax(18rem,0.82fr)_minmax(0,1.45fr)]">
+          <EmployeeAgentsList
+            blueprints={blueprints}
+            detailsById={agentDetailsById}
+            selectedBlueprintId={selectedBlueprint?.id || null}
+            loading={loading}
+            onOpen={(blueprint) => {
+              setSelectedBlueprintId(blueprint.id);
+              setActiveRun(null);
+              setWorkspaceMode('overview');
+              setRecentCreatedAgentName('');
+              setRecentPostCreateHandoff(null);
+            }}
+          />
+
+          <div className="min-w-0 space-y-4">
+            {selectedBlueprint && selectedEmployeeAction ? (
+              workspaceMode === 'overview' || workspaceMode === 'run' ? (
+                <EmployeeAgentOverviewPanel
+                  blueprint={selectedBlueprint}
+                  details={blueprintDetails}
+                  pendingApproval={selectedPendingApproval}
+                  action={selectedEmployeeAction}
+                  actionLoading={actionLoading}
+                  onPrimaryAction={runEmployeePrimaryAction}
+                  onOpenHistory={() => setWorkspaceMode('results')}
+                  onOpenAdvanced={() => setWorkspaceMode('settings')}
+                />
+              ) : workspaceMode === 'results' ? (
+                activeRun || selectedPendingApproval ? (
+                  <EmployeeTestResultPanel
+                    activeRun={activeRun}
+                    pendingApproval={selectedPendingApproval}
+                    actionLoading={actionLoading}
+                    onApprove={() => decideApproval('approve')}
+                    onReject={() => decideApproval('reject')}
+                    onRunAgain={() => startRun(selectedBlueprint)}
+                  />
+                ) : (
+                  <EmployeeHistoryPanel
+                    details={blueprintDetails}
+                    activeRun={activeRun}
+                  />
+                )
+              ) : (
+                <AgentDetailPanel
+                  mode={workspaceMode}
+                  blueprint={selectedBlueprint}
+                  blueprintDetails={blueprintDetails}
+                  activeRun={activeRun}
+                  availablePersonaAgents={availablePersonaAgents}
+                  pendingApproval={selectedPendingApproval}
+                  queuedButNotDispatched={queuedButNotDispatched}
+                  agentReview={agentReview}
+                  feedbackText={feedbackText}
+                  feedbackTrigger={feedbackTrigger}
+                  feedbackVersionNotice={feedbackVersionNotice}
+                  actionLoading={actionLoading}
+                  setupDataSources={setupDataSources}
+                  setupExtractionRules={setupExtractionRules}
+                  setupProcessingRules={setupProcessingRules}
+                  setupOutputFormat={setupOutputFormat}
+                  setupManualControl={setupManualControl}
+                  sourceName={sourceName}
+                  sourceText={sourceText}
+                  internalSource={internalSource}
+                  sourceCatalog={sourceCatalog}
+                  agentIntegrations={agentIntegrations}
+                  availableAgentIntegrations={availableAgentIntegrations}
+                  agentIntegrationCatalog={agentIntegrationCatalog}
+                  agentExternalAuthOptions={agentExternalAuthOptions}
+                  agentBindingStatus={agentBindingStatus}
+                  agentConnectionPlan={agentConnectionPlan}
+                  selectedConnectionBindingKey={selectedConnectionBindingKey}
+                  sheetSpreadsheetId={sheetSpreadsheetId}
+                  sheetName={sheetName}
+                  sheetAuthRef={sheetAuthRef}
+                  sheetDailyCap={sheetDailyCap}
+                  browserTargetUrls={browserTargetUrls}
+                  browserDailyCap={browserDailyCap}
+                  telegramBotMode={telegramBotMode}
+                  telegramDailyCap={telegramDailyCap}
+                  whatsappChannelMode={whatsappChannelMode}
+                  whatsappDailyCap={whatsappDailyCap}
+                  matonAuthRef={matonAuthRef}
+                  matonChannel={matonChannel}
+                  matonDailyCap={matonDailyCap}
+                  processRowValues={processRowValues}
+                  processPreviewMessage={processPreviewMessage}
+                  runSource={runSource}
+                  runCity={runCity}
+                  runCategory={runCategory}
+                  runLimit={runLimit}
+                  onModeChange={setWorkspaceMode}
+                  onStartRun={() => startRun(selectedBlueprint)}
+                  onStartVersionRun={(versionId) => startRun(selectedBlueprint, versionId)}
+                  onActivateVersion={(versionId) => activateVersion(versionId, 'activate')}
+                  onRollbackVersion={(versionId) => activateVersion(versionId, 'rollback')}
+                  onApprove={() => decideApproval('approve')}
+                  onReject={() => decideApproval('reject')}
+                  onDeleteAgent={deleteSelectedAgent}
+                  onFeedbackTextChange={setFeedbackText}
+                  onFeedbackTriggerChange={setFeedbackTrigger}
+                  onSubmitFeedback={sendRunFeedback}
+                  onActivateFeedbackVersion={(versionId) => activateVersion(versionId, 'activate')}
+                  onRollbackFeedbackVersion={(versionId) => activateVersion(versionId, 'rollback')}
+                  onSetupDataSourcesChange={setSetupDataSources}
+                  onSetupExtractionRulesChange={setSetupExtractionRules}
+                  onSetupProcessingRulesChange={setSetupProcessingRules}
+                  onSetupOutputFormatChange={setSetupOutputFormat}
+                  onSetupManualControlChange={setSetupManualControl}
+                  onSourceNameChange={setSourceName}
+                  onSourceTextChange={setSourceText}
+                  onInternalSourceChange={setInternalSource}
+                  onSaveSetup={saveAgentSetup}
+                  onAddTextSource={addTextSource}
+                  onAddInternalSource={addInternalSource}
+                  onAddCatalogSource={addInternalSourceByKey}
+                  onAddFileSource={addFileSource}
+                  onSheetSpreadsheetIdChange={setSheetSpreadsheetId}
+                  onSheetNameChange={setSheetName}
+                  onSheetAuthRefChange={setSheetAuthRef}
+                  onSheetDailyCapChange={setSheetDailyCap}
+                  onBrowserTargetUrlsChange={setBrowserTargetUrls}
+                  onBrowserDailyCapChange={setBrowserDailyCap}
+                  onTelegramBotModeChange={setTelegramBotMode}
+                  onTelegramDailyCapChange={setTelegramDailyCap}
+                  onWhatsappChannelModeChange={setWhatsappChannelMode}
+                  onWhatsappDailyCapChange={setWhatsappDailyCap}
+                  onMatonAuthRefChange={setMatonAuthRef}
+                  onMatonChannelChange={setMatonChannel}
+                  onMatonDailyCapChange={setMatonDailyCap}
+                  onProcessRowValuesChange={setProcessRowValues}
+                  onProcessPreviewMessageChange={setProcessPreviewMessage}
+                  onSaveSheetIntegration={saveSheetIntegration}
+                  onSaveBrowserUseIntegration={saveBrowserUseIntegration}
+                  onSaveTelegramIntegration={saveTelegramIntegration}
+                  onSaveWhatsappIntegration={saveWhatsappIntegration}
+                  onSaveMatonIntegration={saveMatonIntegration}
+                  onChooseProviderRoute={chooseProviderRoute}
+                  onAttachExistingIntegration={attachExistingAgentIntegration}
+                  onSelectConnectionBinding={setSelectedConnectionBindingKey}
+                  onSaveCustomProcess={saveCustomProcess}
+                  onRunCustomProcessPreview={runCustomProcessPreview}
+                  onRunSourceChange={setRunSource}
+                  onRunCityChange={setRunCity}
+                  onRunCategoryChange={setRunCategory}
+                  onRunLimitChange={setRunLimit}
+                  showAdvancedTools={showAdvancedAgentTools}
+                />
+              )
+            ) : (
+              <DashboardEmptyState
+                title="Создайте первого сотрудника"
+                description="После создания LocalOS сразу откроет карточку и покажет один следующий шаг."
+              />
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {false && currentBusinessId ? (
         <div className="space-y-5">
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
@@ -7349,6 +7808,345 @@ const BlueprintAgentCard = ({
       </Button>
     </div>
   </div>
+  );
+};
+
+const employeeToneClass = {
+  emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  amber: 'bg-amber-50 text-amber-800 ring-amber-200',
+  rose: 'bg-rose-50 text-rose-700 ring-rose-200',
+  slate: 'bg-slate-100 text-slate-700 ring-slate-200',
+};
+
+const EmployeeStatusPill = ({ status }: { status: EmployeeStatus }) => (
+  <span className={cn('inline-flex min-h-8 items-center rounded-full px-3 py-1 text-xs font-semibold ring-1', employeeToneClass[status.tone])}>
+    {status.label}
+  </span>
+);
+
+const EmployeeAgentsList = ({
+  blueprints,
+  detailsById,
+  selectedBlueprintId,
+  loading,
+  onOpen,
+}: {
+  blueprints: AgentBlueprint[];
+  detailsById: Record<string, AgentBlueprintDetails>;
+  selectedBlueprintId: string | null;
+  loading: boolean;
+  onOpen: (blueprint: AgentBlueprint) => void;
+}) => (
+  <section className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 className="text-lg font-semibold leading-7 text-slate-950 [text-wrap:balance]">Мои сотрудники</h2>
+        <p className="mt-1 text-sm leading-6 text-slate-600 [text-wrap:pretty]">
+          Каждый сотрудник ведёт одну понятную работу для бизнеса.
+        </p>
+      </div>
+      <span className="inline-flex min-h-8 items-center rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+        {blueprints.length} {blueprints.length === 1 ? 'сотрудник' : 'сотрудников'}
+      </span>
+    </div>
+
+    <div className="mt-4 grid gap-3">
+      {loading ? (
+        <div className="flex min-h-24 items-center gap-2 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500 ring-1 ring-slate-100">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Загружаем сотрудников...
+        </div>
+      ) : blueprints.length === 0 ? (
+        <div className="rounded-xl bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-600 ring-1 ring-slate-100">
+          Сотрудников пока нет. Создайте первого, и LocalOS сразу откроет его карточку с понятным следующим шагом.
+        </div>
+      ) : (
+        blueprints.map((blueprint) => {
+          const details = detailsById[blueprint.id];
+          const status = buildEmployeeStatus(blueprint, details);
+          const selected = selectedBlueprintId === blueprint.id;
+          return (
+            <div
+              key={blueprint.id}
+              className={cn(
+                'grid gap-3 rounded-xl px-4 py-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08)] transition-shadow md:grid-cols-[minmax(0,1fr)_auto] md:items-center',
+                selected ? 'bg-slate-950 text-white shadow-[0_0_0_1px_rgba(15,23,42,1)]' : 'bg-white hover:shadow-[0_12px_28px_rgba(15,23,42,0.08),0_0_0_1px_rgba(15,23,42,0.12)]',
+              )}
+            >
+              <button type="button" className="min-w-0 text-left" onClick={() => onOpen(blueprint)}>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className={cn('truncate text-base font-semibold', selected ? 'text-white' : 'text-slate-950')}>
+                    {blueprint.name}
+                  </div>
+                  <EmployeeStatusPill status={status} />
+                </div>
+                <div className={cn('mt-2 line-clamp-2 text-sm leading-6', selected ? 'text-slate-300' : 'text-slate-600')}>
+                  {buildEmployeeDescription(blueprint, details)}
+                </div>
+                <div className={cn('mt-3 text-xs font-medium', selected ? 'text-slate-400' : 'text-slate-500')}>
+                  Последний раз: {buildEmployeeLastActivity(blueprint, details)}
+                </div>
+              </button>
+              <Button
+                type="button"
+                variant={selected ? 'secondary' : 'outline'}
+                className="min-h-10 active:scale-[0.96] transition-transform"
+                onClick={() => onOpen(blueprint)}
+              >
+                Open
+              </Button>
+            </div>
+          );
+        })
+      )}
+    </div>
+  </section>
+);
+
+const EmployeeAnswerCard = ({
+  label,
+  value,
+  tone = 'slate',
+}: {
+  label: string;
+  value: string;
+  tone?: 'slate' | 'emerald' | 'amber' | 'rose';
+}) => (
+  <div className={cn(
+    'rounded-xl px-4 py-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]',
+    tone === 'emerald' ? 'bg-emerald-50 text-emerald-950' : '',
+    tone === 'amber' ? 'bg-amber-50 text-amber-950' : '',
+    tone === 'rose' ? 'bg-rose-50 text-rose-950' : '',
+    tone === 'slate' ? 'bg-slate-50 text-slate-950' : '',
+  )}>
+    <div className="text-xs font-semibold uppercase tracking-wide opacity-60">{label}</div>
+    <div className="mt-2 text-sm font-medium leading-6 [text-wrap:pretty]">{value}</div>
+  </div>
+);
+
+const EmployeeRunningPanel = ({
+  blueprint,
+  details,
+  pendingApproval,
+}: {
+  blueprint: AgentBlueprint;
+  details: AgentBlueprintDetails | null;
+  pendingApproval: AgentApproval | null;
+}) => {
+  const attentionItems = buildEmployeeAttentionItems(blueprint, details, pendingApproval);
+  const healthy = attentionItems.length === 0;
+  return (
+    <div className={cn(
+      'rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]',
+      healthy ? 'lg:max-w-3xl' : '',
+    )}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+            <CheckCircle2 className="h-4 w-4" />
+            Working
+          </div>
+          <h3 className="mt-2 text-xl font-semibold leading-7 text-slate-950 [text-wrap:balance]">{blueprint.name}</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-600 [text-wrap:pretty]">
+            {healthy ? 'Сотрудник работает. Когда всё спокойно, здесь остаётся только короткий статус.' : 'Есть вопросы, которые требуют вашего внимания.'}
+          </p>
+        </div>
+      </div>
+
+      <div className={cn('mt-5 grid gap-3', healthy ? 'sm:grid-cols-2' : 'lg:grid-cols-3')}>
+        <EmployeeAnswerCard label="Следующий запуск" value={blueprint.active_version_number ? 'По расписанию сотрудника' : 'После включения'} tone="emerald" />
+        <EmployeeAnswerCard label="Последняя задача" value={buildEmployeeLastActivity(blueprint, details || undefined)} />
+        {!healthy ? (
+          <EmployeeAnswerCard label="Требует внимания" value={`${attentionItems.length} ${attentionItems.length === 1 ? 'задача' : 'задачи'}`} tone="amber" />
+        ) : null}
+      </div>
+
+      {!healthy ? (
+        <div className="mt-4 grid gap-2">
+          {attentionItems.map((item) => (
+            <div key={item.key} className={cn('rounded-xl px-3 py-3 text-sm leading-6 ring-1', item.tone === 'rose' ? 'bg-rose-50 text-rose-950 ring-rose-100' : 'bg-amber-50 text-amber-950 ring-amber-100')}>
+              <div className="font-semibold text-slate-950">{item.title}</div>
+              <div className="mt-1">{item.description}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const EmployeeTestResultPanel = ({
+  activeRun,
+  pendingApproval,
+  actionLoading,
+  onApprove,
+  onReject,
+  onRunAgain,
+}: {
+  activeRun: AgentRun | null;
+  pendingApproval: AgentApproval | null;
+  actionLoading: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+  onRunAgain: () => void;
+}) => {
+  const result = buildEmployeeTestResult(activeRun, pendingApproval);
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Test Result</div>
+          <h2 className="mt-2 text-2xl font-semibold leading-8 text-slate-950 [text-wrap:balance]">{result.summary}</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 [text-wrap:pretty]">
+            Это только бизнес-результат. Технические подробности находятся в расширенных настройках.
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {pendingApproval ? (
+            <Button type="button" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onApprove} disabled={actionLoading}>
+              {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              Approve
+            </Button>
+          ) : null}
+          {pendingApproval ? (
+            <Button type="button" variant="outline" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onReject} disabled={actionLoading}>
+              Reject
+            </Button>
+          ) : null}
+          <Button type="button" variant={pendingApproval ? 'outline' : 'default'} className="min-h-10 active:scale-[0.96] transition-transform" onClick={onRunAgain} disabled={actionLoading}>
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            Run Again
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-xl bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-800 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] whitespace-pre-wrap">
+        {result.output}
+      </div>
+
+      {result.previewItems.length ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {result.previewItems.map((item) => (
+            <div key={`${item.label}-${item.value}`} className="rounded-xl bg-white px-4 py-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</div>
+              <div className="mt-2 line-clamp-5 text-sm leading-6 text-slate-800">{item.value}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const EmployeeHistoryPanel = ({
+  details,
+  activeRun,
+}: {
+  details: AgentBlueprintDetails | null;
+  activeRun: AgentRun | null;
+}) => {
+  const events = buildEmployeeHistoryStory(details, activeRun);
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">History</div>
+          <h2 className="mt-2 text-xl font-semibold leading-7 text-slate-950 [text-wrap:balance]">Что сотрудник делал раньше</h2>
+        </div>
+        <span className="inline-flex min-h-8 items-center rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+          {events.length ? `${events.length} событий` : 'пусто'}
+        </span>
+      </div>
+      <div className="mt-5 grid gap-3">
+        {events.length ? (
+          events.map((event) => (
+            <div key={event.key} className="grid gap-3 rounded-xl bg-slate-50 px-4 py-4 ring-1 ring-slate-100 sm:grid-cols-[7rem_minmax(0,1fr)]">
+              <div className="text-sm font-medium tabular-nums text-slate-500">{event.time}</div>
+              <div>
+                <div className="text-sm font-semibold text-slate-950">{event.title}</div>
+                <div className="mt-1 text-sm leading-6 text-slate-600">{event.description}</div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-xl bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-600 ring-1 ring-slate-100">
+            История появится после первого теста или результата.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const EmployeeAgentOverviewPanel = ({
+  blueprint,
+  details,
+  pendingApproval,
+  action,
+  actionLoading,
+  onPrimaryAction,
+  onOpenHistory,
+  onOpenAdvanced,
+}: {
+  blueprint: AgentBlueprint;
+  details: AgentBlueprintDetails | null;
+  pendingApproval: AgentApproval | null;
+  action: EmployeeNextAction;
+  actionLoading: boolean;
+  onPrimaryAction: () => void;
+  onOpenHistory: () => void;
+  onOpenAdvanced: () => void;
+}) => {
+  const status = buildEmployeeStatus(blueprint, details, pendingApproval);
+  const attentionItems = buildEmployeeAttentionItems(blueprint, details, pendingApproval);
+  const healthy = status.label === 'Работает' && attentionItems.length === 0;
+  return (
+    <div className="space-y-4">
+      {healthy ? (
+        <EmployeeRunningPanel blueprint={blueprint} details={details} pendingApproval={pendingApproval} />
+      ) : null}
+
+      <section className={cn(
+        'rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]',
+        healthy ? 'lg:max-w-4xl' : '',
+      )}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <EmployeeStatusPill status={status} />
+              <span className="text-xs font-medium text-slate-500">ИИ-сотрудник</span>
+            </div>
+            <h1 className="mt-3 text-2xl font-semibold leading-8 text-slate-950 [text-wrap:balance]">{blueprint.name}</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 [text-wrap:pretty]">{status.summary}</p>
+          </div>
+          <Button
+            type="button"
+            className="min-h-11 shrink-0 active:scale-[0.96] transition-transform"
+            onClick={onPrimaryAction}
+            disabled={actionLoading}
+          >
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : action.kind === 'connect' ? <Database className="mr-2 h-4 w-4" /> : action.kind === 'approve' ? <ShieldCheck className="mr-2 h-4 w-4" /> : action.kind === 'enable' ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+            {action.label}
+          </Button>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-4">
+          <EmployeeAnswerCard label="Что делает" value={buildEmployeeDescription(blueprint, details)} />
+          <EmployeeAnswerCard label="Работает ли" value={status.summary} tone={status.tone === 'emerald' ? 'emerald' : status.tone === 'rose' ? 'rose' : status.tone === 'amber' ? 'amber' : 'slate'} />
+          <EmployeeAnswerCard label="Последний раз" value={buildEmployeeLastActivity(blueprint, details || undefined)} />
+          <EmployeeAnswerCard label="Что сейчас" value={action.description} tone={action.kind === 'view_history' ? 'emerald' : 'amber'} />
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Button type="button" variant="outline" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onOpenHistory}>
+            History
+          </Button>
+          <Button type="button" variant="ghost" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onOpenAdvanced}>
+            Advanced Settings
+          </Button>
+        </div>
+      </section>
+    </div>
   );
 };
 

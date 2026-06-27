@@ -17,6 +17,27 @@ Product surfaces must be quiet, direct, and operational. They should prioritize 
 
 ## Operating Principles
 
+### Agents Are Employees, Not Workflows
+
+For agents, the product model is "AI employees", not workflow automation.
+The canonical contract is `docs/AGENTS_INTERFACE_MODEL_COMPILED_AI.md`.
+
+The ordinary user layer must never be organized around backend entities such as
+blueprint, runtime, capability, provider, execution, context, DSL, JSON,
+active version, migration, legacy, credits, or raw logs.
+
+Each agents screen must answer one user question and always make four answers
+obvious:
+
+- what the agent does;
+- whether it is working;
+- what happened last time;
+- what the user should do now.
+
+If the agent is healthy, the interface should become smaller, not more
+detailed. Detail appears when there is a problem, a result to approve, or the
+user opens a secondary/advanced layer.
+
 ### One Screen, One Dominant Job
 
 Before implementation, write the screen job in one sentence. If a block does not serve that job, collapse it, move it to a detail layer, or remove it.
@@ -127,26 +148,28 @@ Before shipping product UI, check:
 
 ## Agents UI Rules
 
-Agents must be presented as product objects.
+Agents must be presented as AI employees.
 
 `/dashboard/agents` should behave as:
 
-- `Cockpit`: list agents, show status, pending approvals, last run, next step.
-- `Create`: focused intent -> preview -> clarifications -> cost -> create.
-- `Manage`: overview, logic, runs, learning, connections.
-- `Advanced`: raw blueprint, OpenClaw trace, action ledger, provider executor details.
+- `Agents Home`: answer "What needs my attention today?"
+- `My Employees`: answer "Which AI employees do I have?"
+- `Agent Card`: answer "Is this employee working?"
+- `Result Review`: answer "Do I agree to use this result?"
+- `History`: answer "What did this employee do before?"
+- `Settings`: answer "What can I change if I need to?"
 
-Do not expose the workflow/debugger as the default mental model.
+Do not expose the workflow/debugger as the default mental model. Existing
+cockpit-style UI is considered an intermediate implementation, not the final
+target.
 
 ## Canonical Agent Tabs
 
-Use these labels when the full agent card is available:
+Use these labels only as secondary navigation inside the employee model:
 
 - `Обзор`
-- `Логика`
-- `Запуски`
-- `Обучение`
-- `Подключения`
-- `Advanced`
+- `История`
+- `Сценарий`
+- `Настройки`
 
-The current implementation may roll these out incrementally, but each change should move toward this structure.
+Advanced/debug surfaces must be gated or visually secondary.
