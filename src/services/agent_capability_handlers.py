@@ -1023,7 +1023,7 @@ def _handle_google_sheets_read_rows(envelope: Dict[str, Any], user_data: Dict[st
                     "limit": limit,
                 }
             )
-        except GoogleSheetsAdapterError:
+        except GoogleSheetsAdapterError as exc:
             return _result(
                 "provider_read_required",
                 source="google_sheets",
@@ -1033,6 +1033,7 @@ def _handle_google_sheets_read_rows(envelope: Dict[str, Any], user_data: Dict[st
                 sheet_name=sheet_name,
                 limit=limit,
                 provider_error="GOOGLE_SHEETS_PROVIDER_NOT_READY",
+                provider_error_message=str(exc)[:600],
                 next_action="connect_or_repair_google_sheets_provider",
             )
         finally:

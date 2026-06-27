@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from typing import Any, Dict
 from urllib.parse import quote
@@ -27,7 +28,7 @@ class GoogleSheetsAppendAdapter:
         token = str(credentials.get("token") or "").strip()
         if not token:
             raise GoogleSheetsAdapterError("Google Sheets credentials do not include access token.")
-        spreadsheet_id = str(request.get("spreadsheet_id") or "").strip()
+        spreadsheet_id = _normalize_spreadsheet_id(str(request.get("spreadsheet_id") or "").strip())
         if not spreadsheet_id:
             raise GoogleSheetsAdapterError("spreadsheet_id is required for Google Sheets append.")
         sheet_name = str(request.get("sheet_name") or "Sheet1").strip() or "Sheet1"
@@ -60,7 +61,7 @@ class GoogleSheetsAppendAdapter:
         token = str(credentials.get("token") or "").strip()
         if not token:
             raise GoogleSheetsAdapterError("Google Sheets credentials do not include access token.")
-        spreadsheet_id = str(request.get("spreadsheet_id") or "").strip()
+        spreadsheet_id = _normalize_spreadsheet_id(str(request.get("spreadsheet_id") or "").strip())
         if not spreadsheet_id:
             raise GoogleSheetsAdapterError("spreadsheet_id is required for Google Sheets read.")
         sheet_name = str(request.get("sheet_name") or "Sheet1").strip() or "Sheet1"
@@ -110,6 +111,16 @@ def load_google_sheets_append_adapter(cursor: Any, *, business_id: str, integrat
 
 def load_google_sheets_read_adapter(cursor: Any, *, business_id: str, integration_id: str = "") -> GoogleSheetsAppendAdapter:
     return load_google_sheets_append_adapter(cursor, business_id=business_id, integration_id=integration_id)
+
+
+def _normalize_spreadsheet_id(value: str) -> str:
+    clean = str(value or "").strip()
+    if not clean:
+        return ""
+    match = re.search(r"/spreadsheets/d/([A-Za-z0-9_-]+)", clean)
+    if match:
+        return match.group(1)
+    return clean
 
 
 def _normalize_headers(values: Any) -> list[str]:

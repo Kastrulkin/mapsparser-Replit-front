@@ -1238,6 +1238,12 @@ const getBlueprintBuilderPreview = (blueprint?: AgentBlueprint | null): AgentBui
   return preview ? { ...preview } : null;
 };
 
+const normalizeSpreadsheetInput = (value: string) => {
+  const clean = value.trim();
+  const match = clean.match(/\/spreadsheets\/d\/([A-Za-z0-9_-]+)/);
+  return match?.[1] || clean;
+};
+
 const normalizePostCreateHandoff = (value: unknown): AgentPostCreateHandoff | null => {
   if (!value || typeof value !== 'object') {
     return null;
@@ -3964,7 +3970,7 @@ export const AgentBlueprintsPage = () => {
         display_name: 'Google Sheets',
         auth_ref: sheetAuthRef.trim(),
         config: {
-          spreadsheet_id: sheetSpreadsheetId.trim(),
+          spreadsheet_id: normalizeSpreadsheetInput(sheetSpreadsheetId),
           sheet_name: sheetName.trim() || 'Sheet1',
           operation,
         },
@@ -4191,7 +4197,7 @@ export const AgentBlueprintsPage = () => {
         target: 'google_sheets.append_row',
         row_values: processRowValues,
         integration_id: agentIntegrations.find((item) => item.provider === 'google_sheets')?.id || '',
-        spreadsheet_id: sheetSpreadsheetId.trim(),
+        spreadsheet_id: normalizeSpreadsheetInput(sheetSpreadsheetId),
         sheet_name: sheetName.trim() || 'Leads',
         daily_append_cap: Number(sheetDailyCap) > 0 ? Number(sheetDailyCap) : 50,
       });
@@ -8473,12 +8479,12 @@ const AgentProductCockpit = ({
     : needsConnections
     ? 'Подключить сервисы'
     : canPreview
-      ? 'Проверить на примере'
+      ? 'Запустить тест'
       : needsLogic
         ? 'Открыть логику'
-        : 'Открыть запуски';
-  const PrimaryIcon = needsApproval ? ShieldCheck : canActivate ? CheckCircle2 : needsConnections ? Database : canPreview ? Play : needsLogic ? Workflow : Play;
-  const primaryAction = needsApproval ? onOpenResults : canActivate ? () => onActivateVersion(activationVersionId) : needsConnections ? onOpenConnections : canPreview ? onStartRun : needsLogic ? onOpenLogic : onStartRun;
+        : previewReady ? 'Открыть историю' : 'Запустить тест';
+  const PrimaryIcon = needsApproval ? ShieldCheck : canActivate ? CheckCircle2 : needsConnections ? Database : canPreview ? Play : needsLogic ? Workflow : previewReady ? FileCheck2 : Play;
+  const primaryAction = needsApproval ? onOpenResults : canActivate ? () => onActivateVersion(activationVersionId) : needsConnections ? onOpenConnections : canPreview ? onStartRun : needsLogic ? onOpenLogic : previewReady ? onOpenResults : onStartRun;
   const primaryVariant: 'default' | 'outline' = needsApproval || canActivate || needsConnections || canPreview || needsLogic ? 'default' : 'outline';
   const task = preview?.understood_task || blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Настройте задачу агента.';
   const uniqueReadyTitles = Array.from(new Set(readyItems.map((item) => item.title || connectorLabel(item.provider)).filter(Boolean)));
@@ -8493,13 +8499,22 @@ const AgentProductCockpit = ({
     : connectorsReady
       ? 'подключения готовы'
       : 'проверить подключения';
+  const proofHint = needsApproval
+    ? 'Агент уже остановился на ручном решении. Откройте историю, проверьте результат и решите, продолжать ли следующий шаг.'
+    : needsConnections
+      ? 'Сначала подключите источник или канал. После этого здесь появится тестовый запуск без внешней отправки.'
+      : canPreview
+        ? 'Нажмите “Запустить тест”: LocalOS прочитает пример, подготовит результат и остановится перед внешним действием.'
+        : previewReady
+          ? 'Тест уже проходил. Откройте историю, чтобы посмотреть, что агент прочитал, что подготовил и где остановился.'
+          : 'Запустите тест без внешней отправки и проверьте первый результат в истории.';
   const flowStatus = setupFlow?.status || (activationGate?.can_activate ? 'ready' : 'draft');
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="text-sm font-semibold text-slate-950">Следующий шаг</div>
+            <div className="text-sm font-semibold text-slate-950">Как проверить сейчас</div>
             <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
               {agentFlowStatusLabel(flowStatus)}
             </span>
@@ -8512,9 +8527,15 @@ const AgentProductCockpit = ({
         </Button>
       </div>
       <div className="mt-4 grid gap-2 md:grid-cols-3">
-        <AgentCockpitFact icon={Database} label="Данные" value={dataText} ready={Boolean(preview?.data_sources?.length || readyItems.length)} />
-        <AgentCockpitFact icon={ShieldCheck} label="Доступы" value={requiredText} ready={!needsConnections} />
-        <AgentCockpitFact icon={Play} label="Тест" value={previewReady ? 'пройден' : canPreview ? 'готов к проверке' : 'после проверки доступов'} ready={previewReady} />
+        <AgentCockpitFact icon={Database} label="1. Данные" value={dataText} ready={Boolean(preview?.data_sources?.length || readyItems.length)} />
+        <AgentCockpitFact icon={ShieldCheck} label="2. Доступы" value={requiredText} ready={!needsConnections} />
+        <AgentCockpitFact icon={Play} label="3. Тест" value={previewReady ? 'результат в истории' : canPreview ? 'можно запускать' : 'после подключения'} ready={previewReady || canPreview} />
+      </div>
+      <div className="mt-3 flex flex-col gap-3 rounded-xl bg-sky-50 px-3 py-3 text-sm leading-6 text-sky-950 ring-1 ring-sky-100 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">{proofHint}</div>
+        <Button type="button" size="sm" variant="outline" onClick={onOpenResults} className="shrink-0 bg-white/80">
+          История
+        </Button>
       </div>
       {missingItems.length ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -10181,7 +10202,7 @@ const AgentIntegrationsPanel = ({
           className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
           value={sheetSpreadsheetId}
           onChange={(event) => onSheetSpreadsheetIdChange(event.target.value)}
-          placeholder="Spreadsheet ID"
+          placeholder="Ссылка на Google таблицу или ID"
         />
         <div className="grid gap-2 sm:grid-cols-2">
           <input

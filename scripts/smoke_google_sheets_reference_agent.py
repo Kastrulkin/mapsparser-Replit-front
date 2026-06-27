@@ -130,6 +130,7 @@ def main() -> int:
             "sheet_name": sheet_name,
             "result_status": status,
             "provider_error": result.get("provider_error"),
+            "provider_error_message": result.get("provider_error_message"),
             "next_action": result.get("next_action"),
             "row_count": result.get("count"),
         }
