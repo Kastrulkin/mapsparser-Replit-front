@@ -45,9 +45,9 @@ def _google_business_error_response(error: Exception):
         return jsonify({
             "success": False,
             "status": "google_business_api_disabled",
-            "error": "В Google Cloud project не включён My Business Account Management API. Карточки в Google аккаунте есть, но LocalOS пока не может прочитать их через API.",
-            "next_action": "Откройте Google Cloud Console для project 304042072643 и включите My Business Account Management API.",
-            "activation_url": "https://console.developers.google.com/apis/api/mybusinessaccountmanagement.googleapis.com/overview?project=304042072643",
+            "error": "В Google Cloud project LocalOS не включён или не одобрен My Business Account Management API. Карточки в Google аккаунте есть, но LocalOS пока не может прочитать их через API.",
+            "next_action": "Откройте Google Cloud Console project totemic-union-440908-s8 и проверьте My Business Account Management API / quota.",
+            "activation_url": "https://console.developers.google.com/apis/api/mybusinessaccountmanagement.googleapis.com/overview?project=totemic-union-440908-s8",
         }), 502
     return jsonify({
         "success": False,

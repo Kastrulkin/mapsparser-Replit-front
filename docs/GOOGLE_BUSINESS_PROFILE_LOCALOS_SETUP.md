@@ -2,10 +2,23 @@
 
 Status: beta / Google review pending.
 
+## Production Source Of Truth
+
+Production LocalOS currently uses this OAuth client:
+
+`304042072643-cpvhm8toat1aag3lc2enudfclfouhhod.apps.googleusercontent.com`
+
+This is the account binding that matters for runtime checks. Do not confuse it
+with older project-number notes. In Google Cloud Console the client is visible
+under project `totemic-union-440908-s8`, while the project selector displays
+`510204060`. Runtime errors and OAuth credentials may also include the numeric
+client prefix `304042072643`; treat that prefix as the active LocalOS OAuth
+client identifier, not as a separate LocalOS integration.
+
 ## Google Cloud Project
 
 - Project ID: `totemic-union-440908-s8`
-- Project number: `510204060`
+- Google Cloud project selector / project number shown in Console: `510204060`
 - OAuth app name: `LocalOS`
 - User support email: `demyanovap@gmail.com`
 - OAuth client type: Web application
@@ -41,7 +54,9 @@ Submit the access request from Google Business Profile Help:
 Use:
 
 - request type: `Application for Basic API Access`;
-- project number: `510204060`;
+- Google Cloud project: `totemic-union-440908-s8`;
+- project selector / project number shown in Console: `510204060`;
+- production OAuth client ID: `304042072643-cpvhm8toat1aag3lc2enudfclfouhhod.apps.googleusercontent.com`;
 - contact email: `demyanovap@gmail.com`;
 - app/product: `LocalOS`;
 - domain: `localos.pro`;
@@ -92,5 +107,5 @@ curl -I http://localhost:8000
 ## Current Limitations
 
 - OAuth app remains in Testing until Google verification / publishing is complete.
-- GBP API calls may still fail until Google approves Basic API Access for project `510204060`.
+- GBP API calls may still fail until Google approves Basic API Access for the LocalOS Google Cloud project / OAuth client above.
 - Service and price-list writes depend on GBP category support. LocalOS must keep preview and manual approval before any external write.
