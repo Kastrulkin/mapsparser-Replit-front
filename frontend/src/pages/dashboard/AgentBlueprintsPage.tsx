@@ -2830,6 +2830,7 @@ const buildEmployeePrimaryAction = ({
   const state = buildEmployeeWorkspaceState(blueprint, details, pendingApproval);
   const gate = details?.activation_gate;
   const activationVersionId = gate?.active_version_id || details?.active_version_id || blueprint.active_version_id || '';
+  const latestResult = findPreparedResultPayload(details?.runs?.[0] || null, pendingApproval);
   if (state === 'waiting_for_review') {
     return {
       kind: 'approve',
@@ -2856,6 +2857,14 @@ const buildEmployeePrimaryAction = ({
     };
   }
   if (state === 'draft' || state === 'ready_for_test') {
+    if (latestResult || blueprint.last_run_status === 'completed' || details?.runs?.[0]?.status === 'completed') {
+      return {
+        kind: 'open_result',
+        label: 'View Last Result',
+        description: 'Откройте последний подготовленный результат сотрудника.',
+        targetMode: 'results',
+      };
+    }
     return {
       kind: 'run_test',
       label: 'Run Test',
@@ -3859,13 +3868,19 @@ export const AgentBlueprintsPage = () => {
     };
   }, [agentDetailsById, blueprints, currentBusinessId]);
 
-  const loadRun = async (runId: string) => {
-    setActionLoading(true);
+  const loadRun = async (runId: string, options: { openResults?: boolean; showLoading?: boolean } = {}) => {
+    const openResults = options.openResults !== false;
+    const showLoading = options.showLoading !== false;
+    if (showLoading) {
+      setActionLoading(true);
+    }
     setError(null);
     try {
       const response = await api.get(`/agent-runs/${runId}`);
       setActiveRun(response.data?.run || null);
-      setWorkspaceMode('results');
+      if (openResults) {
+        setWorkspaceMode('results');
+      }
       if (selectedBlueprint?.id) {
         await loadBlueprintDetails(selectedBlueprint.id);
         await loadBlueprintReview(selectedBlueprint.id);
@@ -3874,7 +3889,9 @@ export const AgentBlueprintsPage = () => {
       console.error(requestError);
       setError('Не удалось загрузить запуск.');
     } finally {
-      setActionLoading(false);
+      if (showLoading) {
+        setActionLoading(false);
+      }
     }
   };
 
@@ -3886,6 +3903,17 @@ export const AgentBlueprintsPage = () => {
       console.error(requestError);
     }
   }, []);
+
+  useEffect(() => {
+    const latestRun = blueprintDetails?.runs?.[0];
+    if (!latestRun?.id || activeRun?.id === latestRun.id) {
+      return;
+    }
+    if (!['completed', 'waiting_approval', 'failed'].includes(latestRun.status || '')) {
+      return;
+    }
+    void loadRun(latestRun.id, { openResults: false, showLoading: false });
+  }, [activeRun?.id, blueprintDetails?.runs]);
 
   const loadSourceCatalog = useCallback(async (blueprintId: string) => {
     try {
@@ -4365,9 +4393,8 @@ export const AgentBlueprintsPage = () => {
         await loadBlueprintReview(selectedBlueprint.id);
       }
       await loadBlueprints();
-      const nextPendingApproval = (updatedRun?.approvals || []).find((item: AgentApproval) => item.status === 'pending') || null;
       setDecisionNotice(decision === 'approve' ? 'Решение принято. Агент продолжил работу.' : 'Результат отклонён. Агент остановлен для правки.');
-      setWorkspaceMode(nextPendingApproval ? 'results' : 'overview');
+      setWorkspaceMode('results');
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось применить решение.'));
@@ -4914,6 +4941,7 @@ export const AgentBlueprintsPage = () => {
       : null,
     [blueprintDetails, selectedBlueprint, selectedPendingApproval],
   );
+  const selectedResultRun = activeRun || blueprintDetails?.runs?.[0] || null;
   const runEmployeePrimaryAction = () => {
     if (!selectedBlueprint || !selectedEmployeeAction) {
       return;
@@ -4925,6 +4953,13 @@ export const AgentBlueprintsPage = () => {
     if (selectedEmployeeAction.kind === 'enable' && selectedEmployeeAction.versionId) {
       void activateVersion(selectedEmployeeAction.versionId, 'activate');
       return;
+    }
+    if (selectedEmployeeAction.targetMode === 'results') {
+      const latestRunId = blueprintDetails?.runs?.[0]?.id || selectedBlueprint.last_run_id || '';
+      if (latestRunId && activeRun?.id !== latestRunId) {
+        void loadRun(latestRunId);
+        return;
+      }
     }
     setWorkspaceMode(selectedEmployeeAction.targetMode);
   };
@@ -5214,6 +5249,7 @@ export const AgentBlueprintsPage = () => {
                   <EmployeeAgentOverviewPanel
                     blueprint={selectedBlueprint}
                     details={blueprintDetails}
+                    activeRun={activeRun}
                     pendingApproval={selectedPendingApproval}
                     action={selectedEmployeeAction}
                     actionLoading={actionLoading}
@@ -5221,9 +5257,9 @@ export const AgentBlueprintsPage = () => {
                     onOpenAdvanced={() => setWorkspaceMode('settings')}
                   />
                 ) : workspaceMode === 'results' ? (
-                  activeRun || selectedPendingApproval ? (
+                  selectedResultRun || selectedPendingApproval ? (
                     <EmployeeTestResultPanel
-                      activeRun={activeRun}
+                      activeRun={selectedResultRun}
                       pendingApproval={selectedPendingApproval}
                       actionLoading={actionLoading}
                       onApprove={() => decideApproval('approve')}
@@ -8460,6 +8496,7 @@ const employeeStateTitle = (state: EmployeeWorkspaceState) => ({
 const EmployeeAgentOverviewPanel = ({
   blueprint,
   details,
+  activeRun,
   pendingApproval,
   action,
   actionLoading,
@@ -8468,6 +8505,7 @@ const EmployeeAgentOverviewPanel = ({
 }: {
   blueprint: AgentBlueprint;
   details: AgentBlueprintDetails | null;
+  activeRun: AgentRun | null;
   pendingApproval: AgentApproval | null;
   action: EmployeeNextAction;
   actionLoading: boolean;
@@ -8475,6 +8513,9 @@ const EmployeeAgentOverviewPanel = ({
   onOpenAdvanced: () => void;
 }) => {
   const story = buildEmployeeWorkspaceStory(blueprint, details, pendingApproval);
+  const latestRun = details?.runs?.[0] || null;
+  const detailedLatestRun = activeRun?.id && activeRun.id === latestRun?.id ? activeRun : latestRun;
+  const latestResult = findPreparedResultPayload(detailedLatestRun, pendingApproval);
   const healthy = story.state === 'working' && story.attention.length === 0;
   const problem = story.state === 'error' || story.state === 'waiting_for_review' || story.state === 'needs_connection' || story.state === 'needs_attention';
   const actionDisabled = actionLoading || story.state === 'running_test';
@@ -8527,6 +8568,20 @@ const EmployeeAgentOverviewPanel = ({
           <div className="text-sm font-semibold leading-6 text-slate-950">{story.nextWork}</div>
         </EmployeeWorkspaceSection>
       </div>
+
+      {latestResult ? (
+        <EmployeeWorkspaceSection title="Last result" tone="default">
+          <div className="rounded-2xl bg-slate-50 px-4 py-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+            <HumanResultView result={latestResult} />
+          </div>
+        </EmployeeWorkspaceSection>
+      ) : details?.runs?.[0]?.status === 'completed' ? (
+        <EmployeeWorkspaceSection title="Last result" tone="attention">
+          <div className="text-sm leading-6 text-slate-700">
+            Сотрудник завершил тест, но не сохранил текст результата. Уточните формат результата и запустите тест ещё раз.
+          </div>
+        </EmployeeWorkspaceSection>
+      ) : null}
 
       {story.attention.length ? (
         <EmployeeWorkspaceSection title="Requires your attention" tone={story.state === 'error' ? 'error' : 'attention'}>

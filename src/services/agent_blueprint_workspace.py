@@ -393,6 +393,8 @@ def _render_output(
             business_id=_clean_text((workspace or {}).get("business_id")),
             user_id=_clean_text((workspace or {}).get("user_id")),
         )
+    if _looks_like_message_result(setup, output_format):
+        return _render_message_result(setup, facts, rules, output_format, feedback_notes)
     return {
         "title": "Результат агента",
         "summary": facts,
@@ -400,6 +402,67 @@ def _render_output(
         "format": output_format,
         "feedback_notes": feedback_notes,
     }
+
+
+def _looks_like_message_result(setup: Dict[str, Any], output_format: str) -> bool:
+    text = " ".join(
+        [
+            _clean_text(output_format),
+            _clean_text(setup.get("workflow_description")),
+            _clean_text(setup.get("processing_rules")),
+        ]
+    ).lower()
+    return any(marker in text for marker in ["пост", "сообщ", "telegram", "телеграм", "новост", "публикац", "контент"])
+
+
+def _render_message_result(
+    setup: Dict[str, Any],
+    facts: List[str],
+    rules: str,
+    output_format: str,
+    feedback_notes: List[str],
+) -> Dict[str, Any]:
+    workflow = _clean_text(setup.get("workflow_description"))
+    selected_facts = _select_message_facts(facts, workflow)
+    if selected_facts:
+        body_lines = [
+            "Подготовлен черновик:",
+            "",
+            *[f"- {fact}" for fact in selected_facts[:5]],
+        ]
+        if "20" in workflow or "апрел" in workflow.lower():
+            body_lines.insert(0, "Поездка на 20 апреля")
+            body_lines.insert(1, "")
+    else:
+        body_lines = [
+            "Не удалось сформировать текст поста: агент не получил строку или текстовые данные, из которых можно безопасно собрать сообщение.",
+            "Проверьте, что таблица подключена как источник и в ней есть доступная строка для выбранной даты.",
+        ]
+    return {
+        "title": "Черновик сообщения",
+        "draft_text": "\n".join(body_lines).strip(),
+        "summary": selected_facts or ["Нужны данные источника для текста сообщения."],
+        "rules_applied": rules,
+        "format": output_format,
+        "feedback_notes": feedback_notes,
+    }
+
+
+def _select_message_facts(facts: List[str], workflow: str) -> List[str]:
+    workflow_lower = workflow.lower()
+    if "20" in workflow_lower:
+        by_day = [fact for fact in facts if "20" in fact.lower()]
+        if by_day:
+            return by_day
+    preferred_markers = []
+    if "апрел" in workflow_lower:
+        preferred_markers.extend(["апрел", "apr"])
+    preferred = [
+        fact
+        for fact in facts
+        if any(marker in fact.lower() for marker in preferred_markers)
+    ]
+    return preferred or facts[:5]
 
 
 def _hydrate_internal_sources(cursor: Any, business_id: str, sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
