@@ -194,7 +194,7 @@ def build_generic_artifact_payload(cursor: Any, run: Dict[str, Any], step: Dict[
     if artifact_type == "agent_extracted_context":
         return _build_extracted_context_payload(base_payload, workspace)
     if artifact_type == "agent_output_draft":
-        return _build_output_draft_payload(base_payload, workspace)
+        return _build_output_draft_payload(cursor, run, base_payload, workspace)
     if artifact_type == "agent_final_result":
         return _build_final_result_payload(cursor, run, base_payload, workspace)
     return None
@@ -315,10 +315,14 @@ def _build_extracted_context_payload(base_payload: Dict[str, Any], workspace: Di
     }
 
 
-def _build_output_draft_payload(base_payload: Dict[str, Any], workspace: Dict[str, Any]) -> Dict[str, Any]:
+def _build_output_draft_payload(cursor: Any, run: Dict[str, Any], base_payload: Dict[str, Any], workspace: Dict[str, Any]) -> Dict[str, Any]:
     setup = workspace["setup"] if isinstance(workspace.get("setup"), dict) else {}
     category = _clean_text(base_payload.get("category") or (workspace.get("metadata") or {}).get("draft_category") or "custom")
-    extracted = _extract_source_items(workspace.get("sources") or []) + (workspace.get("internal_sources") or [])
+    extracted = (
+        _extract_run_source_items(cursor, _clean_text(run.get("id")))
+        + _extract_source_items(workspace.get("sources") or [])
+        + (workspace.get("internal_sources") or [])
+    )
     output = _render_output(category, setup, extracted, workspace.get("feedback_history") or [], workspace)
     return {
         **base_payload,
@@ -394,7 +398,7 @@ def _render_output(
             user_id=_clean_text((workspace or {}).get("user_id")),
         )
     if _looks_like_message_result(setup, output_format):
-        return _render_message_result(setup, facts, rules, output_format, feedback_notes)
+        return _render_message_result(setup, extracted, rules, output_format, feedback_notes)
     return {
         "title": "Результат агента",
         "summary": facts,
@@ -417,27 +421,34 @@ def _looks_like_message_result(setup: Dict[str, Any], output_format: str) -> boo
 
 def _render_message_result(
     setup: Dict[str, Any],
-    facts: List[str],
+    extracted: List[Dict[str, Any]],
     rules: str,
     output_format: str,
     feedback_notes: List[str],
 ) -> Dict[str, Any]:
     workflow = _clean_text(setup.get("workflow_description"))
-    selected_facts = _select_message_facts(facts, workflow)
+    selected_items = _select_message_items(extracted, workflow)
+    selected_facts = [_clean_text(item.get("summary")) for item in selected_items if _clean_text(item.get("summary"))]
     if selected_facts:
+        draft_text = _compose_message_draft(selected_items, workflow)
         body_lines = [
-            "Подготовлен черновик:",
-            "",
-            *[f"- {fact}" for fact in selected_facts[:5]],
+            draft_text,
         ]
-        if "20" in workflow or "апрел" in workflow.lower():
-            body_lines.insert(0, "Поездка на 20 апреля")
-            body_lines.insert(1, "")
     else:
-        body_lines = [
-            "Не удалось сформировать текст поста: агент не получил строку или текстовые данные, из которых можно безопасно собрать сообщение.",
-            "Проверьте, что таблица подключена как источник и в ней есть доступная строка для выбранной даты.",
-        ]
+        return {
+            "title": "Нужны данные таблицы",
+            "status": "needs_source_data",
+            "summary": [
+                "Агент не получил строку поездки из Google Sheets или другого источника данных, поэтому сообщение не сформировано.",
+            ],
+            "next_questions": [
+                "Проверьте, что Google Sheets подключён именно как источник данных агента.",
+                "Укажите таблицу и лист со списком поездок, затем запустите тест ещё раз.",
+            ],
+            "rules_applied": rules,
+            "format": output_format,
+            "feedback_notes": feedback_notes,
+        }
     return {
         "title": "Черновик сообщения",
         "draft_text": "\n".join(body_lines).strip(),
@@ -445,24 +456,81 @@ def _render_message_result(
         "rules_applied": rules,
         "format": output_format,
         "feedback_notes": feedback_notes,
+        "provenance": [item.get("source_name") for item in selected_items if item.get("source_name")],
     }
 
 
-def _select_message_facts(facts: List[str], workflow: str) -> List[str]:
+def _select_message_items(extracted: List[Dict[str, Any]], workflow: str) -> List[Dict[str, Any]]:
+    candidates = [item for item in extracted if _can_use_for_message(item)]
     workflow_lower = workflow.lower()
     if "20" in workflow_lower:
-        by_day = [fact for fact in facts if "20" in fact.lower()]
+        by_day = [item for item in candidates if "20" in _message_item_text(item).lower()]
         if by_day:
             return by_day
     preferred_markers = []
     if "апрел" in workflow_lower:
         preferred_markers.extend(["апрел", "apr"])
     preferred = [
-        fact
-        for fact in facts
-        if any(marker in fact.lower() for marker in preferred_markers)
+        item
+        for item in candidates
+        if any(marker in _message_item_text(item).lower() for marker in preferred_markers)
     ]
-    return preferred or facts[:5]
+    return preferred or candidates[:5]
+
+
+def _can_use_for_message(item: Dict[str, Any]) -> bool:
+    source_name = _clean_text(item.get("source_name")).lower()
+    if source_name in {"business_profile", "services", "reviews", "external_reviews"}:
+        return False
+    summary = _clean_text(item.get("summary"))
+    if not summary:
+        return False
+    lowered = summary.lower()
+    internal_markers = ["ready", "id:", "name:", "business_type:", "источник добавлен без текстового содержимого"]
+    if any(marker in lowered for marker in internal_markers) and source_name in {"профиль бизнеса", "business profile"}:
+        return False
+    return True
+
+
+def _message_item_text(item: Dict[str, Any]) -> str:
+    raw = item.get("raw") if isinstance(item.get("raw"), dict) else {}
+    raw_text = " ".join(_clean_text(value) for value in raw.values())
+    return " ".join([_clean_text(item.get("source_name")), _clean_text(item.get("summary")), raw_text])
+
+
+def _compose_message_draft(items: List[Dict[str, Any]], workflow: str) -> str:
+    first = items[0] if items else {}
+    raw = first.get("raw") if isinstance(first.get("raw"), dict) else {}
+    title = "Поездка на 20 апреля" if "20" in workflow or "апрел" in workflow.lower() else "Черновик сообщения"
+    route = _first_row_value(raw, ["route", "маршрут", "поездка", "direction", "направление"])
+    date = _first_row_value(raw, ["date", "дата", "day", "день"])
+    time = _first_row_value(raw, ["time", "время", "departure", "выезд", "start"])
+    client = _first_row_value(raw, ["client", "клиент", "passenger", "пассажир", "name", "имя"])
+    status = _first_row_value(raw, ["status", "статус"])
+    details = []
+    if route:
+        details.append(f"маршрут: {route}")
+    if date:
+        details.append(f"дата: {date}")
+    if time:
+        details.append(f"время: {time}")
+    if client:
+        details.append(f"клиент/пассажир: {client}")
+    if status:
+        details.append(f"статус: {status}")
+    if details:
+        return f"{title}\n\nПодготовлен черновик сообщения:\n{'; '.join(details)}."
+    facts = [_clean_text(item.get("summary")) for item in items if _clean_text(item.get("summary"))]
+    return f"{title}\n\nПодготовлен черновик сообщения:\n" + "\n".join(f"- {fact}" for fact in facts[:5])
+
+
+def _first_row_value(row: Dict[str, Any], names: List[str]) -> str:
+    normalized = {_clean_text(key).lower(): _clean_text(value) for key, value in row.items()}
+    for name in names:
+        value = normalized.get(name.lower())
+        if value:
+            return value
+    return ""
 
 
 def _hydrate_internal_sources(cursor: Any, business_id: str, sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -509,6 +577,51 @@ def _extract_source_items(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]
         else:
             items.append({"source_name": name, "summary": _text_summary(text), "raw": {"text": text[:1000]}})
     return items
+
+
+def _extract_run_source_items(cursor: Any, run_id: str) -> List[Dict[str, Any]]:
+    if not run_id:
+        return []
+    try:
+        cursor.execute(
+            """
+            SELECT step_key, output_json
+            FROM agent_run_steps
+            WHERE run_id = %s
+              AND status = 'completed'
+            ORDER BY step_index ASC
+            """,
+            (run_id,),
+        )
+        rows = [dict(row) for row in (cursor.fetchall() or [])]
+    except Exception:
+        return []
+    items = []
+    for row in rows:
+        step_key = _clean_text(row.get("step_key"))
+        output = parse_json_field(row.get("output_json"), {})
+        if not isinstance(output, dict):
+            continue
+        result = _step_result_payload(output)
+        source = _clean_text(result.get("source") or output.get("source") or step_key)
+        if source != "google_sheets" and "google_sheets" not in step_key:
+            continue
+        source_rows = result.get("rows") if isinstance(result.get("rows"), list) else []
+        for source_row in source_rows[:MAX_REVIEW_ITEMS]:
+            if isinstance(source_row, dict):
+                items.append({"source_name": "google_sheets", "summary": _row_summary(source_row), "raw": source_row})
+    return items
+
+
+def _step_result_payload(output: Dict[str, Any]) -> Dict[str, Any]:
+    orchestrator = output.get("orchestrator") if isinstance(output.get("orchestrator"), dict) else {}
+    result = orchestrator.get("result") if isinstance(orchestrator.get("result"), dict) else {}
+    if result:
+        return result
+    direct_result = output.get("result") if isinstance(output.get("result"), dict) else {}
+    if direct_result:
+        return direct_result
+    return output
 
 
 def _csv_rows(text: str) -> List[Dict[str, Any]]:

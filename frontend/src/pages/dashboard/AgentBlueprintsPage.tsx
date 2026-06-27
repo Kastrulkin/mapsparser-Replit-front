@@ -12230,6 +12230,10 @@ const HumanResultView = ({ result }: { result: Record<string, unknown> }) => {
   const entries = Object.entries(result).filter(([, value]) => value !== '' && value !== null && value !== undefined);
   const priorityKeys = [
     'title',
+    'draft_text',
+    'post_text',
+    'message',
+    'text',
     'summary',
     'risks',
     'facts',
