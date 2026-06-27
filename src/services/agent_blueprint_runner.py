@@ -2759,6 +2759,8 @@ class AgentBlueprintRunner:
             artifact_type = "message_drafts"
         if approval_type == "final_output":
             artifact_type = "agent_output_draft"
+        if approval_type == "telegram_post_approval":
+            artifact_type = "telegram_post_draft"
         if not artifact_type:
             return dict(payload)
         artifact_payload = self._latest_artifact_payload(str(run.get("id") or ""), artifact_type)

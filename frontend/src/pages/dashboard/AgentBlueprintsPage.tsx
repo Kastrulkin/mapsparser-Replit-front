@@ -2402,6 +2402,7 @@ const resultFieldLabels: Record<string, string> = {
   provenance: 'Источники',
   delivery_state: 'Отправка',
   publish_state: 'Публикация',
+  preparation_method: 'Как подготовлено',
 };
 
 const outreachProgressStages = [
@@ -3059,6 +3060,7 @@ const meaningfulResultKeys = [
   'recommendations',
   'reply_drafts',
   'rows_to_review',
+  'preparation_method',
 ];
 
 const extractBusinessResultPayload = (value: unknown): Record<string, unknown> | null => {
@@ -3101,7 +3103,7 @@ const findPreparedResultPayload = (
     return approvalResult;
   }
   const artifacts = activeRun?.artifacts || [];
-  const preferredArtifact = artifacts.find((item) => item.artifact_type === 'agent_output_draft' || item.artifact_type === 'agent_final_result')
+  const preferredArtifact = artifacts.find((item) => item.artifact_type === 'agent_output_draft' || item.artifact_type === 'telegram_post_draft' || item.artifact_type === 'agent_final_result')
     || artifacts.find((item) => extractBusinessResultPayload(item.payload_json));
   return extractBusinessResultPayload(preferredArtifact?.payload_json || null);
 };
@@ -12234,6 +12236,7 @@ const HumanResultView = ({ result }: { result: Record<string, unknown> }) => {
     'post_text',
     'message',
     'text',
+    'preparation_method',
     'summary',
     'risks',
     'facts',

@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import sys
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -10,6 +11,7 @@ from services.agent_document_llm import analyze_document_sources_with_llm
 from services.agent_email_llm import draft_email_with_llm
 from services.agent_review_reply_analysis import draft_review_replies_with_llm
 from services.agent_table_analysis import analyze_table_with_llm
+from services.gigachat_client import analyze_text_with_gigachat
 
 
 MAX_SOURCE_TEXT_CHARS = 30000
@@ -186,14 +188,14 @@ def _learning_trigger_label(trigger_type: str) -> str:
 
 def build_generic_artifact_payload(cursor: Any, run: Dict[str, Any], step: Dict[str, Any], base_payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     artifact_type = _clean_text(step.get("artifact_type"))
-    if artifact_type not in {"agent_input_plan", "agent_extracted_context", "agent_output_draft", "agent_final_result"}:
+    if artifact_type not in {"agent_input_plan", "agent_extracted_context", "agent_output_draft", "agent_final_result", "telegram_post_draft"}:
         return None
     workspace = _load_workspace(cursor, run)
     if artifact_type == "agent_input_plan":
         return _build_input_plan_payload(base_payload, workspace)
     if artifact_type == "agent_extracted_context":
         return _build_extracted_context_payload(base_payload, workspace)
-    if artifact_type == "agent_output_draft":
+    if artifact_type in {"agent_output_draft", "telegram_post_draft"}:
         return _build_output_draft_payload(cursor, run, base_payload, workspace)
     if artifact_type == "agent_final_result":
         return _build_final_result_payload(cursor, run, base_payload, workspace)
@@ -430,10 +432,14 @@ def _render_message_result(
     selected_items = _select_message_items(extracted, workflow)
     selected_facts = [_clean_text(item.get("summary")) for item in selected_items if _clean_text(item.get("summary"))]
     if selected_facts:
-        draft_text = _compose_message_draft(selected_items, workflow)
-        body_lines = [
-            draft_text,
-        ]
+        return _generate_message_result_with_llm(
+            setup,
+            selected_items,
+            selected_facts,
+            rules,
+            output_format,
+            feedback_notes,
+        )
     else:
         return {
             "title": "Нужны данные таблицы",
@@ -448,7 +454,128 @@ def _render_message_result(
             "rules_applied": rules,
             "format": output_format,
             "feedback_notes": feedback_notes,
+            "preparation_method": "Сообщение не готовилось: не было строки источника для безопасного результата.",
         }
+
+
+def _generate_message_result_with_llm(
+    setup: Dict[str, Any],
+    selected_items: List[Dict[str, Any]],
+    selected_facts: List[str],
+    rules: str,
+    output_format: str,
+    feedback_notes: List[str],
+) -> Dict[str, Any]:
+    fallback = _build_message_result_fallback(selected_items, selected_facts, rules, output_format, feedback_notes, _clean_text(setup.get("workflow_description")))
+    prompt = _build_message_prompt(setup, selected_items, feedback_notes)
+    try:
+        raw_response = analyze_text_with_gigachat(prompt, task_type="agent_custom_message_draft")
+        parsed = _parse_message_llm_json(raw_response)
+        draft_text = _clean_text(parsed.get("draft_text") or parsed.get("post_text") or parsed.get("message"))
+        if not draft_text:
+            raise ValueError("LLM response does not contain draft text")
+        summary = _clean_list(parsed.get("summary")) or selected_facts[:3]
+        checklist = _clean_list(parsed.get("checklist")) or ["Проверить факты по строке таблицы перед отправкой."]
+        return {
+            **fallback,
+            "title": _clean_text(parsed.get("title")) or fallback["title"],
+            "draft_text": draft_text,
+            "summary": summary,
+            "checklist": checklist,
+            "rules_applied": _clean_list(parsed.get("rules_applied")) or fallback["rules_applied"],
+            "analysis_source": "gigachat",
+            "analysis_prompt_key": "agent_custom_message_draft",
+            "analysis_prompt_version": "agent_custom_message_draft_v1",
+            "llm_analysis_used": True,
+            "llm_error": "",
+            "preparation_method": "ИИ подготовил черновик по данным этого тестового запуска. Внешняя отправка не выполнялась.",
+        }
+    except Exception:
+        exc = sys.exc_info()[1]
+        return {
+            **fallback,
+            "analysis_source": "deterministic_fallback",
+            "analysis_prompt_key": "agent_custom_message_draft",
+            "analysis_prompt_version": "agent_custom_message_draft_v1",
+            "llm_analysis_used": False,
+            "llm_error": str(exc)[:240],
+            "preparation_method": "Черновик подготовлен локальным fallback, потому что ИИ-генерация не вернула готовый текст. Внешняя отправка не выполнялась.",
+        }
+
+
+def _build_message_result_fallback(
+    selected_items: List[Dict[str, Any]],
+    selected_facts: List[str],
+    rules: str,
+    output_format: str,
+    feedback_notes: List[str],
+    workflow: str,
+) -> Dict[str, Any]:
+    return {
+        "title": "Черновик сообщения",
+        "draft_text": _compose_message_draft(selected_items, workflow),
+        "summary": selected_facts or ["Нужны данные источника для текста сообщения."],
+        "checklist": ["Проверить факты по строке таблицы перед отправкой."],
+        "rules_applied": [rules] if rules else [],
+        "format": output_format,
+        "feedback_notes": feedback_notes,
+        "provenance": [item.get("source_name") for item in selected_items if item.get("source_name")],
+        "external_dispatch_performed": False,
+        "delivery_state": "not_dispatched",
+    }
+
+
+def _build_message_prompt(setup: Dict[str, Any], selected_items: List[Dict[str, Any]], feedback_notes: List[str]) -> str:
+    payload = {
+        "task": _clean_text(setup.get("workflow_description")),
+        "extraction_rules": _clean_text(setup.get("extraction_rules")),
+        "processing_rules": _clean_text(setup.get("processing_rules")),
+        "output_format": _clean_text(setup.get("output_format")),
+        "manual_control": _clean_text(setup.get("manual_control")),
+        "feedback_notes": feedback_notes,
+        "sources": _message_context(selected_items),
+    }
+    return (
+        "Ты готовишь безопасный черновик сообщения для LocalOS AI employee test run. "
+        "Используй только предоставленные строки источника, не придумывай факты и не выполняй отправку. "
+        "Если данных мало, напиши аккуратный короткий черновик только на основе доступных полей. "
+        "Верни только JSON без markdown с полями: "
+        "title, draft_text, summary(list), checklist(list), rules_applied(list). "
+        "draft_text должен быть конкретным сообщением, готовым для проверки владельцем бизнеса.\n\n"
+        f"INPUT_JSON:\n{json.dumps(payload, ensure_ascii=False)}"
+    )
+
+
+def _message_context(selected_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    context = []
+    for index, item in enumerate(selected_items[:8], start=1):
+        raw = item.get("raw") if isinstance(item.get("raw"), dict) else {}
+        context.append(
+            {
+                "row": index,
+                "source_name": _clean_text(item.get("source_name")) or "Источник",
+                "summary": _clean_text(item.get("summary")),
+                "values": raw,
+            }
+        )
+    return context
+
+
+def _parse_message_llm_json(raw_response: str) -> Dict[str, Any]:
+    text = _clean_text(raw_response)
+    if not text:
+        raise ValueError("empty LLM response")
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start < 0 or end <= start:
+            raise ValueError("LLM response does not contain JSON")
+        parsed = json.loads(text[start : end + 1])
+    if not isinstance(parsed, dict):
+        raise ValueError("LLM response JSON is not an object")
+    return parsed
     return {
         "title": "Черновик сообщения",
         "draft_text": "\n".join(body_lines).strip(),
