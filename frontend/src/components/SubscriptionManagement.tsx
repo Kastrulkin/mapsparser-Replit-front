@@ -6,7 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { cn } from '@/lib/utils';
 import { DESIGN_TOKENS } from '@/lib/design-tokens';
-import { Check, Crown, Sparkles, Zap, Shield, Star, Rocket } from 'lucide-react';
+import { Check, Crown, Zap, Shield, Star, Rocket, CreditCard, CalendarClock, Link2Off, RefreshCw } from 'lucide-react';
 
 interface SubscriptionTier {
   id: string;
@@ -22,17 +22,55 @@ interface SubscriptionTier {
 }
 
 interface BusinessSubscription {
+  id?: string;
   tier: string;
   status: string;
   subscription_ends_at?: string;
   trial_ends_at?: string;
   moderation_status?: string;
+  next_billing_date?: string | null;
+  retry_count?: number;
+  next_retry_at?: string | null;
+  autopay_enabled?: boolean;
+  payment_method_linked?: boolean;
+  payment_method_summary?: {
+    brand?: string | null;
+    last4?: string | null;
+    label?: string | null;
+  } | null;
+}
+
+interface BillingAttempt {
+  id: string;
+  attempt_type: string;
+  attempt_no: number;
+  status: string;
+  payment_id?: string | null;
+  error_message?: string | null;
+  created_at?: string | null;
+}
+
+interface BillingStatusResponse {
+  success: boolean;
+  subscription: BusinessSubscription | null;
+  credits_balance?: number;
+  recent_attempts?: BillingAttempt[];
+  renewal_status?: {
+    state?: string;
+    reason?: string;
+    next_retry_at?: string | null;
+    next_billing_date?: string | null;
+  };
 }
 
 export const SubscriptionManagement = ({ businessId, business }: { businessId: string | null; business: any }) => {
   const [subscription, setSubscription] = useState<BusinessSubscription | null>(null);
   const [loading, setLoading] = useState(true);
+  const [billingLoading, setBillingLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [unlinkingCard, setUnlinkingCard] = useState(false);
+  const [recentAttempts, setRecentAttempts] = useState<BillingAttempt[]>([]);
+  const [renewalStatus, setRenewalStatus] = useState<BillingStatusResponse['renewal_status'] | null>(null);
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const paymentStatus = searchParams.get('payment');
@@ -140,6 +178,63 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     ];
   }, [language, t]);
 
+  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return language === 'ru' ? '—' : '—';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+    return new Intl.DateTimeFormat(language === 'ru' ? 'ru-RU' : 'en-US', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(parsed);
+  };
+
+  const applyBillingStatus = (data: BillingStatusResponse) => {
+    if (data.subscription) {
+      setSubscription((prev) => ({
+        ...(prev || {}),
+        ...data.subscription,
+        tier: data.subscription.tier || prev?.tier || 'trial',
+        status: data.subscription.status || prev?.status || 'inactive',
+      }));
+    }
+    if (Array.isArray(data.recent_attempts)) {
+      setRecentAttempts(data.recent_attempts);
+    }
+    if (data.renewal_status) {
+      setRenewalStatus(data.renewal_status);
+    }
+  };
+
+  const loadBillingStatus = async (options?: { silent?: boolean }) => {
+    if (!businessId || !token) return;
+    if (!options?.silent) {
+      setBillingLoading(true);
+    }
+    try {
+      const params = new URLSearchParams({ business_id: businessId });
+      const response = await fetch(`/api/billing/status?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data: BillingStatusResponse = await response.json();
+      if (response.ok && data?.success) {
+        applyBillingStatus(data);
+      }
+    } catch {
+      // keep graceful fallback to business payload
+    } finally {
+      if (!options?.silent) {
+        setBillingLoading(false);
+      }
+    }
+  };
+
   useEffect(() => {
     if (paymentStatus === 'success') {
       toast({
@@ -161,7 +256,6 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     const isReturnPage = window.location.pathname.endsWith('/billing/return') || searchParams.get('yookassa_return') === '1';
     if (!isReturnPage || !businessId) return;
 
-    const token = localStorage.getItem('auth_token');
     if (!token) return;
 
     let aborted = false;
@@ -171,14 +265,15 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
         const response = await fetch(`/api/billing/status?${params.toString()}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const data = await response.json();
+        const data: BillingStatusResponse = await response.json();
         if (!response.ok || aborted) return;
 
         const status = data?.subscription?.status;
+        applyBillingStatus(data);
         if (status === 'active') {
           toast({
             title: language === 'ru' ? 'Оплата успешна!' : 'Payment successful!',
-            description: language === 'ru' ? 'Подписка активирована.' : 'Subscription activated.',
+            description: language === 'ru' ? 'Подписка активирована. Карта сохранена для ежемесячного продления, если вы не отвяжете её в кабинете.' : 'Subscription activated. The card is saved for monthly renewal until you unlink it in your account.',
           });
         } else if (status === 'blocked') {
           toast({
@@ -203,6 +298,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   useEffect(() => {
     if (business) {
       setSubscription({
+        id: business.subscription_id,
         tier: business.subscription_tier || 'trial',
         status: business.subscription_status || 'inactive',
         subscription_ends_at: business.subscription_ends_at,
@@ -212,6 +308,10 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
       setLoading(false);
     }
   }, [business]);
+
+  useEffect(() => {
+    void loadBillingStatus();
+  }, [businessId]);
 
   useEffect(() => {
     if (autoCheckoutStartedRef.current) return;
@@ -290,6 +390,46 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     }
   };
 
+  const handleUnlinkCard = async () => {
+    if (!businessId || !token || !subscription?.id) {
+      return;
+    }
+
+    setUnlinkingCard(true);
+    try {
+      const response = await fetch('/api/billing/payment-method/unlink', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          business_id: businessId,
+          subscription_id: subscription.id,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.error || (language === 'ru' ? 'Не удалось отвязать карту' : 'Could not unlink the card'));
+      }
+      applyBillingStatus(data as BillingStatusResponse);
+      toast({
+        title: language === 'ru' ? 'Автоплатёж отключён' : 'Autopay disabled',
+        description: language === 'ru'
+          ? 'Текущий оплаченный период сохранён. Следующее продление потребует ручной оплаты.'
+          : 'Your current paid period stays active. The next renewal will require a manual payment.',
+      });
+    } catch (error) {
+      toast({
+        title: t.common.error,
+        description: error instanceof Error ? error.message : (language === 'ru' ? 'Не удалось отвязать карту' : 'Could not unlink the card'),
+        variant: 'destructive',
+      });
+    } finally {
+      setUnlinkingCard(false);
+    }
+  };
+
   const getTierName = (tierId: string) => {
     const tier = tiers.find(t => t.id === tierId);
     return tier ? tier.name : tierId;
@@ -317,6 +457,53 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   }
 
   const isModerationPending = subscription?.moderation_status === 'pending';
+  const autopayEnabled = Boolean(subscription?.autopay_enabled);
+  const paymentMethodLinked = Boolean(subscription?.payment_method_linked);
+  const latestAttempt = recentAttempts[0] || null;
+  const nextChargeText = subscription?.next_billing_date ? formatDateTime(subscription.next_billing_date) : (language === 'ru' ? 'Появится после первой успешной оплаты' : 'Will appear after the first successful payment');
+  const autopayStatusTone = autopayEnabled ? 'bg-emerald-500 hover:bg-emerald-600 border-0' : 'bg-slate-500 hover:bg-slate-600 border-0';
+  const autopayStatusLabel = autopayEnabled ? (language === 'ru' ? 'Включён' : 'Enabled') : (language === 'ru' ? 'Выключен' : 'Disabled');
+  const paymentMethodLabel = subscription?.payment_method_summary?.label
+    || (
+      subscription?.payment_method_summary?.brand && subscription?.payment_method_summary?.last4
+        ? `${subscription.payment_method_summary.brand} •••• ${subscription.payment_method_summary.last4}`
+        : paymentMethodLinked
+          ? (language === 'ru' ? 'Карта сохранена' : 'Card saved')
+          : (language === 'ru' ? 'Карта не сохранена' : 'No saved card')
+    );
+  const renewalHelpText = (() => {
+    if (autopayEnabled) {
+      return language === 'ru'
+        ? 'Подписка продлевается ежемесячно автоматически. Карту можно отвязать в любой момент прямо в кабинете.'
+        : 'Your subscription renews monthly automatically. You can unlink the card anytime in your account.';
+    }
+    if (paymentMethodLinked) {
+      return language === 'ru'
+        ? 'Карта сохранена, но автоматическое продление сейчас недоступно.'
+        : 'The card is saved, but automatic renewal is not available right now.';
+    }
+    return language === 'ru'
+      ? 'Автоплатёж выключен. Текущий период сохранится, а следующее продление потребует ручной оплаты.'
+      : 'Autopay is off. Your current period stays active, and the next renewal will require a manual payment.';
+  })();
+  const renewalStatusText = (() => {
+    switch (renewalStatus?.state) {
+      case 'retry_pending':
+        return language === 'ru'
+          ? `Повторная попытка запланирована на ${formatDateTime(renewalStatus.next_retry_at)}`
+          : `Retry scheduled for ${formatDateTime(renewalStatus.next_retry_at)}`;
+      case 'blocked':
+        return language === 'ru'
+          ? 'Есть проблема с продлением. Проверьте последнюю попытку списания.'
+          : 'There is a renewal issue. Check the latest charge attempt.';
+      case 'scheduled':
+        return language === 'ru'
+          ? `Следующее списание ожидается ${formatDateTime(renewalStatus.next_billing_date || subscription?.next_billing_date || null)}`
+          : `Next charge is expected on ${formatDateTime(renewalStatus.next_billing_date || subscription?.next_billing_date || null)}`;
+      default:
+        return renewalHelpText;
+    }
+  })();
 
   const getTierAccent = (tierId: string) => {
     switch (tierId) {
@@ -360,6 +547,94 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
         ) : (
           <p className="text-sm text-gray-500 italic">{t.dashboard.subscription.noSubscription}</p>
         )}
+        <p className="mt-4 text-sm leading-6 text-gray-600 [text-wrap:pretty]">
+          {language === 'ru'
+            ? 'Оплата подписки проходит помесячно. Если вы сохраните карту при первой оплате, LocalOS сможет продлевать подписку автоматически до тех пор, пока вы не отвяжете карту в кабинете.'
+            : 'Subscriptions are billed monthly. If you save your card during the first payment, LocalOS can renew the subscription automatically until you unlink the card in your account.'}
+        </p>
+      </div>
+
+      <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              {language === 'ru' ? 'Автоплатёж' : 'Autopay'}
+            </div>
+            <h3 className="mt-2 text-xl font-semibold leading-7 text-slate-950 [text-wrap:balance]">
+              {language === 'ru' ? 'Ежемесячное продление подписки' : 'Monthly subscription renewal'}
+            </h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 [text-wrap:pretty]">
+              {renewalStatusText}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {paymentMethodLinked ? (
+              <Button
+                variant="outline"
+                className="min-h-11 active:scale-[0.96] transition-transform"
+                disabled={unlinkingCard}
+                onClick={handleUnlinkCard}
+              >
+                {unlinkingCard ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Link2Off className="mr-2 h-4 w-4" />}
+                {language === 'ru' ? 'Отвязать карту' : 'Unlink card'}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <div className="grid gap-px bg-slate-100 md:grid-cols-3">
+          <div className="bg-white px-5 py-4">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              <CreditCard className="h-4 w-4" />
+              <span>{language === 'ru' ? 'Статус' : 'Status'}</span>
+            </div>
+            <div className="mt-3">
+              <Badge className={cn('min-h-7 rounded-full px-3 text-sm', autopayStatusTone)}>
+                {autopayStatusLabel}
+              </Badge>
+            </div>
+            <div className="mt-2 text-sm leading-6 text-slate-600 [text-wrap:pretty]">
+              {language === 'ru'
+                ? 'Карту можно отвязать самостоятельно без обращения в поддержку.'
+                : 'You can unlink the card yourself without contacting support.'}
+            </div>
+          </div>
+          <div className="bg-white px-5 py-4">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              <CalendarClock className="h-4 w-4" />
+              <span>{language === 'ru' ? 'Следующее списание' : 'Next charge'}</span>
+            </div>
+            <div className="mt-2 text-lg font-semibold text-slate-950 tabular-nums">
+              {billingLoading ? (language === 'ru' ? 'Загрузка...' : 'Loading...') : nextChargeText}
+            </div>
+            <div className="mt-2 text-sm leading-6 text-slate-600 [text-wrap:pretty]">
+              {language === 'ru'
+                ? 'После отвязки карты новые автоматические списания не выполняются.'
+                : 'After the card is unlinked, no new automatic charges will be made.'}
+            </div>
+          </div>
+          <div className="bg-white px-5 py-4">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              <Check className="h-4 w-4" />
+              <span>{language === 'ru' ? 'Сохранённая карта' : 'Saved card'}</span>
+            </div>
+            <div className="mt-2 text-lg font-semibold text-slate-950 [text-wrap:balance]">
+              {paymentMethodLabel}
+            </div>
+            {latestAttempt ? (
+              <div className="mt-2 text-sm leading-6 text-slate-600 [text-wrap:pretty]">
+                {language === 'ru'
+                  ? `Последняя попытка: ${formatDateTime(latestAttempt.created_at || null)}`
+                  : `Last attempt: ${formatDateTime(latestAttempt.created_at || null)}`}
+              </div>
+            ) : (
+              <div className="mt-2 text-sm leading-6 text-slate-600 [text-wrap:pretty]">
+                {language === 'ru'
+                  ? 'После первой успешной оплаты здесь появится статус сохранённой карты.'
+                  : 'The saved card status will appear here after the first successful payment.'}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Tiers Grid */}

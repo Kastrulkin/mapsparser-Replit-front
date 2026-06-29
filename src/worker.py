@@ -1349,6 +1349,13 @@ def _run_yookassa_renewals_if_due() -> None:
                 f"scheduled={result.get('scheduled')} errors={result.get('errors')}",
                 flush=True,
             )
+        elif result.get("success") and (int(result.get("processed") or 0) > 0 or int(result.get("errors") or 0) > 0):
+            print(
+                f"[YOOKASSA_RENEWALS] processed={result.get('processed')} "
+                f"scheduled={result.get('scheduled')} errors={result.get('errors')} "
+                f"details={result.get('details')}",
+                flush=True,
+            )
         elif not result.get("success"):
             print(f"[YOOKASSA_RENEWALS] error: {result.get('error')}", flush=True)
     except Exception as e:

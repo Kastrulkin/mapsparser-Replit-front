@@ -418,6 +418,8 @@ def _create_billing_attempt(cursor, *, subscription_id: str, attempt_type: str, 
 
 
 def _subscription_public_payload(row: Dict[str, Any]) -> Dict[str, Any]:
+    payment_method_linked = bool(str(row.get("payment_method_id") or "").strip())
+    status = str(row.get("status") or "").strip().lower()
     return {
         "id": row.get("id"),
         "tariff_id": row.get("tariff_id"),
@@ -429,7 +431,64 @@ def _subscription_public_payload(row: Dict[str, Any]) -> Dict[str, Any]:
         "next_retry_at": _as_str_dt(_parse_dt(row.get("next_retry_at"))),
         "last_payment_id": row.get("last_payment_id"),
         "business_id": row.get("business_id"),
+        "autopay_enabled": payment_method_linked and status != "canceled",
+        "payment_method_linked": payment_method_linked,
+        "payment_method_summary": None,
     }
+
+
+def _subscription_renewal_state(row: Dict[str, Any]) -> Dict[str, Any]:
+    status = str(row.get("status") or "").strip().lower()
+    payment_method_linked = bool(str(row.get("payment_method_id") or "").strip())
+    next_billing = _parse_dt(row.get("next_billing_date"))
+    next_retry = _parse_dt(row.get("next_retry_at"))
+
+    if status == "canceled":
+        return {"state": "canceled", "reason": "subscription_canceled"}
+    if not payment_method_linked:
+        return {"state": "disabled", "reason": "missing_payment_method_id"}
+    if status == "blocked":
+        return {
+            "state": "retry_pending" if next_retry else "blocked",
+            "reason": "retry_scheduled" if next_retry else "subscription_blocked",
+            "next_retry_at": _as_str_dt(next_retry),
+        }
+    if next_billing:
+        return {
+            "state": "scheduled",
+            "reason": "next_billing_scheduled",
+            "next_billing_date": _as_str_dt(next_billing),
+        }
+    return {"state": "ready", "reason": "payment_method_saved"}
+
+
+def _subscription_access_allowed(cursor, *, user_id: str, user_data: Dict[str, Any], row: Dict[str, Any]) -> bool:
+    sub_user_id = str(row.get("user_id") or "")
+    access_allowed = (sub_user_id == user_id) or bool(user_data.get("is_superadmin"))
+    if not access_allowed and row.get("business_id"):
+        cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (str(row.get("business_id")),))
+        biz_row = _row_to_dict(cursor, cursor.fetchone())
+        access_allowed = str((biz_row or {}).get("owner_id") or "") == user_id
+    return access_allowed
+
+
+def _load_subscription_for_request(cursor, *, user_id: str, user_data: Dict[str, Any], business_id: str, subscription_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[Tuple[Dict[str, Any], int]]]:
+    if subscription_id:
+        cursor.execute("SELECT * FROM subscriptions WHERE id = %s LIMIT 1", (subscription_id,))
+    elif business_id:
+        cursor.execute("SELECT * FROM subscriptions WHERE business_id = %s LIMIT 1", (business_id,))
+    else:
+        cursor.execute(
+            "SELECT * FROM subscriptions WHERE user_id = %s ORDER BY created_at DESC LIMIT 1",
+            (user_id,),
+        )
+
+    sub = _row_to_dict(cursor, cursor.fetchone())
+    if not sub:
+        return None, None
+    if not _subscription_access_allowed(cursor, user_id=user_id, user_data=user_data, row=sub):
+        return None, ({"error": "Нет доступа"}, 403)
+    return sub, None
 
 
 def _apply_payment_succeeded(cursor, *, payment: Dict[str, Any], source_event: str) -> Dict[str, Any]:
@@ -952,27 +1011,18 @@ def billing_status():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        if subscription_id:
-            cursor.execute("SELECT * FROM subscriptions WHERE id = %s LIMIT 1", (subscription_id,))
-        elif business_id:
-            cursor.execute("SELECT * FROM subscriptions WHERE business_id = %s LIMIT 1", (business_id,))
-        else:
-            cursor.execute(
-                "SELECT * FROM subscriptions WHERE user_id = %s ORDER BY created_at DESC LIMIT 1",
-                (user_id,),
-            )
-        sub = _row_to_dict(cursor, cursor.fetchone())
+        sub, error_response = _load_subscription_for_request(
+            cursor,
+            user_id=user_id,
+            user_data=user_data,
+            business_id=business_id,
+            subscription_id=subscription_id,
+        )
+        if error_response:
+            payload, code = error_response
+            return jsonify(payload), code
         if not sub:
             return jsonify({"success": True, "subscription": None})
-
-        sub_user_id = str(sub.get("user_id") or "")
-        access_allowed = (sub_user_id == user_id) or bool(user_data.get("is_superadmin"))
-        if not access_allowed and sub.get("business_id"):
-            cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (str(sub.get("business_id")),))
-            biz_row = _row_to_dict(cursor, cursor.fetchone())
-            access_allowed = str((biz_row or {}).get("owner_id") or "") == user_id
-        if not access_allowed:
-            return jsonify({"error": "Нет доступа"}), 403
 
         # Fallback reconciliation: if webhook is delayed/missed, poll YooKassa
         # for the latest pending attempt and apply terminal state.
@@ -1050,9 +1100,70 @@ def billing_status():
                 "subscription": _subscription_public_payload(sub),
                 "credits_balance": int(user_row.get("credits_balance") or 0),
                 "recent_attempts": recent_attempts,
+                "renewal_status": _subscription_renewal_state(sub),
             }
         )
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
+
+
+@billing_bp.route("/api/billing/payment-method/unlink", methods=["POST", "OPTIONS"])
+def billing_payment_method_unlink():
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    user_data = _require_auth()
+    if not user_data:
+        return jsonify({"error": "Требуется авторизация"}), 401
+
+    data = request.get_json(silent=True) or {}
+    business_id = str(data.get("business_id") or "").strip()
+    subscription_id = str(data.get("subscription_id") or "").strip()
+    user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        sub, error_response = _load_subscription_for_request(
+            cursor,
+            user_id=user_id,
+            user_data=user_data,
+            business_id=business_id,
+            subscription_id=subscription_id,
+        )
+        if error_response:
+            payload, code = error_response
+            return jsonify(payload), code
+        if not sub:
+            return jsonify({"error": "Подписка не найдена"}), 404
+
+        cursor.execute(
+            """
+            UPDATE subscriptions
+            SET payment_method_id = NULL,
+                retry_count = 0,
+                next_retry_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            RETURNING *
+            """,
+            (str(sub.get("id")),),
+        )
+        updated = _row_to_dict(cursor, cursor.fetchone())
+        db.conn.commit()
+
+        return jsonify(
+            {
+                "success": True,
+                "subscription": _subscription_public_payload(updated),
+                "renewal_status": _subscription_renewal_state(updated),
+                "message": "Автоплатёж отключён. Текущий оплаченный период сохранён.",
+            }
+        )
+    except Exception as e:
+        db.conn.rollback()
         return jsonify({"error": str(e)}), 500
     finally:
         db.close()

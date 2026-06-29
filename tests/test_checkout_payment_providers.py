@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+import main
 from src import crypto_pay_client, stripe_integration, yookassa_integration
 
 
@@ -101,3 +102,58 @@ def test_create_stripe_checkout_for_checkout_session_uses_checkout_metadata(monk
     assert created["metadata"]["checkout_session_id"] == "checkout-42"
     assert created["customer_email"] == "owner@example.com"
     assert marked["provider_invoice_id"] == "cs_test_1"
+
+
+def test_subscription_public_payload_exposes_autopay_flags() -> None:
+    payload = yookassa_integration._subscription_public_payload(
+        {
+            "id": "sub-1",
+            "tariff_id": "starter_monthly",
+            "pending_tariff_id": None,
+            "status": "active",
+            "period_start": None,
+            "next_billing_date": None,
+            "retry_count": 0,
+            "next_retry_at": None,
+            "last_payment_id": "pay-1",
+            "business_id": "biz-1",
+            "payment_method_id": "pm-1",
+        }
+    )
+
+    assert payload["autopay_enabled"] is True
+    assert payload["payment_method_linked"] is True
+    assert payload["payment_method_summary"] is None
+
+
+def test_subscription_renewal_state_reports_missing_payment_method() -> None:
+    renewal_state = yookassa_integration._subscription_renewal_state(
+        {
+            "status": "active",
+            "payment_method_id": None,
+            "next_billing_date": "2026-07-10T12:00:00+00:00",
+            "next_retry_at": None,
+        }
+    )
+
+    assert renewal_state["state"] == "disabled"
+    assert renewal_state["reason"] == "missing_payment_method_id"
+
+
+def test_subscription_renewal_state_reports_retry_pending() -> None:
+    renewal_state = yookassa_integration._subscription_renewal_state(
+        {
+            "status": "blocked",
+            "payment_method_id": "pm-1",
+            "next_billing_date": None,
+            "next_retry_at": "2026-07-11T09:30:00+00:00",
+        }
+    )
+
+    assert renewal_state["state"] == "retry_pending"
+    assert renewal_state["reason"] == "retry_scheduled"
+
+
+def test_billing_routes_expose_payment_method_unlink() -> None:
+    actual = {rule.rule: rule.endpoint for rule in main.app.url_map.iter_rules()}
+    assert actual.get("/api/billing/payment-method/unlink") == "billing.billing_payment_method_unlink"
