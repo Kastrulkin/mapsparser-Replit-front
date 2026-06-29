@@ -847,6 +847,14 @@ const PIPELINE_SECOND_MESSAGE_SENT = 'second_message_sent';
 const PIPELINE_REPLIED = 'replied';
 const PIPELINE_CONVERTED = 'converted';
 const PIPELINE_CLOSED_LOST = 'closed_lost';
+const OUTREACH_HISTORY_PIPELINE_STATUSES = new Set([
+    PIPELINE_CONTACTED,
+    PIPELINE_WAITING_REPLY,
+    PIPELINE_SECOND_MESSAGE_SENT,
+    PIPELINE_REPLIED,
+    PIPELINE_CONVERTED,
+]);
+const OUTREACH_HISTORY_LEGACY_STATUSES = new Set(['sent', 'delivered', 'responded', 'qualified', 'converted']);
 
 const getLeadPipelineStatus = (lead?: Partial<Lead> | null) => {
     const explicit = String(lead?.pipeline_status || '').trim().toLowerCase();
@@ -865,6 +873,19 @@ const getLeadPipelineStatus = (lead?: Partial<Lead> | null) => {
     if (['qualified', 'converted'].includes(legacy)) return PIPELINE_CONVERTED;
     if (legacy === 'closed') return PIPELINE_CLOSED_LOST;
     return PIPELINE_IN_PROGRESS;
+};
+
+const isLeadInOutreachHistory = (lead?: Partial<Lead> | null) => {
+    const pipelineStatus = getLeadPipelineStatus(lead);
+    if (OUTREACH_HISTORY_PIPELINE_STATUSES.has(pipelineStatus)) {
+        return true;
+    }
+    const legacyStatus = String(lead?.status || '').trim().toLowerCase();
+    if (OUTREACH_HISTORY_LEGACY_STATUSES.has(legacyStatus)) {
+        return true;
+    }
+    const partnershipStage = String(lead?.partnership_stage || '').trim().toLowerCase();
+    return partnershipStage === 'approved_for_send' || partnershipStage === 'sent';
 };
 
 const pipelineStatusLabel = (status?: string | null) => {
@@ -1268,6 +1289,21 @@ const buildSyntheticSentQueueItem = (lead: Lead): OutreachQueueItem | null => {
     };
 };
 
+type AuditOfferForm = {
+    enabled: boolean;
+    company_name: string;
+    company_map_url: string;
+    company_address: string;
+    platform: 'yandex' | 'google' | '2gis';
+    offer_text: string;
+    button_text: string;
+    admin_comment: string;
+    prepared_audit_slug: string;
+    prepared_audit_url: string;
+    lead_email: string;
+    status: 'draft' | 'prepared' | 'offered' | 'disabled';
+};
+
 const queueItemMatchesContactFilter = (
     item: OutreachQueueItem,
     lead: Lead | undefined,
@@ -1331,6 +1367,21 @@ const formatBatchRuntimeStatus = (batch: OutreachBatch) => {
 };
 
 const hasLeadAudit = (lead: Lead) => Boolean(String(lead.public_audit_url || '').trim());
+
+const buildDefaultAuditOfferForm = (lead: Lead | null): AuditOfferForm => ({
+    enabled: Boolean(lead?.public_audit_url),
+    company_name: String(lead?.name || ''),
+    company_map_url: String(lead?.source_url || ''),
+    company_address: String(lead?.address || lead?.city || ''),
+    platform: 'yandex',
+    offer_text: 'LocalOS может создать короткий аудит вашей карточки: фото, отзывы, описание, услуги и видимость рядом с конкурентами.',
+    button_text: 'Создать аудит карточки',
+    admin_comment: '',
+    prepared_audit_slug: String(lead?.public_audit_slug || ''),
+    prepared_audit_url: String(lead?.public_audit_url || ''),
+    lead_email: String(lead?.email || ''),
+    status: lead?.public_audit_url ? 'prepared' : 'draft',
+});
 
 const leadAuditLanguageSummary = (lead: Lead) => {
     const enabled = Array.isArray(lead.enabled_languages)
@@ -1833,6 +1884,7 @@ export const ProspectingManagement: React.FC = () => {
     const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
     const [dropColumnId, setDropColumnId] = useState<string | null>(null);
     const [roomPreparationLead, setRoomPreparationLead] = useState<Lead | null>(null);
+    const [roomAuditOfferForm, setRoomAuditOfferForm] = useState<AuditOfferForm>(() => buildDefaultAuditOfferForm(null));
     const [statusUpdateBusy, setStatusUpdateBusy] = useState<Record<string, boolean>>({});
     const [statusUpdateError, setStatusUpdateError] = useState<Record<string, string>>({});
     const [stageDecision, setStageDecision] = useState<StageDecisionState | null>(null);
@@ -1851,26 +1903,100 @@ export const ProspectingManagement: React.FC = () => {
         return [];
     }, [results, searchJob]);
 
-    const unprocessedLeads = useMemo(
+    useEffect(() => {
+        setRoomAuditOfferForm(buildDefaultAuditOfferForm(roomPreparationLead));
+    }, [roomPreparationLead]);
+
+    const workspaceScopedLeads = useMemo(
         () =>
             savedLeads
                 .filter(isDisplayableLead)
-                .filter((lead) => getLeadPipelineStatus(lead) === PIPELINE_UNPROCESSED),
+                .filter((lead) => !isRawImportedLead(lead)),
         [savedLeads]
+    );
+
+    const unprocessedLeads = useMemo(
+        () => workspaceScopedLeads.filter((lead) => getLeadPipelineStatus(lead) === PIPELINE_UNPROCESSED),
+        [workspaceScopedLeads]
+    );
+
+    const workspaceFilteredLeads = useMemo(
+        () => workspaceScopedLeads
+            .filter((lead) => !filters.source || (lead.source || '') === filters.source)
+            .filter((lead) => {
+                const cityFilter = filters.city.trim().toLowerCase();
+                if (!cityFilter) {
+                    return true;
+                }
+                const haystack = [lead.city, lead.address].filter(Boolean).join(' ').toLowerCase();
+                return haystack.includes(cityFilter);
+            })
+            .filter((lead) => {
+                const minRating = Number.parseFloat(filters.minRating);
+                if (!Number.isFinite(minRating)) {
+                    return true;
+                }
+                return Number(lead.rating || 0) >= minRating;
+            })
+            .filter((lead) => {
+                const maxRating = Number.parseFloat(filters.maxRating);
+                if (!Number.isFinite(maxRating)) {
+                    return true;
+                }
+                return Number(lead.rating || 0) <= maxRating;
+            })
+            .filter((lead) => {
+                const minReviews = Number.parseInt(filters.minReviews, 10);
+                if (!Number.isFinite(minReviews)) {
+                    return true;
+                }
+                return Number(lead.reviews_count || 0) >= minReviews;
+            })
+            .filter((lead) => {
+                const maxReviews = Number.parseInt(filters.maxReviews, 10);
+                if (!Number.isFinite(maxReviews)) {
+                    return true;
+                }
+                return Number(lead.reviews_count || 0) <= maxReviews;
+            })
+            .filter((lead) => matchesBooleanFilter(filters.hasWebsite, Boolean(lead.website)))
+            .filter((lead) => matchesBooleanFilter(filters.hasPhone, Boolean(lead.phone)))
+            .filter((lead) => matchesBooleanFilter(filters.hasEmail, Boolean(lead.email)))
+            .filter((lead) => matchesBooleanFilter(filters.hasMessengers, extractHasMessengers(lead)))
+            .filter((lead) => matchesBooleanFilter(filters.hasTelegram, Boolean(lead.telegram_url)))
+            .filter((lead) => matchesBooleanFilter(filters.hasWhatsApp, Boolean(lead.whatsapp_url)))
+            .filter((lead) => matchesBooleanFilter(filters.hasVk, extractHasVk(lead)))
+            .filter((lead) => matchesBooleanFilter(filters.hasMax, extractHasMax(lead))),
+        [
+            workspaceScopedLeads,
+            filters.source,
+            filters.city,
+            filters.minRating,
+            filters.maxRating,
+            filters.minReviews,
+            filters.maxReviews,
+            filters.hasWebsite,
+            filters.hasPhone,
+            filters.hasEmail,
+            filters.hasMessengers,
+            filters.hasTelegram,
+            filters.hasWhatsApp,
+            filters.hasVk,
+            filters.hasMax,
+        ]
     );
 
     const pipelineEligibleLeads = useMemo(
         () =>
-            savedLeads
-                .filter(isDisplayableLead)
-                .filter((lead) => !isRawImportedLead(lead))
-                .filter((lead) => getLeadPipelineStatus(lead) !== PIPELINE_UNPROCESSED),
-        [savedLeads]
+            workspaceFilteredLeads
+                .filter((lead) => getLeadPipelineStatus(lead) !== PIPELINE_UNPROCESSED)
+                .filter((lead) => !filters.pipelineStatus || getLeadPipelineStatus(lead) === filters.pipelineStatus),
+        [workspaceFilteredLeads, filters.pipelineStatus]
     );
 
     const savedLeadDuplicateReasonMap = useMemo(() => {
         const map = new Map<string, SearchDuplicateReason>();
-        pipelineEligibleLeads.forEach((lead) => {
+        workspaceScopedLeads.forEach((lead) => {
             buildStrictDuplicateReasons(lead).forEach(({ key, code, label }) => {
                 if (!map.has(key)) {
                     map.set(key, { code, label });
@@ -1878,7 +2004,7 @@ export const ProspectingManagement: React.FC = () => {
             });
         });
         return map;
-    }, [pipelineEligibleLeads]);
+    }, [workspaceScopedLeads]);
 
     const searchResultDuplicateAnalysis = useMemo(
         () =>
@@ -2788,6 +2914,7 @@ export const ProspectingManagement: React.FC = () => {
             category: manualLeadCategory.trim() || query.trim() || 'manual',
             city: location.trim() || undefined,
             status: 'new',
+            pipeline_status: PIPELINE_UNPROCESSED,
         };
 
         setManualLeadBusy(true);
@@ -3105,72 +3232,10 @@ export const ProspectingManagement: React.FC = () => {
         setFiltersOpen(false);
     };
 
-    const sourceFilteredLeads = useMemo(
-        () => pipelineEligibleLeads
-            .filter((lead) => !filters.pipelineStatus || getLeadPipelineStatus(lead) === filters.pipelineStatus)
-            .filter((lead) => !filters.source || (lead.source || '') === filters.source)
-            .filter((lead) => {
-                const cityFilter = filters.city.trim().toLowerCase();
-                if (!cityFilter) {
-                    return true;
-                }
-                const haystack = [lead.city, lead.address].filter(Boolean).join(' ').toLowerCase();
-                return haystack.includes(cityFilter);
-            })
-            .filter((lead) => {
-                const minRating = Number.parseFloat(filters.minRating);
-                if (!Number.isFinite(minRating)) {
-                    return true;
-                }
-                return Number(lead.rating || 0) >= minRating;
-            })
-            .filter((lead) => {
-                const maxRating = Number.parseFloat(filters.maxRating);
-                if (!Number.isFinite(maxRating)) {
-                    return true;
-                }
-                return Number(lead.rating || 0) <= maxRating;
-            })
-            .filter((lead) => {
-                const minReviews = Number.parseInt(filters.minReviews, 10);
-                if (!Number.isFinite(minReviews)) {
-                    return true;
-                }
-                return Number(lead.reviews_count || 0) >= minReviews;
-            })
-            .filter((lead) => {
-                const maxReviews = Number.parseInt(filters.maxReviews, 10);
-                if (!Number.isFinite(maxReviews)) {
-                    return true;
-                }
-                return Number(lead.reviews_count || 0) <= maxReviews;
-            })
-            .filter((lead) => matchesBooleanFilter(filters.hasWebsite, Boolean(lead.website)))
-            .filter((lead) => matchesBooleanFilter(filters.hasPhone, Boolean(lead.phone)))
-            .filter((lead) => matchesBooleanFilter(filters.hasEmail, Boolean(lead.email)))
-            .filter((lead) => matchesBooleanFilter(filters.hasMessengers, extractHasMessengers(lead)))
-            .filter((lead) => matchesBooleanFilter(filters.hasTelegram, Boolean(lead.telegram_url)))
-            .filter((lead) => matchesBooleanFilter(filters.hasWhatsApp, Boolean(lead.whatsapp_url)))
-            .filter((lead) => matchesBooleanFilter(filters.hasVk, extractHasVk(lead)))
-            .filter((lead) => matchesBooleanFilter(filters.hasMax, extractHasMax(lead))),
-        [
-            pipelineEligibleLeads,
-            filters.pipelineStatus,
-            filters.source,
-            filters.city,
-            filters.minRating,
-            filters.maxRating,
-            filters.minReviews,
-            filters.maxReviews,
-            filters.hasWebsite,
-            filters.hasPhone,
-            filters.hasEmail,
-            filters.hasMessengers,
-            filters.hasTelegram,
-            filters.hasWhatsApp,
-            filters.hasVk,
-            filters.hasMax,
-        ]
+    const sourceFilteredLeads = useMemo(() => pipelineEligibleLeads, [pipelineEligibleLeads]);
+    const analyticsScopedLeads = useMemo(
+        () => workspaceFilteredLeads.filter((lead) => getLeadPipelineStatus(lead) !== PIPELINE_UNPROCESSED),
+        [workspaceFilteredLeads]
     );
     const visiblePipelineLeads = useMemo(() => {
         const normalizedSearch = pipelineSearch.trim().toLowerCase();
@@ -3335,10 +3400,7 @@ export const ProspectingManagement: React.FC = () => {
     const notRelevantLeadCount = pipelineBoardTotals.not_relevant;
     const repliedLeadCount = pipelineBoardTotals.replied;
     const convertedLeadCount = pipelineBoardTotals.converted;
-    const analyticsTotalLeadCount = useMemo(
-        () => savedLeads.filter(isDisplayableLead).filter((lead) => !isRawImportedLead(lead)).length,
-        [savedLeads]
-    );
+    const analyticsTotalLeadCount = useMemo(() => workspaceScopedLeads.length, [workspaceScopedLeads]);
     const leadIdsWithRecordedReplies = useMemo(() => {
         const next = new Set<string>();
         reactions.forEach((reaction) => {
@@ -3360,7 +3422,7 @@ export const ProspectingManagement: React.FC = () => {
         let secondTouch = 0;
         const replyLeadIds = new Set<string>();
 
-        sourceFilteredLeads.forEach((lead) => {
+        analyticsScopedLeads.forEach((lead) => {
             const stage = leadToPipelineBoardColumn(lead);
             const leadId = String(lead.id || '').trim();
             if (stage !== 'not_relevant') {
@@ -3391,7 +3453,7 @@ export const ProspectingManagement: React.FC = () => {
             secondTouchRate: formatConversion(secondTouch, firstTouch),
             replyRate: formatConversion(replyLeadIds.size, firstTouch),
         };
-    }, [analyticsTotalLeadCount, leadIdsWithRecordedReplies, sourceFilteredLeads]);
+    }, [analyticsScopedLeads, analyticsTotalLeadCount, leadIdsWithRecordedReplies]);
     const pipelineStageMetrics = useMemo(() => {
         const stages = [
             {
@@ -3589,7 +3651,7 @@ export const ProspectingManagement: React.FC = () => {
                 replyLeadIds: Set<string>;
             }>();
 
-            sourceFilteredLeads.forEach((lead) => {
+            analyticsScopedLeads.forEach((lead) => {
                 const leadId = String(lead.id || '').trim();
                 const queueItem = leadId ? latestQueueItemByLeadId.get(leadId) || null : null;
                 const segment = segmentForLead(lead, queueItem);
@@ -3646,7 +3708,7 @@ export const ProspectingManagement: React.FC = () => {
                     left.label.localeCompare(right.label)
                 );
         },
-        [latestQueueItemByLeadId, leadIdsWithRecordedReplies, sourceFilteredLeads]
+        [analyticsScopedLeads, latestQueueItemByLeadId, leadIdsWithRecordedReplies]
     );
     const channelConversionRows = useMemo(
         () => buildOutreachConversionSegments((lead, queueItem) => {
@@ -3671,16 +3733,16 @@ export const ProspectingManagement: React.FC = () => {
         [buildOutreachConversionSegments]
     );
     const sentLeads = useMemo(
-        () => sourceFilteredLeads.filter((lead) => {
+        () => analyticsScopedLeads.filter((lead) => {
             if (!lead.id) {
                 return false;
             }
             if (latestQueueItemByLeadId.has(lead.id)) {
                 return true;
             }
-            return ['sent', 'delivered', 'responded', 'qualified', 'converted'].includes(String(lead.status || '').trim().toLowerCase());
+            return isLeadInOutreachHistory(lead);
         }),
-        [latestQueueItemByLeadId, sourceFilteredLeads]
+        [analyticsScopedLeads, latestQueueItemByLeadId]
     );
     const filteredSentLeads = useMemo(
         () => sentLeads.filter((lead) => leadMatchesOutreachContactFilter(lead, sentContactFilter)),
@@ -4019,16 +4081,24 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
-    const prepareSalesRoomForLead = async (lead: Lead, dataMode: 'audited' | 'template') => {
+    const prepareSalesRoomForLead = async (lead: Lead, dataMode: 'audited' | 'template', auditOfferForm?: AuditOfferForm) => {
         if (!lead.id) {
             toast.error('Не удалось найти лида для цифровой комнаты');
             return;
         }
-        setSalesRoomBusy((prev) => ({ ...prev, [lead.id as string]: dataMode }));
+        const leadId = lead.id;
+        setSalesRoomBusy((prev) => ({ ...prev, [leadId]: dataMode }));
         try {
+            const auditOffer = auditOfferForm?.enabled
+                ? {
+                    ...auditOfferForm,
+                    status: auditOfferForm.prepared_audit_url ? auditOfferForm.status : 'draft',
+                }
+                : undefined;
             const response = await api.post(`/admin/prospecting/lead/${lead.id}/prepare-room`, {
                 data_mode: dataMode,
                 channel: lead.selected_channel || bestAvailableOutreachChannel(lead) || 'manual',
+                audit_offer: auditOffer,
             });
             const roomUrl = String(response.data?.room?.public_url || '');
             const chargedCredits = Number(response.data?.billing?.charged_credits || 0);
@@ -4046,7 +4116,7 @@ export const ProspectingManagement: React.FC = () => {
         } finally {
             setSalesRoomBusy((prev) => {
                 const next = { ...prev };
-                delete next[lead.id as string];
+                delete next[leadId];
                 return next;
             });
         }
@@ -4162,6 +4232,7 @@ export const ProspectingManagement: React.FC = () => {
 
     const renderKanbanCard = (lead: Lead) => {
         const leadId = lead.id || '';
+        const isSelected = Boolean(leadId && selectedPipelineLeadIds.includes(leadId));
         const isDragging = leadId && draggingLeadId === leadId;
         const contactReady = leadHasContact(lead);
         const roomBusyState = leadId ? salesRoomBusy[leadId] : '';
@@ -4194,7 +4265,7 @@ export const ProspectingManagement: React.FC = () => {
                 onDragStart={leadId ? handleLeadDragStart(leadId) : undefined}
                 onDragEnd={handleLeadDragEnd}
                 onClick={() => openLeadPreview(lead)}
-                className={`cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${isDragging ? 'opacity-60' : ''}`}
+                className={`cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md ${isDragging ? 'opacity-60' : ''}`}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(event) => {
@@ -4204,8 +4275,8 @@ export const ProspectingManagement: React.FC = () => {
                     }
                 }}
             >
-                <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                <div className="flex min-h-[224px] flex-col gap-4">
+                    <div className="flex items-start gap-3">
                         {leadId ? (
                             <input
                                 type="checkbox"
@@ -4218,76 +4289,83 @@ export const ProspectingManagement: React.FC = () => {
                                             : prev.filter((id) => id !== leadId)
                                     )
                                 }
-                                className="mt-1 h-4 w-4 rounded border border-input"
+                                className="mt-1 h-4 w-4 shrink-0 rounded border border-input"
                             />
                         ) : null}
                         <div className="min-w-0 flex-1">
-                            <div className="break-words text-base font-semibold leading-snug text-foreground">
+                            <div className="text-balance text-[1.0625rem] font-semibold leading-snug text-foreground">
                                 {lead.name || 'Без названия'}
                             </div>
-                            <div className="mt-1 line-clamp-2 text-sm text-slate-500">
+                            <div className="mt-2 line-clamp-2 text-sm leading-relaxed text-slate-600">
                                 {lead.category || 'Без категории'} · {lead.city || '—'}
                             </div>
-                            <div className="mt-1 line-clamp-1 text-sm text-slate-400">
+                            <div className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-400">
                                 {lead.address || 'Адрес не указан'}
                             </div>
                         </div>
                     </div>
-                    <div className="flex max-w-[45%] shrink-0 flex-wrap justify-end gap-1">
+
+                    <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="outline" className="max-w-full truncate">
                             {sourceLabel(lead.source)}
                         </Badge>
-                        <Badge variant="secondary">
+                        <Badge variant="secondary" className="tabular-nums">
                             ★ {lead.rating ?? '-'}{lead.reviews_count ? ` (${lead.reviews_count})` : ''}
                         </Badge>
                     </div>
-                </div>
-                <div className="mt-4 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                        <Badge variant={humanStatus.variant}>{humanStatus.label}</Badge>
-                        <div className="mt-1 line-clamp-1 text-xs text-slate-500">{humanStatus.helper}</div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2" onClick={(event) => event.stopPropagation()}>
-                        <Button
-                            type="button"
-                            size="sm"
-                            onClick={primaryAction.onClick}
-                            disabled={Boolean(roomBusyState)}
+
+                    <div className="mt-auto space-y-3">
+                        <div className="min-w-0">
+                            <Badge variant={humanStatus.variant}>{humanStatus.label}</Badge>
+                            <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{humanStatus.helper}</div>
+                        </div>
+
+                        <div
+                            className="grid grid-cols-[minmax(0,1fr)_40px] items-center gap-2"
+                            onClick={(event) => event.stopPropagation()}
                         >
-                            {roomBusyState ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : primaryAction.icon ? <span className="mr-2 inline-flex">{primaryAction.icon}</span> : null}
-                            {roomBusyState ? 'Готовим...' : primaryAction.label}
-                        </Button>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button type="button" size="icon" variant="outline" className="h-8 w-8">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                    <span className="sr-only">Ещё действия</span>
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuItem onClick={() => openLeadPreview(lead)}>
-                                    Открыть карточку
-                                </DropdownMenuItem>
-                                <DropdownMenuItem disabled={!leadId || Boolean(roomBusyState)} onClick={() => setRoomPreparationLead(lead)}>
-                                    Подготовить комнату
-                                </DropdownMenuItem>
-                                <DropdownMenuItem disabled={!leadId || Boolean(roomBusyState)} onClick={() => prepareSalesRoomForLead(lead, 'template')}>
-                                    Создать без подготовки данных
-                                </DropdownMenuItem>
-                                {roomUrl ? (
-                                    <DropdownMenuItem onClick={() => window.open(roomUrl, '_blank', 'noopener,noreferrer')}>
-                                        Открыть комнату
+                            <Button
+                                type="button"
+                                size="sm"
+                                onClick={primaryAction.onClick}
+                                disabled={Boolean(roomBusyState)}
+                                className="h-10 min-w-0 w-full justify-center px-3 text-sm"
+                            >
+                                {roomBusyState ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : primaryAction.icon ? <span className="mr-2 inline-flex shrink-0">{primaryAction.icon}</span> : null}
+                                <span className="truncate">{roomBusyState ? 'Готовим...' : primaryAction.label}</span>
+                            </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button type="button" size="icon" variant="outline" className="h-10 w-10 shrink-0">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                        <span className="sr-only">Ещё действия</span>
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                    <DropdownMenuItem onClick={() => openLeadPreview(lead)}>
+                                        Открыть карточку
                                     </DropdownMenuItem>
-                                ) : null}
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem disabled={!leadId} onClick={() => leadId && moveLeadToPostponed(leadId)}>
-                                    Отложить
-                                </DropdownMenuItem>
-                                <DropdownMenuItem disabled={!leadId} onClick={() => leadId && moveLeadToNotRelevant(leadId)}>
-                                    Неактуален
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                                    <DropdownMenuItem disabled={!leadId || Boolean(roomBusyState)} onClick={() => setRoomPreparationLead(lead)}>
+                                        Подготовить комнату
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem disabled={!leadId || Boolean(roomBusyState)} onClick={() => prepareSalesRoomForLead(lead, 'template')}>
+                                        Создать без подготовки данных
+                                    </DropdownMenuItem>
+                                    {roomUrl ? (
+                                        <DropdownMenuItem onClick={() => window.open(roomUrl, '_blank', 'noopener,noreferrer')}>
+                                            Открыть комнату
+                                        </DropdownMenuItem>
+                                    ) : null}
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem disabled={!leadId} onClick={() => leadId && moveLeadToPostponed(leadId)}>
+                                        Отложить
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem disabled={!leadId} onClick={() => leadId && moveLeadToNotRelevant(leadId)}>
+                                        Неактуален
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -5414,13 +5492,99 @@ export const ProspectingManagement: React.FC = () => {
                         </DialogDescription>
                     </DialogHeader>
                     {roomPreparationLead ? (
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                            <div className="text-sm font-semibold text-slate-950">{roomPreparationLead.name || 'Лид без названия'}</div>
-                            <div className="mt-1 text-sm text-slate-500">
-                                {roomPreparationLead.category || 'Без категории'} · {roomPreparationLead.city || roomPreparationLead.address || 'Адрес не указан'}
+                        <div className="space-y-4">
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                                <div className="text-sm font-semibold text-slate-950">{roomPreparationLead.name || 'Лид без названия'}</div>
+                                <div className="mt-1 text-sm text-slate-500">
+                                    {roomPreparationLead.category || 'Без категории'} · {roomPreparationLead.city || roomPreparationLead.address || 'Адрес не указан'}
+                                </div>
+                                <div className="mt-3 text-xs leading-relaxed text-slate-500">
+                                    Подготовка данных расходует кредиты.
+                                </div>
                             </div>
-                            <div className="mt-3 text-xs leading-relaxed text-slate-500">
-                                Подготовка данных расходует кредиты.
+                            <div className="rounded-2xl border border-orange-100 bg-orange-50/50 p-4">
+                                <label className="flex items-start gap-3 text-sm font-semibold text-slate-950">
+                                    <input
+                                        type="checkbox"
+                                        className="mt-1 h-4 w-4 rounded border-slate-300"
+                                        checked={roomAuditOfferForm.enabled}
+                                        onChange={(event) => setRoomAuditOfferForm((previous) => ({ ...previous, enabled: event.target.checked }))}
+                                    />
+                                    <span>
+                                        Показать предложение аудита лиду
+                                        <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">
+                                            Аудит будет скрыт до клика лида и появится после обработки.
+                                        </span>
+                                    </span>
+                                </label>
+                                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                    <Input
+                                        value={roomAuditOfferForm.company_name}
+                                        onChange={(event) => setRoomAuditOfferForm((previous) => ({ ...previous, company_name: event.target.value }))}
+                                        placeholder="Название компании"
+                                    />
+                                    <Input
+                                        value={roomAuditOfferForm.company_map_url}
+                                        onChange={(event) => setRoomAuditOfferForm((previous) => ({ ...previous, company_map_url: event.target.value }))}
+                                        placeholder="Ссылка на Яндекс Карты"
+                                    />
+                                    <Input
+                                        value={roomAuditOfferForm.company_address}
+                                        onChange={(event) => setRoomAuditOfferForm((previous) => ({ ...previous, company_address: event.target.value }))}
+                                        placeholder="Адрес / город"
+                                    />
+                                    <select
+                                        className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                        value={roomAuditOfferForm.platform}
+                                        onChange={(event) => setRoomAuditOfferForm((previous) => ({ ...previous, platform: event.target.value === 'google' ? 'google' : event.target.value === '2gis' ? '2gis' : 'yandex' }))}
+                                    >
+                                        <option value="yandex">Яндекс Карты</option>
+                                        <option value="google">Google</option>
+                                        <option value="2gis">2ГИС</option>
+                                    </select>
+                                    <Input
+                                        value={roomAuditOfferForm.prepared_audit_url}
+                                        onChange={(event) => setRoomAuditOfferForm((previous) => ({ ...previous, prepared_audit_url: event.target.value }))}
+                                        placeholder="Ссылка на подготовленный аудит"
+                                    />
+                                    <select
+                                        className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                        value={roomAuditOfferForm.status}
+                                        onChange={(event) => setRoomAuditOfferForm((previous) => ({
+                                            ...previous,
+                                            status: event.target.value === 'offered' ? 'offered' : event.target.value === 'prepared' ? 'prepared' : event.target.value === 'disabled' ? 'disabled' : 'draft',
+                                        }))}
+                                    >
+                                        <option value="draft">Готовится</option>
+                                        <option value="prepared">Prepared</option>
+                                        <option value="offered">Можно показать</option>
+                                        <option value="disabled">Отключено</option>
+                                    </select>
+                                </div>
+                                <textarea
+                                    className="mt-3 min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                    value={roomAuditOfferForm.offer_text}
+                                    onChange={(event) => setRoomAuditOfferForm((previous) => ({ ...previous, offer_text: event.target.value }))}
+                                    placeholder="Текст предложения для лида"
+                                />
+                                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                    <Input
+                                        value={roomAuditOfferForm.button_text}
+                                        onChange={(event) => setRoomAuditOfferForm((previous) => ({ ...previous, button_text: event.target.value }))}
+                                        placeholder="Текст кнопки"
+                                    />
+                                    <Input
+                                        value={roomAuditOfferForm.lead_email}
+                                        onChange={(event) => setRoomAuditOfferForm((previous) => ({ ...previous, lead_email: event.target.value }))}
+                                        placeholder="Email лида"
+                                    />
+                                </div>
+                                <textarea
+                                    className="mt-3 min-h-16 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                    value={roomAuditOfferForm.admin_comment}
+                                    onChange={(event) => setRoomAuditOfferForm((previous) => ({ ...previous, admin_comment: event.target.value }))}
+                                    placeholder="Внутренний комментарий"
+                                />
                             </div>
                         </div>
                     ) : null}
@@ -5432,8 +5596,9 @@ export const ProspectingManagement: React.FC = () => {
                                 if (!lead) {
                                     return;
                                 }
+                                const auditOfferForm = roomAuditOfferForm;
                                 setRoomPreparationLead(null);
-                                void prepareSalesRoomForLead(lead, 'template');
+                                void prepareSalesRoomForLead(lead, 'template', auditOfferForm);
                             }}
                             disabled={Boolean(roomPreparationLead?.id && salesRoomBusy[roomPreparationLead.id])}
                         >
@@ -5445,8 +5610,9 @@ export const ProspectingManagement: React.FC = () => {
                                 if (!lead) {
                                     return;
                                 }
+                                const auditOfferForm = roomAuditOfferForm;
                                 setRoomPreparationLead(null);
-                                void prepareSalesRoomForLead(lead, 'audited');
+                                void prepareSalesRoomForLead(lead, 'audited', auditOfferForm);
                             }}
                             disabled={Boolean(roomPreparationLead?.id && salesRoomBusy[roomPreparationLead.id])}
                         >
