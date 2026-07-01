@@ -17,6 +17,7 @@ from core.service_problem_regeneration import (
     SERVICE_REGENERATION_RATE_LIMIT_COOLDOWN_MINUTES,
     select_problem_services_for_regeneration,
 )
+from core.service_catalog_compression import build_service_catalog_compression_draft
 import json
 import os
 import sys
@@ -318,6 +319,60 @@ def _jsonable_job_value(value):
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return str(value)
+
+
+def _require_services_user():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return None, jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return None, jsonify({"error": "Недействительный токен"}), 401
+    return user_data, None, None
+
+
+def _ensure_business_access(db, cursor, business_id, user_data):
+    owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
+    if not owner_id:
+        return jsonify({"error": "Бизнес не найден"}), 404
+    if owner_id != user_data["user_id"] and not user_data.get("is_superadmin") and not db.is_superadmin(user_data["user_id"]):
+        return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+    return None, None
+
+
+def _load_compression_request(cursor, request_id):
+    cursor.execute(
+        """
+        SELECT id, business_id, user_id, status, before_count, after_count,
+               groups_json, diff_json, created_service_ids, archived_service_ids,
+               created_at, updated_at, applied_at
+        FROM service_catalog_compression_requests
+        WHERE id = %s
+        """,
+        (request_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    col_names = [d[0] for d in cursor.description] if cursor.description else []
+    item = _service_row_to_dict(row, col_names)
+    for field, empty in [
+        ("groups_json", []),
+        ("diff_json", {}),
+        ("created_service_ids", []),
+        ("archived_service_ids", []),
+    ]:
+        if item.get(field) is None:
+            item[field] = empty
+    return _jsonable_job_value(item)
+
+
+def _compression_counts(groups):
+    apply_groups = [group for group in groups if str(group.get("action") or "") in {"apply", "promotion"}]
+    archived_count = sum(len(group.get("source_service_ids") or []) for group in apply_groups)
+    created_count = sum(1 for group in apply_groups if str(group.get("action") or "") == "apply")
+    return archived_count, created_count
 
 
 def _update_regeneration_job(job_id, patch):
@@ -1999,6 +2054,327 @@ def update_service(service_id):
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+@services_bp.route('/api/services/compression/draft', methods=['POST', 'OPTIONS'])
+def create_service_compression_draft():
+    """Создать черновик сокращения меню услуг."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    user_data, error_response, error_status = _require_services_user()
+    if error_response:
+        return error_response, error_status
+
+    try:
+        data = request.get_json() or {}
+        business_id = str(data.get("business_id") or "").strip()
+        if not business_id:
+            return jsonify({"error": "business_id обязателен"}), 400
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        access_response, access_status = _ensure_business_access(db, cursor, business_id, user_data)
+        if access_response:
+            db.close()
+            return access_response, access_status
+
+        services = _load_active_services_for_business(cursor, business_id)
+        draft_payload = build_service_catalog_compression_draft(services)
+        request_id = str(uuid.uuid4())
+        cursor.execute(
+            """
+            INSERT INTO service_catalog_compression_requests (
+                id, business_id, user_id, status, before_count, after_count,
+                groups_json, diff_json, created_service_ids, archived_service_ids
+            )
+            VALUES (%s, %s, %s, 'draft_ready', %s, %s, %s, %s, '[]'::jsonb, '[]'::jsonb)
+            """,
+            (
+                request_id,
+                business_id,
+                user_data["user_id"],
+                int(draft_payload.get("before_count") or 0),
+                int(draft_payload.get("after_count") or 0),
+                Json(draft_payload.get("groups") or []),
+                Json({
+                    "mode": "draft",
+                    "general_recommendations": draft_payload.get("general_recommendations") or [],
+                    "category_counts": draft_payload.get("category_counts") or [],
+                }),
+            ),
+        )
+        db.conn.commit()
+        draft = _load_compression_request(cursor, request_id)
+        db.close()
+        return jsonify({"success": True, "draft": draft, "analysis": draft_payload})
+    except Exception:
+        error = sys.exc_info()[1]
+        print(f"❌ Ошибка создания черновика сокращения услуг: {error}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(error)}), 500
+
+
+@services_bp.route('/api/services/compression/draft/<string:request_id>', methods=['PUT', 'OPTIONS'])
+def update_service_compression_draft(request_id):
+    """Сохранить ручные правки черновика сокращения услуг."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    user_data, error_response, error_status = _require_services_user()
+    if error_response:
+        return error_response, error_status
+
+    try:
+        data = request.get_json() or {}
+        groups = data.get("groups")
+        if not isinstance(groups, list):
+            return jsonify({"error": "groups должен быть массивом"}), 400
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        draft = _load_compression_request(cursor, request_id)
+        if not draft:
+            db.close()
+            return jsonify({"error": "Черновик не найден"}), 404
+        access_response, access_status = _ensure_business_access(db, cursor, draft["business_id"], user_data)
+        if access_response:
+            db.close()
+            return access_response, access_status
+        if str(draft.get("status") or "") == "applied":
+            db.close()
+            return jsonify({"error": "Применённый черновик нельзя редактировать"}), 409
+
+        before_count = int(draft.get("before_count") or 0)
+        archived_count, created_count = _compression_counts(groups)
+        after_count = max(0, before_count - archived_count + created_count)
+        cursor.execute(
+            """
+            UPDATE service_catalog_compression_requests
+            SET groups_json = %s,
+                after_count = %s,
+                status = 'needs_review',
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (Json(groups), after_count, request_id),
+        )
+        db.conn.commit()
+        updated = _load_compression_request(cursor, request_id)
+        db.close()
+        return jsonify({"success": True, "draft": updated})
+    except Exception:
+        error = sys.exc_info()[1]
+        print(f"❌ Ошибка обновления черновика сокращения услуг: {error}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(error)}), 500
+
+
+@services_bp.route('/api/services/compression/draft/<string:request_id>/apply', methods=['POST', 'OPTIONS'])
+def apply_service_compression_draft(request_id):
+    """Применить черновик: создать объединённые услуги и мягко архивировать исходные."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    user_data, error_response, error_status = _require_services_user()
+    if error_response:
+        return error_response, error_status
+
+    try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        draft = _load_compression_request(cursor, request_id)
+        if not draft:
+            db.close()
+            return jsonify({"error": "Черновик не найден"}), 404
+        access_response, access_status = _ensure_business_access(db, cursor, draft["business_id"], user_data)
+        if access_response:
+            db.close()
+            return access_response, access_status
+        if str(draft.get("status") or "") == "applied":
+            db.close()
+            return jsonify({"success": True, "draft": draft, "already_applied": True})
+
+        groups = draft.get("groups_json") if isinstance(draft.get("groups_json"), list) else []
+        applicable_groups = [group for group in groups if str(group.get("action") or "") in {"apply", "promotion"}]
+        if not applicable_groups:
+            db.close()
+            return jsonify({"error": "Нет групп для применения"}), 400
+
+        created_service_ids = []
+        archived_service_ids = []
+        group_results = []
+        for group in applicable_groups:
+            source_ids = [str(item or "").strip() for item in group.get("source_service_ids") or [] if str(item or "").strip()]
+            if not source_ids:
+                continue
+            placeholders = ", ".join(["%s"] * len(source_ids))
+            cursor.execute(
+                f"""
+                SELECT id
+                FROM userservices
+                WHERE business_id = %s
+                  AND id IN ({placeholders})
+                  AND (is_active IS TRUE OR is_active IS NULL)
+                """,
+                tuple([draft["business_id"], *source_ids]),
+            )
+            found_ids = [str(_cell(row, "id", _cell(row, 0)) or "") for row in cursor.fetchall()]
+            if not found_ids:
+                continue
+
+            created_id = None
+            if str(group.get("action") or "") == "apply":
+                target = group.get("target") if isinstance(group.get("target"), dict) else {}
+                created_id = str(uuid.uuid4())
+                keywords = target.get("keywords") if isinstance(target.get("keywords"), list) else []
+                cursor.execute(
+                    """
+                    INSERT INTO userservices (
+                        id, user_id, business_id, category, name, description,
+                        keywords, price, is_active, created_at, updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """,
+                    (
+                        created_id,
+                        user_data["user_id"],
+                        draft["business_id"],
+                        str(target.get("category") or "").strip() or "Общие услуги",
+                        str(target.get("name") or "").strip() or str(group.get("title") or "Объединённая услуга"),
+                        str(target.get("description") or "").strip(),
+                        json.dumps(keywords, ensure_ascii=False),
+                        str(target.get("price") or "").strip(),
+                    ),
+                )
+                created_service_ids.append(created_id)
+
+            cursor.execute(
+                f"""
+                UPDATE userservices
+                SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+                WHERE business_id = %s AND id IN ({placeholders})
+                """,
+                tuple([draft["business_id"], *found_ids]),
+            )
+            archived_service_ids.extend(found_ids)
+            group_results.append({
+                "group_id": group.get("id"),
+                "action": group.get("action"),
+                "created_service_id": created_id,
+                "archived_service_ids": found_ids,
+            })
+
+        before_count = int(draft.get("before_count") or 0)
+        after_count = max(0, before_count - len(set(archived_service_ids)) + len(created_service_ids))
+        diff = {
+            "mode": "applied",
+            "groups": group_results,
+            "created_count": len(created_service_ids),
+            "archived_count": len(set(archived_service_ids)),
+            "provider_write_performed": False,
+        }
+        cursor.execute(
+            """
+            UPDATE service_catalog_compression_requests
+            SET status = 'applied',
+                after_count = %s,
+                diff_json = %s,
+                created_service_ids = %s,
+                archived_service_ids = %s,
+                updated_at = NOW(),
+                applied_at = NOW()
+            WHERE id = %s
+            """,
+            (
+                after_count,
+                Json(diff),
+                Json(created_service_ids),
+                Json(sorted(set(archived_service_ids))),
+                request_id,
+            ),
+        )
+        db.conn.commit()
+        updated = _load_compression_request(cursor, request_id)
+        db.close()
+        return jsonify({"success": True, "draft": updated, "diff": diff})
+    except Exception:
+        error = sys.exc_info()[1]
+        print(f"❌ Ошибка применения черновика сокращения услуг: {error}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(error)}), 500
+
+
+@services_bp.route('/api/services/compression/draft/<string:request_id>/rollback', methods=['POST', 'OPTIONS'])
+def rollback_service_compression_draft(request_id):
+    """Откатить применённую группировку услуг."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    user_data, error_response, error_status = _require_services_user()
+    if error_response:
+        return error_response, error_status
+
+    try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        draft = _load_compression_request(cursor, request_id)
+        if not draft:
+            db.close()
+            return jsonify({"error": "Черновик не найден"}), 404
+        access_response, access_status = _ensure_business_access(db, cursor, draft["business_id"], user_data)
+        if access_response:
+            db.close()
+            return access_response, access_status
+        if str(draft.get("status") or "") != "applied":
+            db.close()
+            return jsonify({"error": "Откат доступен только для применённого черновика"}), 409
+
+        created_ids = [str(item or "").strip() for item in draft.get("created_service_ids") or [] if str(item or "").strip()]
+        archived_ids = [str(item or "").strip() for item in draft.get("archived_service_ids") or [] if str(item or "").strip()]
+        if created_ids:
+            placeholders = ", ".join(["%s"] * len(created_ids))
+            cursor.execute(
+                f"""
+                UPDATE userservices
+                SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+                WHERE business_id = %s AND id IN ({placeholders})
+                """,
+                tuple([draft["business_id"], *created_ids]),
+            )
+        if archived_ids:
+            placeholders = ", ".join(["%s"] * len(archived_ids))
+            cursor.execute(
+                f"""
+                UPDATE userservices
+                SET is_active = TRUE, updated_at = CURRENT_TIMESTAMP
+                WHERE business_id = %s AND id IN ({placeholders})
+                """,
+                tuple([draft["business_id"], *archived_ids]),
+            )
+        cursor.execute(
+            """
+            UPDATE service_catalog_compression_requests
+            SET status = 'rolled_back',
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (request_id,),
+        )
+        db.conn.commit()
+        updated = _load_compression_request(cursor, request_id)
+        db.close()
+        return jsonify({"success": True, "draft": updated})
+    except Exception:
+        error = sys.exc_info()[1]
+        print(f"❌ Ошибка отката сокращения услуг: {error}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(error)}), 500
+
 
 @services_bp.route('/api/services/delete/<string:service_id>', methods=['DELETE', 'OPTIONS'])
 def delete_service(service_id):

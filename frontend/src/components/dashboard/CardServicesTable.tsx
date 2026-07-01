@@ -10,6 +10,7 @@ export type ServiceTableItem = {
   id?: string;
   category?: string;
   source?: string;
+  is_external?: boolean;
   name?: string;
   optimized_name?: string;
   description?: string;

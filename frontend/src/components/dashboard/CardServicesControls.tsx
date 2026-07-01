@@ -1,8 +1,15 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Filter, LayoutGrid, Plus, Search, Sparkles, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ServiceOptimizer from '@/components/ServiceOptimizer';
 import type { ServiceCatalogCompressionSuggestion } from '@/components/dashboard/cardServicesLogic';
+import type { ServiceTableItem } from '@/components/dashboard/CardServicesTable';
+import {
+  applyServiceCompressionDraft,
+  createServiceCompressionDraft,
+  rollbackServiceCompressionDraft,
+  updateServiceCompressionDraft,
+} from '@/components/dashboard/cardOverviewApi';
 
 type ServiceFormValue = {
   category: string;
@@ -308,22 +315,215 @@ export const CardServicesFilterBar = ({
 
 type CardServiceCatalogCompressionDialogProps = {
   suggestion: ServiceCatalogCompressionSuggestion;
+  services: ServiceTableItem[];
+  businessId?: string;
+  categories: string[];
+  onApplied: (message: string) => Promise<void> | void;
   onClose: () => void;
 };
 
-type CompressionDialogTab = 'recommendations' | 'groups' | 'rules';
+type CompressionDialogTab = 'suggestions' | 'editor' | 'review';
+
+type CompressionTarget = {
+  category?: string;
+  name?: string;
+  description?: string;
+  keywords?: string[];
+  price?: string;
+};
+
+type CompressionGroup = {
+  id: string;
+  title?: string;
+  reason?: string;
+  action?: 'apply' | 'skip' | 'promotion';
+  action_text?: string;
+  source_service_ids?: string[];
+  current_count?: number;
+  recommended_count?: number;
+  target?: CompressionTarget;
+  examples?: string[];
+};
+
+type CompressionDraft = {
+  id: string;
+  status: string;
+  before_count: number;
+  after_count: number;
+  groups_json: CompressionGroup[];
+  created_service_ids?: string[];
+  archived_service_ids?: string[];
+};
 
 const compressionTabs: Array<{ id: CompressionDialogTab; label: string }> = [
-  { id: 'recommendations', label: 'Рекомендации' },
-  { id: 'groups', label: 'Группировка' },
-  { id: 'rules', label: 'Общие правила' },
+  { id: 'suggestions', label: 'Предложения' },
+  { id: 'editor', label: 'Редактор групп' },
+  { id: 'review', label: 'Проверка и применение' },
 ];
+
+const compressionGroupActions: Array<'apply' | 'skip' | 'promotion'> = ['apply', 'skip', 'promotion'];
+
+const groupActionLabels: Record<string, string> = {
+  apply: 'Применить',
+  skip: 'Оставить как есть',
+  promotion: 'Вынести в акции',
+};
+
+const normalizeDraftGroups = (value: unknown): CompressionGroup[] => {
+  if (!Array.isArray(value)) return [];
+  return value.map((item, index) => {
+    const record = item && typeof item === 'object' ? Object.fromEntries(Object.entries(item)) : {};
+    const targetRecord = record.target && typeof record.target === 'object' ? Object.fromEntries(Object.entries(record.target)) : {};
+    const action = String(record.action || 'apply');
+    return {
+      id: String(record.id || `group-${index}`),
+      title: String(record.title || 'Группа услуг'),
+      reason: String(record.reason || ''),
+      action: action === 'skip' || action === 'promotion' ? action : 'apply',
+      action_text: String(record.action_text || ''),
+      source_service_ids: Array.isArray(record.source_service_ids) ? record.source_service_ids.map((id) => String(id)) : [],
+      current_count: Number(record.current_count || 0),
+      recommended_count: Number(record.recommended_count || 0),
+      target: {
+        category: String(targetRecord.category || ''),
+        name: String(targetRecord.name || ''),
+        description: String(targetRecord.description || ''),
+        keywords: Array.isArray(targetRecord.keywords) ? targetRecord.keywords.map((keyword) => String(keyword)) : [],
+        price: String(targetRecord.price || ''),
+      },
+      examples: Array.isArray(record.examples) ? record.examples.map((example) => String(example)) : [],
+    };
+  });
+};
 
 export const CardServiceCatalogCompressionDialog = ({
   suggestion,
+  services,
+  businessId,
+  categories,
+  onApplied,
   onClose,
 }: CardServiceCatalogCompressionDialogProps) => {
-  const [activeTab, setActiveTab] = useState<CompressionDialogTab>('recommendations');
+  const [activeTab, setActiveTab] = useState<CompressionDialogTab>('suggestions');
+  const [draft, setDraft] = useState<CompressionDraft | null>(null);
+  const [groups, setGroups] = useState<CompressionGroup[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const serviceById = useMemo(() => {
+    const map = new Map<string, ServiceTableItem>();
+    services.forEach((service) => {
+      if (service.id && !service.is_external) map.set(String(service.id), service);
+    });
+    return map;
+  }, [services]);
+
+  const activeGroups = groups.filter((group) => group.action === 'apply' || group.action === 'promotion');
+  const archivedCount = new Set(activeGroups.flatMap((group) => group.source_service_ids || [])).size;
+  const createdCount = activeGroups.filter((group) => group.action === 'apply').length;
+  const estimatedAfterCount = draft ? Math.max(0, Number(draft.before_count || 0) - archivedCount + createdCount) : suggestion.estimatedAfterCount;
+  const selectedGroup = groups.find((group) => group.id === selectedGroupId) || groups[0] || null;
+  const selectedServices = selectedGroup ? (selectedGroup.source_service_ids || []).map((id) => serviceById.get(id)).filter(Boolean) : [];
+  const usedServiceIds = new Set(groups.flatMap((group) => group.source_service_ids || []));
+  const addableServices = services.filter((service) => service.id && !service.is_external && !usedServiceIds.has(String(service.id))).slice(0, 80);
+
+  const updateGroup = (groupId: string, patch: Partial<CompressionGroup>) => {
+    setGroups((prev) => prev.map((group) => group.id === groupId ? { ...group, ...patch } : group));
+  };
+
+  const updateGroupTarget = (groupId: string, patch: Partial<CompressionTarget>) => {
+    setGroups((prev) => prev.map((group) => (
+      group.id === groupId
+        ? { ...group, target: { ...(group.target || {}), ...patch } }
+        : group
+    )));
+  };
+
+  const createDraft = async () => {
+    if (!businessId) {
+      setErrorMessage('Не выбран бизнес для группировки услуг');
+      return;
+    }
+    setPending(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      const { response, data } = await createServiceCompressionDraft({ business_id: businessId });
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось создать черновик');
+      const nextDraft: CompressionDraft = data.draft;
+      const nextGroups = normalizeDraftGroups(nextDraft.groups_json);
+      setDraft(nextDraft);
+      setGroups(nextGroups);
+      setSelectedGroupId(nextGroups[0]?.id || null);
+      setActiveTab('editor');
+      setStatusMessage('Черновик создан. Проверьте группы и отредактируйте итоговые услуги.');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Не удалось создать черновик');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const saveDraft = async () => {
+    if (!draft) return null;
+    setPending(true);
+    setErrorMessage(null);
+    try {
+      const { response, data } = await updateServiceCompressionDraft(draft.id, { groups });
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось сохранить черновик');
+      const nextDraft: CompressionDraft = data.draft;
+      setDraft(nextDraft);
+      setStatusMessage('Черновик сохранён.');
+      return nextDraft;
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Не удалось сохранить черновик');
+      return null;
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const applyDraft = async () => {
+    if (!draft) return;
+    const ok = window.confirm(`Будет создано ${createdCount} объединённых услуг, ${archivedCount} исходных услуг будут скрыты из активного меню. Внешние карты не изменятся.`);
+    if (!ok) return;
+    const saved = await saveDraft();
+    if (!saved) return;
+    setPending(true);
+    setErrorMessage(null);
+    try {
+      const { response, data } = await applyServiceCompressionDraft(saved.id);
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось применить группировку');
+      setDraft(data.draft);
+      setStatusMessage(`Меню сокращено: было ${saved.before_count}, стало ${data.draft?.after_count ?? estimatedAfterCount}. Откат доступен в этом черновике.`);
+      await onApplied('Меню услуг сгруппировано. Исходные строки скрыты из активного списка.');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Не удалось применить группировку');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const rollbackDraft = async () => {
+    if (!draft) return;
+    const ok = window.confirm('Откатить группировку: скрыть созданные объединённые услуги и вернуть исходные строки?');
+    if (!ok) return;
+    setPending(true);
+    setErrorMessage(null);
+    try {
+      const { response, data } = await rollbackServiceCompressionDraft(draft.id);
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось откатить группировку');
+      setDraft(data.draft);
+      setStatusMessage('Группировка откачена, исходные услуги возвращены.');
+      await onApplied('Группировка услуг откачена. Исходные услуги возвращены.');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Не удалось откатить группировку');
+    } finally {
+      setPending(false);
+    }
+  };
 
   return (
     <div
@@ -343,7 +543,7 @@ export const CardServiceCatalogCompressionDialog = ({
               </div>
               <h3 className="text-balance text-xl font-semibold text-slate-950">Сократить и сгруппировать услуги</h3>
               <p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">
-                Предложение показывает, как сделать меню понятнее для клиента. LocalOS ничего не меняет в услугах автоматически.
+                Рабочий редактор: создайте черновик, объедините похожие услуги, назначьте категории и примените только после проверки.
               </p>
             </div>
             <Button
@@ -364,15 +564,15 @@ export const CardServiceCatalogCompressionDialog = ({
             </div>
             <div className="rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-100">
               <div className="text-xs font-medium text-emerald-700">После группировки</div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums text-emerald-950">{suggestion.estimatedAfterCount}</div>
-              <div className="text-xs text-emerald-700/80">примерная цель</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-emerald-950">{estimatedAfterCount}</div>
+              <div className="text-xs text-emerald-700/80">по текущему черновику</div>
             </div>
             <div className="rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-100">
               <div className="text-xs font-medium text-amber-700">Приоритет</div>
               <div className="mt-1 text-lg font-semibold text-amber-950">
                 {suggestion.highPriority ? 'Высокий' : 'Средний'}
               </div>
-              <div className="text-xs text-amber-700/80">только рекомендация</div>
+              <div className="text-xs text-amber-700/80">{draft ? draft.status : 'черновик не создан'}</div>
             </div>
           </div>
         </div>
@@ -397,11 +597,17 @@ export const CardServiceCatalogCompressionDialog = ({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          {activeTab === 'recommendations' ? (
+          {statusMessage ? <div className="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 ring-1 ring-emerald-100">{statusMessage}</div> : null}
+          {errorMessage ? <div className="mb-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-100">{errorMessage}</div> : null}
+
+          {activeTab === 'suggestions' ? (
             <div className="space-y-5">
               <div className="rounded-2xl bg-slate-50 p-5 ring-1 ring-slate-200/70">
-                <div className="text-sm font-semibold text-slate-950">Что сделать в первую очередь</div>
+                <div className="text-sm font-semibold text-slate-950">Создать рабочий черновик</div>
                 <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">{suggestion.summary}</p>
+                <Button type="button" onClick={createDraft} disabled={pending || !businessId} className="mt-4 bg-slate-950 text-white hover:bg-slate-800">
+                  {pending ? 'Готовим черновик...' : draft ? 'Пересоздать черновик' : 'Создать черновик группировки'}
+                </Button>
               </div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {suggestion.groups.slice(0, 6).map((group) => (
@@ -424,66 +630,233 @@ export const CardServiceCatalogCompressionDialog = ({
             </div>
           ) : null}
 
-          {activeTab === 'groups' ? (
-            <div className="space-y-4">
-              {suggestion.groups.length > 0 ? suggestion.groups.map((group) => (
-                <div key={group.id} className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          {activeTab === 'editor' ? (
+            !draft ? (
+              <div className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-600 ring-1 ring-slate-200">
+                Сначала создайте черновик на вкладке “Предложения”.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(260px,0.8fr)_minmax(420px,1.2fr)]">
+                <div className="space-y-2">
+                  {groups.map((group) => (
+                    <button
+                      key={group.id}
+                      type="button"
+                      onClick={() => setSelectedGroupId(group.id)}
+                      className={`w-full rounded-2xl border px-4 py-3 text-left transition-[background-color,border-color,color] duration-150 ${
+                        selectedGroup?.id === group.id ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="text-sm font-semibold">{group.title}</div>
+                      <div className={`mt-1 text-xs ${selectedGroup?.id === group.id ? 'text-slate-300' : 'text-slate-500'}`}>
+                        {(group.source_service_ids || []).length} → {group.action === 'apply' ? 1 : 0} · {groupActionLabels[group.action || 'apply']}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {selectedGroup ? (
+                  <div className="space-y-4 rounded-2xl bg-white p-5 ring-1 ring-slate-200">
                     <div>
-                      <h4 className="text-balance text-base font-semibold text-slate-950">{group.title}</h4>
-                      <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">{group.reason}</p>
+                      <div className="text-sm font-semibold text-slate-950">{selectedGroup.title}</div>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">{selectedGroup.reason}</p>
                     </div>
-                    <div className="shrink-0 rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold tabular-nums text-slate-700 ring-1 ring-slate-200">
-                      {group.currentCount} → {group.recommendedCount}
-                    </div>
-                  </div>
-                  <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
-                    {group.action}
-                  </div>
-                  {group.examples.length > 0 ? (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {group.examples.map((example) => (
-                        <span key={example} className="max-w-full truncate rounded-full bg-white px-3 py-1.5 text-xs text-slate-600 ring-1 ring-slate-200">
-                          {example}
-                        </span>
+
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                      {compressionGroupActions.map((action) => (
+                        <button
+                          key={action}
+                          type="button"
+                          onClick={() => updateGroup(selectedGroup.id, { action })}
+                          className={`rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
+                            selectedGroup.action === action ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          {groupActionLabels[action]}
+                        </button>
                       ))}
                     </div>
-                  ) : null}
-                </div>
-              )) : (
-                <div className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-600 ring-1 ring-slate-200">
-                  Явных перегруженных групп не найдено. Можно использовать общие правила и ручную проверку категорий.
-                </div>
-              )}
-            </div>
+
+                    {selectedGroup.action === 'apply' ? (
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <label className="text-sm font-medium text-slate-700">
+                          Категория
+                          <input
+                            list="service-compression-categories"
+                            value={selectedGroup.target?.category || ''}
+                            onChange={(event) => updateGroupTarget(selectedGroup.id, { category: event.target.value })}
+                            className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-400"
+                          />
+                        </label>
+                        <label className="text-sm font-medium text-slate-700">
+                          Цена или диапазон
+                          <input
+                            value={selectedGroup.target?.price || ''}
+                            onChange={(event) => updateGroupTarget(selectedGroup.id, { price: event.target.value })}
+                            className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-400"
+                          />
+                        </label>
+                        <label className="text-sm font-medium text-slate-700 md:col-span-2">
+                          Итоговое название
+                          <input
+                            value={selectedGroup.target?.name || ''}
+                            onChange={(event) => updateGroupTarget(selectedGroup.id, { name: event.target.value })}
+                            className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-400"
+                          />
+                        </label>
+                        <label className="text-sm font-medium text-slate-700 md:col-span-2">
+                          Описание с вариантами
+                          <textarea
+                            value={selectedGroup.target?.description || ''}
+                            onChange={(event) => updateGroupTarget(selectedGroup.id, { description: event.target.value })}
+                            rows={7}
+                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm leading-6 outline-none focus:border-slate-400"
+                          />
+                        </label>
+                        <label className="text-sm font-medium text-slate-700 md:col-span-2">
+                          Ключевые слова через запятую
+                          <input
+                            value={(selectedGroup.target?.keywords || []).join(', ')}
+                            onChange={(event) => updateGroupTarget(selectedGroup.id, { keywords: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })}
+                            className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-400"
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+
+                    <datalist id="service-compression-categories">
+                      {categories.map((category) => <option key={category} value={category} />)}
+                    </datalist>
+
+                    <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70">
+                      <div className="mb-3 text-sm font-semibold text-slate-950">Исходные услуги в группе</div>
+                      <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                        {selectedServices.map((service) => (
+                          <label key={service?.id} className="flex items-start gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-700 ring-1 ring-slate-200">
+                            <input
+                              type="checkbox"
+                              checked
+                              onChange={() => updateGroup(selectedGroup.id, {
+                                source_service_ids: (selectedGroup.source_service_ids || []).filter((id) => id !== service?.id),
+                              })}
+                              className="mt-1"
+                            />
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium text-slate-950">{service?.name || 'Без названия'}</span>
+                              <span className="block truncate text-xs text-slate-500">{service?.category || 'Без категории'} · {service?.price || 'без цены'}</span>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      {addableServices.length > 0 ? (
+                        <select
+                          className="mt-3 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-400"
+                          value=""
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            if (!value) return;
+                            updateGroup(selectedGroup.id, {
+                              source_service_ids: [...(selectedGroup.source_service_ids || []), value],
+                            });
+                          }}
+                        >
+                          <option value="">Добавить услугу в группу</option>
+                          {addableServices.map((service) => (
+                            <option key={service.id} value={service.id}>{service.name || 'Без названия'}</option>
+                          ))}
+                        </select>
+                      ) : null}
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" onClick={saveDraft} disabled={pending}>
+                        {pending ? 'Сохраняем...' : 'Сохранить правки'}
+                      </Button>
+                      <Button type="button" onClick={() => setActiveTab('review')} className="bg-slate-950 text-white hover:bg-slate-800">
+                        Перейти к проверке
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-600 ring-1 ring-slate-200">
+                    Нет групп для редактирования. Можно создать обычные категории вручную в списке услуг.
+                  </div>
+                )}
+              </div>
+            )
           ) : null}
 
-          {activeTab === 'rules' ? (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {suggestion.generalRecommendations.map((recommendation, index) => (
-                <div key={recommendation} className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    Правило {index + 1}
+          {activeTab === 'review' ? (
+            !draft ? (
+              <div className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-600 ring-1 ring-slate-200">
+                Сначала создайте черновик на вкладке “Предложения”.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                    <div className="text-xs text-slate-500">Новые объединённые услуги</div>
+                    <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">{createdCount}</div>
                   </div>
-                  <p className="text-pretty text-sm leading-6 text-slate-700">{recommendation}</p>
+                  <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                    <div className="text-xs text-slate-500">Будут скрыты из активного меню</div>
+                    <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">{archivedCount}</div>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                    <div className="text-xs text-slate-500">Итоговое количество</div>
+                    <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">{estimatedAfterCount}</div>
+                  </div>
                 </div>
-              ))}
-            </div>
+
+                <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
+                  <div className="mb-3 text-sm font-semibold text-slate-950">Что будет применено</div>
+                  <div className="space-y-3">
+                    {activeGroups.map((group) => (
+                      <div key={group.id} className="rounded-xl bg-slate-50 px-4 py-3 text-sm ring-1 ring-slate-200/70">
+                        <div className="font-medium text-slate-950">
+                          {group.action === 'apply' ? group.target?.name || group.title : group.title}
+                        </div>
+                        <div className="mt-1 text-slate-600">
+                          {groupActionLabels[group.action || 'apply']} · {(group.source_service_ids || []).length} исходных услуг
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-100">
+                  <div className="font-semibold">Внешние карты не изменятся.</div>
+                  <div>LocalOS создаст новые активные услуги и скроет исходные строки через мягкий архив. Удаления не будет.</div>
+                </div>
+              </div>
+            )
           ) : null}
         </div>
 
         <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-pretty text-xs leading-5 text-slate-500">
-            Это окно не сохраняет изменения. Следующий этап — отдельный approval-flow для применения группировки.
+            Черновик можно применить только вручную. Откат возвращает исходные услуги в активное меню.
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            className="border-slate-200 bg-white text-slate-700 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.96] hover:bg-slate-100"
-          >
-            Закрыть
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            {draft?.status === 'applied' ? (
+              <Button type="button" variant="outline" onClick={rollbackDraft} disabled={pending} className="border-amber-200 bg-white text-amber-800 hover:bg-amber-50">
+                Откатить группировку
+              </Button>
+            ) : null}
+            {draft && draft.status !== 'applied' ? (
+              <Button type="button" onClick={applyDraft} disabled={pending || activeGroups.length === 0} className="bg-emerald-700 text-white hover:bg-emerald-800">
+                {pending ? 'Применяем...' : 'Применить группировку'}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="border-slate-200 bg-white text-slate-700 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.96] hover:bg-slate-100"
+            >
+              Закрыть
+            </Button>
+          </div>
         </div>
       </div>
     </div>

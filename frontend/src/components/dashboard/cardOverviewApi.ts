@@ -193,3 +193,23 @@ export const updateCardService = (serviceId: string, payload: Record<string, unk
 
 export const removeCardService = (serviceId: string) =>
   jsonRequest(`/api/services/delete/${serviceId}`, { method: 'DELETE' });
+
+export const createServiceCompressionDraft = (payload: { business_id?: string }) =>
+  jsonRequest('/api/services/compression/draft', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+export const updateServiceCompressionDraft = (draftId: string, payload: { groups: unknown[] }) =>
+  jsonRequest(`/api/services/compression/draft/${draftId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+export const applyServiceCompressionDraft = (draftId: string) =>
+  jsonRequest(`/api/services/compression/draft/${draftId}/apply`, { method: 'POST' });
+
+export const rollbackServiceCompressionDraft = (draftId: string) =>
+  jsonRequest(`/api/services/compression/draft/${draftId}/rollback`, { method: 'POST' });

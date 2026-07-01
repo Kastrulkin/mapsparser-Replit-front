@@ -1629,6 +1629,13 @@ export const CardOverviewPage = () => {
         {showServiceCompressionSuggestion ? (
           <CardServiceCatalogCompressionDialog
             suggestion={serviceCompressionSuggestion}
+            services={userServices}
+            businessId={currentBusinessId}
+            categories={serviceCategories}
+            onApplied={async (message) => {
+              await loadUserServices();
+              setSuccess(message);
+            }}
             onClose={() => setShowServiceCompressionSuggestion(false)}
           />
         ) : null}
