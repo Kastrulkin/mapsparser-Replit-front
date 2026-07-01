@@ -43,7 +43,7 @@ from core.parsing_runtime_config import get_use_apify_map_parsing, resolve_map_s
 from core.map_url_normalizer import is_google_map_url
 from core.review_response_utils import extract_review_response_text
 from yookassa_integration import run_due_renewals
-from api.admin_prospecting import dispatch_due_outreach_queue
+from services.outreach_dispatch_service import dispatch_due_outreach_queue
 from core.card_automation import (
     collect_due_telegram_digest_messages,
     ensure_card_automation_tables,

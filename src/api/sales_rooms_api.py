@@ -1,22 +1,74 @@
-"""Public sales-room routes split from admin_prospecting.
-
-This is a transitional split: shared sales-room helpers still live in
-admin_prospecting until the service layer is extracted.
-"""
+"""Public sales-room routes."""
 from __future__ import annotations
 
 from flask import Blueprint
 
-from api import admin_prospecting as _admin_prospecting
+from services.sales_room_public_service import (
+    AUDIT_OFFER_REQUESTABLE_STATUSES,
+    CONSENT_VERSION,
+    Json,
+    PUBLIC_SALES_ROOM_EVENT_LIMIT,
+    PUBLIC_SALES_ROOM_EVENT_WINDOW_SEC,
+    PUBLIC_SALES_ROOM_FILE_LIMIT,
+    PUBLIC_SALES_ROOM_MESSAGE_LIMIT,
+    PUBLIC_SALES_ROOM_SUGGESTION_LIMIT,
+    PUBLIC_SALES_ROOM_WRITE_WINDOW_SEC,
+    RealDictCursor,
+    SALES_ROOM_ALLOWED_EXTENSIONS,
+    SALES_ROOM_UPLOAD_MAX_BYTES,
+    _audit_offer_processing_delay_seconds,
+    _build_sales_room_participant_access_token,
+    _can_edit_sales_room,
+    _check_public_sales_room_rate_limit,
+    _clean_sales_room_filename,
+    _create_sales_room_proposal_version,
+    _ensure_audit_offer_user,
+    _ensure_sales_room_proposal_version,
+    _ensure_sales_room_tables,
+    _is_uuid_string,
+    _load_sales_room_audit_offer,
+    _load_sales_room_by_slug,
+    _load_sales_room_latest_version,
+    _load_sales_room_messages,
+    _load_sales_room_participant_by_token,
+    _load_sales_room_review,
+    _make_sales_room_url,
+    _normalize_public_sales_room_proposal,
+    _optional_auth,
+    _participant_token_from_request,
+    _public_audit_offer_allowed_for_participant,
+    _public_audit_offer_visible_for_user,
+    _record_sales_room_event,
+    _record_sales_room_event_by_id,
+    _replace_text_for_sales_room_suggestion,
+    _require_auth,
+    _row_to_dict,
+    _sales_room_file_extension,
+    _send_sales_room_participant_verification_email,
+    _serialize_public_audit_offer,
+    _serialize_sales_room_message,
+    _serialize_sales_room_participant,
+    _serialize_sales_room_suggestion,
+    _serialize_sales_room_version,
+    _slugify_company_name,
+    _to_json_compatible,
+    _update_sales_room_proposal_body,
+    get_db_connection,
+    io,
+    jsonify,
+    load_sales_room_file,
+    normalize_email,
+    quote,
+    release_ready_audit_offers,
+    request,
+    secrets,
+    send_file,
+    store_sales_room_file,
+    uuid,
+)
 
 
 sales_rooms_bp = Blueprint("sales_rooms_api", __name__)
-
-
-for _name in dir(_admin_prospecting):
-    if _name.startswith("__"):
-        continue
-    globals()[_name] = getattr(_admin_prospecting, _name)
 
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>", methods=["GET"])
@@ -50,6 +102,22 @@ def public_sales_room(slug):
                     room_json["proposal"] = proposal
             room_json["messages"] = _load_sales_room_messages(cur, str(row.get("id") or ""))
             room_json["proposal_review"] = _load_sales_room_review(cur, room_id)
+            participant = _load_sales_room_participant_by_token(cur, room_id, _participant_token_from_request())
+            room_json["participant"] = _serialize_sales_room_participant(participant)
+            offer = _load_sales_room_audit_offer(cur, room_id)
+            current_business_id = str(request.headers.get("X-LocalOS-Current-Business-Id") or "").strip()
+            if _public_audit_offer_visible_for_user(cur, row, offer, user_data, current_business_id=current_business_id):
+                public_offer = _serialize_public_audit_offer(offer, participant, expose_teaser=True)
+            else:
+                public_offer = None
+            room_json["audit_offer"] = public_offer
+            if public_offer:
+                _record_sales_room_event_by_id(
+                    cur,
+                    room_id=room_id,
+                    event_type="audit_offer_shown",
+                    metadata={"offer_id": str(public_offer.get("id") or ""), "participant_id": str(participant.get("id") or "")},
+                )
             conn.commit()
             return jsonify({"success": True, "room": _to_json_compatible(room_json)})
         finally:
@@ -110,6 +178,296 @@ def public_sales_room_welcome(slug):
             conn.close()
     except Exception as e:
         print(f"Error updating public sales room welcome: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/participants", methods=["POST"])
+def public_sales_room_participant_register(slug):
+    try:
+        normalized_slug = _slugify_company_name(slug)
+        data = request.get_json(silent=True) or {}
+        email = normalize_email(str(data.get("email") or ""))
+        name = str(data.get("name") or "").strip()
+        company = str(data.get("company") or "").strip()
+        personal_data_consent = bool(data.get("personal_data_consent"))
+        consent_version = str(data.get("consent_version") or CONSENT_VERSION).strip()
+        if not email:
+            return jsonify({"error": "email is required"}), 400
+        if not personal_data_consent:
+            return jsonify({"error": "Необходимо согласие на обработку персональных данных"}), 400
+        conn = get_db_connection()
+        try:
+            _ensure_sales_room_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _load_sales_room_by_slug(cur, normalized_slug)
+            if not row:
+                return jsonify({"error": "Sales room not found"}), 404
+            room_id = str(row.get("id") or "")
+            participant_id = str(uuid.uuid4())
+            verification_token = secrets.token_urlsafe(32)
+            access_token = _build_sales_room_participant_access_token(participant_id)
+            cur.execute(
+                """
+                INSERT INTO sales_room_participants (
+                    id, room_id, email, name, company, is_verified,
+                    personal_data_consent_at, personal_data_consent_version, privacy_accepted_at,
+                    consent_ip, consent_user_agent,
+                    verification_token, access_token, created_at, updated_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, FALSE,
+                    NOW(), %s, NOW(),
+                    %s, %s,
+                    %s, %s, NOW(), NOW()
+                )
+                ON CONFLICT (room_id, email) DO UPDATE
+                SET name = COALESCE(NULLIF(EXCLUDED.name, ''), sales_room_participants.name),
+                    company = COALESCE(NULLIF(EXCLUDED.company, ''), sales_room_participants.company),
+                    personal_data_consent_at = COALESCE(sales_room_participants.personal_data_consent_at, EXCLUDED.personal_data_consent_at),
+                    personal_data_consent_version = COALESCE(sales_room_participants.personal_data_consent_version, EXCLUDED.personal_data_consent_version),
+                    privacy_accepted_at = COALESCE(sales_room_participants.privacy_accepted_at, EXCLUDED.privacy_accepted_at),
+                    consent_ip = COALESCE(sales_room_participants.consent_ip, EXCLUDED.consent_ip),
+                    consent_user_agent = COALESCE(sales_room_participants.consent_user_agent, EXCLUDED.consent_user_agent),
+                    verification_token = CASE
+                        WHEN sales_room_participants.is_verified THEN sales_room_participants.verification_token
+                        ELSE EXCLUDED.verification_token
+                    END,
+                    access_token = COALESCE(sales_room_participants.access_token, EXCLUDED.access_token),
+                    updated_at = NOW()
+                RETURNING *
+                """,
+                (
+                    participant_id,
+                    room_id,
+                    email,
+                    name,
+                    company,
+                    consent_version,
+                    request.headers.get("X-Forwarded-For") or request.remote_addr,
+                    request.headers.get("User-Agent"),
+                    verification_token,
+                    access_token,
+                ),
+            )
+            participant = _row_to_dict(cur.fetchone())
+            token_for_email = str(participant.get("verification_token") or verification_token)
+            participant_token = str(participant.get("access_token") or access_token)
+            email_sent = True
+            if not bool(participant.get("is_verified")):
+                email_sent = _send_sales_room_participant_verification_email(
+                    email=email,
+                    name=name,
+                    slug=normalized_slug,
+                    participant_token=participant_token,
+                    verification_token=token_for_email,
+                )
+            _record_sales_room_event_by_id(
+                cur,
+                room_id=room_id,
+                event_type="participant_registered",
+                metadata={"participant_id": str(participant.get("id") or ""), "email": email, "email_sent": bool(email_sent)},
+            )
+            conn.commit()
+            return jsonify(
+                {
+                    "success": True,
+                    "participant_token": participant_token,
+                    "participant": _serialize_sales_room_participant(participant),
+                    "email_sent": bool(email_sent),
+                    "verification_required": not bool(participant.get("is_verified")),
+                }
+            )
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error registering public sales room participant: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/participants/verify", methods=["POST"])
+def public_sales_room_participant_verify(slug):
+    try:
+        normalized_slug = _slugify_company_name(slug)
+        data = request.get_json(silent=True) or {}
+        verification_token = str(data.get("verification_token") or "").strip()
+        participant_token = str(data.get("participant_token") or "").strip()
+        if not verification_token:
+            return jsonify({"error": "verification_token is required"}), 400
+        conn = get_db_connection()
+        try:
+            _ensure_sales_room_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _load_sales_room_by_slug(cur, normalized_slug)
+            if not row:
+                return jsonify({"error": "Sales room not found"}), 404
+            room_id = str(row.get("id") or "")
+            params = [room_id, verification_token]
+            token_clause = ""
+            if participant_token:
+                token_clause = " AND access_token = %s"
+                params.append(participant_token)
+            cur.execute(
+                f"""
+                UPDATE sales_room_participants
+                SET is_verified = TRUE,
+                    verified_at = COALESCE(verified_at, NOW()),
+                    verification_token = NULL,
+                    updated_at = NOW()
+                WHERE room_id = %s
+                  AND verification_token = %s
+                  {token_clause}
+                RETURNING *
+                """,
+                tuple(params),
+            )
+            participant = _row_to_dict(cur.fetchone())
+            if not participant:
+                return jsonify({"error": "Verification link is invalid or already used"}), 400
+            _record_sales_room_event_by_id(
+                cur,
+                room_id=room_id,
+                event_type="participant_verified",
+                metadata={"participant_id": str(participant.get("id") or ""), "email": str(participant.get("email") or "")},
+            )
+            conn.commit()
+            return jsonify(
+                {
+                    "success": True,
+                    "participant_token": str(participant.get("access_token") or ""),
+                    "participant": _serialize_sales_room_participant(participant),
+                }
+            )
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error verifying public sales room participant: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/audit-offer/request", methods=["POST"])
+def public_sales_room_audit_offer_request(slug):
+    try:
+        normalized_slug = _slugify_company_name(slug)
+        conn = get_db_connection()
+        try:
+            _ensure_sales_room_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _load_sales_room_by_slug(cur, normalized_slug)
+            if not row:
+                return jsonify({"error": "Sales room not found"}), 404
+            room_id = str(row.get("id") or "")
+            participant = _load_sales_room_participant_by_token(cur, room_id, _participant_token_from_request())
+            if not participant or not bool(participant.get("is_verified")):
+                return jsonify({"error": "Verified room participant is required"}), 403
+            offer = _load_sales_room_audit_offer(cur, room_id, for_update=True)
+            if not _public_audit_offer_allowed_for_participant(offer, participant):
+                return jsonify({"error": "Audit offer is not available"}), 403
+            status = str(offer.get("status") or "").strip().lower()
+            if status in AUDIT_OFFER_REQUESTABLE_STATUSES:
+                user_id = _ensure_audit_offer_user(str(participant.get("email") or ""), str(participant.get("name") or ""))
+                cur.execute(
+                    """
+                    UPDATE sales_room_audit_offers
+                    SET status = 'processing',
+                        requested_by_participant_id = %s,
+                        requested_user_id = NULLIF(%s, '')::uuid,
+                        requested_at = COALESCE(requested_at, NOW()),
+                        processing_started_at = COALESCE(processing_started_at, NOW()),
+                        updated_at = NOW()
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (participant.get("id"), user_id, offer.get("id")),
+                )
+                offer = _row_to_dict(cur.fetchone())
+                _record_sales_room_event_by_id(
+                    cur,
+                    room_id=room_id,
+                    event_type="audit_offer_requested",
+                    metadata={"offer_id": str(offer.get("id") or ""), "participant_id": str(participant.get("id") or "")},
+                )
+                _record_sales_room_event_by_id(
+                    cur,
+                    room_id=room_id,
+                    event_type="audit_offer_processing_started",
+                    metadata={"offer_id": str(offer.get("id") or ""), "delay_seconds": _audit_offer_processing_delay_seconds()},
+                )
+            conn.commit()
+            return jsonify({"success": True, "audit_offer": _serialize_public_audit_offer(offer, participant)})
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error requesting public sales room audit offer: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/audit-offer/status", methods=["GET"])
+def public_sales_room_audit_offer_status(slug):
+    try:
+        release_ready_audit_offers()
+        normalized_slug = _slugify_company_name(slug)
+        conn = get_db_connection()
+        try:
+            _ensure_sales_room_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _load_sales_room_by_slug(cur, normalized_slug)
+            if not row:
+                return jsonify({"error": "Sales room not found"}), 404
+            room_id = str(row.get("id") or "")
+            participant = _load_sales_room_participant_by_token(cur, room_id, _participant_token_from_request())
+            offer = _load_sales_room_audit_offer(cur, room_id)
+            public_offer = _serialize_public_audit_offer(offer, participant)
+            if not public_offer:
+                return jsonify({"error": "Audit offer is not available"}), 403
+            return jsonify({"success": True, "audit_offer": public_offer})
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error loading public sales room audit offer status: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/audit-offer/opened", methods=["POST"])
+def public_sales_room_audit_offer_opened(slug):
+    try:
+        normalized_slug = _slugify_company_name(slug)
+        conn = get_db_connection()
+        try:
+            _ensure_sales_room_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _load_sales_room_by_slug(cur, normalized_slug)
+            if not row:
+                return jsonify({"error": "Sales room not found"}), 404
+            room_id = str(row.get("id") or "")
+            participant = _load_sales_room_participant_by_token(cur, room_id, _participant_token_from_request())
+            offer = _load_sales_room_audit_offer(cur, room_id, for_update=True)
+            public_offer = _serialize_public_audit_offer(offer, participant)
+            if not public_offer or not public_offer.get("audit_url"):
+                return jsonify({"error": "Audit is not ready"}), 403
+            if str(offer.get("status") or "") != "opened":
+                cur.execute(
+                    """
+                    UPDATE sales_room_audit_offers
+                    SET status = 'opened',
+                        opened_at = COALESCE(opened_at, NOW()),
+                        updated_at = NOW()
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (offer.get("id"),),
+                )
+                offer = _row_to_dict(cur.fetchone())
+                _record_sales_room_event_by_id(
+                    cur,
+                    room_id=room_id,
+                    event_type="audit_offer_opened",
+                    metadata={"offer_id": str(offer.get("id") or ""), "participant_id": str(participant.get("id") or "")},
+                )
+            conn.commit()
+            return jsonify({"success": True, "audit_offer": _serialize_public_audit_offer(offer, participant)})
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error marking public sales room audit offer opened: {e}")
         return jsonify({"error": str(e)}), 500
 
 @sales_rooms_bp.route("/api/sales-rooms/public/<string:slug>/proposal/suggestions", methods=["POST"])
