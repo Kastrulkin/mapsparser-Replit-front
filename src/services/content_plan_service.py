@@ -60,6 +60,17 @@ def _row_to_dict(cursor: Any, row: Any) -> dict[str, Any]:
     return {}
 
 
+def _json_value(value: Any, fallback: Any) -> Any:
+    if value is None:
+        return fallback
+    if isinstance(value, (dict, list)):
+        return value
+    try:
+        return json.loads(value)
+    except Exception:
+        return fallback
+
+
 def _json_ready(value: Any) -> Any:
     if isinstance(value, datetime):
         return value.isoformat()
@@ -1063,6 +1074,7 @@ def ensure_content_plan_tables(cursor: Any) -> None:
         )
         """
     )
+    cursor.execute("ALTER TABLE contentplanitems ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb")
 
 
 def _ensure_usernews_table(cursor: Any) -> None:
@@ -1888,7 +1900,7 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
             """
             SELECT id, business_id, scheduled_for, content_type, theme, goal, source_kind, source_ref,
                    seo_keyword, service_id, transaction_id, seo_views, location_scope, draft_text, status, usernews_id,
-                   created_at, updated_at
+                   metadata_json, created_at, updated_at
             FROM contentplanitems
             WHERE plan_id = %s
             ORDER BY scheduled_for ASC, created_at ASC
@@ -1927,8 +1939,9 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
                     "draft_text": str(_row_get(row, "draft_text", 13, "") or "").strip(),
                     "status": str(_row_get(row, "status", 14, "") or "").strip(),
                     "usernews_id": str(_row_get(row, "usernews_id", 15, "") or "").strip(),
-                    "created_at": _row_get(row, "created_at", 16),
-                    "updated_at": _row_get(row, "updated_at", 17),
+                    "metadata_json": _json_value(_row_get(row, "metadata_json", 16, {}), {}),
+                    "created_at": _row_get(row, "created_at", 17),
+                    "updated_at": _row_get(row, "updated_at", 18),
                 }
             )
         target_meta = _resolve_scope_target_meta(
@@ -2107,6 +2120,17 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         if "draft_text" in payload:
             updates.append("status = %s")
             params.append("edited")
+            updates.append("metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb")
+            params.append(
+                json.dumps(
+                    {
+                        "generation_source": "manual",
+                        "generation_error_reason": "",
+                        "last_generation_failed_at": "",
+                    },
+                    ensure_ascii=False,
+                )
+            )
         if not updates:
             return get_content_plan(user_id, str(data.get("plan_id") or ""))
         updates.append("updated_at = CURRENT_TIMESTAMP")
@@ -3773,7 +3797,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             """
             SELECT i.id, i.plan_id, i.business_id, i.theme, i.goal, i.content_type, i.source_kind, i.source_ref,
                    i.seo_keyword, i.seo_views, i.service_id, i.transaction_id, i.location_scope,
-                   i.usernews_id,
+                   i.usernews_id, i.draft_text, i.status, i.metadata_json,
                    p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
@@ -3861,6 +3885,10 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             f"{industry_pattern_context}\n\n"
             "Верни только готовый текст новости."
         )
+        generated_text = ""
+        generation_source = "ai"
+        generation_error_reason = ""
+        fallback_preview = ""
         try:
             result = analyze_text_with_gigachat(
                 prompt,
@@ -3870,12 +3898,25 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             )
             generated_text = _sanitize_generated_news_text(str(result or ""))
             if not generated_text:
-                generated_text = _fallback_draft_text(business_name, item, business_facts, normalized_language)
+                generation_source = "fallback"
+                generation_error_reason = "empty_ai_response"
+                fallback_preview = _fallback_draft_text(business_name, item, business_facts, normalized_language)
         except Exception:
-            generated_text = _fallback_draft_text(business_name, item, business_facts, normalized_language)
-        if _looks_like_ice_rink_hallucination(generated_text, business_facts) or _content_plan_draft_needs_fallback(generated_text, business_facts):
-            generated_text = _fallback_draft_text(business_name, item, business_facts, normalized_language)
-        if active_patterns:
+            generation_source = "fallback"
+            generation_error_reason = "ai_exception"
+            fallback_preview = _fallback_draft_text(business_name, item, business_facts, normalized_language)
+            generated_text = ""
+        if generated_text and _looks_like_ice_rink_hallucination(generated_text, business_facts):
+            generation_source = "fallback"
+            generation_error_reason = "hallucination_filter"
+            fallback_preview = _fallback_draft_text(business_name, item, business_facts, normalized_language)
+            generated_text = ""
+        if generated_text and _content_plan_draft_needs_fallback(generated_text, business_facts):
+            generation_source = "fallback"
+            generation_error_reason = "sanity_filter"
+            fallback_preview = _fallback_draft_text(business_name, item, business_facts, normalized_language)
+            generated_text = ""
+        if active_patterns and generation_source == "ai":
             record_industry_pattern_impact_event(
                 db.conn,
                 active_patterns,
@@ -3916,18 +3957,61 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             "network_location" if location_scope else "single_business",
             location_scope or str(item.get("business_id") or ""),
         )
-        cursor.execute(
-            """
-            UPDATE contentplanitems
-            SET draft_text = %s,
-                status = 'draft_generated',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
-            """,
-            (generated_text, item_id),
-        )
+        generation_metadata = {
+            "generation_source": generation_source,
+            "generation_error_reason": generation_error_reason,
+            "last_generation_failed_at": datetime.utcnow().isoformat() if generation_source != "ai" else "",
+            "fallback_preview": fallback_preview if generation_source != "ai" else "",
+            "language": normalized_language,
+        }
+        if generation_source == "ai":
+            cursor.execute(
+                """
+                UPDATE contentplanitems
+                SET draft_text = %s,
+                    status = 'draft_generated',
+                    metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (generated_text, json.dumps(generation_metadata, ensure_ascii=False), item_id),
+            )
+        else:
+            previous_draft_text = str(item.get("draft_text") or "").strip()
+            technical_fallback_text = str(fallback_preview or "").strip()
+            should_clear_existing_fallback = bool(
+                previous_draft_text
+                and technical_fallback_text
+                and previous_draft_text == technical_fallback_text
+            )
+            if should_clear_existing_fallback:
+                cursor.execute(
+                    """
+                    UPDATE contentplanitems
+                    SET draft_text = NULL,
+                        status = 'planned',
+                        metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (json.dumps(generation_metadata, ensure_ascii=False), item_id),
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE contentplanitems
+                    SET status = CASE
+                            WHEN COALESCE(NULLIF(draft_text, ''), '') = '' THEN 'planned'
+                            ELSE 'edited'
+                        END,
+                        metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (json.dumps(generation_metadata, ensure_ascii=False), item_id),
+                )
         usernews_id = str(item.get("usernews_id") or "").strip()
-        if usernews_id:
+        if usernews_id and generation_source == "ai":
             _ensure_usernews_table(cursor)
             cursor.execute(
                 """
@@ -3954,7 +4038,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             user_id=user_id,
             business_id=str(item.get("root_business_id") or item.get("business_id") or ""),
             capability="content_plan.draft",
-            event_type="generated",
+            event_type="generated" if generation_source == "ai" else "failed",
             draft_text=generated_text,
             metadata={
                 "item_id": item_id,
@@ -3968,10 +4052,24 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
                 "location_label": str(location_meta.get("scope_target_label") or "").strip(),
                 "language": normalized_language,
                 "updated_usernews_id": usernews_id,
+                "generation_source": generation_source,
+                "generation_error_reason": generation_error_reason,
             },
         )
         db.conn.commit()
-        return get_content_plan(user_id, str(item.get("plan_id") or ""))
+        return {
+            "plan": get_content_plan(user_id, str(item.get("plan_id") or "")),
+            "generation": {
+                "success": generation_source == "ai",
+                "source": generation_source,
+                "message": (
+                    "Текст готов. Проверьте его и утвердите публикацию."
+                    if generation_source == "ai"
+                    else "Не удалось написать текст. Попробуйте ещё раз."
+                ),
+                "reason": generation_error_reason,
+            },
+        }
     except Exception:
         db.conn.rollback()
         raise

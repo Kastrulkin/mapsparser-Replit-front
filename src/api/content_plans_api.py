@@ -202,12 +202,18 @@ def content_plan_item_generate_draft(item_id: str):
         return error_response
     data = request.get_json(silent=True) or {}
     try:
-        plan = generate_draft_for_plan_item(
+        result = generate_draft_for_plan_item(
             str(user_data.get("user_id") or ""),
             item_id,
             language=str(data.get("language") or "").strip() or None,
         )
-        return jsonify({"success": True, "plan": plan})
+        return jsonify(
+            {
+                "success": True,
+                "plan": result.get("plan"),
+                "generation": result.get("generation") or {"success": True, "source": "ai"},
+            }
+        )
     except PermissionError as exc:
         return jsonify({"success": False, "error": str(exc)}), 403
     except ValueError as exc:

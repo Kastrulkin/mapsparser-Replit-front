@@ -61,6 +61,7 @@ type PlanItem = {
   draft_text?: string;
   status?: string;
   content_type?: string;
+  metadata_json?: Record<string, unknown>;
 };
 
 type PlanPayload = {
@@ -248,7 +249,11 @@ const getWeekDays = (anchor: Date) => {
 
 const getItemDateKey = (item: PlanItem) => normalizeIsoDate(item.scheduled_for);
 
+const itemGenerationSource = (item?: PlanItem | null) => String(item?.metadata_json?.generation_source || '').trim();
+
 const itemHasText = (item: PlanItem) => String(item.draft_text || '').trim().length > 0;
+
+const itemHasUsableText = (item: PlanItem) => itemHasText(item) && itemGenerationSource(item) !== 'fallback';
 
 const getPostStatusLabel = (status?: string) => {
   const normalized = String(status || '').toLowerCase();
@@ -306,7 +311,7 @@ const getItemStatusLabel = (item: PlanItem, posts: SocialPost[]) => {
   if (posts.some((post) => String(post.status || '') === 'needs_review')) return 'Нужно проверить';
   if (posts.some((post) => String(post.status || '') === 'queued')) return 'Запланировано';
   if (posts.length > 0 && posts.every((post) => String(post.status || '') === 'published')) return 'Опубликовано';
-  if (itemHasText(item)) return 'Нужно проверить';
+  if (itemHasUsableText(item)) return 'Нужно проверить';
   return 'Черновик';
 };
 
@@ -330,7 +335,7 @@ const getCalendarItemState = (item: PlanItem, posts: SocialPost[]) => {
   if (statuses.includes('needs_review')) {
     return { status: 'Текст готов', action: 'Утвердить текст' };
   }
-  if (itemHasText(item)) {
+  if (itemHasUsableText(item)) {
     return { status: 'Текст готов', action: 'Подготовить каналы' };
   }
   return { status: 'Черновик', action: 'Написать текст' };
@@ -433,11 +438,11 @@ export function ContentPage() {
   }, [context]);
 
   const filledDays = useMemo(() => {
-    const filled = new Set(items.filter((item) => itemHasText(item)).map(getItemDateKey).filter(Boolean));
+    const filled = new Set(items.filter((item) => itemHasUsableText(item)).map(getItemDateKey).filter(Boolean));
     return filled.size;
   }, [items]);
   const totalDays = Number(currentPlan?.period_days || 30);
-  const needsReviewCount = Number(socialSummary?.needs_review || 0) || items.filter((item) => itemHasText(item) && getItemStatusLabel(item, postsByItem[item.id] || []) === 'Нужно проверить').length;
+  const needsReviewCount = Number(socialSummary?.needs_review || 0) || items.filter((item) => itemHasUsableText(item) && getItemStatusLabel(item, postsByItem[item.id] || []) === 'Нужно проверить').length;
   const nextItem = useMemo(() => {
     const today = toIsoDate(new Date());
     return [...items]
@@ -740,7 +745,12 @@ export function ContentPage() {
         ? plan.items.find((nextItem: PlanItem) => nextItem.id === selectedItem.id)
         : null;
       setDraftEdits((prev) => ({ ...prev, [selectedItem.id]: String(refreshedItem?.draft_text || '') }));
-      setActionMessage('Текст готов. Проверьте его и утвердите публикацию.');
+      const generation = response.generation || {};
+      if (generation.success === false || generation.source === 'fallback') {
+        setError(String(generation.message || 'Не удалось написать текст. Попробуйте ещё раз.'));
+      } else {
+        setActionMessage(String(generation.message || 'Текст готов. Проверьте его и утвердите публикацию.'));
+      }
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : 'Не удалось сгенерировать текст');
     } finally {
@@ -1302,7 +1312,7 @@ export function ContentPage() {
       <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
         <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Сегодня</div>
         <div className="mt-4 space-y-3">
-          <Insight icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} text={`Создано ${items.filter(itemHasText).length} публикаций`} />
+          <Insight icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} text={`Создано ${items.filter(itemHasUsableText).length} публикаций`} />
           <Insight icon={<AlertCircle className="h-4 w-4 text-amber-600" />} text={`Требует проверки ${needsReviewCount}`} />
           <Insight icon={<Lightbulb className="h-4 w-4 text-blue-600" />} text="Предлагаю публикацию к ближайшему событию" detail="Потому что сезонные темы обычно дают больше поводов написать." />
           <Insight icon={<Star className="h-4 w-4 text-violet-600" />} text="Проверьте акции конкурентов" detail="Если рядом появилась акция, стоит ответить своим предложением." />
@@ -1521,7 +1531,9 @@ export function ContentPage() {
     const item = selectedItem;
     const hasPosts = selectedPosts.length > 0;
     const failedPost = selectedPosts.find((post) => String(post.status || '') === 'failed');
-    const hasDraftText = Boolean(String(draftEdits[item?.id || ''] ?? item?.draft_text ?? '').trim());
+    const currentDraftText = String(draftEdits[item?.id || ''] ?? item?.draft_text ?? '').trim();
+    const hasFallbackDraft = itemGenerationSource(item) === 'fallback';
+    const hasDraftText = Boolean(currentDraftText) && itemGenerationSource(item) !== 'fallback';
     const channelCount = hasPosts ? selectedPosts.length : CHANNELS.length;
     const needsReviewChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Нужно проверить').length;
     const readyTextChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Текст готов').length;
@@ -1586,7 +1598,11 @@ export function ContentPage() {
                         {hasDraftText ? 'Текст уже есть' : 'Текста ещё нет'}
                       </div>
                       <div className="mt-1 text-sm text-slate-500">
-                        {hasDraftText ? 'Можно поправить вручную или попросить LocalOS написать заново.' : 'LocalOS напишет новость по теме из контент-плана.'}
+                        {hasDraftText
+                          ? 'Можно поправить вручную или попросить LocalOS написать заново.'
+                          : hasFallbackDraft
+                            ? 'ИИ не смог подготовить хороший текст с первого раза. Попробуйте ещё раз.'
+                            : 'LocalOS напишет новость по теме из контент-плана.'}
                       </div>
                     </div>
                     <Button
@@ -1776,8 +1792,8 @@ export function ContentPage() {
                     <div className="mt-4">
                       <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Статус</div>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        <span className={cn('rounded-full px-3 py-1 text-xs font-semibold ring-1', getStatusClassName(itemHasText(item) ? 'Нужно проверить' : 'Черновик'))}>
-                          {itemHasText(item) ? 'Нужно проверить' : 'Черновик'}
+                        <span className={cn('rounded-full px-3 py-1 text-xs font-semibold ring-1', getStatusClassName(itemHasUsableText(item) ? 'Нужно проверить' : 'Черновик'))}>
+                          {itemHasUsableText(item) ? 'Нужно проверить' : 'Черновик'}
                         </span>
                       </div>
                     </div>

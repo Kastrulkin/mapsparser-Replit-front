@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime
 
 import src.services.content_plan_service as content_plan_service
@@ -30,6 +31,112 @@ from src.services.content_plan_service import (
     _select_context_seo_keywords,
     _scope_target_business_id,
 )
+
+
+class _FakeDraftCursor:
+    def __init__(self):
+        self.description = []
+        self.row = None
+        self.executed = []
+
+    def execute(self, query, params=None):
+        self.executed.append((query, params))
+        compact_query = " ".join(str(query).split()).lower()
+        if compact_query.startswith("select i.id, i.plan_id"):
+            self.description = [
+                ("id",),
+                ("plan_id",),
+                ("business_id",),
+                ("theme",),
+                ("goal",),
+                ("content_type",),
+                ("source_kind",),
+                ("source_ref",),
+                ("seo_keyword",),
+                ("seo_views",),
+                ("service_id",),
+                ("transaction_id",),
+                ("location_scope",),
+                ("usernews_id",),
+                ("draft_text",),
+                ("status",),
+                ("metadata_json",),
+                ("root_business_id",),
+            ]
+            self.row = (
+                "item-1",
+                "plan-1",
+                "business-1",
+                "Напоминание: 4 июля — Комик против ИИ",
+                "Вернуть внимание к ближайшему событию и привести к записи через карточку или сайт.",
+                "reminder",
+                "event",
+                "Комик против ИИ",
+                "",
+                0,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "planned",
+                {},
+                "business-1",
+            )
+        elif compact_query.startswith("select name, city, business_type"):
+            self.description = [
+                ("name",),
+                ("city",),
+                ("business_type",),
+                ("industry",),
+                ("categories",),
+                ("address",),
+                ("description",),
+                ("site",),
+                ("website",),
+            ]
+            self.row = (
+                "Каток",
+                "Краснодар",
+                "Культурный центр",
+                "",
+                "культурный центр, события, стендап",
+                "ул. Жлобы, 139",
+                "События, концерты и стендап.",
+                "https://katok.io/",
+                "",
+            )
+        else:
+            self.description = []
+            self.row = None
+
+    def fetchone(self):
+        return self.row
+
+
+class _FakeDraftConnection:
+    def __init__(self):
+        self.cursor_instance = _FakeDraftCursor()
+        self.committed = False
+        self.rolled_back = False
+
+    def cursor(self):
+        return self.cursor_instance
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+
+class _FakeDraftDatabase:
+    def __init__(self):
+        self.conn = _FakeDraftConnection()
+        self.closed = False
+
+    def close(self):
+        self.closed = True
 
 
 def test_content_plan_skeleton_respects_allowed_period_and_sources():
@@ -467,6 +574,52 @@ def test_content_plan_katok_site_description_prevents_school_fallback(monkeypatc
     assert "Дата, время и запись — в карточке." in draft
     assert "школ" not in draft.lower()
     assert _content_plan_draft_needs_fallback("Каток — школа и пространство для детей и подростков.", facts) is True
+
+
+def test_generate_draft_does_not_save_fallback_as_ready_text(monkeypatch):
+    fake_db = _FakeDraftDatabase()
+
+    monkeypatch.setattr(content_plan_service, "DatabaseManager", lambda: fake_db)
+    monkeypatch.setattr(content_plan_service, "get_business_owner_id", lambda _cursor, _business_id: "user-1")
+    monkeypatch.setattr(content_plan_service, "_load_content_plan_service_facts", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(content_plan_service, "load_active_industry_patterns", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(content_plan_service, "_resolve_scope_target_meta", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(content_plan_service, "_record_content_plan_event", lambda **_kwargs: None)
+    monkeypatch.setattr(content_plan_service, "analyze_text_with_gigachat", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(
+        content_plan_service,
+        "get_content_plan",
+        lambda _user_id, _plan_id: {
+            "id": "plan-1",
+            "items": [
+                {
+                    "id": "item-1",
+                    "draft_text": "",
+                    "status": "planned",
+                    "metadata_json": {"generation_source": "fallback"},
+                }
+            ],
+        },
+    )
+
+    result = content_plan_service.generate_draft_for_plan_item("user-1", "item-1", "ru")
+
+    assert result["generation"]["success"] is False
+    assert result["generation"]["source"] == "fallback"
+    assert result["generation"]["reason"] == "empty_ai_response"
+    content_item_updates = [
+        (query, params)
+        for query, params in fake_db.conn.cursor_instance.executed
+        if "UPDATE contentplanitems" in str(query)
+    ]
+    assert content_item_updates
+    update_query, update_params = content_item_updates[-1]
+    assert "draft_text = %s" not in update_query
+    metadata = json.loads(update_params[0])
+    assert metadata["generation_source"] == "fallback"
+    assert metadata["generation_error_reason"] == "empty_ai_response"
+    assert "Дата, время и запись" in metadata["fallback_preview"]
+    assert fake_db.conn.committed is True
 
 
 def test_beauty_fallback_draft_stays_on_marketing_objective():
