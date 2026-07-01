@@ -13,7 +13,7 @@ import re
 import time
 import random
 from difflib import SequenceMatcher
-from urllib.parse import quote, unquote
+from urllib.parse import unquote
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -21,7 +21,7 @@ import requests
 from flask import Blueprint, jsonify, request, send_file
 from psycopg2.extras import Json, RealDictCursor
 
-from auth_system import verify_session
+from auth_system import CONSENT_VERSION, normalize_email, verify_session
 from core.channel_delivery import normalize_phone, send_maton_bridge_message
 from core.card_audit import build_lead_card_preview_snapshot
 from core.telegram_userbot import load_userbot_account, send_message as userbot_send_message
@@ -59,7 +59,45 @@ from pg_db_utils import get_db_connection
 from services.gigachat_client import analyze_text_with_gigachat
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
-from services.sales_room_file_storage import load_sales_room_file, sales_room_upload_root, store_sales_room_file
+from services.sales_room_helpers import (
+    append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
+    make_sales_room_url as _make_sales_room_url,
+    normalize_sales_room_data_mode as _normalize_sales_room_data_mode,
+)
+from services.sales_room_review_service import (
+    can_edit_sales_room as _can_edit_sales_room,
+    create_sales_room_proposal_version as _create_sales_room_proposal_version,
+    ensure_sales_room_proposal_version as _ensure_sales_room_proposal_version,
+    load_sales_room_by_slug as _load_sales_room_by_slug,
+    load_sales_room_latest_version as _load_sales_room_latest_version,
+    load_sales_room_messages as _load_sales_room_messages,
+    load_sales_room_review as _load_sales_room_review,
+    replace_text_for_sales_room_suggestion as _replace_text_for_sales_room_suggestion,
+    serialize_sales_room_message as _serialize_sales_room_message,
+    serialize_sales_room_suggestion as _serialize_sales_room_suggestion,
+    serialize_sales_room_version as _serialize_sales_room_version,
+    update_sales_room_proposal_body as _update_sales_room_proposal_body,
+)
+from services.sales_room_audit_offer_service import (
+    AUDIT_OFFER_DEFAULT_BUTTON,
+    AUDIT_OFFER_DEFAULT_TEXT,
+    AUDIT_OFFER_DEFAULT_TITLE,
+    AUDIT_OFFER_PLATFORMS,
+    AUDIT_OFFER_REQUESTABLE_STATUSES,
+    AUDIT_OFFER_TERMINAL_STATUSES,
+    AUDIT_OFFER_VISIBLE_STATUSES,
+    audit_offer_processing_delay_seconds as _audit_offer_processing_delay_seconds,
+    build_sales_room_participant_access_token as _build_sales_room_participant_access_token,
+    ensure_audit_offer_user as _ensure_audit_offer_user,
+    load_sales_room_participant_by_token as _load_sales_room_participant_by_token,
+    participant_token_from_request as _participant_token_from_request,
+    public_audit_offer_allowed_for_participant as _public_audit_offer_allowed_for_participant,
+    record_sales_room_event_by_id as _record_sales_room_event_by_id,
+    send_sales_room_audit_ready_email as _send_sales_room_audit_ready_email,
+    send_sales_room_participant_verification_email as _send_sales_room_participant_verification_email,
+    serialize_public_audit_offer as _serialize_public_audit_offer,
+    serialize_sales_room_participant as _serialize_sales_room_participant,
+)
 
 
 admin_prospecting_bp = Blueprint("admin_prospecting", __name__)
@@ -812,6 +850,112 @@ def _ensure_sales_room_tables(conn) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_sales_room_proposal_suggestions_room_status
         ON sales_room_proposal_suggestions (room_id, status, created_at DESC)
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sales_room_participants (
+            id UUID PRIMARY KEY,
+            room_id UUID NOT NULL REFERENCES sales_rooms(id) ON DELETE CASCADE,
+            email TEXT NOT NULL,
+            name TEXT,
+            company TEXT,
+            is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+            personal_data_consent_at TIMESTAMPTZ,
+            personal_data_consent_version TEXT,
+            privacy_accepted_at TIMESTAMPTZ,
+            consent_ip TEXT,
+            consent_user_agent TEXT,
+            verification_token TEXT,
+            access_token TEXT NOT NULL,
+            verified_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (room_id, email)
+        )
+        """
+    )
+    cur.execute(
+        """
+        ALTER TABLE sales_room_participants
+        ADD COLUMN IF NOT EXISTS personal_data_consent_at TIMESTAMPTZ
+        """
+    )
+    cur.execute(
+        """
+        ALTER TABLE sales_room_participants
+        ADD COLUMN IF NOT EXISTS personal_data_consent_version TEXT
+        """
+    )
+    cur.execute(
+        """
+        ALTER TABLE sales_room_participants
+        ADD COLUMN IF NOT EXISTS privacy_accepted_at TIMESTAMPTZ
+        """
+    )
+    cur.execute(
+        """
+        ALTER TABLE sales_room_participants
+        ADD COLUMN IF NOT EXISTS consent_ip TEXT
+        """
+    )
+    cur.execute(
+        """
+        ALTER TABLE sales_room_participants
+        ADD COLUMN IF NOT EXISTS consent_user_agent TEXT
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_sales_room_participants_verification_token
+        ON sales_room_participants (verification_token)
+        WHERE verification_token IS NOT NULL
+        """
+    )
+    cur.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_room_participants_access_token
+        ON sales_room_participants (access_token)
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sales_room_audit_offers (
+            id UUID PRIMARY KEY,
+            room_id UUID NOT NULL REFERENCES sales_rooms(id) ON DELETE CASCADE,
+            lead_id TEXT REFERENCES prospectingleads(id) ON DELETE SET NULL,
+            lead_email TEXT,
+            company_name TEXT NOT NULL,
+            company_map_url TEXT NOT NULL,
+            company_address TEXT,
+            platform TEXT NOT NULL DEFAULT 'yandex',
+            enabled BOOLEAN NOT NULL DEFAULT FALSE,
+            admin_comment TEXT,
+            offer_title TEXT,
+            offer_text TEXT,
+            button_text TEXT,
+            prepared_audit_slug TEXT,
+            prepared_audit_url TEXT,
+            status TEXT NOT NULL DEFAULT 'draft',
+            requested_by_participant_id UUID REFERENCES sales_room_participants(id) ON DELETE SET NULL,
+            requested_user_id UUID,
+            requested_at TIMESTAMPTZ,
+            processing_started_at TIMESTAMPTZ,
+            ready_at TIMESTAMPTZ,
+            opened_at TIMESTAMPTZ,
+            email_sent_at TIMESTAMPTZ,
+            metadata_json JSONB NOT NULL DEFAULT '{}',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (room_id)
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_sales_room_audit_offers_processing
+        ON sales_room_audit_offers (status, processing_started_at)
+        WHERE status = 'processing'
         """
     )
 
@@ -5313,263 +5457,9 @@ def _approve_send_batch(batch_id: str, user_id: str):
 
 def dispatch_due_outreach_queue(batch_size: int = 20, batch_id: str | None = None, force_ready: bool = False) -> dict[str, Any]:
     """Фоновый диспетчер outbound-очереди outreach: queued/retry -> sent/retry/dlq."""
-    safe_batch_size = max(1, min(int(batch_size or 20), 200))
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        query = """
-            WITH due AS (
-                SELECT
-                    q.id
-                FROM outreachsendqueue q
-                JOIN outreachsendbatches b ON b.id = q.batch_id
-                WHERE b.status = %s
-        """
-        params: list[Any] = [BATCH_APPROVED]
-        if batch_id:
-            query += " AND q.batch_id = %s"
-            params.append(batch_id)
-        query += """
-                  AND (
-                    q.delivery_status = %s
-        """
-        params.append(QUEUE_STATUS_QUEUED)
-        if force_ready:
-            query += """
-                    OR q.delivery_status = %s
-            """
-            params.append(QUEUE_STATUS_RETRY)
-        else:
-            query += """
-                    OR (
-                        q.delivery_status = %s
-                        AND q.next_retry_at IS NOT NULL
-                        AND q.next_retry_at <= NOW()
-                    )
-            """
-            params.append(QUEUE_STATUS_RETRY)
-        query += """
-                  )
-                ORDER BY COALESCE(q.next_retry_at, q.created_at) ASC
-                LIMIT %s
-                FOR UPDATE SKIP LOCKED
-            )
-            UPDATE outreachsendqueue q
-            SET delivery_status = %s,
-                attempts = COALESCE(q.attempts, 0) + 1,
-                last_attempt_at = NOW(),
-                updated_at = NOW()
-            FROM due
-            WHERE q.id = due.id
-            RETURNING q.id, q.batch_id, q.lead_id, q.draft_id, q.channel, q.delivery_status,
-                      q.attempts, q.provider_message_id, q.error_text
-        """
-        params.extend(
-            [
-                safe_batch_size,
-                QUEUE_STATUS_SENDING,
-            ]
-        )
-        cur.execute(
-            query,
-            params,
-        )
-        claimed = [dict(row) for row in cur.fetchall()]
-        if claimed:
-            queue_ids = [str(row.get("id") or "") for row in claimed if str(row.get("id") or "")]
-            if queue_ids:
-                placeholders = ",".join(["%s"] * len(queue_ids))
-                cur.execute(
-                    f"""
-                    SELECT
-                        q.id,
-                        l.name AS lead_name,
-                        l.phone,
-                        l.email,
-                        l.telegram_url,
-                        l.whatsapp_url,
-                        l.selected_channel,
-                        d.approved_text,
-                        d.generated_text
-                    FROM outreachsendqueue q
-                    LEFT JOIN outreachmessagedrafts d ON d.id = q.draft_id
-                    LEFT JOIN prospectingleads l ON l.id = q.lead_id
-                    WHERE q.id IN ({placeholders})
-                    """,
-                    tuple(queue_ids),
-                )
-                detail_map = {str(row.get("id") or ""): dict(row) for row in cur.fetchall()}
-                for row in claimed:
-                    row_id = str(row.get("id") or "")
-                    details = detail_map.get(row_id) or {}
-                    row.update(
-                        {
-                            "lead_name": details.get("lead_name"),
-                            "phone": details.get("phone"),
-                            "email": details.get("email"),
-                            "telegram_url": details.get("telegram_url"),
-                            "whatsapp_url": details.get("whatsapp_url"),
-                            "selected_channel": details.get("selected_channel"),
-                            "approved_text": details.get("approved_text"),
-                            "generated_text": details.get("generated_text"),
-                        }
-                    )
-        conn.commit()
+    from services.outreach_dispatch_service import dispatch_due_outreach_queue as _dispatch_due_outreach_queue
 
-        summary = {
-            "success": True,
-            "batch_id": batch_id,
-            "picked": len(claimed),
-            "sent": 0,
-            "delivered": 0,
-            "retry": 0,
-            "dlq": 0,
-            "failed": 0,
-            "results": [],
-        }
-        if not claimed:
-            return summary
-
-        for item in claimed:
-            queue_id = str(item.get("id") or "")
-            lead_id = str(item.get("lead_id") or "")
-            attempt_no = int(item.get("attempts") or 1)
-            dispatch_result = _dispatch_outreach_queue_item(item)
-            delivery_status = str(dispatch_result.get("delivery_status") or QUEUE_STATUS_FAILED).strip().lower()
-            provider_message_id = dispatch_result.get("provider_message_id")
-            provider_name = dispatch_result.get("provider_name")
-            provider_account_id = dispatch_result.get("provider_account_id")
-            recipient_kind = dispatch_result.get("recipient_kind")
-            recipient_value = dispatch_result.get("recipient_value")
-            error_text = str(dispatch_result.get("error_text") or "").strip()[:500] or None
-            retryable = bool(dispatch_result.get("retryable", True))
-
-            update_conn = get_db_connection()
-            try:
-                update_cur = update_conn.cursor()
-                if delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED}:
-                    update_cur.execute(
-                        """
-                        UPDATE outreachsendqueue
-                        SET delivery_status = %s,
-                            provider_message_id = %s,
-                            provider_name = %s,
-                            provider_account_id = %s,
-                            recipient_kind = %s,
-                            recipient_value = %s,
-                            error_text = NULL,
-                            sent_at = COALESCE(sent_at, NOW()),
-                            next_retry_at = NULL,
-                            dlq_at = NULL,
-                            updated_at = NOW()
-                        WHERE id = %s
-                        """,
-                        (
-                            delivery_status,
-                            provider_message_id,
-                            provider_name,
-                            provider_account_id,
-                            recipient_kind,
-                            recipient_value,
-                            queue_id,
-                        ),
-                    )
-                    update_cur.execute(
-                        """
-                        UPDATE prospectingleads
-                        SET status = %s,
-                            updated_at = NOW()
-                        WHERE id = %s
-                        """,
-                        ("sent", lead_id),
-                    )
-                    if delivery_status == QUEUE_STATUS_DELIVERED:
-                        summary["delivered"] += 1
-                    else:
-                        summary["sent"] += 1
-                else:
-                    retry_delay = _outreach_retry_delay_for_attempt(attempt_no) if retryable else None
-                    exhausted = (attempt_no >= OUTREACH_SEND_MAX_ATTEMPTS or retry_delay is None) and retryable
-                    if not retryable:
-                        next_status = QUEUE_STATUS_FAILED
-                        next_retry_at = None
-                        dlq_at_sql = "NULL"
-                    elif exhausted:
-                        next_status = QUEUE_STATUS_DLQ
-                        next_retry_at = None
-                        dlq_at_sql = "NOW()"
-                        summary["dlq"] += 1
-                    else:
-                        next_status = QUEUE_STATUS_RETRY
-                        next_retry_at = datetime.now(timezone.utc) + retry_delay
-                        dlq_at_sql = "NULL"
-                        summary["retry"] += 1
-                    update_cur.execute(
-                        f"""
-                        UPDATE outreachsendqueue
-                        SET delivery_status = %s,
-                            provider_message_id = %s,
-                            provider_name = %s,
-                            provider_account_id = %s,
-                            recipient_kind = %s,
-                            recipient_value = %s,
-                            error_text = %s,
-                            next_retry_at = %s,
-                            dlq_at = {dlq_at_sql},
-                            updated_at = NOW()
-                        WHERE id = %s
-                        """,
-                        (
-                            next_status,
-                            provider_message_id,
-                            provider_name,
-                            provider_account_id,
-                            recipient_kind,
-                            recipient_value,
-                            error_text,
-                            next_retry_at,
-                            queue_id,
-                        ),
-                    )
-                    update_cur.execute(
-                        """
-                        UPDATE prospectingleads
-                        SET status = %s,
-                            updated_at = NOW()
-                        WHERE id = %s
-                        """,
-                        (CHANNEL_SELECTED, lead_id),
-                    )
-                    summary["failed"] += 1
-                update_conn.commit()
-            except Exception:
-                update_conn.rollback()
-                raise
-            finally:
-                update_conn.close()
-
-            summary["results"].append(
-                {
-                    "queue_id": queue_id,
-                    "lead_id": lead_id,
-                    "channel": item.get("channel"),
-                    "attempt_no": attempt_no,
-                    "delivery_status": delivery_status,
-                    "provider_message_id": provider_message_id,
-                    "provider_name": provider_name,
-                    "provider_account_id": provider_account_id,
-                    "recipient_kind": recipient_kind,
-                    "recipient_value": recipient_value,
-                    "error_text": error_text,
-                }
-            )
-            if len(claimed) > 1 and queue_id != str(claimed[-1].get("id") or ""):
-                delay_seconds = random.uniform(OUTREACH_SEND_DELAY_MIN_SEC, OUTREACH_SEND_DELAY_MAX_SEC)
-                if delay_seconds > 0:
-                    time.sleep(delay_seconds)
-        return summary
-    finally:
-        conn.close()
+    return _dispatch_due_outreach_queue(batch_size=batch_size, batch_id=batch_id, force_ready=force_ready)
 
 
 def _dispatch_send_batch_async(batch_id: str, batch_size: int | None = None) -> None:
@@ -11200,13 +11090,6 @@ def _make_public_offer_url(slug: str) -> str:
     return f"{frontend_base}/{slug}"
 
 
-def _make_sales_room_url(slug: str) -> str:
-    frontend_base = str(os.environ.get("FRONTEND_BASE_URL") or "").strip().rstrip("/")
-    if not frontend_base:
-        frontend_base = "https://localos.pro"
-    return f"{frontend_base}/room/{slug}"
-
-
 def _is_internal_partnership_source_url(url: Any) -> bool:
     return str(url or "").strip().lower().startswith("localos-doc://")
 
@@ -11226,26 +11109,6 @@ def _load_latest_sales_room_url_for_lead(cur, lead_id: str) -> str:
     row = cur.fetchone()
     slug = str(row.get("slug") if row and hasattr(row, "get") else (row[0] if row else "")).strip()
     return _make_sales_room_url(slug) if slug else ""
-
-
-def _append_sales_room_link_to_outreach_text(text: str, room_url: str) -> str:
-    cleaned = str(text or "").strip()
-    url = str(room_url or "").strip()
-    if not cleaned or not url or "/room/" in cleaned:
-        return cleaned
-    return (
-        f"{cleaned}\n\n"
-        "Для удобства подготовил общую цифровую комнату, где можно обсуждать идеи, "
-        "приглашать коллег и обмениваться материалами:\n\n"
-        f"{url}"
-    )
-
-
-def _normalize_sales_room_data_mode(value: Any) -> str:
-    normalized = str(value or "").strip().lower()
-    if normalized == SALES_ROOM_DATA_AUDITED:
-        return SALES_ROOM_DATA_AUDITED
-    return SALES_ROOM_DATA_TEMPLATE
 
 
 def _sales_room_slug_base(*parts: Any) -> str:
@@ -11602,264 +11465,272 @@ def _record_sales_room_event(conn, *, slug: str, event_type: str, metadata: dict
         )
 
 
-def _sales_room_upload_root() -> str:
-    return sales_room_upload_root()
+def _normalize_audit_offer_platform(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in AUDIT_OFFER_PLATFORMS else "yandex"
 
 
-def _clean_sales_room_filename(filename: str) -> str:
-    raw = str(filename or "file").strip().replace("\\", "/").split("/")[-1]
-    cleaned = re.sub(r"[^A-Za-z0-9А-Яа-яЁё._ -]+", "-", raw).strip(" .-")
-    return cleaned or "file"
+def _normalize_audit_offer_status(value: Any, *, enabled: bool, prepared_audit_url: str) -> str:
+    normalized = str(value or "").strip().lower()
+    allowed = AUDIT_OFFER_VISIBLE_STATUSES | {"draft", "disabled"}
+    if normalized in allowed:
+        if not enabled:
+            return "disabled"
+        return normalized
+    if not enabled:
+        return "disabled"
+    return "prepared" if prepared_audit_url else "draft"
 
 
-def _sales_room_file_extension(filename: str) -> str:
-    if "." not in filename:
-        return ""
-    return filename.rsplit(".", 1)[-1].strip().lower()
-
-
-def _is_uuid_string(value: str) -> bool:
-    try:
-        uuid.UUID(str(value or "").strip())
-        return True
-    except ValueError:
-        return False
-
-
-def _serialize_sales_room_message(row: dict[str, Any]) -> dict[str, Any]:
-    attachments = row.get("attachments_json")
-    if not isinstance(attachments, list):
-        attachments = []
-    return _to_json_compatible(
-        {
-            "id": row.get("id"),
-            "author_type": row.get("author_type") or "visitor",
-            "author_name": row.get("author_name") or "Гость",
-            "author_contact": row.get("author_contact") or "",
-            "body_text": row.get("body_text") or "",
-            "attachments": attachments,
-            "created_at": row.get("created_at"),
-        }
-    )
-
-
-def _serialize_sales_room_version(row: dict[str, Any]) -> dict[str, Any]:
-    return _to_json_compatible(
-        {
-            "id": row.get("id"),
-            "version_no": int(row.get("version_no") or 0),
-            "body_text": row.get("body_text") or "",
-            "created_by_name": row.get("created_by_name") or "",
-            "created_by_contact": row.get("created_by_contact") or "",
-            "created_at": row.get("created_at"),
-        }
-    )
-
-
-def _serialize_sales_room_suggestion(row: dict[str, Any]) -> dict[str, Any]:
-    return _to_json_compatible(
-        {
-            "id": row.get("id"),
-            "version_id": row.get("version_id"),
-            "suggestion_type": row.get("suggestion_type") or "replace",
-            "selection_text": row.get("selection_text") or "",
-            "selection_start": row.get("selection_start"),
-            "selection_end": row.get("selection_end"),
-            "replacement_text": row.get("replacement_text") or "",
-            "comment_text": row.get("comment_text") or "",
-            "author_name": row.get("author_name") or "Гость",
-            "author_contact": row.get("author_contact") or "",
-            "status": row.get("status") or "pending",
-            "resolved_by_name": row.get("resolved_by_name") or "",
-            "resolved_by_contact": row.get("resolved_by_contact") or "",
-            "resolved_at": row.get("resolved_at"),
-            "created_at": row.get("created_at"),
-            "updated_at": row.get("updated_at"),
-        }
-    )
-
-
-def _load_sales_room_messages(cur, room_id: str, limit: int = 50) -> list[dict[str, Any]]:
-    cur.execute(
-        """
-        SELECT id, author_type, author_name, author_contact, body_text, attachments_json, created_at
-        FROM sales_room_messages
-        WHERE room_id = %s
-        ORDER BY created_at ASC
-        LIMIT %s
-        """,
-        (room_id, limit),
-    )
-    rows = cur.fetchall() or []
-    return [_serialize_sales_room_message(dict(row)) for row in rows]
-
-
-def _load_sales_room_latest_version(cur, room_id: str) -> dict[str, Any]:
-    cur.execute(
-        """
-        SELECT id, version_no, body_text, created_by_name, created_by_contact, metadata_json, created_at
-        FROM sales_room_proposal_versions
-        WHERE room_id = %s
-        ORDER BY version_no DESC
-        LIMIT 1
-        """,
-        (room_id,),
-    )
-    row = cur.fetchone()
-    return dict(row) if row and hasattr(row, "keys") else {}
-
-
-def _load_sales_room_review(cur, room_id: str) -> dict[str, Any]:
-    latest = _load_sales_room_latest_version(cur, room_id)
-    cur.execute(
-        """
-        SELECT id, version_id, suggestion_type, selection_text, selection_start, selection_end,
-               replacement_text, comment_text, author_name, author_contact, status,
-               resolved_by_name, resolved_by_contact, resolved_at, created_at, updated_at
-        FROM sales_room_proposal_suggestions
-        WHERE room_id = %s
-        ORDER BY
-          CASE WHEN status = 'pending' THEN 0 ELSE 1 END,
-          created_at DESC
-        LIMIT 100
-        """,
-        (room_id,),
-    )
-    suggestions = [_serialize_sales_room_suggestion(dict(row)) for row in (cur.fetchall() or [])]
+def _normalize_sales_room_audit_offer_payload(data: dict[str, Any], room: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = data if isinstance(data, dict) else {}
+    enabled = bool(payload.get("enabled") or payload.get("show_offer"))
+    prepared_slug = str(payload.get("prepared_audit_slug") or payload.get("preparedAuditSlug") or "").strip()
+    prepared_url = str(payload.get("prepared_audit_url") or payload.get("preparedAuditUrl") or "").strip()
+    if not prepared_url and prepared_slug:
+        prepared_url = _make_public_offer_url(prepared_slug)
+    lead_email = normalize_email(str(payload.get("lead_email") or payload.get("leadEmail") or ""))
+    lead_id = str(payload.get("lead_id") or payload.get("leadId") or (room or {}).get("lead_id") or "").strip()
+    company_name = str(payload.get("company_name") or payload.get("companyName") or "").strip()
+    if not company_name:
+        room_json = (room or {}).get("room_json") if isinstance((room or {}).get("room_json"), dict) else {}
+        recipient = room_json.get("recipient") if isinstance(room_json.get("recipient"), dict) else {}
+        company_name = str(recipient.get("name") or "Компания").strip() or "Компания"
+    company_map_url = str(payload.get("company_map_url") or payload.get("companyMapUrl") or "").strip()
+    if not company_map_url:
+        room_json = (room or {}).get("room_json") if isinstance((room or {}).get("room_json"), dict) else {}
+        recipient = room_json.get("recipient") if isinstance(room_json.get("recipient"), dict) else {}
+        company_map_url = str(recipient.get("source_url") or "").strip()
+    status = _normalize_audit_offer_status(payload.get("status"), enabled=enabled, prepared_audit_url=prepared_url)
     return {
-        "latest_version": _serialize_sales_room_version(latest) if latest else None,
-        "suggestions": suggestions,
+        "lead_id": lead_id or None,
+        "lead_email": lead_email or None,
+        "company_name": company_name,
+        "company_map_url": company_map_url,
+        "company_address": str(payload.get("company_address") or payload.get("companyAddress") or "").strip() or None,
+        "platform": _normalize_audit_offer_platform(payload.get("platform")),
+        "enabled": enabled,
+        "admin_comment": str(payload.get("admin_comment") or payload.get("adminComment") or "").strip() or None,
+        "offer_title": str(payload.get("offer_title") or payload.get("offerTitle") or AUDIT_OFFER_DEFAULT_TITLE).strip(),
+        "offer_text": str(payload.get("offer_text") or payload.get("offerText") or AUDIT_OFFER_DEFAULT_TEXT).strip(),
+        "button_text": str(payload.get("button_text") or payload.get("buttonText") or AUDIT_OFFER_DEFAULT_BUTTON).strip(),
+        "prepared_audit_slug": prepared_slug or None,
+        "prepared_audit_url": prepared_url or None,
+        "status": status,
     }
 
 
-def _ensure_sales_room_proposal_version(
-    cur,
-    *,
-    room_id: str,
-    body_text: str,
-    author_name: str = "",
-    author_contact: str = "",
-    metadata: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    current = _load_sales_room_latest_version(cur, room_id)
-    if current:
-        return current
-    version_id = str(uuid.uuid4())
+def _upsert_sales_room_audit_offer(cur, *, room: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
+    payload = _normalize_sales_room_audit_offer_payload(data, room)
+    if not payload["company_map_url"]:
+        raise ValueError("company_map_url is required")
+    room_id = str(room.get("id") or "").strip()
+    offer_id = str(uuid.uuid4())
     cur.execute(
         """
-        INSERT INTO sales_room_proposal_versions (
-            id, room_id, version_no, body_text, created_by_name, created_by_contact, metadata_json, created_at
+        INSERT INTO sales_room_audit_offers (
+            id, room_id, lead_id, lead_email, company_name, company_map_url, company_address,
+            platform, enabled, admin_comment, offer_title, offer_text, button_text,
+            prepared_audit_slug, prepared_audit_url, status, created_at, updated_at
         ) VALUES (
-            %s, %s, 1, %s, %s, %s, %s, NOW()
+            %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, NOW(), NOW()
         )
-        RETURNING id, version_no, body_text, created_by_name, created_by_contact, metadata_json, created_at
-        """,
-        (version_id, room_id, body_text, author_name, author_contact, Json(metadata or {"source": "initial_room_proposal"})),
-    )
-    return dict(cur.fetchone())
-
-
-def _create_sales_room_proposal_version(
-    cur,
-    *,
-    room_id: str,
-    body_text: str,
-    author_name: str,
-    author_contact: str,
-    metadata: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    latest = _load_sales_room_latest_version(cur, room_id)
-    next_version_no = int(latest.get("version_no") or 0) + 1 if latest else 1
-    version_id = str(uuid.uuid4())
-    cur.execute(
-        """
-        INSERT INTO sales_room_proposal_versions (
-            id, room_id, version_no, body_text, created_by_name, created_by_contact, metadata_json, created_at
-        ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, NOW()
-        )
-        RETURNING id, version_no, body_text, created_by_name, created_by_contact, metadata_json, created_at
-        """,
-        (version_id, room_id, next_version_no, body_text, author_name, author_contact, Json(metadata or {})),
-    )
-    return dict(cur.fetchone())
-
-
-def _replace_text_for_sales_room_suggestion(current_text: str, suggestion: dict[str, Any]) -> tuple[str, bool, str]:
-    selection_text = str(suggestion.get("selection_text") or "")
-    replacement_text = str(suggestion.get("replacement_text") or "")
-    start_value = suggestion.get("selection_start")
-    end_value = suggestion.get("selection_end")
-    try:
-        start = int(start_value) if start_value is not None else -1
-        end = int(end_value) if end_value is not None else -1
-    except (TypeError, ValueError):
-        start = -1
-        end = -1
-    if start >= 0 and end > start and current_text[start:end] == selection_text:
-        return f"{current_text[:start]}{replacement_text}{current_text[end:]}", True, "range"
-    if selection_text and selection_text in current_text:
-        return current_text.replace(selection_text, replacement_text, 1), True, "text"
-    return current_text, False, "selection_not_found"
-
-
-def _update_sales_room_proposal_body(cur, *, room_id: str, body_text: str) -> None:
-    cur.execute(
-        """
-        UPDATE sales_rooms
-        SET room_json = jsonb_set(
-                COALESCE(room_json, '{}'),
-                '{proposal,body_text}',
-                to_jsonb(%s::text),
-                TRUE
-            ),
-            proposal_json = jsonb_set(
-                COALESCE(proposal_json, '{}'),
-                '{body_text}',
-                to_jsonb(%s::text),
-                TRUE
-            ),
+        ON CONFLICT (room_id) DO UPDATE
+        SET lead_id = EXCLUDED.lead_id,
+            lead_email = EXCLUDED.lead_email,
+            company_name = EXCLUDED.company_name,
+            company_map_url = EXCLUDED.company_map_url,
+            company_address = EXCLUDED.company_address,
+            platform = EXCLUDED.platform,
+            enabled = EXCLUDED.enabled,
+            admin_comment = EXCLUDED.admin_comment,
+            offer_title = EXCLUDED.offer_title,
+            offer_text = EXCLUDED.offer_text,
+            button_text = EXCLUDED.button_text,
+            prepared_audit_slug = EXCLUDED.prepared_audit_slug,
+            prepared_audit_url = EXCLUDED.prepared_audit_url,
+            status = CASE
+                WHEN sales_room_audit_offers.status IN ('requested', 'processing', 'ready', 'opened')
+                    THEN sales_room_audit_offers.status
+                ELSE EXCLUDED.status
+            END,
             updated_at = NOW()
-        WHERE id = %s
+        RETURNING *
         """,
-        (body_text, body_text, room_id),
+        (
+            offer_id,
+            room_id,
+            payload["lead_id"],
+            payload["lead_email"],
+            payload["company_name"],
+            payload["company_map_url"],
+            payload["company_address"],
+            payload["platform"],
+            payload["enabled"],
+            payload["admin_comment"],
+            payload["offer_title"],
+            payload["offer_text"],
+            payload["button_text"],
+            payload["prepared_audit_slug"],
+            payload["prepared_audit_url"],
+            payload["status"],
+        ),
     )
+    return _row_to_dict(cur.fetchone())
 
 
-def _load_sales_room_by_slug(cur, slug: str) -> dict[str, Any]:
+def _load_sales_room_audit_offer(cur, room_id: str, *, for_update: bool = False) -> dict[str, Any]:
+    suffix = " FOR UPDATE" if for_update else ""
     cur.execute(
-        """
-        SELECT id, slug, business_id, mode, lead_id, room_json, status, updated_at
-        FROM sales_rooms
-        WHERE slug = %s
+        f"""
+        SELECT *
+        FROM sales_room_audit_offers
+        WHERE room_id = %s
         LIMIT 1
+        {suffix}
         """,
-        (slug,),
+        (room_id,),
     )
-    row = cur.fetchone()
-    return dict(row) if row and hasattr(row, "keys") else {}
+    return _row_to_dict(cur.fetchone())
 
 
-def _can_edit_sales_room(cur, room: dict[str, Any], user_data: dict[str, Any] | None) -> bool:
-    if not user_data:
+def _public_audit_offer_visible_for_user(
+    cur,
+    room: dict[str, Any],
+    offer: dict[str, Any],
+    user_data: dict[str, Any] | None,
+    *,
+    current_business_id: str = "",
+) -> bool:
+    if not offer or not bool(offer.get("enabled")):
         return False
-    if bool(user_data.get("is_superadmin")):
+    if str(offer.get("status") or "").strip().lower() not in AUDIT_OFFER_VISIBLE_STATUSES:
+        return False
+    if not user_data:
         return True
     user_id = str(user_data.get("user_id") or user_data.get("id") or "").strip()
-    business_id = str(room.get("business_id") or "").strip()
-    if not user_id or not business_id:
+    company_name = str(offer.get("company_name") or "").strip()
+    if not user_id or not company_name:
         return False
+    target_slug = _slugify_company_name(company_name)
+    if current_business_id:
+        cur.execute(
+            """
+            SELECT name, owner_id
+            FROM businesses
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (current_business_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return False
+        name = str(row.get("name") if hasattr(row, "get") else row[0]).strip()
+        owner_id = str(row.get("owner_id") if hasattr(row, "get") else row[1]).strip()
+        if owner_id != user_id and not bool(user_data.get("is_superadmin")):
+            return False
+        return bool(name and _slugify_company_name(name) == target_slug)
+    if bool(user_data.get("is_superadmin")):
+        return True
     cur.execute(
         """
-        SELECT id
+        SELECT name
         FROM businesses
-        WHERE id = %s
-          AND owner_id = %s
-        LIMIT 1
+        WHERE owner_id = %s
+        ORDER BY created_at DESC
+        LIMIT 50
         """,
-        (business_id, user_id),
+        (user_id,),
     )
-    return bool(cur.fetchone())
+    rows = cur.fetchall() or []
+    for row in rows:
+        name = str(row.get("name") if hasattr(row, "get") else row[0]).strip()
+        if name and _slugify_company_name(name) == target_slug:
+            return True
+    return False
+
+
+def release_ready_audit_offers(now: datetime | None = None) -> int:
+    _now = now or datetime.now(timezone.utc)
+    delay_seconds = _audit_offer_processing_delay_seconds()
+    conn = get_db_connection()
+    released = 0
+    try:
+        _ensure_sales_room_tables(conn)
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            """
+            SELECT o.*, r.slug
+            FROM sales_room_audit_offers o
+            JOIN sales_rooms r ON r.id = o.room_id
+            WHERE o.status = 'processing'
+              AND o.processing_started_at IS NOT NULL
+              AND o.processing_started_at <= %s - (%s * INTERVAL '1 second')
+            FOR UPDATE
+            """,
+            (_now, delay_seconds),
+        )
+        rows = [dict(row) for row in (cur.fetchall() or [])]
+        for offer in rows:
+            audit_url = str(offer.get("prepared_audit_url") or "").strip()
+            if not audit_url:
+                continue
+            room_id = str(offer.get("room_id") or "")
+            cur.execute(
+                """
+                UPDATE sales_room_audit_offers
+                SET status = 'ready',
+                    ready_at = COALESCE(ready_at, %s),
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND status = 'processing'
+                RETURNING *
+                """,
+                (_now, offer.get("id")),
+            )
+            updated = _row_to_dict(cur.fetchone())
+            if not updated:
+                continue
+            email = normalize_email(str(updated.get("lead_email") or ""))
+            if not email and updated.get("requested_by_participant_id"):
+                cur.execute(
+                    "SELECT email FROM sales_room_participants WHERE id = %s LIMIT 1",
+                    (updated.get("requested_by_participant_id"),),
+                )
+                participant_row = cur.fetchone()
+                email = normalize_email(str(participant_row.get("email") if participant_row and hasattr(participant_row, "get") else ""))
+            _record_sales_room_event_by_id(cur, room_id=room_id, event_type="audit_offer_ready", metadata={"offer_id": str(updated.get("id") or "")})
+            if email and not updated.get("email_sent_at"):
+                email_sent = _send_sales_room_audit_ready_email(
+                    email=email,
+                    company_name=str(updated.get("company_name") or "компания"),
+                    audit_url=audit_url,
+                    user_id=str(updated.get("requested_user_id") or ""),
+                )
+                if email_sent:
+                    cur.execute(
+                        """
+                        UPDATE sales_room_audit_offers
+                        SET email_sent_at = %s,
+                            updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (_now, updated.get("id")),
+                    )
+                    _record_sales_room_event_by_id(
+                        cur,
+                        room_id=room_id,
+                        event_type="audit_offer_email_sent",
+                        metadata={"offer_id": str(updated.get("id") or ""), "email": email},
+                    )
+            released += 1
+        conn.commit()
+        return released
+    finally:
+        conn.close()
 
 
 def _load_sales_room_offer_text_from_drafts(cur, lead_id: str) -> str:
@@ -12366,6 +12237,7 @@ def _prepare_partnership_sales_room(
     user_id: str,
     data_mode: str,
     channel: str,
+    audit_offer: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     conn = get_db_connection()
     try:
@@ -12431,6 +12303,8 @@ def _prepare_partnership_sales_room(
             offer_draft_json=offer_draft_json,
             channel=channel,
         )
+        if isinstance(audit_offer, dict) and audit_offer:
+            _upsert_sales_room_audit_offer(cur, room=room, data=audit_offer)
         billing = {"status": "not_required", "credit_charged": False, "charged_credits": 0}
         if data_mode == SALES_ROOM_DATA_AUDITED:
             billing = _finalize_sales_room_credit(
@@ -12463,6 +12337,7 @@ def _prepare_client_sales_room(
     user_id: str,
     data_mode: str,
     channel: str,
+    audit_offer: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     conn = get_db_connection()
     try:
@@ -12511,6 +12386,8 @@ def _prepare_client_sales_room(
             match_json={},
             channel=channel,
         )
+        if isinstance(audit_offer, dict) and audit_offer:
+            _upsert_sales_room_audit_offer(cur, room=room, data=audit_offer)
         billing = {"status": "not_required", "credit_charged": False, "charged_credits": 0}
         if data_mode == SALES_ROOM_DATA_AUDITED:
             billing = _finalize_sales_room_credit(
@@ -13650,6 +13527,8 @@ def partnership_public_offer_page(slug):
             )
             updated_at = row.get("updated_at") if hasattr(row, "get") else (row[2] if isinstance(row, (list, tuple)) and len(row) > 2 else None)
             payload = _to_json_compatible(page_json) if isinstance(page_json, dict) else {}
+            if payload:
+                payload = normalize_public_audit_page_json(payload, slug=normalized_slug)
             payload["slug"] = normalized_slug
             payload["public_url"] = _make_public_offer_url(normalized_slug)
             payload["updated_at"] = updated_at.isoformat() if hasattr(updated_at, "isoformat") else payload.get("updated_at")
@@ -14186,6 +14065,7 @@ def partnership_prepare_sales_room(lead_id):
             user_id=str(user_data.get("user_id") or ""),
             data_mode=data_mode,
             channel=channel,
+            audit_offer=data.get("audit_offer") if isinstance(data.get("audit_offer"), dict) else None,
         )
         if result.get("error"):
             return jsonify(result), int(result.get("status_code") or 400)
@@ -16070,12 +15950,61 @@ def prepare_client_sales_room(lead_id):
             user_id=str(user_data.get("user_id") or ""),
             data_mode=data_mode,
             channel=channel,
+            audit_offer=data.get("audit_offer") if isinstance(data.get("audit_offer"), dict) else None,
         )
         if result.get("error"):
             return jsonify(result), int(result.get("status_code") or 400)
         return jsonify(_to_json_compatible(result))
     except Exception as e:
         print(f"Error preparing client sales room: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/sales-rooms/<string:room_id>/audit-offer", methods=["PATCH"])
+def admin_update_sales_room_audit_offer(room_id):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        conn = get_db_connection()
+        try:
+            _ensure_sales_room_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(
+                """
+                SELECT id, slug, business_id, mode, lead_id, room_json, status, updated_at
+                FROM sales_rooms
+                WHERE id = %s
+                LIMIT 1
+                """,
+                (room_id,),
+            )
+            room = _row_to_dict(cur.fetchone())
+            if not room:
+                return jsonify({"error": "Sales room not found"}), 404
+            if not _can_edit_sales_room(cur, room, user_data):
+                return jsonify({"error": "Forbidden"}), 403
+            offer = _upsert_sales_room_audit_offer(cur, room=room, data=data)
+            _record_sales_room_event_by_id(
+                cur,
+                room_id=str(room.get("id") or ""),
+                event_type="audit_offer_admin_updated",
+                metadata={
+                    "offer_id": str(offer.get("id") or ""),
+                    "enabled": bool(offer.get("enabled")),
+                    "status": str(offer.get("status") or ""),
+                    "updated_by": str(user_data.get("user_id") or ""),
+                },
+            )
+            conn.commit()
+            return jsonify({"success": True, "audit_offer": _to_json_compatible(offer)})
+        finally:
+            conn.close()
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        print(f"Error updating sales room audit offer: {e}")
         return jsonify({"error": str(e)}), 500
 
 

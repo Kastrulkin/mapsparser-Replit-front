@@ -11,6 +11,7 @@ from core.audit_editorial import (
     apply_audit_editorial_pass,
     clean_public_payload,
     normalize_audit_text,
+    truncate_sentence,
 )
 
 
@@ -273,8 +274,126 @@ def _needs_service_count_mask(page_json: dict[str, Any]) -> bool:
     current_state = audit.get("current_state") if isinstance(audit.get("current_state"), dict) else {}
     services_preview = audit.get("services_preview") if isinstance(audit.get("services_preview"), list) else []
     services_count = int(current_state.get("services_count") or 0)
-    priced_services_count = int(current_state.get("services_with_price_count") or 0)
+    raw_priced_services_count = current_state.get("services_with_price_count")
+    priced_services_count_known = raw_priced_services_count not in (None, "")
+    priced_services_count = int(raw_priced_services_count or 0) if priced_services_count_known else 0
+    if not priced_services_count_known:
+        return False
     return services_count > 0 and priced_services_count <= 0 and len(services_preview) > 0
+
+
+def _infer_priced_services_count(services_preview: Any) -> int | None:
+    if not isinstance(services_preview, list) or not services_preview:
+        return None
+    price_markers_found = False
+    priced_services_count = 0
+    for item in services_preview:
+        if not isinstance(item, dict):
+            continue
+        if "price" not in item:
+            continue
+        price_markers_found = True
+        if _normalize_text(item.get("price")):
+            priced_services_count += 1
+    if not price_markers_found:
+        return None
+    return priced_services_count
+
+
+def _build_children_education_network_summary(page_json: dict[str, Any], audit: dict[str, Any], *, slug: str) -> str:
+    current_state = audit.get("current_state") if isinstance(audit.get("current_state"), dict) else {}
+    business_name = _normalize_text(
+        audit.get("business_name")
+        or page_json.get("display_name")
+        or page_json.get("name")
+    ) or "Сеть детских студий"
+    rating_min = current_state.get("rating_min")
+    rating_max = current_state.get("rating_max")
+    weak_locations_count = int(current_state.get("weak_locations_count") or 0)
+    reviews_count = int(current_state.get("reviews_count") or 0)
+    locations_count = int(current_state.get("locations_count") or 0)
+    if locations_count:
+        location_suffix = (
+            "карточка"
+            if locations_count % 10 == 1 and locations_count % 100 != 11
+            else "карточки"
+            if locations_count % 10 in {2, 3, 4} and locations_count % 100 not in {12, 13, 14}
+            else "карточек"
+        )
+        locations_label = f"{locations_count} {location_suffix}"
+    else:
+        locations_label = "карточки сети"
+
+    rating_range = ""
+    try:
+        if rating_min not in (None, "") and rating_max not in (None, ""):
+            rating_range = f"Рейтинг по филиалам сейчас отличается от {float(rating_min):.1f} до {float(rating_max):.1f}"
+    except (TypeError, ValueError):
+        rating_range = ""
+
+    weak_hint = ""
+    if weak_locations_count > 0:
+        weak_hint = (
+            f", и минимум {weak_locations_count} "
+            f"{'точка выглядит слабее' if weak_locations_count == 1 else 'точки выглядят слабее'}"
+        )
+
+    if reviews_count > 0:
+        reviews_suffix = (
+            "отзыв"
+            if reviews_count % 10 == 1 and reviews_count % 100 != 11
+            else "отзыва"
+            if reviews_count % 10 in {2, 3, 4} and reviews_count % 100 not in {12, 13, 14}
+            else "отзывов"
+        )
+        review_hint = f" По сети уже есть {reviews_count} {reviews_suffix}, но доверие распределено неравномерно."
+    else:
+        review_hint = ""
+    if slug == "shansik-set-detskikh-tantsevalnykh-studiy":
+        return (
+            f"У «{business_name}» хорошая база, но {locations_label} ведутся неравномерно. "
+            f"{rating_range or 'Филиалы выглядят по-разному по доверию и наполнению'}{weak_hint}. "
+            f"{review_hint} Сначала стоит выровнять отзывы, описания занятий и регулярные публикации по всем филиалам, "
+            f"чтобы родителю было проще найти студию, выбрать филиал и записаться."
+        ).strip()
+
+    return (
+        f"У «{business_name}» хорошая база, но {locations_label} ведутся неравномерно. "
+        f"{rating_range or 'Филиалы отличаются по доверию и наполнению'}{weak_hint}.{review_hint} "
+        f"Сначала стоит выровнять отзывы, описания и регулярные обновления по всем филиалам."
+    ).strip()
+
+
+def _normalize_children_education_network_details(audit: dict[str, Any], *, slug: str) -> dict[str, Any]:
+    next_audit = copy.deepcopy(audit)
+    if slug != "shansik-set-detskikh-tantsevalnykh-studiy":
+        return next_audit
+
+    next_audit["weak_fit_customer_profile"] = [
+        "Родители, которые не видят актуальных отзывов и публикаций по конкретному филиалу",
+        "Родители, которым сложно быстро понять, как проходит занятие и как записаться",
+    ]
+
+    next_audit["weak_fit_guest_profile"] = list(next_audit["weak_fit_customer_profile"])
+
+    next_audit["top_3_issues"] = [
+        {
+            "title": "Сильный разброс по филиалам",
+            "impact": "Рейтинг по точкам отличается от 4.2 до 4.9, а отзывы — от 3 до 26.",
+            "fix": "Сначала выровнять слабые филиалы: отзывы, описания занятий, фото и новости.",
+        },
+        {
+            "title": "Работа с отзывами должна быть регулярной",
+            "impact": "Если свежих отзывов и быстрых ответов мало, слабые точки выглядят менее надёжно.",
+            "fix": "Регулярно просить отзывы у родителей и отвечать на новые отзывы в течение суток.",
+        },
+        {
+            "title": "Нужны регулярные публикации и обновления",
+            "impact": "Без новостей и обновлений карточки слабее выглядят в поиске и хуже объясняют, что студия активна.",
+            "fix": "Вести регулярные публикации по каждому филиалу: наборы в группы, направления танцев, фото с занятий и пробные занятия.",
+        },
+    ]
+    return next_audit
 
 
 def normalize_public_audit_page_json(page_json: dict[str, Any], *, slug: str | None = None) -> dict[str, Any]:
@@ -296,6 +415,19 @@ def normalize_public_audit_page_json(page_json: dict[str, Any], *, slug: str | N
         business_address = str(output.get("address") or "").strip()
         if business_address and not str(audit.get("business_address") or "").strip():
             audit["business_address"] = business_address
+        current_state = audit.get("current_state") if isinstance(audit.get("current_state"), dict) else {}
+        if current_state:
+            next_state = copy.deepcopy(current_state)
+            services_preview = audit.get("services_preview") if isinstance(audit.get("services_preview"), list) else []
+            inferred_priced_services_count = _infer_priced_services_count(services_preview)
+            if (
+                next_state.get("services_with_price_count") in (None, "")
+                and inferred_priced_services_count is not None
+            ):
+                next_state["services_with_price_count"] = inferred_priced_services_count
+            if next_state.get("services_count") in (None, "") and services_preview:
+                next_state["services_count"] = len(services_preview)
+            audit["current_state"] = next_state
         audit = apply_audit_editorial_pass(audit)
 
     if audit_profile == "beauty":
@@ -358,6 +490,12 @@ def normalize_public_audit_page_json(page_json: dict[str, Any], *, slug: str | N
 
     if isinstance(audit, dict):
         audit = apply_audit_editorial_pass(audit)
+        if audit_profile == "network_children_education":
+            audit = _normalize_children_education_network_details(audit, slug=output_slug)
+            network_summary = _build_children_education_network_summary(output, audit, slug=output_slug)
+            audit["summary_text"] = network_summary
+            audit["summary_public"] = truncate_sentence(network_summary, 300)
+            audit["summary_whatsapp"] = truncate_sentence(network_summary, 220)
 
     output["audit"] = audit
     output = _normalize_public_audit_copy_tree(output, audit_profile=audit_profile)

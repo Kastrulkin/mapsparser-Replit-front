@@ -195,6 +195,104 @@ def test_normalize_public_audit_builds_concrete_next_action_from_services() -> N
     assert len(summary) <= 300
 
 
+def test_normalize_public_audit_keeps_service_count_when_pricing_signal_is_unknown() -> None:
+    page_json = _sample_page_json()
+    page_json["audit"]["current_state"] = {
+        "services_count": 5,
+        "reviews_count": 44,
+    }
+    page_json["audit"]["services_preview"] = [
+        {"current_name": "Пробное занятие"},
+        {"current_name": "Танцы для детей"},
+    ]
+
+    normalized = normalize_public_audit_page_json(page_json)
+    current_state = normalized["audit"]["current_state"]
+
+    assert current_state["services_count"] == 5
+    assert "services_with_price_count" not in current_state or current_state["services_with_price_count"] in (None, "")
+
+
+def test_normalize_public_audit_infers_priced_services_count_from_preview_prices() -> None:
+    page_json = _sample_page_json()
+    page_json["audit"]["current_state"] = {
+        "services_count": 3,
+        "reviews_count": 44,
+    }
+    page_json["audit"]["services_preview"] = [
+        {"current_name": "Пробное занятие", "price": "500 ₽"},
+        {"current_name": "Группа 3-5 лет", "price": ""},
+        {"current_name": "Современные танцы", "price": "от 3500 ₽"},
+    ]
+
+    normalized = normalize_public_audit_page_json(page_json)
+
+    assert normalized["audit"]["current_state"]["services_with_price_count"] == 2
+
+
+def test_normalize_public_audit_rewrites_children_network_summary_without_false_service_or_website_claims() -> None:
+    page_json = {
+        "slug": "shansik-set-detskikh-tantsevalnykh-studiy",
+        "name": "Шансик — сеть детских танцевальных студий",
+        "audit": {
+            "audit_profile": "network_children_education",
+            "summary_text": (
+                "У «Шансик — сеть детских танцевальных студий»: церковная, 27. Сейчас услуг 5, "
+                "но цены не показаны, сайт не указан."
+            ),
+            "current_state": {
+                "locations_count": 5,
+                "reviews_count": 64,
+                "rating_min": 4.2,
+                "rating_max": 4.9,
+                "weak_locations_count": 3,
+                "services_count": 5,
+                "has_website": False,
+            },
+        },
+    }
+
+    normalized = normalize_public_audit_page_json(page_json, slug="shansik-set-detskikh-tantsevalnykh-studiy")
+    summary = normalized["audit"]["summary_text"]
+
+    assert "услуг 5" not in summary
+    assert "сайт не указан" not in summary
+    assert "4.2" in summary
+    assert "4.9" in summary
+    assert "отзывы" in summary.lower()
+
+
+def test_normalize_public_audit_rewrites_shansik_weak_fit_and_top_issues_copy() -> None:
+    page_json = {
+        "slug": "shansik-set-detskikh-tantsevalnykh-studiy",
+        "name": "Шансик — сеть детских танцевальных студий",
+        "audit": {
+            "audit_profile": "network_children_education",
+            "weak_fit_customer_profile": [
+                "Пользователи, которым нужна взрослая танцевальная студия",
+                "Родители, которые не видят актуальных отзывов по конкретному филиалу",
+            ],
+            "top_3_issues": [
+                {
+                    "title": "Церковная, 27",
+                    "impact": "4.2 и 3 отзыва — самая слабая точка по доверию.",
+                    "fix": "Собрать свежие отзывы и выровнять описание занятий.",
+                }
+            ],
+        },
+    }
+
+    normalized = normalize_public_audit_page_json(page_json, slug="shansik-set-detskikh-tantsevalnykh-studiy")
+
+    assert normalized["audit"]["weak_fit_customer_profile"] == [
+        "Родители, которые не видят актуальных отзывов и публикаций по конкретному филиалу",
+        "Родители, которым сложно быстро понять, как проходит занятие и как записаться",
+    ]
+    assert normalized["audit"]["weak_fit_guest_profile"] == normalized["audit"]["weak_fit_customer_profile"]
+    assert normalized["audit"]["top_3_issues"][0]["title"] == "Сильный разброс по филиалам"
+    assert len(normalized["audit"]["top_3_issues"]) == 3
+
+
 def test_normalize_public_audit_removes_public_action_plan_anglicisms() -> None:
     page_json = _sample_page_json()
     page_json["audit"]["audit_profile"] = "medical"

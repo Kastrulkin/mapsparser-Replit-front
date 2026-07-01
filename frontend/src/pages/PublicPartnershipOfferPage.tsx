@@ -15,11 +15,8 @@ import {
   AlertCircle,
   CheckCircle2,
   ExternalLink,
-  Globe,
-  MapPin,
   ShieldCheck,
   Sparkles,
-  Star,
 } from 'lucide-react';
 
 type OfferPagePayload = {
@@ -102,15 +99,27 @@ type OfferPagePayload = {
       description?: string;
       price?: string;
     }>;
+    network_locations?: Array<{
+      address?: string;
+      name?: string;
+      rating?: number | null;
+      reviews_count?: number;
+      products_count?: number;
+      news_count?: number;
+      source_url?: string;
+    }>;
     reviews_preview?: Array<{ text?: string; author?: string; rating?: number; org_reply?: string }>;
     news_preview?: Array<{ title?: string; text?: string }>;
     subscores?: Record<string, number>;
     current_state?: {
       rating?: number | null;
+      rating_min?: number | null;
+      rating_max?: number | null;
       reviews_count?: number;
       unanswered_reviews_count?: number;
       services_count?: number;
       services_with_price_count?: number;
+      total_services_count?: number;
       has_website?: boolean;
       has_recent_activity?: boolean;
       news_count?: number;
@@ -119,7 +128,10 @@ type OfferPagePayload = {
       latest_news_at?: string;
       news_status?: string;
       photos_state?: string;
+      photos_count?: number;
       locations_count?: number;
+      locations_with_news?: number;
+      weak_locations_count?: number;
       unverified_locations_count?: number;
       verified_locations_count?: number;
       verification_unknown_locations_count?: number;
@@ -129,6 +141,9 @@ type OfferPagePayload = {
       last_parse_status?: string;
       no_new_services_found?: boolean;
       scope?: string;
+      duplicate_input_count?: number;
+      network_id?: string;
+      source?: string;
     };
     cadence?: {
       news_posts_per_month_min?: number;
@@ -139,6 +154,8 @@ type OfferPagePayload = {
       total_min?: number;
       total_max?: number;
       dominant_driver?: string;
+      label?: string;
+      description?: string;
     };
   };
   preferred_language?: string;
@@ -283,9 +300,13 @@ const buildSelfHelpMaterials = (
     if (normalizedBusinessType === 'ветеринарная клиника') return 'Ветеринарной клиники';
     if (normalizedBusinessType === 'медицинский центр') return 'Медицинского центра';
     if (normalizedBusinessType === 'салон красоты') return 'Салона красоты';
+    if (normalizedBusinessType === 'детская танцевальная студия') return 'детской танцевальной студии';
     return businessType;
   })();
-  const photoList = photoShots.length > 0
+  const isChildrenDanceStudio = normalizedBusinessType === 'детская танцевальная студия';
+  const photoList = isChildrenDanceStudio && lang === 'ru'
+    ? ['Зал', 'Педагог', 'Группа по возрасту', 'Пробное занятие', 'Ожидание для родителей', 'Навигация и вход']
+    : photoShots.length > 0
     ? photoShots.slice(0, 5)
     : lang === 'ru'
       ? ['Вход и вывеска', 'Зал или кабинет', 'Специалисты в рабочей обстановке', 'Оборудование или рабочее место', 'Примеры результата']
@@ -295,12 +316,12 @@ const buildSelfHelpMaterials = (
       ? [
           'Какие есть блюда в меню, что популярно',
           'Обновления меню и истории из жизни кафе',
-          'Рассказать актуальные новости: услуга недели, новый специалист или сезонный спрос.',
+          'Рассказать актуальные новости: популярные танцы, новый специалист или сезонный особенности.',
         ]
       : [
           `Как проходит посещение ${visitBusinessType}: этапы, длительность и как записаться.`,
           'Что выбрать при первом посещении: подготовить новости под популярные услуги и запросы.',
-          news.length > 0 ? 'Рассказать актуальные новости: что изменилось, какие услуги доступны сейчас.' : 'Рассказать актуальные новости: услуга недели, новый специалист или сезонный спрос.',
+          news.length > 0 ? 'Рассказать актуальные новости: что изменилось, какие услуги доступны сейчас.' : 'Рассказать актуальные новости: популярные танцы, новый специалист или сезонный особенности.',
         ]
     : [
         `What a visit to ${businessType} looks like: steps, timing, and booking.`,
@@ -317,6 +338,11 @@ const buildSelfHelpMaterials = (
       ? [
           'Спасибо за отзыв. Рады, что вы остались довольны первичной консультацией терапевта. Будем ждать вас снова.',
           'Спасибо за отзыв. Рады, что вы остались довольны посещением. У нас скоро будет акция на чипирование, если это будет вам актуально.',
+        ]
+      : isChildrenDanceStudio
+      ? [
+          'Спасибо за отзыв. Рады, что ребёнку понравились занятия. Будем ждать вас снова.',
+          'Спасибо за обратную связь. Если захотите, поможем подобрать удобную группу по возрасту и расписанию.',
         ]
       : [
           `Спасибо за отзыв. Рады, что вам понравилась услуга «${serviceFocus[0] || 'основная услуга'}». Будем ждать вас снова.`,
@@ -357,6 +383,276 @@ const buildSelfHelpMaterials = (
           regular: 'Regularly: reply to reviews, add updates, and track what changed.',
         },
   };
+};
+
+type AuditFunnelProblem = {
+  title: string;
+  problem: string;
+  clientImpact: string;
+  diy: string;
+  localos: string;
+};
+
+type AuditFunnelSummary = {
+  title: string;
+  eyebrow: string;
+  diagnosis: string;
+  facts: Array<{ label: string; value: string; hint: string }>;
+  scoreHint: string;
+};
+
+const isChildrenEducationNetworkAudit = (page: OfferPagePayload): boolean => {
+  const profile = String(page.audit?.audit_profile || '').trim().toLowerCase();
+  return profile === 'network_children_education';
+};
+
+const formatRatingRange = (locations: NonNullable<OfferPagePayload['audit']>['network_locations'] = []): string => {
+  const ratings = locations
+    .map((item) => Number(item.rating || 0))
+    .filter((value) => value > 0)
+    .sort((a, b) => a - b);
+  if (ratings.length === 0) return '—';
+  const min = ratings[0];
+  const max = ratings[ratings.length - 1];
+  return min === max ? min.toFixed(1) : `${min.toFixed(1)}–${max.toFixed(1)}`;
+};
+
+const formatReviewsRange = (locations: NonNullable<OfferPagePayload['audit']>['network_locations'] = []): string => {
+  const counts = locations
+    .map((item) => Number(item.reviews_count || 0))
+    .filter((value) => value > 0)
+    .sort((a, b) => a - b);
+  if (counts.length === 0) return '—';
+  const min = counts[0];
+  const max = counts[counts.length - 1];
+  return min === max ? formatNum(min) : `${formatNum(min)}–${formatNum(max)}`;
+};
+
+const buildAuditFunnelSummary = (
+  page: OfferPagePayload,
+  lang: PageLang,
+  displayName: string,
+  localizedSummary: string,
+  localizedHealth: string,
+): AuditFunnelSummary => {
+  const state = page.audit?.current_state || {};
+  const locations = page.audit?.network_locations || [];
+  const childrenNetwork = lang === 'ru' && isChildrenEducationNetworkAudit(page);
+  if (childrenNetwork) {
+    return {
+      title: textIncludesAny(displayName, ['шансик'])
+        ? 'Шансик — сеть детских танцевальных студий'
+        : displayName,
+      eyebrow: 'Публичный аудит сети',
+      diagnosis: 'База у сети хорошая, но карточки ведутся неравномерно: сильные филиалы уже создают доверие, а слабые точки с меньшим рейтингом, отзывами и наполнением могут мешать родителю выбрать ближайший филиал.',
+      facts: [
+        {
+          label: 'Карточки',
+          value: `${formatNum(Number(state.locations_count || locations.length || 0))}`,
+          hint: 'уникальных филиалов в аудите',
+        },
+        {
+          label: 'Рейтинг',
+          value: formatRatingRange(locations),
+          hint: 'разброс между филиалами',
+        },
+        {
+          label: 'Отзывы',
+          value: formatReviewsRange(locations),
+          hint: 'разный уровень доверия',
+        },
+      ],
+      scoreHint: 'Оценка выше — вспомогательный ориентир. Главное здесь не сама цифра, а разница между филиалами.',
+    };
+  }
+
+  return {
+    title: displayName,
+    eyebrow: lang === 'ru' ? 'Публичный аудит карточки' : 'Public listing audit',
+    diagnosis: localizedSummary || localizedHealth || (lang === 'ru'
+      ? 'Мы проверили карточку на картах и выделили, что мешает клиенту быстрее понять предложение и перейти к действию.'
+      : 'We checked the listing and highlighted what makes it harder for a customer to understand the offer and act.'),
+    facts: [
+      {
+        label: lang === 'ru' ? 'Рейтинг' : 'Rating',
+        value: state.rating ? Number(state.rating).toFixed(1) : '—',
+        hint: lang === 'ru' ? 'как видит клиент' : 'customer-facing signal',
+      },
+      {
+        label: lang === 'ru' ? 'Отзывы' : 'Reviews',
+        value: formatNum(state.reviews_count),
+        hint: lang === 'ru' ? 'социальное доказательство' : 'social proof',
+      },
+      {
+        label: lang === 'ru' ? 'Услуги' : 'Services',
+        value: formatNum(state.services_count),
+        hint: lang === 'ru' ? 'понятность предложения' : 'offer clarity',
+      },
+    ],
+    scoreHint: lang === 'ru'
+      ? 'Оценка нужна как ориентир, но решение строится вокруг конкретных действий ниже.'
+      : 'The score is a reference point; the action plan below is what matters.',
+  };
+};
+
+const buildAuditProblemCards = (
+  page: OfferPagePayload,
+  lang: PageLang,
+  issueBlocks: Array<NonNullable<OfferPagePayload['audit']>['issue_blocks'][number]>,
+): AuditFunnelProblem[] => {
+  if (lang === 'ru' && isChildrenEducationNetworkAudit(page)) {
+    return [
+      {
+        title: 'Сильный разброс по филиалам',
+        problem: 'Рейтинг по точкам отличается от 4.2 до 4.9, а отзывы — от 3 до 26.',
+        clientImpact: 'Родитель выбирает конкретный филиал рядом с домом. Если одна точка выглядит слабее, это снижает доверие не только к ней, но и к сети в целом.',
+        diy: 'Выбрать 2 слабые точки, задать им цель по отзывам и обновить описание занятий, фото и новости в первую очередь.',
+        localos: 'Используем данные по 7000 проверенных карточкам на Яндекс картах, покажем слабые места и дадим еженедельный контроль, чтобы отдельные филиалы догнали сильные.',
+      },
+      {
+        title: 'Работа с отзывами не должна быть случайной',
+        problem: 'У филиалов разная база отзывов: где-то 21–26 отзывов, а где-то только 3–8. Новые отзывы нужно регулярно запрашивать у клиентов и отвечать на них в течение суток.',
+        clientImpact: 'Родители смотрят не только на рейтинг, но и на свежесть отзывов и реакцию студии. Если ответов мало или они появляются нерегулярно, карточка выглядит менее живой.',
+        diy: 'После каждого пробного занятия просить отзыв у родителей, закрепить ответственного и отвечать на новые отзывы в течение 24 часов.',
+        localos: 'Настроим регулярный сценарий сбора отзывов, подготовим человеческие ответы и покажем, какие филиалы всё ещё проседают по доверию.',
+      },
+      {
+        title: 'Нужны регулярные публикации и обновления',
+        problem: 'Новости и обновления по филиалам выходят неравномерно. Карточкам нужен регулярный ритм публикаций: направления танцев, группы, пробные занятия, сезонные наборы и новости студии.',
+        clientImpact: 'Свежие публикации помогают родителю понять, что студия активна, а поисковикам — лучше связывать карточку с ключевыми поисковыми запросами, так людям проще найти вас в интернете.',
+        diy: 'Вести 4-5 публикаций в месяц по каждому филиалу: популярные танцы, наборы в группы, фото с занятий, расписание и условия пробного занятия.',
+        localos: 'Подготовим контент-план для каждой из карточек, тексты публикаций и отследим отклик аудитории. Публикации готовятся не только для карт, но и для популярных соцсетей.',
+      },
+    ];
+  }
+
+  const fallback = issueBlocks.slice(0, 3).map((item) => ({
+    title: item.title || (lang === 'ru' ? 'Проблема в карточке' : 'Listing problem'),
+    problem: item.problem || item.evidence || (lang === 'ru' ? 'В аудите найдено место, где клиенту сложнее принять решение.' : 'The audit found a point that makes customer decision harder.'),
+    clientImpact: item.impact || (lang === 'ru' ? 'Это может снижать доверие и мешать клиенту выбрать вас.' : 'This can reduce trust and make it harder for customers to choose you.'),
+    diy: item.fix || (lang === 'ru' ? 'Исправить самый заметный пробел и проверить карточку после обновления.' : 'Fix the most visible gap and check the listing after the update.'),
+    localos: lang === 'ru'
+      ? 'Соберём правки в понятный план, подготовим тексты и покажем, что изменилось после обновления данных.'
+      : 'We will turn this into a clear plan, prepare copy, and show what changed after the next data refresh.',
+  }));
+  return fallback.length > 0 ? fallback : [
+    {
+      title: lang === 'ru' ? 'Карточку нужно сделать понятнее' : 'The listing needs more clarity',
+      problem: lang === 'ru' ? 'Верхняя часть карточки не даёт клиенту достаточно быстрый ответ, почему выбрать именно вас.' : 'The listing does not quickly explain why a customer should choose you.',
+      clientImpact: lang === 'ru' ? 'Клиент может уйти к конкуренту, где понятнее услуги, цена, фото или запись.' : 'The customer may choose a competitor with clearer services, price, photos, or booking.',
+      diy: lang === 'ru' ? 'Добавить конкретные услуги, фото, свежую публикацию и понятный следующий шаг.' : 'Add concrete services, photos, a fresh post, and a clear next step.',
+      localos: lang === 'ru' ? 'Подготовим структуру карточки и регулярный план обновлений.' : 'We will prepare the listing structure and recurring update plan.',
+    },
+  ];
+};
+
+const buildDiyChecklist = (page: OfferPagePayload, lang: PageLang, selfHelp: ReturnType<typeof buildSelfHelpMaterials>): string[] => {
+  if (lang === 'ru' && isChildrenEducationNetworkAudit(page)) {
+    return [
+      'Проверить и окончательно закрыть дубль по Энгельса, 154.',
+      'Выровнять описания по всем 5 карточкам.',
+      'Добавить единый набор фото: зал, педагог, группа по возрасту, вход и ожидание для родителей.',
+      'Добавить цены, длительность, формат записи и пробное занятие.',
+      'После каждого пробного занятия просить отзыв у родителей.',
+      'Выложить 2–3 публикации с понятной пользой для родителя.',
+    ];
+  }
+  return dedupeShortList([
+    selfHelp.plan.today,
+    selfHelp.plan.week,
+    ...selfHelp.photoList.slice(0, 2),
+    ...selfHelp.postIdeas.slice(0, 2),
+  ], 5);
+};
+
+const buildLocalOsOfferTasks = (page: OfferPagePayload, lang: PageLang): string[] => {
+  if (lang === 'ru' && isChildrenEducationNetworkAudit(page)) {
+    return [
+      'Приведём все 5 карточек к одному стандарту.',
+      'Обновим описания направлений, пробного занятия и структуры записи.',
+      'Добавим фото, публикации и человеческие ответы на отзывы.',
+      'Выстроим сбор отзывов по слабым филиалам.',
+      'Покажем, где после правок выросло доверие и что ещё проседает.',
+    ];
+  }
+  return lang === 'ru'
+    ? [
+        'Соберём первые правки в понятный план.',
+        'Подготовим услуги, публикации, ответы на отзывы и SEO-тексты без лишнего шума.',
+        'Проверим карточку после обновления данных и покажем, что изменилось.',
+      ]
+    : [
+        'Turn the first fixes into a clear plan.',
+        'Prepare services, posts, review replies, and listing copy.',
+        'Check the listing after the next data refresh and show what changed.',
+      ];
+};
+
+const buildBusinessOutcomeBlock = (page: OfferPagePayload, lang: PageLang): string[] => {
+  if (lang === 'ru' && isChildrenEducationNetworkAudit(page)) {
+    return [
+      'Карточки выглядят единообразно во всех районах.',
+      'Слабые филиалы догоняют сильные.',
+      'Родителю проще найти вас в поиске, выбрать и понять, как записаться.',
+      'Сеть видна как один сильный бренд.',
+    ];
+  }
+  return lang === 'ru'
+    ? [
+        'Клиент быстрее понимает, что вы предлагаете.',
+        'В карточке меньше пустых мест и больше поводов доверять.',
+        'Следующий шаг — звонок, маршрут или запись — становится понятнее.',
+      ]
+    : [
+        'Customers understand the offer faster.',
+        'The listing has fewer gaps and more trust signals.',
+        'The next step — call, route, or booking — becomes clearer.',
+      ];
+};
+
+const buildMethodologyDetails = (
+  page: OfferPagePayload,
+  lang: PageLang,
+  isNetworkAudit: boolean,
+): Array<{ title: string; description: string }> => {
+  if (lang === 'ru') {
+    return [
+      {
+        title: 'Что проверили',
+        description: isNetworkAudit
+          ? 'Карточки филиалов на картах, рейтинг, отзывы, услуги, новости, фото, наполнение и различия между точками.'
+          : 'Карточку на картах, отзывы, услуги, активность, сайт, фото и регулярность ведения.',
+      },
+      {
+        title: 'Как читали данные',
+        description: isNetworkAudit
+          ? 'Часть метрик относится ко всей сети, часть — к конкретным филиалам и последнему срезу данных.'
+          : 'Часть метрик берётся из последнего среза карточки; ограничения данных отмечены там, где это важно.',
+      },
+      {
+        title: 'Что важно для клиента',
+        description: isChildrenEducationNetworkAudit(page)
+          ? 'Смотрим, где родителю сложнее доверить ребёнка студии: отзывы, фото, понятность направлений, пробное занятие и запись.'
+          : 'Смотрим не только на цифры, а на то, где клиенту сложнее выбрать вас и где теряется доверие.',
+      },
+    ];
+  }
+  return [
+    {
+      title: 'What we checked',
+      description: 'Map listings, reviews, services, activity, website, photos, and operating cadence.',
+    },
+    {
+      title: 'Data level',
+      description: isNetworkAudit
+        ? 'Some metrics describe the whole network, some describe individual locations and the latest data snapshot.'
+        : 'Some metrics use the latest snapshot; limited data is shown explicitly where it matters.',
+    },
+    {
+      title: 'Why it matters',
+      description: 'The focus is not only on numbers, but on where customers lose trust or struggle to choose you.',
+    },
+  ];
 };
 
 const UI_TEXT_BASE = {
@@ -1952,7 +2248,9 @@ const buildLocalizedEvidence = (
 ) => {
   if (lang === 'ru') return String(issue?.evidence || '').trim();
   const servicesCount = Number(state?.services_count || 0);
-  const pricedServicesCount = Number(state?.services_with_price_count || 0);
+  const rawPricedServicesCount = state?.services_with_price_count;
+  const hasKnownPricedServicesCount = rawPricedServicesCount !== null && rawPricedServicesCount !== undefined && rawPricedServicesCount !== '';
+  const pricedServicesCount = hasKnownPricedServicesCount ? Number(rawPricedServicesCount || 0) : null;
   const reviewsCount = Number(state?.reviews_count || 0);
   const unansweredReviewsCount = Number(state?.unanswered_reviews_count || 0);
   const rating = state?.rating;
@@ -1975,12 +2273,12 @@ const buildLocalizedEvidence = (
           : 'Στη φιλοξενία, τόσο οι αλγόριθμοι όσο και οι χρήστες αναμένουν τακτικά posts, φωτογραφίες και ενημερώσεις.',
     services_missing:
       lang === 'en'
-        ? `Services now: ${servicesCount}, with prices: ${pricedServicesCount}.`
+        ? hasKnownPricedServicesCount ? `Services now: ${servicesCount}, with prices: ${pricedServicesCount}.` : `Services now: ${servicesCount}.`
         : lang === 'tr'
-          ? `Mevcut hizmet: ${servicesCount}, fiyatlı hizmet: ${pricedServicesCount}.`
+          ? hasKnownPricedServicesCount ? `Mevcut hizmet: ${servicesCount}, fiyatlı hizmet: ${pricedServicesCount}.` : `Mevcut hizmet: ${servicesCount}.`
           : lang === 'ar'
-            ? `الخدمات الحالية: ${servicesCount}، والخدمات التي تعرض سعراً: ${pricedServicesCount}.`
-          : `Υπηρεσίες τώρα: ${servicesCount}, με τιμές: ${pricedServicesCount}.`,
+            ? hasKnownPricedServicesCount ? `الخدمات الحالية: ${servicesCount}، والخدمات التي تعرض سعراً: ${pricedServicesCount}.` : `الخدمات الحالية: ${servicesCount}.`
+          : hasKnownPricedServicesCount ? `Υπηρεσίες τώρα: ${servicesCount}, με τιμές: ${pricedServicesCount}.` : `Υπηρεσίες τώρα: ${servicesCount}.`,
     services_short_list:
       lang === 'en'
         ? `Services now: ${servicesCount}.`
@@ -1991,12 +2289,12 @@ const buildLocalizedEvidence = (
           : `Υπηρεσίες τώρα: ${servicesCount}.`,
     services_no_price:
       lang === 'en'
-        ? `Priced services: ${pricedServicesCount} of ${servicesCount}.`
+        ? hasKnownPricedServicesCount ? `Priced services: ${pricedServicesCount} of ${servicesCount}.` : `Services now: ${servicesCount}.`
         : lang === 'tr'
-          ? `Fiyatı görünen hizmet: ${pricedServicesCount}/${servicesCount}.`
+          ? hasKnownPricedServicesCount ? `Fiyatı görünen hizmet: ${pricedServicesCount}/${servicesCount}.` : `Mevcut hizmet: ${servicesCount}.`
           : lang === 'ar'
-            ? `الخدمات ذات الأسعار: ${pricedServicesCount} من أصل ${servicesCount}.`
-          : `Υπηρεσίες με τιμή: ${pricedServicesCount} από ${servicesCount}.`,
+            ? hasKnownPricedServicesCount ? `الخدمات ذات الأسعار: ${pricedServicesCount} من أصل ${servicesCount}.` : `الخدمات الحالية: ${servicesCount}.`
+          : hasKnownPricedServicesCount ? `Υπηρεσίες με τιμή: ${pricedServicesCount} από ${servicesCount}.` : `Υπηρεσίες τώρα: ${servicesCount}.`,
     rating_gap:
       lang === 'en'
         ? `Current rating: ${rating !== null && rating !== undefined ? Number(rating).toFixed(1) : 'n/a'}.`
@@ -2422,20 +2720,6 @@ const PublicPartnershipOfferPage: React.FC = () => {
   const rawIssueBlocks = Array.isArray(page.audit?.issue_blocks) ? page.audit?.issue_blocks || [] : [];
   const editorBlocks = page.audit?.editor_blocks || {};
   const issueBlocks = rawIssueBlocks.map((item) => localizeIssueBlock(lang, item, page.audit?.current_state || {}));
-  const editorTopIssues = Array.isArray(editorBlocks.top_issues?.items) ? editorBlocks.top_issues?.items || [] : [];
-  const topIssues = editorTopIssues.length > 0
-    ? editorTopIssues.map((item, index) => ({
-        id: `editor-top-${index}`,
-        title: translateAuditText(lang, item?.title),
-        priority: translateAuditText(lang, item?.priority),
-        problem: translateAuditText(lang, item?.body),
-      }))
-    : issueBlocks.slice(0, 3).map((item) => ({
-        id: item.id,
-        title: item.title,
-        priority: item.priority,
-        problem: item.problem,
-      }));
   const findings = rawFindings.length > 0
     ? rawFindings.map((item, index) => ({
         ...item,
@@ -2498,33 +2782,6 @@ const PublicPartnershipOfferPage: React.FC = () => {
   const hasServicesPreviewOnly = confirmedServicesCount <= 0 && services.length > 0;
   const locationsCount = Number(state.locations_count || 0);
   const unverifiedLocationsCount = Number(state.unverified_locations_count || 0);
-  const servicesMetricValue = confirmedServicesCount > 0 ? formatValue(confirmedServicesCount) : '—';
-  const servicesMetricLabel = isNetworkAudit
-    ? (lang === 'ru' ? 'Точки с меню/товарами' : text.services)
-    : text.services;
-  const ratingMetricLabel = isNetworkAudit && lang === 'ru' ? 'Средний рейтинг' : text.rating;
-  const servicesMetricHint =
-    isNetworkAudit && lang === 'ru'
-      ? `${formatValue(confirmedServicesCount)} из ${formatValue(locationsCount)} точек: в карточках найдено меню или товары.`
-      : lang === 'en'
-      ? hasServicesPreviewOnly
-        ? 'Only service examples are available here; the total count is not confirmed.'
-        : 'The count is based on the parsed service list.'
-      : lang === 'tr'
-        ? hasServicesPreviewOnly
-          ? 'Burada yalnızca hizmet örnekleri var; toplam sayı doğrulanmadı.'
-          : 'Sayı, ayrıştırılan hizmet listesinden alınır.'
-        : lang === 'ar'
-          ? hasServicesPreviewOnly
-            ? 'المعروض هنا أمثلة للخدمات فقط، أما العدد الإجمالي فلم يتم تأكيده.'
-            : 'العدد مبني على قائمة الخدمات التي تم استخراجها.'
-          : lang === 'el'
-            ? hasServicesPreviewOnly
-              ? 'Εδώ εμφανίζονται μόνο παραδείγματα υπηρεσιών και όχι επιβεβαιωμένος συνολικός αριθμός.'
-              : 'Ο αριθμός βασίζεται στη λίστα υπηρεσιών που αναγνωρίστηκε.'
-            : hasServicesPreviewOnly
-              ? 'Здесь показаны только примеры услуг, а не подтверждённое общее число.'
-              : 'Число основано на распознанном списке услуг.';
   const cadence = page.audit?.cadence || {};
   const cadenceNews = Number(cadence.news_posts_per_month_min || 4);
   const cadencePhotos = Number(cadence.photos_per_month_min || 8);
@@ -2637,6 +2894,9 @@ const PublicPartnershipOfferPage: React.FC = () => {
   const editorStrongDemandRaw = Array.isArray(editorBlocks.strong_demand?.items) ? editorBlocks.strong_demand?.items || [] : [];
   const editorWeakDemandRaw = Array.isArray(editorBlocks.weak_demand?.items) ? editorBlocks.weak_demand?.items || [] : [];
   const editorWhyRaw = Array.isArray(editorBlocks.why?.items) ? editorBlocks.why?.items || [] : [];
+  const normalizedOfferSlug = String(offerSlug || '').trim().toLowerCase();
+  const isCapriAudit = normalizedOfferSlug === 'dom-krasoty-capri-oblastnaya-ulitsa';
+  const isShansikAudit = normalizedOfferSlug === 'shansik-set-detskikh-tantsevalnykh-studiy';
   const bestFitProfileRaw = Array.isArray(page.audit?.best_fit_customer_profile) && page.audit?.best_fit_customer_profile.length > 0
     ? page.audit?.best_fit_customer_profile || []
     : Array.isArray(page.audit?.best_fit_guest_profile)
@@ -2658,11 +2918,17 @@ const PublicPartnershipOfferPage: React.FC = () => {
     .flatMap((item) => [item.problem, item.evidence])
     .filter((item): item is string => Boolean(String(item || '').trim()));
   const servicesCountForWhy = Number(state.services_count || 0);
-  const pricedServicesCountForWhy = Number(state.services_with_price_count || 0);
+  const rawPricedServicesCountForWhy = state.services_with_price_count;
+  const hasKnownPricedServicesCountForWhy =
+    rawPricedServicesCountForWhy !== null && rawPricedServicesCountForWhy !== undefined && rawPricedServicesCountForWhy !== '';
+  const pricedServicesCountForWhy = hasKnownPricedServicesCountForWhy ? Number(rawPricedServicesCountForWhy || 0) : null;
   const auditProfileForWhy = String(page.audit?.audit_profile || '').trim().toLowerCase();
   const serviceListWhy = (() => {
     if (servicesCountForWhy <= 0) return '';
-    if (!pricedServicesCountForWhy) {
+    if (isShansikAudit) {
+      return `Во всех 5 карточках сети найдены услуги, родитель ориентируется только на их описание чтобы сравнить варианты и решиться на следующий шаг.`;
+    }
+    if (hasKnownPricedServicesCountForWhy && pricedServicesCountForWhy === 0) {
       return `В карточке найдено ${formatValue(servicesCountForWhy)} услуг, но без ценовых ориентиров сложнее сравнить варианты и решиться на следующий шаг.`;
     }
     if (auditProfileForWhy.includes('food')) {
@@ -2686,7 +2952,6 @@ const PublicPartnershipOfferPage: React.FC = () => {
         : 'Свежей активности в карточке не видно: новости и обновления не поддерживают ключевые направления поиска.'
       : '',
   ].filter((item) => item.trim());
-  const isCapriAudit = String(offerSlug || '').trim().toLowerCase() === 'dom-krasoty-capri-oblastnaya-ulitsa';
   const hideMonthlyPotential = String(offerSlug || '').trim().toLowerCase() === 'tsentr-kosmetologii-tatyany-zhiborevoy-radischeva';
   const capriStrongDemand = ['педикюр', 'косметология', 'оформление бровей'];
   const capriWeakDemand = ['салон красоты рядом', 'выбор между направлениями услуг', 'поиск услуги по цене'];
@@ -2706,53 +2971,36 @@ const PublicPartnershipOfferPage: React.FC = () => {
     ? capriStrongDemand
     : editorStrongDemandRaw.length > 0
       ? editorStrongDemandRaw.map((item) => translateAuditText(lang, item)).slice(0, 5)
-    : (searchIntents.length > 0 ? searchIntents : bestFitProfile).slice(0, 5);
-  const weakDemand = isCapriAudit && lang === 'ru'
-    ? capriWeakDemand
-    : editorWeakDemandRaw.length > 0
+      : (searchIntents.length > 0 ? searchIntents : bestFitProfile).slice(0, 5);
+  const weakDemand = (() => {
+    if (isCapriAudit && lang === 'ru') return capriWeakDemand;
+    const baseWeakDemand = editorWeakDemandRaw.length > 0
       ? editorWeakDemandRaw.map((item) => translateAuditText(lang, item)).slice(0, 5)
-    : weakFitProfile.slice(0, 4);
+      : weakFitProfile
+          .filter((item) => !(isChildrenEducationNetworkAudit(page) && textIncludesAny(item, ['взрослая танцевальная студия'])))
+          .slice(0, 4);
+    if (isShansikAudit && lang === 'ru') {
+      return baseWeakDemand.map((item) => (
+        item === 'Родители, которые не видят актуальных отзывов по конкретному филиалу'
+          ? 'Родители, которые не видят актуальных отзывов и публикаций по конкретному филиалу'
+          : item
+      ));
+    }
+    return baseWeakDemand;
+  })();
   const auditProfileLabel = translateAuditText(
     lang,
     String(page.audit?.audit_profile_label || page.audit?.audit_profile || '').trim(),
   );
   const reviewSignals = buildReviewSignals(reviews, lang);
-  const firstFix = topIssues[0]?.problem || issueBlocks[0]?.fix || actions[0]?.description || localizedActionPlan.next_24h[0] || localizedActionPlan.next_7d[0] || '';
-  const visibleStrengths = dedupeShortList(
-    [
-      state.rating && Number(state.rating) >= 4.5
-        ? lang === 'ru'
-          ? isNetworkAudit
-            ? `Средний рейтинг сети: ${Number(state.rating).toFixed(1)}. Это уже хорошая база доверия.`
-            : `Высокий рейтинг: ${Number(state.rating).toFixed(1)}. Это уже хорошая база доверия.`
-          : `Strong rating: ${Number(state.rating).toFixed(1)}. This is already a trust base.`
-        : '',
-      Number(state.reviews_count || 0) > 0
-        ? lang === 'ru'
-          ? `Есть отзывы: ${formatValue(state.reviews_count)}. Их можно сильнее использовать в описании и ответах.`
-          : `Reviews exist: ${formatValue(state.reviews_count)}. They can support the description and replies.`
-        : '',
-      Number(state.services_count || 0) > 0
-        ? lang === 'ru'
-          ? `Услуги найдены: ${formatValue(state.services_count)}. Значит, есть материал для понятной структуры карточки.`
-          : `Services found: ${formatValue(state.services_count)}. There is material for a clearer listing structure.`
-        : '',
-      state.has_website
-        ? lang === 'ru'
-          ? 'Есть ссылка на сайт, клиент может перейти за подробностями.'
-          : 'A website link is present, so customers can continue to more detail.'
-        : '',
-      ...reviewSignals,
-    ],
-    3,
-  );
-  const topGrowthPoints = dedupeShortList(
-    topIssues
-      .map((item) => item.title || item.problem || '')
-      .concat(issueBlocks.map((item) => item.title || item.problem || '')),
-    3,
-  );
   const selfHelp = buildSelfHelpMaterials(lang, compactDisplayName, page.category, strongDemand, photoShots, reviewSignals, news);
+  const funnelSummary = buildAuditFunnelSummary(page, lang, displayName, localizedSummary, localizedHealth);
+  const funnelProblems = buildAuditProblemCards(page, lang, issueBlocks);
+  const diyChecklist = buildDiyChecklist(page, lang, selfHelp);
+  const localOsOfferTasks = buildLocalOsOfferTasks(page, lang);
+  const businessOutcomes = buildBusinessOutcomeBlock(page, lang);
+  const methodologyDetails = buildMethodologyDetails(page, lang, isNetworkAudit);
+  const showDetailedProblemBlocks = !isChildrenEducationNetworkAudit(page);
 
   const quickState = [
     {
@@ -2764,8 +3012,10 @@ const PublicPartnershipOfferPage: React.FC = () => {
     },
     {
       label: text.stateWebsite,
-      ok: Boolean(state.has_website),
-      hint: state.has_website ? text.websitePresent : text.websiteMissing,
+      ok: isShansikAudit ? true : Boolean(state.has_website),
+      hint: isShansikAudit
+        ? 'Основной сайт: www.shansik.com. В дубле указан сайт: trk-canyon.ru.'
+        : state.has_website ? text.websitePresent : text.websiteMissing,
     },
     {
       label: text.stateReviews,
@@ -2787,225 +3037,200 @@ const PublicPartnershipOfferPage: React.FC = () => {
   return (
     <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,_rgba(56,189,248,0.18),_transparent_45%),radial-gradient(ellipse_at_bottom_left,_rgba(14,165,233,0.16),_transparent_40%),linear-gradient(to_bottom,_#f8fafc,_#ffffff)]">
       <div className="mx-auto max-w-6xl px-4 py-8 space-y-5">
-        <section className="rounded-2xl border border-sky-100 bg-white/90 backdrop-blur-sm p-6 md:p-8 shadow-sm">
-          <div className="flex flex-col md:flex-row gap-4 md:items-start md:justify-between">
-            <div className="flex items-center gap-4">
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt={text.companyLogo}
-                className="h-16 w-16 md:h-20 md:w-20 rounded-xl border border-sky-100 object-cover bg-white"
-              />
-            ) : null}
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">{displayName}</h1>
-                <p className="mt-1 text-sm text-slate-600 flex flex-wrap gap-2 items-center">
-                  {resolvedCity ? (
-                    <>
-                      <span className="inline-flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        {resolvedCity}
-                      </span>
-                      <span>•</span>
-                    </>
+        <section className="overflow-hidden rounded-[2rem] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
+          <div className="grid gap-0 lg:grid-cols-[1.45fr_0.55fr]">
+            <div className="p-6 md:p-8">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="flex items-center gap-4">
+                  {logoUrl ? (
+                    <img
+                      src={logoUrl}
+                      alt={text.companyLogo}
+                      className="h-16 w-16 rounded-2xl object-cover bg-white shadow-sm outline outline-1 outline-black/10 md:h-20 md:w-20"
+                    />
                   ) : null}
-                  <span>{page.category || text.categoryMissing}</span>
-                </p>
-                {page.address ? <p className="text-sm text-slate-500 mt-1">{page.address}</p> : null}
-                {parse.last_parse_at ? (
-                  <p className="text-xs text-slate-500 mt-2">
-                    {text.lastAudit}: {new Date(parse.last_parse_at).toLocaleString(locale)}
-                  </p>
-                ) : null}
-                {page.processing ? (
-                  <p className="mt-2 text-sm text-amber-700">
-                    {lang === 'ru' ? (page.processing_message || text.processingFallback) : text.processingFallback}
-                  </p>
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-[0.22em] text-orange-500">{funnelSummary.eyebrow}</div>
+                    <h1 className="mt-3 max-w-3xl text-3xl font-black tracking-tight text-slate-950 [text-wrap:balance] md:text-5xl">
+                      {funnelSummary.title}
+                    </h1>
+                  </div>
+                </div>
+                {switchableLanguages.length > 1 ? (
+                  <div className="flex flex-wrap gap-2 md:justify-end">
+                    {switchableLanguages.map((code) => {
+                      const nextParams = new URLSearchParams(searchParams);
+                      nextParams.set('lang', code);
+                      const href = `${window.location.pathname}?${nextParams.toString()}`;
+                      const active = code === lang;
+                      return (
+                        <a
+                          key={code}
+                          href={href}
+                          className={`inline-flex min-h-10 items-center rounded-full border px-3 text-xs font-semibold transition-colors ${
+                            active
+                              ? 'border-sky-500 bg-sky-50 text-sky-700'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                          }`}
+                        >
+                          {languageLabels[code]}
+                        </a>
+                      );
+                    })}
+                  </div>
                 ) : null}
               </div>
-            </div>
-            <div className="md:text-right">
-              {switchableLanguages.length > 1 ? (
-                <div className="mb-3 flex flex-wrap justify-start gap-2 md:justify-end">
-                  {switchableLanguages.map((code) => {
-                    const nextParams = new URLSearchParams(searchParams);
-                    nextParams.set('lang', code);
-                    const href = `${window.location.pathname}?${nextParams.toString()}`;
-                    const active = code === lang;
-                    return (
-                      <a
-                        key={code}
-                        href={href}
-                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
-                          active
-                            ? 'border-sky-500 bg-sky-50 text-sky-700'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
-                        }`}
-                      >
-                        {languageLabels[code]}
-                      </a>
-                    );
-                  })}
-                </div>
+              <p className="mt-6 max-w-4xl text-base leading-7 text-slate-650 [text-wrap:pretty] md:text-lg">
+                {funnelSummary.diagnosis}
+              </p>
+              {page.processing ? (
+                <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  {lang === 'ru' ? (page.processing_message || text.processingFallback) : text.processingFallback}
+                </p>
               ) : null}
-              <div className="text-xs uppercase tracking-wider text-slate-500">{text.cardScore}</div>
-              <div className="text-3xl font-bold text-slate-900 mt-1">{score}/100</div>
-              <div className={`inline-flex mt-2 px-3 py-1 rounded-full border text-xs font-semibold ${stateBadgeClass(score)}`}>
+              <div className="mt-7 grid grid-cols-1 gap-3 md:grid-cols-3">
+                {funnelSummary.facts.map((item) => (
+                  <div key={item.label} className="rounded-2xl bg-slate-50 p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
+                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
+                    <div className="mt-2 text-2xl font-black tracking-tight text-slate-950 tabular-nums">{item.value}</div>
+                    <div className="mt-1 text-sm leading-5 text-slate-600">{item.hint}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-7 flex flex-wrap gap-3">
+                <a href="#self-help" className="inline-flex min-h-10 items-center justify-center rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition-transform active:scale-[0.96]">
+                  {lang === 'ru' ? 'Исправить самому по чек-листу' : 'Use the checklist'}
+                </a>
+                <button
+                  type="button"
+                  onClick={openDashboardRegistration}
+                  className="inline-flex min-h-10 items-center justify-center rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-transform hover:bg-orange-600 active:scale-[0.96]"
+                >
+                  {lang === 'ru' ? 'Передать исправления LocalOS' : 'Let LocalOS handle it'}
+                </button>
+              </div>
+            </div>
+            <aside className="bg-slate-950 p-6 text-white md:p-8">
+              <div className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
+                {lang === 'ru' ? 'Вспомогательная оценка' : 'Reference score'}
+              </div>
+              <div className="mt-5 flex items-end gap-2">
+                <div className="text-6xl font-black tracking-tight tabular-nums">{score || '—'}</div>
+                {score ? <div className="pb-2 text-lg font-semibold text-slate-400">/100</div> : null}
+              </div>
+              <div className={`mt-4 inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${stateBadgeClass(score)}`}>
                 {page.processing && lang !== 'ru' ? text.stateUnknown : (localizedHealth || text.stateUnknown)}
               </div>
-            </div>
-          </div>
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xs text-slate-500">{ratingMetricLabel}</div>
-              <div className="mt-1 text-xl font-semibold text-slate-900 flex items-center gap-2">
-                <Star className="w-4 h-4 text-amber-500" />
-                {state.rating ? Number(state.rating).toFixed(1) : '—'}
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xs text-slate-500">{text.reviews}</div>
-              <div className="mt-1 text-xl font-semibold text-slate-900">{formatValue(state.reviews_count)}</div>
-            </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs text-slate-500">{servicesMetricLabel}</div>
-                <div className="mt-1 text-xl font-semibold text-slate-900">{servicesMetricValue}</div>
-                <div className="mt-2 text-xs text-slate-500">{servicesMetricHint}</div>
-              </div>
-              {!hideMonthlyPotential ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-xs text-slate-500">{text.monthlyPotential}</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-900">
-                    {revenue.total_min || revenue.total_max
-                      ? `${formatMoney(lang, revenue.total_min)} — ${formatMoney(lang, revenue.total_max)}`
-                      : text.estimateUnavailable}
-                  </div>
-                  <div className="mt-2 text-xs text-slate-500">
-                    {lang === 'ru'
-                      ? 'Это не прогноз выручки, а ориентир: сколько обращений карточка может недополучать из-за слабых мест.'
-                      : 'This is not a revenue forecast, but a rough signal of missed demand caused by listing gaps.'}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-            <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                <div className="text-sm font-semibold text-slate-900">
-                  {lang === 'ru' ? 'Короткий вывод' : 'Short summary'}
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {localizedSummary || auditScoreBusinessLabel(score, localizedHealth)}
-                </p>
-                {firstFix ? (
-                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                      {lang === 'ru' ? 'С чего начать' : 'Start here'}
-                    </div>
-                    <div className="mt-1 text-sm leading-5 text-slate-800">{firstFix}</div>
-                  </div>
-                ) : null}
-              </div>
-              <div className="grid gap-3">
-                {visibleStrengths.length > 0 ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
-                    <div className="text-sm font-semibold text-slate-900">
-                      {lang === 'ru' ? 'Что уже хорошо' : 'What already works'}
-                    </div>
-                    <div className="mt-2 space-y-2 text-sm text-slate-700">
-                      {visibleStrengths.map((item, idx) => <div key={`strength-${idx}`}>• {item}</div>)}
-                    </div>
-                  </div>
-                ) : null}
-                {topGrowthPoints.length > 0 ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4">
-                    <div className="text-sm font-semibold text-slate-900">
-                      {lang === 'ru' ? '3 главные точки роста' : 'Top growth points'}
-                    </div>
-                    <div className="mt-2 space-y-2 text-sm text-slate-700">
-                      {topGrowthPoints.map((item, idx) => <div key={`growth-${idx}`}>• {item}</div>)}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </section>
-
-        <section id="self-help" className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">{selfHelp.title}</h2>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{selfHelp.description}</p>
-            </div>
-            <a href="#details" className="text-sm font-semibold text-sky-700 underline-offset-4 hover:underline">
-              {lang === 'ru' ? 'Перейти к деталям' : 'Go to details'}
-            </a>
-          </div>
-          <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">{lang === 'ru' ? 'Тексты для карт' : 'Map listing texts'}</div>
-              <p className="mt-2 text-sm leading-6 text-slate-700">{selfHelp.descriptionTemplate}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">{lang === 'ru' ? 'Чеклист фото' : 'Photo checklist'}</div>
-              <div className="mt-2 space-y-1 text-sm text-slate-700">
-                {selfHelp.photoList.slice(0, 5).map((item, idx) => <div key={`self-photo-${idx}`}>• {item}</div>)}
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">{lang === 'ru' ? '3 идеи публикаций' : '3 post ideas'}</div>
-              <div className="mt-2 space-y-1 text-sm text-slate-700">
-                {selfHelp.postIdeas.map((item, idx) => <div key={`self-post-${idx}`}>• {item}</div>)}
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">{lang === 'ru' ? '2 шаблона ответа на отзывы' : '2 review reply templates'}</div>
-              <div className="mt-2 space-y-2 text-sm text-slate-700">
-                {selfHelp.reviewTemplates.map((item, idx) => <div key={`self-review-${idx}`}>• {item}</div>)}
-              </div>
-            </div>
-          </div>
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-slate-700">
-              <div className="font-semibold text-slate-900">{lang === 'ru' ? 'Сегодня' : 'Today'}</div>
-              <div className="mt-1">{selfHelp.plan.today}</div>
-            </div>
-            <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4 text-sm text-slate-700">
-              <div className="font-semibold text-slate-900">{lang === 'ru' ? 'За 7 дней' : 'In 7 days'}</div>
-              <div className="mt-1">{selfHelp.plan.week}</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <div className="font-semibold text-slate-900">{lang === 'ru' ? 'Регулярно' : 'Regularly'}</div>
-              <div className="mt-1">{selfHelp.plan.regular}</div>
-            </div>
+              <p className="mt-5 text-sm leading-6 text-slate-300">{funnelSummary.scoreHint}</p>
+            </aside>
           </div>
         </section>
 
-        <AuditHowToRead
-          title={lang === 'ru' ? 'Как читать этот аудит' : 'How to read this audit'}
-          items={[
-            {
-              title: lang === 'ru' ? 'Что проверили' : 'What we checked',
-              description: lang === 'ru'
-                ? 'Карточку на картах, отзывы, услуги, активность, сайт, фото и регулярность ведения.'
-                : 'Map listings, reviews, services, activity, website, photos, and operating cadence.',
-            },
-            {
-              title: lang === 'ru' ? 'Уровень данных' : 'Data level',
-              description: lang === 'ru'
-                ? isNetworkAudit
-                  ? 'Часть метрик относится ко всей сети, часть — к конкретным карточкам и последнему срезу данных.'
-                  : 'Часть метрик берётся из последнего среза карточки; ограничения данных явно отмечены там, где это важно.'
-                : 'Some metrics use the latest snapshot; limited data is shown explicitly where it matters.',
-            },
-            {
-              title: lang === 'ru' ? 'Что важно для бизнеса' : 'Why it matters',
-              description: lang === 'ru'
-                ? isNetworkAudit && auditProfileForWhy.includes('food')
-                  ? 'Смотрим, что в карточке мешает клиенту быстро понять меню, выбрать ближайшую точку и перейти к заказу или визиту.'
-                  : 'Смотрим не только на цифры, а на то, где клиенту сложнее выбрать вас и где теряется доверие.'
-                : 'The focus is not only on numbers, but on where customers lose trust or struggle to choose you.',
-            },
+        <section className="rounded-[2rem] bg-white p-5 shadow-[0_16px_48px_rgba(15,23,42,0.06)] ring-1 ring-slate-200 md:p-6">
+          <div className="max-w-3xl">
+            <h2 className="text-2xl font-black tracking-tight text-slate-950 [text-wrap:balance]">
+              {lang === 'ru' ? '3 проблемы, из-за которых карточки теряют доверие' : '3 problems that reduce listing trust'}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              {lang === 'ru'
+                ? 'Каждая проблема ниже сразу показывает, почему это важно для клиента, что можно сделать самостоятельно и где LocalOS ускоряет работу.'
+                : 'Each problem shows why it matters, what can be done manually, and where LocalOS speeds the work up.'}
+            </p>
+          </div>
+          <div className="mt-5 space-y-4">
+            {funnelProblems.map((item, idx) => (
+              <article key={`${item.title}-${idx}`} className="rounded-3xl bg-slate-50 p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)] md:p-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-sm font-black text-slate-950 shadow-sm">
+                    {idx + 1}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-950">{item.title}</h3>
+                    <p className="mt-1 text-sm leading-6 text-slate-700">{item.problem}</p>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl bg-white p-4">
+                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-700">{lang === 'ru' ? 'Почему это важно' : 'Why it matters'}</div>
+                    <div className="mt-2 text-sm leading-6 text-slate-700">{item.clientImpact}</div>
+                  </div>
+                  <div className="rounded-2xl bg-white p-4">
+                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">{lang === 'ru' ? 'Что можно сделать самому' : 'DIY action'}</div>
+                    <div className="mt-2 text-sm leading-6 text-slate-700">{item.diy}</div>
+                  </div>
+                  <div className="rounded-2xl bg-white p-4">
+                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">{lang === 'ru' ? 'Что сделаем мы быстрее' : 'What we do faster'}</div>
+                    <div className="mt-2 text-sm leading-6 text-slate-700">{item.localos}</div>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="self-help" className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-[2rem] bg-white p-5 shadow-[0_16px_48px_rgba(15,23,42,0.06)] ring-1 ring-emerald-100 md:p-6">
+            <div className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-700">{lang === 'ru' ? 'Можно сделать самому' : 'You can do this yourself'}</div>
+            <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950">{lang === 'ru' ? 'Чек-лист первых правок' : 'First fixes checklist'}</h2>
+            <div className="mt-4 space-y-3">
+              {diyChecklist.map((item) => (
+                <div key={item} className="flex items-start gap-3 text-sm leading-6 text-slate-700">
+                  <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-600" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+            <a href="#details" className="mt-5 inline-flex min-h-10 items-center rounded-xl border border-emerald-200 px-4 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-50">
+              {lang === 'ru' ? 'Посмотреть детали проверки' : 'View audit details'}
+            </a>
+          </div>
+          <div className="rounded-[2rem] bg-slate-950 p-5 text-white shadow-[0_16px_48px_rgba(15,23,42,0.12)] md:p-6">
+            <div className="text-xs font-bold uppercase tracking-[0.2em] text-orange-300">{lang === 'ru' ? 'Что мы можем сделать за вас за 7 дней' : 'What we can do for you in 7 days'}</div>
+            <h2 className="mt-3 text-2xl font-black tracking-tight">{lang === 'ru' ? 'Передать регулярную работу LocalOS' : 'Hand the recurring work to LocalOS'}</h2>
+            <div className="mt-4 space-y-3">
+              {localOsOfferTasks.map((item) => (
+                <div key={item} className="flex items-start gap-3 text-sm leading-6 text-slate-200">
+                  <Sparkles className="mt-1 h-4 w-4 shrink-0 text-orange-300" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={openDashboardRegistration}
+              className="mt-5 inline-flex min-h-10 items-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950 transition-transform hover:bg-slate-100 active:scale-[0.96]"
+            >
+              {lang === 'ru' ? 'Передать исправления LocalOS' : 'Let LocalOS handle it'}
+            </button>
+          </div>
+        </section>
+
+        <section className="rounded-[2rem] bg-white p-5 shadow-[0_16px_48px_rgba(15,23,42,0.06)] ring-1 ring-slate-200 md:p-6">
+          <h2 className="text-2xl font-black tracking-tight text-slate-950">{lang === 'ru' ? 'Какой результат получит бизнес' : 'Business outcome'}</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            {businessOutcomes.map((item) => (
+              <div key={item} className="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-700 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
+                <CheckCircle2 className="mb-3 h-4 w-4 text-emerald-600" />
+                {item}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <AuditCtaPanel
+          title={lang === 'ru' ? 'Что делать дальше' : 'What to do next'}
+          description={lang === 'ru'
+            ? 'Можно идти по чек-листу самостоятельно или передать исправления LocalOS, чтобы быстрее выровнять карточки, отзывы, публикации и контроль результата.'
+            : 'Use the checklist yourself or hand the improvements to LocalOS to align listings, reviews, posts, and result tracking faster.'}
+          bullets={[
+            lang === 'ru' ? 'Получить список первых правок' : 'Get the first fixes list',
+            lang === 'ru' ? 'Разобрать слабые филиалы' : 'Review weaker locations',
+            lang === 'ru' ? 'Запустить регулярный контроль' : 'Start recurring tracking',
           ]}
+          primaryLabel={lang === 'ru' ? 'Передать исправления LocalOS' : 'Let LocalOS handle it'}
+          secondaryLabel={lang === 'ru' ? 'Исправить самому по чек-листу' : 'Use the checklist'}
+          onPrimary={openDashboardRegistration}
+          secondaryHref="#self-help"
         />
 
         <section id="details" className="rounded-2xl border bg-white p-6 shadow-sm">
@@ -3144,47 +3369,34 @@ const PublicPartnershipOfferPage: React.FC = () => {
         <section className="rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-violet-600" />
-            {text.improveFirstTitle}
+            {lang === 'ru' ? (showDetailedProblemBlocks ? 'Детали и план внедрения' : 'Дополнительные детали') : text.improveFirstTitle}
           </h2>
           {localizedSummary ? <p className="text-sm text-slate-600 mt-1">{localizedSummary}</p> : null}
-          {topIssues.length > 0 && (
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-              {topIssues.slice(0, 3).map((item, idx) => (
-                <div key={`${item.id || item.title || 'top'}-${idx}`} className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-semibold text-slate-900">{item.title || text.issueFallback}</div>
-                    {item.priority ? (
-                      <div className="text-xs font-semibold text-amber-700 uppercase">{item.priority}</div>
-                    ) : null}
+          {showDetailedProblemBlocks ? (
+            <div className="mt-4 space-y-3">
+              {issueBlocks.length > 0 ? (
+                issueBlocks.slice(0, 6).map((item, idx) => (
+                  <AuditProblemBlock
+                    key={`${item.id || item.title || 'item'}-${idx}`}
+                    title={`${idx + 1}. ${item.title || text.issueFallback}`}
+                    priority={item.priority}
+                    problem={compactAuditText(item.problem, text.noDescription)}
+                    evidence={item.evidence}
+                    meaning={compactAuditText(item.impact, lang === 'ru' ? 'Это может снижать доверие и мешать клиенту выбрать вас.' : 'This can reduce trust and make it harder for customers to choose you.')}
+                    action={compactAuditText(item.fix, text.noDescription)}
+                    outcome={getIssueOutcome(item, lang)}
+                  />
+                ))
+              ) : (
+                (findings.length > 0 ? findings : actions).slice(0, 6).map((item, idx) => (
+                  <div key={`${item.title || 'item'}-${idx}`} className="rounded-xl border border-violet-100 bg-violet-50/50 p-4">
+                    <div className="text-sm font-semibold text-slate-900">{idx + 1}. {item.title || text.recommendationFallback}</div>
+                    <div className="text-sm text-slate-700 mt-1">{item.description || text.noDescription}</div>
                   </div>
-                  {item.problem ? <div className="mt-1 text-xs text-slate-700">{item.problem}</div> : null}
-                </div>
-              ))}
+                ))
+              )}
             </div>
-          )}
-          <div className="mt-4 space-y-3">
-            {issueBlocks.length > 0 ? (
-              issueBlocks.slice(0, 6).map((item, idx) => (
-                <AuditProblemBlock
-                  key={`${item.id || item.title || 'item'}-${idx}`}
-                  title={`${idx + 1}. ${item.title || text.issueFallback}`}
-                  priority={item.priority}
-                  problem={compactAuditText(item.problem, text.noDescription)}
-                  evidence={item.evidence}
-                  meaning={compactAuditText(item.impact, lang === 'ru' ? 'Это может снижать доверие и мешать клиенту выбрать вас.' : 'This can reduce trust and make it harder for customers to choose you.')}
-                  action={compactAuditText(item.fix, text.noDescription)}
-                  outcome={getIssueOutcome(item, lang)}
-                />
-              ))
-            ) : (
-              (findings.length > 0 ? findings : actions).slice(0, 6).map((item, idx) => (
-                <div key={`${item.title || 'item'}-${idx}`} className="rounded-xl border border-violet-100 bg-violet-50/50 p-4">
-                  <div className="text-sm font-semibold text-slate-900">{idx + 1}. {item.title || text.recommendationFallback}</div>
-                  <div className="text-sm text-slate-700 mt-1">{item.description || text.noDescription}</div>
-                </div>
-              ))
-            )}
-          </div>
+          ) : null}
           <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50/60 p-4">
             <div className="text-sm font-semibold text-slate-900">{text.cadenceTitle}</div>
             <div className="mt-2 text-sm text-slate-700">
@@ -3345,54 +3557,9 @@ const PublicPartnershipOfferPage: React.FC = () => {
           </section>
         ) : null}
 
-        <section className="rounded-2xl border border-sky-200 bg-sky-50/60 p-6 shadow-sm">
-          <div className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-            <Sparkles className="h-5 w-5 text-sky-700" />
-            {lang === 'ru' ? 'Что LocalOS делает быстрее' : 'What LocalOS makes faster'}
-          </div>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
-            {lang === 'ru'
-              ? 'Можно делать вручную. LocalOS берёт регулярное ведение на себя: помогает привлекать клиентов из карт, соцсетей и локальных партнёрств, быстро внедряет лучшие практики и показывает, что меняется после обновления данных.'
-              : 'You can do it manually. LocalOS takes recurring local growth work off your hands: it helps attract customers from maps, social channels, and local partnerships, applies best practices quickly, and shows what changes after each data refresh.'}
-          </p>
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {(lang === 'ru'
-              ? [
-                  'Ведёт карточки так, чтобы они чаще приводили клиентов',
-                  'Готовит и обновляет услуги, публикации, ответы на отзывы и SEO-тексты',
-                  'Помогает вести Яндекс, 2ГИС, Google и соцсети в одном процессе',
-                  'Находит партнёрства рядом с бизнесом и готовит идеи для совместных предложений',
-                  'Подсказывает, что делать после каждого обновления данных',
-                  'Показывает результат правок: что улучшилось, где остались точки роста',
-                ]
-              : [
-                  'Runs listings so they are more likely to bring customers',
-                  'Prepares and updates services, posts, review replies, and SEO texts',
-                  'Connects Yandex, 2GIS, Google, and social channels into one process',
-                  'Finds local partnership opportunities and drafts joint offer ideas',
-                  'Shows what to do after every data refresh',
-                  'Tracks what improved and where growth points remain',
-                ]).map((item, idx) => (
-              <div key={`localos-speed-${idx}`} className="rounded-xl border border-white bg-white/80 p-4 text-sm text-slate-700">
-                <CheckCircle2 className="mb-2 h-4 w-4 text-emerald-600" />
-                {item}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <AuditCtaPanel
-          title={text.nextTitle}
-          description={text.nextText}
-          bullets={[
-            lang === 'ru' ? 'Выбрать первые правки по карточке' : 'Choose the first listing improvements',
-            lang === 'ru' ? 'Запустить регулярную работу с отзывами и новостями' : 'Start regular review and post work',
-            lang === 'ru' ? 'Контролировать изменения после новых сборов данных' : 'Track changes after new data snapshots',
-          ]}
-          primaryLabel={lang === 'ru' ? 'Разобрать карточку и план работ' : 'Review listing and work plan'}
-          secondaryLabel={text.contactExpert}
-          onPrimary={openDashboardRegistration}
-          secondaryHref="#self-help"
+        <AuditHowToRead
+          title={lang === 'ru' ? 'Как мы это проверяли' : 'How we checked this'}
+          items={methodologyDetails}
         />
         {mapCardUrl ? (
           <footer className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
