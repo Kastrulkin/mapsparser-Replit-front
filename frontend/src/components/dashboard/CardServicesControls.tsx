@@ -1,6 +1,8 @@
-import { Filter, Plus, Search, Sparkles, Wand2 } from 'lucide-react';
+import { useState } from 'react';
+import { Filter, LayoutGrid, Plus, Search, Sparkles, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ServiceOptimizer from '@/components/ServiceOptimizer';
+import type { ServiceCatalogCompressionSuggestion } from '@/components/dashboard/cardServicesLogic';
 
 type ServiceFormValue = {
   category: string;
@@ -303,6 +305,190 @@ export const CardServicesFilterBar = ({
     </div>
   </div>
 );
+
+type CardServiceCatalogCompressionDialogProps = {
+  suggestion: ServiceCatalogCompressionSuggestion;
+  onClose: () => void;
+};
+
+type CompressionDialogTab = 'recommendations' | 'groups' | 'rules';
+
+const compressionTabs: Array<{ id: CompressionDialogTab; label: string }> = [
+  { id: 'recommendations', label: 'Рекомендации' },
+  { id: 'groups', label: 'Группировка' },
+  { id: 'rules', label: 'Общие правила' },
+];
+
+export const CardServiceCatalogCompressionDialog = ({
+  suggestion,
+  onClose,
+}: CardServiceCatalogCompressionDialogProps) => {
+  const [activeTab, setActiveTab] = useState<CompressionDialogTab>('recommendations');
+
+  return (
+    <div
+      className="fixed inset-0 z-[85] flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/10"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="border-b border-slate-100 px-6 py-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Меню услуг
+              </div>
+              <h3 className="text-balance text-xl font-semibold text-slate-950">Сократить и сгруппировать услуги</h3>
+              <p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">
+                Предложение показывает, как сделать меню понятнее для клиента. LocalOS ничего не меняет в услугах автоматически.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onClose}
+              className="h-10 w-10 shrink-0 p-0 text-slate-500 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.96] hover:bg-slate-100 hover:text-slate-950"
+              aria-label="Закрыть"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70">
+              <div className="text-xs font-medium text-slate-500">Сейчас</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">{suggestion.beforeCount}</div>
+              <div className="text-xs text-slate-500">услуг в списке</div>
+            </div>
+            <div className="rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-100">
+              <div className="text-xs font-medium text-emerald-700">После группировки</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-emerald-950">{suggestion.estimatedAfterCount}</div>
+              <div className="text-xs text-emerald-700/80">примерная цель</div>
+            </div>
+            <div className="rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-100">
+              <div className="text-xs font-medium text-amber-700">Приоритет</div>
+              <div className="mt-1 text-lg font-semibold text-amber-950">
+                {suggestion.highPriority ? 'Высокий' : 'Средний'}
+              </div>
+              <div className="text-xs text-amber-700/80">только рекомендация</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-b border-slate-100 px-6 pt-4">
+          <div className="flex gap-2 overflow-x-auto pb-4 [&::-webkit-scrollbar]:hidden">
+            {compressionTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`min-h-10 rounded-xl px-4 text-sm font-medium transition-[background-color,color,box-shadow] duration-150 ease-out ${
+                  activeTab === tab.id
+                    ? 'bg-slate-950 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-950'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {activeTab === 'recommendations' ? (
+            <div className="space-y-5">
+              <div className="rounded-2xl bg-slate-50 p-5 ring-1 ring-slate-200/70">
+                <div className="text-sm font-semibold text-slate-950">Что сделать в первую очередь</div>
+                <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">{suggestion.summary}</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {suggestion.groups.slice(0, 6).map((group) => (
+                  <div key={group.id} className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-950">{group.title}</div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {group.currentCount} → {group.recommendedCount} позиций
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium tabular-nums text-slate-600">
+                        -{Math.max(0, group.currentCount - group.recommendedCount)}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-pretty text-sm leading-6 text-slate-600">{group.action}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {activeTab === 'groups' ? (
+            <div className="space-y-4">
+              {suggestion.groups.length > 0 ? suggestion.groups.map((group) => (
+                <div key={group.id} className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <h4 className="text-balance text-base font-semibold text-slate-950">{group.title}</h4>
+                      <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">{group.reason}</p>
+                    </div>
+                    <div className="shrink-0 rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold tabular-nums text-slate-700 ring-1 ring-slate-200">
+                      {group.currentCount} → {group.recommendedCount}
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+                    {group.action}
+                  </div>
+                  {group.examples.length > 0 ? (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {group.examples.map((example) => (
+                        <span key={example} className="max-w-full truncate rounded-full bg-white px-3 py-1.5 text-xs text-slate-600 ring-1 ring-slate-200">
+                          {example}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              )) : (
+                <div className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-600 ring-1 ring-slate-200">
+                  Явных перегруженных групп не найдено. Можно использовать общие правила и ручную проверку категорий.
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {activeTab === 'rules' ? (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {suggestion.generalRecommendations.map((recommendation, index) => (
+                <div key={recommendation} className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    Правило {index + 1}
+                  </div>
+                  <p className="text-pretty text-sm leading-6 text-slate-700">{recommendation}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-pretty text-xs leading-5 text-slate-500">
+            Это окно не сохраняет изменения. Следующий этап — отдельный approval-flow для применения группировки.
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            className="border-slate-200 bg-white text-slate-700 transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.96] hover:bg-slate-100"
+          >
+            Закрыть
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 type CardServiceEditDialogProps = {
   copy: ServiceCopy;

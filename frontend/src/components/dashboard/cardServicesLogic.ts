@@ -1,4 +1,4 @@
-type ServiceLike = {
+export type ServiceLike = {
   source?: string;
   keywords?: string[] | string;
   updated_at?: string | null;
@@ -49,6 +49,26 @@ export type ServicesQualityAudit = {
   };
   items: Array<ServiceQuality & { serviceId: string; name: string }>;
   telegramSummary: string;
+};
+
+export type ServiceCatalogCompressionGroup = {
+  id: string;
+  title: string;
+  currentCount: number;
+  recommendedCount: number;
+  reason: string;
+  action: string;
+  examples: string[];
+};
+
+export type ServiceCatalogCompressionSuggestion = {
+  beforeCount: number;
+  estimatedAfterCount: number;
+  highPriority: boolean;
+  categoryCounts: Array<{ category: string; count: number }>;
+  summary: string;
+  groups: ServiceCatalogCompressionGroup[];
+  generalRecommendations: string[];
 };
 
 const createKeywordMatch = (keyword: string, level: KeywordMatchLevel): KeywordMatch => ({
@@ -362,6 +382,177 @@ export const buildServicesQualityAudit = (
       `Не хватает важных запросов: ${summary.missingKeywords}`,
       `Шаблонные описания: ${summary.fallback}`,
     ].join('\n'),
+  };
+};
+
+type CompressionServiceLike = ServiceLike & {
+  id?: string;
+  category?: string;
+  name?: string;
+  description?: string;
+  price?: string | number | null;
+};
+
+const SERVICE_CATALOG_GENERAL_RECOMMENDATIONS = [
+  'Сократите список до понятных клиенту направлений, а варианты оставьте внутри описания: зона, длина, пол, объём препарата, размер рубца.',
+  'Не держите акции как обычные услуги: сезонные предложения лучше вынести в новости, акции или выделенные блоки.',
+  'Для SEO оставляйте отдельными только услуги, которые клиент реально ищет как самостоятельный запрос.',
+  'Внутри категории показывайте 5-12 ключевых позиций, остальное группируйте как варианты.',
+  'Цены лучше показывать диапазоном или таблицей вариантов, а не десятками почти одинаковых строк.',
+];
+
+const SERVICE_CATALOG_COMPRESSION_RULES: Array<{
+  id: string;
+  title: string;
+  pattern: RegExp;
+  recommendedCount: number;
+  reason: string;
+  action: string;
+}> = [
+  {
+    id: 'laser_epilation',
+    title: 'Лазерная эпиляция',
+    pattern: /эпиляц|бикини|подмыш|голен|бедр|ноги|руки|усики|ареол|пальц|зона mini|тотальное/iu,
+    recommendedCount: 8,
+    reason: 'Много строк отличаются только зоной, полом клиента или размером комплекса.',
+    action: 'Свернуть в группы по зонам и добавить варианты “женщины/мужчины” внутри услуги.',
+  },
+  {
+    id: 'injectable_cosmetology',
+    title: 'Инъекционная косметология',
+    pattern: /биоревитализац|ботулинотерап|токсин|гипергидроз|коллагенотерап|collost|контурная пластика|филлер|мезотерап|belarti|bellarti|revi|plinest|meso/iu,
+    recommendedCount: 12,
+    reason: 'Часть строк описывает одну процедуру разными препаратами или объёмами.',
+    action: 'Оставить семьи процедур, а препараты и ml вынести в варианты или описание.',
+  },
+  {
+    id: 'seasonal_offers',
+    title: 'Сезонные предложения',
+    pattern: /сезонное\s+предложение/iu,
+    recommendedCount: 3,
+    reason: 'Акционные формулировки смешаны с постоянным меню услуг.',
+    action: 'Вынести сезонные позиции в акции, новости или выделенные предложения.',
+  },
+  {
+    id: 'hair_services',
+    title: 'Волосы: завивка, окрашивание, уходы и дети',
+    pattern: /биозавив|афро|окрашив|балаяж|шатуш|air touch|эйр|блонд|тонирован|контуринг|выход из темного|выход из тёмного|биксипласт|ботокс для волос|кератин|счастье для волос|уход за волос|детск|стрижка/iu,
+    recommendedCount: 14,
+    reason: 'Строки дробятся по длине волос, возрасту или сложности.',
+    action: 'Объединить по базовой услуге, а длину, возраст и сложность показать как варианты.',
+  },
+  {
+    id: 'scar_aesthetics',
+    title: 'Эстетика рубцов',
+    pattern: /рубц|растяж|стрии|абдоминопласт|блефаропласт|брахиопласт|хейлопласт|ареол/iu,
+    recommendedCount: 6,
+    reason: 'Похожие процедуры отличаются размером зоны или типом рубца.',
+    action: 'Сгруппировать по типу процедуры и размеру рубца.',
+  },
+  {
+    id: 'permanent_makeup',
+    title: 'Перманентный макияж',
+    pattern: /перманент|пудров|межреснич|стрелк|татуаж|ремувер|акварель|помада/iu,
+    recommendedCount: 6,
+    reason: 'Позиции можно понятнее собрать по зоне и технике.',
+    action: 'Группировать по зонам: брови, губы, веки, коррекция и удаление.',
+  },
+  {
+    id: 'podology',
+    title: 'Подология и ногтевой сервис',
+    pattern: /подолог|стоп|вросш|ногт|титанов|биоматериал|педикюр|маникюр|мозол|гиперкератоз/iu,
+    recommendedCount: 8,
+    reason: 'Медицинские и обычные ногтевые услуги смешаны в одном списке.',
+    action: 'Отделить подологию от маникюра/педикюра и сгруппировать лечебные варианты.',
+  },
+];
+
+const compressionServiceText = (service: CompressionServiceLike) =>
+  `${service.category || ''} ${service.name || ''} ${service.description || ''}`;
+
+const compressionServiceName = (service: CompressionServiceLike) =>
+  String(service.name || '').trim();
+
+export const buildServiceCatalogCompressionSuggestion = (
+  services: CompressionServiceLike[],
+): ServiceCatalogCompressionSuggestion => {
+  const activeServices = Array.isArray(services) ? services : [];
+  const beforeCount = activeServices.length;
+  const categoryCounter = new Map<string, number>();
+
+  activeServices.forEach((service) => {
+    const category = String(service.category || 'Без категории').trim() || 'Без категории';
+    categoryCounter.set(category, (categoryCounter.get(category) || 0) + 1);
+  });
+
+  const categoryCounts = Array.from(categoryCounter.entries())
+    .map(([category, count]) => ({ category, count }))
+    .sort((left, right) => right.count - left.count || left.category.localeCompare(right.category));
+
+  const usedNames = new Set<string>();
+  const groups = SERVICE_CATALOG_COMPRESSION_RULES.map((rule) => {
+    const matches = activeServices.filter((service) => rule.pattern.test(compressionServiceText(service)));
+    const examples = matches
+      .map(compressionServiceName)
+      .filter((name) => {
+        const normalized = normalizeServiceText(name);
+        if (!normalized || usedNames.has(`${rule.id}:${normalized}`)) return false;
+        usedNames.add(`${rule.id}:${normalized}`);
+        return true;
+      })
+      .slice(0, 4);
+
+    return {
+      id: rule.id,
+      title: rule.title,
+      currentCount: matches.length,
+      recommendedCount: Math.min(rule.recommendedCount, Math.max(1, matches.length)),
+      reason: rule.reason,
+      action: rule.action,
+      examples,
+    };
+  }).filter((group) => group.currentCount >= 3);
+
+  categoryCounts
+    .filter((item) => item.count > 25)
+    .forEach((item) => {
+      if (groups.some((group) => normalizeServiceText(group.title) === normalizeServiceText(item.category))) {
+        return;
+      }
+      groups.push({
+        id: `category_${normalizeServiceText(item.category).replace(/\s+/g, '_')}`,
+        title: item.category,
+        currentCount: item.count,
+        recommendedCount: 12,
+        reason: 'В категории слишком много равнозначных строк, клиенту трудно быстро выбрать.',
+        action: 'Оставить ключевые направления, а редкие или технические варианты перенести внутрь описаний.',
+        examples: activeServices
+          .filter((service) => String(service.category || '').trim() === item.category)
+          .map(compressionServiceName)
+          .filter(Boolean)
+          .slice(0, 4),
+      });
+    });
+
+  const coveredCurrentCount = groups.reduce((sum, group) => sum + group.currentCount, 0);
+  const coveredRecommendedCount = groups.reduce((sum, group) => sum + group.recommendedCount, 0);
+  const estimatedAfterCount = Math.max(
+    Math.min(beforeCount, 12),
+    beforeCount - Math.max(0, coveredCurrentCount - coveredRecommendedCount),
+  );
+  const highPriority = beforeCount >= 150;
+  const summary = beforeCount >= 80
+    ? `В меню ${beforeCount} услуг. Клиенту будет проще выбрать, если сократить видимый список примерно до ${estimatedAfterCount} направлений и перенести варианты внутрь карточек услуг.`
+    : `В меню ${beforeCount} услуг. Список пока не перегружен, но часть похожих позиций всё равно можно сгруппировать.`;
+
+  return {
+    beforeCount,
+    estimatedAfterCount,
+    highPriority,
+    categoryCounts,
+    summary,
+    groups,
+    generalRecommendations: SERVICE_CATALOG_GENERAL_RECOMMENDATIONS,
   };
 };
 

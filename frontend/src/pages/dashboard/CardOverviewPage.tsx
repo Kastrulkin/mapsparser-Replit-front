@@ -34,6 +34,7 @@ import { CardServicesTable } from '@/components/dashboard/CardServicesTable';
 import { CompetitorsTab, KeywordsTab, NewsTab, ReviewsTab } from '@/components/dashboard/CardOverviewTabs';
 import {
   CardServiceAddForm,
+  CardServiceCatalogCompressionDialog,
   CardServiceEditDialog,
   CardServiceOptimizerPanel,
   CardServicesFilterBar,
@@ -42,6 +43,7 @@ import {
 import {
   formatMapSourceTab,
   formatServiceSource,
+  buildServiceCatalogCompressionSuggestion,
   buildServicesQualityAudit,
   getDisplayedServiceUpdatedAt,
   getKeywordScore,
@@ -223,6 +225,7 @@ export const CardOverviewPage = () => {
   const [servicesQualityFilter, setServicesQualityFilter] = useState('all');
   const [servicesSort, setServicesSort] = useState<ServicesSort>('default');
   const [showServiceSettings, setShowServiceSettings] = useState(false);
+  const [showServiceCompressionSuggestion, setShowServiceCompressionSuggestion] = useState(false);
 
   // Состояния для парсера
   // parsequeue canonical status: 'completed'; API and backend also accept legacy 'done'
@@ -554,6 +557,11 @@ export const CardOverviewPage = () => {
     () => buildServicesQualityAudit(userServices),
     [userServices],
   );
+  const serviceCompressionSuggestion = useMemo(
+    () => buildServiceCatalogCompressionSuggestion(userServices),
+    [userServices],
+  );
+  const shouldShowServiceCompressionOffer = serviceCompressionSuggestion.beforeCount >= 80;
 
   const serviceCategories = useMemo(() => {
     const set = new Set<string>();
@@ -1328,6 +1336,26 @@ export const CardOverviewPage = () => {
                         Сгенерирует SEO-названия и описания для всех услуг. Используйте осторожно, если список большой.
                       </TooltipContent>
                     </Tooltip>
+                    {shouldShowServiceCompressionOffer ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => setShowServiceCompressionSuggestion(true)}
+                              className="border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-950"
+                            >
+                              <LayoutGrid className="mr-2 h-4 w-4" />
+                              Сократить меню услуг
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-xs text-xs leading-5">
+                          Покажет, какие услуги лучше объединить в категории и варианты. Ничего не меняет автоматически.
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : null}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex">
@@ -1596,6 +1624,12 @@ export const CardOverviewPage = () => {
             onChange={setEditServiceForm}
             onCancel={() => setEditingService(null)}
             onSave={saveEditedService}
+          />
+        ) : null}
+        {showServiceCompressionSuggestion ? (
+          <CardServiceCatalogCompressionDialog
+            suggestion={serviceCompressionSuggestion}
+            onClose={() => setShowServiceCompressionSuggestion(false)}
           />
         ) : null}
       </div>
