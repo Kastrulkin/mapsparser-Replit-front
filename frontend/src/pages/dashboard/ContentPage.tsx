@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import {
   AlertCircle,
@@ -15,6 +15,7 @@ import {
   Plus,
   Sparkles,
   Star,
+  Upload,
   Wand2,
 } from 'lucide-react';
 
@@ -25,6 +26,7 @@ import { Progress } from '@/components/ui/progress';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { API_URL } from '@/config/api';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
 
@@ -107,7 +109,19 @@ type PhotoAsset = {
   quality_score?: number;
   freshness_score?: number;
   orientation?: string;
+  suitable_platforms?: string[];
+  analysis_status?: string;
+  analysis_error?: string;
+  last_used_at?: string;
+  metadata_json?: Record<string, unknown>;
   why?: string;
+};
+
+type MediaCoverage = {
+  coverage_percent?: number;
+  missing_text?: string;
+  total_assets?: number;
+  missing?: { key?: string; label?: string }[];
 };
 
 type MediaRecommendation = {
@@ -125,6 +139,8 @@ type MediaRecommendation = {
 };
 
 type CalendarView = 'month' | 'week' | 'list';
+type ContentSection = 'calendar' | 'media';
+type MediaFilter = 'all' | 'maps' | 'posts' | 'weak';
 type ModalStep = 'setup' | 'preview';
 
 type CreatePlanDraft = {
@@ -136,6 +152,7 @@ type CreatePlanDraft = {
 };
 
 const CONTENT_VIEW_STORAGE_KEY = 'localos_content_view_v1';
+const CONTENT_SECTION_STORAGE_KEY = 'localos_content_section_v1';
 
 const CHANNELS = [
   { key: 'yandex_maps', label: 'Яндекс', mode: 'controlled' },
@@ -375,6 +392,11 @@ export function ContentPage() {
     const saved = window.localStorage.getItem(CONTENT_VIEW_STORAGE_KEY);
     return saved === 'week' || saved === 'list' || saved === 'month' ? saved : 'month';
   });
+  const [section, setSection] = useState<ContentSection>(() => {
+    if (typeof window === 'undefined') return 'calendar';
+    const saved = window.localStorage.getItem(CONTENT_SECTION_STORAGE_KEY);
+    return saved === 'media' ? 'media' : 'calendar';
+  });
   const [selectedItemId, setSelectedItemId] = useState('');
   const [channelDetailsOpen, setChannelDetailsOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
@@ -382,12 +404,21 @@ export function ContentPage() {
   const [dateEdits, setDateEdits] = useState<Record<string, string>>({});
   const [mediaRecommendations, setMediaRecommendations] = useState<Record<string, MediaRecommendation>>({});
   const [mediaLoadingItemId, setMediaLoadingItemId] = useState('');
+  const [mediaAssets, setMediaAssets] = useState<PhotoAsset[]>([]);
+  const [mediaCoverage, setMediaCoverage] = useState<MediaCoverage | null>(null);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaAnalyzingId, setMediaAnalyzingId] = useState('');
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
+  const [mediaError, setMediaError] = useState('');
+  const [mediaActionMessage, setMediaActionMessage] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [createStep, setCreateStep] = useState<ModalStep>('setup');
   const [createDraft, setCreateDraft] = useState<CreatePlanDraft>(DEFAULT_CREATE_DRAFT);
   const [generating, setGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationCards, setGenerationCards] = useState(0);
+  const mediaUploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const items = useMemo(() => currentPlan?.items || [], [currentPlan]);
   const postsByItem = useMemo(() => groupPostsByItem(socialPosts), [socialPosts]);
@@ -441,6 +472,18 @@ export function ContentPage() {
       return acc;
     }, {});
   }, [items]);
+  const filteredMediaAssets = useMemo(() => {
+    const mapPlatforms = new Set(['yandex_maps', 'two_gis', 'google_business']);
+    const postPlatforms = new Set(['telegram', 'vk', 'instagram', 'facebook']);
+    return mediaAssets.filter((asset) => {
+      const platforms = Array.isArray(asset.suitable_platforms) ? asset.suitable_platforms : [];
+      const quality = Number(asset.quality_score || 0);
+      if (mediaFilter === 'maps') return platforms.some((platform) => mapPlatforms.has(platform)) || ['entrance', 'interior', 'result', 'process'].includes(String(asset.category || ''));
+      if (mediaFilter === 'posts') return platforms.some((platform) => postPlatforms.has(platform)) || quality >= 45;
+      if (mediaFilter === 'weak') return quality > 0 && quality < 45 || String(asset.analysis_status || '') === 'analysis_failed';
+      return true;
+    });
+  }, [mediaAssets, mediaFilter]);
 
   const loadSocialPosts = async (planId: string) => {
     const response = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(planId)}/social-posts`, { method: 'GET' });
@@ -504,6 +547,16 @@ export function ContentPage() {
   }, [view]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(CONTENT_SECTION_STORAGE_KEY, section);
+  }, [section]);
+
+  useEffect(() => {
+    if (section !== 'media' || !currentBusinessId) return;
+    void loadMediaAssets();
+  }, [section, currentBusinessId]);
+
+  useEffect(() => {
     if (!generating) return;
     const interval = window.setInterval(() => {
       setGenerationProgress((value) => Math.min(value + 7, 92));
@@ -538,6 +591,112 @@ export function ContentPage() {
       }));
     } finally {
       setMediaLoadingItemId('');
+    }
+  };
+
+  const photoImageSrc = (asset: PhotoAsset) => {
+    const url = String(asset.original_url || '').trim();
+    if (!url) return '';
+    if (url.startsWith('/')) return url;
+    return url;
+  };
+
+  const loadMediaAssets = async () => {
+    if (!currentBusinessId) return;
+    setMediaLoading(true);
+    setMediaError('');
+    try {
+      const response = await newAuth.makeRequest(`/media-intelligence/photos?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
+      setMediaAssets(Array.isArray(response.photos) ? response.photos : []);
+      setMediaCoverage(response.coverage || null);
+    } catch (mediaLoadError) {
+      setMediaError(mediaLoadError instanceof Error ? mediaLoadError.message : 'Не удалось загрузить медиатеку');
+    } finally {
+      setMediaLoading(false);
+    }
+  };
+
+  const analyzeMediaAsset = async (assetId?: string) => {
+    if (!currentBusinessId || !assetId) return;
+    setMediaAnalyzingId(assetId);
+    setMediaError('');
+    try {
+      await newAuth.makeRequest(`/media-intelligence/photos/${encodeURIComponent(assetId)}/analyze`, {
+        method: 'POST',
+        body: JSON.stringify({ business_id: currentBusinessId }),
+      });
+      await loadMediaAssets();
+      setMediaActionMessage('Фото проанализировано. LocalOS учтёт его в рекомендациях к публикациям.');
+    } catch (analyzeError) {
+      setMediaError(analyzeError instanceof Error ? analyzeError.message : 'Не удалось проанализировать фото');
+      await loadMediaAssets();
+    } finally {
+      setMediaAnalyzingId('');
+    }
+  };
+
+  const uploadMediaPhoto = async (file?: File) => {
+    if (!currentBusinessId || !file) return;
+    setMediaUploading(true);
+    setMediaError('');
+    setMediaActionMessage('');
+    try {
+      const formData = new FormData();
+      formData.append('business_id', currentBusinessId);
+      formData.append('file', file);
+      const token = window.localStorage.getItem('auth_token') || '';
+      const response = await fetch(`${API_URL}/api/media-intelligence/photos/upload`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || 'Не удалось загрузить фото');
+      }
+      setMediaActionMessage('Фото загружено. Анализируем, чтобы подбирать его к публикациям.');
+      await loadMediaAssets();
+      await analyzeMediaAsset(data.photo?.id);
+    } catch (uploadError) {
+      setMediaError(uploadError instanceof Error ? uploadError.message : 'Не удалось загрузить фото');
+    } finally {
+      setMediaUploading(false);
+      if (mediaUploadInputRef.current) {
+        mediaUploadInputRef.current.value = '';
+      }
+    }
+  };
+
+  const recordSelectedPhotoUsage = async () => {
+    if (!selectedItem || !currentBusinessId) return;
+    const recommendation = mediaRecommendations[selectedItem.id];
+    const assetId = recommendation?.selected_asset?.id;
+    if (!assetId) {
+      setError('Сначала загрузите или выберите подходящее фото.');
+      return;
+    }
+    setBusyAction('photo-usage');
+    setError('');
+    try {
+      await newAuth.makeRequest(`/media-intelligence/photos/${encodeURIComponent(assetId)}/usage`, {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          usage_type: 'publication',
+          target_id: selectedItem.id,
+          metadata: {
+            source: 'content_publication_drawer',
+            theme: selectedItem.theme || selectedItem.goal || '',
+          },
+        }),
+      });
+      setActionMessage('Фото сохранено для публикации. Повторный анализ и списание кредитов не нужны.');
+      await loadMediaRecommendation(selectedItem.id);
+      if (section === 'media') await loadMediaAssets();
+    } catch (usageError) {
+      setError(usageError instanceof Error ? usageError.message : 'Не удалось сохранить фото для публикации');
+    } finally {
+      setBusyAction('');
     }
   };
 
@@ -1166,6 +1325,198 @@ export function ContentPage() {
     </aside>
   );
 
+  const renderMediaLibrary = () => (
+    <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
+      <main className="space-y-5">
+        <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Медиатека</div>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Фото для карт и постов</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                Загрузите фото бизнеса. LocalOS подскажет, что подходит для публикаций, а чего не хватает.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <input
+                ref={mediaUploadInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(event) => { void uploadMediaPhoto(event.target.files?.[0]); }}
+              />
+              <Button
+                type="button"
+                onClick={() => mediaUploadInputRef.current?.click()}
+                disabled={mediaUploading}
+                className="rounded-2xl bg-slate-950 px-5 py-6 text-white hover:bg-slate-800"
+              >
+                {mediaUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                {mediaUploading ? 'Загружаем...' : 'Загрузить фото'}
+              </Button>
+              <Button type="button" variant="outline" onClick={loadMediaAssets} disabled={mediaLoading} className="rounded-2xl px-5 py-6">
+                {mediaLoading ? 'Обновляем...' : 'Обновить'}
+              </Button>
+            </div>
+          </div>
+          <div className="mt-6 grid gap-3 md:grid-cols-3">
+            <div className="rounded-3xl bg-slate-950 p-5 text-white">
+              <div className="text-sm text-slate-400">Покрытие</div>
+              <div className="mt-2 text-4xl font-semibold tabular-nums">{Number(mediaCoverage?.coverage_percent || 0)}%</div>
+              <div className="mt-2 text-sm leading-6 text-slate-300">{mediaCoverage?.missing_text || 'Загрузите фото, чтобы увидеть покрытие.'}</div>
+            </div>
+            <div className="rounded-3xl bg-slate-50 p-5">
+              <div className="text-sm text-slate-500">Фото</div>
+              <div className="mt-2 text-4xl font-semibold text-slate-950 tabular-nums">{mediaAssets.length}</div>
+              <div className="mt-2 text-sm leading-6 text-slate-500">Используются для рекомендаций в публикациях.</div>
+            </div>
+            <div className="rounded-3xl bg-amber-50 p-5">
+              <div className="text-sm text-amber-800">Что доснять</div>
+              <div className="mt-2 text-sm leading-6 text-amber-900">
+                {mediaCoverage?.missing_text || 'Вход, команда, процесс и результат помогают закрыть карты и соцсети.'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {mediaError ? (
+          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {mediaError}
+          </div>
+        ) : null}
+        {mediaActionMessage ? (
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+            {mediaActionMessage}
+          </div>
+        ) : null}
+
+        <div className="rounded-[28px] border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex flex-wrap gap-2">
+            {[
+              ['all', `Все · ${mediaAssets.length}`],
+              ['maps', 'Для карт'],
+              ['posts', 'Для постов'],
+              ['weak', 'Лучше заменить'],
+            ].map(([key, label]) => (
+              <button
+                key={String(key)}
+                type="button"
+                onClick={() => setMediaFilter(key === 'maps' ? 'maps' : key === 'posts' ? 'posts' : key === 'weak' ? 'weak' : 'all')}
+                className={cn(
+                  'min-h-10 rounded-2xl px-4 py-2 text-sm font-semibold transition-colors',
+                  mediaFilter === key ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {mediaLoading ? (
+          <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
+            Загружаем медиатеку...
+          </div>
+        ) : filteredMediaAssets.length > 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {filteredMediaAssets.map((asset) => {
+              const imageSrc = photoImageSrc(asset);
+              const quality = Number(asset.quality_score || 0);
+              const status = String(asset.analysis_status || 'not_analyzed');
+              return (
+                <div key={asset.id} className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                  {imageSrc ? (
+                    <AuthenticatedImage src={imageSrc} alt="Фото бизнеса" className="h-48 w-full object-cover ring-1 ring-black/10" />
+                  ) : (
+                    <div className="flex h-48 items-center justify-center bg-slate-100 text-slate-400">
+                      <ImageIcon className="h-8 w-8" />
+                    </div>
+                  )}
+                  <div className="space-y-3 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-950">{asset.category && asset.category !== 'unknown' ? asset.category : 'Фото бизнеса'}</div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {status === 'analyzed' ? 'Проанализировано' : status === 'analysis_failed' ? 'Не удалось проанализировать' : 'Ждёт анализа'}
+                        </div>
+                      </div>
+                      <span className={cn('rounded-full px-2.5 py-1 text-xs font-semibold ring-1', quality >= 55 ? 'bg-emerald-50 text-emerald-700 ring-emerald-100' : quality > 0 ? 'bg-amber-50 text-amber-800 ring-amber-100' : 'bg-slate-100 text-slate-600 ring-slate-200')}>
+                        {quality > 0 ? `${quality}%` : 'новое'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(asset.suitable_platforms || []).slice(0, 4).map((platform) => (
+                        <span key={platform} className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
+                          {platform}
+                        </span>
+                      ))}
+                      {(asset.suitable_platforms || []).length === 0 ? (
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">каналы появятся после анализа</span>
+                      ) : null}
+                    </div>
+                    {status !== 'analyzed' ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => { void analyzeMediaAsset(asset.id); }}
+                        disabled={mediaAnalyzingId === asset.id}
+                        className="w-full rounded-2xl"
+                      >
+                        {mediaAnalyzingId === asset.id ? 'Анализируем...' : 'Проанализировать'}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-[32px] border border-dashed border-slate-200 bg-white p-8 shadow-sm">
+            <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
+                  <ImageIcon className="h-4 w-4" />
+                  Фото ещё не загружены
+                </div>
+                <h3 className="mt-4 text-2xl font-semibold text-slate-950">Начните с 10 реальных фото</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Для первого proof подойдут вход, интерьер, процесс, результат, команда и живые детали. Анализ списывает 2 кредита за новое фото.
+                </p>
+                <Button type="button" onClick={() => mediaUploadInputRef.current?.click()} className="mt-5 rounded-2xl bg-slate-950 px-5 py-6 text-white hover:bg-slate-800">
+                  <Upload className="mr-2 h-4 w-4" />
+                  Загрузить фото
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 gap-3 opacity-70">
+                {['вход', 'процесс', 'результат', 'команда', 'интерьер', 'детали'].map((label) => (
+                  <div key={label} className="flex h-28 items-end rounded-3xl bg-slate-100 p-3 text-xs font-semibold text-slate-500">
+                    {label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+      <aside className="space-y-4">
+        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Как LocalOS использует фото</div>
+          <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+            <div>1. Анализирует фото один раз.</div>
+            <div>2. Подбирает лучшее фото к публикации.</div>
+            <div>3. Повторное использование не списывает кредиты.</div>
+          </div>
+        </div>
+        <div className="rounded-[28px] border border-slate-200 bg-slate-950 p-5 text-white shadow-sm">
+          <div className="text-sm font-semibold text-slate-300">Следующий proof</div>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            Сначала загрузите 10 фото для “Весёлой расчёски”, затем откройте публикацию и проверьте рекомендацию.
+          </p>
+        </div>
+      </aside>
+    </div>
+  );
+
   const renderDrawer = () => {
     const item = selectedItem;
     const hasPosts = selectedPosts.length > 0;
@@ -1292,7 +1643,7 @@ export function ContentPage() {
                     </div>
                     {selectedPhoto?.original_url ? (
                       <div className="mt-4 grid gap-4 sm:grid-cols-[140px_1fr]">
-                        <img src={selectedPhoto.original_url} alt="Подобранное фото" className="h-32 w-full rounded-2xl object-cover shadow-sm ring-1 ring-slate-200" />
+                        <AuthenticatedImage src={photoImageSrc(selectedPhoto)} alt="Подобранное фото" className="h-32 w-full rounded-2xl object-cover shadow-sm ring-1 ring-black/10" />
                         <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
                           <div className="font-semibold text-slate-900">Почему подходит</div>
                           <div className="mt-1 leading-6">{selectedPhoto.why || mediaRecommendation?.message || 'Фото подходит по задаче публикации.'}</div>
@@ -1300,6 +1651,34 @@ export function ContentPage() {
                             <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">качество {Math.round(Number(selectedPhoto.quality_score || 0))}%</span>
                             {selectedPhoto.category ? <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">{selectedPhoto.category}</span> : null}
                           </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={recordSelectedPhotoUsage}
+                            disabled={busyAction === 'photo-usage'}
+                            className="mt-3 rounded-2xl bg-white"
+                          >
+                            {busyAction === 'photo-usage' ? 'Сохраняем...' : 'Использовать фото'}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {Array.isArray(mediaRecommendation?.alternatives) && mediaRecommendation.alternatives.length > 0 ? (
+                      <div className="mt-4">
+                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Альтернативы</div>
+                        <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                          {mediaRecommendation.alternatives.slice(0, 3).map((asset) => (
+                            <div key={asset.id} className="w-28 shrink-0 rounded-2xl bg-slate-50 p-2">
+                              {photoImageSrc(asset) ? (
+                                <AuthenticatedImage src={photoImageSrc(asset)} alt="Альтернативное фото" className="h-20 w-full rounded-xl object-cover ring-1 ring-black/10" />
+                              ) : (
+                                <div className="flex h-20 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+                                  <ImageIcon className="h-5 w-5" />
+                                </div>
+                              )}
+                              <div className="mt-1 truncate text-[11px] font-medium text-slate-600">{asset.category || 'фото'}</div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     ) : null}
@@ -1315,6 +1694,17 @@ export function ContentPage() {
                         ))}
                       </div>
                     ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setSection('media');
+                        setSelectedItemId('');
+                      }}
+                      className="mt-4 rounded-2xl"
+                    >
+                      Открыть медиатеку
+                    </Button>
                   </div>
                   {failedPost ? (
                     <div className="rounded-3xl border border-red-100 bg-red-50 p-4 text-sm text-red-800">
@@ -1488,6 +1878,26 @@ export function ContentPage() {
         </Button>
       </div>
 
+      <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+        {[
+          ['calendar', 'Календарь', CalendarDays],
+          ['media', 'Медиатека', ImageIcon],
+        ].map(([key, label, Icon]) => (
+          <button
+            key={String(key)}
+            type="button"
+            onClick={() => setSection(key === 'media' ? 'media' : 'calendar')}
+            className={cn(
+              'inline-flex min-h-10 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors',
+              section === key ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-950',
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
       {error ? (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-800">
           <span>{error}</span>
@@ -1503,11 +1913,13 @@ export function ContentPage() {
         </div>
       ) : null}
 
-      {generating ? renderGenerating() : null}
+      {section === 'media' ? renderMediaLibrary() : null}
 
-      {!generating && !loading && items.length === 0 ? renderEmptyState() : null}
+      {section === 'calendar' && generating ? renderGenerating() : null}
 
-      {!generating && (loading || items.length > 0) ? (
+      {section === 'calendar' && !generating && !loading && items.length === 0 ? renderEmptyState() : null}
+
+      {section === 'calendar' && !generating && (loading || items.length > 0) ? (
         <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
           <main className="space-y-5">
             <div className="rounded-[32px] border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
@@ -1608,6 +2020,45 @@ export function ContentPage() {
       ) : null}
     </div>
   );
+}
+
+function AuthenticatedImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const [resolvedSrc, setResolvedSrc] = useState(() => (src.startsWith('/api/') ? '' : src));
+
+  useEffect(() => {
+    if (!src || !src.startsWith('/api/')) {
+      setResolvedSrc(src);
+      return undefined;
+    }
+    setResolvedSrc('');
+    let cancelled = false;
+    let objectUrl = '';
+    const loadImage = async () => {
+      const token = window.localStorage.getItem('auth_token') || '';
+      const response = await fetch(`${API_URL}${src}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) return;
+      const blob = await response.blob();
+      if (cancelled) return;
+      objectUrl = URL.createObjectURL(blob);
+      setResolvedSrc(objectUrl);
+    };
+    void loadImage();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [src]);
+
+  if (!resolvedSrc) {
+    return (
+      <div className={cn('flex items-center justify-center bg-slate-100 text-slate-400', className)}>
+        <ImageIcon className="h-5 w-5" />
+      </div>
+    );
+  }
+  return <img src={resolvedSrc} alt={alt} className={className} />;
 }
 
 function Insight({ icon, text, detail }: { icon: React.ReactNode; text: string; detail?: string }) {

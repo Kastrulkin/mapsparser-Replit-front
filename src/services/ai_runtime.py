@@ -13,6 +13,7 @@ from typing import Any
 from psycopg2.extras import Json
 
 from services.gigachat_client import get_gigachat_client
+from services.media_file_storage import load_media_file
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 
 
@@ -164,6 +165,24 @@ def _download_image_as_base64(url: str) -> str:
         data = response.read(10 * 1024 * 1024 + 1)
     finally:
         response.close()
+    if len(data) > 10 * 1024 * 1024:
+        raise ValueError("Фото слишком большое для анализа")
+    return base64.b64encode(data).decode("ascii")
+
+
+def _load_stored_image_as_base64(asset: dict[str, Any]) -> str:
+    versions = _json_value(asset.get("versions_json"), {})
+    original = versions.get("original") if isinstance(versions, dict) else {}
+    storage_path = ""
+    if isinstance(original, dict):
+        storage_path = str(original.get("storage_path") or "").strip()
+    if not storage_path:
+        storage_path = str(asset.get("storage_key") or "").strip()
+    if not storage_path:
+        return ""
+    data = load_media_file(storage_path)
+    if data is None:
+        return ""
     if len(data) > 10 * 1024 * 1024:
         raise ValueError("Фото слишком большое для анализа")
     return base64.b64encode(data).decode("ascii")
@@ -447,7 +466,7 @@ def analyze_photo_runtime(
 
     cursor.execute(
         """
-        SELECT id, asset_version, original_url
+        SELECT id, asset_version, original_url, storage_key, versions_json
         FROM photo_assets
         WHERE id = %s AND business_id = %s
         LIMIT 1
@@ -503,6 +522,8 @@ def analyze_photo_runtime(
 
     clean_image_base64 = str(image_base64 or "").strip()
     try:
+        if not clean_image_base64:
+            clean_image_base64 = _load_stored_image_as_base64(asset)
         if not clean_image_base64:
             clean_image_base64 = _download_image_as_base64(image_url or asset.get("original_url") or "")
     except Exception:
@@ -626,7 +647,7 @@ def analyze_photo_runtime(
         """,
         (
             Json({"analysis": analysis}),
-            f"photo-assets/{business_id}/{asset_id}/v{asset_version}/photo.meta.json",
+            f"businesses/{business_id}/media/meta/{asset_id}/v{asset_version}/photo.meta.json",
             analysis["category"],
             analysis["quality_score"],
             analysis["freshness_score"],

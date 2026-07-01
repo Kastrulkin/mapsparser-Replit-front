@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request
 
 from core.auth_helpers import require_auth_from_request, verify_business_access
 from database_manager import DatabaseManager
@@ -16,6 +16,7 @@ from services.ai_runtime import (
 )
 from services.media_intelligence import (
     build_photo_coverage,
+    create_uploaded_photo_asset,
     create_photo_asset_version,
     list_photo_assets,
     load_business,
@@ -23,6 +24,7 @@ from services.media_intelligence import (
     recommend_media_for_post,
     upsert_photo_asset,
 )
+from services.media_file_storage import load_media_file
 
 
 media_intelligence_bp = Blueprint("media_intelligence", __name__, url_prefix="/api/media-intelligence")
@@ -158,6 +160,95 @@ def media_photos_create():
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
     except Exception:
         db.conn.rollback()
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+@media_intelligence_bp.route("/photos/upload", methods=["POST"])
+def media_photo_upload():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    business_id = str(request.form.get("business_id") or "").strip()
+    uploaded_file = request.files.get("file")
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        ok, error_response = _require_business(cursor, business_id, user_data)
+        if not ok:
+            return error_response
+        if not is_capability_enabled(cursor, business_id, VISION_CAPABILITY):
+            return jsonify(
+                {
+                    "success": False,
+                    "status": "vision_disabled",
+                    "error": "Работа с фотографиями выключена.",
+                    "next_action": "Включите интеллектуальную работу с фотографиями в настройках ИИ.",
+                }
+            ), 409
+        if uploaded_file is None:
+            return jsonify({"success": False, "error": "Выберите фото для загрузки"}), 400
+        content = uploaded_file.read()
+        photo = create_uploaded_photo_asset(
+            cursor,
+            business_id=business_id,
+            user_id=_user_id(user_data),
+            content=content,
+            original_name=str(uploaded_file.filename or "photo"),
+            mime_type=str(uploaded_file.mimetype or ""),
+            metadata={"consent": "photo_intelligence_enabled"},
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "photo": photo, "coverage": build_photo_coverage(cursor, business_id)})
+    except ValueError:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+    except Exception:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+@media_intelligence_bp.route("/photos/<asset_id>/file", methods=["GET"])
+def media_photo_file(asset_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    variant = str(request.args.get("variant") or "original").strip() or "original"
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT business_id, storage_key, versions_json
+            FROM photo_assets
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (str(asset_id or "").strip(),),
+        )
+        row = cursor.fetchone()
+        photo = dict(row) if hasattr(row, "keys") else None
+        if not photo:
+            columns = [col[0] for col in (getattr(cursor, "description", None) or [])]
+            if isinstance(row, (list, tuple)) and columns:
+                photo = {columns[idx]: row[idx] for idx in range(min(len(columns), len(row)))}
+        if not photo:
+            return jsonify({"success": False, "error": "Фото не найдено"}), 404
+        ok, error_response = _require_business(cursor, str(photo.get("business_id") or ""), user_data)
+        if not ok:
+            return error_response
+        versions = photo.get("versions_json") if isinstance(photo.get("versions_json"), dict) else {}
+        variant_data = versions.get(variant) if isinstance(versions.get(variant), dict) else {}
+        storage_path = str(variant_data.get("storage_path") or photo.get("storage_key") or "").strip()
+        content = load_media_file(storage_path)
+        if content is None:
+            return jsonify({"success": False, "error": "Файл не найден"}), 404
+        mime_type = str(variant_data.get("mime_type") or "image/jpeg")
+        return Response(content, mimetype=mime_type)
+    except Exception:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
     finally:
         db.close()

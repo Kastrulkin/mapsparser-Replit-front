@@ -63,8 +63,14 @@ class FakeCursor:
         query = self.last_query
         if "from ai_capability_settings" in query:
             return {"enabled": self.enabled}
-        if "select id, asset_version, original_url from photo_assets" in query:
-            return {"id": "asset-1", "asset_version": 1, "original_url": "https://example.com/photo.jpg"}
+        if "from photo_assets" in query and "asset_version" in query:
+            return {
+                "id": "asset-1",
+                "asset_version": 1,
+                "original_url": "https://example.com/photo.jpg",
+                "storage_key": "",
+                "versions_json": {},
+            }
         if "from ai_runtime_cache" in query:
             if self.cache:
                 return {"result_json": self.cache, "usage_event_id": "source-usage-1"}

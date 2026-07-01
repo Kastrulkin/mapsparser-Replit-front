@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 from psycopg2.extras import Json
+
+from services.media_file_storage import store_media_file
 
 
 PHOTO_LIBRARY: dict[str, list[dict[str, str]]] = {
@@ -168,6 +172,82 @@ def upsert_photo_asset(
     return serialize_photo_asset(cursor, _row_to_dict(cursor, cursor.fetchone()) or {})
 
 
+def create_uploaded_photo_asset(
+    cursor: Any,
+    *,
+    business_id: str,
+    user_id: str,
+    content: bytes,
+    original_name: str,
+    mime_type: str,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not content:
+        raise ValueError("Файл фото пустой")
+    if len(content) > 10 * 1024 * 1024:
+        raise ValueError("Фото слишком большое. Загрузите файл до 10 МБ.")
+    extension = _photo_extension(original_name=original_name, mime_type=mime_type)
+    if extension not in {"jpg", "jpeg", "png", "webp"}:
+        raise ValueError("Поддерживаются JPG, PNG и WebP")
+    asset_id = str(uuid.uuid4())
+    stored = store_media_file(
+        business_id=business_id,
+        asset_id=asset_id,
+        variant="original",
+        extension=extension,
+        content=content,
+        original_name=original_name,
+        mime_type=mime_type,
+    )
+    content_hash = hashlib.sha256(content).hexdigest()
+    original_url = stored.get("public_url") or f"/api/media-intelligence/photos/{asset_id}/file?variant=original"
+    versions = {
+        "original": {
+            "storage_path": stored.get("storage_path"),
+            "storage_key": stored.get("storage_key"),
+            "public_url": stored.get("public_url") or "",
+            "mime_type": stored.get("mime_type") or mime_type,
+            "size_bytes": stored.get("size_bytes") or len(content),
+        },
+        "preview": {"status": "pending", "source": "original"},
+        "thumb": {"status": "pending", "source": "original"},
+        "meta": {
+            "status": "pending",
+            "storage_key": f"businesses/{business_id}/media/meta/{asset_id}/v1/photo.meta.json",
+        },
+    }
+    upload_metadata = {
+        "upload": {
+            "original_name": original_name,
+            "mime_type": mime_type,
+            "size_bytes": len(content),
+            "source": "content_mediatheque",
+        },
+        **(metadata or {}),
+    }
+    cursor.execute(
+        """
+        INSERT INTO photo_assets (
+            id, business_id, source, original_url, storage_key, versions_json, metadata_json,
+            content_hash, analysis_status, created_by, created_at, updated_at
+        )
+        VALUES (%s, %s, 'upload', %s, %s, %s, %s, %s, 'not_analyzed', %s, NOW(), NOW())
+        RETURNING *
+        """,
+        (
+            asset_id,
+            business_id,
+            original_url,
+            stored.get("storage_path") or stored.get("storage_key") or "",
+            Json(versions),
+            Json(upload_metadata),
+            content_hash,
+            user_id,
+        ),
+    )
+    return serialize_photo_asset(cursor, _row_to_dict(cursor, cursor.fetchone()) or {})
+
+
 def list_photo_assets(cursor: Any, business_id: str) -> list[dict[str, Any]]:
     cursor.execute(
         """
@@ -202,11 +282,29 @@ def serialize_photo_asset(cursor: Any, row: dict[str, Any]) -> dict[str, Any]:
         "last_analyzed_at": row.get("last_analyzed_at"),
         "content_hash": row.get("content_hash"),
         "meta_storage_key": row.get("meta_storage_key"),
+        "storage_key": row.get("storage_key"),
+        "versions_json": _json_value(row.get("versions_json"), {}),
         "metadata_json": _json_value(row.get("metadata_json"), {}),
         "last_used_at": row.get("last_used_at"),
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
     }
+
+
+def _photo_extension(*, original_name: str, mime_type: str) -> str:
+    name_extension = os.path.splitext(str(original_name or "").strip())[1].lower().lstrip(".")
+    if name_extension == "jpg" or name_extension == "jpeg":
+        return "jpg"
+    if name_extension in {"png", "webp"}:
+        return name_extension
+    clean_mime = str(mime_type or "").strip().lower()
+    if clean_mime in {"image/jpeg", "image/jpg"}:
+        return "jpg"
+    if clean_mime == "image/png":
+        return "png"
+    if clean_mime == "image/webp":
+        return "webp"
+    return name_extension
 
 
 def create_photo_asset_version(
