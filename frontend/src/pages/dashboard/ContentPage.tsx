@@ -571,6 +571,8 @@ export function ContentPage() {
   }, [generating]);
 
   const openItem = (item: PlanItem) => {
+    setError('');
+    setActionMessage('');
     setSelectedItemId(item.id);
     setDraftEdits((prev) => ({ ...prev, [item.id]: String(item.draft_text || '') }));
     setThemeEdits((prev) => ({ ...prev, [item.id]: String(item.theme || item.goal || '') }));
@@ -746,7 +748,11 @@ export function ContentPage() {
         : null;
       setDraftEdits((prev) => ({ ...prev, [selectedItem.id]: String(refreshedItem?.draft_text || '') }));
       const generation = response.generation || {};
-      if (generation.success === false || generation.source === 'fallback') {
+      const refreshedText = String(refreshedItem?.draft_text || '').trim();
+      const refreshedGenerationSource = itemGenerationSource(refreshedItem);
+      const hasGeneratedText = Boolean(refreshedText) && refreshedGenerationSource !== 'fallback';
+      if (generation.success === false || generation.source === 'fallback' || !hasGeneratedText) {
+        setActionMessage('');
         setError(String(generation.message || 'Не удалось написать текст. Попробуйте ещё раз.'));
       } else {
         setActionMessage(String(generation.message || 'Текст готов. Проверьте его и утвердите публикацию.'));
