@@ -35,7 +35,17 @@ export const en = {
   footer: {
     title: "LocalOS",
     description: "Local promotion for local business",
-    madeWithLove: "Made with love for the beauty industry",
+    madeWithLovePrefix: "Made with love for ",
+    madeWithLoveIndustries: [
+      "the beauty industry",
+      "medical centers",
+      "fitness studios",
+      "cafes and restaurants",
+      "auto services",
+      "local shops",
+      "schools and courses",
+      "service businesses",
+    ],
     company: "Company",
     whoWeAre: "Who We Are?",
     contacts: "Contacts",

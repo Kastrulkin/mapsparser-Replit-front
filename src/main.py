@@ -118,6 +118,7 @@ from api.content_plans_api import content_plans_bp
 from api.social_posts_api import social_posts_bp
 from api.media_intelligence_api import media_intelligence_bp
 from api.finance_api import finance_bp
+from api.dashboard_feedback_api import dashboard_feedback_bp
 from api.external_accounts_api import external_accounts_bp
 from api.parsing_admin_api import parsing_admin_bp
 from api.admin_prospecting import (
@@ -126,6 +127,7 @@ from api.admin_prospecting import (
     _ensure_partnership_public_offers_table,
     _slugify_company_name,
 )
+from api.partnership_leads_api import partnership_leads_bp
 from api.sales_rooms_api import sales_rooms_bp
 from api.admin_industry_patterns_api import admin_industry_patterns_bp
 from api.agent_security_api import agent_security_bp
@@ -293,8 +295,10 @@ app.register_blueprint(content_plans_bp)
 app.register_blueprint(social_posts_bp)
 app.register_blueprint(media_intelligence_bp)
 app.register_blueprint(finance_bp)
+app.register_blueprint(dashboard_feedback_bp)
 app.register_blueprint(external_accounts_bp)
 app.register_blueprint(parsing_admin_bp)
+app.register_blueprint(partnership_leads_bp)
 app.register_blueprint(admin_prospecting_bp)
 app.register_blueprint(sales_rooms_bp)
 app.register_blueprint(admin_industry_patterns_bp)

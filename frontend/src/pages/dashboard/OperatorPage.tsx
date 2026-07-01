@@ -13,6 +13,7 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
+import { BetaFeedbackBanner } from '@/components/dashboard/BetaFeedbackBanner';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
 
@@ -410,6 +411,14 @@ export const OperatorPage = () => {
         title="Оператор"
         description="Управление LocalOS через чат: напишите, что нужно сделать с отзывами, картами, услугами, новостями или постами."
         icon={Bot}
+      />
+
+      <BetaFeedbackBanner
+        area="operator"
+        title="Функция в стадии beta-тестирования"
+        description="Если в Операторе что-то сработало не так, выглядит странно или не доводит задачу до результата, сообщите о проблеме."
+        businessId={currentBusinessId}
+        businessName={currentBusiness?.name || null}
       />
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">

@@ -32,7 +32,17 @@ export const tr = {
   footer: {
     title: "LocalOS",
     description: "Yerel işletmeler için yerel büyüme",
-    madeWithLove: "Güzellik sektörü için sevgiyle hazırlandı",
+    madeWithLovePrefix: "Sevgiyle hazırlandı: ",
+    madeWithLoveIndustries: [
+      "güzellik sektörü",
+      "sağlık merkezleri",
+      "fitness stüdyoları",
+      "kafe ve restoranlar",
+      "oto servisleri",
+      "yerel mağazalar",
+      "okullar ve kurslar",
+      "hizmet işletmeleri",
+    ],
     company: "Şirket",
     whoWeAre: "Biz Kimiz?",
     contacts: "İletişim",

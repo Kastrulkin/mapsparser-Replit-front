@@ -408,6 +408,42 @@ def _metadata_binding_config(metadata: Dict[str, Any], provider: str, binding_ke
     return {}
 
 
+def resolve_agent_binding_runtime_config(metadata: Dict[str, Any], provider: str, binding_key: str) -> Dict[str, Any]:
+    binding_integrations = (
+        metadata.get("agent_binding_integrations")
+        if isinstance(metadata.get("agent_binding_integrations"), dict)
+        else {}
+    )
+    custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    candidates = [
+        custom_process.get(binding_key),
+        custom_process.get(provider),
+    ]
+    if provider == "google_sheets":
+        candidates.extend([custom_process.get("google_sheets_read"), custom_process.get("google_sheets_append")])
+    candidates.append(binding_integrations.get(binding_key))
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        resolved: Dict[str, Any] = {}
+        for source in (
+            candidate.get("answer_config") if isinstance(candidate.get("answer_config"), dict) else {},
+            candidate,
+        ):
+            if not isinstance(source, dict):
+                continue
+            for key, value in source.items():
+                clean_key = str(key or "").strip()
+                if not clean_key or clean_key == "answer_config":
+                    continue
+                if value in ("", None, [], {}):
+                    continue
+                resolved.setdefault(clean_key, value)
+        if resolved:
+            return resolved
+    return {}
+
+
 def _metadata_candidate_has_connection_anchor(candidate: Dict[str, Any]) -> bool:
     for key in ["integration_id", "route_provider", "external_account_id", "auth_ref"]:
         if str(candidate.get(key) or "").strip():

@@ -107,8 +107,37 @@ type SalesRoomPayload = {
   permissions?: {
     can_edit_welcome?: boolean;
   };
+  participant?: {
+    id?: string;
+    email?: string;
+    name?: string;
+    company?: string;
+    verified?: boolean;
+    verified_at?: string;
+  };
+  audit_offer?: SalesRoomAuditOffer | null;
   messages?: SalesRoomMessage[];
   proposal_review?: SalesRoomProposalReview;
+};
+
+type SalesRoomAuditOffer = {
+  id?: string;
+  status?: string;
+  platform?: string;
+  company_name?: string;
+  company_address?: string;
+  offer_title?: string;
+  offer_text?: string;
+  button_text?: string;
+  prepared_audit_slug?: string | null;
+  requires_registration?: boolean;
+  requires_verification?: boolean;
+  requested_at?: string;
+  processing_started_at?: string;
+  ready_at?: string;
+  opened_at?: string;
+  audit_url?: string | null;
+  processing_delay_seconds?: number;
 };
 
 const roomModeLabel = (mode?: string) => {
@@ -138,6 +167,8 @@ const formatDateTime = (value?: string) => {
 
 const roomAuthorNameKey = 'localos_sales_room_author_name';
 const roomAuthorCompanyKey = 'localos_sales_room_author_company';
+const roomParticipantTokenKey = (slug?: string) => `localos_sales_room_participant_token_${slug || 'unknown'}`;
+const roomAuditOfferDismissedKey = (slug?: string) => `localos_sales_room_audit_offer_dismissed_${slug || 'unknown'}`;
 const fileUploadsVisible = true;
 const defaultWelcomeText =
   'Рад знакомству. Я подготовил эту цифровую комнату, чтобы было проще обсуждать детали, подключать коллег и видеть всё в одном месте.\n\n' +
@@ -205,6 +236,15 @@ export default function PublicSalesRoomPage() {
   const [welcomeDraft, setWelcomeDraft] = useState('');
   const [savingWelcome, setSavingWelcome] = useState(false);
   const [welcomeError, setWelcomeError] = useState<string | null>(null);
+  const [participantToken, setParticipantToken] = useState(() => localStorage.getItem(roomParticipantTokenKey(roomSlug)) || '');
+  const [participantEmail, setParticipantEmail] = useState('');
+  const [participantBusy, setParticipantBusy] = useState(false);
+  const [participantMessage, setParticipantMessage] = useState<string | null>(null);
+  const [participantError, setParticipantError] = useState<string | null>(null);
+  const [participantConsent, setParticipantConsent] = useState(false);
+  const [auditOfferBusy, setAuditOfferBusy] = useState(false);
+  const [auditOfferError, setAuditOfferError] = useState<string | null>(null);
+  const [auditOfferDismissed, setAuditOfferDismissed] = useState(() => localStorage.getItem(roomAuditOfferDismissedKey(roomSlug)) === '1');
 
   const updateAuthorName = (value: string) => {
     setAuthorName(value);
@@ -221,13 +261,25 @@ export default function PublicSalesRoomPage() {
     try {
       setLoading(true);
       setError(null);
+      const headers: Record<string, string> = {};
+      if (participantToken) {
+        headers['X-Sales-Room-Participant-Token'] = participantToken;
+      }
+      const selectedBusinessId = localStorage.getItem('selectedBusinessId') || '';
+      if (selectedBusinessId) {
+        headers['X-LocalOS-Current-Business-Id'] = selectedBusinessId;
+      }
       const response = await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}`, {
         method: 'GET',
+        headers,
       });
       const nextRoom = response?.room || null;
       setRoom(nextRoom);
       setMessages(Array.isArray(nextRoom?.messages) ? nextRoom.messages : []);
       setWelcomeDraft(String(nextRoom?.welcome?.body_text || defaultWelcomeText));
+      if (nextRoom?.participant?.email) {
+        setParticipantEmail(String(nextRoom.participant.email || ''));
+      }
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : 'Не удалось загрузить комнату';
       setError(message);
@@ -240,7 +292,157 @@ export default function PublicSalesRoomPage() {
 
   useEffect(() => {
     void loadRoom();
+  }, [roomSlug, participantToken]);
+
+  useEffect(() => {
+    setParticipantToken(localStorage.getItem(roomParticipantTokenKey(roomSlug)) || '');
+    setAuditOfferDismissed(localStorage.getItem(roomAuditOfferDismissedKey(roomSlug)) === '1');
   }, [roomSlug]);
+
+  useEffect(() => {
+    if (!roomSlug) return;
+    const params = new URLSearchParams(window.location.search);
+    const verifyToken = params.get('verify_token') || '';
+    const urlParticipantToken = params.get('participant_token') || '';
+    if (!verifyToken) return;
+    void verifyParticipantFromUrl(verifyToken, urlParticipantToken);
+  }, [roomSlug]);
+
+  useEffect(() => {
+    if (!roomSlug || !participantToken || room?.audit_offer?.status !== 'processing') return;
+    const timer = window.setInterval(() => {
+      void refreshAuditOfferStatus();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [roomSlug, participantToken, room?.audit_offer?.status]);
+
+  const participantHeaders = () => {
+    const headers: Record<string, string> = {};
+    if (participantToken) {
+      headers['X-Sales-Room-Participant-Token'] = participantToken;
+    }
+    return headers;
+  };
+
+  const verifyParticipantFromUrl = async (verificationToken: string, tokenFromUrl: string) => {
+    if (!roomSlug || !verificationToken) return;
+    setParticipantBusy(true);
+    setParticipantError(null);
+    try {
+      const response = await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/participants/verify`, {
+        method: 'POST',
+        body: JSON.stringify({
+          verification_token: verificationToken,
+          participant_token: tokenFromUrl || participantToken,
+        }),
+      });
+      const nextToken = String(response?.participant_token || tokenFromUrl || participantToken || '');
+      if (nextToken) {
+        localStorage.setItem(roomParticipantTokenKey(roomSlug), nextToken);
+        setParticipantToken(nextToken);
+      }
+      setParticipantMessage('Email подтверждён.');
+      const cleanUrl = `${window.location.pathname}${window.location.hash || ''}`;
+      window.history.replaceState({}, '', cleanUrl);
+      await loadRoom();
+    } catch (verifyError) {
+      const message = verifyError instanceof Error ? verifyError.message : 'Не удалось подтвердить email';
+      setParticipantError(message);
+    } finally {
+      setParticipantBusy(false);
+    }
+  };
+
+  const registerParticipant = async () => {
+    if (!roomSlug || participantBusy) return;
+    const cleanEmail = participantEmail.trim();
+    if (!cleanEmail) {
+      setParticipantError('Укажите email.');
+      return;
+    }
+    if (!participantConsent) {
+      setParticipantError('Нужно согласие на обработку персональных данных.');
+      return;
+    }
+    setParticipantBusy(true);
+    setParticipantError(null);
+    setParticipantMessage(null);
+    try {
+      const response = await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/participants`, {
+        method: 'POST',
+        body: JSON.stringify({
+          email: cleanEmail,
+          name: authorName.trim(),
+          company: authorCompany.trim(),
+          personal_data_consent: participantConsent,
+          consent_version: 'localos-personal-data-v1-2026-05-11',
+        }),
+      });
+      const nextToken = String(response?.participant_token || '');
+      if (nextToken) {
+        localStorage.setItem(roomParticipantTokenKey(roomSlug), nextToken);
+        setParticipantToken(nextToken);
+      }
+      setParticipantMessage(response?.verification_required ? 'Отправили письмо для подтверждения email.' : 'Email уже подтверждён.');
+      await loadRoom();
+    } catch (registerError) {
+      const message = registerError instanceof Error ? registerError.message : 'Не удалось отправить письмо подтверждения';
+      setParticipantError(message);
+    } finally {
+      setParticipantBusy(false);
+    }
+  };
+
+  const setAuditOffer = (auditOffer: SalesRoomAuditOffer | null) => {
+    setRoom((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        audit_offer: auditOffer,
+      };
+    });
+  };
+
+  const requestAuditOffer = async () => {
+    if (!roomSlug || auditOfferBusy) return;
+    setAuditOfferBusy(true);
+    setAuditOfferError(null);
+    try {
+      const response = await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/audit-offer/request`, {
+        method: 'POST',
+        headers: participantHeaders(),
+      });
+      setAuditOffer(response?.audit_offer || null);
+      setAuditOfferDismissed(false);
+      localStorage.removeItem(roomAuditOfferDismissedKey(roomSlug));
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'Не удалось запросить аудит';
+      setAuditOfferError(message);
+    } finally {
+      setAuditOfferBusy(false);
+    }
+  };
+
+  const refreshAuditOfferStatus = async () => {
+    if (!roomSlug || !participantToken) return;
+    try {
+      const response = await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/audit-offer/status`, {
+        method: 'GET',
+        headers: participantHeaders(),
+      });
+      setAuditOffer(response?.audit_offer || null);
+    } catch {
+      // Status polling should stay quiet for the recipient.
+    }
+  };
+
+  const dismissAuditOffer = () => {
+    setAuditOfferDismissed(true);
+    if (roomSlug) {
+      localStorage.setItem(roomAuditOfferDismissedKey(roomSlug), '1');
+    }
+    void recordEvent('audit_offer_dismissed', { source: 'public_page' });
+  };
 
   useEffect(() => {
     if (!roomSlug || !room) return;
@@ -264,6 +466,21 @@ export default function PublicSalesRoomPage() {
     if (!url) return;
     void recordEvent('audit_open', { target: url });
     window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const openAuditOffer = async () => {
+    const url = room?.audit_offer?.audit_url || '';
+    if (!url || !roomSlug) return;
+    try {
+      await newAuth.makeRequest(`/sales-rooms/public/${encodeURIComponent(roomSlug)}/audit-offer/opened`, {
+        method: 'POST',
+        headers: participantHeaders(),
+      });
+    } catch {
+      // Opening the ready audit should not be blocked by analytics.
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+    await refreshAuditOfferStatus();
   };
 
   const saveWelcome = async () => {
@@ -511,7 +728,17 @@ export default function PublicSalesRoomPage() {
   const managerInitial = managerName.trim().charAt(0).toUpperCase();
   const welcomeText = String(room.welcome?.body_text || defaultWelcomeText);
   const canEditWelcome = Boolean(room.permissions?.can_edit_welcome);
-  const hasAudit = Boolean(room.audit?.available && room.audit?.public_url);
+  const auditOffer = room.audit_offer || null;
+  const participantVerified = Boolean(room.participant?.verified);
+  const hasAudit = Boolean(!auditOffer && room.audit?.available && room.audit?.public_url);
+  const auditOfferReady = Boolean(auditOffer?.audit_url && (auditOffer.status === 'ready' || auditOffer.status === 'opened'));
+  const auditOfferProcessing = auditOffer?.status === 'processing' || auditOffer?.status === 'requested';
+  const auditOfferInitial = Boolean(auditOffer && !auditOfferDismissed && !auditOfferProcessing && !auditOfferReady);
+  const auditOfferRegisterUrl = auditOffer?.prepared_audit_slug
+    ? `/login?tab=register&source=sales_room&audit_slug=${encodeURIComponent(auditOffer.prepared_audit_slug)}&business_name=${encodeURIComponent(
+        auditOffer.company_name || recipientName,
+      )}&business_address=${encodeURIComponent(auditOffer.company_address || room.recipient?.address || '')}&business_city=${encodeURIComponent(room.recipient?.city || '')}`
+    : '';
   const proposalText =
     room.proposal?.body_text?.trim() ||
     room.proposal?.next_step?.trim() ||
@@ -665,6 +892,54 @@ export default function PublicSalesRoomPage() {
                   />
                 </div>
               </div>
+              <div className="mt-4 max-w-2xl rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-sm font-bold text-slate-950">Добавьте email для уведомлений</div>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">
+                      Чтобы получать уведомления о новых комментариях и доступных действиях в комнате, добавьте адрес почты.
+                    </p>
+                  </div>
+                  {participantVerified ? (
+                    <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Подтверждён</span>
+                  ) : null}
+                </div>
+                {!participantVerified ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                      <Input
+                        value={participantEmail}
+                        onChange={(event) => setParticipantEmail(event.currentTarget.value)}
+                        placeholder="email@company.ru"
+                        autoComplete="email"
+                        type="email"
+                      />
+                      <Button type="button" onClick={registerParticipant} disabled={participantBusy || !participantConsent}>
+                        {participantBusy ? 'Отправляем...' : 'Подтвердить email'}
+                      </Button>
+                    </div>
+                    <label className="flex items-start gap-2 text-xs leading-5 text-slate-600">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 rounded border-slate-300"
+                        checked={participantConsent}
+                        onChange={(event) => setParticipantConsent(event.currentTarget.checked)}
+                      />
+                      <span>
+                        Я согласен на обработку персональных данных и принимаю{' '}
+                        <a href="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-slate-900 underline underline-offset-2">
+                          политику обработки персональных данных
+                        </a>
+                        .
+                      </span>
+                    </label>
+                  </div>
+                ) : (
+                  <div className="mt-3 text-sm font-medium text-slate-700">{room.participant?.email}</div>
+                )}
+                {participantMessage ? <div className="mt-3 text-sm font-medium text-emerald-700">{participantMessage}</div> : null}
+                {participantError ? <div className="mt-3 text-sm font-medium text-red-600">{participantError}</div> : null}
+              </div>
             </div>
           </div>
         </section>
@@ -673,9 +948,6 @@ export default function PublicSalesRoomPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.2em] text-orange-500">Предложение</div>
-              <h1 className="mt-3 text-2xl font-black leading-tight tracking-tight text-slate-950 sm:text-3xl">
-                {room.proposal?.title || 'Предложение'}
-              </h1>
             </div>
             {hasAudit ? (
               <Button variant="outline" className="shrink-0 gap-2" onClick={openAudit}>
@@ -684,6 +956,56 @@ export default function PublicSalesRoomPage() {
               </Button>
             ) : null}
           </div>
+
+          {auditOfferInitial ? (
+            <div className="mt-6 rounded-2xl border border-orange-100 bg-orange-50/70 p-5">
+              <div className="text-xs font-bold uppercase tracking-[0.18em] text-orange-500">LocalOS</div>
+              <h2 className="mt-2 text-xl font-black tracking-tight text-slate-950">
+                {auditOffer?.offer_title || 'Проверьте, как ваша компания выглядит на Яндекс Картах'}
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-700">
+                {auditOffer?.offer_text || 'LocalOS может создать короткий аудит вашей карточки: фото, отзывы, описание, услуги и видимость рядом с конкурентами.'}
+              </p>
+              {auditOfferError ? <div className="mt-3 text-sm font-semibold text-red-600">{auditOfferError}</div> : null}
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button type="button" className="bg-slate-950 text-white hover:bg-slate-800" onClick={requestAuditOffer} disabled={auditOfferBusy || !participantVerified}>
+                  {auditOfferBusy ? 'Запускаем...' : auditOffer?.button_text || 'Создать аудит карточки'}
+                </Button>
+                {auditOfferRegisterUrl ? (
+                  <Button type="button" variant="outline" onClick={() => window.open(auditOfferRegisterUrl, '_self')}>
+                    Зарегистрироваться и забрать аудит
+                  </Button>
+                ) : null}
+                <Button type="button" variant="ghost" onClick={dismissAuditOffer}>
+                  Не сейчас
+                </Button>
+              </div>
+              {!participantVerified ? (
+                <div className="mt-3 text-sm text-slate-500">Подтвердите email выше, чтобы запросить аудит.</div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {auditOfferProcessing ? (
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="text-xl font-black tracking-tight text-slate-950">Аудит создаётся</div>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-700">
+                Мы проверяем карточку компании, отзывы, фото, услуги и видимость на картах. Когда аудит будет готов, отправим ссылку на вашу почту.
+              </p>
+              <div className="mt-3 text-sm font-semibold text-slate-500">Обычно занимает 2–3 минуты.</div>
+              {auditOfferError ? <div className="mt-3 text-sm font-semibold text-red-600">{auditOfferError}</div> : null}
+            </div>
+          ) : null}
+
+          {auditOfferReady ? (
+            <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
+              <div className="text-xl font-black tracking-tight text-slate-950">Аудит готов. Мы отправили ссылку на вашу почту.</div>
+              <Button type="button" className="mt-4 gap-2 bg-slate-950 text-white hover:bg-slate-800" onClick={openAuditOffer}>
+                Открыть аудит
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : null}
 
           <div className="mt-7 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-5 sm:px-6 sm:py-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">

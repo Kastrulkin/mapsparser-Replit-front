@@ -9,7 +9,10 @@ from src.api.admin_prospecting import (
     _build_sales_room_invitation_text,
     _build_sales_room_payload,
     _build_sales_room_proposal,
+    _normalize_sales_room_audit_offer_payload,
     _public_sales_room_rate_buckets,
+    _public_audit_offer_visible_for_user,
+    _serialize_public_audit_offer,
 )
 
 
@@ -22,9 +25,8 @@ def test_partner_sales_room_invitation_points_to_room() -> None:
         room_url="https://localos.pro/room/demo",
     )
 
-    assert "предложение по партнёрству" in text
+    assert "предложение по возможному партнёрству" in text
     assert "https://localos.pro/room/demo" in text
-    assert "аудит" in text
 
 
 def test_template_room_does_not_claim_audit() -> None:
@@ -97,3 +99,131 @@ def test_public_sales_room_rate_limit_returns_retry_after() -> None:
     assert response.get_json()["reason"] == "public_sales_room_write_limit"
 
     _public_sales_room_rate_buckets.clear()
+
+
+def test_audit_offer_payload_defaults_to_prepared_when_audit_url_exists() -> None:
+    payload = _normalize_sales_room_audit_offer_payload(
+        {
+            "enabled": True,
+            "company_name": "Новамед",
+            "company_map_url": "https://yandex.ru/maps/org/demo",
+            "prepared_audit_slug": "novamed",
+        }
+    )
+
+    assert payload["status"] == "prepared"
+    assert payload["platform"] == "yandex"
+    assert payload["button_text"] == "Создать аудит карточки"
+    assert payload["prepared_audit_url"].endswith("/novamed")
+
+
+def test_audit_offer_teaser_visible_for_unverified_participant_without_url() -> None:
+    offer = {
+        "id": "offer-1",
+        "enabled": True,
+        "status": "offered",
+        "prepared_audit_slug": "shansik-set-detskikh-tantsevalnykh-studiy",
+        "lead_email": "lead@example.com",
+        "prepared_audit_url": "https://localos.pro/audit",
+    }
+    participant = {"email": "lead@example.com", "is_verified": False}
+
+    serialized = _serialize_public_audit_offer(offer, participant, expose_teaser=True)
+
+    assert serialized is not None
+    assert serialized["audit_url"] is None
+    assert serialized["prepared_audit_slug"] == "shansik-set-detskikh-tantsevalnykh-studiy"
+    assert serialized["requires_registration"] is True
+
+
+def test_audit_offer_does_not_expose_audit_url_before_ready() -> None:
+    offer = {
+        "id": "offer-1",
+        "enabled": True,
+        "status": "offered",
+        "lead_email": "lead@example.com",
+        "prepared_audit_url": "https://localos.pro/audit",
+    }
+    participant = {"email": "lead@example.com", "is_verified": True}
+
+    serialized = _serialize_public_audit_offer(offer, participant)
+
+    assert serialized is not None
+    assert serialized["status"] == "offered"
+    assert serialized["audit_url"] is None
+
+
+def test_audit_offer_exposes_audit_url_when_ready() -> None:
+    offer = {
+        "id": "offer-1",
+        "enabled": True,
+        "status": "ready",
+        "lead_email": "lead@example.com",
+        "prepared_audit_url": "https://localos.pro/audit",
+    }
+    participant = {"email": "lead@example.com", "is_verified": True}
+
+    serialized = _serialize_public_audit_offer(offer, participant)
+
+    assert serialized is not None
+    assert serialized["audit_url"] == "https://localos.pro/audit"
+
+
+def test_audit_offer_hidden_for_logged_in_foreign_business() -> None:
+    class Cursor:
+        def __init__(self) -> None:
+            self.executed = False
+
+        def execute(self, *_args, **_kwargs) -> None:
+            self.executed = True
+
+        def fetchall(self):
+            return [{"name": "Весёлая расчёска"}]
+
+    cursor = Cursor()
+    visible = _public_audit_offer_visible_for_user(
+        cursor,
+        {"business_id": "11111111-1111-1111-1111-111111111111"},
+        {"enabled": True, "status": "prepared", "company_name": "Шансик — сеть детских танцевальных студий"},
+        {"user_id": "22222222-2222-2222-2222-222222222222"},
+    )
+
+    assert visible is False
+    assert cursor.executed is True
+
+
+def test_audit_offer_visible_for_logged_in_matching_business() -> None:
+    class Cursor:
+        def execute(self, *_args, **_kwargs) -> None:
+            pass
+
+        def fetchall(self):
+            return [{"name": "Шансик — сеть детских танцевальных студий"}]
+
+    visible = _public_audit_offer_visible_for_user(
+        Cursor(),
+        {"business_id": "11111111-1111-1111-1111-111111111111"},
+        {"enabled": True, "status": "prepared", "company_name": "Шансик — сеть детских танцевальных студий"},
+        {"user_id": "22222222-2222-2222-2222-222222222222"},
+    )
+
+    assert visible is True
+
+
+def test_audit_offer_hidden_when_current_business_is_foreign_even_for_superadmin() -> None:
+    class Cursor:
+        def execute(self, *_args, **_kwargs) -> None:
+            pass
+
+        def fetchone(self):
+            return {"name": "Весёлая расчёска", "owner_id": "22222222-2222-2222-2222-222222222222"}
+
+    visible = _public_audit_offer_visible_for_user(
+        Cursor(),
+        {"business_id": "11111111-1111-1111-1111-111111111111"},
+        {"enabled": True, "status": "prepared", "company_name": "Шансик — сеть детских танцевальных студий"},
+        {"user_id": "22222222-2222-2222-2222-222222222222", "is_superadmin": True},
+        current_business_id="33333333-3333-3333-3333-333333333333",
+    )
+
+    assert visible is False

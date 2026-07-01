@@ -7,7 +7,10 @@ from core.channel_router import dispatch_with_routing, load_business_channel_con
 from services.agent_capability_handlers import build_capability_handlers
 from services.agent_domain_request_executors import execute_approved_domain_requests
 from services.agent_blueprint_workspace import build_generic_artifact_payload
-from services.agent_integration_preflight import build_agent_integration_preflight
+from services.agent_integration_preflight import (
+    build_agent_integration_preflight,
+    resolve_agent_binding_runtime_config,
+)
 
 
 RUNNING_STATUSES = {"running", "waiting_approval"}
@@ -1330,8 +1333,51 @@ class AgentBlueprintRunner:
         if not isinstance(run_input, dict):
             run_input = {}
         payload = {**run_input, **step_payload}
+        self._apply_binding_runtime_config(run, step, payload)
         self._apply_step_output_references(str(run.get("id") or ""), payload)
         return payload
+
+    def _apply_binding_runtime_config(self, run: Dict[str, Any], step: Dict[str, Any], payload: Dict[str, Any]) -> None:
+        binding_key = str(payload.get("integration_binding") or "").strip()
+        if not binding_key:
+            return
+        blueprint = self._load_blueprint(str(run.get("blueprint_id") or ""))
+        metadata = parse_json_field((blueprint or {}).get("metadata_json"), {})
+        if not isinstance(metadata, dict):
+            return
+        provider = self._binding_provider(metadata, binding_key, str(step.get("capability") or ""))
+        if not provider:
+            return
+        # Root-cause category: preflight could resolve a runnable binding from metadata,
+        # but the runtime capability payload only contained `integration_binding`.
+        # We hydrate the actual runtime config here so source-step runs and preflight
+        # evaluate the same connection state.
+        binding_config = resolve_agent_binding_runtime_config(metadata, provider, binding_key)
+        for key, value in binding_config.items():
+            if key in {"route_provider", "status", "attached_at", "provider"}:
+                continue
+            current = payload.get(key)
+            if current in ("", None, [], {}):
+                payload[key] = value
+
+    def _binding_provider(self, metadata: Dict[str, Any], binding_key: str, capability: str) -> str:
+        required = (
+            metadata.get("required_integration_bindings")
+            if isinstance(metadata.get("required_integration_bindings"), list)
+            else []
+        )
+        for item in required:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("key") or "").strip() == binding_key:
+                return str(item.get("provider") or "").strip()
+        if capability.startswith("google_sheets."):
+            return "google_sheets"
+        if capability.startswith("communications.") or capability.startswith("telegram."):
+            return "telegram"
+        if capability.startswith("finance."):
+            return "localos_finance"
+        return ""
 
     def _apply_step_output_references(self, run_id: str, payload: Dict[str, Any]) -> None:
         input_mappings = payload.get("input_mappings")
@@ -1647,10 +1693,12 @@ class AgentBlueprintRunner:
         integration_preflight = self._build_run_integration_preflight(run)
         recovery_actions = self._build_recovery_actions(run, step_errors + action_errors, delivery_status, action_ids)
         preview_summary = self._build_preview_summary(run, steps, artifacts, approvals, domain_requests, integration_preflight)
+        source_result_chain = self._build_source_result_chain(steps, artifacts, integration_preflight)
 
         return {
             "schema": "agent_run_observability_v1",
             "preview_summary": preview_summary,
+            "source_result_chain": source_result_chain,
             "run_history": {
                 "run_id": run.get("id"),
                 "blueprint_id": run.get("blueprint_id"),
@@ -1707,6 +1755,71 @@ class AgentBlueprintRunner:
                 "formats": ["json", "markdown"],
                 "source": "agent_run_detail",
             },
+        }
+
+    def _build_source_result_chain(
+        self,
+        steps: List[Dict[str, Any]],
+        artifacts: List[Dict[str, Any]],
+        integration_preflight: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        source_step = next(
+            (
+                step
+                for step in steps
+                if str(step.get("step_key") or "") == "read_google_sheets"
+                or str(step.get("output_json", {}).get("capability") or "") == "google_sheets.read_rows"
+            ),
+            None,
+        )
+        source_output = source_step.get("output_json") if isinstance((source_step or {}).get("output_json"), dict) else {}
+        orchestrator = source_output.get("orchestrator") if isinstance(source_output.get("orchestrator"), dict) else {}
+        source_result = orchestrator.get("result") if isinstance(orchestrator.get("result"), dict) else {}
+        rows = source_result.get("rows") if isinstance(source_result.get("rows"), list) else []
+        output_artifact = next(
+            (
+                artifact
+                for artifact in artifacts
+                if str(artifact.get("artifact_type") or "") in {"agent_output_draft", "telegram_post_draft", "agent_final_result"}
+            ),
+            None,
+        )
+        output_payload = output_artifact.get("payload_json") if isinstance((output_artifact or {}).get("payload_json"), dict) else {}
+        output_result = output_payload.get("result") if isinstance(output_payload.get("result"), dict) else {}
+        preflight_items = integration_preflight.get("items") if isinstance(integration_preflight.get("items"), list) else []
+        source_preflight = next(
+            (
+                item
+                for item in preflight_items
+                if isinstance(item, dict) and str(item.get("provider") or "") == "google_sheets"
+            ),
+            {},
+        )
+        blocker_code = ""
+        if isinstance(output_result, dict):
+            blocker_code = str(output_result.get("status") or output_result.get("error_code") or "").strip()
+        if not blocker_code:
+            blocker_code = str(source_result.get("error_code") or source_result.get("provider_error") or "").strip()
+        result_generated = False
+        if isinstance(output_result, dict):
+            result_generated = any(
+                isinstance(output_result.get(key), str) and str(output_result.get(key) or "").strip()
+                for key in ("draft_text", "post_text", "message", "text", "body")
+            ) or bool(output_result.get("summary"))
+        rows_used_for_output_count = int(output_payload.get("items_used") or 0)
+        if not rows_used_for_output_count and result_generated:
+            rows_used_for_output_count = len(rows[:1]) if rows else 0
+        return {
+            "source_step_present": bool(source_step),
+            "provider_connected": str(source_preflight.get("status") or "") == "ready",
+            "provider_read_attempted": bool(source_step) and (
+                bool(source_result)
+                or str((source_step or {}).get("status") or "") in {"completed", "failed", "blocked"}
+            ),
+            "rows_returned_count": len(rows),
+            "rows_used_for_output_count": rows_used_for_output_count,
+            "result_generated": result_generated,
+            "blocker_code": blocker_code,
         }
 
     def _build_preview_summary(

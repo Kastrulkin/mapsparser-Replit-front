@@ -7253,6 +7253,65 @@ def test_generic_reviews_runner_prepares_reply_drafts_and_never_publishes():
     assert run["approvals"][0]["approval_type"] == "final_output"
 
 
+def test_message_result_needs_source_data_without_sheet_rows():
+    from services.agent_blueprint_workspace import _render_output
+
+    result = _render_output(
+        "custom",
+        {
+            "workflow_description": "Открой таблицу поездок и подготовь сообщение владельцу",
+            "processing_rules": "Не придумывать факты",
+            "output_format": "Готовое сообщение для проверки",
+        },
+        [{"source_name": "business_profile", "summary": "ready; id: biz-1", "raw": {"id": "biz-1"}}],
+        [],
+        {},
+    )
+
+    assert result["status"] == "needs_source_data"
+    assert "draft_text" not in result
+    assert "не получил строку поездки" in result["summary"][0].lower()
+
+
+def test_message_result_uses_google_sheets_rows_for_concrete_draft(monkeypatch):
+    import services.agent_blueprint_workspace as workspace
+
+    monkeypatch.setattr(workspace, "analyze_text_with_gigachat", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("llm offline")))
+
+    result = workspace._render_output(
+        "custom",
+        {
+            "workflow_description": "Выбери поездку на 20 апреля и подготовь сообщение владельцу",
+            "processing_rules": "Не придумывать факты",
+            "output_format": "Готовое сообщение для проверки",
+        },
+        [
+            {
+                "source_name": "google_sheets",
+                "summary": "date: 2026-04-20; route: Airport -> Center; passenger: Anna",
+                "raw": {
+                    "date": "2026-04-20",
+                    "route": "Airport -> Center",
+                    "passenger": "Anna",
+                },
+            }
+        ],
+        [],
+        {},
+    )
+
+    assert result["title"] == "Черновик сообщения"
+    assert "Airport -> Center" in result["draft_text"]
+    assert result["analysis_source"] == "deterministic_fallback"
+
+
+def test_agents_page_normal_result_panel_does_not_dump_raw_artifact_payload():
+    source = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
+
+    assert "stringifyBusinessValue(artifact.payload_json)" not in source
+    assert "Результат не был сохранён. Запустите тест ещё раз" in source
+
+
 def test_agent_source_ingestion_extracts_text_pdf_docx_xlsx_and_rejects_unsafe_files():
     import io
     import zipfile
@@ -8335,6 +8394,53 @@ def test_default_runner_is_wired_to_real_google_sheets_and_finance_handlers():
     assert "finance.transaction.create" in runner.orchestrator.handlers
 
 
+def test_runner_build_capability_payload_hydrates_google_sheets_binding_from_metadata():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "metadata_json": {
+            "required_integration_bindings": [
+                {
+                    "key": "google_sheets_read",
+                    "provider": "google_sheets",
+                    "capability": "google_sheets.read_rows",
+                    "required_config": ["spreadsheet_id", "sheet_name"],
+                }
+            ],
+            "custom_process": {
+                "google_sheets_read": {
+                    "integration_id": "integration-1",
+                    "spreadsheet_id": "spreadsheet-1",
+                    "sheet_name": "Trips",
+                }
+            },
+        },
+    }
+    run = {
+        "id": "run1",
+        "blueprint_id": "bp1",
+        "input_json": {},
+    }
+    step = {
+        "key": "read_google_sheets",
+        "type": "capability",
+        "capability": "google_sheets.read_rows",
+        "payload": {
+            "integration_binding": "google_sheets_read",
+            "limit": 100,
+        },
+    }
+
+    payload = AgentBlueprintRunner(cursor)._build_capability_payload(run, step)
+
+    assert payload["integration_id"] == "integration-1"
+    assert payload["spreadsheet_id"] == "spreadsheet-1"
+    assert payload["sheet_name"] == "Trips"
+
+
 def test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai():
     from services.agent_blueprint_runner import AgentBlueprintRunner
 
@@ -9101,6 +9207,96 @@ def test_runner_load_run_includes_observability_envelope_for_openclaw_actions():
     assert domain_request["provider_write_performed"] is False
     assert "External spreadsheet write requires human approval" in domain_request["why_waiting"]
     assert observability["support_export"]["endpoint"] == "/api/agent-runs/run1/support-export"
+
+
+def test_runner_observability_exposes_source_to_result_chain():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "metadata_json": {
+            "required_integration_bindings": [
+                {
+                    "key": "google_sheets_read",
+                    "provider": "google_sheets",
+                    "capability": "google_sheets.read_rows",
+                    "required_config": ["spreadsheet_id", "sheet_name"],
+                }
+            ],
+            "custom_process": {
+                "google_sheets_read": {
+                    "integration_id": "integration-1",
+                    "spreadsheet_id": "spreadsheet-1",
+                    "sheet_name": "Trips",
+                }
+            },
+        },
+    }
+    cursor.tables["agent_runs"]["run1"] = {
+        "id": "run1",
+        "blueprint_id": "bp1",
+        "blueprint_version_id": "ver1",
+        "business_id": "biz1",
+        "status": "completed",
+        "input_json": {},
+        "output_json": {},
+        "created_by_user_id": "user1",
+    }
+    cursor.tables["agent_run_steps"]["read-step"] = {
+        "id": "read-step",
+        "run_id": "run1",
+        "step_index": 0,
+        "step_key": "read_google_sheets",
+        "step_type": "capability",
+        "status": "completed",
+        "input_json": {},
+        "output_json": {
+            "capability": "google_sheets.read_rows",
+            "orchestrator": {
+                "success": True,
+                "result": {
+                    "status": "read_completed",
+                    "provider_read_performed": True,
+                    "rows": [{"date": "2026-04-20", "route": "Airport -> Center"}],
+                },
+            },
+        },
+    }
+    cursor.tables["agent_artifacts"]["artifact1"] = {
+        "id": "artifact1",
+        "run_id": "run1",
+        "step_id": "output-step",
+        "artifact_type": "telegram_post_draft",
+        "title": "Черновик поста",
+        "payload_json": {
+            "items_used": 1,
+            "result": {
+                "title": "Черновик сообщения",
+                "draft_text": "Поездка на 20 апреля\n\nПодготовлен черновик сообщения:\nмаршрут: Airport -> Center.",
+            },
+        },
+        "created_at": "2026-06-28 12:00:00",
+    }
+    cursor.tables["agent_integrations"]["integration-1"] = {
+        "id": "integration-1",
+        "business_id": "biz1",
+        "provider": "google_sheets",
+        "status": "active",
+        "auth_ref": "ext-1",
+        "config_json": {"spreadsheet_id": "spreadsheet-1", "sheet_name": "Trips"},
+    }
+
+    observability = AgentBlueprintRunner(cursor).load_run("run1", {"user_id": "user1"})["observability"]["source_result_chain"]
+
+    assert observability["source_step_present"] is True
+    assert observability["provider_connected"] is True
+    assert observability["provider_read_attempted"] is True
+    assert observability["rows_returned_count"] == 1
+    assert observability["rows_used_for_output_count"] == 1
+    assert observability["result_generated"] is True
+    assert observability["blocker_code"] == ""
 
 
 class FakeCursor:

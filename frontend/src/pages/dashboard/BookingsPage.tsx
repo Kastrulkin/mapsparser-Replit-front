@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { BetaFeedbackBanner } from '@/components/dashboard/BetaFeedbackBanner';
 import { Ban, BarChart3, Calendar, FileText, Lightbulb, Loader2, Mail, Newspaper, Phone, Repeat, User } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 
@@ -24,7 +25,7 @@ interface Booking {
 }
 
 export const BookingsPage = () => {
-  const { currentBusinessId } = useOutletContext<any>();
+  const { currentBusinessId, currentBusiness } = useOutletContext<any>();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
@@ -201,6 +202,14 @@ export const BookingsPage = () => {
           </Button>
         </div>
       </div>
+
+      <BetaFeedbackBanner
+        area="bookings"
+        title="Функция в стадии beta-тестирования"
+        description="Если в Бронированиях увидите ошибку, непонятное поведение или неверные данные, сообщите о проблеме."
+        businessId={currentBusinessId}
+        businessName={currentBusiness?.name || null}
+      />
 
       <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
         Записи загружены из CRM и используются для статистики, контента, допродаж и планирования. LocalOS не меняет запись в CRM.

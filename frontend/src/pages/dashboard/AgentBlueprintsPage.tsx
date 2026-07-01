@@ -4,6 +4,7 @@ import { useOutletContext } from 'react-router-dom';
 import {
   Activity,
   AlertTriangle,
+  ArrowDownUp,
   Bot,
   CheckCircle2,
   Clock3,
@@ -46,6 +47,7 @@ import {
   DashboardPageHeader,
   DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
+import { BetaFeedbackBanner } from '@/components/dashboard/BetaFeedbackBanner';
 import { newAuth } from '@/lib/auth_new';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
@@ -211,6 +213,15 @@ type AgentRunBillingAction = {
 type AgentRunObservability = {
   schema?: string;
   preview_summary?: Record<string, unknown>;
+  source_result_chain?: {
+    source_step_present?: boolean;
+    provider_connected?: boolean;
+    provider_read_attempted?: boolean;
+    rows_returned_count?: number;
+    rows_used_for_output_count?: number;
+    result_generated?: boolean;
+    blocker_code?: string;
+  };
   run_history?: Record<string, unknown>;
   step_history?: { count?: number; completed?: number; failed?: number; items?: AgentRunStep[] };
   artifacts?: { count?: number; items?: AgentArtifact[] };
@@ -855,6 +866,7 @@ type EmployeeNextAction = {
 type EmployeeTestResult = {
   summary: string;
   output: string;
+  state: 'result' | 'blocker' | 'missing';
   resultPayload?: Record<string, unknown> | null;
   previewItems: Array<{ label: string; value: string }>;
   hasResult: boolean;
@@ -3118,21 +3130,42 @@ const hasPreparedMessageText = (result: Record<string, unknown> | null): boolean
   });
 };
 
+const resultPayloadStatus = (result: Record<string, unknown> | null): string => {
+  const status = result?.status;
+  return typeof status === 'string' ? status.trim().toLowerCase() : '';
+};
+
+const isBusinessBlockerPayload = (result: Record<string, unknown> | null): boolean => {
+  const status = resultPayloadStatus(result);
+  return [
+    'needs_source_data',
+    'needs_clarification',
+    'needs_source_upload',
+    'needs_config',
+    'validation_error',
+    'provider_read_required',
+    'blocked',
+  ].includes(status);
+};
+
 const buildEmployeeTestResult = (
   activeRun: AgentRun | null,
   pendingApproval?: AgentApproval | null,
 ): EmployeeTestResult => {
   const approvalItems = pendingApproval ? getApprovalPreviewItems(pendingApproval) : [];
-  const artifact = activeRun?.artifacts?.[0] || activeRun?.observability?.artifacts?.items?.[0] || null;
   const resultPayload = findPreparedResultPayload(activeRun, pendingApproval);
-  const artifactText = artifact?.payload_json && !isTechnicalApprovalPayload(artifact.payload_json)
-    ? stringifyBusinessValue(artifact.payload_json)
+  const blocker = isBusinessBlockerPayload(resultPayload);
+  const hasStructuredResult = Boolean(resultPayload && !blocker);
+  const approvalText = !resultPayload
+    ? approvalItems.map((item) => `${item.label}: ${item.value}`).join('\n')
     : '';
-  const summaryText = '';
-  const approvalText = approvalItems.map((item) => `${item.label}: ${item.value}`).join('\n');
-  const output = artifactText || approvalText || summaryText || activeRun?.error_text || '';
+  const output = hasStructuredResult
+    ? ''
+    : activeRun?.error_text || approvalText || '';
   const status = activeRun?.status || pendingApproval?.run_status || '';
-  const summary = pendingApproval
+  const summary = blocker
+    ? 'Нужен следующий шаг перед результатом'
+    : pendingApproval
     ? hasPreparedMessageText(resultPayload)
       ? 'Проверьте подготовленный пост'
       : approvalDecisionTitle(pendingApproval)
@@ -3143,16 +3176,26 @@ const buildEmployeeTestResult = (
         : activeRun
           ? 'Тест выполнен. Ниже бизнес-результат.'
           : 'После теста здесь появится подготовленный результат.';
+  const state: EmployeeTestResult['state'] = hasStructuredResult
+    ? 'result'
+    : blocker
+      ? 'blocker'
+      : output
+        ? 'missing'
+        : 'missing';
   return {
     summary,
-    output: output || (pendingApproval
-      ? resultPayload
-        ? 'Агент подготовил результат, но отдельный текст поста не найден. Проверьте поля результата ниже или уточните формат результата агента.'
-        : 'Агент дошёл до проверки, но не сохранил текст результата. Запустите тест ещё раз или уточните формат результата.'
-      : 'Пока нет сохранённого результата. Запустите тест ещё раз.'),
+    output: output || (blocker
+      ? ''
+      : pendingApproval
+        ? resultPayload
+          ? 'Агент подготовил результат, но отдельный текст результата не был сохранён.'
+          : 'Агент дошёл до проверки, но не сохранил результат. Запустите тест ещё раз или уточните формат результата.'
+        : 'Результат не был сохранён. Запустите тест ещё раз.'),
+    state,
     resultPayload,
     previewItems: approvalItems,
-    hasResult: Boolean(activeRun || pendingApproval || output || resultPayload),
+    hasResult: Boolean(activeRun || pendingApproval || output || resultPayload || approvalItems.length),
   };
 };
 
@@ -4985,6 +5028,14 @@ export const AgentBlueprintsPage = () => {
             </Button>
           </>
         )}
+      />
+
+      <BetaFeedbackBanner
+        area="agents"
+        title="Функция в стадии beta-тестирования"
+        description="Если в Агентах что-то не запускается, показывает странный результат или ведёт себя не так, как вы ожидали, сообщите о проблеме."
+        businessId={currentBusinessId}
+        businessName={currentBusiness?.name || null}
       />
 
       <Dialog open={createWizardOpen} onOpenChange={(open) => {
@@ -8385,18 +8436,31 @@ const EmployeeTestResultPanel = ({
       </div>
 
       {result.resultPayload ? (
-        <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Подготовленный результат</div>
+        <div className={cn(
+          'mt-5 rounded-2xl px-4 py-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]',
+          result.state === 'blocker' ? 'bg-amber-50' : 'bg-slate-50',
+        )}>
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {result.state === 'blocker' ? 'Что мешает продолжить' : 'Подготовленный результат'}
+          </div>
           <HumanResultView result={result.resultPayload} />
         </div>
       ) : null}
 
-      <div className={cn(
-        'rounded-xl px-4 py-4 text-sm leading-7 text-slate-700 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] whitespace-pre-wrap',
-        result.resultPayload ? 'mt-3 bg-white' : 'mt-5 bg-slate-50',
-      )}>
-        {result.output}
-      </div>
+      {result.output ? (
+        <div className={cn(
+          'rounded-xl px-4 py-4 text-sm leading-7 text-slate-700 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] whitespace-pre-wrap',
+          result.resultPayload ? 'mt-3 bg-white' : 'mt-5 bg-slate-50',
+        )}>
+          {result.output}
+        </div>
+      ) : null}
+
+      {!result.resultPayload && !result.output ? (
+        <div className="mt-5 rounded-xl bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+          Результат не был сохранён. Запустите тест ещё раз или откройте расширенные настройки для диагностики.
+        </div>
+      ) : null}
 
       {result.previewItems.length ? (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -12321,6 +12385,7 @@ const AgentRunObservabilityPanel = ({
   const billingActions = billingLedger.actions || [];
   const billingEntries = billingLedger.entries || [];
   const delivery = observability.delivery_status || {};
+  const sourceChain = observability.source_result_chain || {};
   const ledgerItems = observability.action_ledger?.items || [];
   const domainRequests = observability.domain_requests?.items || [];
   const errors = observability.errors || [];
@@ -12373,6 +12438,16 @@ const AgentRunObservabilityPanel = ({
         onNextStepAction={onPreviewNextStepAction}
         onActivateVersion={onActivateVersion}
       />
+
+      <div className="rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Source To Result</div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <AgentObservabilityMetric icon={Database} label="Источник" value={sourceChain.source_step_present ? 'есть' : 'нет'} hint={sourceChain.provider_connected ? 'подключение готово' : 'подключение не подтверждено'} />
+          <AgentObservabilityMetric icon={ArrowDownUp} label="Чтение" value={sourceChain.provider_read_attempted ? 'проверено' : 'не было'} hint={`${sourceChain.rows_returned_count || 0} строк`} />
+          <AgentObservabilityMetric icon={FileText} label="Использовано" value={String(sourceChain.rows_used_for_output_count || 0)} hint={sourceChain.result_generated ? 'результат собран' : 'результат не собран'} />
+          <AgentObservabilityMetric icon={AlertTriangle} label="Blocker" value={String(sourceChain.blocker_code || 'none')} hint="где оборвалась цепочка" />
+        </div>
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-5">
         <RunColumn title="Журнал действий" icon={ReceiptText}>

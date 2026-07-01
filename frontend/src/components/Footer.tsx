@@ -1,24 +1,81 @@
 import { useState, useEffect } from "react";
 import { Heart } from "lucide-react";
-import { useLanguage } from "@/i18n/LanguageContext";
+import { Language, useLanguage } from "@/i18n/LanguageContext";
+
+const footerIndustryFallbacks: Record<Language, string[]> = {
+  ru: [
+    "индустрии красоты",
+    "медицинских центров",
+    "фитнес-студий",
+    "кафе и ресторанов",
+    "автосервисов",
+    "магазинов",
+    "школ и курсов",
+    "сервисных компаний",
+  ],
+  en: [
+    "the beauty industry",
+    "medical centers",
+    "fitness studios",
+    "cafes and restaurants",
+    "auto services",
+    "local shops",
+    "schools and courses",
+    "service businesses",
+  ],
+  fr: ["salons de beauté", "artisans", "ateliers", "magasins", "écoles", "garages", "cliniques", "cafés", "stations-service"],
+  es: ["salones de belleza", "maestros", "talleres", "tiendas", "escuelas", "talleres de autos", "clínicas", "cafeterías", "gasolineras"],
+  el: ["κομμωτήρια", "τεχνίτες", "εργαστήρια", "καταστήματα", "σχολεία", "συνεργεία αυτοκινήτων", "κλινικές", "καφετέριες", "πρατήρια καυσίμων"],
+  de: ["Friseursalons", "Handwerker", "Werkstätten", "Geschäfte", "Schulen", "Autowerkstätten", "Kliniken", "Cafés", "Tankstellen"],
+  th: ["ร้านเสริมสวย", "ช่างฝีมือ", "เวิร์กช็อป", "ร้านค้า", "โรงเรียน", "อู่ซ่อมรถ", "คลินิก", "ร้านกาแฟ", "ปั๊มน้ำมัน"],
+  ar: ["صالونات التجميل", "الحرفيين", "الورش", "المتاجر", "المدارس", "خدمات السيارات", "العيادات", "المقاهي", "محطات الوقود"],
+  ha: ["salons na kyau", "masu sana'a", "aikin hannu", "shaguna", "makarantu", "tallace-tallace mota", "asibiti", "gidajen abinci", "tashoshin man fetur"],
+  tr: [
+    "güzellik sektörü",
+    "sağlık merkezleri",
+    "fitness stüdyoları",
+    "kafe ve restoranlar",
+    "oto servisleri",
+    "yerel mağazalar",
+    "okullar ve kurslar",
+    "hizmet işletmeleri",
+  ],
+};
 
 const Footer = () => {
   const { t, language } = useLanguage();
   const isRu = language === "ru";
-  const industries = t.footer.madeWithLoveIndustries ?? [isRu ? "индустрии красоты" : "the beauty industry"];
+  const translatedIndustries = t.footer.madeWithLoveIndustries;
+  const industries = Array.isArray(translatedIndustries) && translatedIndustries.length > 1
+    ? translatedIndustries
+    : footerIndustryFallbacks[language];
   const prefix = t.footer.madeWithLovePrefix ?? (isRu ? "Сделано с любовью для " : "Made with love for ");
   const [index, setIndex] = useState(0);
   const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
+    setIndex(0);
+    setIsExiting(false);
+  }, [industries.length]);
+
+  useEffect(() => {
+    if (industries.length < 2) {
+      setIsExiting(false);
+      return;
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout>;
     const interval = setInterval(() => {
       setIsExiting(true);
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         setIndex((i) => (i + 1) % industries.length);
         setIsExiting(false);
       }, 400);
     }, 2600);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeoutId);
+    };
   }, [industries.length]);
 
   const footerLinks = {

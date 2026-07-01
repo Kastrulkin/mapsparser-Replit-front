@@ -905,6 +905,12 @@ async def run_smoke(url, screenshot):
                     missing.append("created Google Sheets Telegram agent")
                 if "daily responsibilities" not in created_body_lower or "current status" not in created_body_lower:
                     missing.append("created agent opened overview")
+                if (
+                    "approval_required:" in created_body_lower
+                    or "next questions:" in created_body_lower
+                    or "правки: ; формат:" in created_body_lower
+                ):
+                    leaked.append("raw payload dump visible in normal agent workspace")
                 if "Агент создан" in created_body:
                     leaked.append("old post-create banner still visible")
                 run_test_buttons = page.get_by_role("button", name="Run Test")
