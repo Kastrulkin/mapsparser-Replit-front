@@ -527,14 +527,14 @@ export const CardServiceCatalogCompressionDialog = ({
 
   return (
     <div
-      className="fixed inset-0 z-[85] flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[85] flex items-start justify-center overflow-y-auto bg-black/30 p-3 backdrop-blur-sm sm:p-5"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/10"
+        className="my-auto flex h-[calc(100dvh-24px)] min-h-[720px] w-full max-w-[min(1500px,calc(100vw-24px))] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/10 sm:h-[calc(100dvh-40px)] sm:max-w-[min(1500px,calc(100vw-40px))]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="border-b border-slate-100 px-6 py-5">
+        <div className="shrink-0 border-b border-slate-100 px-6 py-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
@@ -542,7 +542,7 @@ export const CardServiceCatalogCompressionDialog = ({
                 Меню услуг
               </div>
               <h3 className="text-balance text-xl font-semibold text-slate-950">Сократить и сгруппировать услуги</h3>
-              <p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">
+              <p className="mt-2 max-w-4xl text-pretty text-sm leading-6 text-slate-600">
                 Рабочий редактор: создайте черновик, объедините похожие услуги, назначьте категории и примените только после проверки.
               </p>
             </div>
@@ -556,18 +556,18 @@ export const CardServiceCatalogCompressionDialog = ({
               <X className="h-5 w-5" />
             </Button>
           </div>
-          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200/70">
               <div className="text-xs font-medium text-slate-500">Сейчас</div>
               <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">{suggestion.beforeCount}</div>
               <div className="text-xs text-slate-500">услуг в списке</div>
             </div>
-            <div className="rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-100">
+            <div className="rounded-2xl bg-emerald-50 p-3 ring-1 ring-emerald-100">
               <div className="text-xs font-medium text-emerald-700">После группировки</div>
               <div className="mt-1 text-2xl font-semibold tabular-nums text-emerald-950">{estimatedAfterCount}</div>
               <div className="text-xs text-emerald-700/80">по текущему черновику</div>
             </div>
-            <div className="rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-100">
+            <div className="rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-100">
               <div className="text-xs font-medium text-amber-700">Приоритет</div>
               <div className="mt-1 text-lg font-semibold text-amber-950">
                 {suggestion.highPriority ? 'Высокий' : 'Средний'}
@@ -577,8 +577,8 @@ export const CardServiceCatalogCompressionDialog = ({
           </div>
         </div>
 
-        <div className="border-b border-slate-100 px-6 pt-4">
-          <div className="flex gap-2 overflow-x-auto pb-4 [&::-webkit-scrollbar]:hidden">
+        <div className="shrink-0 border-b border-slate-100 px-6 pt-3">
+          <div className="flex gap-2 overflow-x-auto pb-3 [&::-webkit-scrollbar]:hidden">
             {compressionTabs.map((tab) => (
               <button
                 key={tab.id}
@@ -636,8 +636,14 @@ export const CardServiceCatalogCompressionDialog = ({
                 Сначала создайте черновик на вкладке “Предложения”.
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(260px,0.8fr)_minmax(420px,1.2fr)]">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(320px,0.75fr)_minmax(640px,1.25fr)]">
+                <div className="space-y-3 xl:sticky xl:top-0 xl:self-start">
+                  <div className="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600 ring-1 ring-slate-200/70">
+                    <div className="font-semibold text-slate-950">Применяются не все услуги сразу</div>
+                    <div className="mt-1">
+                      Выберите группу и поставьте “Оставить как есть”, чтобы исключить её целиком. Внутри группы снимите чекбокс с услуги, чтобы не скрывать конкретную строку.
+                    </div>
+                  </div>
                   {groups.map((group) => (
                     <button
                       key={group.id}
@@ -662,9 +668,9 @@ export const CardServiceCatalogCompressionDialog = ({
                       <p className="mt-1 text-sm leading-6 text-slate-600">{selectedGroup.reason}</p>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                      {compressionGroupActions.map((action) => (
-                        <button
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        {compressionGroupActions.map((action) => (
+                          <button
                           key={action}
                           type="button"
                           onClick={() => updateGroup(selectedGroup.id, { action })}
@@ -674,8 +680,15 @@ export const CardServiceCatalogCompressionDialog = ({
                         >
                           {groupActionLabels[action]}
                         </button>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                      <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200/70">
+                        {selectedGroup.action === 'apply'
+                          ? 'Эта группа будет применена: LocalOS создаст одну объединённую услугу и скроет выбранные исходные строки.'
+                          : selectedGroup.action === 'promotion'
+                            ? 'Эти строки будут вынесены из активного меню как акции после подтверждения. Новая услуга не создаётся.'
+                            : 'Эта группа исключена из применения. Услуги останутся в активном меню без изменений.'}
+                      </div>
 
                     {selectedGroup.action === 'apply' ? (
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -730,7 +743,10 @@ export const CardServiceCatalogCompressionDialog = ({
 
                     <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70">
                       <div className="mb-3 text-sm font-semibold text-slate-950">Исходные услуги в группе</div>
-                      <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                      <div className="mb-3 text-xs leading-5 text-slate-500">
+                        Снимите чекбокс, если услугу нельзя объединять с этой группой.
+                      </div>
+                      <div className="max-h-[min(52dvh,520px)] space-y-2 overflow-y-auto pr-1">
                         {selectedServices.map((service) => (
                           <label key={service?.id} className="flex items-start gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-700 ring-1 ring-slate-200">
                             <input

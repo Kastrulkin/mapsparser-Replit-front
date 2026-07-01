@@ -405,6 +405,7 @@ const SERVICE_CATALOG_COMPRESSION_RULES: Array<{
   id: string;
   title: string;
   pattern: RegExp;
+  excludePattern?: RegExp;
   recommendedCount: number;
   reason: string;
   action: string;
@@ -458,17 +459,26 @@ const SERVICE_CATALOG_COMPRESSION_RULES: Array<{
     action: 'Группировать по зонам: брови, губы, веки, коррекция и удаление.',
   },
   {
-    id: 'podology',
-    title: 'Подология и ногтевой сервис',
-    pattern: /подолог|стоп|вросш|ногт|титанов|биоматериал|педикюр|маникюр|мозол|гиперкератоз/iu,
-    recommendedCount: 8,
-    reason: 'Медицинские и обычные ногтевые услуги смешаны в одном списке.',
-    action: 'Отделить подологию от маникюра/педикюра и сгруппировать лечебные варианты.',
+    id: 'podology_treatment',
+    title: 'Подология',
+    pattern: /подолог|вросш|биоматериал|титанов|мозол|гиперкератоз|диабетическ|протезирован|обработка\s+ногт|комплексная\s+обработка\s+стоп|забор\s+биоматериала/iu,
+    excludePattern: /\bманикюр\b|гигиеническ.*педикюр|мужской\s+педикюр|педикюр\s+с\s+покрыт|японский\s+маникюр|парафинотерап/iu,
+    recommendedCount: 4,
+    reason: 'Лечебные подологические процедуры лучше отделить от обычного маникюра и педикюра.',
+    action: 'Сгруппировать лечебные процедуры по проблеме: консультация, обработка стоп, вросший ноготь, протезирование и коррекция ногтя.',
+  },
+  {
+    id: 'nail_service',
+    title: 'Маникюр и педикюр',
+    pattern: /маникюр|педикюр|гель[\s-]?лак|покрыти|парафинотерап|японский\s+маникюр/iu,
+    recommendedCount: 5,
+    reason: 'Обычные ногтевые услуги можно оставить отдельной категорией с вариантами покрытия и пола клиента.',
+    action: 'Сгруппировать по базовой услуге: маникюр, педикюр, покрытие, уходы и мужские варианты.',
   },
 ];
 
 const compressionServiceText = (service: CompressionServiceLike) =>
-  `${service.category || ''} ${service.name || ''} ${service.description || ''}`;
+  `${service.name || ''} ${service.description || ''}`;
 
 const compressionServiceName = (service: CompressionServiceLike) =>
   String(service.name || '').trim();
@@ -491,7 +501,10 @@ export const buildServiceCatalogCompressionSuggestion = (
 
   const usedNames = new Set<string>();
   const groups = SERVICE_CATALOG_COMPRESSION_RULES.map((rule) => {
-    const matches = activeServices.filter((service) => rule.pattern.test(compressionServiceText(service)));
+    const matches = activeServices.filter((service) => {
+      const text = compressionServiceText(service);
+      return rule.pattern.test(text) && !(rule.excludePattern && rule.excludePattern.test(text));
+    });
     const examples = matches
       .map(compressionServiceName)
       .filter((name) => {

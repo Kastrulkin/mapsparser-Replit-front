@@ -81,15 +81,27 @@ COMPRESSION_RULES = [
         "target_category": "Перманентный макияж",
     },
     {
-        "id": "podology",
-        "title": "Подология и ногтевой сервис",
-        "pattern": re.compile(r"подолог|стоп|вросш|ногт|титанов|биоматериал|педикюр|маникюр|мозол|гиперкератоз", re.I),
-        "recommended_count": 8,
-        "reason": "Медицинские и обычные ногтевые услуги смешаны в одном списке.",
-        "action_text": "Отделить подологию от маникюра/педикюра и сгруппировать лечебные варианты.",
+        "id": "podology_treatment",
+        "title": "Подология",
+        "pattern": re.compile(r"подолог|вросш|биоматериал|титанов|мозол|гиперкератоз|диабетическ|протезирован|обработка\s+ногт|комплексная\s+обработка\s+стоп|забор\s+биоматериала", re.I),
+        "exclude_pattern": re.compile(r"\bманикюр\b|гигиеническ.*педикюр|мужской\s+педикюр|педикюр\s+с\s+покрыт|японский\s+маникюр|парафинотерап", re.I),
+        "recommended_count": 4,
+        "reason": "Лечебные подологические процедуры лучше отделить от обычного маникюра и педикюра.",
+        "action_text": "Сгруппировать лечебные процедуры по проблеме: консультация, обработка стоп, вросший ноготь, протезирование и коррекция ногтя.",
         "apply_action": "apply",
-        "target_name": "Подология и лечебный уход за стопами",
+        "target_name": "Подологические процедуры",
         "target_category": "Подология",
+    },
+    {
+        "id": "nail_service",
+        "title": "Маникюр и педикюр",
+        "pattern": re.compile(r"маникюр|педикюр|гель[\s-]?лак|покрыти|парафинотерап|японский\s+маникюр", re.I),
+        "recommended_count": 5,
+        "reason": "Обычные ногтевые услуги можно оставить отдельной категорией с вариантами покрытия и пола клиента.",
+        "action_text": "Сгруппировать по базовой услуге: маникюр, педикюр, покрытие, уходы и мужские варианты.",
+        "apply_action": "apply",
+        "target_name": "Маникюр и педикюр",
+        "target_category": "Маникюр и педикюр",
     },
 ]
 
@@ -100,7 +112,6 @@ def normalize_service_text(value: Any) -> str:
 
 def _service_text(service: dict[str, Any]) -> str:
     return " ".join([
-        str(service.get("category") or ""),
         str(service.get("name") or ""),
         str(service.get("description") or ""),
     ])
@@ -165,6 +176,126 @@ def _build_description(action_text: str, services: list[dict[str, Any]]) -> str:
     return action_text + "\n\nВарианты из исходного меню:\n" + "\n".join(variants)
 
 
+def _cluster_key(value: Any) -> str:
+    return normalize_service_text(value)
+
+
+def _specialized_clusters(rule: dict[str, Any], matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rule_id = str(rule.get("id") or "")
+    clusters: list[dict[str, Any]] = []
+
+    def add_cluster(key: str, title: str, target_name: str, target_category: str, action_text: str, pattern: str) -> None:
+        regex = re.compile(pattern, re.I)
+        services = [service for service in matches if regex.search(str(service.get("name") or ""))]
+        if len(services) < 2:
+            return
+        clusters.append({
+            "key": key,
+            "title": title,
+            "target_name": target_name,
+            "target_category": target_category,
+            "action_text": action_text,
+            "services": services,
+        })
+
+    if rule_id == "scar_aesthetics":
+        add_cluster(
+            "scar_by_size",
+            "Рубцы по размеру",
+            "Коррекция рубцов по размеру",
+            "Эстетика рубцов",
+            "Объединить коррекцию рубцов в одну услугу с вариантами по длине рубца.",
+            r"коррекция\s+рубцов:\s+до",
+        )
+        add_cluster(
+            "scar_after_surgery",
+            "Рубцы после пластических операций",
+            "Коррекция рубцов после операций",
+            "Эстетика рубцов",
+            "Сгруппировать рубцы после пластических операций, а тип операции оставить вариантом.",
+            r"абдоминопласт|блефаропласт|брахиопласт|хейлопласт|т-рубц|якорн",
+        )
+        add_cluster(
+            "scar_skin_marks",
+            "Рубцы кожи и постакне",
+            "Коррекция рубцов кожи и постакне",
+            "Эстетика рубцов",
+            "Оставить одну понятную услугу для постакне, селфхарма и небольших рубцов кожи.",
+            r"постакне|селфхарм|родинок|папиллом",
+        )
+        return clusters
+
+    if rule_id == "podology_treatment":
+        add_cluster(
+            "podology_foot_processing",
+            "Подологическая обработка стоп",
+            "Подологическая обработка стоп",
+            "Подология",
+            "Объединить лечебную обработку стоп, а состояние стопы оставить вариантом.",
+            r"обработка\s+стоп|диабетическ",
+        )
+        add_cluster(
+            "podology_nail_correction",
+            "Коррекция ногтей у подолога",
+            "Коррекция ногтей у подолога",
+            "Подология",
+            "Объединить процедуры коррекции ногтевой пластины и вросшего ногтя.",
+            r"вросш|протезирован|титанов",
+        )
+        return clusters
+
+    if rule_id == "nail_service":
+        add_cluster(
+            "nail_manicure",
+            "Маникюр",
+            "Маникюр",
+            "Маникюр и педикюр",
+            "Объединить варианты маникюра, а пол клиента и технику оставить вариантами.",
+            r"маникюр",
+        )
+        add_cluster(
+            "nail_pedicure",
+            "Педикюр",
+            "Педикюр",
+            "Маникюр и педикюр",
+            "Объединить варианты педикюра, а покрытие и пол клиента оставить вариантами.",
+            r"педикюр",
+        )
+        return clusters
+
+    return []
+
+
+def _build_group(rule: dict[str, Any], matches: list[dict[str, Any]], overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    overrides = overrides or {}
+    action = str(rule["apply_action"])
+    recommended_count = 0 if action == "promotion" else 1
+    action_text = str(overrides.get("action_text") or rule["action_text"])
+    title = str(overrides.get("title") or rule["title"])
+    target_name = str(overrides.get("target_name") or rule["target_name"])
+    target_category = str(overrides.get("target_category") or rule["target_category"])
+
+    return {
+        "id": str(uuid.uuid4()),
+        "rule_id": str(overrides.get("rule_id") or rule["id"]),
+        "title": title,
+        "reason": rule["reason"],
+        "action": action,
+        "action_text": action_text,
+        "source_service_ids": [_service_id(service) for service in matches],
+        "current_count": len(matches),
+        "recommended_count": recommended_count,
+        "target": {
+            "category": target_category,
+            "name": target_name,
+            "description": _build_description(action_text, matches),
+            "keywords": _keyword_list(matches),
+            "price": _price_range(matches),
+        },
+        "examples": [str(service.get("name") or "").strip() for service in matches[:5] if str(service.get("name") or "").strip()],
+    }
+
+
 def build_service_catalog_compression_draft(services: list[dict[str, Any]]) -> dict[str, Any]:
     active_services = [service for service in services if _service_id(service) and not service.get("is_external")]
     before_count = len(active_services)
@@ -177,32 +308,35 @@ def build_service_catalog_compression_draft(services: list[dict[str, Any]]) -> d
             service
             for service in active_services
             if _service_id(service) not in used_service_ids and rule["pattern"].search(_service_text(service))
+            and not (rule.get("exclude_pattern") and rule["exclude_pattern"].search(_service_text(service)))
         ]
         if len(matches) < 3:
             continue
+        specialized = _specialized_clusters(rule, matches)
+        if specialized:
+            clustered_ids = set()
+            for cluster in specialized:
+                cluster_services = [
+                    service
+                    for service in cluster["services"]
+                    if _service_id(service) not in clustered_ids
+                ]
+                if len(cluster_services) < 2:
+                    continue
+                clustered_ids.update(_service_id(service) for service in cluster_services)
+                groups.append(_build_group(rule, cluster_services, {
+                    "rule_id": f"{rule['id']}_{cluster['key']}",
+                    "title": cluster["title"],
+                    "target_name": cluster["target_name"],
+                    "target_category": cluster["target_category"],
+                    "action_text": cluster["action_text"],
+                }))
+            used_service_ids.update(clustered_ids)
+            continue
+
         source_ids = [_service_id(service) for service in matches]
         used_service_ids.update(source_ids)
-        action = str(rule["apply_action"])
-        recommended_count = 0 if action == "promotion" else min(int(rule["recommended_count"]), max(1, len(matches)))
-        groups.append({
-            "id": str(uuid.uuid4()),
-            "rule_id": rule["id"],
-            "title": rule["title"],
-            "reason": rule["reason"],
-            "action": action,
-            "action_text": rule["action_text"],
-            "source_service_ids": source_ids,
-            "current_count": len(matches),
-            "recommended_count": recommended_count,
-            "target": {
-                "category": rule["target_category"],
-                "name": rule["target_name"],
-                "description": _build_description(rule["action_text"], matches),
-                "keywords": _keyword_list(matches),
-                "price": _price_range(matches),
-            },
-            "examples": [str(service.get("name") or "").strip() for service in matches[:5] if str(service.get("name") or "").strip()],
-        })
+        groups.append(_build_group(rule, matches))
 
     for category, count in category_counts.most_common():
         if count <= 25:

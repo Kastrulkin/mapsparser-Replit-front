@@ -71,6 +71,48 @@ def test_overloaded_category_gets_cleanup_group() -> None:
     assert group["target"]["category"] == "Уходы"
 
 
+def test_podology_and_nail_services_are_separate_groups() -> None:
+    services = [
+        _service("nail-1", "Гигиенический педикюр", "Маникюр и педикюр", "3300"),
+        _service("nail-2", "Маникюр мужской", "Маникюр и педикюр", "2500"),
+        _service("nail-3", "Японский маникюр", "Маникюр и педикюр", "3000"),
+        _service("nail-4", "Массаж локальный (стопы/ШВЗ/спина) 30 мин", "Маникюр и педикюр", "2000"),
+        _service("pod-1", "Консультация подолога", "Подология", "1000"),
+        _service("pod-2", "Обработка вросшего ногтя", "Подология", "2800"),
+        _service("pod-3", "Установка титановой нити", "Подология", "2800"),
+    ]
+
+    draft = build_service_catalog_compression_draft(services)
+    podology = next(item for item in draft["groups"] if item["rule_id"] == "podology_treatment_podology_nail_correction")
+    nails = next(item for item in draft["groups"] if item["rule_id"] == "nail_service_nail_manicure")
+
+    assert podology["target"]["name"] == "Коррекция ногтей у подолога"
+    assert podology["source_service_ids"] == ["pod-2", "pod-3"]
+    assert nails["target"]["name"] == "Маникюр"
+    assert nails["source_service_ids"] == ["nail-2", "nail-3"]
+    assert "nail-4" not in podology["source_service_ids"]
+    assert "nail-4" not in nails["source_service_ids"]
+
+
+def test_scar_aesthetics_split_into_actionable_groups() -> None:
+    services = [
+        _service("scar-1", "Коррекция рубцов: до 3 см", "Эстетика рубцов", "5000"),
+        _service("scar-2", "Коррекция рубцов: до 6 см", "Эстетика рубцов", "8000"),
+        _service("scar-3", "Абдоминопластика", "Эстетика рубцов", "39000"),
+        _service("scar-4", "Блефаропластика", "Эстетика рубцов", "19000"),
+        _service("scar-5", "Рубцы постакне, селфхарм", "Эстетика рубцов", "15000"),
+        _service("scar-6", "Рубцы от удаления родинок и папиллом (шт.)", "Эстетика рубцов", "3000"),
+    ]
+
+    draft = build_service_catalog_compression_draft(services)
+    by_rule = {item["rule_id"]: item for item in draft["groups"]}
+
+    assert by_rule["scar_aesthetics_scar_by_size"]["target"]["name"] == "Коррекция рубцов по размеру"
+    assert by_rule["scar_aesthetics_scar_after_surgery"]["target"]["name"] == "Коррекция рубцов после операций"
+    assert by_rule["scar_aesthetics_scar_skin_marks"]["target"]["name"] == "Коррекция рубцов кожи и постакне"
+    assert by_rule["scar_aesthetics_scar_by_size"]["recommended_count"] == 1
+
+
 def test_external_services_are_not_grouped_for_apply_diff() -> None:
     services = [
         {**_service("ext-1", "Лазерная эпиляция голени", "Эпиляция"), "is_external": True},

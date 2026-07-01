@@ -403,10 +403,12 @@ export function CardServicesTable({
                       {selectedService.price ? <span>{formatPrice(selectedService.price)}</span> : null}
                       {selectedUpdatedAt ? <span>Обновлено {formatDate(selectedUpdatedAt, locale)}</span> : null}
                     </div>
-                    <div className="mt-3 grid gap-2 rounded-2xl bg-slate-50/80 px-3 py-2.5 ring-1 ring-slate-100 xl:grid-cols-[minmax(0,1fr)_minmax(14rem,0.72fr)]">
+                    <div className="mt-3 space-y-3 rounded-2xl bg-slate-50/80 px-3 py-3 ring-1 ring-slate-100">
                       <div className="min-w-0">
                         <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Текущее описание</div>
-                        <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-slate-600">{selectedService.description || 'Описание пока не заполнено.'}</p>
+                        <p className="mt-1 max-h-56 overflow-y-auto whitespace-pre-line pr-1 text-sm leading-6 text-slate-700">
+                          {selectedService.description || 'Описание пока не заполнено.'}
+                        </p>
                       </div>
                       <div className="min-w-0">
                         <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">SEO-запросы</div>
