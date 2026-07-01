@@ -1496,7 +1496,7 @@ export function ContentPage() {
                 </div>
                 <h3 className="mt-4 text-2xl font-semibold text-slate-950">Начните с 10 реальных фото</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Для первого proof подойдут вход, интерьер, процесс, результат, команда и живые детали. Анализ списывает 2 кредита за новое фото.
+                  Лучше всего подойдут вход, интерьер, процесс, результат, команда и живые детали. Анализ списывает 2 кредита за новое фото.
                 </p>
                 <Button type="button" onClick={() => mediaUploadInputRef.current?.click()} className="mt-5 rounded-2xl bg-slate-950 px-5 py-6 text-white hover:bg-slate-800">
                   <Upload className="mr-2 h-4 w-4" />
@@ -1522,12 +1522,6 @@ export function ContentPage() {
             <div>2. Подбирает лучшее фото к публикации.</div>
             <div>3. Повторное использование не списывает кредиты.</div>
           </div>
-        </div>
-        <div className="rounded-[28px] border border-slate-200 bg-slate-950 p-5 text-white shadow-sm">
-          <div className="text-sm font-semibold text-slate-300">Следующий proof</div>
-          <p className="mt-2 text-sm leading-6 text-slate-300">
-            Сначала загрузите 10 фото для “Весёлой расчёски”, затем откройте публикацию и проверьте рекомендацию.
-          </p>
         </div>
       </aside>
     </div>
