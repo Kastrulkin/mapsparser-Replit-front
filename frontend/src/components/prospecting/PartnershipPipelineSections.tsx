@@ -103,6 +103,18 @@ const shortStatusLabel = (value?: string) => {
   return value || '—';
 };
 
+const sourceProviderLabel = (value?: string) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === 'yandex_maps' || normalized.includes('yandex')) return 'Яндекс Карты';
+  if (normalized === 'two_gis' || normalized === '2gis' || normalized.includes('2gis')) return '2ГИС';
+  if (normalized.includes('google_doc')) return 'Google Docs';
+  if (normalized.includes('google')) return 'Google Maps';
+  if (normalized.includes('manual') || normalized.includes('localos')) return 'Ручной ввод';
+  if (normalized.includes('file')) return 'Файл';
+  return String(value || '').trim();
+};
+
 const isPlaceholderPartnerName = (value?: string) => {
   const normalized = String(value || '').trim().toLowerCase();
   return !normalized || normalized === 'новый партнёр' || normalized === 'новый партнер' || normalized === 'без названия';
@@ -281,7 +293,7 @@ export const PartnershipLeadCard = ({
           </div>
         </div>
         <div className="flex max-w-[45%] shrink-0 flex-wrap justify-end gap-1">
-          {lead.source_provider ? <Badge variant="outline" className="max-w-full truncate">{lead.source_provider}</Badge> : null}
+          {lead.source_provider ? <Badge variant="outline" className="max-w-full truncate">{sourceProviderLabel(lead.source_provider)}</Badge> : null}
           {lead.rating ? <Badge variant="secondary">★ {lead.rating}{lead.reviews_count ? ` (${lead.reviews_count})` : ''}</Badge> : null}
         </div>
       </div>
@@ -734,7 +746,7 @@ export const PartnershipPipelineList = ({
                       <span className={mutedPillClass}><span className="truncate">Воронка: {shortStatusLabel(lead.pipeline_status || 'unprocessed')}</span></span>
                       <span className={mutedPillClass}><span className="truncate">Этап: {shortStatusLabel(lead.partnership_stage || 'новый')}</span></span>
                       <span className={mutedPillClass}><span className="truncate">Когорта: {lead.pilot_cohort || 'резерв'}</span></span>
-                      {lead.source_provider ? <span className={mutedPillClass}><span className="max-w-[180px] truncate">{lead.source_provider}</span></span> : null}
+                      {lead.source_provider ? <span className={mutedPillClass}><span className="max-w-[180px] truncate">{sourceProviderLabel(lead.source_provider)}</span></span> : null}
                       {lead.rating ? <span className={mutedPillClass}>★ {lead.rating}{lead.reviews_count ? ` · ${lead.reviews_count}` : ''}</span> : null}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs">

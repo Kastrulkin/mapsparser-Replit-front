@@ -764,7 +764,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [geoCity, setGeoCity] = useState('');
   const [geoCategory, setGeoCategory] = useState('');
   const [geoQuery, setGeoQuery] = useState('');
-  const [geoProvider, setGeoProvider] = useState<'google' | 'yandex' | 'both'>('google');
+  const [geoProvider, setGeoProvider] = useState<'google' | 'yandex' | 'both'>('yandex');
   const [geoRadiusKm, setGeoRadiusKm] = useState('5');
   const [geoLimit, setGeoLimit] = useState('25');
   const [stage, setStage] = useState('all');

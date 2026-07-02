@@ -1,0 +1,24 @@
+{
+  "task_id": "shansik-partner-search",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Shansik Engelsa 154 partner search produced 17 candidates, live UI showed the candidate step, and production health/leads API checks passed after fixes and deploy."
+    }
+  ],
+  "commands_run": [
+    "venv/bin/python -m py_compile src/api/admin_prospecting.py",
+    "venv/bin/python -m pytest tests/test_partnership_leads_routes_contract.py tests/test_admin_prospecting_audit_payload.py",
+    "npm --prefix frontend run build",
+    "scripts/deploy_backend_src.sh",
+    "scripts/deploy_frontend_dist.sh"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/shansik-partner-search/raw/geo_search_requests.jsonl",
+    ".agent/tasks/shansik-partner-search/raw/shansik_engelsa_leads_after_search.txt",
+    ".agent/tasks/shansik-partner-search/raw/source_provider_correction.txt",
+    ".agent/tasks/shansik-partner-search/raw/screenshot-1.png"
+  ]
+}

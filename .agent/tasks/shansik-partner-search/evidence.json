@@ -1,0 +1,35 @@
+{
+  "task_id": "shansik-partner-search",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Run partner search for Shansik Engelsa 154 and validate the user workflow.",
+      "status": "PASS",
+      "proof": [
+        "17 candidates imported for business_id 0efe3f0d-d32c-5ea9-84e8-e9387418cec1.",
+        "Live UI showed selected location Санкт-Петербург, проспект Энгельса, 154 and Кандидаты 17.",
+        "Production /api/partnership/health returned HTTP 200 with leads_total=17.",
+        "Production /api/partnership/leads returned 17 leads with source_provider=yandex_maps."
+      ],
+      "gaps": [
+        "One noisy candidate, Клуб 154, remains for user review instead of being auto-disqualified."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/api/admin_prospecting.py",
+    "frontend/src/pages/dashboard/PartnershipSearchPage.tsx",
+    "frontend/src/components/prospecting/PartnershipPipelineSections.tsx"
+  ],
+  "commands_for_fresh_verifier": [
+    "venv/bin/python -m py_compile src/api/admin_prospecting.py",
+    "venv/bin/python -m pytest tests/test_partnership_leads_routes_contract.py tests/test_admin_prospecting_audit_payload.py",
+    "npm --prefix frontend run build",
+    "scripts/proof_loop.sh validate shansik-partner-search",
+    "scripts/proof_loop.sh status shansik-partner-search"
+  ],
+  "known_gaps": [
+    "Browser runtime reset during the final reload; server/API checks after deploy are green."
+  ]
+}

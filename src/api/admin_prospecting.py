@@ -8198,6 +8198,12 @@ def partnership_geo_search():
                     )
                     if not isinstance(provider_candidates, list):
                         provider_candidates = []
+                    for candidate in provider_candidates:
+                        if not isinstance(candidate, dict):
+                            continue
+                        candidate.setdefault("source", "openclaw_seed_geo" if has_seed_items else "openclaw_google_geo")
+                        candidate.setdefault("source_kind", "geo_search_seed" if has_seed_items else "geo_search")
+                        candidate.setdefault("source_provider", "openclaw_seed" if has_seed_items else "openclaw_google")
                     candidates.extend([item for item in provider_candidates if isinstance(item, dict)])
                     provider_status["google"]["executed"] = True
                     provider_status["google"]["items_count"] = len(provider_candidates)
@@ -8219,6 +8225,12 @@ def partnership_geo_search():
                     yandex_candidates = yandex_results.get("items") or []
                     if not isinstance(yandex_candidates, list):
                         yandex_candidates = []
+                    for candidate in yandex_candidates:
+                        if not isinstance(candidate, dict):
+                            continue
+                        candidate.setdefault("source", "yandex_geo")
+                        candidate.setdefault("source_kind", "geo_search")
+                        candidate.setdefault("source_provider", "yandex_maps")
                     candidates.extend([item for item in yandex_candidates if isinstance(item, dict)])
                     provider_status["yandex"]["executed"] = True
                     provider_status["yandex"]["items_count"] = len(yandex_candidates)
@@ -8260,6 +8272,19 @@ def partnership_geo_search():
                     reviews_count = int(item.get("reviews_count")) if item.get("reviews_count") is not None else None
                 except Exception:
                     reviews_count = None
+                fallback_source = (
+                    "openclaw_seed_geo"
+                    if has_seed_items
+                    else ("openclaw_google_geo" if provider in {"google", "both"} else "yandex_geo")
+                )
+                fallback_source_provider = (
+                    "openclaw_seed"
+                    if has_seed_items
+                    else ("openclaw_google" if provider in {"google", "both"} else "yandex_maps")
+                )
+                meta_provider = ""
+                if isinstance(meta_blob, dict):
+                    meta_provider = str(meta_blob.get("provider") or "").strip()
                 lead_id, created = _insert_partnership_lead_if_new(
                     cur,
                     business_id=business_id,
@@ -8269,7 +8294,7 @@ def partnership_geo_search():
                     address=lead_address,
                     city=lead_city,
                     category=lead_category,
-                    source="openclaw_seed_geo" if has_seed_items else ("openclaw_google_geo" if provider in {"google", "both"} else "manual_geo"),
+                    source=str(item.get("source") or fallback_source).strip() or fallback_source,
                     phone=phone,
                     email=email,
                     website=website,
@@ -8278,13 +8303,13 @@ def partnership_geo_search():
                     rating=rating,
                     reviews_count=reviews_count,
                     source_kind=str(item.get("source_kind") or ("geo_search_seed" if has_seed_items else "geo_search")).strip() or ("geo_search_seed" if has_seed_items else "geo_search"),
-                    source_provider=str(item.get("source_provider") or item.get("provider") or ("openclaw_seed" if has_seed_items else "openclaw_google")).strip() or ("openclaw_seed" if has_seed_items else "openclaw_google"),
+                    source_provider=str(item.get("source_provider") or item.get("provider") or fallback_source_provider).strip() or fallback_source_provider,
                     external_place_id=external_place_id,
                     external_source_id=external_source_id,
                     lat=lat,
                     lon=lon,
                     search_payload={
-                        "provider": str(meta_blob.get("provider") if isinstance(meta_blob, dict) else "") or ("seed_items" if has_seed_items else provider),
+                        "provider": meta_provider or ("seed_items" if has_seed_items else provider),
                         "city": city,
                         "category": category,
                         "query": query,
@@ -8334,28 +8359,41 @@ def partnership_health():
         return error
     try:
         requested_business_id = str(request.args.get("business_id") or "").strip() or None
+
+        def _count_from_row(row: Any) -> int:
+            if not row:
+                return 0
+            if isinstance(row, dict):
+                for key in ("total", "count", "count(*)"):
+                    if key in row:
+                        return int(row.get(key) or 0)
+                values = list(row.values())
+                return int((values[0] if values else 0) or 0)
+            return int((row[0] if len(row) else 0) or 0)
+
         conn = get_db_connection()
         try:
             _ensure_partnership_columns(conn)
             cur = conn.cursor()
+            schema_flags = _get_partnership_schema_flags(cur)
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
 
             cur.execute(
                 """
-                SELECT COUNT(*)::INT
+                SELECT COUNT(*)::INT AS total
                 FROM prospectingleads
                 WHERE business_id = %s
                   AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
                 """,
                 (business_id,),
             )
-            leads_total = int((cur.fetchone() or [0])[0] or 0)
+            leads_total = _count_from_row(cur.fetchone())
 
             cur.execute(
                 """
-                SELECT COUNT(*)::INT
+                SELECT COUNT(*)::INT AS total
                 FROM outreachmessagedrafts d
                 JOIN prospectingleads l ON l.id = d.lead_id
                 WHERE l.business_id = %s
@@ -8363,23 +8401,26 @@ def partnership_health():
                 """,
                 (business_id,),
             )
-            drafts_total = int((cur.fetchone() or [0])[0] or 0)
+            drafts_total = _count_from_row(cur.fetchone())
 
             cur.execute(
                 """
-                SELECT COUNT(*)::INT
+                SELECT COUNT(DISTINCT b.id)::INT AS total
                 FROM outreachsendbatches b
-                WHERE b.business_id = %s
+                JOIN outreachsendqueue q ON q.batch_id = b.id
+                JOIN prospectingleads l ON l.id = q.lead_id
+                WHERE l.business_id = %s
+                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
                 """,
                 (business_id,),
             )
-            batches_total = int((cur.fetchone() or [0])[0] or 0)
+            batches_total = _count_from_row(cur.fetchone())
 
             reactions_total = 0
             if schema_flags["has_reactions"]:
                 cur.execute(
                     """
-                    SELECT COUNT(*)::INT
+                    SELECT COUNT(*)::INT AS total
                     FROM outreachmessagereactions r
                     JOIN outreachsendqueue q ON q.id = r.queue_id
                     JOIN prospectingleads l ON l.id = q.lead_id
@@ -8388,7 +8429,7 @@ def partnership_health():
                     """,
                     (business_id,),
                 )
-                reactions_total = int((cur.fetchone() or [0])[0] or 0)
+                reactions_total = _count_from_row(cur.fetchone())
         finally:
             conn.close()
 
