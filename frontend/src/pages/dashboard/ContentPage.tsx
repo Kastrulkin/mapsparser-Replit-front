@@ -1397,7 +1397,7 @@ export function ContentPage() {
   );
 
   const renderMediaLibrary = () => (
-    <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
+    <div className="space-y-5">
       <main className="space-y-5">
         <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -1430,7 +1430,7 @@ export function ContentPage() {
               </Button>
             </div>
           </div>
-          <div className="mt-6 grid gap-3 md:grid-cols-3">
+          <div className="mt-6 grid gap-3 md:grid-cols-3 xl:grid-cols-[1.1fr_1fr_1.1fr]">
             <div className="rounded-3xl bg-slate-950 p-5 text-white">
               <div className="text-sm text-slate-400">Покрытие</div>
               <div className="mt-2 text-4xl font-semibold tabular-nums">{Number(mediaCoverage?.coverage_percent || 0)}%</div>
@@ -1447,6 +1447,17 @@ export function ContentPage() {
                 {mediaCoverage?.missing_text || 'Вход, команда, процесс и результат помогают закрыть карты и соцсети.'}
               </div>
             </div>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            {[
+              'Анализируем фото один раз',
+              'Подбираем лучшее к публикации',
+              'Повторное использование без списания',
+            ].map((text) => (
+              <div key={text} className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-medium leading-5 text-slate-600">
+                {text}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -1489,7 +1500,7 @@ export function ContentPage() {
             Загружаем медиатеку...
           </div>
         ) : filteredMediaAssets.length > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {filteredMediaAssets.map((asset) => {
               const imageSrc = photoImageSrc(asset);
               const quality = Number(asset.quality_score || 0);
@@ -1569,16 +1580,6 @@ export function ContentPage() {
           </div>
         )}
       </main>
-      <aside className="space-y-4">
-        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Как LocalOS использует фото</div>
-          <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-            <div>1. Анализирует фото один раз.</div>
-            <div>2. Подбирает лучшее фото к публикации.</div>
-            <div>3. Повторное использование не списывает кредиты.</div>
-          </div>
-        </div>
-      </aside>
     </div>
   );
 
