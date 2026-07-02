@@ -1,0 +1,47 @@
+{
+  "payload": {
+    "business_id": "17ff72b6-a542-5fac-b67c-f710ee4fc828",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "кафе",
+    "query": "Санкт-Петербург, Пушкин, улица Радищева, 22 кафе для детей",
+    "radius_km": 5,
+    "limit": 10
+  },
+  "status": 200,
+  "response": {
+    "imported_count": 10,
+    "lead_ids": [
+      "dd3e98fd-d40e-46f0-9525-23af7c8ce0e2",
+      "abc99398-46d9-442f-8bef-cdee9b20ed82",
+      "672d4b58-1e4b-4150-8fcc-125b5c85c3f1",
+      "86e1afd9-225a-4977-8cc5-b7f6aa42de21",
+      "a758cbba-8657-4208-81c6-c4e29e012809",
+      "32a19f54-57c3-400b-b57d-b0d055ec54c2",
+      "47db1c47-9279-437a-86d0-a569602ab955",
+      "e50ddca4-7230-4334-99e2-f7903ba8227a",
+      "052a0172-8169-4eea-be20-99da7717e72b",
+      "314645a8-b320-4cc1-b98b-254961cb3736"
+    ],
+    "merged_count": 0,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 10
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 10,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

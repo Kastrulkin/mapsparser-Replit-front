@@ -1,0 +1,47 @@
+{
+  "payload": {
+    "business_id": "12c19fd1-e1a3-51f5-9980-eb75f0a5234a",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "детская стоматология",
+    "query": "Санкт-Петербург, Пушкин, Церковная улица, 27 детская стоматология",
+    "radius_km": 5,
+    "limit": 10
+  },
+  "status": 200,
+  "response": {
+    "imported_count": 10,
+    "lead_ids": [
+      "766b3305-9bc5-4b62-bc23-3a908af41874",
+      "9632dd18-433a-4f72-9283-30e15bc24d85",
+      "9f6a9807-dce7-4623-a67d-24757a22789d",
+      "4723c4d4-b3a4-4dd6-9aa5-42854b79a553",
+      "de507301-49f9-42c7-bcc9-8fa1a4cdb0de",
+      "6631f720-7629-4837-80f1-19a94f8c4f39",
+      "c8a1dbea-2aa6-4b1e-9169-5f85d36cd6ec",
+      "17e9297a-300c-4078-894a-4ab84b96b6cb",
+      "09c80786-ee16-4770-a0a3-f71d304b4070",
+      "f9c87659-842a-44dc-a7f7-3a5dd009994d"
+    ],
+    "merged_count": 0,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 10
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 10,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

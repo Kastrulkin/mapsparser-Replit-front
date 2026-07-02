@@ -1,0 +1,46 @@
+{
+  "payload": {
+    "business_id": "46bb9a2f-bd03-5930-9644-76315016d471",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "детская стоматология",
+    "query": "Санкт-Петербург, Пушкин, Кедринская улица, 12 детская стоматология",
+    "radius_km": 5,
+    "limit": 8
+  },
+  "status": 200,
+  "duration_sec": 20.52,
+  "response": {
+    "imported_count": 8,
+    "lead_ids": [
+      "d5632fe4-7068-49e8-a661-d48a69ac842e",
+      "111c1b00-7bb8-4af6-972a-d48007a14237",
+      "9d52bcce-b0a9-46fd-80dc-c00812ef251c",
+      "5c1bd583-c7a6-410e-825d-f7359b5deaac",
+      "0f961202-a007-4077-ba2c-e580d682929c",
+      "3c1ecae3-77c8-4ff8-8940-8634d5eb5dc7",
+      "2056d5e6-835d-4220-a923-a62d7560aa92",
+      "84e54a4f-ae29-4399-8f4f-03c0ba7e1596"
+    ],
+    "merged_count": 0,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 8
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 8,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

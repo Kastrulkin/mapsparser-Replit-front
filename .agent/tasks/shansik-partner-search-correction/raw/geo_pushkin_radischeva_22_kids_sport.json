@@ -1,0 +1,44 @@
+{
+  "payload": {
+    "business_id": "17ff72b6-a542-5fac-b67c-f710ee4fc828",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "детская секция",
+    "query": "Санкт-Петербург, Пушкин, улица Радищева, 22 детская секция",
+    "radius_km": 5,
+    "limit": 10
+  },
+  "status": 200,
+  "response": {
+    "imported_count": 7,
+    "lead_ids": [
+      "72bbaa51-7f23-42c2-b0b9-3584d5b8770b",
+      "2133edca-29ae-4b2e-b9c5-0c4efdf58868",
+      "00c3335d-930a-4fdd-9118-368f0ce630ed",
+      "371bdb33-089c-4e17-b72e-6d6c0b18b993",
+      "4d87f1c2-7947-43ed-8581-0a9db3ced851",
+      "2357251c-c1a6-4347-b1f7-4cfc0ffe7a62",
+      "78d9d514-a8bd-4e2c-8ebb-b8968a703eb5"
+    ],
+    "merged_count": 1,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 8
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 8,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

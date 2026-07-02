@@ -1,0 +1,48 @@
+{
+  "before_count": 17,
+  "lead_ids": [
+    "68c634e7-ba6f-47fd-8361-bb995e6196f2",
+    "5282e0e6-35cd-4efe-aa1d-a7b822d3fb70",
+    "3c162480-8034-4b3a-8440-38612b47c074",
+    "be25624a-efbb-48ab-ad6b-754dca4d0c79",
+    "5997f31d-eafb-43c0-8224-0b26fdfc705a",
+    "b5f5c1e7-ed89-4d8b-a0d2-8ccc4507d60a",
+    "13eb15ad-28b9-483b-bb80-13d4f76222f7",
+    "a1f30b86-b947-4d4e-9307-611ab240181e",
+    "a0353843-c009-4565-9543-eade53257e14",
+    "51af7009-b409-4865-b060-07a40b7b5152",
+    "cce2d25b-fc49-4daf-a9dc-9eb88cb9b09f",
+    "256a4256-81c3-491c-84bd-acb29fd911a1",
+    "c1c69d04-07b6-49dc-b143-3a64b9d30dc2",
+    "df91f34a-130f-4275-9eee-964f7d9ab00a",
+    "b4982b84-87ac-4b91-87e1-54681a2f0029",
+    "7da30dc3-41b3-41ff-b49f-4ed73c675213",
+    "fbcf6f15-bae9-43df-8094-05d0ced1c4a4"
+  ],
+  "response": {
+    "status": 200,
+    "payload": {
+      "deleted_count": 17,
+      "deleted_ids": [
+        "256a4256-81c3-491c-84bd-acb29fd911a1",
+        "fbcf6f15-bae9-43df-8094-05d0ced1c4a4",
+        "a0353843-c009-4565-9543-eade53257e14",
+        "51af7009-b409-4865-b060-07a40b7b5152",
+        "7da30dc3-41b3-41ff-b49f-4ed73c675213",
+        "b4982b84-87ac-4b91-87e1-54681a2f0029",
+        "df91f34a-130f-4275-9eee-964f7d9ab00a",
+        "c1c69d04-07b6-49dc-b143-3a64b9d30dc2",
+        "cce2d25b-fc49-4daf-a9dc-9eb88cb9b09f",
+        "13eb15ad-28b9-483b-bb80-13d4f76222f7",
+        "a1f30b86-b947-4d4e-9307-611ab240181e",
+        "3c162480-8034-4b3a-8440-38612b47c074",
+        "be25624a-efbb-48ab-ad6b-754dca4d0c79",
+        "68c634e7-ba6f-47fd-8361-bb995e6196f2",
+        "b5f5c1e7-ed89-4d8b-a0d2-8ccc4507d60a",
+        "5997f31d-eafb-43c0-8224-0b26fdfc705a",
+        "5282e0e6-35cd-4efe-aa1d-a7b822d3fb70"
+      ],
+      "success": true
+    }
+  }
+}

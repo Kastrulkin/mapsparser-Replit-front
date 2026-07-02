@@ -1,0 +1,7 @@
+scripts/deploy_backend_src.sh
+PASS
+
+Post-deploy checks performed during backend deploy:
+- app and worker services running
+- http://localhost:8000 returned HTTP 200
+- APP_CORE_OK

@@ -1,0 +1,117 @@
+{
+  "locations": [
+    {
+      "slug": "engelsa_154",
+      "business_id": "0efe3f0d-d32c-5ea9-84e8-e9387418cec1",
+      "label": "Энгельса, 154",
+      "list_http_status": 200,
+      "health_http_status": 200,
+      "list_count": 0,
+      "health_leads_total": 0,
+      "source_providers": [],
+      "self_like": [],
+      "sample_names": []
+    },
+    {
+      "slug": "pushkin_radischeva_22",
+      "business_id": "17ff72b6-a542-5fac-b67c-f710ee4fc828",
+      "label": "Пушкин, Радищева, 22",
+      "list_http_status": 200,
+      "health_http_status": 200,
+      "list_count": 47,
+      "health_leads_total": 47,
+      "source_providers": [
+        "yandex_maps"
+      ],
+      "self_like": [],
+      "sample_names": [
+        "Академия детского развития и танца",
+        "Созвездие",
+        "Time-Gym",
+        "Студия игры на фортепиано",
+        "Extreme kids",
+        "TL Kids",
+        "София",
+        "Saint P. Studio",
+        "ТриНаЧетыре",
+        "Spbfoto"
+      ]
+    },
+    {
+      "slug": "pushkin_cerkovnaya_27",
+      "business_id": "12c19fd1-e1a3-51f5-9980-eb75f0a5234a",
+      "label": "Пушкин, Церковная, 27",
+      "list_http_status": 200,
+      "health_http_status": 200,
+      "list_count": 36,
+      "health_leads_total": 36,
+      "source_providers": [
+        "yandex_maps"
+      ],
+      "self_like": [],
+      "sample_names": [
+        "Академия Самбо",
+        "Стремление",
+        "Орёл",
+        "Fitneo",
+        "Невские медведи",
+        "Зенит-Чемпионика",
+        "Патиум",
+        "Фотостудия 19.78",
+        "Saint. P. studio",
+        "ТриНаЧетыре"
+      ]
+    },
+    {
+      "slug": "novoizmaylovskiy_101",
+      "business_id": "72e5811d-bdda-5ec7-ad74-5f728fb6c11d",
+      "label": "Новоизмайловский, 101",
+      "list_http_status": 200,
+      "health_http_status": 200,
+      "list_count": 33,
+      "health_leads_total": 33,
+      "source_providers": [
+        "yandex_maps"
+      ],
+      "self_like": [],
+      "sample_names": [
+        "ФспБ",
+        "Fitness House",
+        "Центр патриотического воспитания",
+        "Футболика",
+        "Usti Team",
+        "Фортис",
+        "Борец - 78",
+        "ФотоЛюрекс",
+        "Moonphoto.ru",
+        "Tage Studio"
+      ]
+    },
+    {
+      "slug": "pushkin_kedrinskaya_12",
+      "business_id": "46bb9a2f-bd03-5930-9644-76315016d471",
+      "label": "Пушкин, Кедринская, 12",
+      "list_http_status": 200,
+      "health_http_status": 200,
+      "list_count": 39,
+      "health_leads_total": 39,
+      "source_providers": [
+        "yandex_maps"
+      ],
+      "self_like": [],
+      "sample_names": [
+        "Капибара Fight",
+        "Асоль",
+        "Центр детского досуга Каскад",
+        "Plastica",
+        "Lion Heart Муайтай Каскад",
+        "Поднебесье",
+        "Подростково-молодежный клуб Витус",
+        "Матрёшка",
+        "Skypoint",
+        "Spbfoto"
+      ]
+    }
+  ],
+  "total_non_engelsa": 155
+}

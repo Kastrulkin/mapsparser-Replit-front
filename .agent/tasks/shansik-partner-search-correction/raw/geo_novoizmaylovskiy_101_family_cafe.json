@@ -1,0 +1,46 @@
+{
+  "payload": {
+    "business_id": "72e5811d-bdda-5ec7-ad74-5f728fb6c11d",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "кафе",
+    "query": "Санкт-Петербург, Новоизмайловский проспект, 101 кафе для детей",
+    "radius_km": 5,
+    "limit": 8
+  },
+  "status": 200,
+  "duration_sec": 25.19,
+  "response": {
+    "imported_count": 8,
+    "lead_ids": [
+      "370a07c2-dffc-4864-965c-b98d41bc9430",
+      "31d0dc85-ce6c-4c23-856e-25b4aaf71a00",
+      "5ed3ee5c-3918-49ad-bd7b-1e6c362ad63b",
+      "126d743e-4fd2-4d8b-a0b5-da6743e0c466",
+      "dde5b9e0-3144-4a1d-bd7b-dd785cc00511",
+      "5c60fe41-58b8-4bae-8600-4a875ff3d2ec",
+      "fa678d04-fc2d-4254-8203-709479af912e",
+      "dc2ebd93-9f55-410c-b94a-fd5516cf562f"
+    ],
+    "merged_count": 0,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 8
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 8,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

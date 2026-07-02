@@ -1,0 +1,33 @@
+{
+  "task_id": "shansik-partner-search-correction",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Partner search is corrected to cover all Shansik locations except Engelsa 154, with mistaken Engelsa leads removed and future self-import prevented.",
+      "status": "PASS",
+      "proof": [
+        "raw/delete_mistaken_engelsa_leads.json deleted 17 mistakenly created Engelsa leads.",
+        "raw/delete_self_leads.json deleted one own-brand self lead and left no remaining self-like names.",
+        "raw/final_counts_after_self_cleanup.json shows Engelsa 154 has 0 leads and the four required locations have 47, 36, 33 and 39 leads.",
+        "Backend self-candidate filter deployed in src/api/admin_prospecting.py."
+      ],
+      "gaps": [
+        "Some Yandex geo queries timed out, but every required non-Engelsa location has imported candidates."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/api/admin_prospecting.py",
+    ".agent/tasks/shansik-partner-search-correction/"
+  ],
+  "commands_for_fresh_verifier": [
+    "venv/bin/python -m py_compile src/api/admin_prospecting.py",
+    "venv/bin/python -m pytest tests/test_partnership_leads_routes_contract.py tests/test_admin_prospecting_audit_payload.py",
+    "git diff --check -- src/api/admin_prospecting.py",
+    "scripts/proof_loop.sh validate shansik-partner-search-correction"
+  ],
+  "known_gaps": [
+    "Provider timeouts are recorded under raw/geo_*.json."
+  ]
+}

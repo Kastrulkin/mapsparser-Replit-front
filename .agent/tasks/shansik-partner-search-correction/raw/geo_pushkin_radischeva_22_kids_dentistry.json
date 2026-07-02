@@ -1,0 +1,47 @@
+{
+  "payload": {
+    "business_id": "17ff72b6-a542-5fac-b67c-f710ee4fc828",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "детская стоматология",
+    "query": "Санкт-Петербург, Пушкин, улица Радищева, 22 детская стоматология",
+    "radius_km": 5,
+    "limit": 10
+  },
+  "status": 200,
+  "response": {
+    "imported_count": 10,
+    "lead_ids": [
+      "b4092257-95f9-4347-89c0-38d5c62fee6d",
+      "8530805c-6d69-4158-aa26-ea4ba5d1cb7d",
+      "914fc4c7-7ba3-4dd1-bd8d-a8813d83530b",
+      "0f6cd17e-c7f8-464c-8637-8e72713bb175",
+      "d03fc33c-e45f-4e09-99ea-3fe59d1e5b4a",
+      "bf7f5f98-5ad3-412f-879f-64576a356f44",
+      "8b1a0f42-82a6-4361-9a7f-ba93184e2c94",
+      "5e923239-0b02-4706-87a2-67dcdca669f7",
+      "a53eb2be-3642-4bfe-a2ea-c9e0cb0e248f",
+      "f1534445-6d3c-4c38-b83d-fcd732c50eec"
+    ],
+    "merged_count": 0,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 10
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 10,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

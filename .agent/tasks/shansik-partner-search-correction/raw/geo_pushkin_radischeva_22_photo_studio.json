@@ -1,0 +1,43 @@
+{
+  "payload": {
+    "business_id": "17ff72b6-a542-5fac-b67c-f710ee4fc828",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "фотостудия",
+    "query": "Санкт-Петербург, Пушкин, улица Радищева, 22 фотостудия дети",
+    "radius_km": 5,
+    "limit": 10
+  },
+  "status": 200,
+  "response": {
+    "imported_count": 6,
+    "lead_ids": [
+      "d0aa1e2b-fb8b-4208-8559-feeb7bb53e96",
+      "3ca9659c-5ceb-4bf6-aeeb-9dc8fa1d8331",
+      "9c132894-cdc0-497b-a326-f5a3e270d9bd",
+      "bb5f6916-1b39-4c1a-a93d-2deecf2b522b",
+      "fea1d92b-ce72-423d-99c2-ec1afaa3f0e6",
+      "eb262259-c89c-44b4-9387-e7f274903935"
+    ],
+    "merged_count": 0,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 6
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 6,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

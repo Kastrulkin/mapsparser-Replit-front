@@ -1,0 +1,46 @@
+{
+  "payload": {
+    "business_id": "72e5811d-bdda-5ec7-ad74-5f728fb6c11d",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "детская стоматология",
+    "query": "Санкт-Петербург, Новоизмайловский проспект, 101 детская стоматология",
+    "radius_km": 5,
+    "limit": 8
+  },
+  "status": 200,
+  "duration_sec": 25.28,
+  "response": {
+    "imported_count": 8,
+    "lead_ids": [
+      "598b77dc-abaf-4bb9-ac79-18409fab4c52",
+      "55556311-12b8-4bbd-83dc-53561961a511",
+      "b2715105-a879-4ca1-9e11-e0b5f44e75d0",
+      "4436f682-b5a6-4337-a1b9-3c12e4f4895b",
+      "5ccc00e4-7afb-44e8-a813-f9fa3dac2347",
+      "6950d03a-2e8f-447f-b635-48f58bada5c8",
+      "ca5b732f-e380-4001-9f60-9d3027b3b354",
+      "9b51195a-6c0e-455d-99bb-15117f20f24e"
+    ],
+    "merged_count": 0,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 8
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 8,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

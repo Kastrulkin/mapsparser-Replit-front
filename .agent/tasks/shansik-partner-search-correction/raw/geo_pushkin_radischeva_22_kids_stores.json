@@ -1,0 +1,42 @@
+{
+  "payload": {
+    "business_id": "17ff72b6-a542-5fac-b67c-f710ee4fc828",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "детский магазин",
+    "query": "Санкт-Петербург, Пушкин, улица Радищева, 22 детский магазин",
+    "radius_km": 5,
+    "limit": 10
+  },
+  "status": 200,
+  "response": {
+    "imported_count": 5,
+    "lead_ids": [
+      "f6df2afa-487c-4bba-b1c9-db2de714ce9f",
+      "99bb553a-76cc-4895-8c8c-39f034b6a816",
+      "e5c0ab3c-9b72-4c88-ac36-daabbaffe6bb",
+      "cf418fad-53c0-4ac9-b990-35bc6b7dc533",
+      "3f9da333-3ae3-4c69-9509-021481afd8db"
+    ],
+    "merged_count": 0,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 5
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 5,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

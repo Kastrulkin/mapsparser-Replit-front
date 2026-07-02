@@ -8119,6 +8119,23 @@ def partnership_geo_search():
         if provider not in {"google", "yandex", "both"}:
             return jsonify({"error": "provider must be one of: google, yandex, both"}), 400
 
+        def _geo_match_text(value: Any) -> str:
+            return re.sub(r"[^0-9a-zа-яё]+", " ", str(value or "").lower()).strip()
+
+        def _looks_like_same_business(candidate_name: str, candidate_address: str | None, business_row: dict[str, Any]) -> bool:
+            own_name = _geo_match_text(business_row.get("name"))
+            lead_name = _geo_match_text(candidate_name)
+            if not own_name or len(own_name) < 5 or not lead_name:
+                return False
+            same_brand = own_name in lead_name or lead_name in own_name
+            if not same_brand:
+                return False
+            own_address = _geo_match_text(business_row.get("address"))
+            lead_address = _geo_match_text(candidate_address)
+            if own_address and lead_address and (own_address in lead_address or lead_address in own_address):
+                return True
+            return own_name in lead_name
+
         yandex_query = " ".join(part for part in [category, query] if part).strip() or query or category
 
         conn = get_db_connection()
@@ -8128,6 +8145,8 @@ def partnership_geo_search():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            cur.execute("SELECT * FROM businesses WHERE id = %s LIMIT 1", (business_id,))
+            business_row = dict(cur.fetchone() or {})
             provider_status = {
                 "requested": provider,
                 "google": {"enabled": provider in {"google", "both"}, "executed": False, "items_count": 0},
@@ -8249,6 +8268,9 @@ def partnership_geo_search():
                 lead_city = str(item.get("city") or city or "").strip() or None
                 lead_category = str(item.get("category") or category or "").strip() or None
                 lead_address = str(item.get("address") or item.get("location") or "").strip() or None
+                if _looks_like_same_business(lead_name, lead_address, business_row):
+                    skipped += 1
+                    continue
                 phone = str(item.get("phone") or "").strip() or None
                 email = str(item.get("email") or "").strip() or None
                 website = str(item.get("website") or item.get("website_url") or "").strip() or None

@@ -1,0 +1,22 @@
+{
+  "before_count": 48,
+  "self_items": [
+    {
+      "id": "72bbaa51-7f23-42c2-b0b9-3584d5b8770b",
+      "name": "Детская танцевальная студия Шансик",
+      "address": "Санкт-Петербург, Пушкин, улица Радищева, 22"
+    }
+  ],
+  "delete": {
+    "status": 200,
+    "payload": {
+      "deleted_count": 1,
+      "deleted_ids": [
+        "72bbaa51-7f23-42c2-b0b9-3584d5b8770b"
+      ],
+      "success": true
+    }
+  },
+  "after_count": 47,
+  "remaining_self_names": []
+}

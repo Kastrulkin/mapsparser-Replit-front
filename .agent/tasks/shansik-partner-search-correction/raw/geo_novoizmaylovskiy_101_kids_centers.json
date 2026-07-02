@@ -1,0 +1,16 @@
+{
+  "payload": {
+    "business_id": "72e5811d-bdda-5ec7-ad74-5f728fb6c11d",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "детский центр",
+    "query": "Санкт-Петербург, Новоизмайловский проспект, 101 детский центр",
+    "radius_km": 5,
+    "limit": 8
+  },
+  "status": 0,
+  "duration_sec": 45.62,
+  "response": {
+    "error": "TimeoutError('The read operation timed out')"
+  }
+}

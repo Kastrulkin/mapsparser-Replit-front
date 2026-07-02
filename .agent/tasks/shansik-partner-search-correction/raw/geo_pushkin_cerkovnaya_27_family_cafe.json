@@ -1,0 +1,16 @@
+{
+  "payload": {
+    "business_id": "12c19fd1-e1a3-51f5-9980-eb75f0a5234a",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "кафе",
+    "query": "Санкт-Петербург, Пушкин, Церковная улица, 27 кафе для детей",
+    "radius_km": 5,
+    "limit": 8
+  },
+  "status": 0,
+  "duration_sec": 45.54,
+  "response": {
+    "error": "TimeoutError('The read operation timed out')"
+  }
+}

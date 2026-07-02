@@ -1,0 +1,47 @@
+{
+  "payload": {
+    "business_id": "12c19fd1-e1a3-51f5-9980-eb75f0a5234a",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "детский центр",
+    "query": "Санкт-Петербург, Пушкин, Церковная улица, 27 детский центр",
+    "radius_km": 5,
+    "limit": 10
+  },
+  "status": 200,
+  "response": {
+    "imported_count": 10,
+    "lead_ids": [
+      "b2b1861d-9adf-4085-a4ee-779b927663d0",
+      "72a5b853-48b1-4c6e-bb14-1282fd99519a",
+      "f4021ec4-3c3e-4cb1-b88e-3812a8e2623c",
+      "c7d490f0-3207-4653-aa0b-1f6ffecf6d32",
+      "bc329881-633d-4066-b52b-5a532ccdb1ac",
+      "52b5bf85-dc7a-4085-b808-7445ba86fc56",
+      "fded2a4e-dd23-4447-99b2-a724e04935d4",
+      "93d747d7-2ff9-4d71-87ef-734dbc1d7c01",
+      "c5ff8b5b-173f-4ddc-a1d1-6cfbeb0669d8",
+      "b70f78f1-0219-423e-9779-5e071488db47"
+    ],
+    "merged_count": 0,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 10
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 10,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

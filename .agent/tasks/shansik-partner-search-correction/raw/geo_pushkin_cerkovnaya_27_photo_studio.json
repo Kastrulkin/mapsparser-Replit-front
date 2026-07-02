@@ -1,0 +1,46 @@
+{
+  "payload": {
+    "business_id": "12c19fd1-e1a3-51f5-9980-eb75f0a5234a",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "фотостудия",
+    "query": "Санкт-Петербург, Пушкин, Церковная улица, 27 фотостудия дети",
+    "radius_km": 5,
+    "limit": 8
+  },
+  "status": 200,
+  "duration_sec": 20.4,
+  "response": {
+    "imported_count": 8,
+    "lead_ids": [
+      "ea29f59d-4249-4aed-9313-fc82e74b35e7",
+      "f566d41c-5424-4171-9197-abe81498678d",
+      "3ce33f7a-250c-4ed4-b672-09db89f7d48f",
+      "da0656d5-4aa9-47b5-89ee-694905e83293",
+      "10e93cc9-2302-4018-8e01-dec9c13abe9b",
+      "25682dd3-b0b5-44dc-a36f-e75689558932",
+      "ce263cb1-08ae-44c1-a679-aee70f95869c",
+      "b605fe62-1bb5-4e88-a25f-7900db291106"
+    ],
+    "merged_count": 0,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 8
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 8,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

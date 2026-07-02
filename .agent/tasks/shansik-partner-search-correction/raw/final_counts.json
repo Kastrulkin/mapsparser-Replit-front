@@ -1,0 +1,149 @@
+[
+  {
+    "label": "engelsa_154",
+    "business_id": "0efe3f0d-d32c-5ea9-84e8-e9387418cec1",
+    "name": "Энгельса, 154",
+    "lead_count": 0,
+    "health_http": 200,
+    "health_counts": {
+      "batches_total": 0,
+      "drafts_total": 0,
+      "leads_total": 0,
+      "reactions_total": 0
+    },
+    "source_providers": [],
+    "first_names": []
+  },
+  {
+    "label": "pushkin_radischeva_22",
+    "business_id": "17ff72b6-a542-5fac-b67c-f710ee4fc828",
+    "name": "Пушкин, Радищева, 22",
+    "lead_count": 48,
+    "health_http": 200,
+    "health_counts": {
+      "batches_total": 0,
+      "drafts_total": 0,
+      "leads_total": 48,
+      "reactions_total": 0
+    },
+    "source_providers": [
+      "yandex_maps"
+    ],
+    "first_names": [
+      "Детская танцевальная студия Шансик",
+      "Extreme kids",
+      "Академия детского развития и танца",
+      "Time-Gym",
+      "Созвездие",
+      "TL Kids",
+      "Студия игры на фортепиано",
+      "София",
+      "Черепаха",
+      "ТриНаЧетыре",
+      "Spbfoto",
+      "Saint. P. studio",
+      "Saint P. Studio",
+      "Фотостудия 19.78",
+      "Гоголь"
+    ]
+  },
+  {
+    "label": "pushkin_cerkovnaya_27",
+    "business_id": "12c19fd1-e1a3-51f5-9980-eb75f0a5234a",
+    "name": "Пушкин, Церковная, 27",
+    "lead_count": 36,
+    "health_http": 200,
+    "health_counts": {
+      "batches_total": 0,
+      "drafts_total": 0,
+      "leads_total": 36,
+      "reactions_total": 0
+    },
+    "source_providers": [
+      "yandex_maps"
+    ],
+    "first_names": [
+      "Академия Самбо",
+      "Стремление",
+      "Орёл",
+      "Fitneo",
+      "Невские медведи",
+      "Зенит-Чемпионика",
+      "Патиум",
+      "Фотостудия 19.78",
+      "Saint. P. studio",
+      "ТриНаЧетыре",
+      "Spbfoto",
+      "ФотоЛюрекс",
+      "Студия R21",
+      "Saint P. Studio",
+      "Студия оцифровки"
+    ]
+  },
+  {
+    "label": "novoizmaylovskiy_101",
+    "business_id": "72e5811d-bdda-5ec7-ad74-5f728fb6c11d",
+    "name": "Новоизмайловский, 101",
+    "lead_count": 33,
+    "health_http": 200,
+    "health_counts": {
+      "batches_total": 0,
+      "drafts_total": 0,
+      "leads_total": 33,
+      "reactions_total": 0
+    },
+    "source_providers": [
+      "yandex_maps"
+    ],
+    "first_names": [
+      "ФспБ",
+      "Fitness House",
+      "Центр патриотического воспитания",
+      "Футболика",
+      "Usti Team",
+      "Фортис",
+      "Борец - 78",
+      "ФотоЛюрекс",
+      "Moonphoto.ru",
+      "Tage Studio",
+      "ЛенМикро",
+      "Art-place tower",
+      "Cocos Lounge",
+      "Чабрец",
+      "Chang"
+    ]
+  },
+  {
+    "label": "pushkin_kedrinskaya_12",
+    "business_id": "46bb9a2f-bd03-5930-9644-76315016d471",
+    "name": "Пушкин, Кедринская, 12",
+    "lead_count": 39,
+    "health_http": 200,
+    "health_counts": {
+      "batches_total": 0,
+      "drafts_total": 0,
+      "leads_total": 39,
+      "reactions_total": 0
+    },
+    "source_providers": [
+      "yandex_maps"
+    ],
+    "first_names": [
+      "Капибара Fight",
+      "Асоль",
+      "Центр детского досуга Каскад",
+      "Plastica",
+      "Lion Heart Муайтай Каскад",
+      "Поднебесье",
+      "Подростково-молодежный клуб Витус",
+      "Матрёшка",
+      "Skypoint",
+      "Spbfoto",
+      "Чеховъ",
+      "Chelentano",
+      "DM Cafe",
+      "Тайяки",
+      "Ресторанчик"
+    ]
+  }
+]

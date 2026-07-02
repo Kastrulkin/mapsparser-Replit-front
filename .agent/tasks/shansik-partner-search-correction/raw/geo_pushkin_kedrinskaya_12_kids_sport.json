@@ -1,0 +1,44 @@
+{
+  "payload": {
+    "business_id": "46bb9a2f-bd03-5930-9644-76315016d471",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "детская секция",
+    "query": "Санкт-Петербург, Пушкин, Кедринская улица, 12 детская секция",
+    "radius_km": 5,
+    "limit": 8
+  },
+  "status": 200,
+  "duration_sec": 20.15,
+  "response": {
+    "imported_count": 6,
+    "lead_ids": [
+      "4a5898f8-733e-4b9b-a7a1-130e7ca17cbe",
+      "015db2eb-65cd-4274-8fa0-55fc0e9bb538",
+      "c943c6a1-a1d4-46aa-8c79-511a42753510",
+      "198310f4-9c29-4bd1-8ca7-effae8411001",
+      "1abf22ab-d6de-4daf-ae16-1f134003eb56",
+      "7daadd89-7586-4eb9-abc4-41c05b88b052"
+    ],
+    "merged_count": 2,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 8
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 8,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "payload": {
+    "business_id": "12c19fd1-e1a3-51f5-9980-eb75f0a5234a",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "детский магазин",
+    "query": "Санкт-Петербург, Пушкин, Церковная улица, 27 детский магазин",
+    "radius_km": 5,
+    "limit": 8
+  },
+  "status": 200,
+  "duration_sec": 16.0,
+  "response": {
+    "imported_count": 0,
+    "lead_ids": [],
+    "merged_count": 1,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 1
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 1,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

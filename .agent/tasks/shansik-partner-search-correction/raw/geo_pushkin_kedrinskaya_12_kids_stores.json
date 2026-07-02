@@ -1,0 +1,45 @@
+{
+  "payload": {
+    "business_id": "46bb9a2f-bd03-5930-9644-76315016d471",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "детский магазин",
+    "query": "Санкт-Петербург, Пушкин, Кедринская улица, 12 детский магазин",
+    "radius_km": 5,
+    "limit": 8
+  },
+  "status": 200,
+  "duration_sec": 24.94,
+  "response": {
+    "imported_count": 7,
+    "lead_ids": [
+      "7ec55815-8638-4cd1-9ffb-ae64be977a2e",
+      "85dc9e77-07d4-4db6-86a0-41635df13f1e",
+      "454b305c-f458-4721-a882-3356bfc84b63",
+      "b4f29769-8935-41fe-a05b-e28c36458e49",
+      "f8c03d90-8efc-4426-bb42-6aa4bc2e8f00",
+      "64bfa0cb-a907-41c9-ac31-6ef70af3d88a",
+      "9b3dbf19-1eb3-4561-803e-86af852fc6e2"
+    ],
+    "merged_count": 1,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 8
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 8,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

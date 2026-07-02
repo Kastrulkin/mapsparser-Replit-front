@@ -1,0 +1,5 @@
+Production API verification:
+- /api/partnership/leads returned HTTP 200 for all five Shansik locations.
+- /api/partnership/health returned HTTP 200 for all five Shansik locations.
+- Engelsa 154 has 0 partnership leads.
+- Non-Engelsa locations have 155 partnership leads total.

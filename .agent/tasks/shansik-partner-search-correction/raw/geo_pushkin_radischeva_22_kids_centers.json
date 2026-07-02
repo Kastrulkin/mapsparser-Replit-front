@@ -1,0 +1,47 @@
+{
+  "payload": {
+    "business_id": "17ff72b6-a542-5fac-b67c-f710ee4fc828",
+    "provider": "yandex",
+    "city": "Санкт-Петербург",
+    "category": "детский центр",
+    "query": "Санкт-Петербург, Пушкин, улица Радищева, 22 детский центр",
+    "radius_km": 5,
+    "limit": 10
+  },
+  "status": 200,
+  "response": {
+    "imported_count": 10,
+    "lead_ids": [
+      "547cee93-32a3-4031-8f76-0140b2960796",
+      "b3107169-65ed-42a9-a880-9c65aafd7d21",
+      "c808417a-8a86-4b5e-ac34-5c070c8ac371",
+      "77e4fc82-1697-48b4-91b0-6b26351f3c02",
+      "41c4b80f-c62d-4dd1-8d05-3e05c4d6fa64",
+      "13fbd904-4f39-430d-ae42-4089ab6b1678",
+      "82be6cb2-e54c-4b19-bcf0-98a160875914",
+      "437c3ec9-3f36-49aa-b37b-4900ba9640c2",
+      "906de7c9-1ced-4f94-b375-af1c052f711e",
+      "b783aa10-0af9-4ed8-949f-592fdd37976f"
+    ],
+    "merged_count": 0,
+    "openclaw_meta": {},
+    "provider_status": {
+      "google": {
+        "enabled": false,
+        "executed": false,
+        "items_count": 0
+      },
+      "requested": "yandex",
+      "yandex": {
+        "enabled": true,
+        "executed": true,
+        "items_count": 10
+      }
+    },
+    "skipped_count": 0,
+    "source_total": 10,
+    "success": true,
+    "warning": null,
+    "warnings": []
+  }
+}

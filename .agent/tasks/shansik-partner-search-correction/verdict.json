@@ -1,0 +1,23 @@
+{
+  "task_id": "shansik-partner-search-correction",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Engelsa 154 has 0 leads; the four required non-Engelsa locations have 155 leads total; mistaken self/import data was removed; backend self-filter is deployed."
+    }
+  ],
+  "commands_run": [
+    "venv/bin/python -m py_compile src/api/admin_prospecting.py",
+    "venv/bin/python -m pytest tests/test_partnership_leads_routes_contract.py tests/test_admin_prospecting_audit_payload.py",
+    "git diff --check -- src/api/admin_prospecting.py",
+    "scripts/deploy_backend_src.sh",
+    "Production API count verification"
+  ],
+  "artifacts_used": [
+    "raw/delete_mistaken_engelsa_leads.json",
+    "raw/delete_self_leads.json",
+    "raw/final_counts_after_self_cleanup.json"
+  ]
+}
