@@ -6272,6 +6272,20 @@ def _build_social_post_publish_rehearsal(cursor: Any, post: dict[str, Any]) -> d
                 "message_en": str(metadata.get("queue_preflight_message_en") or decision.get("reason_label_en") or "").strip(),
             }
         )
+    rules_readiness = evaluate_social_post_publish_rules(cursor, post)
+    for item in rules_readiness:
+        if str(item.get("severity") or "").strip() != "blocking" or bool(item.get("ready")):
+            continue
+        code = str(item.get("status") or "").strip()
+        if any(str(blocker.get("code") or "") == code for blocker in blockers):
+            continue
+        blockers.append(
+            {
+                "code": code,
+                "message_ru": str(item.get("message") or item.get("label") or "").strip(),
+                "message_en": str(item.get("message_en") or item.get("message") or item.get("label") or "").strip(),
+            }
+        )
     ready_for_execution = not blockers and str(decision.get("dispatch_action") or "") in {
         "publish_api",
         "create_supervised_task",
@@ -6296,6 +6310,7 @@ def _build_social_post_publish_rehearsal(cursor: Any, post: dict[str, Any]) -> d
         "browser_final_click_allowed": False,
         "stop_before_final_publish": bool(decision.get("stop_before_final_publish")) or platform in BROWSER_OR_MANUAL_PLATFORMS,
         "dispatch_decision": decision,
+        "rules_readiness": rules_readiness,
         "blockers": blockers,
         "summary_ru": _publish_rehearsal_summary(ready_for_execution, decision, blockers, True),
         "summary_en": _publish_rehearsal_summary(ready_for_execution, decision, blockers, False),
@@ -9300,6 +9315,17 @@ def _social_goal_execution_detail(
 
 def _queue_preflight_block(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     platform = str(post.get("platform") or "").strip()
+    rules_readiness = evaluate_social_post_publish_rules(cursor, post)
+    blocking_rule = next(
+        (
+            item
+            for item in rules_readiness
+            if str(item.get("severity") or "").strip() == "blocking" and not bool(item.get("ready"))
+        ),
+        {},
+    )
+    if blocking_rule:
+        return _queue_preflight_block_from_readiness(blocking_rule)
     if platform not in API_PLATFORMS:
         return {}
     business_id = str(post.get("business_id") or "").strip()
@@ -9322,6 +9348,218 @@ def _queue_preflight_block(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "queue_preflight_message_en": _channel_readiness_message(platform, status, False),
         },
     }
+
+
+def evaluate_social_post_publish_rules(cursor: Any, post: dict[str, Any]) -> list[dict[str, Any]]:
+    platform = str(post.get("platform") or "").strip()
+    text = str(post.get("platform_text") or post.get("base_text") or "").strip()
+    text_len = len(text)
+    has_media = _social_post_has_selected_media(cursor, post)
+    rules: list[dict[str, Any]] = []
+    if platform == "telegram":
+        if has_media and text_len > 1024:
+            rules.append(
+                _platform_rule_readiness(
+                    platform,
+                    ready=False,
+                    status="caption_too_long",
+                    label="Сократите подпись",
+                    message="Telegram ограничивает подпись к фото или видео 1024 символами.",
+                    action_label="Сократить текст",
+                    severity="blocking",
+                )
+            )
+        elif not has_media and text_len > 4096:
+            rules.append(
+                _platform_rule_readiness(
+                    platform,
+                    ready=False,
+                    status="text_too_long",
+                    label="Сократите текст",
+                    message="Telegram принимает текстовый пост до 4096 символов.",
+                    action_label="Сократить текст",
+                    severity="blocking",
+                )
+            )
+        else:
+            rules.append(
+                _platform_rule_readiness(
+                    platform,
+                    ready=True,
+                    status="content_ready",
+                    label="Готово к отправке",
+                    message="Telegram готов принять этот текст.",
+                    action_label="Запланировать отправку",
+                    severity="info",
+                )
+            )
+    elif platform == "instagram":
+        if not has_media:
+            rules.append(
+                _platform_rule_readiness(
+                    platform,
+                    ready=False,
+                    status="media_required",
+                    label="Нужно фото",
+                    message="Instagram не публикует текст без изображения.",
+                    action_label="Добавить фото",
+                    severity="blocking",
+                )
+            )
+        elif not _social_post_media_is_instagram_ready(post):
+            rules.append(
+                _platform_rule_readiness(
+                    platform,
+                    ready=False,
+                    status="media_format_required",
+                    label="Нужен другой формат",
+                    message="Для Instagram лучше выбрать JPEG-фото подходящего формата.",
+                    action_label="Заменить фото",
+                    severity="blocking",
+                )
+            )
+        else:
+            rules.append(
+                _platform_rule_readiness(
+                    platform,
+                    ready=True,
+                    status="content_ready",
+                    label="Готово к отправке",
+                    message="Фото и текст подходят для Instagram.",
+                    action_label="Запланировать отправку",
+                    severity="info",
+                )
+            )
+    elif platform in {"yandex_maps", "two_gis"}:
+        rules.append(
+            _platform_rule_readiness(
+                platform,
+                ready=True,
+                status="manual_or_supervised",
+                label="Будет размещено вручную",
+                message=f"{platform_label(platform)} размещается через контролируемое или ручное действие.",
+                action_label="Открыть размещение",
+                severity="info",
+            )
+        )
+    elif platform in {"google_business"} and not has_media:
+        rules.append(
+            _platform_rule_readiness(
+                platform,
+                ready=True,
+                status="media_recommended",
+                label="Фото лучше добавить",
+                message="Для карт лучше добавить фото входа, интерьера, услуги или результата.",
+                action_label="Выбрать фото",
+                severity="warning",
+            )
+        )
+    elif platform in {"vk", "facebook"} and not has_media:
+        rules.append(
+            _platform_rule_readiness(
+                platform,
+                ready=True,
+                status="media_optional",
+                label="Фото можно добавить",
+                message=f"{platform_label(platform)} может принять текст, но фото повысит заметность публикации.",
+                action_label="Выбрать фото",
+                severity="info",
+            )
+        )
+    return rules
+
+
+def _platform_rule_readiness(
+    platform: str,
+    *,
+    ready: bool,
+    status: str,
+    label: str,
+    message: str,
+    action_label: str,
+    severity: str,
+) -> dict[str, Any]:
+    return {
+        "schema": "localos_social_platform_rule_readiness_v1",
+        "platform": str(platform or "").strip(),
+        "platform_label": platform_label(platform),
+        "ready": bool(ready),
+        "status": str(status or "").strip(),
+        "label": str(label or "").strip(),
+        "message": str(message or "").strip(),
+        "message_en": str(message or "").strip(),
+        "action_label": str(action_label or "").strip(),
+        "severity": str(severity or "info").strip(),
+        "user_fixable": str(severity or "").strip() == "blocking",
+    }
+
+
+def _queue_preflight_block_from_readiness(readiness: dict[str, Any]) -> dict[str, Any]:
+    platform = str(readiness.get("platform") or "").strip()
+    status = str(readiness.get("status") or "platform_rule_blocked").strip()
+    message = str(readiness.get("message") or readiness.get("label") or "").strip()
+    review_statuses = {"caption_too_long", "text_too_long", "media_required", "media_format_required"}
+    return {
+        "status": "needs_review" if status in review_statuses else "needs_manual_publish",
+        "last_error": message or _queue_preflight_error(platform, status),
+        "metadata_json": {
+            "queue_preflight_status": status,
+            "provider_status": status,
+            "queue_preflight_ready": False,
+            "platform_rule_readiness": readiness,
+            "queue_preflight_message_ru": message,
+            "queue_preflight_message_en": str(readiness.get("message_en") or message).strip(),
+            "queue_preflight_action_label": str(readiness.get("action_label") or "").strip(),
+        },
+    }
+
+
+def _social_post_has_selected_media(cursor: Any, post: dict[str, Any]) -> bool:
+    media = post.get("media_json")
+    if isinstance(media, list) and len(media) > 0:
+        return True
+    if isinstance(media, dict) and bool(media):
+        return True
+    if not hasattr(cursor, "execute"):
+        return False
+    business_id = str(post.get("business_id") or "").strip()
+    item_id = str(post.get("content_plan_item_id") or "").strip()
+    post_id = str(post.get("id") or "").strip()
+    target_ids = [value for value in (post_id, item_id) if value]
+    if not business_id or not target_ids:
+        return False
+    try:
+        cursor.execute(
+            """
+            SELECT 1
+            FROM photo_asset_usage_events
+            WHERE business_id = %s
+              AND usage_type = 'publication'
+              AND target_id = ANY(%s)
+            LIMIT 1
+            """,
+            (business_id, target_ids),
+        )
+        return bool(cursor.fetchone())
+    except Exception:
+        return False
+
+
+def _social_post_media_is_instagram_ready(post: dict[str, Any]) -> bool:
+    media = post.get("media_json")
+    if not media:
+        return True
+    items = media if isinstance(media, list) else [media]
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        mime_type = str(item.get("mime_type") or item.get("content_type") or "").lower()
+        url = str(item.get("url") or item.get("original_url") or item.get("public_url") or "").lower()
+        if mime_type and mime_type not in {"image/jpeg", "image/jpg"}:
+            return False
+        if not mime_type and url and not (url.endswith(".jpg") or url.endswith(".jpeg")):
+            return False
+    return True
 
 
 def _queue_preflight_error(platform: str, status: str) -> str:

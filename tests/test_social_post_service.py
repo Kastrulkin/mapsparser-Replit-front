@@ -2883,6 +2883,100 @@ def test_queue_preflight_allows_ready_api_channel(monkeypatch):
     assert _queue_preflight_block(object(), {"business_id": "biz-1", "platform": "telegram"}) == {}
 
 
+def test_queue_preflight_blocks_instagram_without_photo_before_connection_check(monkeypatch):
+    monkeypatch.setattr(
+        social_post_service,
+        "_build_channel_readiness",
+        lambda cursor, business_id: [
+            {
+                "platform": "instagram",
+                "ready": True,
+                "status": "ready",
+            }
+        ],
+    )
+
+    block = _queue_preflight_block(
+        object(),
+        {
+            "id": "post-ig",
+            "business_id": "biz-1",
+            "platform": "instagram",
+            "platform_text": "Пост для Instagram",
+            "media_json": [],
+        },
+    )
+
+    assert block["status"] == "needs_review"
+    assert block["metadata_json"]["queue_preflight_status"] == "media_required"
+    assert block["metadata_json"]["queue_preflight_action_label"] == "Добавить фото"
+    assert "Instagram не публикует текст без изображения" in block["last_error"]
+
+
+def test_queue_preflight_blocks_telegram_long_media_caption(monkeypatch):
+    monkeypatch.setattr(
+        social_post_service,
+        "_build_channel_readiness",
+        lambda cursor, business_id: [
+            {
+                "platform": "telegram",
+                "ready": True,
+                "status": "ready",
+            }
+        ],
+    )
+
+    block = _queue_preflight_block(
+        object(),
+        {
+            "id": "post-tg",
+            "business_id": "biz-1",
+            "platform": "telegram",
+            "platform_text": "а" * 1025,
+            "media_json": [{"url": "https://example.com/photo.jpg", "mime_type": "image/jpeg"}],
+        },
+    )
+
+    assert block["status"] == "needs_review"
+    assert block["metadata_json"]["queue_preflight_status"] == "caption_too_long"
+    assert block["metadata_json"]["queue_preflight_action_label"] == "Сократить текст"
+    assert "1024" in block["last_error"]
+
+
+def test_publish_rehearsal_returns_platform_rules_without_external_write(monkeypatch):
+    monkeypatch.setattr(
+        social_post_service,
+        "_preview_dispatch_decision",
+        lambda cursor, post: {
+            "dispatch_action": "publish_api",
+            "external_publish": True,
+            "scheduled_for": post.get("scheduled_for"),
+            "approved_at": post.get("approved_at"),
+            "metadata_json": {},
+        },
+    )
+
+    rehearsal = social_post_service._build_social_post_publish_rehearsal(
+        object(),
+        {
+            "id": "post-ig",
+            "business_id": "biz-1",
+            "platform": "instagram",
+            "publish_mode": "api",
+            "status": "approved",
+            "approved_at": "2026-07-02T10:00:00+00:00",
+            "platform_text": "Пост",
+            "media_json": [],
+        },
+    )
+
+    assert rehearsal["external_publish_performed"] is False
+    assert rehearsal["provider_write_performed"] is False
+    assert rehearsal["ready_for_execution"] is False
+    assert rehearsal["rules_readiness"][0]["status"] == "media_required"
+    assert rehearsal["blockers"][0]["code"] == "media_required"
+
+
 def test_queue_social_post_api_preflight_fallback_does_not_create_supervised_ledger(monkeypatch):
     monkeypatch.setattr(social_post_service, "DatabaseManager", FakeQueueFallbackDB)
     monkeypatch.setattr(social_post_service, "ensure_social_post_tables", lambda cursor: None)

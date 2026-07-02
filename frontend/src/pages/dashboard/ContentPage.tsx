@@ -91,6 +91,17 @@ type SocialPost = {
   last_error?: string;
   publish_mode?: string;
   external_account_id?: string;
+  metadata_json?: {
+    platform_rule_readiness?: {
+      label?: string;
+      message?: string;
+      action_label?: string;
+      severity?: string;
+      status?: string;
+    };
+    queue_preflight_action_label?: string;
+    queue_preflight_message_ru?: string;
+  };
 };
 
 type SocialSummary = {
@@ -287,15 +298,54 @@ const getChannelStatusLabel = (status?: string) => {
 };
 
 const getChannelNextAction = (post: SocialPost) => {
+  const readiness = getPostPlatformReadiness(post);
+  if (readiness?.message) return readiness.message;
   const normalized = String(post.status || '').toLowerCase();
   if (normalized === 'approved') return 'Можно планировать. Подключение проверим перед публикацией.';
   if (normalized === 'queued') return 'Запланировано. Если канал не подключён, появится понятный шаг.';
   return getPostNextAction(post);
 };
 
+const getPostPlatformReadiness = (post: SocialPost) => {
+  const metadata = post.metadata_json || {};
+  const readiness = metadata.platform_rule_readiness;
+  if (readiness && typeof readiness === 'object') return readiness;
+  const message = String(metadata.queue_preflight_message_ru || '').trim();
+  const actionLabel = String(metadata.queue_preflight_action_label || '').trim();
+  if (message || actionLabel) {
+    return {
+      label: actionLabel || 'Что сделать',
+      message,
+      action_label: actionLabel,
+      severity: 'blocking',
+    };
+  }
+  return null;
+};
+
+const getChannelStatusDisplay = (post: SocialPost) => {
+  const readiness = getPostPlatformReadiness(post);
+  const normalized = String(post.status || '').toLowerCase();
+  if (readiness?.label && !['queued', 'published'].includes(normalized)) return readiness.label;
+  return getChannelStatusLabel(post.status);
+};
+
+const getPrimaryBlockedPostMessage = (posts: SocialPost[]) => {
+  const blockedPost = posts.find((post) => isAutomaticSendBlockedStatus(post.status) || isPlatformRuleBlocked(post));
+  if (!blockedPost) return '';
+  const readiness = getPostPlatformReadiness(blockedPost);
+  if (readiness?.message) return readiness.message;
+  return String(blockedPost.last_error || '').trim();
+};
+
 const isAutomaticSendBlockedStatus = (status?: string) => {
   const normalized = String(status || '').toLowerCase();
   return normalized === 'needs_manual_publish' || normalized === 'failed';
+};
+
+const isPlatformRuleBlocked = (post: SocialPost) => {
+  const readiness = getPostPlatformReadiness(post);
+  return Boolean(readiness && String(readiness.severity || '').toLowerCase() === 'blocking');
 };
 
 const isQueuedOrHandledStatus = (status?: string) => {
@@ -355,6 +405,11 @@ const getStatusClassName = (label: string) => {
   if (label === 'Готово') return 'bg-emerald-50 text-emerald-700 ring-emerald-100';
   if (label === 'Исправить') return 'bg-red-50 text-red-700 ring-red-100';
   if (label === 'Нужно проверить') return 'bg-amber-50 text-amber-800 ring-amber-100';
+  if (label === 'Нужно фото') return 'bg-amber-50 text-amber-800 ring-amber-100';
+  if (label === 'Фото лучше добавить') return 'bg-amber-50 text-amber-800 ring-amber-100';
+  if (label === 'Нужен другой формат') return 'bg-red-50 text-red-700 ring-red-100';
+  if (label === 'Сократите текст') return 'bg-red-50 text-red-700 ring-red-100';
+  if (label === 'Сократите подпись') return 'bg-red-50 text-red-700 ring-red-100';
   if (label === 'Нужно разместить') return 'bg-orange-50 text-orange-800 ring-orange-100';
   if (label === 'Не удалось') return 'bg-red-50 text-red-700 ring-red-100';
   return 'bg-slate-100 text-slate-600 ring-slate-200';
@@ -866,10 +921,10 @@ export function ContentPage() {
           setError('Сначала нажмите «Подготовить каналы». После этого LocalOS создаст варианты для площадок.');
         } else if (posts.some((post) => String(post.status || '').toLowerCase() === 'needs_review')) {
           setError('Сначала проверьте текст и нажмите «Утвердить». После этого появится расписание.');
-        } else if (posts.some((post) => isAutomaticSendBlockedStatus(post.status))) {
-          const blockedPosts = posts.filter((post) => isAutomaticSendBlockedStatus(post.status));
+        } else if (posts.some((post) => isAutomaticSendBlockedStatus(post.status) || isPlatformRuleBlocked(post))) {
+          const blockedPosts = posts.filter((post) => isAutomaticSendBlockedStatus(post.status) || isPlatformRuleBlocked(post));
           const blockedLabels = blockedPosts.map((post) => platformShortLabel(post)).filter(Boolean).join(', ');
-          const firstError = String(blockedPosts[0]?.last_error || '').trim();
+          const firstError = getPrimaryBlockedPostMessage(blockedPosts);
           setError(
             firstError
               ? `${blockedLabels || 'Каналы'} не готовы: ${firstError}`
@@ -887,12 +942,12 @@ export function ContentPage() {
         body: JSON.stringify({ post_ids: postIds }),
       });
       const queuedPosts = Array.isArray(response.posts) ? response.posts : [];
-      const blockedPosts = queuedPosts.filter((post: SocialPost) => isAutomaticSendBlockedStatus(post.status));
+      const blockedPosts = queuedPosts.filter((post: SocialPost) => isAutomaticSendBlockedStatus(post.status) || isPlatformRuleBlocked(post));
       const handledPosts = queuedPosts.filter((post: SocialPost) => isQueuedOrHandledStatus(post.status));
       await loadSocialPosts(currentPlan.id);
       if (blockedPosts.length > 0) {
         const blockedLabels = blockedPosts.map((post: SocialPost) => platformShortLabel(post)).filter(Boolean).join(', ');
-        const firstError = String(blockedPosts[0]?.last_error || '').trim();
+        const firstError = getPrimaryBlockedPostMessage(blockedPosts);
         setError(
           firstError
             ? `${blockedLabels || 'Каналы'} не готовы: ${firstError}`
@@ -1763,7 +1818,8 @@ export function ContentPage() {
                       hasPosts ? (
                         <div id={channelDetailsId} className="mt-2 space-y-2">
                           {selectedPosts.map((post) => {
-                            const statusLabel = getChannelStatusLabel(post.status);
+                            const statusLabel = getChannelStatusDisplay(post);
+                            const readiness = getPostPlatformReadiness(post);
                             return (
                               <div key={post.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
                                 <div className="flex items-center justify-between gap-2">
@@ -1773,6 +1829,24 @@ export function ContentPage() {
                                   </span>
                                 </div>
                                 <div className="mt-1 text-xs leading-5 text-slate-500">{getChannelNextAction(post)}</div>
+                                {readiness?.action_label && isPlatformRuleBlocked(post) ? (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (readiness.action_label === 'Добавить фото' || readiness.action_label === 'Заменить фото' || readiness.action_label === 'Выбрать фото') {
+                                        setSection('media');
+                                        setSelectedItemId('');
+                                      } else {
+                                        navigate('/dashboard/settings');
+                                      }
+                                    }}
+                                    className="mt-2 h-8 rounded-xl bg-white px-3 text-xs"
+                                  >
+                                    {readiness.action_label}
+                                  </Button>
+                                ) : null}
                               </div>
                             );
                           })}
