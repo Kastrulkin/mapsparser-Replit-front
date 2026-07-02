@@ -468,6 +468,7 @@ export function ContentPage() {
   const [mediaCoverage, setMediaCoverage] = useState<MediaCoverage | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaUploadProgress, setMediaUploadProgress] = useState('');
   const [mediaAnalyzingId, setMediaAnalyzingId] = useState('');
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
   const [mediaError, setMediaError] = useState('');
@@ -697,32 +698,58 @@ export function ContentPage() {
     }
   };
 
-  const uploadMediaPhoto = async (file?: File) => {
-    if (!currentBusinessId || !file) return;
+  const uploadSingleMediaPhoto = async (file: File) => {
+    if (!currentBusinessId) throw new Error('Бизнес не выбран');
+    const formData = new FormData();
+    formData.append('business_id', currentBusinessId);
+    formData.append('file', file);
+    const token = window.localStorage.getItem('auth_token') || '';
+    const response = await fetch(`${API_URL}/api/media-intelligence/photos/upload`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || data.message || `Не удалось загрузить ${file.name}`);
+    }
+    return data.photo as PhotoAsset;
+  };
+
+  const uploadMediaPhotos = async (fileList?: FileList | null) => {
+    if (!currentBusinessId || !fileList || fileList.length === 0) return;
+    const files = Array.from(fileList).filter((file) => file.type.startsWith('image/'));
+    if (files.length === 0) {
+      setMediaError('Выберите фото для загрузки');
+      return;
+    }
     setMediaUploading(true);
     setMediaError('');
     setMediaActionMessage('');
+    setMediaUploadProgress('');
+    const uploaded: PhotoAsset[] = [];
+    const failed: string[] = [];
     try {
-      const formData = new FormData();
-      formData.append('business_id', currentBusinessId);
-      formData.append('file', file);
-      const token = window.localStorage.getItem('auth_token') || '';
-      const response = await fetch(`${API_URL}/api/media-intelligence/photos/upload`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: formData,
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || data.message || 'Не удалось загрузить фото');
+      for (const [index, file] of files.entries()) {
+        setMediaUploadProgress(`Загружаем ${index + 1} из ${files.length}`);
+        try {
+          const photo = await uploadSingleMediaPhoto(file);
+          uploaded.push(photo);
+          setMediaUploadProgress(`Анализируем ${index + 1} из ${files.length}`);
+          await analyzeMediaAsset(photo?.id);
+        } catch (uploadError) {
+          failed.push(`${file.name}: ${uploadError instanceof Error ? uploadError.message : 'не удалось загрузить'}`);
+        }
       }
-      setMediaActionMessage('Фото загружено. Анализируем, чтобы подбирать его к публикациям.');
       await loadMediaAssets();
-      await analyzeMediaAsset(data.photo?.id);
-    } catch (uploadError) {
-      setMediaError(uploadError instanceof Error ? uploadError.message : 'Не удалось загрузить фото');
+      if (failed.length > 0) {
+        setMediaError(`Загружено ${uploaded.length} из ${files.length}. Не удалось: ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '...' : ''}`);
+      } else {
+        setMediaActionMessage(`Загружено и проанализировано фото: ${uploaded.length}. LocalOS учтёт их в рекомендациях к публикациям.`);
+      }
     } finally {
       setMediaUploading(false);
+      setMediaUploadProgress('');
       if (mediaUploadInputRef.current) {
         mediaUploadInputRef.current.value = '';
       }
@@ -1412,9 +1439,10 @@ export function ContentPage() {
               <input
                 ref={mediaUploadInputRef}
                 type="file"
+                multiple
                 accept="image/jpeg,image/png,image/webp"
                 className="hidden"
-                onChange={(event) => { void uploadMediaPhoto(event.target.files?.[0]); }}
+                onChange={(event) => { void uploadMediaPhotos(event.target.files); }}
               />
               <Button
                 type="button"
@@ -1423,7 +1451,7 @@ export function ContentPage() {
                 className="rounded-2xl bg-slate-950 px-5 py-6 text-white hover:bg-slate-800"
               >
                 {mediaUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                {mediaUploading ? 'Загружаем...' : 'Загрузить фото'}
+                {mediaUploading ? mediaUploadProgress || 'Загружаем...' : 'Загрузить фото'}
               </Button>
               <Button type="button" variant="outline" onClick={loadMediaAssets} disabled={mediaLoading} className="rounded-2xl px-5 py-6">
                 {mediaLoading ? 'Обновляем...' : 'Обновить'}
@@ -1564,9 +1592,9 @@ export function ContentPage() {
                 <p className="mt-2 text-sm leading-6 text-slate-500">
                   Лучше всего подойдут вход, интерьер, процесс, результат, команда и живые детали. Анализ списывает 2 кредита за новое фото.
                 </p>
-                <Button type="button" onClick={() => mediaUploadInputRef.current?.click()} className="mt-5 rounded-2xl bg-slate-950 px-5 py-6 text-white hover:bg-slate-800">
-                  <Upload className="mr-2 h-4 w-4" />
-                  Загрузить фото
+                <Button type="button" onClick={() => mediaUploadInputRef.current?.click()} disabled={mediaUploading} className="mt-5 rounded-2xl bg-slate-950 px-5 py-6 text-white hover:bg-slate-800 disabled:bg-slate-300">
+                  {mediaUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  {mediaUploading ? mediaUploadProgress || 'Загружаем...' : 'Загрузить фото'}
                 </Button>
               </div>
               <div className="grid grid-cols-3 gap-3 opacity-70">
