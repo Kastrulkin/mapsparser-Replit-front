@@ -912,6 +912,35 @@ def test_school_fallback_general_intro_does_not_pick_random_single_course():
     assert "Английский для дошкольников. Общий пост" not in text
 
 
+def test_school_business_facts_do_not_mark_intellectum_as_cultural_space(monkeypatch):
+    monkeypatch.setattr(content_plan_service, "_fetch_site_description", lambda _url: "")
+
+    facts = _content_plan_business_facts(
+        (
+            "Intellectum Space and School",
+            "Батуми",
+            "school",
+            "education",
+            "школа, курсы, дети",
+            "",
+            "Образовательное пространство для детей и подростков",
+            "",
+            "",
+        ),
+        {
+            "theme": "Гимназия 1–4 класс: английский и естественные науки",
+            "goal": "Раскрыть направление для младших школьников",
+        },
+    )
+
+    assert facts["is_school_space"] is True
+    assert facts["is_cultural_space"] is False
+    assert _content_plan_draft_needs_fallback(
+        "Гимназия 1–4 класс помогает младшим школьникам учиться в понятной системе.",
+        {**facts, "services": "- Гимназия 1–4 класс (английский и естественные науки)"},
+    ) is False
+
+
 def test_fetch_seo_keywords_isolated_returns_empty_list_when_optional_loader_fails(monkeypatch):
     class FakeCursor:
         pass

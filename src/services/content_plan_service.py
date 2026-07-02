@@ -3408,6 +3408,26 @@ def _fallback_draft_text(
         lines.append("Details, booking, and current offers can be checked through the contacts in the listing.")
         return " ".join(lines)
 
+    if bool(facts.get("is_school_space")) or "school" in lower_identity or "школ" in lower_identity or "образован" in lower_identity:
+        city = str(facts.get("city") or "").strip()
+        city_text = f" в {city}" if city else ""
+        if _is_general_school_intro_topic(theme, goal):
+            directions = ", ".join(service_names[:5]) if service_names else "подготовка к школе, английский, программирование и творческие направления"
+            return (
+                f"{business_name}{city_text} — школа и пространство для детей и подростков. "
+                f"В карточке можно выбрать направление под возраст и интересы ребёнка: {directions}. "
+                "Такой формат помогает поддерживать учебный ритм, развивать самостоятельность и пробовать новые навыки. "
+                "Подробности и запись можно уточнить по контактам в карточке."
+            )
+        directions = service_names[0] if service_names else theme
+        focus = theme.rstrip(".")
+        goal_sentence = _school_goal_sentence(goal)
+        return (
+            f"{business_name}{city_text}: {focus}. "
+            f"В фокусе публикации — {directions}. {goal_sentence} "
+            "Подробности и запись можно уточнить по контактам в карточке."
+        )
+
     if bool(facts.get("is_cultural_space")):
         objective_key = _normalize_publication_objective(item)
         directions = ", ".join(service_names[:5])
@@ -3438,26 +3458,6 @@ def _fallback_draft_text(
         return (
             f"{theme.rstrip('.') + '.' if theme else 'Ближайшие события появятся в карточке.'} "
             "Дата, время и запись — в карточке."
-        )
-
-    if "school" in lower_identity or "школ" in lower_identity or "образован" in lower_identity:
-        city = str(facts.get("city") or "").strip()
-        city_text = f" в {city}" if city else ""
-        if _is_general_school_intro_topic(theme, goal):
-            directions = ", ".join(service_names[:5]) if service_names else "подготовка к школе, английский, программирование и творческие направления"
-            return (
-                f"{business_name}{city_text} — школа и пространство для детей и подростков. "
-                f"В карточке можно выбрать направление под возраст и интересы ребёнка: {directions}. "
-                "Такой формат помогает поддерживать учебный ритм, развивать самостоятельность и пробовать новые навыки. "
-                "Подробности и запись можно уточнить по контактам в карточке."
-            )
-        directions = service_names[0] if service_names else theme
-        focus = theme.rstrip(".")
-        goal_sentence = _school_goal_sentence(goal)
-        return (
-            f"{business_name}{city_text}: {focus}. "
-            f"В фокусе публикации — {directions}. {goal_sentence} "
-            "Подробности и запись можно уточнить по контактам в карточке."
         )
 
     if (
@@ -3589,6 +3589,18 @@ def _content_plan_business_facts(business_row: Any, item: dict[str, Any]) -> dic
     theme = str(item.get("theme") or "").strip()
     goal = str(item.get("goal") or "").strip()
     combined = " ".join([name, business_type, industry, categories, description, site_description, theme, goal]).lower()
+    normalized_combined = combined.replace("ё", "е")
+    school_markers = [
+        "school",
+        "школ",
+        "образован",
+        "обучен",
+        "курс",
+        "гимназ",
+        "academy",
+        "детский центр",
+        "детей и подростков",
+    ]
     cultural_markers = [
         "культур",
         "галере",
@@ -3597,12 +3609,12 @@ def _content_plan_business_facts(business_row: Any, item: dict[str, Any]) -> dic
         "концерт",
         "пространств",
         "практикум",
-        "образован",
         "событи",
         "выстав",
     ]
     ice_markers = ["лед", "лёд", "коньк", "катани", "зимн", "каток на льду"]
-    is_cultural_space = any(marker in combined for marker in cultural_markers)
+    is_school_space = any(marker in normalized_combined for marker in school_markers)
+    is_cultural_space = not is_school_space and any(marker in normalized_combined for marker in cultural_markers)
     return {
         "name": name,
         "city": city,
@@ -3613,6 +3625,7 @@ def _content_plan_business_facts(business_row: Any, item: dict[str, Any]) -> dic
         "description": description,
         "site": website_url,
         "site_description": site_description,
+        "is_school_space": is_school_space,
         "is_cultural_space": is_cultural_space,
         "ice_markers": ice_markers,
     }
@@ -3663,7 +3676,14 @@ def _build_content_plan_business_fact_block(facts: dict[str, Any]) -> str:
             "Не выводи сферу деятельности из одного названия: опирайся на тип, категории, описание, тему и цель."
         ),
     ]
-    if facts.get("is_cultural_space"):
+    if facts.get("is_school_space"):
+        lines.append(
+            "Фактическая сфера: образовательное пространство / школа для детей и подростков."
+        )
+        lines.append(
+            "Пиши про обучение, навыки, занятия, возраст и выбор направления только по фактам из темы, цели и услуг."
+        )
+    elif facts.get("is_cultural_space"):
         lines.append(
             "Фактическая сфера: культурное пространство для лекций, концертов, камерных событий, практикумов и встреч."
         )
