@@ -417,6 +417,79 @@ const getStatusClassName = (label: string) => {
 
 const getSelectedCount = (values: Record<string, boolean>) => Object.values(values).filter(Boolean).length;
 
+const PLATFORM_LABELS: Record<string, string> = {
+  facebook: 'Facebook',
+  google_business: 'Google',
+  instagram: 'Instagram',
+  telegram: 'Telegram',
+  two_gis: '2ГИС',
+  vk: 'VK',
+  yandex_maps: 'Яндекс',
+};
+
+const PHOTO_CATEGORY_LABELS: Record<string, string> = {
+  atmosphere: 'Атмосфера',
+  child: 'Ребёнок',
+  children: 'Дети',
+  classroom: 'Учебное пространство',
+  details: 'Детали',
+  entrance: 'Вход и вывеска',
+  event: 'Событие',
+  events: 'События',
+  facade: 'Фасад',
+  interior: 'Интерьер',
+  interior_team_process: 'Интерьер, команда и процесс',
+  people: 'Люди',
+  process: 'Процесс',
+  product: 'Продукт',
+  result: 'Результат',
+  service: 'Услуга',
+  signboard: 'Вывеска',
+  team: 'Команда',
+  unknown: 'Фото бизнеса',
+  workspace: 'Рабочее пространство',
+};
+
+const PHOTO_CATEGORY_PART_LABELS: Record<string, string> = {
+  atmosphere: 'атмосфера',
+  child: 'ребёнок',
+  children: 'дети',
+  classroom: 'учебное пространство',
+  details: 'детали',
+  entrance: 'вход',
+  event: 'событие',
+  events: 'события',
+  facade: 'фасад',
+  interior: 'интерьер',
+  people: 'люди',
+  process: 'процесс',
+  product: 'продукт',
+  result: 'результат',
+  service: 'услуга',
+  signboard: 'вывеска',
+  team: 'команда',
+  workspace: 'рабочее пространство',
+};
+
+const formatPlatformLabel = (value?: string) => {
+  const key = String(value || '').trim();
+  if (!key) return 'Канал';
+  return PLATFORM_LABELS[key] || key;
+};
+
+const formatPhotoCategoryLabel = (value?: string) => {
+  const key = String(value || '').trim();
+  if (!key) return 'Фото бизнеса';
+  if (PHOTO_CATEGORY_LABELS[key]) return PHOTO_CATEGORY_LABELS[key];
+  const parts = key
+    .split('_')
+    .map((part) => PHOTO_CATEGORY_PART_LABELS[part] || part)
+    .filter(Boolean);
+  if (parts.length === 0) return 'Фото бизнеса';
+  if (parts.length === 1) return parts[0][0]?.toUpperCase() + parts[0].slice(1);
+  return `${parts.slice(0, -1).join(', ')} и ${parts[parts.length - 1]}`.replace(/^./, (letter) => letter.toUpperCase());
+};
+
 const groupPostsByItem = (posts: SocialPost[]) => {
   return posts.reduce<Record<string, SocialPost[]>>((acc, post) => {
     const itemId = String(post.content_plan_item_id || '').trim();
@@ -428,11 +501,7 @@ const groupPostsByItem = (posts: SocialPost[]) => {
 
 const platformShortLabel = (post: SocialPost) => {
   const label = String(post.platform_label || post.platform || '').trim();
-  if (!label) return 'Канал';
-  if (label === 'google_business') return 'Google';
-  if (label === 'yandex_maps') return 'Яндекс';
-  if (label === 'two_gis') return '2ГИС';
-  return label;
+  return formatPlatformLabel(label);
 };
 
 export function ContentPage() {
@@ -1545,7 +1614,7 @@ export function ContentPage() {
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-sm font-semibold text-slate-950">{asset.category && asset.category !== 'unknown' ? asset.category : 'Фото бизнеса'}</div>
+                        <div className="text-sm font-semibold text-slate-950">{formatPhotoCategoryLabel(asset.category)}</div>
                         <div className="mt-1 text-xs text-slate-500">
                           {status === 'analyzed' ? 'Проанализировано' : status === 'analysis_failed' ? 'Не удалось проанализировать' : 'Ждёт анализа'}
                         </div>
@@ -1557,7 +1626,7 @@ export function ContentPage() {
                     <div className="flex flex-wrap gap-1.5">
                       {(asset.suitable_platforms || []).slice(0, 4).map((platform) => (
                         <span key={platform} className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
-                          {platform}
+                          {formatPlatformLabel(platform)}
                         </span>
                       ))}
                       {(asset.suitable_platforms || []).length === 0 ? (
@@ -1749,7 +1818,7 @@ export function ContentPage() {
                           <div className="mt-1 leading-6">{selectedPhoto.why || mediaRecommendation?.message || 'Фото подходит по задаче публикации.'}</div>
                           <div className="mt-3 flex flex-wrap gap-2">
                             <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">качество {Math.round(Number(selectedPhoto.quality_score || 0))}%</span>
-                            {selectedPhoto.category ? <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">{selectedPhoto.category}</span> : null}
+                            {selectedPhoto.category ? <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">{formatPhotoCategoryLabel(selectedPhoto.category)}</span> : null}
                           </div>
                           <Button
                             type="button"
@@ -1776,7 +1845,7 @@ export function ContentPage() {
                                   <ImageIcon className="h-5 w-5" />
                                 </div>
                               )}
-                              <div className="mt-1 truncate text-[11px] font-medium text-slate-600">{asset.category || 'фото'}</div>
+                              <div className="mt-1 truncate text-[11px] font-medium text-slate-600">{formatPhotoCategoryLabel(asset.category)}</div>
                             </div>
                           ))}
                         </div>
