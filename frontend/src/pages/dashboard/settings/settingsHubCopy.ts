@@ -171,8 +171,8 @@ const en: SettingsHubCopy = {
       description: 'Review channel setup and keep external publishing behind preview and approval.',
     },
     integrations: {
-      title: 'Integration details',
-      description: 'Open the detailed setup controls for this service.',
+      title: 'Connections',
+      description: 'Sign in to Google, VK, or Meta, or add the Maton API key.',
     },
   },
   routes: {
@@ -184,8 +184,8 @@ const en: SettingsHubCopy = {
     diagnosticsSectionDescription: 'Use this when a setup looks wrong or a support export is needed.',
     publicationsTitle: 'Publication channels',
     publicationsDescription: 'Connect channels that can receive approved content from LocalOS.',
-    integrationsTitle: 'Integration details',
-    integrationsDescription: 'Manage connected accounts, CRM providers, and service keys.',
+    integrationsTitle: 'Connections',
+    integrationsDescription: 'Sign in to Google, VK, or Meta, or add the Maton API key.',
     backToHub: 'Back to hub',
   },
 };
@@ -294,8 +294,8 @@ const ru: SettingsHubCopy = {
       description: 'Проверьте каналы и оставьте публикации за предпросмотром и подтверждением.',
     },
     integrations: {
-      title: 'Детали интеграции',
-      description: 'Откройте подробные настройки выбранного сервиса.',
+      title: 'Подключения',
+      description: 'Войдите в Google, VK или Meta либо добавьте API-ключ Maton.',
     },
   },
   routes: {
@@ -307,8 +307,8 @@ const ru: SettingsHubCopy = {
     diagnosticsSectionDescription: 'Используйте этот раздел, если настройка выглядит неправильно или нужен экспорт для поддержки.',
     publicationsTitle: 'Каналы публикаций',
     publicationsDescription: 'Подключите каналы, куда LocalOS сможет отправлять согласованный контент.',
-    integrationsTitle: 'Детали интеграций',
-    integrationsDescription: 'Управляйте подключенными аккаунтами, CRM и сервисными ключами.',
+    integrationsTitle: 'Подключения',
+    integrationsDescription: 'Войдите в Google, VK или Meta либо добавьте API-ключ Maton.',
     backToHub: 'Назад к готовности',
   },
 };
