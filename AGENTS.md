@@ -61,27 +61,26 @@ Older SQLite/systemd-first instructions were superseded by Docker/Postgres workf
 Legacy details remain in git history and must not be used as default runbook.
 
 ## 8.1 Current Platform State
-- OpenClaw ↔ LocalOS integration roadmap (Phase 1–9) is complete in the current codebase.
-- Canonical agent map is documented in `docs/AGENT_REGISTRY_V1.md` (agent roles, capability map, orchestrator boundaries, Ralph loop).
-- Partnership implementation backlog is documented in `docs/PARTNERSHIP_ROADMAP_BACKLOG.md` (Sprints P0–P10).
-- Live platform includes:
-  - Action Orchestrator + policy + ledger + human-in-the-loop
-  - M2M callbacks with retry/DLQ/outbox
-  - diagnostics / support export / recovery flows
-  - unified audit timeline
-  - Telegram control surface with approval flow
-  - unified multi-channel router (Telegram / WhatsApp / Maton bridge)
-- The next product track is supervised outreach (lead sourcing, shortlist approval, draft approval, controlled sending).
-- Current outreach stage:
-  - Sprint 0 foundation is live (secure admin prospecting, async jobs, Yandex-first sourcing).
-  - Sprint 1 uses the existing `prospectingleads` table as a transitional shortlist UI; do not introduce a second lead table unless the user asks for the full outreach schema migration.
-  - Sprint 1.5 / Sprint 2A also uses the same transitional table for contact selection:
-    - statuses `selected_for_outreach` and `channel_selected`
-  - Sprint 2B / 2C / 2D extend the same transitional flow:
-    - first-message drafts + manual approval
-    - capped send batches (`10/day`) + manual batch approval
-    - manual per-item delivery status + inbound reactions + baseline outcome classification
-    - `selected_channel` is stored on `prospectingleads`
+- LocalOS is now an operating layer for local businesses, not only a map-card SEO analyzer.
+- Current user-facing work areas include:
+  - map/card audit, parser queue, external account snapshots, public audit/sales-room pages;
+  - services management, SEO suggestions, service menu compression/grouping, internal apply/rollback and soft archive through `userservices.is_active`;
+  - external reviews, unanswered-review queues, reply drafts, bulk reply draft generation and manual publication helpers;
+  - news drafts, social post drafts, content plans, content history and public articles/cases/documents;
+  - finance dashboard, KPI history, import previews, finance apply approvals and average-ticket work;
+  - partnerships and supervised outreach through `prospectingleads`: search/import, shortlist, channel selection, draft offers, approval, capped batches, delivery status and reactions;
+  - Operator as the governed work center across `/dashboard/operator` and Telegram owner-bot commands;
+  - agent product cockpit with compiled workflows, preview/preflight, provider routes, approvals, run journal and observability.
+- OpenClaw / Action Orchestrator remains the execution boundary for policy, approval, billing, audit, callbacks, retry/DLQ/outbox and recovery.
+- Canonical agent docs:
+  - product model: `PRODUCT.md`;
+  - agent map: `docs/AGENT_REGISTRY_V1.md`;
+  - compiled agent architecture: `docs/LOCALOS_AGENT_ARCHITECTURE_V1.md`;
+  - AI-agent overview: `docs/agents/index.md`;
+  - tool/capability boundaries: `docs/agents/tool-registry.md` and `docs/agents/capabilities.md`;
+  - partnership backlog: `docs/PARTNERSHIP_ROADMAP_BACKLOG.md`.
+- Do not introduce a second lead table for current supervised outreach unless the user explicitly asks for the full outreach schema migration; the transitional flow uses `prospectingleads`.
+- Do not claim autonomous provider writes. Review replies, news/social posts, outreach sends, payments, destructive changes, access changes and bulk mutations require the documented approval/manual-publication boundary.
 
 ## 9. Terminal Sessions (tmux)
 - Use `tmux` for all long-running operations on server and local machine.

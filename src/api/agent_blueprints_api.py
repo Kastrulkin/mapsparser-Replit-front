@@ -2981,7 +2981,8 @@ def create_agent_blueprint_version(blueprint_id: str):
     if error_response:
         return error_response
     payload = request.get_json(silent=True) or {}
-    if not str(payload.get("goal") or "").strip():
+    rebuild_from_description = bool(payload.get("rebuild_from_description"))
+    if not rebuild_from_description and not str(payload.get("goal") or "").strip():
         return _json_error("goal is required", 400, "VALIDATION_ERROR")
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -2989,9 +2990,36 @@ def create_agent_blueprint_version(blueprint_id: str):
         blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
         if access_error:
             return access_error
-        version = _insert_version(cursor, str(blueprint.get("id")), payload, user_data)
+        version_payload = payload
+        if rebuild_from_description:
+            description = str(
+                payload.get("description")
+                or blueprint.get("description")
+                or blueprint.get("latest_goal")
+                or blueprint.get("name")
+                or ""
+            ).strip()
+            if not description:
+                return _json_error("description is required for rebuild", 400, "VALIDATION_ERROR")
+            draft = build_agent_blueprint_draft(
+                description,
+                str(payload.get("category") or blueprint.get("category") or "custom"),
+                use_ai=bool(payload.get("use_ai_compiler")),
+                business_id=str(blueprint.get("business_id") or ""),
+                user_id=_user_id(user_data),
+            )
+            version_payload = draft.get("version_payload") if isinstance(draft.get("version_payload"), dict) else {}
+            metadata = {
+                **_blueprint_metadata(blueprint),
+                **(draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}),
+            }
+            metadata["builder"] = str(metadata.get("builder") or "rebuild_from_description_v1")
+            metadata["rebuild_reason"] = str(payload.get("reason") or "manual_rebuild_from_dashboard")
+            _save_blueprint_metadata(cursor, str(blueprint.get("id")), metadata)
+        version = _insert_version(cursor, str(blueprint.get("id")), version_payload, user_data)
         db.conn.commit()
-        active_version_id = str(_blueprint_metadata(blueprint).get("active_version_id") or "").strip()
+        refreshed_blueprint = _load_blueprint(cursor, str(blueprint.get("id") or ""))
+        active_version_id = str(_blueprint_metadata(refreshed_blueprint or blueprint).get("active_version_id") or "").strip()
         active_version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), active_version_id) if active_version_id else None
         return jsonify(
             {
@@ -3001,6 +3029,7 @@ def create_agent_blueprint_version(blueprint_id: str):
                 "active_version": _normalize_json_row(active_version) if active_version else None,
                 "version_event": None,
                 "activation_state": "candidate_requires_preview",
+                "rebuild_applied": rebuild_from_description,
             }
         ), 201
     except Exception:

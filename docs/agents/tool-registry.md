@@ -131,6 +131,9 @@ Current Operator review intake uses these tool boundaries:
 | `social_post.draft.generate` | `paid_compute` | `draft_only` plus `write_internal` | saves a LocalOS post draft; no external publication | charges credits after successful draft generation |
 | `services.optimization_suggest` | `paid_compute` | `draft_only` plus `write_internal` | saves proposed names/descriptions in service-regeneration job tables; does not update active services | charges credits per saved suggestion |
 | `services.optimization_apply` | `approval_required` | `write_internal` | applies saved service suggestions to `userservices` after explicit confirmation; no external publication | no extra charge after suggestion generation |
+| `services.compression_draft` | `free_cached` or `paid_compute` when AI grouping is used | `draft_only` plus `write_internal` | creates/updates a LocalOS grouping draft; does not change active services | no charge unless AI grouping/generation is used |
+| `services.compression_apply` | `approval_required` | `write_internal` | creates confirmed combined LocalOS services and softly archives original rows; no external publication | no extra charge after draft generation |
+| `services.compression_rollback` | `approval_required` | `write_internal` | hides created combined services and restores archived source rows in LocalOS | no external provider write |
 | `operator.content_history.read` | `free_cached` | `read_only` | lists LocalOS review reply drafts, news drafts, social post drafts, service suggestions, and applied service changes by type | no charge |
 | `reviews.reply_draft.copy` | `manual_external` | `read_only` | user copies text manually | no extra charge after draft generation |
 | `reviews.reply_draft.mark_manual_published` | `manual_external` | `write_internal` | marks the LocalOS draft as published manually after the user copied and pasted it outside LocalOS | no extra charge after draft generation |

@@ -25,6 +25,42 @@ LocalOS turns fragmented local-business operations into supervised workflows:
 
 LocalOS is not a fully autonomous publishing, payment, or messaging system. It can automate preparation and controlled execution, but user-facing docs and UI must not imply unsupported autonomous sends, destructive changes, third-party writes, or payments without approval.
 
+## What LocalOS Does Today
+
+LocalOS is useful when a business owner asks practical operating questions:
+
+- Why are map listings not bringing enough calls, routes, bookings, or trust?
+- Which services, descriptions, prices, categories, photos, reviews, and posts need attention?
+- What should be prepared now: reply draft, service rewrite, news draft, partner shortlist, finance import, or map refresh?
+- What changed after the business acted, and what still needs manual review?
+
+Current product surfaces cover:
+
+- map/card audit, parsing, public audit offers, profile quality and freshness signals;
+- services list management, SEO suggestions, service menu compression/grouping, internal apply and rollback;
+- review storage, unanswered-review workflows, reply drafts, bulk draft generation and manual publication helpers;
+- news drafts, social post drafts, content history, content plans and public content materials;
+- finance dashboard, data quality, imports, KPI history, average-ticket work and approved finance apply flows;
+- partnerships and supervised outreach: search/import, shortlist, match reasons, draft offers, approvals, capped batches and delivery status;
+- Operator as a work center across web and Telegram for attention briefs, review/content/service/partnership actions, map refresh jobs and billing visibility;
+- AI agents as compiled workflows with preview, preflight, provider resolution, approvals, run journal and audit.
+
+## Beauty Salon Operating Scenarios
+
+Beauty salons are a primary use case and should be described through business outcomes, not internal modules.
+
+- Low season: LocalOS can inspect card health, service structure, reviews, news cadence and partner opportunities, then prepare a short action queue for the month.
+- Service menu clarity: LocalOS can find duplicates and overloaded service lists, propose groups, let the user edit final categories/names/descriptions, and apply only confirmed internal changes.
+- Average ticket: LocalOS can help package services, show price ranges, expose add-on opportunities and connect service structure with finance/KPI review.
+- Reputation: LocalOS can show unanswered or fresh reviews, prepare reply drafts, and keep external publication manual unless a supported provider write flow is approved.
+- Partnerships: LocalOS can find nearby complementary businesses, prepare fit reasons and draft partner messages, but sending stays behind approval/capped dispatch.
+
+## Product Boundaries
+
+LocalOS may prepare drafts, previews, recommendations, imports, refresh requests, grouped service drafts and internal changes after explicit confirmation. It must not imply that it automatically publishes to maps/social networks, sends outreach/customer messages, pays, deletes, bulk-mutates, or changes third-party systems unless the exact provider write flow is implemented, tested, documented and approved by the user.
+
+Internal LocalOS mutations can still require approval when they hide, archive, overwrite, apply suggestions, import finance data, change access, or affect a business workflow. External publication and communication are always separate from draft generation.
+
 ## AI Agents Canon
 
 An agent is a product object, not a technical workflow editor.
@@ -102,6 +138,20 @@ Every product screen must have one dominant job.
 - `Advanced`: inspect raw runtime details, ledgers, traces, and provider boundaries.
 
 Technical internals can exist, but they must not be the first layer of the product UI.
+
+## Operator Product Model
+
+Operator is the goal-oriented work center above the dashboard. It should answer "what needs my attention and what can LocalOS prepare next?" rather than expose raw modules first.
+
+Operator may surface:
+
+- cached attention briefs and state cards;
+- review reply drafts, news/social drafts and service suggestions;
+- map refresh jobs, reliability states, retry requests and billing visibility;
+- partnership work queues and draft offers;
+- links into detailed dashboard sections for review and manual completion.
+
+Operator is not a separate bot product and not a permission bypass. Web chat, dashboard cards and Telegram owner-bot commands must share the same context, consent, credit, approval, audit and manual-publication boundaries.
 
 ## UI Process
 

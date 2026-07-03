@@ -1776,6 +1776,10 @@ class AgentBlueprintRunner:
         orchestrator = source_output.get("orchestrator") if isinstance(source_output.get("orchestrator"), dict) else {}
         source_result = orchestrator.get("result") if isinstance(orchestrator.get("result"), dict) else {}
         rows = source_result.get("rows") if isinstance(source_result.get("rows"), list) else []
+        source_kind = str(source_result.get("source") or "").strip()
+        if not source_kind and source_step and "google_sheets" in str(source_step.get("step_key") or ""):
+            source_kind = "google_sheets"
+        provider_read_performed = source_result.get("provider_read_performed") is True
         output_artifact = next(
             (
                 artifact
@@ -1809,6 +1813,15 @@ class AgentBlueprintRunner:
         rows_used_for_output_count = int(output_payload.get("items_used") or 0)
         if not rows_used_for_output_count and result_generated:
             rows_used_for_output_count = len(rows[:1]) if rows else 0
+        external_source_verified = (
+            bool(source_step)
+            and source_kind == "google_sheets"
+            and provider_read_performed
+            and len(rows) > 0
+        )
+        chain_verified = external_source_verified and result_generated and rows_used_for_output_count > 0
+        if result_generated and not chain_verified and not blocker_code:
+            blocker_code = "SOURCE_NOT_VERIFIED"
         return {
             "source_step_present": bool(source_step),
             "provider_connected": str(source_preflight.get("status") or "") == "ready",
@@ -1816,9 +1829,13 @@ class AgentBlueprintRunner:
                 bool(source_result)
                 or str((source_step or {}).get("status") or "") in {"completed", "failed", "blocked"}
             ),
+            "provider_read_performed": provider_read_performed,
+            "source_kind": source_kind,
+            "external_source_verified": external_source_verified,
             "rows_returned_count": len(rows),
             "rows_used_for_output_count": rows_used_for_output_count,
             "result_generated": result_generated,
+            "chain_verified": chain_verified,
             "blocker_code": blocker_code,
         }
 

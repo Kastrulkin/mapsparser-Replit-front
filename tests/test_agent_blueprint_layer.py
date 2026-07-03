@@ -668,6 +668,40 @@ def test_agent_compiler_creates_source_destination_blueprint_for_sheets_to_teleg
     assert draft["metadata"]["compiled_validation"]["valid"] is True
 
 
+def test_agent_compiler_creates_source_only_blueprint_for_google_sheet_result_url():
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+
+    draft = compile_agent_blueprint(
+        "Агент открывает таблицу со списком поездок, выбирает одну из поездок 20 апреля 2022 года. "
+        "https://docs.google.com/spreadsheets/d/1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCkyIqY/edit?gid=0#gid=0 "
+        "пишет пост и сохраняет его в контент план на 27 июня 2026 года"
+    )
+    payload = draft["version_payload"]
+
+    assert draft["category"] == "custom"
+    assert draft["metadata"]["custom_process"]["kind"] == "source_to_result_workflow"
+    assert draft["metadata"]["custom_process"]["source"] == "google_sheets.read_rows"
+    assert draft["metadata"]["custom_process"]["target"] == "agent_output_draft"
+    assert draft["metadata"]["compiled_process"]["schema"] == "compiled_source_to_result_workflow_v1"
+    assert payload["mode"] == "source_to_reviewed_result"
+    assert payload["capability_allowlist"] == ["google_sheets.read_rows"]
+    assert payload["required_integration_bindings"][0]["key"] == "google_sheets_read"
+    assert [step["key"] for step in payload["steps"]] == [
+        "read_google_sheets",
+        "prepare_output",
+        "approve_output",
+        "save_result",
+    ]
+    assert payload["steps"][0]["capability"] == "google_sheets.read_rows"
+    assert payload["steps"][0]["provider_action_ref"] == "openclaw.google_sheets.read_rows"
+    assert payload["steps"][1]["artifact_type"] == "agent_output_draft"
+    assert payload["steps"][1]["payload"]["rows_from_step"] == "read_google_sheets"
+    assert payload["approval_policy"]["final_output"] == "manual_approval_required"
+    assert payload["limits"]["autonomous_external_write_allowed"] is False
+    assert draft["metadata"]["compiled_artifact_candidate"]["status"] == "validation_passed"
+    assert draft["metadata"]["compiled_validation"]["valid"] is True
+
+
 def test_compiled_workflow_validation_rejects_write_without_approval():
     from services.agent_compiled_artifact import validate_compiled_artifact_candidate
 
@@ -4669,6 +4703,90 @@ def test_google_sheets_read_rows_capability_uses_native_provider(monkeypatch):
     assert payload["rows"][0]["amount"] == "12000"
 
 
+def test_source_result_chain_requires_real_google_sheets_provider_read():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    runner = AgentBlueprintRunner(cursor=None)
+    source_step = {
+        "step_key": "read_google_sheets",
+        "status": "completed",
+        "output_json": {
+            "capability": "google_sheets.read_rows",
+            "orchestrator": {
+                "result": {
+                    "status": "read_completed",
+                    "source": "inline_rows",
+                    "provider_read_performed": False,
+                    "rows": [{"row_number": 2, "title": "Preview order"}],
+                }
+            },
+        },
+    }
+    artifacts = [
+        {
+            "artifact_type": "telegram_post_draft",
+            "payload_json": {
+                "result": {"draft_text": "Черновик из строки"},
+                "items_used": 1,
+            },
+        }
+    ]
+
+    chain = runner._build_source_result_chain(
+        [source_step],
+        artifacts,
+        {"items": [{"provider": "google_sheets", "status": "ready"}]},
+    )
+
+    assert chain["provider_read_attempted"] is True
+    assert chain["provider_read_performed"] is False
+    assert chain["external_source_verified"] is False
+    assert chain["result_generated"] is True
+    assert chain["chain_verified"] is False
+    assert chain["blocker_code"] == "SOURCE_NOT_VERIFIED"
+
+
+def test_source_result_chain_verifies_result_after_real_google_sheets_read():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    runner = AgentBlueprintRunner(cursor=None)
+    source_step = {
+        "step_key": "read_google_sheets",
+        "status": "completed",
+        "output_json": {
+            "capability": "google_sheets.read_rows",
+            "orchestrator": {
+                "result": {
+                    "status": "read_completed",
+                    "source": "google_sheets",
+                    "provider_read_performed": True,
+                    "rows": [{"row_number": 2, "title": "Real order"}],
+                }
+            },
+        },
+    }
+    artifacts = [
+        {
+            "artifact_type": "telegram_post_draft",
+            "payload_json": {
+                "result": {"draft_text": "Черновик из строки таблицы"},
+                "items_used": 1,
+            },
+        }
+    ]
+
+    chain = runner._build_source_result_chain(
+        [source_step],
+        artifacts,
+        {"items": [{"provider": "google_sheets", "status": "ready"}]},
+    )
+
+    assert chain["provider_read_performed"] is True
+    assert chain["external_source_verified"] is True
+    assert chain["chain_verified"] is True
+    assert chain["blocker_code"] == ""
+
+
 def test_sheet_provider_executor_loads_adapter_from_agent_integration_and_applies(monkeypatch):
     from services import agent_sheet_provider_executor
 
@@ -6641,6 +6759,9 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     create_version_start = api_source.index("def create_agent_blueprint_version")
     create_version_endpoint = api_source[create_version_start:api_source.index("@agent_blueprints_bp.route", create_version_start + 1)]
     assert "candidate_version" in create_version_endpoint
+    assert "rebuild_from_description" in create_version_endpoint
+    assert "build_agent_blueprint_draft" in create_version_endpoint
+    assert "_save_blueprint_metadata" in create_version_endpoint
     assert "_remember_active_version" not in create_version_endpoint
 
     setup_start = api_source.index("def setup_agent_blueprint")
@@ -7305,11 +7426,102 @@ def test_message_result_uses_google_sheets_rows_for_concrete_draft(monkeypatch):
     assert result["analysis_source"] == "deterministic_fallback"
 
 
+def test_runner_propagates_google_sheets_run_rows_into_output_artifact(monkeypatch):
+    import services.agent_blueprint_workspace as workspace
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    monkeypatch.setattr(workspace, "analyze_text_with_gigachat", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("llm offline")))
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Trips agent",
+        "category": "custom",
+        "metadata_json": {
+            "agent_setup": {
+                "workflow_description": "Выбери поездку на 20 апреля и подготовь сообщение владельцу",
+                "processing_rules": "Не придумывать факты",
+                "output_format": "Готовое сообщение для проверки",
+            },
+            "agent_sources": [
+                {
+                    "id": "business-profile",
+                    "source_type": "internal",
+                    "internal_source": "business_profile",
+                    "name": "Профиль бизнеса",
+                }
+            ],
+        },
+    }
+    cursor.tables["agent_runs"]["run1"] = {
+        "id": "run1",
+        "blueprint_id": "bp1",
+        "blueprint_version_id": "ver1",
+        "business_id": "biz1",
+        "status": "running",
+        "input_json": {},
+        "output_json": {},
+        "created_by_user_id": "user1",
+    }
+    cursor.tables["agent_run_steps"]["read-step"] = {
+        "id": "read-step",
+        "run_id": "run1",
+        "step_index": 0,
+        "step_key": "read_google_sheets",
+        "step_type": "capability",
+        "status": "completed",
+        "input_json": {},
+        "output_json": {
+            "capability": "google_sheets.read_rows",
+            "orchestrator": {
+                "success": True,
+                "result": {
+                    "source": "google_sheets",
+                    "provider_read_performed": True,
+                    "rows": [
+                        {
+                            "date": "2026-04-20",
+                            "route": "Tallinn Airport -> Old Town",
+                            "passenger": "Anna",
+                        }
+                    ],
+                },
+            },
+        },
+    }
+
+    payload = AgentBlueprintRunner(cursor)._build_artifact_payload(
+        cursor.tables["agent_runs"]["run1"],
+        {
+            "key": "prepare_output",
+            "artifact_type": "agent_output_draft",
+            "payload": {
+                "category": "custom",
+                "rows_from_step": "read_google_sheets",
+                "format": "Готовое сообщение для проверки",
+            },
+        },
+    )
+
+    assert payload["items_used"] >= 1
+    assert payload["result"]["title"] == "Черновик сообщения"
+    assert payload["result"].get("status") != "needs_source_data"
+    assert "Tallinn Airport -> Old Town" in payload["result"]["draft_text"]
+    assert "business_profile" not in payload["result"]["draft_text"]
+    assert payload["external_dispatch_performed"] is False
+
+
 def test_agents_page_normal_result_panel_does_not_dump_raw_artifact_payload():
     source = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
 
     assert "stringifyBusinessValue(artifact.payload_json)" not in source
     assert "Результат не был сохранён. Запустите тест ещё раз" in source
+    assert "const isBlocked = result.state === 'blocker';" in source
+    assert "const canApprove = Boolean(pendingApproval && !isBlocked);" in source
+    assert "needsScenarioRebuildForSourceResult" in source
+    assert "Пересобрать сценарий" in source
+    assert "Этот агент создан старой версией сценария" in source
 
 
 def test_agent_source_ingestion_extracts_text_pdf_docx_xlsx_and_rejects_unsafe_files():
@@ -9524,6 +9736,20 @@ class FakeCursor:
             return None
         if normalized_query.startswith("update agent_run_steps set output_json"):
             self.tables["agent_run_steps"][params[1]]["output_json"] = json.loads(params[0])
+            return None
+        if normalized_query.startswith("select step_key, output_json from agent_run_steps"):
+            run_id = params[0]
+            self.last_results = [
+                {
+                    "step_key": step["step_key"],
+                    "output_json": step["output_json"],
+                }
+                for step in sorted(
+                    self.tables["agent_run_steps"].values(),
+                    key=lambda item: item["step_index"],
+                )
+                if step["run_id"] == run_id and step["status"] == "completed"
+            ]
             return None
         if normalized_query.startswith("select * from agent_run_steps"):
             run_id = params[0]

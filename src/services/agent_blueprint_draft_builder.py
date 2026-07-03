@@ -326,6 +326,8 @@ def _sources_for_request(category: str, request_text: str) -> List[str]:
     lowered = request_text.lower()
     if category == "documents" and _is_uploaded_document_request(lowered):
         return ["uploaded_documents", "business_profile"]
+    if _is_local_table_request(lowered):
+        return ["uploaded_tables", "manual_context"]
     if _is_browser_monitoring_request(lowered):
         result = ["browser_use", "competitor_websites", "business_profile"]
         if _contains_any(lowered, ["цен", "прайс", "стоимост", "меню", "товар", "услуг"]):
@@ -675,6 +677,43 @@ def _infer_integration_intent(description: str) -> Dict[str, Any]:
             "schedule": schedule,
             "compiled_template_key": "google_sheets_to_telegram_post",
         }
+    has_google_sheet_source = _contains_any(
+        lowered,
+        ["google sheets", "google-таблиц", "google таблиц", "spreadsheet", "docs.google"],
+    ) or (
+        _contains_any(lowered, ["гугл", "google"])
+        and _contains_any(lowered, ["таблиц", "sheet", "sheets"])
+    )
+    has_source_only_result_request = _contains_any(
+        lowered,
+        ["пост", "контент", "сообщен", "результат", "черновик", "выбира", "найд", "строк"],
+    )
+    has_explicit_external_destination = (
+        _contains_any(lowered, ["telegram", "телеграм", "бот"])
+        or _is_localos_finance_monitoring_request(lowered)
+        or (
+            _contains_any(lowered, ["добав", "запиш", "append", "insert"])
+            and _contains_any(lowered, ["строк", "таблиц", "sheet", "sheets", "spreadsheet"])
+        )
+    )
+    if (
+        has_google_sheet_source
+        and has_source_only_result_request
+        and not has_explicit_external_destination
+    ):
+        source = _spec_by_key("google_sheets", SOURCE_SPECS)
+        trigger = "manual.run"
+        schedule = {}
+        if _contains_any(lowered, ["каждый", "ежеднев", "вечер", "утро", "день", "schedule", "daily"]):
+            trigger = "schedule.daily"
+            schedule = {"time": "10:00", "timezone": "business_timezone"}
+        return {
+            "source": source,
+            "trigger": trigger,
+            "schedule": schedule,
+            "compiled_template_key": "google_sheets_to_business_result",
+            "output_kind": "business_result",
+        }
     direct_telegram_delivery = _direct_telegram_delivery_intent(lowered)
     if direct_telegram_delivery:
         return direct_telegram_delivery
@@ -682,6 +721,146 @@ def _infer_integration_intent(description: str) -> Dict[str, Any]:
     destination = _matching_spec(lowered, DESTINATION_SPECS)
     if not source or not destination:
         return {}
+    if (source.get("key") == "telegram" or destination.get("key") == "telegram") and not _contains_any(lowered, ["telegram", "телеграм", "бот", "webhook"]):
+        return {}
+    if source.get("key") == destination.get("key") and source.get("key") != "telegram":
+        return {}
+    action_words = ["связ", "процесс", "workflow", "автомат", "редакт", "добав", "строк", "append", "занос", "созда", "запис", "импорт", "каждый", "ежеднев"]
+    if not _contains_any(lowered, action_words):
+        return {}
+    trigger = str(source.get("trigger") or "")
+    schedule = {}
+    if _contains_any(lowered, ["каждый", "ежеднев", "вечер", "утро", "день", "schedule", "daily"]):
+        trigger = "schedule.daily"
+        schedule = {"time": "19:00", "timezone": "business_timezone"}
+    if not trigger:
+        trigger = "manual.run"
+    return {
+        "source": source,
+        "destination": destination,
+        "trigger": trigger,
+        "schedule": schedule,
+    }
+
+
+def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[str, Any]:
+    source = intent.get("source") if isinstance(intent.get("source"), dict) else {}
+    trigger = str(intent.get("trigger") or "manual.run")
+    schedule = intent.get("schedule") if isinstance(intent.get("schedule"), dict) else {}
+    source_binding = _source_binding(source, trigger)
+    source_step_key = f"read_{source.get('key') or 'source'}"
+    steps = [
+        _source_step(source, trigger),
+        {
+            "key": "prepare_output",
+            "type": "artifact",
+            "title": "Подготовить результат",
+            "artifact_type": "agent_output_draft",
+            "payload": {
+                "status": "draft",
+                "category": "custom",
+                "format": "Готовый результат по задаче: сообщение, список действий или черновик для проверки.",
+                "source_step": source_step_key,
+                "rows_from_step": source_step_key,
+                "external_dispatch_performed": False,
+                "delivery_state": "not_dispatched",
+            },
+        },
+        {
+            "key": "approve_output",
+            "type": "approval",
+            "title": "Подтвердить результат",
+            "approval_type": "final_output",
+        },
+        {
+            "key": "save_result",
+            "type": "artifact",
+            "title": "Сохранить итог",
+            "artifact_type": "agent_final_result",
+            "payload": {
+                "status": "pending_approval",
+                "source_step": source_step_key,
+                "external_dispatch_performed": False,
+                "delivery_state": "not_dispatched",
+            },
+        },
+    ]
+    steps = annotate_steps_with_openclaw_action_refs(steps)
+    read_capability = str(source.get("default_capability") or "")
+    version_payload = {
+        "goal": description,
+        "trigger": trigger,
+        "mode": "source_to_reviewed_result",
+        "inputs_schema": {
+            "type": "object",
+            "properties": {
+                "integration_id": {"type": "string"},
+                "spreadsheet_id": {"type": "string"},
+                "sheet_name": {"type": "string"},
+                "request": {"type": "string"},
+            },
+        },
+        "steps": steps,
+        "capability_allowlist": [read_capability] if read_capability else [],
+        "approval_policy": {
+            "required_for": ["final_output"],
+            "final_output": "manual_approval_required",
+            "first_run": "manual_approval_required",
+            "mode": "review_result_only",
+        },
+        "required_integration_bindings": [source_binding],
+        "limits": {
+            "max_items_per_run": 100,
+            "autonomous_external_write_allowed": False,
+            "autonomous_localos_write_allowed": False,
+        },
+        "output_schema": {
+            "type": "object",
+            "properties": {
+                "source_items": {"type": "array"},
+                "result": {"type": "object"},
+                "approval_required": {"type": "boolean"},
+            },
+        },
+        "side_effects_performed": False,
+    }
+    if schedule:
+        version_payload["schedule"] = schedule
+    sources = [str(source.get("key") or "source"), "business_profile"]
+    metadata = _metadata(description, "custom", sources)
+    metadata["custom_process"] = {
+        "kind": "source_to_result_workflow",
+        "trigger": trigger,
+        "schedule": schedule,
+        "source": read_capability or str(source.get("key") or ""),
+        "target": "agent_output_draft",
+        "runtime": "agent_blueprints",
+        "archetype": f"{source.get('key')}_to_business_result",
+        "binding_status": "requires_user_connection",
+    }
+    metadata["compiled_process"] = {
+        "schema": "compiled_source_to_result_workflow_v1",
+        "source_binding": str(source_binding.get("key") or ""),
+        "runtime_truth": "agent_blueprint_versions.steps_json",
+        "approval_boundary": "final_output",
+    }
+    metadata["compiler_contract"] = {
+        "llm_usage": "design_time_only",
+        "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_llm_required": False,
+        "runtime_executes_compiled_steps": True,
+    }
+    metadata["required_integration_bindings"] = version_payload["required_integration_bindings"]
+    metadata["compiled_artifact_candidate"] = build_compiled_artifact_candidate(version_payload, metadata)
+    metadata["compiled_validation"] = metadata["compiled_artifact_candidate"]["validation"]
+    return {
+        "name": _draft_name(description, "Кастомный рабочий агент"),
+        "category": "custom",
+        "description": description,
+        "metadata": metadata,
+        "version_payload": version_payload,
+        "summary": _summary("custom", sources, steps),
+    }
     if (source.get("key") == "telegram" or destination.get("key") == "telegram") and not _contains_any(lowered, ["telegram", "телеграм", "бот", "webhook"]):
         return {}
     if source.get("key") == destination.get("key") and source.get("key") != "telegram":
@@ -843,6 +1022,8 @@ def _is_localos_finance_monitoring_request(text: str) -> bool:
     if _contains_any(text, ["счёт", "счет", "счета", "счёта", "неоплачен", "просрочен"]):
         return True
     if "предоплат" in text and not _contains_any(text, ["запис", "клиент"]):
+        return True
+    if _contains_any(text, ["оплат", "платеж", "платёж", "транзакц"]) and not _contains_any(text, ["запис", "клиент"]):
         return True
     if _contains_any(text, ["расход", "траты", "трата", "трату", "финанс"]):
         return True
@@ -1266,6 +1447,8 @@ def _outcome_step(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict[s
 def _source_destination_compilation(description: str, intent: Dict[str, Any]) -> Dict[str, Any]:
     source = intent.get("source") if isinstance(intent.get("source"), dict) else {}
     destination = intent.get("destination") if isinstance(intent.get("destination"), dict) else {}
+    if source and not destination:
+        return _source_only_compilation(description, intent)
     trigger = str(intent.get("trigger") or "manual.run")
     schedule = intent.get("schedule") if isinstance(intent.get("schedule"), dict) else {}
     source_binding = _source_binding(source, trigger)

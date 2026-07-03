@@ -12,82 +12,56 @@ The safe pattern is:
 
 ## What Agents Can Do Today
 
-- Read and summarize map/card data through existing audit and business APIs.
-- Generate service optimization suggestions.
-- Draft review replies.
-- Draft news/posts and content plans.
-- Read finance dashboard, data quality, recommendations, history, import previews, and CRM sync previews.
-- Work with partnership leads, matching, drafts, approvals, batches, delivery status, and reactions.
-- Route Telegram/WhatsApp messages through configured AI-agent webhooks.
-- Help superadmin review industry-pattern proposals.
+- Read scoped LocalOS business context: profile, card snapshots, audits, services, reviews, news drafts, finance summaries, locations, partnership leads and approved run history.
+- Prepare drafts and recommendations: service SEO suggestions, service menu grouping, review replies, news/social posts, content plans, finance import previews, partner match reasons and outreach drafts.
+- Request or inspect controlled actions: service suggestion apply, service grouping apply/rollback, finance apply, map refresh jobs, partnership batch approvals and manual-publication status.
+- Use Operator surfaces to answer "what needs attention today?" and route the user to review/content/service/partnership/finance actions.
+- Work through configured Telegram/WhatsApp webhooks and owner-bot control surfaces when the business has the required settings and scopes.
+- Help superadmin review internal proposals such as industry-pattern recalibration, while respecting privileged/admin boundaries.
 
 Every account should also have a visible starter pack of common draft examples.
 See [Popular account examples](popular-account-examples.md) for the canonical
 10 examples and seed/backfill rules.
 
+## Capability Status Overview
+
+Status values used in this documentation:
+
+- `available`: implemented and usable inside the documented LocalOS boundary.
+- `beta`: implemented but provider access, workflow coverage, or production approval may be limited.
+- `internal`: intended for superadmin, maintenance, testing, or controlled runtime surfaces.
+- `planned`: intended product direction, not safe to present as ready.
+- `gap`: explicitly unavailable; agents must not claim it works.
+
+Current capability areas:
+
+| Area | Status | Agent-safe use | Boundary |
+| --- | --- | --- | --- |
+| Card audit and map snapshots | `available/beta` | read existing data, request supported refreshes, summarize gaps | provider coverage varies; paid refresh uses consent/credits |
+| Services optimization | `available` | prepare SEO suggestions and apply confirmed internal changes | no external card write unless separately implemented and approved |
+| Service menu compression | `available` | propose groups, let user edit, apply confirmed LocalOS grouping/rollback | soft archive originals; no automatic external provider writes |
+| Reviews | `available/beta` | read stored reviews, draft replies, bulk draft replies, mark manual publication | direct map publishing is provider-specific and must be documented before use |
+| News and social drafts | `available` | prepare drafts and content history | publication remains manual unless a provider write flow is approved |
+| Finance | `available/beta` | read KPIs, prepare import previews/proposals, apply only approved rows | money/billing/payment-related operations require approval |
+| Partnerships and outreach | `beta` | search/import leads, classify fit, draft offers, prepare approval-ready batches | sending is capped, approved, and never implied by draft generation |
+| Operator | `beta` | use attention briefs, action cards, refresh status, draft helpers and Telegram parity | same approval, billing and audit policy as dashboard workflows |
+| Public MCP server | `gap` | do not claim MCP availability | only documented static manifests/OpenAPI aliases are available |
+
 ## LocalOS Operator
 
-[LocalOS Operator](localos-operator.md) is the beta main control layer above the dashboard. It treats web chat and Telegram as two surfaces for the same governed Operator core.
+[LocalOS Operator](localos-operator.md) is the beta control layer above the dashboard. It treats web chat, action cards and Telegram owner-bot commands as surfaces for the same governed core.
 
-Sprint 1 includes the first cached-data web intent at `/dashboard/operator`: `Что требует моего внимания сегодня?`. Sprint 2 connects the same cached brief to the existing Telegram owner-bot `client_today` flow. Sprint 3 adds proposal-only `paid_action_offers` for paid refresh/generation consent. Sprint 4 persists business-level consent policies and limit settings for those offers. Sprint 5 adds read-only paid action preflight for map refresh. Sprints 6-14 add Operator audit events, a disabled execution boundary, an internal adapter stub, a credit reservation ledger plan, reservation finalization, stale reservation recovery, runtime-flagged reserve/rollback contracts, internal fake execution accounting, and usage-window enforcement for auto limits.
+Operator can currently expose:
 
-Sprints 15-19 add the first practical chat-control workflow: a user can paste a new review into Operator, LocalOS saves it, generates a paid reply draft when credits are available, shows the draft in chat and in the reviews UI, and exposes the same intent through Telegram. The flow charges `review_replies_generate` as paid compute and keeps map publication manual. Sprint 19 adds only a disabled Apify map-refresh enqueue boundary; real provider execution and actual-cost settlement are still later work.
+- cached attention briefs: reviews without replies, pending approvals, content tasks, partnership leads, card/profile freshness and finance warnings;
+- manual review intake, review reply draft generation, bulk draft generation and manual publication helpers;
+- news/social draft generation and content history;
+- services optimization suggestions and confirmed internal apply;
+- read-only map refresh jobs, refresh result summaries, reliability states, retry requests and billing clarity;
+- partnership queues and next-best-action links;
+- Telegram parity for selected owner commands and completed refresh follow-ups.
 
-Sprint 20 improves the web/manual UX for that flow: chat results now expose copy/open/billing actions, credit and publication status are shown separately, and saved LocalOS drafts in the reviews UI make the manual copy-to-map boundary explicit.
-
-Sprints 21-25 add the Operator Inbox and manual completion workflow: the dashboard now has a unified queue for review/content/partnership actions, paid generation offers are shown through one registry, Telegram uses the same manual review intake core, and users can mark a copied review reply as manually published without LocalOS writing to external maps.
-
-Sprint 26 turns the `review_replies_generate` offer into a real paid draft action for already saved unanswered reviews. Operator can prepare up to five LocalOS reply drafts, charge one credit per successfully created draft, show the result in chat, and keep publication to maps as manual copy/paste.
-
-Sprint 27 turns `news_generate` into a real paid compute action. Operator can prepare a news draft from web chat or Inbox, save it into `usernews`, charge one credit after successful generation, and keep publication manual.
-
-Sprint 28 turns `social_post_generate` into the same paid compute/manual-publish pattern for social posts. Operator can prepare a post draft, save it as a LocalOS draft, charge one credit on success, and expose copy/manual publication actions.
-
-Sprint 29 connects `services_optimize` as a paid suggestion workflow. Operator reads saved services, prepares improved names/descriptions, saves suggestions into the existing service-regeneration job tables, charges per saved suggestion, and leaves applying changes to a later confirmed action.
-
-Sprint 30 adds Telegram parity for bulk review reply generation. The owner bot can accept `Подготовь ответы на отзывы`, call the same web Operator service, charge credits through the same path, and return draft answers for manual copy/paste publication.
-
-Sprint 31 adds the Apify actual-cost settlement boundary. When a future parser result includes provider cost, LocalOS can convert it to credits at x10, settle the reservation, and charge any overage through `credit_ledger` without running Apify from Operator itself.
-
-Sprint 32 adds the `Проверь новые отзывы` command. Operator now routes it into the existing read-only map-refresh boundary, reports the latest saved review snapshot when refresh is disabled, and points the user to bulk reply generation after refresh.
-
-Sprint 33 adds the refresh-result lifecycle. After a queued refresh completes and parser output is saved, Operator can check the `parsequeue` job, count newly saved reviews, show `найдено N новых отзывов`, and offer bulk reply generation for unanswered new reviews.
-
-Sprint 34 connects worker-side Apify actual-cost settlement for future paid refresh jobs. When an Apify parse has provider cost and a matching `map_reviews_refresh` reservation tagged with `parsequeue_id`, worker can settle the reservation through the existing accounting service; otherwise it skips settlement and completes parsing normally.
-
-Sprint 35 connects the full paid map-refresh chain. The `Проверь новые отзывы` command now runs preflight, reserves estimated credits, enqueues a read-only `parsequeue` job with the queue id stored in reservation metadata, lets the worker/Apify path settle actual cost, and shows the completed refresh result through Operator. External map publication remains manual and unsupported.
-
-Sprint 36 adds the Operator refresh-jobs UI. The dashboard now shows recent read-only map refresh jobs, statuses, new review snippets, a `Проверить результат` action, and a direct transition to bulk reply draft generation for unanswered new reviews.
-
-Sprint 37 adds Telegram follow-up for the same refresh jobs. The owner bot can show recent refresh statuses/results and point the user to `подготовь ответы на отзывы` without starting new parsing, bypassing credits, or publishing to maps.
-
-Sprint 38 adds the confirmed apply step for service optimization suggestions. Operator can now show saved `services_optimize` suggestions, accept an explicit `Применить предложения` approval, update only LocalOS `userservices`, and mark suggestion items as fixed without extra billing or external provider writes.
-
-Sprint 39 adds normalized Operator content history. The dashboard now separates review reply drafts, news drafts, social post drafts, service suggestions, and applied service changes instead of showing all generated artifacts as the same kind of output.
-
-Sprint 40 polishes paid refresh billing visibility. Refresh results and refresh-job history now show reserved credits, actual charged credits, released credits, overage, provider actual cost, and Apify multiplier when settlement data is available.
-
-Sprint 41 adds the first automatic Telegram follow-up for paid refresh completion. After worker marks a read-only map refresh completed, LocalOS can send the owner a one-time Telegram summary with new-review counts, billing status, and the manual next step. It does not publish replies, send customer messages, or write to map providers.
-
-Sprint 42 adds parse reliability visibility for refresh jobs. Operator now shows retry, captcha, failed, and warning states with user-facing explanations from the existing `parsequeue`/worker status, both in the dashboard and compact Telegram summaries. It does not run new parsing or mutate external providers.
-
-Sprint 43 adds a controlled retry request for failed/captcha/warning refresh jobs. The web Operator can create a new paid read-only refresh job from the previous job URL through the same preflight/reserve/enqueue boundary, while leaving the old failed job unchanged and keeping all map publication manual.
-
-Sprint 44 polishes the retry lifecycle. Retry-created refresh jobs carry `retry_source_queue_id` in reservation metadata, refresh history shows them as a linked attempt, and the web Operator immediately checks the new job after the retry request.
-
-Sprint 45 deepens the parse reliability panel. Refresh jobs now expose technical details such as queue status, retry_after, captcha status, resume flag, warning count, and parsed retry attempt markers, so failed Apify/parse jobs are easier to diagnose before scaling paid refresh.
-
-Sprint 46 adds the worker retry/recovery boundary as backend service code. It does not auto-retry failed jobs; it builds a recovery plan that can ask the user to retry manually, and it can release a failed refresh reservation only through an explicit confirmation and the existing credit finalization boundary.
-
-Sprint 47 adds Telegram retry parity. Owner-bot text commands such as `повтори refresh` route into the same `request_refresh_retry` backend service, reserve credits through the same boundary, and keep publication/manual copy rules unchanged.
-
-Sprint 48 improves user-facing refresh billing clarity. Refresh billing state now includes a plain explanation and a summary of reserved, charged, released, outstanding, overage, provider cost, actual credits, and multiplier; the web Operator renders the explanation near the numbers.
-
-Sprint 49 normalizes the “new reviews found” flow. Completed refresh results now include `result_summary` with the count of new reviews, unanswered reviews, and the primary next action; both web Operator and Telegram render this result before offering reply generation.
-
-The next Operator hardening layer connects the GigaChat fallback router to Telegram and exposes the refresh recovery boundary through runtime API. Telegram still runs explicit rules first; only unsupported Operator-like phrases can spend `operator_intent_classify` credits. Refresh recovery can inspect a failed job and, with explicit confirmation, release outstanding reserved credits without retrying silently or writing to map providers.
-
-The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
+The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy and one audit trail across web and Telegram. It does not publish replies, send customer messages, update third-party maps, bypass credits, or silently retry paid refreshes.
 
 ## What Agents Must Not Assume
 
@@ -97,6 +71,8 @@ The Operator model keeps one context, one permission system, one credit/usage le
 - Publishing and sending require human approval.
 - Review reply publishing to maps is not currently autonomous; LocalOS can prepare drafts, while users copy and publish manually unless a provider write flow is explicitly implemented and approved.
 - Billing and payment operations must not be automated by a general agent.
+- Draft generation does not imply apply/publish/send permission.
+- Internal apply actions can still be risky when they hide, archive, overwrite, import, bill, or bulk-change LocalOS records.
 
 ## Related Docs
 

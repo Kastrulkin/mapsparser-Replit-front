@@ -822,18 +822,17 @@ async def run_smoke(url, screenshot):
         required = [
             "Мои агенты",
             "Создать агента",
-            "Сотрудники",
             "Сегодня",
-            "Работают",
-            "Ждут вас",
-            "События",
-            "Daily responsibilities",
-            "Current status",
-            "Latest completed work",
-            "Next scheduled work",
-            "Requires your attention",
-            "Review Result",
-            "Advanced",
+            "Требует внимания",
+            "Агенты",
+            "Сотрудники",
+            "Что сотрудник делает",
+            "Текущее состояние",
+            "Последняя работа",
+            "Следующая работа",
+            "Требует вашего внимания",
+            "Подтвердить отправку",
+            "Расширенные настройки",
         ]
         body_lower = body.lower()
         missing = [item for item in required if item.lower() not in body_lower]
@@ -848,17 +847,22 @@ async def run_smoke(url, screenshot):
             "provider route",
             "runtime truth",
             "capability не подключена",
+            "Daily responsibilities",
+            "Current status",
+            "Test Result",
+            "Approve",
+            "Reject",
             "ток.",
         ]
         leaked = [item for item in forbidden if item.lower() in body_lower]
 
-        primary_actions = page.get_by_role("button", name="Review Result")
+        primary_actions = page.get_by_role("button", name="Подтвердить отправку")
         if await primary_actions.count() != 1:
             missing.append("exactly one selected employee primary action")
 
         if "Что сотрудник делал раньше" not in body:
             missing.append("embedded employee history story")
-        if "Read Google Sheet" not in body and "Prepare result for owner review" not in body:
+        if "Прочитать Google-таблицу" not in body and "Подготовить результат для проверки владельцем" not in body:
             missing.append("employee responsibilities")
         if "Open" in body:
             leaked.append("old row action label")
@@ -903,7 +907,7 @@ async def run_smoke(url, screenshot):
                 created_body_lower = created_body.lower()
                 if "Google Sheets → Telegram" not in created_body:
                     missing.append("created Google Sheets Telegram agent")
-                if "daily responsibilities" not in created_body_lower or "current status" not in created_body_lower:
+                if "что сотрудник делает" not in created_body_lower or "текущее состояние" not in created_body_lower:
                     missing.append("created agent opened overview")
                 if (
                     "approval_required:" in created_body_lower
@@ -913,8 +917,8 @@ async def run_smoke(url, screenshot):
                     leaked.append("raw payload dump visible in normal agent workspace")
                 if "Агент создан" in created_body:
                     leaked.append("old post-create banner still visible")
-                run_test_buttons = page.get_by_role("button", name="Run Test")
-                connect_buttons = page.get_by_role("button", name=re.compile(r"Connect"))
+                run_test_buttons = page.get_by_role("button", name="Запустить тест")
+                connect_buttons = page.get_by_role("button", name=re.compile(r"Подключить"))
                 if await run_test_buttons.count() + await connect_buttons.count() != 1:
                     missing.append("one created-agent next action")
 

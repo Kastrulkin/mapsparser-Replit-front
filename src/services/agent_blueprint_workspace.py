@@ -734,9 +734,18 @@ def _extract_run_source_items(cursor: Any, run_id: str) -> List[Dict[str, Any]]:
         if source != "google_sheets" and "google_sheets" not in step_key:
             continue
         source_rows = result.get("rows") if isinstance(result.get("rows"), list) else []
+        provider_read_performed = result.get("provider_read_performed") is True
+        source_name = "google_sheets" if provider_read_performed else "inline_rows_preview"
         for source_row in source_rows[:MAX_REVIEW_ITEMS]:
             if isinstance(source_row, dict):
-                items.append({"source_name": "google_sheets", "summary": _row_summary(source_row), "raw": source_row})
+                items.append(
+                    {
+                        "source_name": source_name,
+                        "summary": _row_summary(source_row),
+                        "raw": source_row,
+                        "provider_read_performed": provider_read_performed,
+                    }
+                )
     return items
 
 

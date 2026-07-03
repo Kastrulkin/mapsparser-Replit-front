@@ -9,6 +9,7 @@ This page is a machine-readable human guide. Status values: `available`, `beta`,
 | `card.audit` | `available` | `POST /api/analyze`, `GET /api/business/<business_id>/card-audit`, `GET /api/public/report-offer/<slug>` | Not for read; required for sending report externally |
 | `card.external_accounts` | `available/beta` | `GET/POST /api/business/<business_id>/external-accounts`, `POST /api/business/<business_id>/external-accounts/test` | Required for credential changes |
 | `services.optimize` | `available` | `POST /api/services/optimize`, `GET /api/services/list` | Required before applying/public publishing |
+| `services.compress_menu` | `available` | `POST /api/services/compression/draft`, `PUT /api/services/compression/draft/<id>`, `POST /api/services/compression/draft/<id>/apply`, `POST /api/services/compression/draft/<id>/rollback` | Required before applying grouping/rollback |
 | `services.manage` | `available` | `POST /api/services/add`, `PUT /api/services/update/<service_id>`, `DELETE /api/services/delete/<service_id>` | Required for create/update/delete |
 | `reviews.reply_draft` | `available` | `POST /api/reviews/reply`, `POST /api/review-replies/update` | Required before publishing |
 | `reviews.google_publish` | `beta` | `POST /api/business/<business_id>/google/publish-review-reply` | Required |
@@ -49,6 +50,16 @@ This page is a machine-readable human guide. Status values: `available`, `beta`,
 - Output: suggestions, guardrail results, keyword scoring.
 - Limits: beauty guardrails are industry-specific and must not be applied globally.
 - Approval: required before applying to external cards.
+
+### `services.compress_menu`
+
+- Status: `available`
+- What it does: creates and edits a draft that groups similar services, creates confirmed combined LocalOS services, and softly archives original rows.
+- When to use: service lists are overloaded, duplicated, hard to scan, or contain many variants that should live inside one client-facing service.
+- Inputs: `business_id`, saved `userservices`, user-edited groups, final names, categories, descriptions, prices and action choices.
+- Output: draft grouping, diff, created service ids, archived source ids and rollback state.
+- Limits: v1 changes only LocalOS `userservices`; it does not write grouped services to Yandex, Google, 2GIS or another external provider.
+- Approval: required before apply and rollback.
 
 ### `reviews.reply_draft`
 

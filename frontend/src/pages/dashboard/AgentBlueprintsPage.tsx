@@ -217,9 +217,13 @@ type AgentRunObservability = {
     source_step_present?: boolean;
     provider_connected?: boolean;
     provider_read_attempted?: boolean;
+    provider_read_performed?: boolean;
+    source_kind?: string;
+    external_source_verified?: boolean;
     rows_returned_count?: number;
     rows_used_for_output_count?: number;
     result_generated?: boolean;
+    chain_verified?: boolean;
     blocker_code?: string;
   };
   run_history?: Record<string, unknown>;
@@ -876,13 +880,6 @@ type EmployeeResponsibility = {
   key: string;
   label: string;
   done?: boolean;
-};
-
-type ManagerDaySummary = {
-  workingCount: number;
-  attentionCount: number;
-  todayEvents: number;
-  primaryText: string;
 };
 
 type AgentScenarioStep = {
@@ -2083,6 +2080,20 @@ const getActiveVersionId = (blueprint: AgentBlueprint, details?: AgentBlueprintD
   return typeof active?.id === 'string' ? active.id : '';
 };
 
+const getLatestVersionId = (blueprint: AgentBlueprint, details?: AgentBlueprintDetails | null) => {
+  if (typeof blueprint.latest_version_id === 'string' && blueprint.latest_version_id) {
+    return blueprint.latest_version_id;
+  }
+  const versions = details?.versions || [];
+  const sorted = [...versions].sort((a, b) => (getVersionNumber(b) || 0) - (getVersionNumber(a) || 0));
+  const latest = sorted[0];
+  return typeof latest?.id === 'string' ? latest.id : '';
+};
+
+const getRunnableVersionId = (blueprint: AgentBlueprint, details?: AgentBlueprintDetails | null) => (
+  getActiveVersionId(blueprint, details) || getLatestVersionId(blueprint, details)
+);
+
 const getAgentVoiceName = (blueprint: AgentBlueprint, details?: AgentBlueprintDetails | null) => {
   const detailVoice = details?.active_version?.voice;
   if (typeof detailVoice === 'object' && detailVoice !== null) {
@@ -2472,31 +2483,31 @@ const approvalActionLabels = (approval?: AgentApproval | null) => {
   const approvalType = approval?.approval_type || '';
   if (approvalType === 'external_delivery' || approvalType === 'send_batch') {
     return {
-      approve: 'Разрешить отправку подготовленных сообщений.',
-      reject: 'Не отправлять сообщения и вернуть агенту задачу на правку.',
+      approve: 'Подтвердить отправку',
+      reject: 'Не отправлять',
     };
   }
   if (approvalType === 'final_output') {
     return {
-      approve: 'Разрешить использовать подготовленный результат в следующем шаге агента.',
-      reject: 'Не использовать этот результат и оставить агент остановленным.',
+      approve: 'Разрешить выполнение',
+      reject: 'Не использовать',
     };
   }
   if (approvalType === 'shortlist') {
     return {
-      approve: 'Передать выбранный список в следующий шаг работы.',
-      reject: 'Остановить работу с этим списком и уточнить отбор.',
+      approve: 'Утвердить список',
+      reject: 'Отклонить список',
     };
   }
   if (approvalType === 'drafts') {
     return {
-      approve: 'Принять черновики для следующего шага.',
-      reject: 'Не использовать черновики и отправить их на правку.',
+      approve: 'Подтвердить публикацию',
+      reject: 'Отклонить результат',
     };
   }
   return {
-    approve: 'Разрешить агенту использовать текущий результат и перейти только к следующему безопасному шагу.',
-    reject: 'Не использовать текущий результат и оставить агента остановленным.',
+    approve: 'Разрешить выполнение',
+    reject: 'Не использовать',
   };
 };
 
@@ -2847,7 +2858,7 @@ const buildEmployeePrimaryAction = ({
   if (state === 'waiting_for_review') {
     return {
       kind: 'approve',
-      label: 'Review Result',
+      label: approvalActionLabels(pendingApproval).approve,
       description: 'Проверьте подготовленный результат и решите, можно ли использовать его дальше.',
       targetMode: 'results',
     };
@@ -2856,7 +2867,7 @@ const buildEmployeePrimaryAction = ({
     const label = getMissingConnectorLabel(details);
     return {
       kind: 'connect',
-      label: `Connect ${label}`,
+      label: `Подключить ${label}`,
       description: 'Завершите одно недостающее подключение, чтобы сотрудник получил нужные данные.',
       targetMode: 'connections',
     };
@@ -2864,7 +2875,7 @@ const buildEmployeePrimaryAction = ({
   if (state === 'error') {
     return {
       kind: 'open_result',
-      label: 'Review Problem',
+      label: 'Разобрать проблему',
       description: 'Посмотрите последний бизнес-результат и причину остановки.',
       targetMode: 'results',
     };
@@ -2873,14 +2884,14 @@ const buildEmployeePrimaryAction = ({
     if (latestResult || blueprint.last_run_status === 'completed' || details?.runs?.[0]?.status === 'completed') {
       return {
         kind: 'open_result',
-        label: 'View Last Result',
+        label: 'Открыть последний результат',
         description: 'Откройте последний подготовленный результат сотрудника.',
         targetMode: 'results',
       };
     }
     return {
       kind: 'run_test',
-      label: 'Run Test',
+      label: 'Запустить тест',
       description: 'Запустите безопасную проверку без публикаций и внешних отправок.',
       targetMode: 'results',
     };
@@ -2888,7 +2899,7 @@ const buildEmployeePrimaryAction = ({
   if (state === 'running_test') {
     return {
       kind: 'view_history',
-      label: 'Testing...',
+      label: 'Проверка идёт',
       description: 'Сотрудник выполняет тест. Дождитесь результата.',
       targetMode: 'results',
     };
@@ -2896,7 +2907,7 @@ const buildEmployeePrimaryAction = ({
   if (state === 'needs_attention' && activationVersionId) {
     return {
       kind: 'enable',
-      label: 'Enable Employee',
+      label: 'Включить сотрудника',
       description: 'Включите сотрудника после успешной проверки результата.',
       targetMode: 'overview',
       versionId: activationVersionId,
@@ -2904,7 +2915,7 @@ const buildEmployeePrimaryAction = ({
   }
   return {
     kind: 'view_history',
-    label: 'View Last Result',
+    label: 'Открыть последний результат',
     description: 'Сотрудник работает. Можно открыть последний сохранённый результат.',
     targetMode: 'results',
   };
@@ -2942,50 +2953,29 @@ const buildEmployeeResponsibilities = (
   ].filter(Boolean).join(' ').toLowerCase();
   const items: EmployeeResponsibility[] = [];
   if (text.includes('google sheet') || text.includes('таблиц')) {
-    pushUniqueResponsibility(items, 'Read Google Sheet');
+    pushUniqueResponsibility(items, 'Прочитать Google-таблицу');
   }
   if (text.includes('telegram')) {
-    pushUniqueResponsibility(items, 'Prepare Telegram message');
+    pushUniqueResponsibility(items, 'Подготовить сообщение в Telegram');
   }
   if (text.includes('whatsapp')) {
-    pushUniqueResponsibility(items, 'Read WhatsApp questions');
+    pushUniqueResponsibility(items, 'Разобрать вопросы из WhatsApp');
   }
   if (text.includes('поезд') || text.includes('trip') || text.includes('заказ')) {
-    pushUniqueResponsibility(items, text.includes('поезд') || text.includes('trip') ? 'Find the right trip' : 'Find new orders');
+    pushUniqueResponsibility(items, text.includes('поезд') || text.includes('trip') ? 'Найти нужную поездку' : 'Найти новые заказы');
   }
   if (blueprint.category === 'reviews' || text.includes('отзыв')) {
-    pushUniqueResponsibility(items, 'Prepare review reply draft');
+    pushUniqueResponsibility(items, 'Подготовить черновик ответа на отзыв');
   }
   if (blueprint.category === 'outreach' || text.includes('партн')) {
-    pushUniqueResponsibility(items, 'Prepare shortlist and draft message');
+    pushUniqueResponsibility(items, 'Подготовить список и черновик сообщения');
   }
   if (blueprint.category === 'tables') {
-    pushUniqueResponsibility(items, 'Save structured row');
+    pushUniqueResponsibility(items, 'Сохранить данные в таблицу');
   }
-  pushUniqueResponsibility(items, 'Prepare result for owner review');
-  pushUniqueResponsibility(items, 'Wait for approval before external action');
+  pushUniqueResponsibility(items, 'Подготовить результат для проверки владельцем');
+  pushUniqueResponsibility(items, 'Остановиться перед внешним действием');
   return items.slice(0, 5);
-};
-
-const buildManagerDaySummary = (
-  blueprints: AgentBlueprint[],
-  detailsById: Record<string, AgentBlueprintDetails>,
-): ManagerDaySummary => {
-  const states = blueprints.map((blueprint) => buildEmployeeWorkspaceState(blueprint, detailsById[blueprint.id]));
-  const attentionCount = states.filter((state) => state === 'waiting_for_review' || state === 'needs_connection' || state === 'needs_attention' || state === 'error').length;
-  const workingCount = states.filter((state) => state === 'working').length;
-  const today = buildTodaySummary(blueprints, detailsById);
-  const todayEvents = today.completedRuns + today.preparedArtifacts + today.pendingApprovals + today.failedRuns;
-  return {
-    workingCount,
-    attentionCount,
-    todayEvents,
-    primaryText: attentionCount
-      ? `${attentionCount} ${attentionCount === 1 ? 'сотрудник ждёт вас' : 'сотрудника ждут вас'}`
-      : workingCount
-        ? 'Команда работает спокойно'
-        : 'Команду можно собрать из первого сотрудника',
-  };
 };
 
 const buildEmployeeWorkspaceStory = (
@@ -3005,6 +2995,79 @@ const buildEmployeeWorkspaceStory = (
     attention,
   };
 };
+
+const buildAgentUserMode = (
+  blueprint: AgentBlueprint,
+  details?: AgentBlueprintDetails | null,
+) => {
+  const preview = getBlueprintBuilderPreview(details?.blueprint || blueprint);
+  const text = [
+    blueprint.name,
+    blueprint.description,
+    blueprint.active_goal,
+    blueprint.latest_goal,
+    preview?.understood_task,
+    preview?.trigger,
+  ].filter(Boolean).join(' ').toLowerCase();
+  const oneShot = ['разово', 'один раз', 'one-shot', 'one shot', 'разовая'].some((marker) => text.includes(marker));
+  return oneShot
+    ? {
+      label: 'Разовая задача',
+      flow: 'Запрос → выполнение → результат',
+      description: 'После результата задача считается завершённой.',
+    }
+    : {
+      label: 'Повторяемая работа',
+      flow: 'Описание → проверка → включение → работа',
+      description: 'Сотрудник работает по опубликованному сценарию и ждёт разрешения перед внешними действиями.',
+    };
+};
+
+const buildReasonCard = (
+  state: EmployeeWorkspaceState,
+  pendingApproval?: AgentApproval | null,
+) => {
+  if (state === 'waiting_for_review') {
+    return {
+      title: 'Почему сейчас требуется решение',
+      description: pendingApproval
+        ? explainApproval(pendingApproval)
+        : 'Сотрудник остановился, потому что следующий шаг требует решения владельца.',
+    };
+  }
+  if (state === 'needs_connection') {
+    return {
+      title: 'Почему работа не началась',
+      description: 'Не хватает одного подключения или настройки источника. После подключения можно запустить безопасный тест.',
+    };
+  }
+  if (state === 'running_test') {
+    return {
+      title: 'Что происходит сейчас',
+      description: 'Сотрудник выполняет проверку. Внешние отправки и публикации не выполняются без вашего разрешения.',
+    };
+  }
+  if (state === 'error') {
+    return {
+      title: 'Почему сотрудник остановился',
+      description: 'Последняя проверка не дала готового результата. Посмотрите причину и запустите тест после исправления.',
+    };
+  }
+  if (state === 'working') {
+    return {
+      title: 'Почему можно не вмешиваться',
+      description: 'Сценарий включён, новых решений от владельца сейчас не требуется.',
+    };
+  }
+  return {
+    title: 'Почему следующий шаг именно такой',
+    description: 'Перед включением LocalOS сначала показывает безопасный тест и результат для проверки.',
+  };
+};
+
+const buildBuildConfidenceFacts = (
+  details?: AgentBlueprintDetails | null,
+) => buildConfidenceFacts(details?.activation_gate, []).slice(0, 4);
 
 const stringifyBusinessValue = (value: unknown): string => {
   if (value === null || value === undefined) {
@@ -3156,12 +3219,13 @@ const buildEmployeeTestResult = (
   const resultPayload = findPreparedResultPayload(activeRun, pendingApproval);
   const blocker = isBusinessBlockerPayload(resultPayload);
   const hasStructuredResult = Boolean(resultPayload && !blocker);
-  const approvalText = !resultPayload
-    ? approvalItems.map((item) => `${item.label}: ${item.value}`).join('\n')
-    : '';
   const output = hasStructuredResult
     ? ''
-    : activeRun?.error_text || approvalText || '';
+    : blocker
+      ? ''
+      : activeRun?.status === 'failed'
+        ? 'Проверка остановилась до сохранения результата. Посмотрите причину в настройках и запустите тест ещё раз.'
+        : '';
   const status = activeRun?.status || pendingApproval?.run_status || '';
   const summary = blocker
     ? 'Нужен следующий шаг перед результатом'
@@ -3197,6 +3261,56 @@ const buildEmployeeTestResult = (
     previewItems: approvalItems,
     hasResult: Boolean(activeRun || pendingApproval || output || resultPayload || approvalItems.length),
   };
+};
+
+const versionHasGoogleSheetsReadStep = (version?: Record<string, unknown> | null) => {
+  const versionRecord = recordValue(version);
+  const rawSteps = versionRecord ? versionRecord.steps_json : null;
+  const steps = Array.isArray(rawSteps) ? rawSteps : [];
+  return steps.some((step) => {
+    const stepRecord = recordValue(step);
+    if (!stepRecord) {
+      return false;
+    }
+    const key = String(stepRecord.key || stepRecord.id || '').toLowerCase();
+    const capability = String(stepRecord.capability || stepRecord.capability_key || '').toLowerCase();
+    return key.includes('read_google_sheets') || capability === 'google_sheets.read_rows';
+  });
+};
+
+const detailsHaveGoogleSheetsReadStep = (details?: AgentBlueprintDetails | null) => {
+  if (!details) {
+    return false;
+  }
+  if (versionHasGoogleSheetsReadStep(details.active_version)) {
+    return true;
+  }
+  const latestVersion = [...(details.versions || [])].sort((a, b) => (getVersionNumber(b) || 0) - (getVersionNumber(a) || 0))[0] || null;
+  return versionHasGoogleSheetsReadStep(latestVersion);
+};
+
+const needsScenarioRebuildForSourceResult = (
+  activeRun: AgentRun | null,
+  pendingApproval?: AgentApproval | null,
+  details?: AgentBlueprintDetails | null,
+) => {
+  const resultPayload = findPreparedResultPayload(activeRun, pendingApproval);
+  if (!isBusinessBlockerPayload(resultPayload)) {
+    return false;
+  }
+  const sourceChain = activeRun?.observability?.source_result_chain || {};
+  const text = stringifyBusinessValue(resultPayload).toLowerCase();
+  const mentionsSheets = text.includes('google sheets') || text.includes('таблиц');
+  if (!mentionsSheets) {
+    return false;
+  }
+  if (sourceChain.source_step_present === false) {
+    return true;
+  }
+  if (sourceChain.source_step_present === true) {
+    return false;
+  }
+  return !detailsHaveGoogleSheetsReadStep(details);
 };
 
 const buildEmployeeHistoryStory = (
@@ -4298,6 +4412,7 @@ export const AgentBlueprintsPage = () => {
     setError(null);
     setDecisionNotice(null);
     try {
+      const selectedVersionId = blueprintVersionId || getRunnableVersionId(targetBlueprint, blueprintDetails);
       const runInput = {
         schema: 'localos_agent_preview_input_v1',
         preview_mode: true,
@@ -4309,13 +4424,13 @@ export const AgentBlueprintsPage = () => {
         intent: 'agent_preview',
         business_id: currentBusinessId,
         blueprint_id: targetBlueprint.id,
-        blueprint_version_id: blueprintVersionId || getActiveVersionId(targetBlueprint, blueprintDetails) || '',
+        blueprint_version_id: selectedVersionId,
         external_side_effects_allowed: false,
         approval_required_for_external_actions: true,
         limit: Number(runLimit) > 0 ? Math.min(Number(runLimit), 100) : 30,
       };
       const preflightResponse = await api.post(`/agent-blueprints/${targetBlueprint.id}/preflight`, {
-        blueprint_version_id: blueprintVersionId || undefined,
+        blueprint_version_id: selectedVersionId || undefined,
         input: runInput,
       });
       const preflight = normalizeAgentIntegrationPreflight(preflightResponse.data?.preflight);
@@ -4334,17 +4449,45 @@ export const AgentBlueprintsPage = () => {
         return;
       }
       const response = await api.post(`/agent-blueprints/${targetBlueprint.id}/runs`, {
-        blueprint_version_id: blueprintVersionId || undefined,
+        blueprint_version_id: selectedVersionId || undefined,
         input: runInput,
       });
-      setActiveRun(response.data?.run || null);
+      const nextRun = response.data?.run || null;
+      setActiveRun(nextRun);
       setWorkspaceMode('results');
+      setDecisionNotice(nextRun?.id ? 'Тест запущен заново. Ниже показан свежий результат проверки.' : 'Тест запущен заново.');
       await loadBlueprintDetails(targetBlueprint.id);
       await loadBlueprintReview(targetBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось запустить агента.'));
     } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const rebuildScenarioAndRun = async () => {
+    if (!selectedBlueprint) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    setDecisionNotice(null);
+    try {
+      const description = selectedBlueprint.description || selectedBlueprint.latest_goal || selectedBlueprint.name || '';
+      const response = await api.post(`/agent-blueprints/${selectedBlueprint.id}/versions`, {
+        rebuild_from_description: true,
+        description,
+        category: selectedBlueprint.category || 'custom',
+        reason: 'Rebuilt from dashboard because the previous scenario had no source read step.',
+      });
+      const versionId = response.data?.version?.id || response.data?.candidate_version?.id || '';
+      await loadBlueprintDetails(selectedBlueprint.id);
+      setDecisionNotice('Сценарий пересобран. Запускаю тест по новой версии.');
+      await startRun(selectedBlueprint, versionId);
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось пересобрать сценарий агента.'));
       setActionLoading(false);
     }
   };
@@ -4945,14 +5088,6 @@ export const AgentBlueprintsPage = () => {
     () => buildTodaySummary(blueprints, agentDetailsById),
     [agentDetailsById, blueprints],
   );
-  const managerDaySummary = useMemo(
-    () => buildManagerDaySummary(blueprints, agentDetailsById),
-    [agentDetailsById, blueprints],
-  );
-  const selectedBusinessStatus = useMemo(
-    () => selectedBlueprint ? buildAgentBusinessStatus(selectedBlueprint, blueprintDetails) : null,
-    [blueprintDetails, selectedBlueprint],
-  );
   const openBlueprintMode = (blueprint: AgentBlueprint, mode: AgentWorkspaceMode) => {
     setSelectedBlueprintId(blueprint.id);
     setActiveRun(null);
@@ -4987,6 +5122,7 @@ export const AgentBlueprintsPage = () => {
     [blueprintDetails, selectedBlueprint, selectedPendingApproval],
   );
   const selectedResultRun = activeRun || blueprintDetails?.runs?.[0] || null;
+  const resultNeedsScenarioRebuild = needsScenarioRebuildForSourceResult(selectedResultRun, selectedPendingApproval, blueprintDetails);
   const runEmployeePrimaryAction = () => {
     if (!selectedBlueprint || !selectedEmployeeAction) {
       return;
@@ -5255,21 +5391,6 @@ export const AgentBlueprintsPage = () => {
         </div>
       ) : null}
 
-      {false && currentBusinessId ? (
-        <AgentsTodaySection
-          summary={todaySummary}
-          loading={loading}
-          onOpenToday={() => setWorkspaceMode('results')}
-        />
-      ) : null}
-
-      {false && currentBusinessId ? (
-        <AgentsAttentionInbox
-          items={attentionItems}
-          loading={loading}
-        />
-      ) : null}
-
       {!currentBusinessId ? (
         <DashboardEmptyState
           title="Сначала выберите бизнес"
@@ -5279,7 +5400,29 @@ export const AgentBlueprintsPage = () => {
 
       {currentBusinessId ? (
         <div className="space-y-4">
-          <ManagerDayStrip summary={managerDaySummary} />
+          <AgentsTodaySection
+            summary={todaySummary}
+            loading={loading}
+            onOpenToday={() => setWorkspaceMode('results')}
+          />
+          <AgentsAttentionInbox
+            items={attentionItems}
+            loading={loading}
+          />
+          <section className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Агенты</div>
+                <h2 className="mt-1 text-xl font-semibold leading-7 text-slate-950">ИИ-сотрудники бизнеса</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  Откройте сотрудника, чтобы увидеть его роль, последний результат и один следующий шаг.
+                </p>
+              </div>
+              <span className="inline-flex min-h-8 items-center rounded-full bg-slate-50 px-3 py-1 text-sm font-medium tabular-nums text-slate-600 ring-1 ring-slate-200">
+                {blueprints.length} всего
+              </span>
+            </div>
+          </section>
           <div className="grid gap-5 lg:grid-cols-[20rem_minmax(0,1fr)]">
             <EmployeeAgentsList
               blueprints={blueprints}
@@ -5315,9 +5458,11 @@ export const AgentBlueprintsPage = () => {
                       activeRun={selectedResultRun}
                       pendingApproval={selectedPendingApproval}
                       actionLoading={actionLoading}
+                      needsScenarioRebuild={resultNeedsScenarioRebuild}
                       onApprove={() => decideApproval('approve')}
                       onReject={() => decideApproval('reject')}
                       onRunAgain={() => startRun(selectedBlueprint)}
+                      onRebuildScenario={rebuildScenarioAndRun}
                     />
                   ) : (
                     <EmployeeHistoryPanel
@@ -7944,7 +8089,7 @@ const AgentsTodaySection = ({
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div>
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Сегодня</div>
-        <h2 className="mt-2 text-xl font-semibold leading-7 text-slate-950">Что сделали агенты за последние 24 часа</h2>
+        <h2 className="mt-2 text-xl font-semibold leading-7 text-slate-950">Что сделали ИИ-сотрудники за последние 24 часа</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
           {summary.empty
             ? 'За сегодня агенты ещё ничего не запускали.'
@@ -7958,10 +8103,10 @@ const AgentsTodaySection = ({
       </Button>
     </div>
     <div className="mt-5 grid gap-3 md:grid-cols-4">
-      <TodayFact icon={CheckCircle2} label="Завершено запусков" value={summary.completedRuns} tone="emerald" />
+      <TodayFact icon={CheckCircle2} label="Выполнено работ" value={summary.completedRuns} tone="emerald" />
       <TodayFact icon={FileCheck2} label="Подготовлено результатов" value={summary.preparedArtifacts} tone="sky" />
       <TodayFact icon={ShieldCheck} label="Ждут решения" value={summary.pendingApprovals} tone={summary.pendingApprovals ? 'amber' : 'slate'} />
-      <TodayFact icon={AlertTriangle} label="Ошибок" value={summary.failedRuns} tone={summary.failedRuns ? 'rose' : 'slate'} />
+      <TodayFact icon={AlertTriangle} label="Нужно проверить" value={summary.failedRuns} tone={summary.failedRuns ? 'rose' : 'slate'} />
     </div>
   </section>
 );
@@ -8035,7 +8180,7 @@ const AgentsAttentionInbox = ({
         ))
       ) : (
         <div className="rounded-xl bg-emerald-50 px-3 py-3 text-sm leading-6 text-emerald-950 ring-1 ring-emerald-100">
-          Сейчас нет задач, где нужен человек. Агенты либо работают, либо ждут следующего запуска.
+          Всё работает. Новых действий не требуется.
         </div>
       )}
     </div>
@@ -8221,30 +8366,6 @@ const EmployeeStatusPill = ({ status }: { status: EmployeeStatus }) => (
   </span>
 );
 
-const ManagerDayStrip = ({ summary }: { summary: ManagerDaySummary }) => (
-  <section className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(8rem,0.45fr))]">
-    <div className={cn(
-      'rounded-2xl px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]',
-      summary.attentionCount ? 'bg-amber-50 text-amber-950' : 'bg-white text-slate-950',
-    )}>
-      <div className="text-xs font-semibold uppercase tracking-wide opacity-60">Сегодня</div>
-      <div className="mt-1 text-lg font-semibold leading-7 [text-wrap:balance]">{summary.primaryText}</div>
-    </div>
-    <div className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Работают</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums text-emerald-700">{summary.workingCount}</div>
-    </div>
-    <div className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ждут вас</div>
-      <div className={cn('mt-1 text-2xl font-semibold tabular-nums', summary.attentionCount ? 'text-amber-700' : 'text-slate-700')}>{summary.attentionCount}</div>
-    </div>
-    <div className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">События</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{summary.todayEvents}</div>
-    </div>
-  </section>
-);
-
 const EmployeeAgentsList = ({
   blueprints,
   detailsById,
@@ -8359,7 +8480,7 @@ const EmployeeRunningPanel = ({
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
             <CheckCircle2 className="h-4 w-4" />
-            Working
+            Работает
           </div>
           <h3 className="mt-2 text-xl font-semibold leading-7 text-slate-950 [text-wrap:balance]">{blueprint.name}</h3>
           <p className="mt-2 text-sm leading-6 text-slate-600 [text-wrap:pretty]">
@@ -8394,43 +8515,66 @@ const EmployeeTestResultPanel = ({
   activeRun,
   pendingApproval,
   actionLoading,
+  needsScenarioRebuild = false,
   onApprove,
   onReject,
   onRunAgain,
+  onRebuildScenario,
 }: {
   activeRun: AgentRun | null;
   pendingApproval: AgentApproval | null;
   actionLoading: boolean;
+  needsScenarioRebuild?: boolean;
   onApprove: () => void;
   onReject: () => void;
   onRunAgain: () => void;
+  onRebuildScenario?: () => void;
 }) => {
   const result = buildEmployeeTestResult(activeRun, pendingApproval);
+  const labels = approvalActionLabels(pendingApproval);
+  const isBlocked = result.state === 'blocker';
+  const canApprove = Boolean(pendingApproval && !isBlocked);
+  const canReject = Boolean(pendingApproval);
+  const canRebuildScenario = Boolean(needsScenarioRebuild && onRebuildScenario);
+  const rerunLabel = canRebuildScenario ? 'Пересобрать сценарий' : 'Запустить тест ещё раз';
+  const handleRerun = () => {
+    if (canRebuildScenario && onRebuildScenario) {
+      onRebuildScenario();
+      return;
+    }
+    onRunAgain();
+  };
   return (
     <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Test Result</div>
-          <h2 className="mt-2 text-2xl font-semibold leading-8 text-slate-950 [text-wrap:balance]">{result.summary}</h2>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+        <div className="min-w-0 max-w-4xl">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Результат проверки</div>
+          <h2 className="mt-2 max-w-3xl text-2xl font-semibold leading-8 text-slate-950 [text-wrap:balance]">{result.summary}</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 [text-wrap:pretty]">
             Это только бизнес-результат. Технические подробности находятся в расширенных настройках.
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          {pendingApproval ? (
-            <Button type="button" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onApprove} disabled={actionLoading}>
+        <div className="flex min-w-0 flex-wrap gap-2 xl:justify-end">
+          {canApprove ? (
+            <Button type="button" className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform" onClick={onApprove} disabled={actionLoading}>
               {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-              Approve
+              {labels.approve}
             </Button>
           ) : null}
-          {pendingApproval ? (
-            <Button type="button" variant="outline" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onReject} disabled={actionLoading}>
-              Reject
+          {canReject ? (
+            <Button type="button" variant="outline" className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform" onClick={onReject} disabled={actionLoading}>
+              {labels.reject}
             </Button>
           ) : null}
-          <Button type="button" variant={pendingApproval ? 'outline' : 'default'} className="min-h-10 active:scale-[0.96] transition-transform" onClick={onRunAgain} disabled={actionLoading}>
+          <Button
+            type="button"
+            variant={pendingApproval && !canRebuildScenario ? 'outline' : 'default'}
+            className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform"
+            onClick={handleRerun}
+            disabled={actionLoading}
+          >
             {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-            Run Again
+            {rerunLabel}
           </Button>
         </div>
       </div>
@@ -8444,6 +8588,11 @@ const EmployeeTestResultPanel = ({
             {result.state === 'blocker' ? 'Что мешает продолжить' : 'Подготовленный результат'}
           </div>
           <HumanResultView result={result.resultPayload} />
+          {needsScenarioRebuild ? (
+            <div className="mt-3 rounded-xl bg-white px-3 py-3 text-sm leading-6 text-amber-950 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.18)]">
+              Этот агент создан старой версией сценария: в нём нет шага чтения Google Sheets. Пересоберите сценарий, и LocalOS сразу запустит тест по новой версии.
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -8458,7 +8607,7 @@ const EmployeeTestResultPanel = ({
 
       {!result.resultPayload && !result.output ? (
         <div className="mt-5 rounded-xl bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
-          Результат не был сохранён. Запустите тест ещё раз или откройте расширенные настройки для диагностики.
+          Результат не был сохранён. Запустите тест ещё раз или откройте настройки для диагностики.
         </div>
       ) : null}
 
@@ -8488,7 +8637,7 @@ const EmployeeHistoryPanel = ({
     <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">History</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">История</div>
           <h2 className="mt-2 text-xl font-semibold leading-7 text-slate-950 [text-wrap:balance]">Что сотрудник делал раньше</h2>
         </div>
         <span className="inline-flex min-h-8 items-center rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
@@ -8549,14 +8698,14 @@ const EmployeeResponsibilitiesList = ({ items }: { items: EmployeeResponsibility
 );
 
 const employeeStateTitle = (state: EmployeeWorkspaceState) => ({
-  draft: 'Draft',
-  needs_connection: 'Needs connection',
-  ready_for_test: 'Ready for test',
-  running_test: 'Running test',
-  waiting_for_review: 'Waiting for review',
-  working: 'Working normally',
-  needs_attention: 'Needs attention',
-  error: 'Error',
+  draft: 'Черновик',
+  needs_connection: 'Не хватает подключения',
+  ready_for_test: 'Готов к проверке',
+  running_test: 'Проверка идёт',
+  waiting_for_review: 'Ждёт вашего решения',
+  working: 'Работает',
+  needs_attention: 'Нужно включить',
+  error: 'Ошибка',
 }[state]);
 
 const EmployeeAgentOverviewPanel = ({
@@ -8585,6 +8734,9 @@ const EmployeeAgentOverviewPanel = ({
   const healthy = story.state === 'working' && story.attention.length === 0;
   const problem = story.state === 'error' || story.state === 'waiting_for_review' || story.state === 'needs_connection' || story.state === 'needs_attention';
   const actionDisabled = actionLoading || story.state === 'running_test';
+  const userMode = buildAgentUserMode(blueprint, details);
+  const reasonCard = buildReasonCard(story.state, pendingApproval);
+  const confidenceFacts = buildBuildConfidenceFacts(details);
   return (
     <div className={cn('space-y-4', healthy ? 'max-w-4xl' : 'max-w-5xl')}>
       <section className={cn(
@@ -8597,6 +8749,9 @@ const EmployeeAgentOverviewPanel = ({
               <EmployeeStatusPill status={story.status} />
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
                 {employeeStateTitle(story.state)}
+              </span>
+              <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 ring-1 ring-sky-100">
+                {userMode.label}
               </span>
             </div>
             <h1 className="mt-3 text-3xl font-semibold leading-9 text-slate-950 [text-wrap:balance]">{blueprint.name}</h1>
@@ -8617,32 +8772,54 @@ const EmployeeAgentOverviewPanel = ({
         </div>
       </section>
 
-      <EmployeeWorkspaceSection title="Daily responsibilities">
+      <EmployeeWorkspaceSection title="Что сотрудник делает">
         <EmployeeResponsibilitiesList items={story.responsibilities} />
+        <div className="mt-3 rounded-xl bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-600 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
+          <span className="font-semibold text-slate-800">{userMode.flow}.</span> {userMode.description}
+        </div>
       </EmployeeWorkspaceSection>
 
-      <EmployeeWorkspaceSection title="Current status" tone={story.state === 'error' ? 'error' : problem ? 'attention' : 'quiet'}>
+      <EmployeeWorkspaceSection title="Текущее состояние" tone={story.state === 'error' ? 'error' : problem ? 'attention' : 'quiet'}>
         <div className="text-base font-semibold leading-7 text-slate-950">{story.status.summary}</div>
         <div className="mt-1 text-sm leading-6 opacity-75">{action.description}</div>
       </EmployeeWorkspaceSection>
 
+      <div className={cn('grid gap-4', healthy ? 'lg:grid-cols-1' : 'lg:grid-cols-2')}>
+        <EmployeeWorkspaceSection title="Почему сейчас именно так" tone={healthy ? 'quiet' : problem ? 'attention' : 'default'}>
+          <div className="text-sm font-semibold leading-6 text-slate-950">{reasonCard.title}</div>
+          <div className="mt-1 text-sm leading-6 text-slate-600">{reasonCard.description}</div>
+        </EmployeeWorkspaceSection>
+        {!healthy ? (
+          <EmployeeWorkspaceSection title="Почему этому можно доверять">
+            <div className="grid gap-2">
+              {confidenceFacts.map((fact) => (
+                <div key={fact.key} className="flex items-start gap-2 text-sm leading-6 text-slate-700">
+                  <CheckCircle2 className={cn('mt-1 h-4 w-4 shrink-0', fact.ready ? 'text-emerald-600' : 'text-amber-600')} />
+                  <span>{fact.label}</span>
+                </div>
+              ))}
+            </div>
+          </EmployeeWorkspaceSection>
+        ) : null}
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-2">
-        <EmployeeWorkspaceSection title="Latest completed work" tone={healthy ? 'quiet' : 'default'}>
+        <EmployeeWorkspaceSection title="Последняя работа" tone={healthy ? 'quiet' : 'default'}>
           <div className="text-sm font-semibold leading-6 text-slate-950">{story.latestWork}</div>
         </EmployeeWorkspaceSection>
-        <EmployeeWorkspaceSection title="Next scheduled work" tone={healthy ? 'quiet' : 'default'}>
+        <EmployeeWorkspaceSection title="Следующая работа" tone={healthy ? 'quiet' : 'default'}>
           <div className="text-sm font-semibold leading-6 text-slate-950">{story.nextWork}</div>
         </EmployeeWorkspaceSection>
       </div>
 
       {latestResult ? (
-        <EmployeeWorkspaceSection title="Last result" tone="default">
+        <EmployeeWorkspaceSection title="Последний результат" tone="default">
           <div className="rounded-2xl bg-slate-50 px-4 py-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
             <HumanResultView result={latestResult} />
           </div>
         </EmployeeWorkspaceSection>
       ) : details?.runs?.[0]?.status === 'completed' ? (
-        <EmployeeWorkspaceSection title="Last result" tone="attention">
+        <EmployeeWorkspaceSection title="Последний результат" tone="attention">
           <div className="text-sm leading-6 text-slate-700">
             Сотрудник завершил тест, но не сохранил текст результата. Уточните формат результата и запустите тест ещё раз.
           </div>
@@ -8650,7 +8827,7 @@ const EmployeeAgentOverviewPanel = ({
       ) : null}
 
       {story.attention.length ? (
-        <EmployeeWorkspaceSection title="Requires your attention" tone={story.state === 'error' ? 'error' : 'attention'}>
+        <EmployeeWorkspaceSection title="Требует вашего внимания" tone={story.state === 'error' ? 'error' : 'attention'}>
           <div className="grid gap-2">
             {story.attention.map((item) => (
               <div key={item.key} className="rounded-xl bg-white/70 px-3 py-3 text-sm leading-6 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
@@ -8665,10 +8842,10 @@ const EmployeeAgentOverviewPanel = ({
       <EmployeeHistoryPanel details={details} activeRun={null} />
 
       <details className="rounded-2xl bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.08)]">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-700">Advanced</summary>
+        <summary className="cursor-pointer text-sm font-semibold text-slate-700">Расширенные настройки</summary>
         <div className="mt-4">
           <Button type="button" variant="outline" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onOpenAdvanced}>
-            Advanced Settings
+            Открыть настройки
           </Button>
         </div>
       </details>
@@ -9093,7 +9270,7 @@ const AgentDetailPanel = ({
           {blueprint.name}
         </h2>
         <p className="mt-1 text-sm leading-6 text-slate-600">
-          {humanizeCategory(blueprint.category)} · {latestVersionNumber ? `активная версия v${latestVersionNumber}` : 'нет активной версии'}{voiceName ? ` · голос: ${voiceName}` : ''}
+          {humanizeCategory(blueprint.category)} · {latestVersionNumber ? 'рабочий сценарий опубликован' : 'рабочий сценарий ещё не включён'}{voiceName ? ` · стиль: ${voiceName}` : ''}
         </p>
       </div>
       <div className="mt-4 flex max-w-full flex-wrap gap-2">
@@ -9536,10 +9713,10 @@ const AgentApprovalDecisionPanel = ({
         {onApprove && onReject ? (
           <div className="flex shrink-0 flex-wrap gap-2">
             <Button type="button" onClick={onApprove} disabled={actionLoading}>
-              Принять
+              {labels.approve}
             </Button>
             <Button type="button" variant="outline" onClick={onReject} disabled={actionLoading}>
-              Отклонить
+              {labels.reject}
             </Button>
           </div>
         ) : null}
@@ -12386,6 +12563,28 @@ const AgentRunObservabilityPanel = ({
   const billingEntries = billingLedger.entries || [];
   const delivery = observability.delivery_status || {};
   const sourceChain = observability.source_result_chain || {};
+  const sourceReadValue = sourceChain.provider_read_performed
+    ? 'реально'
+    : sourceChain.provider_read_attempted
+      ? 'пример'
+      : 'не было';
+  const sourceReadHint = sourceChain.provider_read_performed
+    ? `${sourceChain.rows_returned_count || 0} строк из таблицы`
+    : sourceChain.provider_read_attempted
+      ? 'нет подтверждённого чтения Google Sheets'
+      : `${sourceChain.rows_returned_count || 0} строк`;
+  const sourceProofValue = sourceChain.chain_verified
+    ? 'доказано'
+    : sourceChain.result_generated
+      ? 'не доказано'
+      : 'нет результата';
+  const sourceProofHint = sourceChain.chain_verified
+    ? 'источник → результат связан'
+    : sourceChain.blocker_code === 'SOURCE_NOT_VERIFIED'
+      ? 'результат есть, но источник не подтверждён'
+      : sourceChain.result_generated
+        ? 'проверьте источник'
+        : 'результат не собран';
   const ledgerItems = observability.action_ledger?.items || [];
   const domainRequests = observability.domain_requests?.items || [];
   const errors = observability.errors || [];
@@ -12443,8 +12642,8 @@ const AgentRunObservabilityPanel = ({
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Source To Result</div>
         <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <AgentObservabilityMetric icon={Database} label="Источник" value={sourceChain.source_step_present ? 'есть' : 'нет'} hint={sourceChain.provider_connected ? 'подключение готово' : 'подключение не подтверждено'} />
-          <AgentObservabilityMetric icon={ArrowDownUp} label="Чтение" value={sourceChain.provider_read_attempted ? 'проверено' : 'не было'} hint={`${sourceChain.rows_returned_count || 0} строк`} />
-          <AgentObservabilityMetric icon={FileText} label="Использовано" value={String(sourceChain.rows_used_for_output_count || 0)} hint={sourceChain.result_generated ? 'результат собран' : 'результат не собран'} />
+          <AgentObservabilityMetric icon={ArrowDownUp} label="Чтение" value={sourceReadValue} hint={sourceReadHint} />
+          <AgentObservabilityMetric icon={FileText} label="Связка" value={sourceProofValue} hint={sourceProofHint} />
           <AgentObservabilityMetric icon={AlertTriangle} label="Blocker" value={String(sourceChain.blocker_code || 'none')} hint="где оборвалась цепочка" />
         </div>
       </div>
