@@ -255,7 +255,7 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
             Каналы ещё не настроены.
           </div>
         ) : (
-          <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+          <div className="grid min-w-0 gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr))]">
             {channels.map((channel) => (
               <div
                 key={channel.channel_id}
@@ -263,7 +263,7 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
               >
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <div className="break-words text-sm font-semibold leading-6 text-slate-900">{channel.label}</div>
+                    <div className="text-pretty text-sm font-semibold leading-6 text-slate-900">{channel.label}</div>
                     <div className="mt-1 text-xs uppercase tracking-wide text-slate-400">{channel.provider}</div>
                   </div>
                   <div className={`w-fit shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getBadgeClass(channel.status)}`}>
@@ -279,9 +279,9 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
                   </div>
                 </div>
 
-                <div className="mt-4 min-h-[72px] break-words text-sm leading-6 text-slate-600">{channel.detail}</div>
+                <div className="mt-4 min-h-[72px] text-pretty text-sm leading-6 text-slate-600">{channel.detail}</div>
                 {channel.target ? (
-                  <div className="mt-3 break-words text-xs leading-5 text-slate-500">Цель теста: {channel.target}</div>
+                  <div className="mt-3 text-xs leading-5 text-slate-500 [overflow-wrap:anywhere]">Цель теста: {channel.target}</div>
                 ) : null}
 
                 <div className="mt-auto flex flex-col gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">

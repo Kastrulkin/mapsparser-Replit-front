@@ -16,6 +16,13 @@ import {
   DashboardPageHeader,
   DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
+import { featureFlags } from '@/config/featureFlags';
+import {
+  SettingsDiagnosticsPage,
+  SettingsHubPage,
+  SettingsIntegrationsPage,
+  SettingsPublicationsPage,
+} from './settings/SettingsHubPage';
 
 type SettingsBusiness = {
   network_id?: string | number | null;
@@ -25,7 +32,7 @@ type SettingsBusiness = {
   waba_access_token?: string | null;
 };
 
-export const SettingsPage = () => {
+const LegacySettingsPage = () => {
   const location = useLocation();
   const channelsRef = useRef<HTMLElement | null>(null);
   const integrationsRef = useRef<HTMLElement | null>(null);
@@ -219,4 +226,26 @@ export const SettingsPage = () => {
       </DashboardSection>
     </div>
   );
+};
+
+export const SettingsPage = () => {
+  const location = useLocation();
+
+  if (!featureFlags.settingsHubV2) {
+    return <LegacySettingsPage />;
+  }
+
+  if (location.pathname.endsWith('/diagnostics')) {
+    return <SettingsDiagnosticsPage />;
+  }
+
+  if (location.pathname.endsWith('/publications')) {
+    return <SettingsPublicationsPage />;
+  }
+
+  if (location.pathname.endsWith('/integrations')) {
+    return <SettingsIntegrationsPage />;
+  }
+
+  return <SettingsHubPage />;
 };

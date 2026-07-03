@@ -184,7 +184,7 @@ const AppShell = () => {
             <Route path="finance" element={<FinancePage />} />
             <Route path="average-ticket" element={<AverageTicketPage />} />
             <Route path="ai-chat-promotion" element={<AIChatPromotionPage />} />
-            <Route path="settings" element={<SettingsPage />} />
+            <Route path="settings/*" element={<SettingsPage />} />
             <Route path="partnerships" element={<PartnershipSearchPage />} />
             <Route path="operator" element={<OperatorPage />} />
             <Route path="agents" element={<AgentBlueprintsPage />} />
