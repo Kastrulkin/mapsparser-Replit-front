@@ -16,6 +16,7 @@ export type SettingsHubAction = {
 };
 
 export type ModuleState = {
+  key: SettingsHubModuleKey;
   status: HubStatus;
   displayStatus?: HubStatus | 'partially_configured';
   label: string;
@@ -167,6 +168,7 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
 
   const modules: Record<SettingsHubModuleKey, ModuleState> = {
     telegram: {
+      key: 'telegram',
       status: telegramStatus,
       displayStatus: telegramReady ? 'ready' : telegramPartial ? 'partially_configured' : 'not_configured',
       label: 'Telegram',
@@ -180,6 +182,7 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
       meta: { ownerBotConnected, publicationTargetSet },
     },
     whatsapp: {
+      key: 'whatsapp',
       status: whatsappStatus,
       label: 'WhatsApp',
       description: 'Номер и отправка сообщений клиентам.',
@@ -192,6 +195,7 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
       meta: { phoneAdded, wabaConnected },
     },
     google: {
+      key: 'google',
       status: googleStatus,
       label: 'Google Business',
       description: 'Карточка, отзывы и публикации Google.',
@@ -204,6 +208,7 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
       meta: { connected: googleReady },
     },
     vk: {
+      key: 'vk',
       status: vkStatus,
       label: 'VK',
       description: 'Публикации в сообщество после проверки.',
@@ -216,6 +221,7 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
       meta: { connected: vkReady },
     },
     meta: {
+      key: 'meta',
       status: metaStatus,
       label: 'Meta',
       description: 'Instagram и Facebook в контролируемом режиме.',
@@ -228,6 +234,7 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
       meta: { connected: metaStatus === 'ready' },
     },
     crm: {
+      key: 'crm',
       status: crmStatus,
       label: 'CRM',
       description: crmLabel ? `${crmLabel} подключена к финансам.` : 'Записи и оплаты для финансовой модели.',
@@ -240,6 +247,7 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
       meta: { provider: crmLabel },
     },
     maton: {
+      key: 'maton',
       status: matonStatus,
       label: 'Maton.ai',
       description: 'Единый ключ для сторонних сервисов.',

@@ -10,6 +10,7 @@ import WhatsAppConnection from '@/components/WhatsAppConnection';
 import { WABACredentials } from '@/components/WABACredentials';
 import { Button } from '@/components/ui/button';
 import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/DashboardPrimitives';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { newAuth } from '@/lib/auth_new';
 
 import {
@@ -19,6 +20,7 @@ import {
   SettingsDetailSheet,
   SettingsModuleCard,
 } from './SettingsHubComponents';
+import { getSettingsHubCopy, SettingsHubCopy } from './settingsHubCopy';
 import {
   SettingsHubBusiness,
   SettingsHubCrmProvider,
@@ -62,29 +64,23 @@ const fetchJson = async (url: string, options?: RequestInit) => {
 
 const firstArray = (value: unknown) => Array.isArray(value) ? value : [];
 
-const detailTitle = (detail: string | null) => {
-  if (detail === 'telegram') return 'Telegram setup';
-  if (detail === 'whatsapp') return 'WhatsApp setup';
-  if (detail === 'crm') return 'CRM setup';
-  if (detail === 'publications') return 'Publication channels';
-  return 'Integration details';
-};
-
-const detailDescription = (detail: string | null) => {
-  if (detail === 'telegram') return 'Connect the owner bot and choose where approved posts should be sent.';
-  if (detail === 'whatsapp') return 'Add the business number and configure sending credentials when they are available.';
-  if (detail === 'crm') return 'Choose a CRM provider, preview imported data, then confirm when the preview is right.';
-  if (detail === 'publications') return 'Review channel setup and keep external publishing behind preview and approval.';
-  return 'Open the detailed setup controls for this service.';
+const detailCopy = (detail: string | null, copy: SettingsHubCopy) => {
+  if (detail === 'telegram') return copy.details.telegram;
+  if (detail === 'whatsapp') return copy.details.whatsapp;
+  if (detail === 'crm') return copy.details.crm;
+  if (detail === 'publications') return copy.details.publications;
+  return copy.details.integrations;
 };
 
 export const SettingsHubPage = () => {
   const location = useLocation();
+  const { language } = useLanguage();
   const { currentBusinessId, currentBusiness } = useOutletContext<SettingsHubOutletContext>();
   const [loadState, setLoadState] = useState<HubLoadState>(emptyLoadState);
   const [loading, setLoading] = useState(false);
   const [activeDetail, setActiveDetail] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const copy = useMemo(() => getSettingsHubCopy(language), [language]);
 
   const focusTarget = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -189,42 +185,43 @@ export const SettingsHubPage = () => {
   const handleSaved = () => {
     setRefreshKey((value) => value + 1);
   };
+  const activeDetailCopy = detailCopy(activeDetail, copy);
 
   return (
     <div className="mx-auto max-w-6xl space-y-7 pb-10" data-settings-hub-version="v2">
       <DashboardPageHeader
-        eyebrow="LocalOS"
-        title="Settings readiness"
-        description="See what is ready, what needs one step, and where to open detailed setup."
+        eyebrow={copy.page.eyebrow}
+        title={copy.page.title}
+        description={copy.page.description}
         icon={Settings}
         actions={(
           <Button type="button" variant="outline" asChild>
-            <Link to="/dashboard/settings/integrations">Open details</Link>
+            <Link to="/dashboard/settings/integrations">{copy.page.openDetails}</Link>
           </Button>
         )}
       />
 
       {loading ? (
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
-          Refreshing setup state...
+          {copy.page.loading}
         </div>
       ) : null}
 
-      <ReadinessSummary summary={hubState.summary} />
-      <NextStepBanner nextStep={hubState.nextStep} onOpenDetail={setActiveDetail} />
+      <ReadinessSummary summary={hubState.summary} copy={copy} />
+      <NextStepBanner nextStep={hubState.nextStep} onOpenDetail={setActiveDetail} copy={copy} />
 
       <section data-settings-hub-first-layer="module-grid" className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {moduleList.map((module) => (
-          <SettingsModuleCard key={module.label} module={module} onOpenDetail={setActiveDetail} />
+          <SettingsModuleCard key={module.key} module={module} onOpenDetail={setActiveDetail} copy={copy} />
         ))}
       </section>
 
-      <SecondaryLinks />
+      <SecondaryLinks copy={copy} />
 
       <SettingsDetailSheet
         open={Boolean(activeDetail)}
-        title={detailTitle(activeDetail)}
-        description={detailDescription(activeDetail)}
+        title={activeDetailCopy.title}
+        description={activeDetailCopy.description}
         onOpenChange={(open) => {
           if (!open) setActiveDetail(null);
         }}
@@ -254,18 +251,20 @@ export const SettingsHubPage = () => {
 };
 
 export const SettingsDiagnosticsPage = () => {
+  const { language } = useLanguage();
+  const copy = useMemo(() => getSettingsHubCopy(language), [language]);
   const { currentBusinessId } = useOutletContext<SettingsHubOutletContext>();
 
   return (
     <div className="mx-auto max-w-6xl space-y-7 pb-10">
       <DashboardPageHeader
-        eyebrow="Advanced"
-        title="Settings diagnostics"
-        description="Technical channel checks, delivery health, and support exports live here instead of the main setup hub."
+        eyebrow={copy.routes.advancedEyebrow}
+        title={copy.routes.diagnosticsTitle}
+        description={copy.routes.diagnosticsDescription}
         icon={ClipboardCheck}
-        actions={<Button type="button" variant="outline" asChild><Link to="/dashboard/settings">Back to hub</Link></Button>}
+        actions={<Button type="button" variant="outline" asChild><Link to="/dashboard/settings">{copy.routes.backToHub}</Link></Button>}
       />
-      <DashboardSection title="Diagnostics and support tools" description="Use this when a setup looks wrong or a support export is needed.">
+      <DashboardSection title={copy.routes.diagnosticsSectionTitle} description={copy.routes.diagnosticsSectionDescription}>
         <ExternalIntegrations currentBusinessId={currentBusinessId || null} />
       </DashboardSection>
     </div>
@@ -274,6 +273,8 @@ export const SettingsDiagnosticsPage = () => {
 
 export const SettingsPublicationsPage = () => {
   const location = useLocation();
+  const { language } = useLanguage();
+  const copy = useMemo(() => getSettingsHubCopy(language), [language]);
   const { currentBusinessId, currentBusiness } = useOutletContext<SettingsHubOutletContext>();
   const params = new URLSearchParams(location.search);
   const focus = params.get('focus') || 'telegram';
@@ -281,11 +282,11 @@ export const SettingsPublicationsPage = () => {
   return (
     <div className="mx-auto max-w-6xl space-y-7 pb-10">
       <DashboardPageHeader
-        eyebrow="Settings"
-        title="Publication channels"
-        description="Connect channels that can receive approved content from LocalOS."
+        eyebrow={copy.routes.settingsEyebrow}
+        title={copy.routes.publicationsTitle}
+        description={copy.routes.publicationsDescription}
         icon={ClipboardCheck}
-        actions={<Button type="button" variant="outline" asChild><Link to="/dashboard/settings">Back to hub</Link></Button>}
+        actions={<Button type="button" variant="outline" asChild><Link to="/dashboard/settings">{copy.routes.backToHub}</Link></Button>}
       />
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <TelegramBotCredentials businessId={currentBusinessId || null} business={currentBusiness} />
@@ -297,6 +298,8 @@ export const SettingsPublicationsPage = () => {
 
 export const SettingsIntegrationsPage = () => {
   const location = useLocation();
+  const { language } = useLanguage();
+  const copy = useMemo(() => getSettingsHubCopy(language), [language]);
   const { currentBusinessId } = useOutletContext<SettingsHubOutletContext>();
   const params = new URLSearchParams(location.search);
   const focus = params.get('focus') || 'integrations';
@@ -304,11 +307,11 @@ export const SettingsIntegrationsPage = () => {
   return (
     <div className="mx-auto max-w-6xl space-y-7 pb-10">
       <DashboardPageHeader
-        eyebrow="Settings"
-        title="Integration details"
-        description="Manage connected accounts, CRM providers, and service keys."
+        eyebrow={copy.routes.settingsEyebrow}
+        title={copy.routes.integrationsTitle}
+        description={copy.routes.integrationsDescription}
         icon={Cable}
-        actions={<Button type="button" variant="outline" asChild><Link to="/dashboard/settings">Back to hub</Link></Button>}
+        actions={<Button type="button" variant="outline" asChild><Link to="/dashboard/settings">{copy.routes.backToHub}</Link></Button>}
       />
       <ExternalIntegrations currentBusinessId={currentBusinessId || null} focusedPlatform={focus} />
       <FinanceCrmPanel currentBusinessId={currentBusinessId} surface="embedded" />

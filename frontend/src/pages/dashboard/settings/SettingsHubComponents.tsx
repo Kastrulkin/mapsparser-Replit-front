@@ -21,42 +21,36 @@ import {
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
+import { SettingsHubCopy } from './settingsHubCopy';
 import { HubStatus, ModuleState, SettingsHubState } from './settingsHubState';
 
 type StatusView = {
-  label: string;
   className: string;
   icon: LucideIcon;
 };
 
 const statusViews: Record<HubStatus | 'partially_configured', StatusView> = {
   ready: {
-    label: 'Ready',
     className: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
     icon: CheckCircle2,
   },
   attention: {
-    label: 'Needs attention',
     className: 'bg-amber-50 text-amber-700 ring-amber-200',
     icon: AlertCircle,
   },
   not_configured: {
-    label: 'Not configured',
     className: 'bg-slate-100 text-slate-600 ring-slate-200',
     icon: CircleDot,
   },
   manual: {
-    label: 'Manual',
     className: 'bg-sky-50 text-sky-700 ring-sky-200',
     icon: Info,
   },
   error: {
-    label: 'Error',
     className: 'bg-rose-50 text-rose-700 ring-rose-200',
     icon: AlertCircle,
   },
   partially_configured: {
-    label: 'Partially configured',
     className: 'bg-amber-50 text-amber-700 ring-amber-200',
     icon: AlertCircle,
   },
@@ -64,22 +58,34 @@ const statusViews: Record<HubStatus | 'partially_configured', StatusView> = {
 
 const statusView = (status: HubStatus | 'partially_configured') => statusViews[status];
 
-export const StatusBadge = ({ status }: { status: HubStatus | 'partially_configured' }) => {
+export const StatusBadge = ({
+  status,
+  copy,
+}: {
+  status: HubStatus | 'partially_configured';
+  copy: SettingsHubCopy;
+}) => {
   const view = statusView(status);
   const Icon = view.icon;
   return (
     <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ring-1', view.className)}>
       <Icon className="h-3.5 w-3.5" />
-      {view.label}
+      {copy.status[status]}
     </span>
   );
 };
 
-export const ReadinessSummary = ({ summary }: { summary: SettingsHubState['summary'] }) => {
+export const ReadinessSummary = ({
+  summary,
+  copy,
+}: {
+  summary: SettingsHubState['summary'];
+  copy: SettingsHubCopy;
+}) => {
   const items = [
-    { label: 'Communications', status: summary.communications, hint: 'Owner updates and client messaging.' },
-    { label: 'Publications', status: summary.publications, hint: 'Channels for approved content.' },
-    { label: 'CRM & Data', status: summary.crm, hint: 'Finance inputs and service connectors.' },
+    { ...copy.summary.communications, status: summary.communications },
+    { ...copy.summary.publications, status: summary.publications },
+    { ...copy.summary.crm, status: summary.crm },
   ];
 
   return (
@@ -91,7 +97,7 @@ export const ReadinessSummary = ({ summary }: { summary: SettingsHubState['summa
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{item.label}</div>
               <div className="mt-2 text-sm leading-6 text-slate-600">{item.hint}</div>
             </div>
-            <StatusBadge status={item.status} />
+            <StatusBadge status={item.status} copy={copy} />
           </div>
         </div>
       ))}
@@ -102,20 +108,22 @@ export const ReadinessSummary = ({ summary }: { summary: SettingsHubState['summa
 export const NextStepBanner = ({
   nextStep,
   onOpenDetail,
+  copy,
 }: {
   nextStep: SettingsHubState['nextStep'];
   onOpenDetail: (detail: string) => void;
+  copy: SettingsHubCopy;
 }) => {
   if (!nextStep) {
     return (
       <section data-settings-hub-first-layer="next-step" className="rounded-3xl border border-emerald-200 bg-emerald-50/85 p-5 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-950">Core setup is ready</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-700">You can review details or continue with content and automation workflows.</p>
+            <h2 className="text-lg font-semibold text-slate-950">{copy.nextStep.readyTitle}</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-700">{copy.nextStep.readyDescription}</p>
           </div>
           <Button type="button" variant="outline" asChild>
-            <Link to="/dashboard/card?tab=news&mode=plan">Open content plan</Link>
+            <Link to="/dashboard/card?tab=news&mode=plan">{copy.nextStep.openContentPlan}</Link>
           </Button>
         </div>
       </section>
@@ -126,16 +134,16 @@ export const NextStepBanner = ({
     <section data-settings-hub-first-layer="next-step" className="rounded-3xl border border-sky-200 bg-sky-50/85 p-5 shadow-sm">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Recommended next step</div>
-          <h2 className="mt-2 text-xl font-semibold text-slate-950">{nextStep.title}</h2>
-          <p className="mt-1 text-sm leading-6 text-slate-700">Finish this first so the rest of setup has a clear path forward.</p>
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">{copy.nextStep.eyebrow}</div>
+          <h2 className="mt-2 text-xl font-semibold text-slate-950">{copy.nextStep.titles[nextStep.title] || nextStep.title}</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-700">{copy.nextStep.description}</p>
         </div>
         <Button
           type="button"
           onClick={() => nextStep.drawer ? onOpenDetail(nextStep.drawer) : undefined}
           className="min-h-10 bg-slate-900 text-white hover:bg-slate-800"
         >
-          {nextStep.actionLabel}
+          {copy.nextStep.actions[nextStep.actionLabel] || nextStep.actionLabel}
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </div>
@@ -143,28 +151,28 @@ export const NextStepBanner = ({
   );
 };
 
-const ModuleMetaRows = ({ module }: { module: ModuleState }) => {
-  if (module.label === 'Telegram') {
+const ModuleMetaRows = ({ module, copy }: { module: ModuleState; copy: SettingsHubCopy }) => {
+  if (module.key === 'telegram') {
     return (
       <div className="grid gap-2 text-xs sm:grid-cols-2">
         <div className={cn('rounded-xl px-3 py-2 ring-1', module.meta?.ownerBotConnected ? 'bg-emerald-50 text-emerald-800 ring-emerald-100' : 'bg-amber-50 text-amber-800 ring-amber-100')}>
-          Owner bot: {module.meta?.ownerBotConnected ? 'connected' : 'missing'}
+          {copy.metaRows.ownerBot}: {module.meta?.ownerBotConnected ? copy.metaRows.connected : copy.metaRows.missing}
         </div>
         <div className={cn('rounded-xl px-3 py-2 ring-1', module.meta?.publicationTargetSet ? 'bg-emerald-50 text-emerald-800 ring-emerald-100' : 'bg-amber-50 text-amber-800 ring-amber-100')}>
-          Publication target: {module.meta?.publicationTargetSet ? 'set' : 'missing'}
+          {copy.metaRows.publicationTarget}: {module.meta?.publicationTargetSet ? copy.metaRows.set : copy.metaRows.missing}
         </div>
       </div>
     );
   }
 
-  if (module.label === 'WhatsApp') {
+  if (module.key === 'whatsapp') {
     return (
       <div className="grid gap-2 text-xs sm:grid-cols-2">
         <div className={cn('rounded-xl px-3 py-2 ring-1', module.meta?.phoneAdded ? 'bg-emerald-50 text-emerald-800 ring-emerald-100' : 'bg-slate-50 text-slate-600 ring-slate-200')}>
-          Number: {module.meta?.phoneAdded ? 'added' : 'missing'}
+          {copy.metaRows.number}: {module.meta?.phoneAdded ? copy.metaRows.added : copy.metaRows.missing}
         </div>
         <div className={cn('rounded-xl px-3 py-2 ring-1', module.meta?.wabaConnected ? 'bg-emerald-50 text-emerald-800 ring-emerald-100' : 'bg-slate-50 text-slate-600 ring-slate-200')}>
-          Sending: {module.meta?.wabaConnected ? 'configured' : 'not configured'}
+          {copy.metaRows.sending}: {module.meta?.wabaConnected ? copy.metaRows.configured : copy.metaRows.notConfigured}
         </div>
       </div>
     );
@@ -180,23 +188,26 @@ const ModuleMetaRows = ({ module }: { module: ModuleState }) => {
 export const SettingsModuleCard = ({
   module,
   onOpenDetail,
+  copy,
 }: {
   module: ModuleState;
   onOpenDetail: (detail: string) => void;
+  copy: SettingsHubCopy;
 }) => {
   const displayStatus = module.displayStatus || module.status;
+  const moduleCopy = copy.modules[module.key];
   return (
     <article data-settings-hub-first-layer="module-card" className="flex min-h-[220px] flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm">
       <div>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-slate-950">{module.label}</h3>
-            <p className="mt-1 truncate text-sm text-slate-600">{module.description}</p>
+            <h3 className="text-base font-semibold text-slate-950">{moduleCopy.label}</h3>
+            <p className="mt-1 truncate text-sm text-slate-600">{moduleCopy.description}</p>
           </div>
-          <StatusBadge status={displayStatus} />
+          <StatusBadge status={displayStatus} copy={copy} />
         </div>
         <div className="mt-4">
-          <ModuleMetaRows module={module} />
+          <ModuleMetaRows module={module} copy={copy} />
         </div>
       </div>
       <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -205,12 +216,12 @@ export const SettingsModuleCard = ({
           onClick={() => onOpenDetail(module.primaryAction.target)}
           className="min-h-10 bg-slate-900 text-white hover:bg-slate-800"
         >
-          {module.primaryAction.label}
+          {copy.actions[module.primaryAction.label] || module.primaryAction.label}
         </Button>
         {module.secondaryAction ? (
           <Button type="button" variant="ghost" className="min-h-10 text-slate-600 hover:text-slate-950" asChild>
             <Link to={module.secondaryAction.target}>
-              {module.secondaryAction.label}
+              {copy.actions[module.secondaryAction.label] || module.secondaryAction.label}
               <ExternalLink className="ml-2 h-4 w-4" />
             </Link>
           </Button>
@@ -220,24 +231,24 @@ export const SettingsModuleCard = ({
   );
 };
 
-export const SecondaryLinks = () => (
+export const SecondaryLinks = ({ copy }: { copy: SettingsHubCopy }) => (
   <section data-settings-hub-first-layer="secondary-links" className="grid gap-3 md:grid-cols-3">
     <Button type="button" variant="outline" className="min-h-12 justify-start gap-2 rounded-2xl bg-white" asChild>
       <Link to="/dashboard/agents">
         <ClipboardList className="h-4 w-4" />
-        Agents
+        {copy.secondaryLinks.agents}
       </Link>
     </Button>
     <Button type="button" variant="outline" className="min-h-12 justify-start gap-2 rounded-2xl bg-white" asChild>
       <Link to="/dashboard/network">
         <ClipboardList className="h-4 w-4" />
-        Network
+        {copy.secondaryLinks.network}
       </Link>
     </Button>
     <Button type="button" variant="outline" className="min-h-12 justify-start gap-2 rounded-2xl bg-white" asChild>
       <Link to="/dashboard/settings/diagnostics">
         <ClipboardList className="h-4 w-4" />
-        Diagnostics
+        {copy.secondaryLinks.diagnostics}
       </Link>
     </Button>
   </section>
