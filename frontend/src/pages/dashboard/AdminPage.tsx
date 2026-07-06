@@ -224,6 +224,8 @@ type AdminTabConfig = {
   icon: typeof User;
 };
 
+const LOCALOS_RADAR_BUSINESS_ID = '__localos__';
+
 const adminTabs: AdminTabConfig[] = [
   { id: 'businesses', label: 'Пользователи и бизнесы', icon: User },
   { id: 'subscriptions', label: 'Подписки', icon: CreditCard },
@@ -936,11 +938,14 @@ export const AdminPage: React.FC = () => {
   }, [users]);
 
   useEffect(() => {
-    if (selectedRadarBusinessId && radarBusinessOptions.some((item) => item.id === selectedRadarBusinessId)) {
+    if (
+      selectedRadarBusinessId === LOCALOS_RADAR_BUSINESS_ID ||
+      (selectedRadarBusinessId && radarBusinessOptions.some((item) => item.id === selectedRadarBusinessId))
+    ) {
       return;
     }
     const savedBusinessId = localStorage.getItem('selectedBusinessId') || localStorage.getItem('admin_selected_business_id') || '';
-    const nextBusinessId = radarBusinessOptions.find((item) => item.id === savedBusinessId)?.id || radarBusinessOptions[0]?.id || '';
+    const nextBusinessId = radarBusinessOptions.find((item) => item.id === savedBusinessId)?.id || LOCALOS_RADAR_BUSINESS_ID;
     setSelectedRadarBusinessId(nextBusinessId);
   }, [radarBusinessOptions, selectedRadarBusinessId]);
   const adminStats = useMemo(() => {
@@ -1485,7 +1490,7 @@ export const AdminPage: React.FC = () => {
         ) : activeTab === 'telegramRadar' ? (
           <DashboardSection
             title={activeTabConfig.label}
-            description="Суперадминский доступ к inbox радара: выберите бизнес, проверьте найденные сообщения и статусы."
+            description="Суперадминский доступ к inbox радара: выберите ЛокалОС или клиентский бизнес, проверьте найденные сообщения и статусы."
             actions={(
               <div className="flex w-full flex-col gap-2 sm:w-[420px]">
                 <label className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
@@ -1496,6 +1501,7 @@ export const AdminPage: React.FC = () => {
                   onChange={(event) => setSelectedRadarBusinessId(event.target.value)}
                   className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
                 >
+                  <option value={LOCALOS_RADAR_BUSINESS_ID}>ЛокалОС</option>
                   {radarBusinessOptions.length === 0 ? (
                     <option value="">Нет доступных бизнесов</option>
                   ) : radarBusinessOptions.map((business) => (

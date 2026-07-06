@@ -20,6 +20,10 @@ from services.telegram_opportunity_radar import (
 )
 
 
+LOCALOS_PLATFORM_RADAR_ALIASES = {"__localos__", "localos", "локалос"}
+LOCALOS_PLATFORM_RADAR_BUSINESS_ID = "localos-platform-telegram-radar"
+
+
 telegram_opportunity_radar_bp = Blueprint(
     "telegram_opportunity_radar_api",
     __name__,
@@ -42,6 +46,53 @@ def _verify_openclaw_signature(raw_body: bytes) -> bool:
     return hmac.compare_digest(expected, provided)
 
 
+def _is_localos_platform_alias(value: str | None) -> bool:
+    return str(value or "").strip().lower() in LOCALOS_PLATFORM_RADAR_ALIASES
+
+
+def _ensure_localos_platform_business(cursor: Any, owner_id: str | None = None) -> str:
+    cursor.execute("SELECT id FROM businesses WHERE id = %s LIMIT 1", (LOCALOS_PLATFORM_RADAR_BUSINESS_ID,))
+    row = cursor.fetchone()
+    if row:
+        if hasattr(row, "get"):
+            return str(row.get("id") or LOCALOS_PLATFORM_RADAR_BUSINESS_ID)
+        return str(row[0] or LOCALOS_PLATFORM_RADAR_BUSINESS_ID)
+
+    platform_owner_id = str(owner_id or os.getenv("LOCALOS_PLATFORM_OWNER_ID") or "").strip()
+    if not platform_owner_id:
+        cursor.execute(
+            """
+            SELECT id
+            FROM users
+            WHERE is_superadmin = TRUE
+            ORDER BY created_at ASC NULLS LAST
+            LIMIT 1
+            """
+        )
+        owner_row = cursor.fetchone()
+        if hasattr(owner_row, "get"):
+            platform_owner_id = str(owner_row.get("id") or "").strip()
+        elif owner_row:
+            platform_owner_id = str(owner_row[0] or "").strip()
+    if not platform_owner_id:
+        raise ValueError("Не найден superadmin для системного бизнеса ЛокалОС")
+
+    cursor.execute(
+        """
+        INSERT INTO businesses (
+            id, owner_id, name, business_type, description,
+            is_active, created_at, updated_at
+        )
+        VALUES (%s, %s, 'ЛокалОС', 'platform', 'System business for LocalOS Telegram radar', TRUE, NOW(), NOW())
+        ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            updated_at = NOW()
+        """,
+        (LOCALOS_PLATFORM_RADAR_BUSINESS_ID, platform_owner_id),
+    )
+    return LOCALOS_PLATFORM_RADAR_BUSINESS_ID
+
+
 def _require_business_access() -> tuple[DatabaseManager | None, Any | None, dict[str, Any] | None, str | None, Any | None]:
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -57,6 +108,18 @@ def _require_business_access() -> tuple[DatabaseManager | None, Any | None, dict
 
     db = DatabaseManager()
     cursor = db.conn.cursor()
+    if _is_localos_platform_alias(business_id):
+        if not db.is_superadmin(user_data["user_id"]):
+            db.close()
+            return None, None, user_data, business_id, (jsonify({"error": "Нет доступа"}), 403)
+        try:
+            business_id = _ensure_localos_platform_business(cursor, user_data["user_id"])
+            db.conn.commit()
+        except Exception as exc:
+            db.conn.rollback()
+            db.close()
+            return None, None, user_data, business_id, (jsonify({"error": str(exc)}), 500)
+
     owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
     if not owner_id:
         db.close()
@@ -79,6 +142,8 @@ def ingest_from_openclaw():
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
+        if _is_localos_platform_alias(payload.get("business_id")):
+            payload = {**payload, "business_id": _ensure_localos_platform_business(cursor)}
         result = ingest_opportunity(cursor, payload)
         alert_result = None
         if result.get("created") and result.get("opportunity"):

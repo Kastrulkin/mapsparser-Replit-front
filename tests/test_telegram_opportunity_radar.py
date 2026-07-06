@@ -24,6 +24,15 @@ def test_score_message_ignores_short_noise():
     assert score_message("ок") is None
 
 
+def test_localos_platform_aliases():
+    from api.telegram_opportunity_radar_api import _is_localos_platform_alias
+
+    assert _is_localos_platform_alias("__localos__") is True
+    assert _is_localos_platform_alias("localos") is True
+    assert _is_localos_platform_alias("ЛокалОС") is True
+    assert _is_localos_platform_alias("business-1") is False
+
+
 def test_openclaw_signature_accepts_raw_body(monkeypatch):
     from flask import Flask
     from api.telegram_opportunity_radar_api import _verify_openclaw_signature

@@ -40,9 +40,10 @@ const statusLabels: Record<string, string> = {
 type Props = {
   businessId?: string | null;
   mode?: 'settings' | 'work';
+  sourceSetup?: 'visible' | 'hidden';
 };
 
-export const TelegramOpportunityRadar = ({ businessId, mode = 'settings' }: Props) => {
+export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', sourceSetup = 'visible' }: Props) => {
   const [sources, setSources] = useState<RadarSource[]>([]);
   const [opportunities, setOpportunities] = useState<RadarOpportunity[]>([]);
   const [title, setTitle] = useState('');
@@ -112,6 +113,7 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings' }: Prop
 
   const newCount = opportunities.filter((item) => item.status === 'new').length;
   const isWorkMode = mode === 'work';
+  const showSourceSetup = sourceSetup === 'visible';
 
   return (
     <Card className="overflow-hidden border-slate-200">
@@ -120,12 +122,12 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings' }: Prop
           <div>
             <CardTitle className="flex items-center gap-2 text-xl">
               <BellRing className="h-5 w-5 text-sky-600" />
-              {isWorkMode ? 'Найденные возможности' : 'Telegram-радар возможностей'}
+              {isWorkMode ? 'Найденные сообщения' : 'Telegram-радар'}
             </CardTitle>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               {isWorkMode
-                ? 'Разберите сообщения, где можно ответить экспертно, помочь с выбором или сохранить тему для поста.'
-                : 'LocalOS собирает сообщения, где стоит ответить экспертно, помочь с выбором или сохранить тему для поста.'}
+                ? 'Просматривайте сообщения и упоминания из выбранных чатов: что требует ответа, что сохранить как идею и что закрыть как неважное.'
+                : 'LocalOS отслеживает выбранные чаты и показывает сообщения, которые стоит разобрать вручную.'}
             </p>
           </div>
           <Badge variant={newCount > 0 ? 'default' : 'secondary'}>{newCount} новых</Badge>
@@ -138,7 +140,7 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings' }: Prop
           </div>
         ) : null}
 
-        {!isWorkMode ? (
+        {showSourceSetup ? (
           <>
             <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
               <div className="space-y-2">
@@ -168,7 +170,7 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings' }: Prop
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="telegram-radar-keywords">Сигналы для OpenClaw</Label>
+              <Label htmlFor="telegram-radar-keywords">Сигналы для LocalOS</Label>
               <Textarea
                 id="telegram-radar-keywords"
                 value={keywords}
@@ -186,8 +188,8 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings' }: Prop
           </Button>
           <span className="text-xs text-slate-500">
             {isWorkMode
-              ? 'Источники и сигналы настраиваются в настройках Telegram.'
-              : 'OpenClaw только читает выбранные источники; ответы остаются ручными.'}
+              ? 'Источники можно добавить здесь или в настройках Telegram.'
+              : 'LocalOS только читает выбранные источники; ответы остаются ручными.'}
           </span>
         </div>
 
@@ -200,7 +202,7 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings' }: Prop
             <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">Источники</div>
             <div className="divide-y divide-slate-100">
               {sources.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-slate-500">Добавьте первый чат, где ваша экспертиза может быть уместной.</div>
+                <div className="px-4 py-6 text-sm text-slate-500">Добавьте первый чат или канал для мониторинга.</div>
               ) : sources.map((source) => (
                 <div key={source.id} className="px-4 py-3">
                   <div className="font-medium text-slate-900">{source.title}</div>
@@ -214,7 +216,7 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings' }: Prop
             <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">Найденные сообщения</div>
             <div className="divide-y divide-slate-100">
               {opportunities.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-slate-500">Когда OpenClaw найдёт подходящие сообщения, они появятся здесь.</div>
+                <div className="px-4 py-6 text-sm text-slate-500">Когда LocalOS найдёт подходящие сообщения, они появятся здесь.</div>
               ) : opportunities.map((item) => (
                 <div key={item.id} className="space-y-3 px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">

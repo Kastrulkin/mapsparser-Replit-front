@@ -12,8 +12,8 @@ export const TelegramRadarPage = () => {
     <div className="mx-auto max-w-6xl space-y-7 pb-10">
       <DashboardPageHeader
         eyebrow="Telegram"
-        title="Радар возможностей"
-        description="Рабочий inbox сообщений из выбранных чатов: где ответить экспертно, что сохранить как идею и что закрыть как неважное."
+        title="Telegram-радар"
+        description="Рабочий inbox сообщений и упоминаний из выбранных чатов: где ответить, что сохранить как идею и что закрыть как неважное."
         icon={Radar}
         actions={(
           <Button type="button" variant="outline" asChild>
@@ -24,7 +24,7 @@ export const TelegramRadarPage = () => {
 
       <DashboardActionPanel
         title="Отвечайте только вручную"
-        description="OpenClaw читает выбранные чаты и подсвечивает сигналы. LocalOS не пишет в чужие чаты автоматически: вы сами решаете, где ответить, а где сохранить тему для контента."
+        description="LocalOS читает выбранные чаты и подсвечивает сигналы, но не пишет в чужие чаты автоматически: вы сами решаете, где ответить, а где сохранить тему для контента."
         tone="sky"
       />
 
