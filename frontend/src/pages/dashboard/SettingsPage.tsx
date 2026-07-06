@@ -5,6 +5,7 @@ import TelegramConnection from '@/components/TelegramConnection';
 import WhatsAppConnection from '@/components/WhatsAppConnection';
 import { WABACredentials } from '@/components/WABACredentials';
 import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
+import { TelegramOpportunityRadar } from '@/components/TelegramOpportunityRadar';
 import { NetworkManagement } from '@/components/NetworkManagement';
 import { ExternalIntegrations } from '@/components/ExternalIntegrations';
 import FinanceCrmPanel from '@/components/FinanceCrmPanel';
@@ -160,6 +161,9 @@ const LegacySettingsPage = () => {
               onSaved={() => setSocialReadinessRefreshKey((value) => value + 1)}
             />
           </div>
+        </div>
+        <div className="mt-5 border-t border-slate-100 pt-5">
+          <TelegramOpportunityRadar businessId={currentBusinessId} />
         </div>
       </DashboardSection>
 

@@ -14,7 +14,8 @@ import {
   PanelLeftOpen,
   Sparkles,
   Handshake,
-  Bot
+  Bot,
+  Radar
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState } from 'react';
@@ -50,6 +51,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       tooltip: language === 'ru'
         ? 'Управляйте LocalOS через единый чатовый слой: сводки, действия и безопасные следующие шаги.'
         : 'Control LocalOS through one chat layer: briefs, actions, and safe next steps.',
+    },
+    {
+      id: 'telegram-radar',
+      label: language === 'ru' ? 'Telegram-радар' : 'Telegram Radar',
+      icon: Radar,
+      path: '/dashboard/telegram-radar',
+      tooltip: language === 'ru'
+        ? 'Рабочий inbox сообщений из выбранных Telegram-чатов: ответить, сохранить идею или скрыть.'
+        : 'Work inbox for selected Telegram chats: reply, save an idea, or dismiss.',
     },
     {
       id: 'agents',

@@ -104,6 +104,11 @@ const OperatorPage = lazy(() =>
     default: module.OperatorPage,
   })),
 );
+const TelegramRadarPage = lazy(() =>
+  import("./pages/dashboard/TelegramRadarPage").then((module) => ({
+    default: module.TelegramRadarPage,
+  })),
+);
 const AgentBlueprintsPage = lazy(() =>
   import("./pages/dashboard/AgentBlueprintsPage").then((module) => ({
     default: module.AgentBlueprintsPage,
@@ -187,6 +192,7 @@ const AppShell = () => {
             <Route path="settings/*" element={<SettingsPage />} />
             <Route path="partnerships" element={<PartnershipSearchPage />} />
             <Route path="operator" element={<OperatorPage />} />
+            <Route path="telegram-radar" element={<TelegramRadarPage />} />
             <Route path="agents" element={<AgentBlueprintsPage />} />
             <Route path="bookings" element={<BookingsPage />} />
             <Route path="chats" element={<ChatsPage />} />
