@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useLocation, useOutletContext } from 'react-router-dom';
 import {
   Activity,
   AlertTriangle,
@@ -3660,6 +3660,7 @@ const uploadAgentSource = async (blueprintId: string, file: File, name: string) 
 };
 
 export const AgentBlueprintsPage = () => {
+  const location = useLocation();
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
   const [blueprints, setBlueprints] = useState<AgentBlueprint[]>([]);
   const [selectedBlueprintId, setSelectedBlueprintId] = useState<string | null>(null);
@@ -3739,6 +3740,11 @@ export const AgentBlueprintsPage = () => {
   const [showAdvancedAgentTools, setShowAdvancedAgentTools] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<AgentBlueprint | null>(null);
   const [decisionNotice, setDecisionNotice] = useState<string | null>(null);
+  const googleAuthStatus = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('google_auth');
+  }, [location.search]);
+  const googleAccessJustConnected = googleAuthStatus === 'success';
 
   useEffect(() => {
     setSystemAgentConfig(parseAgentConfig(currentBusiness));
@@ -3767,6 +3773,14 @@ export const AgentBlueprintsPage = () => {
       setWorkspaceMode('overview');
     }
   }, [showAdvancedAgentTools, workspaceMode]);
+
+  useEffect(() => {
+    if (!googleAccessJustConnected) {
+      return;
+    }
+    setDecisionNotice('Google-доступ подключён. Теперь запустите тест ещё раз, чтобы проверить таблицу на свежем доступе.');
+    setWorkspaceMode((currentMode) => (currentMode === 'overview' ? 'results' : currentMode));
+  }, [googleAccessJustConnected]);
 
   const selectedBlueprint = useMemo(
     () => blueprints.find((item) => item.id === selectedBlueprintId) || blueprints[0] || null,
@@ -5152,6 +5166,7 @@ export const AgentBlueprintsPage = () => {
   const resultNeedsScenarioRebuild = needsScenarioRebuildForSourceResult(selectedResultRun, selectedPendingApproval, blueprintDetails);
   const resultNeedsGoogleSheetsSetup = needsGoogleSheetsSourceSetup(selectedResultRun, selectedPendingApproval);
   const resultNeedsGoogleAccessReconnect = needsGoogleAccessReconnect(selectedResultRun, selectedPendingApproval);
+  const resultGoogleAccessReconnected = googleAccessJustConnected && resultNeedsGoogleAccessReconnect;
   const openGoogleSheetsSourceSetup = () => {
     const sheetBinding = agentBindingStatus.find((binding) => binding.provider === 'google_sheets' && binding.capability === 'google_sheets.read_rows')
       || agentBindingStatus.find((binding) => binding.provider === 'google_sheets')
@@ -5507,6 +5522,7 @@ export const AgentBlueprintsPage = () => {
                       needsScenarioRebuild={resultNeedsScenarioRebuild}
                       needsGoogleSheetsSetup={resultNeedsGoogleSheetsSetup}
                       needsGoogleAccessReconnect={resultNeedsGoogleAccessReconnect}
+                      googleAccessJustConnected={resultGoogleAccessReconnected}
                       onApprove={() => decideApproval('approve')}
                       onReject={() => decideApproval('reject')}
                       onRunAgain={() => startRun(selectedBlueprint)}
@@ -8568,6 +8584,7 @@ const EmployeeTestResultPanel = ({
   needsScenarioRebuild = false,
   needsGoogleSheetsSetup = false,
   needsGoogleAccessReconnect = false,
+  googleAccessJustConnected = false,
   onApprove,
   onReject,
   onRunAgain,
@@ -8581,6 +8598,7 @@ const EmployeeTestResultPanel = ({
   needsScenarioRebuild?: boolean;
   needsGoogleSheetsSetup?: boolean;
   needsGoogleAccessReconnect?: boolean;
+  googleAccessJustConnected?: boolean;
   onApprove: () => void;
   onReject: () => void;
   onRunAgain: () => void;
@@ -8594,15 +8612,18 @@ const EmployeeTestResultPanel = ({
   const canApprove = Boolean(pendingApproval && !isBlocked);
   const canReject = Boolean(pendingApproval);
   const canRebuildScenario = Boolean(needsScenarioRebuild && onRebuildScenario);
-  const canOpenGoogleAccessReconnect = Boolean(!canRebuildScenario && needsGoogleAccessReconnect && onOpenGoogleAccessReconnect);
+  const canRunAfterGoogleReconnect = Boolean(!canRebuildScenario && googleAccessJustConnected && needsGoogleAccessReconnect);
+  const canOpenGoogleAccessReconnect = Boolean(!canRunAfterGoogleReconnect && !canRebuildScenario && needsGoogleAccessReconnect && onOpenGoogleAccessReconnect);
   const canOpenGoogleSheetsSetup = Boolean(!canRebuildScenario && !canOpenGoogleAccessReconnect && needsGoogleSheetsSetup && onOpenGoogleSheetsSetup);
   const rerunLabel = canRebuildScenario
     ? 'Пересобрать сценарий'
-    : canOpenGoogleAccessReconnect
-      ? 'Переподключить Google-доступ'
-      : canOpenGoogleSheetsSetup
-        ? 'Указать Google-таблицу'
-        : 'Запустить тест ещё раз';
+    : canRunAfterGoogleReconnect
+      ? 'Запустить тест'
+      : canOpenGoogleAccessReconnect
+        ? 'Переподключить Google-доступ'
+        : canOpenGoogleSheetsSetup
+          ? 'Указать Google-таблицу'
+          : 'Запустить тест ещё раз';
   const handleRerun = () => {
     if (canRebuildScenario && onRebuildScenario) {
       onRebuildScenario();
@@ -8647,7 +8668,7 @@ const EmployeeTestResultPanel = ({
             onClick={handleRerun}
             disabled={actionLoading}
           >
-            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : canOpenGoogleAccessReconnect || canOpenGoogleSheetsSetup ? <Database className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : canRunAfterGoogleReconnect ? <Play className="mr-2 h-4 w-4" /> : canOpenGoogleAccessReconnect || canOpenGoogleSheetsSetup ? <Database className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             {rerunLabel}
           </Button>
         </div>
@@ -8674,7 +8695,9 @@ const EmployeeTestResultPanel = ({
           ) : null}
           {needsGoogleAccessReconnect && !needsScenarioRebuild ? (
             <div className="mt-3 rounded-xl bg-white px-3 py-3 text-sm leading-6 text-amber-950 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.18)]">
-              Google-доступ для чтения таблицы больше не работает. Нажмите “Переподключить Google-доступ” — откроется экран подключений с Google Таблицами.
+              {googleAccessJustConnected
+                ? 'Google-доступ подключён. Этот результат был получен до переподключения, поэтому запустите тест ещё раз.'
+                : 'Google-доступ для чтения таблицы больше не работает. Нажмите “Переподключить Google-доступ” — откроется экран подключений с Google Таблицами.'}
             </div>
           ) : null}
         </div>

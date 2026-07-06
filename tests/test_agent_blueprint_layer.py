@@ -7743,6 +7743,10 @@ def test_agents_page_normal_result_panel_does_not_dump_raw_artifact_payload():
     assert "focus: 'google_sheets'" in source
     assert "return_to: '/dashboard/agents'" in source
     assert "Переподключить Google-доступ" in source
+    assert "google_auth" in source
+    assert "googleAccessJustConnected" in source
+    assert "Google-доступ подключён. Теперь запустите тест ещё раз" in source
+    assert "Этот результат был получен до переподключения" in source
 
 
 def test_settings_integrations_first_layer_separates_google_sheets_from_google_business():
