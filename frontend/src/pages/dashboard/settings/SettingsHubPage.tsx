@@ -14,6 +14,7 @@ import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/Da
 import { useLanguage } from '@/i18n/LanguageContext';
 import { newAuth } from '@/lib/auth_new';
 
+import IntegrationsPageV3 from './IntegrationsPageV3';
 import {
   NextStepBanner,
   ReadinessSummary,
@@ -303,9 +304,20 @@ export const SettingsIntegrationsPage = () => {
   const location = useLocation();
   const { language } = useLanguage();
   const copy = useMemo(() => getSettingsHubCopy(language), [language]);
-  const { currentBusinessId } = useOutletContext<SettingsHubOutletContext>();
+  const { currentBusinessId, currentBusiness } = useOutletContext<SettingsHubOutletContext>();
   const params = new URLSearchParams(location.search);
   const focus = params.get('focus') || 'integrations';
+  const integrationsV3Enabled = import.meta.env.VITE_SETTINGS_INTEGRATIONS_V3 !== 'false';
+
+  if (integrationsV3Enabled) {
+    return (
+      <IntegrationsPageV3
+        currentBusinessId={currentBusinessId || null}
+        currentBusiness={currentBusiness || null}
+        focus={focus}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-7 pb-10">

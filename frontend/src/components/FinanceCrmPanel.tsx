@@ -12,6 +12,7 @@ type FinanceCrmPanelProps = {
   currentBusinessId?: string | null;
   onSynced?: () => void;
   surface?: 'section' | 'embedded';
+  providerFilter?: string[];
 };
 
 type CrmConnection = {
@@ -61,7 +62,7 @@ type CrmPreview = {
   errors?: Array<{ row?: number; errors?: string[] }>;
 };
 
-export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusinessId, onSynced, surface = 'section' }) => {
+export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusinessId, onSynced, surface = 'section', providerFilter }) => {
   const [providers, setProviders] = useState<CrmProvider[]>([]);
   const [loading, setLoading] = useState(false);
   const [runningProvider, setRunningProvider] = useState<string | null>(null);
@@ -239,7 +240,7 @@ export const FinanceCrmPanel: React.FC<FinanceCrmPanelProps> = ({ currentBusines
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {providers.map((provider) => {
+        {providers.filter((provider) => !providerFilter?.length || providerFilter.includes(provider.provider)).map((provider) => {
           const connected = provider.connection?.status === 'connected';
           const running = runningProvider === provider.provider;
           const previewReady = Boolean(previews[provider.provider]?.preview_token);
