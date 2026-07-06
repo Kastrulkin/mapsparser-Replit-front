@@ -458,6 +458,7 @@ def _create_billing_attempt(cursor, *, subscription_id: str, attempt_type: str, 
 def _subscription_public_payload(row: Dict[str, Any]) -> Dict[str, Any]:
     payment_method_linked = bool(str(row.get("payment_method_id") or "").strip())
     status = str(row.get("status") or "").strip().lower()
+    autopay_enabled = payment_method_linked and status == "active"
     return {
         "id": row.get("id"),
         "tariff_id": row.get("tariff_id"),
@@ -469,7 +470,7 @@ def _subscription_public_payload(row: Dict[str, Any]) -> Dict[str, Any]:
         "next_retry_at": _as_str_dt(_parse_dt(row.get("next_retry_at"))),
         "last_payment_id": row.get("last_payment_id"),
         "business_id": row.get("business_id"),
-        "autopay_enabled": payment_method_linked and status != "canceled",
+        "autopay_enabled": autopay_enabled,
         "payment_method_linked": payment_method_linked,
         "payment_method_summary": None,
     }

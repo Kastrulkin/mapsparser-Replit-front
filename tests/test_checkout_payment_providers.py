@@ -174,6 +174,27 @@ def test_subscription_public_payload_exposes_autopay_flags() -> None:
     assert payload["payment_method_summary"] is None
 
 
+def test_blocked_subscription_with_saved_card_does_not_show_autopay_enabled() -> None:
+    payload = yookassa_integration._subscription_public_payload(
+        {
+            "id": "sub-1",
+            "tariff_id": "starter_monthly",
+            "pending_tariff_id": None,
+            "status": "blocked",
+            "period_start": None,
+            "next_billing_date": "2026-04-05T15:38:45+00:00",
+            "retry_count": 2,
+            "next_retry_at": "2026-03-07T21:06:33+00:00",
+            "last_payment_id": "pay-1",
+            "business_id": "biz-1",
+            "payment_method_id": "pm-1",
+        }
+    )
+
+    assert payload["payment_method_linked"] is True
+    assert payload["autopay_enabled"] is False
+
+
 def test_subscription_renewal_state_reports_missing_payment_method() -> None:
     renewal_state = yookassa_integration._subscription_renewal_state(
         {
