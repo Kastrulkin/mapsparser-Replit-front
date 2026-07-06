@@ -566,7 +566,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
         <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-              {language === 'ru' ? 'Подписка и автоплатёж' : 'Subscription and autopay'}
+              {language === 'ru' ? 'Подписка' : 'Subscription'}
             </div>
             <h3 className="mt-2 text-xl font-semibold leading-7 text-slate-950 [text-wrap:balance]">
               {language === 'ru' ? 'Автоплатёж и отвязка карты' : 'Autopay and card unlinking'}
