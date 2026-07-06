@@ -17,12 +17,16 @@ const About = () => {
     const token = newAuth.getToken();
 
     let paymentProvider = "yookassa";
-    try {
-      const providerResp = await fetch("/api/geo/payment-provider");
-      const providerData = await providerResp.json();
-      const detected = String(providerData?.payment_provider || "").trim().toLowerCase();
-      paymentProvider = detected === "stripe" ? "stripe" : "yookassa";
-    } catch {
+    if (!isRu) {
+      try {
+        const providerResp = await fetch("/api/geo/payment-provider");
+        const providerData = await providerResp.json();
+        const detected = String(providerData?.payment_provider || "").trim().toLowerCase();
+        paymentProvider = detected === "stripe" ? "stripe" : "yookassa";
+      } catch {
+        paymentProvider = "yookassa";
+      }
+    } else {
       paymentProvider = "yookassa";
     }
 

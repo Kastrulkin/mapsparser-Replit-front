@@ -63,6 +63,20 @@ interface BillingStatusResponse {
   };
 }
 
+const paymentProviderForTier = async (tier: SubscriptionTier | undefined): Promise<'yookassa' | 'stripe'> => {
+  if (!tier || tier.currency === '₽') {
+    return 'yookassa';
+  }
+
+  try {
+    const providerResp = await fetch('/api/geo/payment-provider');
+    const providerData = await providerResp.json();
+    return String(providerData?.payment_provider || '').trim().toLowerCase() === 'stripe' ? 'stripe' : 'yookassa';
+  } catch {
+    return 'yookassa';
+  }
+};
+
 export const SubscriptionManagement = ({ businessId, business }: { businessId: string | null; business: any }) => {
   const [subscription, setSubscription] = useState<BusinessSubscription | null>(null);
   const [loading, setLoading] = useState(true);
@@ -342,14 +356,8 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     setProcessing(true);
     try {
       const token = localStorage.getItem('auth_token');
-      let paymentProvider = 'yookassa';
-      try {
-        const providerResp = await fetch('/api/geo/payment-provider');
-        const providerData = await providerResp.json();
-        paymentProvider = String(providerData?.payment_provider || '').trim().toLowerCase() === 'stripe' ? 'stripe' : 'yookassa';
-      } catch {
-        paymentProvider = 'yookassa';
-      }
+      const selectedTier = tiers.find((tier) => tier.id === tierId);
+      const paymentProvider = await paymentProviderForTier(selectedTier);
 
       const response = await fetch('/api/billing/checkout/session/start', {
         method: 'POST',
