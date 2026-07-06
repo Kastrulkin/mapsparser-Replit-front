@@ -375,7 +375,7 @@ def _build_agent_post_connect_handoff(connection_plan: dict) -> dict:
             "next_binding": {},
             "next_route": {},
             "title": "Подключения готовы",
-            "description": "Теперь запустите safe preview run: он проверит workflow, preflight, limits и approval gate без внешних действий.",
+            "description": "Теперь запустите безопасный тест: LocalOS проверит данные и подготовит результат без внешних действий.",
             "connection_plan": connection_plan,
         }
     next_binding_key = _connection_plan_next_binding_key(connection_plan)
@@ -389,7 +389,7 @@ def _build_agent_post_connect_handoff(connection_plan: dict) -> dict:
         "next_binding": next_binding,
         "next_route": _preferred_connection_plan_route(next_binding),
         "title": "Остались подключения",
-        "description": "Завершите обязательные подключения, затем LocalOS откроет safe preview run.",
+        "description": "Завершите обязательные подключения, затем LocalOS откроет безопасный тест без внешних действий.",
         "connection_plan": connection_plan,
     }
 

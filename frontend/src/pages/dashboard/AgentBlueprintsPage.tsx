@@ -70,7 +70,7 @@ const AGENT_BLUEPRINT_LEGACY_SOURCE_CONTRACT_LABELS = [
   'compiled workflow candidate',
   'Создать агента и открыть preview',
   'У бизнеса уже есть несколько подходящих коннектов',
-  'Запустите safe preview run',
+  'Запустите безопасный тест',
   'Последний run',
   'Симуляция compiled workflow',
   'workflow проверен',
@@ -3313,6 +3313,15 @@ const needsScenarioRebuildForSourceResult = (
   return !detailsHaveGoogleSheetsReadStep(details);
 };
 
+const needsGoogleSheetsSourceSetup = (activeRun: AgentRun | null, pendingApproval?: AgentApproval | null) => {
+  const resultPayload = findPreparedResultPayload(activeRun, pendingApproval);
+  if (!isBusinessBlockerPayload(resultPayload)) {
+    return false;
+  }
+  const text = stringifyBusinessValue(resultPayload).toLowerCase();
+  return text.includes('google sheets') || text.includes('таблиц');
+};
+
 const buildEmployeeHistoryStory = (
   details: AgentBlueprintDetails | null,
   activeRun: AgentRun | null,
@@ -4761,7 +4770,16 @@ export const AgentBlueprintsPage = () => {
       });
       await loadAgentIntegrations(selectedBlueprint.id);
       await loadBlueprintDetails(selectedBlueprint.id);
-      applyPostConnectHandoff(response.data?.post_connect_handoff);
+      const handoff = normalizePostCreateHandoff(response.data?.post_connect_handoff);
+      applyPostConnectHandoff(handoff);
+      if (handoff?.status === 'ready_for_preview') {
+        setDecisionNotice('Таблица сохранена. Теперь запустите безопасный тест.');
+      } else if (handoff?.status === 'needs_connections') {
+        const nextTitle = handoff.next_binding?.title || connectorLabel(handoff.next_binding?.provider);
+        setDecisionNotice(`Таблица сохранена. Остался следующий доступ: ${nextTitle}.`);
+      } else {
+        setDecisionNotice('Таблица сохранена.');
+      }
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось подключить Google Sheets.'));
@@ -5123,6 +5141,17 @@ export const AgentBlueprintsPage = () => {
   );
   const selectedResultRun = activeRun || blueprintDetails?.runs?.[0] || null;
   const resultNeedsScenarioRebuild = needsScenarioRebuildForSourceResult(selectedResultRun, selectedPendingApproval, blueprintDetails);
+  const resultNeedsGoogleSheetsSetup = needsGoogleSheetsSourceSetup(selectedResultRun, selectedPendingApproval);
+  const openGoogleSheetsSourceSetup = () => {
+    const sheetBinding = agentBindingStatus.find((binding) => binding.provider === 'google_sheets' && binding.capability === 'google_sheets.read_rows')
+      || agentBindingStatus.find((binding) => binding.provider === 'google_sheets')
+      || null;
+    if (sheetBinding?.key) {
+      setSelectedConnectionBindingKey(sheetBinding.key);
+    }
+    setDecisionNotice('Укажите Google-таблицу и лист со списком поездок, затем сохраните источник и запустите тест ещё раз.');
+    setWorkspaceMode('connections');
+  };
   const runEmployeePrimaryAction = () => {
     if (!selectedBlueprint || !selectedEmployeeAction) {
       return;
@@ -5459,10 +5488,12 @@ export const AgentBlueprintsPage = () => {
                       pendingApproval={selectedPendingApproval}
                       actionLoading={actionLoading}
                       needsScenarioRebuild={resultNeedsScenarioRebuild}
+                      needsGoogleSheetsSetup={resultNeedsGoogleSheetsSetup}
                       onApprove={() => decideApproval('approve')}
                       onReject={() => decideApproval('reject')}
                       onRunAgain={() => startRun(selectedBlueprint)}
                       onRebuildScenario={rebuildScenarioAndRun}
+                      onOpenGoogleSheetsSetup={openGoogleSheetsSourceSetup}
                     />
                   ) : (
                     <EmployeeHistoryPanel
@@ -8516,19 +8547,23 @@ const EmployeeTestResultPanel = ({
   pendingApproval,
   actionLoading,
   needsScenarioRebuild = false,
+  needsGoogleSheetsSetup = false,
   onApprove,
   onReject,
   onRunAgain,
   onRebuildScenario,
+  onOpenGoogleSheetsSetup,
 }: {
   activeRun: AgentRun | null;
   pendingApproval: AgentApproval | null;
   actionLoading: boolean;
   needsScenarioRebuild?: boolean;
+  needsGoogleSheetsSetup?: boolean;
   onApprove: () => void;
   onReject: () => void;
   onRunAgain: () => void;
   onRebuildScenario?: () => void;
+  onOpenGoogleSheetsSetup?: () => void;
 }) => {
   const result = buildEmployeeTestResult(activeRun, pendingApproval);
   const labels = approvalActionLabels(pendingApproval);
@@ -8536,10 +8571,15 @@ const EmployeeTestResultPanel = ({
   const canApprove = Boolean(pendingApproval && !isBlocked);
   const canReject = Boolean(pendingApproval);
   const canRebuildScenario = Boolean(needsScenarioRebuild && onRebuildScenario);
-  const rerunLabel = canRebuildScenario ? 'Пересобрать сценарий' : 'Запустить тест ещё раз';
+  const canOpenGoogleSheetsSetup = Boolean(!canRebuildScenario && needsGoogleSheetsSetup && onOpenGoogleSheetsSetup);
+  const rerunLabel = canRebuildScenario ? 'Пересобрать сценарий' : canOpenGoogleSheetsSetup ? 'Указать Google-таблицу' : 'Запустить тест ещё раз';
   const handleRerun = () => {
     if (canRebuildScenario && onRebuildScenario) {
       onRebuildScenario();
+      return;
+    }
+    if (canOpenGoogleSheetsSetup && onOpenGoogleSheetsSetup) {
+      onOpenGoogleSheetsSetup();
       return;
     }
     onRunAgain();
@@ -8568,12 +8608,12 @@ const EmployeeTestResultPanel = ({
           ) : null}
           <Button
             type="button"
-            variant={pendingApproval && !canRebuildScenario ? 'outline' : 'default'}
+            variant={pendingApproval && !canRebuildScenario && !canOpenGoogleSheetsSetup ? 'outline' : 'default'}
             className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform"
             onClick={handleRerun}
             disabled={actionLoading}
           >
-            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : canOpenGoogleSheetsSetup ? <Database className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             {rerunLabel}
           </Button>
         </div>
@@ -8591,6 +8631,11 @@ const EmployeeTestResultPanel = ({
           {needsScenarioRebuild ? (
             <div className="mt-3 rounded-xl bg-white px-3 py-3 text-sm leading-6 text-amber-950 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.18)]">
               Этот агент создан старой версией сценария: в нём нет шага чтения Google Sheets. Пересоберите сценарий, и LocalOS сразу запустит тест по новой версии.
+            </div>
+          ) : null}
+          {needsGoogleSheetsSetup && !needsScenarioRebuild ? (
+            <div className="mt-3 rounded-xl bg-white px-3 py-3 text-sm leading-6 text-amber-950 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.18)]">
+              Нужно указать конкретную таблицу и лист со списком поездок. Нажмите “Указать Google-таблицу” — откроется раздел источников этого сотрудника.
             </div>
           ) : null}
         </div>
@@ -10441,17 +10486,9 @@ const AgentConnectionsPanel = ({
     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
       <div className="text-sm font-semibold text-slate-950">Подключения агента</div>
           <div className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-	        Здесь видно, какие источники и каналы нужны агенту, что уже подключено и какой доступ нужно настроить дальше. Логика агента остаётся во вкладке “Логика”.
+	        Настройте один следующий доступ. После сохранения LocalOS покажет тест без внешних действий.
       </div>
     </div>
-    <AgentConnectionPlanPanel
-      connectionPlan={agentConnectionPlan}
-      availableIntegrations={availableAgentIntegrations}
-      actionLoading={actionLoading}
-      onAttachExistingIntegration={onAttachExistingIntegration}
-      onConfigureBinding={onSelectConnectionBinding}
-      onChooseProviderRoute={onChooseProviderRoute}
-    />
     <AgentIntegrationsPanel
       integrations={agentIntegrations}
       availableIntegrations={availableAgentIntegrations}
@@ -10503,6 +10540,19 @@ const AgentConnectionsPanel = ({
       onRunCustomProcessPreview={onRunCustomProcessPreview}
       onPreviewRun={onPreviewRun}
     />
+    <details className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+      <summary className="cursor-pointer text-sm font-semibold text-slate-950">Технические детали</summary>
+      <div className="mt-3">
+        <AgentConnectionPlanPanel
+          connectionPlan={agentConnectionPlan}
+          availableIntegrations={availableAgentIntegrations}
+          actionLoading={actionLoading}
+          onAttachExistingIntegration={onAttachExistingIntegration}
+          onConfigureBinding={onSelectConnectionBinding}
+          onChooseProviderRoute={onChooseProviderRoute}
+        />
+      </div>
+    </details>
   </div>
 );
 
@@ -11403,8 +11453,18 @@ const AgentIntegrationsPanel = ({
   const missingBindings = bindingStatus.filter((binding) => binding.status !== 'connected' && binding.status !== 'ready').length;
   const canPreviewRun = !bindingStatus.length || missingBindings === 0;
   const connectionDecision = buildAgentConnectionDecision(connectionPlan, bindingStatus, canPreviewRun);
-  const selectedBinding = bindingStatus.find((binding) => binding.key === selectedBindingKey);
+  const selectedBinding = bindingStatus.find((binding) => binding.key === selectedBindingKey)
+    || bindingStatus.find((binding) => binding.status !== 'connected' && binding.status !== 'ready')
+    || bindingStatus[0];
   const selectedProvider = selectedBinding?.provider || '';
+  const hasRequiredBindings = bindingStatus.length > 0;
+  const showBrowserUseForm = needsBrowserUse && (!hasRequiredBindings || selectedProvider === 'browser_use');
+  const showTelegramForm = (needsTelegram || !hasRequiredBindings) && (!hasRequiredBindings || selectedProvider === 'telegram');
+  const showWhatsappForm = needsWhatsapp && (!hasRequiredBindings || selectedProvider === 'whatsapp');
+  const showMatonForm = needsMaton && (!hasRequiredBindings || selectedProvider === 'maton');
+  const showSheetsForm = (needsSheets || !hasRequiredBindings) && (!hasRequiredBindings || selectedProvider === 'google_sheets');
+  const showCustomProcessForm = isTelegramToSheetsProcess && !hasRequiredBindings;
+  const otherBindings = bindingStatus.filter((binding) => binding.key !== selectedBinding?.key);
   return (
     <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
@@ -11428,6 +11488,7 @@ const AgentIntegrationsPanel = ({
         </div>
       ) : null}
 
+      {!hasRequiredBindings ? (
       <div className={cn('rounded-lg px-3 py-3 ring-1', canPreviewRun ? 'bg-emerald-50 text-emerald-950 ring-emerald-200' : 'bg-slate-50 text-slate-600 ring-slate-200')}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -11444,7 +11505,9 @@ const AgentIntegrationsPanel = ({
           </Button>
         </div>
       </div>
+      ) : null}
 
+      {!hasRequiredBindings ? (
       <div className="grid gap-2">
         {needsBrowserUse ? <AgentIntegrationStatusItem integration={browserIntegration} provider="browser_use" fallbackTitle="Browser use" /> : null}
         {needsTelegram || !bindingStatus.length ? <AgentIntegrationStatusItem integration={telegramIntegration} provider="telegram" fallbackTitle="Telegram" /> : null}
@@ -11452,11 +11515,256 @@ const AgentIntegrationsPanel = ({
         {needsMaton ? <AgentIntegrationStatusItem integration={matonIntegration} provider="maton" fallbackTitle="Maton.ai bridge" /> : null}
         {needsSheets || !bindingStatus.length ? <AgentIntegrationStatusItem integration={sheetIntegration} provider="google_sheets" fallbackTitle={sheetsTitle} /> : null}
       </div>
+      ) : null}
+
+      {showCustomProcessForm ? (
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+          <Workflow className="h-4 w-4" />
+          Логика канала Telegram → Google Sheets
+        </div>
+        <textarea
+          className="min-h-20 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={processRowValues}
+          onChange={(event) => onProcessRowValuesChange(event.target.value)}
+          placeholder="{{received_at}}, {{telegram_username}}, {{message_text}}"
+        />
+        <div className="text-xs leading-5 text-slate-500">
+          Значения идут в строку таблицы по порядку. Сохранение создаёт новую активную версию агента.
+        </div>
+        <textarea
+          className="min-h-20 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={processPreviewMessage}
+          onChange={(event) => onProcessPreviewMessageChange(event.target.value)}
+          placeholder="Новая заявка: Анна, телефон +7..."
+        />
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" onClick={onSaveCustomProcess} disabled={actionLoading}>
+            Сохранить логику канала
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={onRunCustomProcessPreview} disabled={actionLoading}>
+            Проверить на примере
+          </Button>
+        </div>
+      </div>
+      ) : null}
+
+      {showBrowserUseForm ? (
+      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'browser_use' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+          <Workflow className="h-4 w-4" />
+          Browser use
+        </div>
+        <div className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
+          Чтение сайтов идёт через защищенный способ LocalOS/OpenClaw. Агент готовит результат, внешние действия требуют подтверждения.
+        </div>
+        <textarea
+          className="min-h-20 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={browserTargetUrls}
+          onChange={(event) => onBrowserTargetUrlsChange(event.target.value)}
+          placeholder="https://example.com"
+        />
+        <input
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={browserDailyCap}
+          onChange={(event) => onBrowserDailyCapChange(event.target.value)}
+          placeholder="Лимит проверок страниц в день"
+          inputMode="numeric"
+        />
+        <Button type="button" size="sm" variant="outline" onClick={onSaveBrowserUseIntegration} disabled={actionLoading || !browserTargetUrls.trim()}>
+          {selectedProvider === 'browser_use' ? 'Сохранить Browser use для выбранного шага' : 'Сохранить Browser use'}
+        </Button>
+      </div>
+      ) : null}
+
+      {showTelegramForm ? (
+      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'telegram' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+          <MessageSquareText className="h-4 w-4" />
+          Telegram
+        </div>
+        <select
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={telegramBotMode}
+          onChange={(event) => onTelegramBotModeChange(event.target.value)}
+        >
+          <option value="business_bot">Бот бизнеса</option>
+          <option value="global_control_bot">Глобальный control bot</option>
+        </select>
+        <input
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={telegramDailyCap}
+          onChange={(event) => onTelegramDailyCapChange(event.target.value)}
+          placeholder="Лимит сообщений в день"
+          inputMode="numeric"
+        />
+        <Button type="button" size="sm" variant="outline" onClick={onSaveTelegramIntegration} disabled={actionLoading}>
+          {selectedProvider === 'telegram' ? 'Сохранить Telegram для выбранного шага' : 'Подключить Telegram'}
+        </Button>
+      </div>
+      ) : null}
+
+      {showWhatsappForm ? (
+      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'whatsapp' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+          <MessageSquareText className="h-4 w-4" />
+          WhatsApp
+        </div>
+        <select
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={whatsappChannelMode}
+          onChange={(event) => onWhatsappChannelModeChange(event.target.value)}
+        >
+          <option value="whatsapp_business">WhatsApp Business</option>
+          <option value="manual_whatsapp">Ручная отправка через WhatsApp</option>
+        </select>
+        <input
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={whatsappDailyCap}
+          onChange={(event) => onWhatsappDailyCapChange(event.target.value)}
+          placeholder="Лимит сообщений в день"
+          inputMode="numeric"
+        />
+        <Button type="button" size="sm" variant="outline" onClick={onSaveWhatsappIntegration} disabled={actionLoading}>
+          {selectedProvider === 'whatsapp' ? 'Сохранить WhatsApp для выбранного шага' : 'Подключить WhatsApp'}
+        </Button>
+      </div>
+      ) : null}
+
+      {showMatonForm ? (
+      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'maton' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+          <Workflow className="h-4 w-4" />
+          Maton.ai bridge
+        </div>
+        <div className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
+          Используем сохранённый Maton.ai API key как delivery/provider bridge за LocalOS approval и audit boundary.
+        </div>
+        <select
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={matonAuthRef}
+          onChange={(event) => onMatonAuthRefChange(event.target.value)}
+        >
+          <option value="">Maton key не выбран</option>
+          {authOptions.filter((option) => option.source === 'maton').map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.display_name || 'Maton.ai'} · {option.id.slice(0, 8)}
+            </option>
+          ))}
+        </select>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <input
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+            value={matonChannel}
+            onChange={(event) => onMatonChannelChange(event.target.value)}
+            placeholder="maton_bridge"
+          />
+          <input
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+            value={matonDailyCap}
+            onChange={(event) => onMatonDailyCapChange(event.target.value)}
+            placeholder="Лимит действий в день"
+            inputMode="numeric"
+          />
+        </div>
+        <Button type="button" size="sm" onClick={onSaveMatonIntegration} disabled={actionLoading || !matonAuthRef.trim()}>
+          {selectedProvider === 'maton' ? 'Сохранить Maton для выбранного шага' : 'Подключить Maton.ai'}
+        </Button>
+      </div>
+      ) : null}
+
+      {showSheetsForm ? (
+      <div className={cn('space-y-3 rounded-lg border px-3 py-3', selectedProvider === 'google_sheets' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+              <Database className="h-4 w-4" />
+              Подключите таблицу с поездками
+            </div>
+            <div className="mt-1 text-xs leading-5 text-slate-600">
+              LocalOS прочитает строки и подготовит результат. Наружу ничего не отправится.
+            </div>
+          </div>
+          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-sky-800 ring-1 ring-sky-200">
+            {needsSheetsRead && needsSheetsAppend ? 'чтение и запись' : needsSheetsRead ? 'чтение строк' : 'запись строк'}
+          </span>
+        </div>
+        <label className="block text-xs font-medium text-slate-700">
+          Ссылка на таблицу или ID
+          <input
+            className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none transition focus:border-slate-400"
+            value={sheetSpreadsheetId}
+            onChange={(event) => onSheetSpreadsheetIdChange(event.target.value)}
+            placeholder="https://docs.google.com/spreadsheets/d/..."
+          />
+        </label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="block text-xs font-medium text-slate-700">
+            Лист
+            <input
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none transition focus:border-slate-400"
+              value={sheetName}
+              onChange={(event) => onSheetNameChange(event.target.value)}
+              placeholder="Sheet1"
+            />
+          </label>
+          <label className="block text-xs font-medium text-slate-700">
+            Лимит в день
+            <input
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none transition focus:border-slate-400"
+              value={sheetDailyCap}
+              onChange={(event) => onSheetDailyCapChange(event.target.value)}
+              placeholder="50"
+              inputMode="numeric"
+            />
+          </label>
+        </div>
+        <label className="block text-xs font-medium text-slate-700">
+          Google-доступ
+          <select
+            className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none transition focus:border-slate-400"
+            value={sheetAuthRef}
+            onChange={(event) => onSheetAuthRefChange(event.target.value)}
+          >
+            <option value="">Выбрать доступ автоматически</option>
+            {authOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.display_name || humanizeMeta(option.source)} · {option.id.slice(0, 8)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button type="button" size="sm" className="w-full sm:w-fit" onClick={onSaveSheetIntegration} disabled={actionLoading || !sheetSpreadsheetId.trim()}>
+          {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Database className="mr-2 h-4 w-4" />}
+          {selectedProvider === 'google_sheets' ? 'Сохранить и перейти к тесту' : 'Сохранить таблицу'}
+        </Button>
+      </div>
+      ) : null}
+
+      {hasRequiredBindings ? (
+      <div className={cn('rounded-lg px-3 py-3 ring-1', canPreviewRun ? 'bg-emerald-50 text-emerald-950 ring-emerald-200' : 'bg-slate-50 text-slate-600 ring-slate-200')}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold">Тест без отправки</div>
+            <div className="mt-1 text-xs leading-5">
+              {canPreviewRun
+                ? 'Проверим доступы, лимиты и ручные подтверждения. Ничего не отправим наружу.'
+                : 'Сначала заполните обязательные подключения. После этого станет доступна проверка на примере.'}
+            </div>
+          </div>
+          <Button type="button" size="sm" onClick={onPreviewRun} disabled={actionLoading || !canPreviewRun}>
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+            Проверить на примере
+          </Button>
+        </div>
+      </div>
+      ) : null}
 
       {bindingStatus.length ? (
-        <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Что нужно подключить</div>
-          {bindingStatus.map((binding) => {
+        <details className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-500">Другие подключения</summary>
+          <div className="mt-2 space-y-2">
+          {(otherBindings.length ? otherBindings : bindingStatus).map((binding) => {
             const resourceFacts = connectionResourceFacts(binding.provider, binding.answer_config || null);
             return (
               <div
@@ -11502,12 +11810,14 @@ const AgentIntegrationsPanel = ({
               </div>
             );
           })}
-        </div>
+          </div>
+        </details>
       ) : null}
 
       {selectedBinding ? (
-        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-950">
-          <div className="font-semibold">Сейчас настраивается: {connectorLabel(selectedBinding.provider)}</div>
+        <details className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-950">
+          <summary className="cursor-pointer font-semibold">Технические детали</summary>
+          <div className="mt-2 font-semibold">Сейчас настраивается: {connectorLabel(selectedBinding.provider)}</div>
             <div className="mt-1">
             {bindingUserFacingRole(selectedBinding)}
             {selectedBinding.missing_config?.length ? ` · заполните: ${selectedBinding.missing_config.join(', ')}` : ''}
@@ -11534,213 +11844,13 @@ const AgentIntegrationsPanel = ({
               {userFacingAgentTechText(providerActionDescription(selectedPlanItem.provider_routes.find((route) => route.state === 'available') || selectedPlanItem.provider_routes[0]) || 'Выберите доступный способ подключения для этого шага.')}
             </div>
           ) : null}
-        </div>
-      ) : null}
-
-      {isTelegramToSheetsProcess ? (
-      <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
-          <Workflow className="h-4 w-4" />
-          Логика канала Telegram → Google Sheets
-        </div>
-        <textarea
-          className="min-h-20 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-          value={processRowValues}
-          onChange={(event) => onProcessRowValuesChange(event.target.value)}
-          placeholder="{{received_at}}, {{telegram_username}}, {{message_text}}"
-        />
-        <div className="text-xs leading-5 text-slate-500">
-          Значения идут в строку таблицы по порядку. Сохранение создаёт новую активную версию агента.
-        </div>
-        <textarea
-          className="min-h-20 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-          value={processPreviewMessage}
-          onChange={(event) => onProcessPreviewMessageChange(event.target.value)}
-          placeholder="Новая заявка: Анна, телефон +7..."
-        />
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" onClick={onSaveCustomProcess} disabled={actionLoading}>
-            Сохранить логику канала
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={onRunCustomProcessPreview} disabled={actionLoading}>
-            Проверить на примере
-          </Button>
-        </div>
-      </div>
-      ) : null}
-
-      {needsBrowserUse ? (
-      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'browser_use' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
-          <Workflow className="h-4 w-4" />
-          Browser use
-        </div>
-        <div className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
-          Чтение сайтов идёт через защищенный способ LocalOS/OpenClaw. Агент готовит результат, внешние действия требуют подтверждения.
-        </div>
-        <textarea
-          className="min-h-20 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-          value={browserTargetUrls}
-          onChange={(event) => onBrowserTargetUrlsChange(event.target.value)}
-          placeholder="https://example.com"
-        />
-        <input
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-          value={browserDailyCap}
-          onChange={(event) => onBrowserDailyCapChange(event.target.value)}
-          placeholder="Лимит проверок страниц в день"
-          inputMode="numeric"
-        />
-        <Button type="button" size="sm" variant="outline" onClick={onSaveBrowserUseIntegration} disabled={actionLoading || !browserTargetUrls.trim()}>
-          {selectedProvider === 'browser_use' ? 'Сохранить Browser use для выбранного шага' : 'Сохранить Browser use'}
-        </Button>
-      </div>
-      ) : null}
-
-      {needsTelegram || !bindingStatus.length ? (
-      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'telegram' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
-          <MessageSquareText className="h-4 w-4" />
-          Telegram
-        </div>
-        <select
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-          value={telegramBotMode}
-          onChange={(event) => onTelegramBotModeChange(event.target.value)}
-        >
-          <option value="business_bot">Бот бизнеса</option>
-          <option value="global_control_bot">Глобальный control bot</option>
-        </select>
-        <input
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-          value={telegramDailyCap}
-          onChange={(event) => onTelegramDailyCapChange(event.target.value)}
-          placeholder="Лимит сообщений в день"
-          inputMode="numeric"
-        />
-        <Button type="button" size="sm" variant="outline" onClick={onSaveTelegramIntegration} disabled={actionLoading}>
-          {selectedProvider === 'telegram' ? 'Сохранить Telegram для выбранного шага' : 'Подключить Telegram'}
-        </Button>
-      </div>
-      ) : null}
-
-      {needsWhatsapp ? (
-      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'whatsapp' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
-          <MessageSquareText className="h-4 w-4" />
-          WhatsApp
-        </div>
-        <select
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-          value={whatsappChannelMode}
-          onChange={(event) => onWhatsappChannelModeChange(event.target.value)}
-        >
-          <option value="whatsapp_business">WhatsApp Business</option>
-          <option value="manual_whatsapp">Ручная отправка через WhatsApp</option>
-        </select>
-        <input
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-          value={whatsappDailyCap}
-          onChange={(event) => onWhatsappDailyCapChange(event.target.value)}
-          placeholder="Лимит сообщений в день"
-          inputMode="numeric"
-        />
-        <Button type="button" size="sm" variant="outline" onClick={onSaveWhatsappIntegration} disabled={actionLoading}>
-          {selectedProvider === 'whatsapp' ? 'Сохранить WhatsApp для выбранного шага' : 'Подключить WhatsApp'}
-        </Button>
-      </div>
-      ) : null}
-
-      {needsMaton ? (
-      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'maton' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
-          <Workflow className="h-4 w-4" />
-          Maton.ai bridge
-        </div>
-        <div className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
-          Используем сохранённый Maton.ai API key как delivery/provider bridge за LocalOS approval и audit boundary.
-        </div>
-        <select
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-          value={matonAuthRef}
-          onChange={(event) => onMatonAuthRefChange(event.target.value)}
-        >
-          <option value="">Maton key не выбран</option>
-          {authOptions.filter((option) => option.source === 'maton').map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.display_name || 'Maton.ai'} · {option.id.slice(0, 8)}
-            </option>
-          ))}
-        </select>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <input
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-            value={matonChannel}
-            onChange={(event) => onMatonChannelChange(event.target.value)}
-            placeholder="maton_bridge"
-          />
-          <input
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-            value={matonDailyCap}
-            onChange={(event) => onMatonDailyCapChange(event.target.value)}
-            placeholder="Лимит действий в день"
-            inputMode="numeric"
-          />
-        </div>
-        <Button type="button" size="sm" onClick={onSaveMatonIntegration} disabled={actionLoading || !matonAuthRef.trim()}>
-          {selectedProvider === 'maton' ? 'Сохранить Maton для выбранного шага' : 'Подключить Maton.ai'}
-        </Button>
-      </div>
-      ) : null}
-
-      {needsSheets || !bindingStatus.length ? (
-      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'google_sheets' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
-          <Database className="h-4 w-4" />
-          {needsSheetsRead && needsSheetsAppend ? 'Google Sheets: чтение и запись' : needsSheetsRead ? 'Google Sheets: чтение строк' : 'Google Sheets: запись строк'}
-        </div>
-        <input
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-          value={sheetSpreadsheetId}
-          onChange={(event) => onSheetSpreadsheetIdChange(event.target.value)}
-          placeholder="Ссылка на Google таблицу или ID"
-        />
-        <div className="grid gap-2 sm:grid-cols-2">
-          <input
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-            value={sheetName}
-            onChange={(event) => onSheetNameChange(event.target.value)}
-            placeholder="Sheet1"
-          />
-          <input
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-            value={sheetDailyCap}
-            onChange={(event) => onSheetDailyCapChange(event.target.value)}
-            placeholder="Лимит append в день"
-            inputMode="numeric"
-          />
-        </div>
-        <select
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-          value={sheetAuthRef}
-          onChange={(event) => onSheetAuthRefChange(event.target.value)}
-        >
-          <option value="">Google-доступ не выбран</option>
-          {authOptions.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.display_name || humanizeMeta(option.source)} · {option.id.slice(0, 8)}
-            </option>
-          ))}
-        </select>
-        <Button type="button" size="sm" onClick={onSaveSheetIntegration} disabled={actionLoading || !sheetSpreadsheetId.trim()}>
-          {selectedProvider === 'google_sheets' ? 'Сохранить таблицу для выбранного шага' : 'Сохранить таблицу'}
-        </Button>
-      </div>
+        </details>
       ) : null}
 
       {availableIntegrations.length ? (
-        <div className="space-y-1">
-          <div className="text-xs font-semibold text-slate-700">Уже подключены в бизнесе</div>
+        <details className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-500">Уже подключены в бизнесе</summary>
+          <div className="mt-2 space-y-1">
           {availableIntegrations.slice(0, 3).map((integration) => (
             <div key={integration.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
               <AgentIntegrationStatusItem integration={integration} provider={integration.provider} fallbackTitle={integration.display_name || integration.provider_label || integration.provider} />
@@ -11755,7 +11865,8 @@ const AgentIntegrationsPanel = ({
               </Button>
             </div>
           ))}
-        </div>
+          </div>
+        </details>
       ) : null}
     </div>
   );

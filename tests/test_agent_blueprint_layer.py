@@ -6105,7 +6105,10 @@ def test_agent_post_connect_handoff_routes_ready_connections_to_preview():
     assert ready["status"] == "ready_for_preview"
     assert ready["workspace_mode"] == "run"
     assert ready["next_step"] == "run_preview"
-    assert "safe preview run" in ready["description"]
+    assert "безопасный тест" in ready["description"]
+    assert "workflow" not in ready["description"]
+    assert "preflight" not in ready["description"]
+    assert "approval gate" not in ready["description"]
     assert blocked["status"] == "needs_connections"
     assert blocked["workspace_mode"] == "connections"
     assert blocked["next_step"] == "connect_required_integrations"
@@ -7025,7 +7028,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Создать агента и открыть preview" in agents_page_source
     assert "У бизнеса уже есть несколько подходящих коннектов" in agents_page_source
     assert "Подключения готовы" in agents_page_source
-    assert "Запустите safe preview run" in agents_page_source
+    assert "Настройте один следующий доступ" in agents_page_source
+    assert "Сохранить и перейти к тесту" in agents_page_source
     assert "LocalOS покажет следующий шаг" in agents_page_source
     assert "GenericRunProgress" in agents_page_source
     assert "Мои агенты" in agents_page_source
@@ -7522,6 +7526,9 @@ def test_agents_page_normal_result_panel_does_not_dump_raw_artifact_payload():
     assert "needsScenarioRebuildForSourceResult" in source
     assert "Пересобрать сценарий" in source
     assert "Этот агент создан старой версией сценария" in source
+    assert "needsGoogleSheetsSourceSetup" in source
+    assert "Указать Google-таблицу" in source
+    assert "Укажите Google-таблицу и лист со списком поездок" in source
 
 
 def test_agent_source_ingestion_extracts_text_pdf_docx_xlsx_and_rejects_unsafe_files():
