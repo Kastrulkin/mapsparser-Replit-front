@@ -12,6 +12,7 @@ from auth_encryption import decrypt_auth_data
 
 
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
+GOOGLE_SHEETS_EXTERNAL_ACCOUNT_SOURCES = ("google_sheets", "google_business")
 
 
 class GoogleSheetsAdapterError(Exception):
@@ -193,8 +194,83 @@ def _load_agent_integration(cursor: Any, *, business_id: str, integration_id: st
     cursor.execute(query, params)
     row = cursor.fetchone()
     if not row:
+        fallback = _load_google_sheets_external_account_integration(
+            cursor,
+            business_id=business_id,
+            preferred_account_id=integration_id,
+        )
+        if fallback:
+            return fallback
         raise GoogleSheetsAdapterError("Active Google Sheets agent integration was not found.")
     return _row_to_dict(row, ["id", "business_id", "provider", "status", "auth_ref", "config_json"])
+
+
+def _load_google_sheets_external_account_integration(
+    cursor: Any,
+    *,
+    business_id: str,
+    preferred_account_id: str,
+) -> Dict[str, Any] | None:
+    query = """
+        SELECT id, business_id, source, display_name
+        FROM externalbusinessaccounts
+        WHERE business_id = %s
+          AND is_active = TRUE
+          AND source IN ('google_sheets', 'google_business')
+        ORDER BY updated_at DESC
+        LIMIT 1
+    """
+    params: tuple[Any, ...] = (business_id,)
+    if preferred_account_id:
+        query = """
+            SELECT id, business_id, source, display_name
+            FROM externalbusinessaccounts
+            WHERE id = %s
+              AND business_id = %s
+              AND is_active = TRUE
+              AND source IN ('google_sheets', 'google_business')
+            LIMIT 1
+        """
+        params = (preferred_account_id, business_id)
+    try:
+        cursor.execute(query, params)
+        row = cursor.fetchone()
+    except Exception:
+        row = None
+    if not row and preferred_account_id:
+        try:
+            cursor.execute(
+                """
+                SELECT id, business_id, source, display_name
+                FROM externalbusinessaccounts
+                WHERE business_id = %s
+                  AND is_active = TRUE
+                  AND source IN ('google_sheets', 'google_business')
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (business_id,),
+            )
+            row = cursor.fetchone()
+        except Exception:
+            row = None
+    if not row:
+        return None
+    item = _row_to_dict(row, ["id", "business_id", "source", "display_name"])
+    account_id = str(item.get("id") or "").strip()
+    source = str(item.get("source") or "").strip()
+    if not account_id or source not in GOOGLE_SHEETS_EXTERNAL_ACCOUNT_SOURCES:
+        return None
+    return {
+        "id": account_id,
+        "business_id": str(item.get("business_id") or business_id),
+        "provider": "google_sheets",
+        "status": "active",
+        "auth_ref": account_id,
+        "config_json": "{}",
+        "display_name": str(item.get("display_name") or "Google-доступ"),
+        "inventory_source": "external_business_account",
+    }
 
 
 def _load_external_account_credentials(cursor: Any, *, business_id: str, auth_ref: str) -> Dict[str, Any]:

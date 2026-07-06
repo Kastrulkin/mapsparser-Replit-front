@@ -402,7 +402,12 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     try {
       const token = newAuth.getToken();
       if (!token) return;
-      const res = await fetch(`/api/google/oauth/authorize?business_id=${encodeURIComponent(currentBusinessId)}`, {
+      const oauthParams = new URLSearchParams({ business_id: currentBusinessId });
+      const returnTo = `${window.location.pathname}${window.location.search || ''}`;
+      if (returnTo.startsWith('/dashboard/')) {
+        oauthParams.set('return_to', returnTo);
+      }
+      const res = await fetch(`/api/google/oauth/authorize?${oauthParams.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();

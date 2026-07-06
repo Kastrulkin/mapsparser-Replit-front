@@ -63,6 +63,7 @@ type IntegrationsPageV3Props = {
   currentBusinessId?: string | null;
   currentBusiness?: SettingsHubBusiness | null;
   focus?: string | null;
+  returnTo?: string | null;
 };
 
 type RegistryLoadState = {
@@ -201,7 +202,13 @@ const ServiceStatusBadge = ({ status }: { status: ConnectionStatus }) => {
   );
 };
 
-export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus }: IntegrationsPageV3Props) => {
+const safeDashboardReturnTo = (value?: string | null) => {
+  const clean = String(value || '').trim();
+  if (!clean || clean.startsWith('//') || !clean.startsWith('/dashboard/')) return '';
+  return clean;
+};
+
+export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, returnTo }: IntegrationsPageV3Props) => {
   const { toast } = useToast();
   const [loadState, setLoadState] = useState<RegistryLoadState>(emptyLoadState);
   const [loading, setLoading] = useState(false);
@@ -313,7 +320,10 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus }
     try {
       const token = newAuth.getToken();
       if (!token) return;
-      const response = await fetch(`/api/google/oauth/authorize?business_id=${encodeURIComponent(currentBusinessId)}`, {
+      const oauthParams = new URLSearchParams({ business_id: currentBusinessId });
+      const fallbackReturnTo = `/dashboard/settings/integrations?focus=${encodeURIComponent(activeServiceId || normalizedFocus || 'google_sheets')}`;
+      oauthParams.set('return_to', safeDashboardReturnTo(returnTo) || fallbackReturnTo);
+      const response = await fetch(`/api/google/oauth/authorize?${oauthParams.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();

@@ -5,6 +5,7 @@ API эндпоинты для Google Business Profile интеграции
 import os
 import json
 import uuid
+import base64
 from flask import Blueprint, request, jsonify, redirect
 from database_manager import DatabaseManager
 from auth_system import verify_session
@@ -15,6 +16,8 @@ from auth_encryption import encrypt_auth_data, decrypt_auth_data
 from core.helpers import get_business_owner_id
 
 google_business_bp = Blueprint('google_business', __name__)
+
+DEFAULT_GOOGLE_RETURN_PATH = "/dashboard/settings/integrations?focus=google_sheets"
 
 def _row_value(row, key: str, index: int = 0):
     if row is None:
@@ -54,6 +57,60 @@ def _google_business_error_response(error: Exception):
         "status": "google_business_api_error",
         "error": message or "Не удалось получить карточки Google Business Profile",
     }), 502
+
+
+def _safe_google_return_path(value: str | None) -> str:
+    clean = str(value or "").strip()
+    if not clean:
+        return DEFAULT_GOOGLE_RETURN_PATH
+    if clean.startswith("//") or "\r" in clean or "\n" in clean:
+        return DEFAULT_GOOGLE_RETURN_PATH
+    if not clean.startswith("/dashboard/"):
+        return DEFAULT_GOOGLE_RETURN_PATH
+    return clean[:500]
+
+
+def _append_google_auth_status(path: str, status: str) -> str:
+    safe_path = _safe_google_return_path(path)
+    separator = "&" if "?" in safe_path else "?"
+    return f"{safe_path}{separator}google_auth={status}"
+
+
+def _encode_google_oauth_state(user_id: str, business_id: str, return_to: str | None) -> str:
+    payload = {
+        "user_id": str(user_id or ""),
+        "business_id": str(business_id or ""),
+        "return_to": _safe_google_return_path(return_to),
+    }
+    encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8")).decode("ascii")
+    return f"v2:{encoded.rstrip('=')}"
+
+
+def _decode_google_oauth_state(state: str | None) -> dict:
+    raw = str(state or "").strip()
+    if raw.startswith("v2:"):
+        encoded = raw[3:]
+        padded = encoded + ("=" * (-len(encoded) % 4))
+        try:
+            payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
+        except Exception:
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        return {
+            "user_id": str(payload.get("user_id") or ""),
+            "business_id": str(payload.get("business_id") or ""),
+            "return_to": _safe_google_return_path(str(payload.get("return_to") or "")),
+        }
+    try:
+        user_id, business_id = raw.split('_', 1)
+    except ValueError:
+        return {}
+    return {
+        "user_id": user_id,
+        "business_id": business_id,
+        "return_to": DEFAULT_GOOGLE_RETURN_PATH,
+    }
 
 def _public_location(location: dict) -> dict:
     address = location.get("storefrontAddress") if isinstance(location.get("storefrontAddress"), dict) else {}
@@ -183,8 +240,11 @@ def google_oauth_authorize():
         if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
-        # Генерируем state для безопасности (user_id + business_id)
-        state = f"{user_data['user_id']}_{business_id}"
+        state = _encode_google_oauth_state(
+            str(user_data['user_id']),
+            str(business_id),
+            request.args.get("return_to"),
+        )
         
         auth = GoogleBusinessAuth()
         auth_url = auth.get_authorization_url(state)
@@ -217,18 +277,20 @@ def google_oauth_callback():
     
     frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
     
+    state_payload = _decode_google_oauth_state(state)
+    return_to = str(state_payload.get("return_to") or DEFAULT_GOOGLE_RETURN_PATH)
+
     if error:
         # Пользователь отменил авторизацию
-        return redirect(f"{frontend_url}/dashboard/profile?google_auth=error")
+        return redirect(f"{frontend_url}{_append_google_auth_status(return_to, 'error')}")
     
     if not code or not state:
-        return redirect(f"{frontend_url}/dashboard/profile?google_auth=error")
+        return redirect(f"{frontend_url}{_append_google_auth_status(return_to, 'error')}")
     
-    # Парсим state (user_id_business_id)
-    try:
-        user_id, business_id = state.split('_', 1)
-    except ValueError:
-        return redirect(f"{frontend_url}/dashboard/profile?google_auth=error")
+    user_id = str(state_payload.get("user_id") or "")
+    business_id = str(state_payload.get("business_id") or "")
+    if not user_id or not business_id:
+        return redirect(f"{frontend_url}{_append_google_auth_status(return_to, 'error')}")
     
     try:
         auth = GoogleBusinessAuth()
@@ -274,14 +336,14 @@ def google_oauth_callback():
         db.conn.commit()
         db.close()
         
-        # Редиректим на фронтенд с успешным статусом
-        return redirect(f"{frontend_url}/dashboard/profile?google_auth=success")
+        # Редиректим в исходный пользовательский сценарий с успешным статусом
+        return redirect(f"{frontend_url}{_append_google_auth_status(return_to, 'success')}")
         
     except Exception as e:
         print(f"❌ Ошибка обработки OAuth callback: {e}")
         import traceback
         traceback.print_exc()
-        return redirect(f"{frontend_url}/dashboard/profile?google_auth=error")
+        return redirect(f"{frontend_url}{_append_google_auth_status(return_to, 'error')}")
 
 @google_business_bp.route('/api/business/<business_id>/google/status', methods=['GET', 'OPTIONS'])
 def google_status(business_id):

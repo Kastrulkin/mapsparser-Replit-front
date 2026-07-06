@@ -307,6 +307,7 @@ export const SettingsIntegrationsPage = () => {
   const { currentBusinessId, currentBusiness } = useOutletContext<SettingsHubOutletContext>();
   const params = new URLSearchParams(location.search);
   const focus = params.get('focus') || 'integrations';
+  const returnTo = params.get('return_to') || null;
   const integrationsV3Enabled = import.meta.env.VITE_SETTINGS_INTEGRATIONS_V3 !== 'false';
 
   if (integrationsV3Enabled) {
@@ -315,6 +316,7 @@ export const SettingsIntegrationsPage = () => {
         currentBusinessId={currentBusinessId || null}
         currentBusiness={currentBusiness || null}
         focus={focus}
+        returnTo={returnTo}
       />
     );
   }

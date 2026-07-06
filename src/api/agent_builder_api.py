@@ -110,7 +110,7 @@ def _load_builder_connection_inventory(cursor, business_id: str) -> list[dict]:
         FROM externalbusinessaccounts
         WHERE business_id = %s
           AND is_active = TRUE
-          AND source IN ('maton', 'google_sheets', 'telegram_app')
+          AND source IN ('maton', 'google_sheets', 'google_business', 'telegram_app')
         ORDER BY updated_at DESC
         LIMIT 50
         """,
@@ -124,6 +124,12 @@ def _load_builder_connection_inventory(cursor, business_id: str) -> list[dict]:
         if source == "telegram_app":
             provider = "telegram"
             config = {"bot_mode": "business_bot"}
+        elif source == "google_business":
+            provider = "google_sheets"
+            config = {"auth_ref": str(item.get("id") or ""), "source": "google_business"}
+        elif source == "google_sheets":
+            provider = "google_sheets"
+            config = {"auth_ref": str(item.get("id") or ""), "source": "google_sheets"}
         elif source == "maton":
             provider = "maton"
             config = {"channel": "maton_bridge"}

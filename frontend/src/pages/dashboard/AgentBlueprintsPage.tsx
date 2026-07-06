@@ -5163,7 +5163,11 @@ export const AgentBlueprintsPage = () => {
     setWorkspaceMode('connections');
   };
   const openGoogleAccessReconnect = () => {
-    window.location.href = '/dashboard/settings/integrations?focus=google_sheets';
+    const params = new URLSearchParams({
+      focus: 'google_sheets',
+      return_to: '/dashboard/agents',
+    });
+    window.location.href = `/dashboard/settings/integrations?${params.toString()}`;
   };
   const runEmployeePrimaryAction = () => {
     if (!selectedBlueprint || !selectedEmployeeAction) {

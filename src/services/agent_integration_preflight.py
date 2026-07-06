@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 
 NATIVE_READY_PROVIDERS = {"localos_finance"}
 ROUTE_REQUIRED_PROVIDERS = {"google_sheets", "telegram", "maton"}
+GOOGLE_SHEETS_EXTERNAL_ACCOUNT_SOURCES = {"google_sheets", "google_business"}
 
 
 def parse_json_field(value: Any, fallback: Any) -> Any:
@@ -219,11 +220,16 @@ def _binding_preflight_item(
 
 def _has_native_auth_ref(metadata_config: Dict[str, Any], active_integrations: List[Dict[str, Any]]) -> bool:
     integration_id = str(metadata_config.get("integration_id") or "").strip()
+    has_any_auth_ref = False
     for integration in active_integrations:
+        if str(integration.get("auth_ref") or "").strip():
+            has_any_auth_ref = True
         if integration_id and str(integration.get("id") or "").strip() != integration_id:
             continue
         if str(integration.get("auth_ref") or "").strip():
             return True
+    if integration_id:
+        return has_any_auth_ref
     return False
 
 
@@ -490,6 +496,7 @@ def _missing_config_summary(provider: str, missing_config: List[str]) -> str:
 def _load_agent_integrations(cursor: Any, business_id: str) -> List[Dict[str, Any]]:
     if not business_id:
         return []
+    integrations: List[Dict[str, Any]] = []
     try:
         cursor.execute(
             """
@@ -502,6 +509,58 @@ def _load_agent_integrations(cursor: Any, business_id: str) -> List[Dict[str, An
             """,
             (business_id,),
         )
-        return [dict(row) for row in (cursor.fetchall() or [])]
+        integrations = [dict(row) for row in (cursor.fetchall() or [])]
+    except Exception:
+        integrations = []
+    return integrations + _load_google_sheets_oauth_integrations(cursor, business_id, integrations)
+
+
+def _load_google_sheets_oauth_integrations(
+    cursor: Any,
+    business_id: str,
+    existing_integrations: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    existing_google_auth_refs = {
+        str(item.get("auth_ref") or "").strip()
+        for item in existing_integrations
+        if str(item.get("provider") or "").strip() == "google_sheets" and str(item.get("auth_ref") or "").strip()
+    }
+    try:
+        cursor.execute(
+            """
+            SELECT id, business_id, source, display_name
+            FROM externalbusinessaccounts
+            WHERE business_id = %s
+              AND is_active = TRUE
+              AND source IN ('google_sheets', 'google_business')
+            ORDER BY updated_at DESC
+            LIMIT 10
+            """,
+            (business_id,),
+        )
+        rows = cursor.fetchall() or []
     except Exception:
         return []
+    result: List[Dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        account_id = str(item.get("id") or "").strip()
+        if not account_id or account_id in existing_google_auth_refs:
+            continue
+        source = str(item.get("source") or "").strip()
+        if source not in GOOGLE_SHEETS_EXTERNAL_ACCOUNT_SOURCES:
+            continue
+        result.append(
+            {
+                "id": account_id,
+                "business_id": str(item.get("business_id") or business_id),
+                "provider": "google_sheets",
+                "status": "active",
+                "display_name": str(item.get("display_name") or "Google-доступ"),
+                "auth_ref": account_id,
+                "config_json": "{}",
+                "limits_json": "{}",
+                "inventory_source": "external_business_account",
+            }
+        )
+    return result

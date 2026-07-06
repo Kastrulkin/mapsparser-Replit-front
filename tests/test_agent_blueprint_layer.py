@@ -4574,6 +4574,106 @@ def test_google_sheets_adapter_loads_active_agent_integration_credentials(monkey
     assert adapter.credentials["token"] == "access-token"
 
 
+def test_google_sheets_adapter_can_use_google_business_oauth_credentials(monkeypatch):
+    from services import agent_google_sheets_adapter
+
+    cursor = FakeGoogleSheetsIntegrationCursor()
+    cursor.external_accounts["google-1"] = {
+        "id": "google-1",
+        "business_id": "biz1",
+        "source": "google_business",
+        "display_name": "Google-доступ",
+        "auth_data_encrypted": "encrypted-auth",
+        "is_active": True,
+    }
+    monkeypatch.setattr(
+        agent_google_sheets_adapter,
+        "decrypt_auth_data",
+        lambda encrypted: json.dumps(
+            {
+                "token": "access-token",
+                "scopes": [agent_google_sheets_adapter.SHEETS_SCOPE],
+            }
+        ),
+    )
+
+    adapter = agent_google_sheets_adapter.load_google_sheets_append_adapter(
+        cursor,
+        business_id="biz1",
+        integration_id="stale-integration-id",
+    )
+
+    assert adapter.credentials["token"] == "access-token"
+
+
+def test_preflight_treats_google_business_oauth_as_sheets_credential():
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def __init__(self):
+            self.rows = []
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            self.rows = []
+            if "from agent_integrations" in normalized_query:
+                return None
+            if "from externalbusinessaccounts" in normalized_query:
+                self.rows = [
+                    {
+                        "id": "google-1",
+                        "business_id": "biz1",
+                        "source": "google_business",
+                        "display_name": "Google-доступ",
+                    }
+                ]
+                return None
+            raise AssertionError(f"Unhandled SQL: {query}")
+
+        def fetchall(self):
+            return self.rows
+
+    metadata = {
+        "required_integration_bindings": [
+            {
+                "key": "google_sheets_read",
+                "provider": "google_sheets",
+                "capability": "google_sheets.read_rows",
+                "required": True,
+                "required_config": ["spreadsheet_id", "sheet_name"],
+            }
+        ],
+        "agent_binding_integrations": {
+            "google_sheets_read": {
+                "integration_id": "stale-integration-id",
+                "spreadsheet_id": "spreadsheet-1",
+                "sheet_name": "Trips",
+            }
+        },
+    }
+
+    preflight = build_agent_integration_preflight(
+        Cursor(),
+        business_id="biz1",
+        metadata=metadata,
+        input_payload={},
+    )
+
+    assert preflight["ready"] is True
+    assert preflight["items"][0]["resolution"] == "agent_integration_native_provider"
+
+
+def test_google_oauth_returns_to_agent_flow_from_reconnect_cta():
+    agent_page = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text()
+    integrations_page = Path("frontend/src/pages/dashboard/settings/IntegrationsPageV3.tsx").read_text()
+    google_api = Path("src/api/google_business_api.py").read_text()
+
+    assert "return_to: '/dashboard/agents'" in agent_page
+    assert "oauthParams.set('return_to'" in integrations_page
+    assert "request.args.get(\"return_to\")" in google_api
+    assert "dashboard/profile?google_auth" not in google_api
+
+
 def test_google_sheets_adapter_append_row_uses_google_sheets_api(monkeypatch):
     from services import agent_google_sheets_adapter
 
@@ -7640,7 +7740,8 @@ def test_agents_page_normal_result_panel_does_not_dump_raw_artifact_payload():
     assert "Указать Google-таблицу" in source
     assert "Укажите Google-таблицу и лист со списком поездок" in source
     assert "needsGoogleAccessReconnect" in source
-    assert "/dashboard/settings/integrations?focus=google_sheets" in source
+    assert "focus: 'google_sheets'" in source
+    assert "return_to: '/dashboard/agents'" in source
     assert "Переподключить Google-доступ" in source
 
 
@@ -10733,6 +10834,26 @@ class FakeGoogleSheetsIntegrationCursor:
             self.last_results = [{"column_name": "auth_data_encrypted"}]
             return None
         if "from externalbusinessaccounts" in normalized_query:
+            if "select id, business_id, source, display_name" in normalized_query:
+                if "where id = %s" in normalized_query:
+                    account = self.external_accounts.get(params[0])
+                    self.last_result = (
+                        account
+                        if account and account.get("business_id") == params[1] and account.get("is_active") is True
+                        else None
+                    )
+                    return None
+                business_id = params[0]
+                rows = [
+                    account
+                    for account in self.external_accounts.values()
+                    if account.get("business_id") == business_id
+                    and account.get("is_active") is True
+                    and account.get("source") in {"google_sheets", "google_business"}
+                ]
+                self.last_result = rows[0] if rows else None
+                self.last_results = rows
+                return None
             auth_ref = params[0]
             business_id = params[1]
             account = self.external_accounts.get(auth_ref)
