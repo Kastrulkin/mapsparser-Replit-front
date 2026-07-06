@@ -4659,6 +4659,84 @@ def test_google_sheets_adapter_read_rows_uses_google_sheets_values_api(monkeypat
     assert calls[0]["headers"]["Authorization"] == "Bearer access-token"
 
 
+def test_google_sheets_adapter_read_rows_refreshes_expired_access_token(monkeypatch):
+    from services import agent_google_sheets_adapter
+
+    calls = []
+
+    class UnauthorizedResponse:
+        status_code = 401
+        content = b'{"error":"expired"}'
+        text = '{"error":"expired"}'
+
+        def json(self):
+            return {"error": "expired"}
+
+    class ReadResponse:
+        status_code = 200
+        content = b"{}"
+        text = "{}"
+
+        def json(self):
+            return {
+                "range": "Trips!A1:C2",
+                "values": [
+                    ["date", "from", "to"],
+                    ["2022-04-20", "Tallinn", "Airport"],
+                ],
+            }
+
+    class RefreshResponse:
+        status_code = 200
+        content = b"{}"
+        text = "{}"
+
+        def json(self):
+            return {"access_token": "fresh-token"}
+
+    def fake_get(url, **kwargs):
+        calls.append({"method": "get", "url": url, **kwargs})
+        if len([call for call in calls if call["method"] == "get"]) == 1:
+            return UnauthorizedResponse()
+        return ReadResponse()
+
+    def fake_post(url, **kwargs):
+        calls.append({"method": "post", "url": url, **kwargs})
+        return RefreshResponse()
+
+    monkeypatch.setattr(agent_google_sheets_adapter.requests, "get", fake_get)
+    monkeypatch.setattr(agent_google_sheets_adapter.requests, "post", fake_post)
+    adapter = agent_google_sheets_adapter.GoogleSheetsAppendAdapter(
+        {
+            "token": "expired-token",
+            "refresh_token": "refresh-token",
+            "client_id": "client-id",
+            "client_secret": "client-secret",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "scopes": [agent_google_sheets_adapter.SHEETS_SCOPE],
+        }
+    )
+
+    result = adapter.read_rows(
+        {
+            "spreadsheet_id": "spreadsheet-1",
+            "sheet_name": "Trips",
+            "limit": 10,
+        }
+    )
+
+    get_calls = [call for call in calls if call["method"] == "get"]
+    refresh_calls = [call for call in calls if call["method"] == "post"]
+    assert result["success"] is True
+    assert result["row_count"] == 1
+    assert result["rows"][0]["from"] == "Tallinn"
+    assert len(get_calls) == 2
+    assert len(refresh_calls) == 1
+    assert get_calls[0]["headers"]["Authorization"] == "Bearer expired-token"
+    assert get_calls[1]["headers"]["Authorization"] == "Bearer fresh-token"
+    assert refresh_calls[0]["data"]["refresh_token"] == "refresh-token"
+
+
 def test_google_sheets_read_rows_capability_uses_native_provider(monkeypatch):
     from services import agent_capability_handlers
 
@@ -7396,6 +7474,38 @@ def test_message_result_needs_source_data_without_sheet_rows():
     assert result["status"] == "needs_source_data"
     assert "draft_text" not in result
     assert "не получил строку поездки" in result["summary"][0].lower()
+
+
+def test_message_result_prompts_google_reconnect_when_sheet_auth_is_revoked():
+    from services.agent_blueprint_workspace import _render_output
+
+    result = _render_output(
+        "custom",
+        {
+            "workflow_description": "Открой таблицу поездок и подготовь сообщение владельцу",
+            "processing_rules": "Не придумывать факты",
+            "output_format": "Готовое сообщение для проверки",
+        },
+        [
+            {
+                "source_name": "google_sheets_error",
+                "summary": "Google token refresh failed with HTTP 400: invalid_grant",
+                "raw": {
+                    "provider_error": "GOOGLE_SHEETS_PROVIDER_NOT_READY",
+                    "provider_error_message": "Google token refresh failed with HTTP 400: invalid_grant",
+                    "next_action": "connect_or_repair_google_sheets_provider",
+                },
+            }
+        ],
+        [],
+        {},
+    )
+
+    assert result["status"] == "needs_google_access"
+    assert result["title"] == "Нужно переподключить Google-доступ"
+    assert "Таблица выбрана" in result["summary"][0]
+    assert "Переподключите Google-доступ" in result["next_questions"][0]
+    assert "invalid_grant" in result["technical_reason"]
 
 
 def test_message_result_uses_google_sheets_rows_for_concrete_draft(monkeypatch):

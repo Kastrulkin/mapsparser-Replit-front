@@ -37,13 +37,14 @@ class GoogleSheetsAppendAdapter:
             raise GoogleSheetsAdapterError("row_values are required for Google Sheets append.")
         range_name = quote(f"{sheet_name}!A1", safe="")
         url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(spreadsheet_id, safe='')}/values/{range_name}:append"
-        response = requests.post(
-            url,
-            params={"valueInputOption": "USER_ENTERED", "insertDataOption": "INSERT_ROWS"},
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            json={"values": [row_values]},
-            timeout=self.timeout_seconds,
-        )
+        request_kwargs = {
+            "params": {"valueInputOption": "USER_ENTERED", "insertDataOption": "INSERT_ROWS"},
+            "headers": {"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            "json": {"values": [row_values]},
+            "timeout": self.timeout_seconds,
+        }
+        response = requests.post(url, **request_kwargs)
+        response = self._retry_with_refreshed_token_on_unauthorized("post", url, request_kwargs, response, credentials)
         if response.status_code >= 400:
             raise GoogleSheetsAdapterError(f"Google Sheets append failed with HTTP {response.status_code}: {_response_excerpt(response)}")
         payload = response.json() if response.content else {}
@@ -70,12 +71,13 @@ class GoogleSheetsAppendAdapter:
             range_value = f"{sheet_name}!A1:Z"
         limit = max(1, min(int(request.get("limit") or 100), 500))
         url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(spreadsheet_id, safe='')}/values/{quote(range_value, safe='')}"
-        response = requests.get(
-            url,
-            params={"majorDimension": "ROWS"},
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=self.timeout_seconds,
-        )
+        request_kwargs = {
+            "params": {"majorDimension": "ROWS"},
+            "headers": {"Authorization": f"Bearer {token}"},
+            "timeout": self.timeout_seconds,
+        }
+        response = requests.get(url, **request_kwargs)
+        response = self._retry_with_refreshed_token_on_unauthorized("get", url, request_kwargs, response, credentials)
         if response.status_code >= 400:
             raise GoogleSheetsAdapterError(f"Google Sheets read failed with HTTP {response.status_code}: {_response_excerpt(response)}")
         payload = response.json() if response.content else {}
@@ -97,6 +99,29 @@ class GoogleSheetsAppendAdapter:
             "rows": rows,
             "row_count": len(rows),
         }
+
+    def _retry_with_refreshed_token_on_unauthorized(
+        self,
+        method: str,
+        url: str,
+        request_kwargs: Dict[str, Any],
+        response: requests.Response,
+        credentials: Dict[str, Any],
+    ) -> requests.Response:
+        if response.status_code != 401:
+            return response
+        refreshed_credentials = _refresh_credentials(dict(credentials), force=True)
+        refreshed_token = str(refreshed_credentials.get("token") or "").strip()
+        current_token = str(credentials.get("token") or "").strip()
+        if not refreshed_token or refreshed_token == current_token:
+            return response
+        refreshed_kwargs = dict(request_kwargs)
+        refreshed_headers = dict(refreshed_kwargs.get("headers") or {})
+        refreshed_headers["Authorization"] = f"Bearer {refreshed_token}"
+        refreshed_kwargs["headers"] = refreshed_headers
+        if method == "post":
+            return requests.post(url, **refreshed_kwargs)
+        return requests.get(url, **refreshed_kwargs)
 
 
 def load_google_sheets_append_adapter(cursor: Any, *, business_id: str, integration_id: str = "") -> GoogleSheetsAppendAdapter:
@@ -221,7 +246,11 @@ def _validate_sheets_credentials(credentials: Dict[str, Any]) -> None:
 
 
 def _refresh_credentials_if_needed(credentials: Dict[str, Any]) -> Dict[str, Any]:
-    if str(credentials.get("token") or "").strip():
+    return _refresh_credentials(credentials, force=False)
+
+
+def _refresh_credentials(credentials: Dict[str, Any], *, force: bool = False) -> Dict[str, Any]:
+    if str(credentials.get("token") or "").strip() and not force:
         return credentials
     refresh_token = str(credentials.get("refresh_token") or "").strip()
     client_id = str(credentials.get("client_id") or "").strip()

@@ -429,6 +429,24 @@ def _render_message_result(
     feedback_notes: List[str],
 ) -> Dict[str, Any]:
     workflow = _clean_text(setup.get("workflow_description"))
+    google_error = _google_sheets_source_error(extracted)
+    if google_error:
+        return {
+            "title": "Нужно переподключить Google-доступ",
+            "status": "needs_google_access",
+            "summary": [
+                "Таблица выбрана, но LocalOS не смог прочитать её через сохранённый Google-доступ.",
+            ],
+            "next_questions": [
+                "Переподключите Google-доступ к таблицам.",
+                "После подключения запустите тест ещё раз.",
+            ],
+            "technical_reason": google_error,
+            "rules_applied": rules,
+            "format": output_format,
+            "feedback_notes": feedback_notes,
+            "preparation_method": "Сообщение не готовилось: Google не выдал строки таблицы для безопасного результата.",
+        }
     selected_items = _select_message_items(extracted, workflow)
     selected_facts = [_clean_text(item.get("summary")) for item in selected_items if _clean_text(item.get("summary"))]
     if selected_facts:
@@ -440,22 +458,34 @@ def _render_message_result(
             output_format,
             feedback_notes,
         )
-    else:
-        return {
-            "title": "Нужны данные таблицы",
-            "status": "needs_source_data",
-            "summary": [
-                "Агент не получил строку поездки из Google Sheets или другого источника данных, поэтому сообщение не сформировано.",
-            ],
-            "next_questions": [
-                "Проверьте, что Google Sheets подключён именно как источник данных агента.",
-                "Укажите таблицу и лист со списком поездок, затем запустите тест ещё раз.",
-            ],
-            "rules_applied": rules,
-            "format": output_format,
-            "feedback_notes": feedback_notes,
-            "preparation_method": "Сообщение не готовилось: не было строки источника для безопасного результата.",
-        }
+    return {
+        "title": "Нужны данные таблицы",
+        "status": "needs_source_data",
+        "summary": [
+            "Агент не получил строку поездки из Google Sheets или другого источника данных, поэтому сообщение не сформировано.",
+        ],
+        "next_questions": [
+            "Проверьте, что Google Sheets подключён именно как источник данных агента.",
+            "Укажите таблицу и лист со списком поездок, затем запустите тест ещё раз.",
+        ],
+        "rules_applied": rules,
+        "format": output_format,
+        "feedback_notes": feedback_notes,
+        "preparation_method": "Сообщение не готовилось: не было строки источника для безопасного результата.",
+    }
+
+
+def _google_sheets_source_error(extracted: List[Dict[str, Any]]) -> str:
+    for item in extracted:
+        if not isinstance(item, dict):
+            continue
+        if _clean_text(item.get("source_name")) != "google_sheets_error":
+            continue
+        raw = item.get("raw") if isinstance(item.get("raw"), dict) else {}
+        reason = _clean_text(raw.get("provider_error_message") or raw.get("provider_error") or item.get("summary"))
+        if reason:
+            return reason
+    return ""
 
 
 def _generate_message_result_with_llm(
@@ -736,6 +766,20 @@ def _extract_run_source_items(cursor: Any, run_id: str) -> List[Dict[str, Any]]:
         source_rows = result.get("rows") if isinstance(result.get("rows"), list) else []
         provider_read_performed = result.get("provider_read_performed") is True
         source_name = "google_sheets" if provider_read_performed else "inline_rows_preview"
+        if not source_rows and source == "google_sheets" and result.get("provider_error"):
+            items.append(
+                {
+                    "source_name": "google_sheets_error",
+                    "summary": _clean_text(result.get("provider_error_message") or result.get("provider_error")),
+                    "raw": {
+                        "provider_error": _clean_text(result.get("provider_error")),
+                        "provider_error_message": _clean_text(result.get("provider_error_message")),
+                        "next_action": _clean_text(result.get("next_action")),
+                    },
+                    "provider_read_performed": False,
+                    "provider_error": _clean_text(result.get("provider_error")),
+                }
+            )
         for source_row in source_rows[:MAX_REVIEW_ITEMS]:
             if isinstance(source_row, dict):
                 items.append(
