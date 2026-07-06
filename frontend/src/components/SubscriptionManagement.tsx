@@ -83,6 +83,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   const [billingLoading, setBillingLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [unlinkingCard, setUnlinkingCard] = useState(false);
+  const [unlinkConfirmed, setUnlinkConfirmed] = useState(false);
   const [recentAttempts, setRecentAttempts] = useState<BillingAttempt[]>([]);
   const [renewalStatus, setRenewalStatus] = useState<BillingStatusResponse['renewal_status'] | null>(null);
   const { toast } = useToast();
@@ -328,6 +329,10 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   }, [businessId]);
 
   useEffect(() => {
+    setUnlinkConfirmed(false);
+  }, [businessId, subscription?.id, subscription?.payment_method_linked]);
+
+  useEffect(() => {
     if (autoCheckoutStartedRef.current) return;
     if (processing) return;
     if (paymentStatus !== 'required') return;
@@ -427,6 +432,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
           ? 'Текущий оплаченный период сохранён. Следующее продление потребует ручной оплаты.'
           : 'Your current paid period stays active. The next renewal will require a manual payment.',
       });
+      setUnlinkConfirmed(false);
     } catch (error) {
       toast({
         title: t.common.error,
@@ -575,16 +581,30 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
               {renewalStatusText}
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="flex shrink-0 flex-col gap-2">
+            <label className={cn('flex max-w-sm items-start gap-2 rounded-2xl border px-3 py-2 text-sm leading-5', paymentMethodLinked ? 'border-slate-200 bg-white text-slate-700' : 'border-slate-100 bg-slate-50 text-slate-400')}>
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900"
+                checked={paymentMethodLinked ? unlinkConfirmed : false}
+                disabled={!paymentMethodLinked || unlinkingCard}
+                onChange={(event) => setUnlinkConfirmed(event.target.checked)}
+              />
+              <span>
+                {language === 'ru'
+                  ? 'Я понимаю, что после удаления карты автоматические списания остановятся.'
+                  : 'I understand that automatic charges stop after the card is deleted.'}
+              </span>
+            </label>
             {paymentMethodLinked ? (
               <Button
                 variant="outline"
                 className="min-h-11 active:scale-[0.96] transition-transform"
-                disabled={unlinkingCard}
+                disabled={unlinkingCard || !unlinkConfirmed}
                 onClick={handleUnlinkCard}
               >
                 {unlinkingCard ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Link2Off className="mr-2 h-4 w-4" />}
-                {language === 'ru' ? 'Отвязать карту' : 'Unlink card'}
+                {language === 'ru' ? 'Удалить карту' : 'Delete card'}
               </Button>
             ) : (
               <Button
@@ -594,7 +614,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                 title={language === 'ru' ? 'Кнопка станет активной после сохранения карты при оплате' : 'This action becomes available after a card is saved during payment'}
               >
                 <Link2Off className="mr-2 h-4 w-4" />
-                {language === 'ru' ? 'Отвязать карту' : 'Unlink card'}
+                {language === 'ru' ? 'Удалить карту' : 'Delete card'}
               </Button>
             )}
           </div>
