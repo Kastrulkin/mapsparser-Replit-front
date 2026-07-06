@@ -104,6 +104,54 @@ def test_create_stripe_checkout_for_checkout_session_uses_checkout_metadata(monk
     assert marked["provider_invoice_id"] == "cs_test_1"
 
 
+def test_yookassa_checkout_falls_back_to_onetime_when_recurring_not_allowed(monkeypatch) -> None:
+    calls = []
+    marked = {}
+
+    monkeypatch.setattr(
+        yookassa_integration,
+        "load_checkout_session",
+        lambda session_id: {
+            "id": session_id,
+            "tariff_id": "starter_monthly",
+            "entry_point": "registered_paywall",
+            "business_id": "biz-1",
+        },
+    )
+    monkeypatch.setattr(
+        yookassa_integration,
+        "mark_checkout_created",
+        lambda session_id, **kwargs: marked.update({"session_id": session_id, **kwargs}) or {"id": session_id},
+    )
+
+    class _FakeYooKassaClient:
+        def configured(self) -> bool:
+            return True
+
+        def create_payment(self, *, payload, idempotency_key):
+            calls.append({"payload": payload, "idempotency_key": idempotency_key})
+            if len(calls) == 1:
+                raise RuntimeError("YooKassa API 403: {'type': 'error', 'code': 'forbidden', 'description': \"This store can't make recurring payments.\"}")
+            return {
+                "id": "pay-onetime",
+                "status": "pending",
+                "confirmation": {"confirmation_url": "https://yookassa.test/pay"},
+            }
+
+    monkeypatch.setattr(yookassa_integration, "YooKassaClient", _FakeYooKassaClient)
+
+    result = yookassa_integration.create_yookassa_payment_for_checkout_session("checkout-1")
+
+    assert len(calls) == 2
+    assert calls[0]["payload"]["save_payment_method"] is True
+    assert "save_payment_method" not in calls[1]["payload"]
+    assert calls[1]["payload"]["metadata"]["autopay_unavailable_reason"] == "yookassa_recurring_not_enabled"
+    assert result["payment_id"] == "pay-onetime"
+    assert result["confirmation_url"] == "https://yookassa.test/pay"
+    assert result["autopay_requested"] is False
+    assert marked["provider_invoice_id"] == "pay-onetime"
+
+
 def test_subscription_public_payload_exposes_autopay_flags() -> None:
     payload = yookassa_integration._subscription_public_payload(
         {

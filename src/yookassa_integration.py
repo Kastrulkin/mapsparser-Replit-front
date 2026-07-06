@@ -333,6 +333,18 @@ def _build_payment_payload(*, amount: Decimal, currency: str, return_url: str, d
     return payload
 
 
+def _is_recurring_not_allowed_error(error: Exception) -> bool:
+    message = str(error).lower()
+    return (
+        "forbidden" in message
+        and (
+            "can't make recurring payments" in message
+            or "cannot make recurring payments" in message
+            or "recurring" in message
+        )
+    )
+
+
 def _build_checkout_return_url(session: Dict[str, Any]) -> str:
     frontend_base = (os.getenv("FRONTEND_BASE_URL") or "http://localhost:8000").rstrip("/")
     if str(session.get("entry_point") or "").strip() == "registered_paywall" and str(session.get("business_id") or "").strip():
@@ -351,25 +363,50 @@ def create_yookassa_payment_for_checkout_session(session_id: str) -> Dict[str, A
 
     amount = TARIFFS[tariff_id]["amount"]
     currency = TARIFFS[tariff_id]["currency"]
-    payment = client.create_payment(
-        payload=_build_payment_payload(
-            amount=amount,
-            currency=currency,
-            return_url=_build_checkout_return_url(session),
-            description=f"LocalOS {tariff_id} checkout",
-            metadata={
-                "checkout_session_id": str(session.get("id") or ""),
-                "tariff_id": tariff_id,
-                "entry_point": str(session.get("entry_point") or ""),
-                "kind": "checkout_session_payment",
-                "env": os.getenv("YOOKASSA_ENV", "prod"),
-            },
-            payment_method_id=None,
-            save_payment_method=True,
-            recurring=False,
-        ),
-        idempotency_key=_short_idempotency_key("cs", str(session.get("id") or ""), uuid.uuid4().hex[:10]),
-    )
+    metadata = {
+        "checkout_session_id": str(session.get("id") or ""),
+        "tariff_id": tariff_id,
+        "entry_point": str(session.get("entry_point") or ""),
+        "kind": "checkout_session_payment",
+        "env": os.getenv("YOOKASSA_ENV", "prod"),
+    }
+    save_payment_method = True
+    try:
+        payment = client.create_payment(
+            payload=_build_payment_payload(
+                amount=amount,
+                currency=currency,
+                return_url=_build_checkout_return_url(session),
+                description=f"LocalOS {tariff_id} checkout",
+                metadata=metadata,
+                payment_method_id=None,
+                save_payment_method=True,
+                recurring=False,
+            ),
+            idempotency_key=_short_idempotency_key("cs", str(session.get("id") or ""), uuid.uuid4().hex[:10]),
+        )
+    except RuntimeError as exc:
+        if not _is_recurring_not_allowed_error(exc):
+            raise
+        save_payment_method = False
+        fallback_metadata = {
+            **metadata,
+            "autopay_requested": "false",
+            "autopay_unavailable_reason": "yookassa_recurring_not_enabled",
+        }
+        payment = client.create_payment(
+            payload=_build_payment_payload(
+                amount=amount,
+                currency=currency,
+                return_url=_build_checkout_return_url(session),
+                description=f"LocalOS {tariff_id} checkout",
+                metadata=fallback_metadata,
+                payment_method_id=None,
+                save_payment_method=False,
+                recurring=False,
+            ),
+            idempotency_key=_short_idempotency_key("cs-onetime", str(session.get("id") or ""), uuid.uuid4().hex[:10]),
+        )
     updated = mark_checkout_created(
         str(session.get("id") or ""),
         provider_invoice_id=str(payment.get("id") or "").strip() or None,
@@ -380,6 +417,7 @@ def create_yookassa_payment_for_checkout_session(session_id: str) -> Dict[str, A
         "payment_id": payment.get("id"),
         "confirmation_url": ((payment.get("confirmation") or {}).get("confirmation_url")),
         "payment_status": payment.get("status"),
+        "autopay_requested": save_payment_method,
     }
 
 
@@ -875,6 +913,7 @@ def billing_checkout_session_start():
                 "payment_id": payment.get("payment_id"),
                 "confirmation_url": payment.get("confirmation_url"),
                 "payment_status": payment.get("payment_status"),
+                "autopay_requested": payment.get("autopay_requested"),
             }
         else:
             from stripe_integration import create_stripe_checkout_for_checkout_session

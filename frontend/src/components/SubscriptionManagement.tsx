@@ -586,7 +586,17 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                 {unlinkingCard ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Link2Off className="mr-2 h-4 w-4" />}
                 {language === 'ru' ? 'Отвязать карту' : 'Unlink card'}
               </Button>
-            ) : null}
+            ) : (
+              <Button
+                variant="outline"
+                className="min-h-11"
+                disabled
+                title={language === 'ru' ? 'Кнопка станет активной после сохранения карты при оплате' : 'This action becomes available after a card is saved during payment'}
+              >
+                <Link2Off className="mr-2 h-4 w-4" />
+                {language === 'ru' ? 'Отвязать карту' : 'Unlink card'}
+              </Button>
+            )}
           </div>
         </div>
         <div className="grid gap-px bg-slate-100 md:grid-cols-3">
