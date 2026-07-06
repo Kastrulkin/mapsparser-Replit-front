@@ -565,6 +565,42 @@ def _apply_payment_succeeded(cursor, *, payment: Dict[str, Any], source_event: s
     }
 
 
+def _attach_checkout_payment_method(cursor, *, checkout_payload: Dict[str, Any], payment: Dict[str, Any]) -> Dict[str, Any]:
+    """Persist the saved YooKassa method after the first checkout payment.
+
+    Checkout activation lives in the shared checkout service, while recurring
+    renewals use subscriptions.payment_method_id from this module. Copy the
+    method returned by YooKassa at that boundary.
+    """
+    subscription_id = str((checkout_payload or {}).get("subscription_id") or "").strip()
+    payment_method_id = str(((payment.get("payment_method") or {}).get("id") or "")).strip()
+    payment_id = str(payment.get("id") or "").strip()
+    if not subscription_id or not payment_method_id:
+        return {
+            "subscription_id": subscription_id or None,
+            "payment_method_linked": False,
+            "reason": "missing_subscription_id_or_payment_method_id",
+        }
+
+    cursor.execute(
+        """
+        UPDATE subscriptions
+        SET payment_method_id = %s,
+            last_payment_id = COALESCE(NULLIF(last_payment_id, ''), %s),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = %s
+        RETURNING id, payment_method_id, next_billing_date
+        """,
+        (payment_method_id, payment_id or None, subscription_id),
+    )
+    updated = _row_to_dict(cursor, cursor.fetchone())
+    return {
+        "subscription_id": subscription_id,
+        "payment_method_linked": bool(str(updated.get("payment_method_id") or "").strip()),
+        "next_billing_date": _as_str_dt(_parse_dt(updated.get("next_billing_date"))),
+    }
+
+
 def _apply_payment_canceled(cursor, *, payment: Dict[str, Any], source_event: str) -> Dict[str, Any]:
     metadata = dict(payment.get("metadata") or {})
     subscription_id = str(metadata.get("subscription_id") or "").strip()
@@ -890,6 +926,20 @@ def billing_checkout_session_status():
                             provider_status=payment_status,
                         )
                         status_payload = complete_checkout(session_id)
+                        method_db = DatabaseManager()
+                        try:
+                            method_cursor = method_db.conn.cursor()
+                            status_payload["payment_method_state"] = _attach_checkout_payment_method(
+                                method_cursor,
+                                checkout_payload=status_payload,
+                                payment=payment,
+                            )
+                            method_db.conn.commit()
+                        except Exception:
+                            method_db.conn.rollback()
+                            raise
+                        finally:
+                            method_db.close()
                     elif payment_status == "canceled":
                         mark_checkout_failed(session_id, provider_status=payment_status, error_message="payment canceled")
                         status_payload = get_checkout_status(session_id)
@@ -1277,6 +1327,11 @@ def yookassa_webhook():
                 provider_status=api_status,
             )
             result = complete_checkout(checkout_session_id)
+            result["payment_method_state"] = _attach_checkout_payment_method(
+                cursor,
+                checkout_payload=result,
+                payment=api_payment,
+            )
         elif checkout_session_id and event_name == "payment.canceled":
             if api_status != "canceled":
                 raise RuntimeError(f"payment status mismatch: webhook={event_name} api={api_status}")
