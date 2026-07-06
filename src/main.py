@@ -63,6 +63,7 @@ from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_t
 from database_manager import DatabaseManager, get_db_connection
 from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR, normalize_status
 from auth_system import CONSENT_VERSION, authenticate_user, create_session, normalize_email, verify_email_token, verify_session, rotate_verification_token
+from billing_constants import TARIFFS
 from core.email_delivery import build_password_setup_link, send_email as deliver_email, send_password_setup_email, send_verification_email
 from init_database_schema import init_database_schema
 from core.default_ai_prompts import get_default_ai_prompts
@@ -9372,6 +9373,219 @@ def get_users_with_businesses():
             import traceback
             payload["traceback"] = traceback.format_exc()
         return jsonify(payload), 500
+
+@app.route('/api/admin/subscriptions/overview', methods=['GET'])
+def get_admin_subscriptions_overview():
+    """Операционный обзор подписок, автоплатежей и кредитов для суперадмина."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            db.close()
+            return jsonify({"error": "Недостаточно прав"}), 403
+
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                s.id,
+                s.user_id,
+                s.business_id,
+                s.tariff_id,
+                s.pending_tariff_id,
+                s.status,
+                s.period_start,
+                s.next_billing_date,
+                s.payment_method_id IS NOT NULL AS payment_method_linked,
+                s.last_payment_id,
+                s.retry_count,
+                s.next_retry_at,
+                s.created_at,
+                s.updated_at,
+                u.email AS user_email,
+                u.name AS user_name,
+                u.is_active AS user_is_active,
+                COALESCE(u.credits_balance, 0) AS credits_balance,
+                b.name AS business_name,
+                b.subscription_tier AS business_subscription_tier,
+                b.subscription_status AS business_subscription_status,
+                b.subscription_ends_at AS business_subscription_ends_at,
+                latest_attempt.status AS latest_attempt_status,
+                latest_attempt.attempt_type AS latest_attempt_type,
+                latest_attempt.payment_id AS latest_attempt_payment_id,
+                latest_attempt.error_message AS latest_attempt_error,
+                latest_attempt.created_at AS latest_attempt_at
+            FROM subscriptions s
+            JOIN users u ON u.id = s.user_id
+            LEFT JOIN businesses b ON b.id = s.business_id
+            LEFT JOIN LATERAL (
+                SELECT status, attempt_type, payment_id, error_message, created_at
+                FROM billing_attempts
+                WHERE subscription_id = s.id
+                ORDER BY created_at DESC
+                LIMIT 1
+            ) latest_attempt ON TRUE
+            ORDER BY
+                CASE WHEN s.status = 'blocked' THEN 0 WHEN s.status = 'active' THEN 1 ELSE 2 END,
+                COALESCE(s.next_retry_at, s.next_billing_date, s.updated_at) ASC
+            LIMIT 300
+            """
+        )
+        subscriptions = [_row_to_dict(cursor, row) for row in (cursor.fetchall() or [])]
+
+        cursor.execute(
+            """
+            SELECT
+                ba.id,
+                ba.subscription_id,
+                ba.attempt_type,
+                ba.attempt_no,
+                ba.status,
+                ba.payment_id,
+                ba.amount_value,
+                ba.currency,
+                ba.error_message,
+                ba.created_at,
+                ba.updated_at,
+                u.email AS user_email,
+                b.name AS business_name
+            FROM billing_attempts ba
+            JOIN subscriptions s ON s.id = ba.subscription_id
+            JOIN users u ON u.id = s.user_id
+            LEFT JOIN businesses b ON b.id = s.business_id
+            ORDER BY ba.created_at DESC
+            LIMIT 30
+            """
+        )
+        attempts = [_row_to_dict(cursor, row) for row in (cursor.fetchall() or [])]
+
+        cursor.execute(
+            """
+            SELECT
+                cl.id,
+                cl.user_id,
+                cl.subscription_id,
+                cl.delta,
+                cl.reason,
+                cl.period_start,
+                cl.period_end,
+                cl.external_id,
+                cl.created_at,
+                u.email AS user_email,
+                b.name AS business_name
+            FROM credit_ledger cl
+            JOIN users u ON u.id = cl.user_id
+            LEFT JOIN subscriptions s ON s.id = cl.subscription_id
+            LEFT JOIN businesses b ON b.id = s.business_id
+            ORDER BY cl.created_at DESC
+            LIMIT 30
+            """
+        )
+        ledger = [_row_to_dict(cursor, row) for row in (cursor.fetchall() or [])]
+
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*) FILTER (WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '30 days') AS new_users_30d,
+                COUNT(*) FILTER (WHERE COALESCE(is_active, TRUE) = FALSE) AS inactive_users_total,
+                COUNT(*) AS users_total
+            FROM users
+            """
+        )
+        user_metrics = _row_to_dict(cursor, cursor.fetchone()) or {}
+
+        db.close()
+
+        now = datetime.now(timezone.utc)
+        tariff_amounts = {
+            tariff_id: float(config.get("amount", 0))
+            for tariff_id, config in TARIFFS.items()
+        }
+
+        def parse_admin_dt(value):
+            if not value:
+                return None
+            if isinstance(value, datetime):
+                return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            try:
+                text = str(value)
+                if text.endswith("Z"):
+                    text = text[:-1] + "+00:00"
+                parsed = datetime.fromisoformat(text)
+                return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+            except Exception:
+                return None
+
+        def serialize_admin_value(value):
+            if isinstance(value, datetime):
+                dt = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+                return dt.isoformat()
+            return value
+
+        def serialize_admin_row(row):
+            return {key: serialize_admin_value(value) for key, value in (row or {}).items()}
+
+        active_subscriptions = [item for item in subscriptions if str(item.get("status") or "") == "active"]
+        blocked_subscriptions = [item for item in subscriptions if str(item.get("status") or "") == "blocked"]
+        canceled_subscriptions = [item for item in subscriptions if str(item.get("status") or "") == "canceled"]
+        autopay_enabled = [item for item in active_subscriptions if bool(item.get("payment_method_linked"))]
+        missing_payment_method = [item for item in active_subscriptions if not bool(item.get("payment_method_linked"))]
+        due_soon_count = 0
+        overdue_count = 0
+        blocked_30d = 0
+
+        for item in subscriptions:
+            status = str(item.get("status") or "")
+            next_billing = parse_admin_dt(item.get("next_billing_date"))
+            updated_at = parse_admin_dt(item.get("updated_at"))
+            if status == "active" and next_billing:
+                if next_billing <= now:
+                    overdue_count += 1
+                elif next_billing <= now + timedelta(days=7):
+                    due_soon_count += 1
+            if status in {"blocked", "canceled"} and updated_at and updated_at >= now - timedelta(days=30):
+                blocked_30d += 1
+
+        monthly_recurring_revenue = 0.0
+        for item in active_subscriptions:
+            monthly_recurring_revenue += tariff_amounts.get(str(item.get("tariff_id") or ""), 0.0)
+
+        summary = {
+            "subscriptions_total": len(subscriptions),
+            "active_subscriptions": len(active_subscriptions),
+            "blocked_subscriptions": len(blocked_subscriptions),
+            "canceled_subscriptions": len(canceled_subscriptions),
+            "autopay_enabled": len(autopay_enabled),
+            "missing_payment_method": len(missing_payment_method),
+            "due_soon_7d": due_soon_count,
+            "overdue": overdue_count,
+            "new_users_30d": int(user_metrics.get("new_users_30d") or 0),
+            "inactive_users_total": int(user_metrics.get("inactive_users_total") or 0),
+            "churned_or_blocked_30d": blocked_30d,
+            "users_total": int(user_metrics.get("users_total") or 0),
+            "monthly_recurring_revenue": monthly_recurring_revenue,
+            "currency": "RUB",
+        }
+
+        return jsonify({
+            "success": True,
+            "summary": summary,
+            "subscriptions": [serialize_admin_row(item) for item in subscriptions],
+            "recent_attempts": [serialize_admin_row(item) for item in attempts],
+            "credit_ledger": [serialize_admin_row(item) for item in ledger],
+        })
+
+    except Exception as e:
+        logger.exception("Admin subscriptions overview failed")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/admin/businesses/<business_id>/block', methods=['POST'])
 def block_business(business_id):

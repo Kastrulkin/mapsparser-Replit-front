@@ -37,7 +37,7 @@ const IndustryPatternsManagement = lazy(() =>
   import('../../components/IndustryPatternsManagement').then((module) => ({ default: module.IndustryPatternsManagement })),
 );
 
-type AdminTabId = 'businesses' | 'agents' | 'agentApi' | 'tokens' | 'growth' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting';
+type AdminTabId = 'businesses' | 'subscriptions' | 'agents' | 'agentApi' | 'tokens' | 'growth' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting';
 interface Business {
   id: string;
   name: string;
@@ -133,6 +133,90 @@ interface AdminAgentBlueprintOverview {
   agents: AdminAgentBlueprint[];
 }
 
+interface AdminSubscriptionSummary {
+  subscriptions_total: number;
+  active_subscriptions: number;
+  blocked_subscriptions: number;
+  canceled_subscriptions: number;
+  autopay_enabled: number;
+  missing_payment_method: number;
+  due_soon_7d: number;
+  overdue: number;
+  new_users_30d: number;
+  inactive_users_total: number;
+  churned_or_blocked_30d: number;
+  users_total: number;
+  monthly_recurring_revenue: number;
+  currency: string;
+}
+
+interface AdminSubscriptionRow {
+  id: string;
+  user_id: string;
+  business_id?: string;
+  tariff_id: string;
+  pending_tariff_id?: string;
+  status: string;
+  period_start?: string;
+  next_billing_date?: string;
+  payment_method_linked?: boolean;
+  last_payment_id?: string;
+  retry_count?: number;
+  next_retry_at?: string;
+  created_at?: string;
+  updated_at?: string;
+  user_email?: string;
+  user_name?: string;
+  user_is_active?: boolean | number;
+  credits_balance?: number;
+  business_name?: string;
+  business_subscription_tier?: string;
+  business_subscription_status?: string;
+  business_subscription_ends_at?: string;
+  latest_attempt_status?: string;
+  latest_attempt_type?: string;
+  latest_attempt_payment_id?: string;
+  latest_attempt_error?: string;
+  latest_attempt_at?: string;
+}
+
+interface AdminBillingAttemptRow {
+  id: string;
+  subscription_id: string;
+  attempt_type?: string;
+  attempt_no?: number;
+  status?: string;
+  payment_id?: string;
+  amount_value?: string | number;
+  currency?: string;
+  error_message?: string;
+  created_at?: string;
+  updated_at?: string;
+  user_email?: string;
+  business_name?: string;
+}
+
+interface AdminCreditLedgerRow {
+  id: string;
+  user_id: string;
+  subscription_id?: string;
+  delta: number;
+  reason: string;
+  period_start?: string;
+  period_end?: string;
+  external_id?: string;
+  created_at?: string;
+  user_email?: string;
+  business_name?: string;
+}
+
+interface AdminSubscriptionsOverview {
+  summary: AdminSubscriptionSummary;
+  subscriptions: AdminSubscriptionRow[];
+  recent_attempts: AdminBillingAttemptRow[];
+  credit_ledger: AdminCreditLedgerRow[];
+}
+
 type AdminTabConfig = {
   id: AdminTabId;
   label: string;
@@ -141,6 +225,7 @@ type AdminTabConfig = {
 
 const adminTabs: AdminTabConfig[] = [
   { id: 'businesses', label: 'Пользователи и бизнесы', icon: User },
+  { id: 'subscriptions', label: 'Подписки', icon: CreditCard },
   { id: 'agents', label: 'Агенты пользователей', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
   { id: 'prospecting', label: 'Поиск клиентов', icon: Search },
@@ -154,6 +239,7 @@ const adminTabs: AdminTabConfig[] = [
 
 const primaryAdminTabs: AdminTabConfig[] = [
   { id: 'businesses', label: 'Пользователи', icon: User },
+  { id: 'subscriptions', label: 'Подписки', icon: CreditCard },
   { id: 'agents', label: 'Агенты', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
   { id: 'prospecting', label: 'Поиск клиентов', icon: Search },
@@ -275,6 +361,74 @@ const getNetworkPaymentState = (businesses: Business[]) => {
   };
 };
 
+const formatAdminDateTime = (value?: string) => {
+  if (!value) {
+    return 'Дата не указана';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'Дата не указана';
+  }
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+};
+
+const formatAdminMoney = (value?: number, currency = 'RUB') =>
+  new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+
+const getSubscriptionStatusLabel = (status?: string) => {
+  if (status === 'active') return 'Активна';
+  if (status === 'blocked') return 'Проблема оплаты';
+  if (status === 'canceled') return 'Отменена';
+  return 'Неизвестно';
+};
+
+const getSubscriptionStatusClassName = (status?: string) => {
+  if (status === 'active') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (status === 'blocked') return 'border-amber-200 bg-amber-50 text-amber-800';
+  if (status === 'canceled') return 'border-slate-200 bg-slate-100 text-slate-600';
+  return 'border-slate-200 bg-white text-slate-600';
+};
+
+const getBillingAttemptLabel = (status?: string) => {
+  if (status === 'succeeded') return 'Успешно';
+  if (status === 'pending') return 'Ожидает';
+  if (status === 'canceled') return 'Отменён';
+  if (status === 'failed') return 'Ошибка';
+  if (status === 'scheduled') return 'Запланирован';
+  return status || 'Нет попыток';
+};
+
+const getBillingAttemptClassName = (status?: string) => {
+  if (status === 'succeeded') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (status === 'pending' || status === 'scheduled') return 'border-sky-200 bg-sky-50 text-sky-700';
+  if (status === 'failed' || status === 'canceled') return 'border-rose-200 bg-rose-50 text-rose-700';
+  return 'border-slate-200 bg-slate-50 text-slate-600';
+};
+
+const buildSubscriptionAttention = (subscription: AdminSubscriptionRow) => {
+  const status = String(subscription.status || '');
+  if (status === 'blocked') {
+    return 'Нужна проверка оплаты';
+  }
+  if (status === 'active' && !subscription.payment_method_linked) {
+    return 'Нет карты для автосписания';
+  }
+  if (subscription.latest_attempt_status === 'failed' || subscription.latest_attempt_status === 'canceled') {
+    return 'Последнее списание не прошло';
+  }
+  return 'В порядке';
+};
+
 const closeConfirmDialog = (
   setConfirmDialog: React.Dispatch<React.SetStateAction<{
     isOpen: boolean;
@@ -358,6 +512,8 @@ export const AdminPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [agentBlueprintOverview, setAgentBlueprintOverview] = useState<AdminAgentBlueprintOverview | null>(null);
   const [agentBlueprintLoading, setAgentBlueprintLoading] = useState(false);
+  const [subscriptionsOverview, setSubscriptionsOverview] = useState<AdminSubscriptionsOverview | null>(null);
+  const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [settingsModal, setSettingsModal] = useState<{
@@ -449,6 +605,29 @@ export const AdminPage: React.FC = () => {
     }
   }, [toast]);
 
+  const loadSubscriptionsOverview = useCallback(async () => {
+    try {
+      setSubscriptionsLoading(true);
+      const data = await newAuth.makeRequest('/admin/subscriptions/overview');
+      if (data.success) {
+        setSubscriptionsOverview({
+          summary: data.summary,
+          subscriptions: data.subscriptions || [],
+          recent_attempts: data.recent_attempts || [],
+          credit_ledger: data.credit_ledger || [],
+        });
+      }
+    } catch (error: unknown) {
+      toast({
+        title: 'Ошибка',
+        description: getErrorMessage(error, 'Не удалось загрузить подписки'),
+        variant: 'destructive',
+      });
+    } finally {
+      setSubscriptionsLoading(false);
+    }
+  }, [toast]);
+
   const runReloadingMutation = useCallback(async (
     request: () => Promise<unknown>,
     successDescription: string,
@@ -520,6 +699,12 @@ export const AdminPage: React.FC = () => {
       loadAgentBlueprintOverview();
     }
   }, [activeTab, loadAgentBlueprintOverview]);
+
+  useEffect(() => {
+    if (activeTab === 'subscriptions') {
+      loadSubscriptionsOverview();
+    }
+  }, [activeTab, loadSubscriptionsOverview]);
 
   const toggleNetwork = (networkId: string) => {
     const newExpanded = new Set(expandedNetworks);
@@ -765,6 +950,32 @@ export const AdminPage: React.FC = () => {
     { label: 'Средний риск', value: String(agentSummary?.medium_risk || 0), tone: 'warning' },
     { label: 'Активные', value: String(agentSummary?.active || 0), tone: 'positive' },
   ];
+  const subscriptionSummary = subscriptionsOverview?.summary;
+  const subscriptionMetrics = [
+    {
+      label: 'Активные подписки',
+      value: <span className="tabular-nums">{subscriptionSummary?.active_subscriptions || 0}</span>,
+      hint: `${subscriptionSummary?.autopay_enabled || 0} с автоплатежом`,
+      tone: 'positive',
+    },
+    {
+      label: 'Списания скоро',
+      value: <span className="tabular-nums">{subscriptionSummary?.due_soon_7d || 0}</span>,
+      hint: `${subscriptionSummary?.overdue || 0} уже просрочены`,
+      tone: subscriptionSummary?.overdue ? 'warning' : 'default',
+    },
+    {
+      label: 'Новые пользователи',
+      value: <span className="tabular-nums">{subscriptionSummary?.new_users_30d || 0}</span>,
+      hint: 'За последние 30 дней',
+    },
+    {
+      label: 'MRR',
+      value: <span className="tabular-nums">{formatAdminMoney(subscriptionSummary?.monthly_recurring_revenue, subscriptionSummary?.currency || 'RUB')}</span>,
+      hint: `${subscriptionSummary?.churned_or_blocked_30d || 0} отвалились или заблокированы за 30 дней`,
+      tone: subscriptionSummary?.churned_or_blocked_30d ? 'warning' : 'default',
+    },
+  ];
   const formatAdminDate = (value?: string) => {
     if (!value) return 'Дата не указана';
     return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
@@ -848,7 +1059,7 @@ export const AdminPage: React.FC = () => {
 
         <div className="rounded-[2rem] border border-slate-200/80 bg-white/95 p-2.5 shadow-sm">
           <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
               {primaryAdminTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -898,7 +1109,182 @@ export const AdminPage: React.FC = () => {
         </div>
 
         <Suspense fallback={<AdminTabFallback />}>
-        {activeTab === 'agents' ? (
+        {activeTab === 'subscriptions' ? (
+          <DashboardSection
+            title="Подписки"
+            description="Кто платит, когда следующее списание, есть ли карта для автоплатежа и сколько кредитов осталось у пользователей."
+            actions={(
+              <Button type="button" variant="outline" onClick={loadSubscriptionsOverview} disabled={subscriptionsLoading}>
+                Обновить
+              </Button>
+            )}
+            contentClassName="space-y-6"
+          >
+            <DashboardCompactMetricsRow items={subscriptionMetrics} />
+
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]">
+              <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-950">Клиенты и подписки</h3>
+                    <p className="text-sm leading-6 text-slate-500">Срок, автоплатёж, остаток кредитов и последний платёжный статус.</p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600 tabular-nums">
+                    {subscriptionsOverview?.subscriptions.length || 0} всего
+                  </span>
+                </div>
+
+                {subscriptionsLoading ? (
+                  <div className="px-5 py-10 text-center text-sm text-slate-500">Загружаем подписки...</div>
+                ) : !subscriptionsOverview || subscriptionsOverview.subscriptions.length === 0 ? (
+                  <div className="px-5 py-6">
+                    <DashboardEmptyState
+                      title="Подписок пока нет"
+                      description="После первой оплаты здесь появятся клиенты, даты списаний, автоплатёж и баланс кредитов."
+                    />
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[980px]">
+                      <div className="grid grid-cols-[minmax(220px,1.2fr)_minmax(170px,0.8fr)_minmax(150px,0.65fr)_minmax(150px,0.65fr)_minmax(130px,0.55fr)_minmax(180px,0.8fr)] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        <div>Клиент</div>
+                        <div>Тариф</div>
+                        <div>Статус</div>
+                        <div>Следующее списание</div>
+                        <div>Кредиты</div>
+                        <div>Что проверить</div>
+                      </div>
+                      <div className="divide-y divide-slate-100">
+                        {subscriptionsOverview.subscriptions.map((subscription) => (
+                          <div
+                            key={subscription.id}
+                            className="grid grid-cols-[minmax(220px,1.2fr)_minmax(170px,0.8fr)_minmax(150px,0.65fr)_minmax(150px,0.65fr)_minmax(130px,0.55fr)_minmax(180px,0.8fr)] gap-3 px-5 py-4 text-sm"
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate font-semibold text-slate-950">
+                                {subscription.business_name || subscription.user_name || subscription.user_email || 'Клиент без названия'}
+                              </div>
+                              <div className="mt-1 truncate text-xs text-slate-500">{subscription.user_email || 'email не указан'}</div>
+                              <div className="mt-2 truncate text-xs text-slate-400">{subscription.id}</div>
+                            </div>
+
+                            <div className="min-w-0">
+                              <div className="font-semibold text-slate-900">{subscription.tariff_id || 'тариф не указан'}</div>
+                              <div className="mt-1 text-xs text-slate-500">
+                                {subscription.payment_method_linked ? 'Автоплатёж включён' : 'Карта не привязана'}
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getSubscriptionStatusClassName(subscription.status)}`}>
+                                {getSubscriptionStatusLabel(subscription.status)}
+                              </span>
+                              {subscription.latest_attempt_status ? (
+                                <div className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${getBillingAttemptClassName(subscription.latest_attempt_status)}`}>
+                                  {getBillingAttemptLabel(subscription.latest_attempt_status)}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="leading-6 text-slate-700">
+                              <div className="font-medium tabular-nums">{formatAdminDateTime(subscription.next_billing_date)}</div>
+                              {subscription.next_retry_at ? (
+                                <div className="text-xs text-amber-700">retry: {formatAdminDateTime(subscription.next_retry_at)}</div>
+                              ) : null}
+                            </div>
+
+                            <div className="text-xl font-semibold tracking-tight text-slate-950 tabular-nums">
+                              {Number(subscription.credits_balance || 0)}
+                            </div>
+
+                            <div className="text-sm leading-6 text-slate-600">
+                              <div>{buildSubscriptionAttention(subscription)}</div>
+                              {subscription.latest_attempt_error ? (
+                                <div className="mt-1 line-clamp-2 text-xs text-rose-600">{subscription.latest_attempt_error}</div>
+                              ) : null}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="text-base font-semibold text-slate-950">Что требует внимания</h3>
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center justify-between rounded-2xl bg-amber-50 px-4 py-3 text-sm">
+                      <span className="font-medium text-amber-900">Без карты</span>
+                      <span className="font-semibold text-amber-900 tabular-nums">{subscriptionSummary?.missing_payment_method || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-2xl bg-rose-50 px-4 py-3 text-sm">
+                      <span className="font-medium text-rose-900">Проблема оплаты</span>
+                      <span className="font-semibold text-rose-900 tabular-nums">{subscriptionSummary?.blocked_subscriptions || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm">
+                      <span className="font-medium text-slate-700">Пользователи всего</span>
+                      <span className="font-semibold text-slate-950 tabular-nums">{subscriptionSummary?.users_total || 0}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="text-base font-semibold text-slate-950">Последние списания</h3>
+                  <div className="mt-4 space-y-3">
+                    {(subscriptionsOverview?.recent_attempts || []).slice(0, 5).map((attempt) => (
+                      <div key={attempt.id} className="rounded-2xl bg-slate-50 px-4 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="truncate text-sm font-semibold text-slate-900">{attempt.business_name || attempt.user_email || 'Клиент'}</span>
+                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold ${getBillingAttemptClassName(attempt.status)}`}>
+                            {getBillingAttemptLabel(attempt.status)}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-xs leading-5 text-slate-500">
+                          {attempt.attempt_type || 'payment'} · {formatAdminDateTime(attempt.created_at)}
+                        </div>
+                        {attempt.error_message ? (
+                          <div className="mt-1 line-clamp-2 text-xs text-rose-600">{attempt.error_message}</div>
+                        ) : null}
+                      </div>
+                    ))}
+                    {(subscriptionsOverview?.recent_attempts || []).length === 0 ? (
+                      <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">Попыток списания пока нет.</div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-100 px-5 py-4">
+                <h3 className="text-base font-semibold text-slate-950">Движение кредитов</h3>
+                <p className="text-sm leading-6 text-slate-500">Последние начисления и списания, чтобы быстро понять остатки и причины изменения баланса.</p>
+              </div>
+              <div className="overflow-x-auto">
+                <div className="min-w-[860px] divide-y divide-slate-100">
+                  {(subscriptionsOverview?.credit_ledger || []).map((entry) => (
+                    <div key={entry.id} className="grid grid-cols-[minmax(220px,1fr)_120px_minmax(180px,0.8fr)_minmax(220px,1fr)] gap-3 px-5 py-3 text-sm">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-slate-950">{entry.business_name || entry.user_email || 'Пользователь'}</div>
+                        <div className="truncate text-xs text-slate-500">{entry.user_email || entry.user_id}</div>
+                      </div>
+                      <div className={`font-semibold tabular-nums ${Number(entry.delta || 0) < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                        {Number(entry.delta || 0) > 0 ? '+' : ''}{Number(entry.delta || 0)}
+                      </div>
+                      <div className="text-slate-700">{entry.reason || 'Причина не указана'}</div>
+                      <div className="text-slate-500 tabular-nums">{formatAdminDateTime(entry.created_at)}</div>
+                    </div>
+                  ))}
+                  {(subscriptionsOverview?.credit_ledger || []).length === 0 ? (
+                    <div className="px-5 py-8 text-center text-sm text-slate-500">Движения кредитов пока нет.</div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </DashboardSection>
+        ) : activeTab === 'agents' ? (
           <DashboardSection
             title={activeTabConfig.label}
             description="Только просмотр: задача, бизнес, внешние действия, запуски и риск для модерации пользовательских агентов."
