@@ -459,14 +459,14 @@ def _connection_plan_recommended_route_reason(action: str, route: dict) -> str:
     provider = str(route.get("provider") or "").strip()
     label = str(route.get("label") or provider or "provider route").strip()
     if action in {"ready", "native_ready"}:
-        return f"{label} уже закрывает этот binding."
+        return f"{label} уже закрывает этот шаг."
     if provider == "openclaw":
-        return "OpenClaw можно использовать как execution boundary под LocalOS policy envelope."
+        return "LocalOS сможет выполнить этот шаг в защищённом режиме."
     if provider == "maton":
-        return "Maton можно использовать как provider bridge после выбора сохранённого ключа."
+        return "Maton можно использовать после выбора сохранённого ключа."
     if provider == "manual":
-        return "Manual fallback оставит агента в draft/handoff режиме до действия человека."
-    return f"{label} доступен как provider route для этого binding."
+        return "Ручной режим оставит результат на проверке до действия человека."
+    return f"{label} доступен для этого шага."
 
 
 def _integrations_by_provider(values: list[dict]) -> dict:
@@ -515,16 +515,16 @@ def _connection_plan_explanation(binding: dict, action: str) -> str:
     provider = str(binding.get("provider") or "сервис").strip()
     missing_config = binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else []
     if action in {"ready", "native_ready"}:
-        return "Подключение готово для preflight и активации."
+        return "Подключение готово для безопасного теста и включения."
     if action == "choose_route":
-        return "Выберите маршрут выполнения для этого шага: существующий доступ, OpenClaw boundary, Maton key или ручной fallback."
+        return "Выберите, как выполнить этот шаг: сохранённый доступ, защищённый режим LocalOS, Maton или вручную."
     if action == "choose_existing":
         return "У бизнеса уже есть подходящий доступ. Выберите его для этого агента."
     if action == "complete_config":
         return f"Доступ найден, но нужно заполнить: {', '.join([str(item) for item in missing_config])}."
     if action == "planned_provider":
-        return "Этот provider есть в roadmap, но пока недоступен для активации агента."
-    return f"Подключите {provider}, чтобы агент можно было активировать после preflight."
+        return "Этот способ подключения запланирован, но пока недоступен для включения агента."
+    return f"Подключите {provider}, чтобы агента можно было проверить и включить."
 
 
 def _connection_plan_route_summary(binding: dict, action: str, route_state: str) -> str:
@@ -533,18 +533,18 @@ def _connection_plan_route_summary(binding: dict, action: str, route_state: str)
     if action in {"ready", "native_ready"}:
         return f"{title} уже подключён для этого агента."
     if action == "choose_route":
-        return f"{title}: выберите route выполнения, прежде чем запускать preview или активацию."
+        return f"{title}: выберите способ выполнения перед тестом или включением."
     if action == "choose_existing":
-        return f"У бизнеса уже есть подключение {title}; выберите его для шага workflow."
+        return f"У бизнеса уже есть подключение {title}; выберите его для этого шага."
     if action == "complete_config":
         return f"Подключение {title} найдено, но нужно заполнить недостающие настройки."
     if route_state == "available":
-        return f"{title} можно подключить через доступный provider route LocalOS/OpenClaw/Maton."
+        return f"{title} можно подключить через доступный способ LocalOS или Maton."
     if route_state == "manual":
-        return f"{title} доступен как ручной fallback или загруженный источник."
+        return f"{title} доступен вручную или как загруженный источник."
     if route_state == "planned":
-        return f"{title} появится через planned provider route, но сейчас агент нельзя активировать на этом пути."
-    return f"Для {title} нет разрешённого provider route."
+        return f"{title} появится позже, но сейчас агент нельзя включить на этом пути."
+    return f"Для {title} нет разрешённого способа подключения."
 
 
 def _connection_plan_why_blocked(binding: dict, action: str, route_state: str) -> str:
@@ -554,15 +554,15 @@ def _connection_plan_why_blocked(binding: dict, action: str, route_state: str) -
     title = _agent_integration_provider_label(provider)
     missing_config = binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else []
     if action == "choose_route":
-        return f"{title} найден или описан, но route выполнения ещё не выбран."
+        return f"{title} найден или описан, но способ выполнения ещё не выбран."
     if action == "choose_existing":
         return f"Есть сохранённый доступ {title}, но он ещё не выбран для этого агента."
     if action == "complete_config":
         return f"{title} выбран, но не хватает настроек: {', '.join([str(item) for item in missing_config])}."
     if action == "planned_provider":
-        return f"{title} есть в каталоге, но provider route пока не доступен для production-запуска."
+        return f"{title} есть в каталоге, но способ подключения пока недоступен для рабочего запуска."
     if route_state in {"available", "manual"}:
-        return f"Нужно выбрать разрешённый route или добавить доступ {title} перед preview."
+        return f"Нужно выбрать разрешённый способ или добавить доступ {title} перед тестом."
     return f"У LocalOS нет разрешённого подключения для {title}."
 
 
@@ -575,7 +575,7 @@ def _connection_plan_setup_cta(binding: dict, action: str, route_state: str, rec
     if action == "choose_route":
         route_provider = str((recommended_route or {}).get("provider") or "").strip()
         return {
-            "label": f"Выбрать route {title}",
+            "label": f"Выбрать способ {title}",
             "action": "choose_route",
             "binding_key": binding_key,
             "provider": provider,

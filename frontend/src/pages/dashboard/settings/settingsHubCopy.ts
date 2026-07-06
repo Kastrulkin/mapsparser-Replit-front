@@ -98,6 +98,7 @@ const en: SettingsHubCopy = {
       'Set Telegram publication target': 'Set Telegram publication target',
       'Connect Telegram owner bot': 'Connect Telegram owner bot',
       'Add WhatsApp number': 'Add WhatsApp number',
+      'Connect Google Sheets': 'Connect Google Sheets',
       'Connect Google Business': 'Connect Google Business',
       'Configure Meta': 'Configure Meta',
       'Connect VK': 'Connect VK',
@@ -116,6 +117,7 @@ const en: SettingsHubCopy = {
   modules: {
     telegram: { label: 'Telegram', description: 'Management messages and approved posts to a selected chat.' },
     whatsapp: { label: 'WhatsApp', description: 'Business number and client message sending.' },
+    google_sheets: { label: 'Google Sheets', description: 'Agent access to table rows.' },
     google: { label: 'Google Business', description: 'Google profile, reviews, and posts.' },
     vk: { label: 'VK', description: 'Community posts after review.' },
     meta: { label: 'Meta', description: 'Instagram and Facebook in a controlled mode.' },
@@ -221,6 +223,7 @@ const ru: SettingsHubCopy = {
       'Set Telegram publication target': 'Выберите чат для публикаций в Telegram',
       'Connect Telegram owner bot': 'Подключите Telegram владельца',
       'Add WhatsApp number': 'Добавьте номер WhatsApp',
+      'Connect Google Sheets': 'Подключите Google Таблицы',
       'Connect Google Business': 'Подключите Google Business',
       'Configure Meta': 'Настройте Meta',
       'Connect VK': 'Подключите VK',
@@ -239,6 +242,7 @@ const ru: SettingsHubCopy = {
   modules: {
     telegram: { label: 'Telegram', description: 'Управление и публикации в выбранный чат.' },
     whatsapp: { label: 'WhatsApp', description: 'Номер бизнеса и отправка сообщений клиентам.' },
+    google_sheets: { label: 'Google Таблицы', description: 'Доступ агентов к строкам таблиц.' },
     google: { label: 'Google Business', description: 'Карточка, отзывы и публикации Google.' },
     vk: { label: 'VK', description: 'Публикации в сообщество после проверки.' },
     meta: { label: 'Meta', description: 'Instagram и Facebook в контролируемом режиме.' },

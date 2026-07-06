@@ -171,6 +171,7 @@ export const SettingsHubPage = () => {
   const moduleList = [
     hubState.modules.telegram,
     hubState.modules.whatsapp,
+    hubState.modules.google_sheets,
     hubState.modules.google,
     hubState.modules.vk,
     hubState.modules.meta,
@@ -314,7 +315,17 @@ export const SettingsIntegrationsPage = () => {
         actions={<Button type="button" variant="outline" asChild><Link to="/dashboard/settings">{copy.routes.backToHub}</Link></Button>}
       />
       <ExternalIntegrations currentBusinessId={currentBusinessId || null} focusedPlatform={focus} />
-      <FinanceCrmPanel currentBusinessId={currentBusinessId} surface="embedded" />
+      <details
+        open={focus === 'crm'}
+        className="rounded-3xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
+      >
+        <summary className="cursor-pointer select-none text-sm font-semibold text-slate-950">
+          CRM: YCLIENTS и Altegio
+        </summary>
+        <div className="mt-4">
+          <FinanceCrmPanel currentBusinessId={currentBusinessId} surface="embedded" />
+        </div>
+      </details>
     </div>
   );
 };

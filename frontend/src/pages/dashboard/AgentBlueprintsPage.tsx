@@ -3207,6 +3207,7 @@ const isBusinessBlockerPayload = (result: Record<string, unknown> | null): boole
     'needs_config',
     'validation_error',
     'provider_read_required',
+    'needs_google_access',
     'blocked',
   ].includes(status);
 };
@@ -3318,8 +3319,16 @@ const needsGoogleSheetsSourceSetup = (activeRun: AgentRun | null, pendingApprova
   if (!isBusinessBlockerPayload(resultPayload)) {
     return false;
   }
+  if (resultPayloadStatus(resultPayload) === 'needs_google_access') {
+    return false;
+  }
   const text = stringifyBusinessValue(resultPayload).toLowerCase();
   return text.includes('google sheets') || text.includes('таблиц');
+};
+
+const needsGoogleAccessReconnect = (activeRun: AgentRun | null, pendingApproval?: AgentApproval | null) => {
+  const resultPayload = findPreparedResultPayload(activeRun, pendingApproval);
+  return resultPayloadStatus(resultPayload) === 'needs_google_access';
 };
 
 const buildEmployeeHistoryStory = (
@@ -5142,6 +5151,7 @@ export const AgentBlueprintsPage = () => {
   const selectedResultRun = activeRun || blueprintDetails?.runs?.[0] || null;
   const resultNeedsScenarioRebuild = needsScenarioRebuildForSourceResult(selectedResultRun, selectedPendingApproval, blueprintDetails);
   const resultNeedsGoogleSheetsSetup = needsGoogleSheetsSourceSetup(selectedResultRun, selectedPendingApproval);
+  const resultNeedsGoogleAccessReconnect = needsGoogleAccessReconnect(selectedResultRun, selectedPendingApproval);
   const openGoogleSheetsSourceSetup = () => {
     const sheetBinding = agentBindingStatus.find((binding) => binding.provider === 'google_sheets' && binding.capability === 'google_sheets.read_rows')
       || agentBindingStatus.find((binding) => binding.provider === 'google_sheets')
@@ -5151,6 +5161,9 @@ export const AgentBlueprintsPage = () => {
     }
     setDecisionNotice('Укажите Google-таблицу и лист со списком поездок, затем сохраните источник и запустите тест ещё раз.');
     setWorkspaceMode('connections');
+  };
+  const openGoogleAccessReconnect = () => {
+    window.location.href = '/dashboard/settings/integrations?focus=google_sheets';
   };
   const runEmployeePrimaryAction = () => {
     if (!selectedBlueprint || !selectedEmployeeAction) {
@@ -5489,11 +5502,13 @@ export const AgentBlueprintsPage = () => {
                       actionLoading={actionLoading}
                       needsScenarioRebuild={resultNeedsScenarioRebuild}
                       needsGoogleSheetsSetup={resultNeedsGoogleSheetsSetup}
+                      needsGoogleAccessReconnect={resultNeedsGoogleAccessReconnect}
                       onApprove={() => decideApproval('approve')}
                       onReject={() => decideApproval('reject')}
                       onRunAgain={() => startRun(selectedBlueprint)}
                       onRebuildScenario={rebuildScenarioAndRun}
                       onOpenGoogleSheetsSetup={openGoogleSheetsSourceSetup}
+                      onOpenGoogleAccessReconnect={openGoogleAccessReconnect}
                     />
                   ) : (
                     <EmployeeHistoryPanel
@@ -8548,22 +8563,26 @@ const EmployeeTestResultPanel = ({
   actionLoading,
   needsScenarioRebuild = false,
   needsGoogleSheetsSetup = false,
+  needsGoogleAccessReconnect = false,
   onApprove,
   onReject,
   onRunAgain,
   onRebuildScenario,
   onOpenGoogleSheetsSetup,
+  onOpenGoogleAccessReconnect,
 }: {
   activeRun: AgentRun | null;
   pendingApproval: AgentApproval | null;
   actionLoading: boolean;
   needsScenarioRebuild?: boolean;
   needsGoogleSheetsSetup?: boolean;
+  needsGoogleAccessReconnect?: boolean;
   onApprove: () => void;
   onReject: () => void;
   onRunAgain: () => void;
   onRebuildScenario?: () => void;
   onOpenGoogleSheetsSetup?: () => void;
+  onOpenGoogleAccessReconnect?: () => void;
 }) => {
   const result = buildEmployeeTestResult(activeRun, pendingApproval);
   const labels = approvalActionLabels(pendingApproval);
@@ -8571,11 +8590,22 @@ const EmployeeTestResultPanel = ({
   const canApprove = Boolean(pendingApproval && !isBlocked);
   const canReject = Boolean(pendingApproval);
   const canRebuildScenario = Boolean(needsScenarioRebuild && onRebuildScenario);
-  const canOpenGoogleSheetsSetup = Boolean(!canRebuildScenario && needsGoogleSheetsSetup && onOpenGoogleSheetsSetup);
-  const rerunLabel = canRebuildScenario ? 'Пересобрать сценарий' : canOpenGoogleSheetsSetup ? 'Указать Google-таблицу' : 'Запустить тест ещё раз';
+  const canOpenGoogleAccessReconnect = Boolean(!canRebuildScenario && needsGoogleAccessReconnect && onOpenGoogleAccessReconnect);
+  const canOpenGoogleSheetsSetup = Boolean(!canRebuildScenario && !canOpenGoogleAccessReconnect && needsGoogleSheetsSetup && onOpenGoogleSheetsSetup);
+  const rerunLabel = canRebuildScenario
+    ? 'Пересобрать сценарий'
+    : canOpenGoogleAccessReconnect
+      ? 'Переподключить Google-доступ'
+      : canOpenGoogleSheetsSetup
+        ? 'Указать Google-таблицу'
+        : 'Запустить тест ещё раз';
   const handleRerun = () => {
     if (canRebuildScenario && onRebuildScenario) {
       onRebuildScenario();
+      return;
+    }
+    if (canOpenGoogleAccessReconnect && onOpenGoogleAccessReconnect) {
+      onOpenGoogleAccessReconnect();
       return;
     }
     if (canOpenGoogleSheetsSetup && onOpenGoogleSheetsSetup) {
@@ -8613,7 +8643,7 @@ const EmployeeTestResultPanel = ({
             onClick={handleRerun}
             disabled={actionLoading}
           >
-            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : canOpenGoogleSheetsSetup ? <Database className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : canOpenGoogleAccessReconnect || canOpenGoogleSheetsSetup ? <Database className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             {rerunLabel}
           </Button>
         </div>
@@ -8636,6 +8666,11 @@ const EmployeeTestResultPanel = ({
           {needsGoogleSheetsSetup && !needsScenarioRebuild ? (
             <div className="mt-3 rounded-xl bg-white px-3 py-3 text-sm leading-6 text-amber-950 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.18)]">
               Нужно указать конкретную таблицу и лист со списком поездок. Нажмите “Указать Google-таблицу” — откроется раздел источников этого сотрудника.
+            </div>
+          ) : null}
+          {needsGoogleAccessReconnect && !needsScenarioRebuild ? (
+            <div className="mt-3 rounded-xl bg-white px-3 py-3 text-sm leading-6 text-amber-950 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.18)]">
+              Google-доступ для чтения таблицы больше не работает. Нажмите “Переподключить Google-доступ” — откроется экран подключений с Google Таблицами.
             </div>
           ) : null}
         </div>

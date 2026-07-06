@@ -3,6 +3,7 @@ export type HubStatus = 'ready' | 'attention' | 'not_configured' | 'manual' | 'e
 export type SettingsHubModuleKey =
   | 'telegram'
   | 'whatsapp'
+  | 'google_sheets'
   | 'google'
   | 'vk'
   | 'meta'
@@ -146,6 +147,7 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
   const vkAccount = findAccount(externalAccounts, ['vk', 'vk_group', 'vk_business']);
   const metaAccount = findAccount(externalAccounts, ['meta', 'instagram', 'facebook']);
   const matonAccount = findAccount(externalAccounts, ['maton']);
+  const googleSheetsReady = Boolean(googleAccount);
   const googleReady = Boolean(googleAccount && hasText(googleAccount.external_id));
   const vkReady = Boolean(vkAccount);
   const matonReady = Boolean(matonAccount);
@@ -193,6 +195,19 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
       },
       secondaryAction: { label: 'Advanced', target: '/dashboard/settings/integrations?focus=whatsapp' },
       meta: { phoneAdded, wabaConnected },
+    },
+    google_sheets: {
+      key: 'google_sheets',
+      status: googleSheetsReady ? 'ready' : 'not_configured',
+      label: 'Google Таблицы',
+      description: 'Доступ для агентов к строкам таблиц.',
+      primaryAction: {
+        label: googleSheetsReady ? 'Check connection' : 'Connect Google',
+        type: 'drawer',
+        target: 'google_sheets',
+      },
+      secondaryAction: { label: 'Open details', target: '/dashboard/settings/integrations?focus=google_sheets' },
+      meta: { connected: googleSheetsReady },
     },
     google: {
       key: 'google',
@@ -267,8 +282,10 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
       ? { module: 'telegram', title: 'Connect Telegram owner bot', actionLabel: 'Connect bot', drawer: 'telegram' }
       : !phoneAdded
         ? { module: 'whatsapp', title: 'Add WhatsApp number', actionLabel: 'Connect number', drawer: 'whatsapp' }
-        : !googleReady
-          ? { module: 'google', title: 'Connect Google Business', actionLabel: 'Connect Google', drawer: 'google_business' }
+        : !googleSheetsReady
+          ? { module: 'google_sheets', title: 'Connect Google Sheets', actionLabel: 'Connect Google', drawer: 'google_sheets' }
+          : !googleReady
+            ? { module: 'google', title: 'Connect Google Business', actionLabel: 'Connect Google', drawer: 'google_business' }
           : (!vkReady || metaStatus !== 'ready')
             ? { module: vkReady ? 'meta' : 'vk', title: vkReady ? 'Configure Meta' : 'Connect VK', actionLabel: vkReady ? 'Configure Meta' : 'Connect VK', drawer: vkReady ? 'meta' : 'vk' }
             : !crmConnected
@@ -278,7 +295,7 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
   return {
     summary: {
       communications: combineStatus([telegramStatus, whatsappStatus]),
-      publications: combineStatus([publicationTargetSet ? 'ready' : 'attention', googleStatus, vkStatus, metaStatus]),
+      publications: combineStatus([publicationTargetSet ? 'ready' : 'attention', googleSheetsReady ? 'ready' : 'not_configured', googleStatus, vkStatus, metaStatus]),
       crm: combineStatus([crmStatus, matonStatus]),
     },
     nextStep,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useLanguage } from "@/i18n/LanguageContext";
 import OpenClawOutboxMetrics from "@/components/OpenClawOutboxMetrics";
 import { ChannelControlCenter } from "@/components/ChannelControlCenter";
-import { ImageIcon, Sparkles } from "lucide-react";
+import { Building2, Database, ImageIcon, KeyRound, Send, Sparkles } from "lucide-react";
 
 interface ExternalAccount {
   id: string;
@@ -96,6 +96,78 @@ interface ExternalIntegrationsProps {
   focusedPlatform?: string | null;
 }
 
+type AccessCardTone = "ready" | "attention" | "neutral";
+
+type AccessCardProps = {
+  title: string;
+  description: string;
+  status: string;
+  detail?: string;
+  actionLabel: string;
+  icon: ReactNode;
+  tone: AccessCardTone;
+  focused?: boolean;
+  disabled?: boolean;
+  onAction: () => void;
+};
+
+const accessToneClass = (tone: AccessCardTone, focused?: boolean) => {
+  if (focused) return "border-sky-300 bg-sky-50 ring-2 ring-sky-100";
+  if (tone === "ready") return "border-emerald-200 bg-emerald-50/70";
+  if (tone === "attention") return "border-amber-200 bg-amber-50/70";
+  return "border-slate-200 bg-white";
+};
+
+const accessBadgeClass = (tone: AccessCardTone) => {
+  if (tone === "ready") return "bg-emerald-100 text-emerald-800";
+  if (tone === "attention") return "bg-amber-100 text-amber-800";
+  return "bg-slate-100 text-slate-700";
+};
+
+const AccessCard = ({
+  title,
+  description,
+  status,
+  detail,
+  actionLabel,
+  icon,
+  tone,
+  focused = false,
+  disabled = false,
+  onAction,
+}: AccessCardProps) => (
+  <div className={["flex min-h-[190px] flex-col rounded-2xl border p-4 shadow-sm", accessToneClass(tone, focused)].join(" ")}>
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-800 shadow-sm ring-1 ring-black/5">
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold leading-6 text-slate-950 [text-wrap:balance]">{title}</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-600 [text-wrap:pretty]">{description}</p>
+        </div>
+      </div>
+      <span className={["shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold", accessBadgeClass(tone)].join(" ")}>
+        {status}
+      </span>
+    </div>
+    {detail ? (
+      <p className="mt-3 text-xs leading-5 text-slate-500">{detail}</p>
+    ) : null}
+    <div className="mt-auto pt-4">
+      <Button
+        type="button"
+        variant={tone === "ready" ? "outline" : "default"}
+        onClick={onAction}
+        disabled={disabled}
+        className="min-h-10 w-full justify-center transition-transform active:scale-[0.96] sm:w-auto"
+      >
+        {actionLabel}
+      </Button>
+    </div>
+  </div>
+);
+
 export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   currentBusinessId,
   readinessRefreshKey = 0,
@@ -122,6 +194,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const [socialOpenClawReadiness, setSocialOpenClawReadiness] = useState<SocialOpenClawReadiness | null>(null);
   const [socialTelegramTransport, setSocialTelegramTransport] = useState<SocialTelegramTransport | null>(null);
   const [socialReadinessLoading, setSocialReadinessLoading] = useState(false);
+  const [expandedDetails, setExpandedDetails] = useState<string | null>(null);
   const socialReadinessRef = useRef<HTMLDivElement | null>(null);
   const googleCardRef = useRef<HTMLDivElement | null>(null);
   const vkCardRef = useRef<HTMLDivElement | null>(null);
@@ -131,9 +204,24 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const googleAccount = accounts.find((acc) => acc.source === 'google_business');
   const vkAccount = accounts.find((acc) => acc.source === 'vk' || acc.source === 'vk_group' || acc.source === 'vk_business');
   const normalizedFocusedPlatform = String(focusedPlatform || '').trim();
+  const isGoogleSheetsFocused = normalizedFocusedPlatform === 'google_sheets';
   const isGoogleFocused = normalizedFocusedPlatform === 'google_business';
   const isVkFocused = normalizedFocusedPlatform === 'vk';
   const isMetaFocused = normalizedFocusedPlatform === 'meta' || normalizedFocusedPlatform === 'instagram' || normalizedFocusedPlatform === 'facebook';
+  const isCrmFocused = normalizedFocusedPlatform === 'crm' || normalizedFocusedPlatform === 'maton';
+  const googleSheetsReady = Boolean(googleAccount);
+  const googleBusinessReady = Boolean(googleAccount?.external_id);
+  const apiReadyCount = Number(socialReadinessSummary.api_ready || 0);
+  const channelAttentionCount = Number(socialReadinessSummary.api_needs_attention || 0);
+  const manualChannelCount = Number(socialReadinessSummary.controlled_or_manual || 0);
+  const channelStatus = socialReadinessLoading
+    ? 'Проверяем'
+    : apiReadyCount > 0
+      ? `${apiReadyCount} готовы`
+      : channelAttentionCount > 0 || manualChannelCount > 0
+        ? 'Нужно внимание'
+        : 'Проверить';
+  const crmKeysReady = Boolean(matonAccount);
   const focusedCardClass = 'border-sky-300 bg-sky-50/80 ring-2 ring-sky-100';
   const openClawOperational = Boolean(
     socialOpenClawReadiness?.ready
@@ -193,6 +281,20 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     }, 140);
     return () => window.clearTimeout(timeoutId);
   }, [isGoogleFocused, isMetaFocused, isVkFocused, socialReadinessLoading]);
+
+  useEffect(() => {
+    if (isGoogleFocused || isGoogleSheetsFocused) {
+      setExpandedDetails('google');
+      return;
+    }
+    if (isVkFocused || isMetaFocused) {
+      setExpandedDetails('channels');
+      return;
+    }
+    if (isCrmFocused) {
+      setExpandedDetails('crm');
+    }
+  }, [isCrmFocused, isGoogleFocused, isGoogleSheetsFocused, isMetaFocused, isVkFocused]);
 
   const loadAccounts = async () => {
     if (!currentBusinessId) return;
@@ -656,13 +758,17 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     }
   };
 
+  const openDetails = (section: string) => {
+    setExpandedDetails(section);
+  };
+
   return (
     <Card className="overflow-hidden rounded-3xl border-slate-200/80 bg-white shadow-sm">
       <CardHeader className="pb-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <CardTitle className="text-slate-950">{t.dashboard.settings.external.title}</CardTitle>
-            <CardDescription className="mt-2 leading-6">Подключённые внешние аккаунты, ключи и служебные каналы автоматизации.</CardDescription>
+            <CardTitle className="text-slate-950">Подключения</CardTitle>
+            <CardDescription className="mt-2 leading-6">Подключите доступы, которые нужны агентам и публикациям.</CardDescription>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
             {accounts.length} подключено
@@ -670,6 +776,94 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        <div
+          data-testid="settings-integrations-scenario"
+          className="rounded-3xl bg-slate-50 px-4 py-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]"
+        >
+          <div className="max-w-3xl text-sm leading-6 text-slate-700">
+            Сначала подключите Google-доступ для агентов. Если агент читает таблицу, ему нужен именно доступ к Google Таблицам, а не выбор карточки Google Business.
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <AccessCard
+            title="Google Таблицы"
+            description="Этот доступ нужен агентам для чтения Google Таблиц. Он не публикует ничего наружу."
+            status={googleSheetsReady ? 'Доступ есть' : 'Нужно подключить'}
+            detail="Google Документы: позже, когда появится отдельный Drive/Docs scope."
+            actionLabel={googleSheetsReady ? 'Переподключить' : 'Подключить Google-доступ'}
+            icon={<Database className="h-5 w-5" />}
+            tone={googleSheetsReady ? 'ready' : 'attention'}
+            focused={isGoogleSheetsFocused}
+            disabled={googleBusy || !currentBusinessId}
+            onAction={handleGoogleConnect}
+          />
+          <AccessCard
+            title="Google Business"
+            description="Карточка компании, отзывы и посты Google. Это отдельный шаг после Google-доступа."
+            status={googleBusinessReady ? 'Карточка выбрана' : googleSheetsReady ? 'Выберите карточку' : 'Нужно подключить'}
+            detail={googleSheetsReady ? 'Google-доступ уже есть: можно выбрать карточку или синхронизировать данные.' : 'Сначала войдите в Google аккаунт владельца или менеджера.'}
+            actionLabel={!googleSheetsReady ? 'Подключить Google' : googleBusinessReady ? 'Синхронизировать' : 'Выбрать карточку'}
+            icon={<Building2 className="h-5 w-5" />}
+            tone={googleBusinessReady ? 'ready' : 'attention'}
+            focused={isGoogleFocused}
+            disabled={googleBusy || !currentBusinessId}
+            onAction={() => {
+              if (!googleSheetsReady) {
+                handleGoogleConnect();
+                return;
+              }
+              if (googleBusinessReady) {
+                handleSyncGoogle();
+                return;
+              }
+              openDetails('google');
+              handleLoadGoogleLocations();
+            }}
+          />
+          <AccessCard
+            title="Каналы публикаций"
+            description="Telegram, VK и Meta для согласованных постов. Детали и ключи открываются только когда нужны."
+            status={channelStatus}
+            detail="Публикации наружу остаются через предпросмотр и подтверждение человека."
+            actionLabel="Открыть каналы"
+            icon={<Send className="h-5 w-5" />}
+            tone={apiReadyCount > 0 ? 'ready' : 'neutral'}
+            focused={isVkFocused || isMetaFocused}
+            onAction={() => openDetails('channels')}
+          />
+          <AccessCard
+            title="CRM и ключи"
+            description="YCLIENTS, Altegio и Maton для записей, финансов и внешних сервисов."
+            status={crmKeysReady ? 'Ключ есть' : 'Настроить'}
+            detail="Формы и технические ключи спрятаны ниже, чтобы не мешать основному подключению."
+            actionLabel="Открыть CRM и ключи"
+            icon={<KeyRound className="h-5 w-5" />}
+            tone={crmKeysReady ? 'ready' : 'neutral'}
+            focused={isCrmFocused}
+            onAction={() => openDetails('crm')}
+          />
+        </div>
+
+        <details
+          open={expandedDetails !== null}
+          onToggle={(event) => {
+            if (!event.currentTarget.open) {
+              setExpandedDetails(null);
+            }
+          }}
+          className="rounded-3xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
+        >
+          <summary className="cursor-pointer select-none text-sm font-semibold text-slate-950">
+            {expandedDetails === 'google'
+              ? 'Google: таблицы и карточка'
+              : expandedDetails === 'channels'
+                ? 'Каналы публикаций'
+                : expandedDetails === 'crm'
+                  ? 'CRM и ключи'
+                  : 'Другие подключения и технические детали'}
+          </summary>
+          <div className="mt-4 space-y-6">
         <div className="rounded-3xl border border-slate-200 bg-white p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -1204,13 +1398,23 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
                         {acc.source === "yandex_business"
                           ? "Яндекс.Бизнес"
                           : acc.source === "google_business"
-                            ? "Google Business Profile"
+                            ? "Google-доступ"
                             : acc.source === "2gis"
                               ? "2ГИС"
                               : acc.source === "maton"
                                 ? "Maton.ai"
                               : acc.source}
                       </div>
+                      {acc.source === "google_business" ? (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
+                            Таблицы
+                          </span>
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${acc.external_id ? 'bg-emerald-50 text-emerald-700 ring-emerald-100' : 'bg-slate-50 text-slate-600 ring-slate-200'}`}>
+                            Карточка
+                          </span>
+                        </div>
+                      ) : null}
                       {acc.display_name && (
                         <div className="text-sm text-slate-700">{acc.display_name}</div>
                       )}
@@ -1254,6 +1458,8 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
             </div>
           )}
         </div>
+          </div>
+        </details>
       </CardContent>
     </Card>
   );

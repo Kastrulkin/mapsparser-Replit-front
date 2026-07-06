@@ -7639,6 +7639,27 @@ def test_agents_page_normal_result_panel_does_not_dump_raw_artifact_payload():
     assert "needsGoogleSheetsSourceSetup" in source
     assert "Указать Google-таблицу" in source
     assert "Укажите Google-таблицу и лист со списком поездок" in source
+    assert "needsGoogleAccessReconnect" in source
+    assert "/dashboard/settings/integrations?focus=google_sheets" in source
+    assert "Переподключить Google-доступ" in source
+
+
+def test_settings_integrations_first_layer_separates_google_sheets_from_google_business():
+    external = Path("frontend/src/components/ExternalIntegrations.tsx").read_text(encoding="utf-8")
+    hub_state = Path("frontend/src/pages/dashboard/settings/settingsHubState.ts").read_text(encoding="utf-8")
+    hub_copy = Path("frontend/src/pages/dashboard/settings/settingsHubCopy.ts").read_text(encoding="utf-8")
+
+    assert 'data-testid="settings-integrations-scenario"' in external
+    assert "Google Таблицы" in external
+    assert "Этот доступ нужен агентам для чтения Google Таблиц. Он не публикует ничего наружу." in external
+    assert "Google Документы: позже" in external
+    assert "Google-доступ" in external
+    assert "Карточка" in external
+    assert "Таблицы" in external
+    assert "google_sheets" in hub_state
+    assert "/dashboard/settings/integrations?focus=google_sheets" in hub_state
+    assert "Agent access to table rows." in hub_copy
+    assert "Доступ агентов к строкам таблиц." in hub_copy
 
 
 def test_agent_source_ingestion_extracts_text_pdf_docx_xlsx_and_rejects_unsafe_files():
