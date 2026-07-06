@@ -802,6 +802,13 @@ def _prompt_from_db(conn, prompt_type: str, fallback: str) -> str:
     return text or fallback
 
 
+def _format_prompt_template(template: str, values: dict[str, Any]) -> str:
+    formatted = str(template or "")
+    for key, value in values.items():
+        formatted = formatted.replace("{" + str(key) + "}", str(value or ""))
+    return formatted
+
+
 def _extract_json_field(raw_text: Any, field_name: str) -> str:
     text = str(raw_text or "").strip()
     if not text:
@@ -1037,13 +1044,19 @@ Write all generated text in {language_name}.
 {news_examples}
 """
     prompt_template = _prompt_from_db(conn, "news_generation", default_prompt)
-    prompt = prompt_template.format(
-        language_name=language_names.get(language, "Russian"),
-        business_name=business_name,
-        service_context=service_text or "Нет уточнённых услуг",
-        transaction_context=transaction_text or "Нет данных",
-        raw_info=raw_info,
-        news_examples=news_examples or "Примеров нет",
+    prompt = _format_prompt_template(
+        prompt_template,
+        {
+            "language_name": language_names.get(language, "Russian"),
+            "business_name": business_name,
+            "service_context": service_text or "Нет уточнённых услуг",
+            "transaction_context": transaction_text or "Нет данных",
+            "raw_info": raw_info,
+            "news_examples": news_examples or "Примеров нет",
+            "seo_keywords": "",
+            "seo_keywords_top10": "",
+            "seo_generation_hint": "",
+        },
     )
     prompt = (
         "Рабочие паттерны индустрии для auto-news:\n"
@@ -1210,13 +1223,16 @@ Write the reply in {language_name}.
         review_text = str(rd.get("text") or "").strip()
         if not review_text:
             continue
-        prompt = prompt_template.format(
-            tone="professional",
-            language_name=language_names.get(language, "Russian"),
-            examples_text=examples_text or "Примеров нет",
-            review_text=review_text[:1000],
-            seo_keywords="",
-            seo_keywords_top10="",
+        prompt = _format_prompt_template(
+            prompt_template,
+            {
+                "tone": "professional",
+                "language_name": language_names.get(language, "Russian"),
+                "examples_text": examples_text or "Примеров нет",
+                "review_text": review_text[:1000],
+                "seo_keywords": "",
+                "seo_keywords_top10": "",
+            },
         )
         prompt = (
             "Рабочие паттерны индустрии для auto-review-reply:\n"

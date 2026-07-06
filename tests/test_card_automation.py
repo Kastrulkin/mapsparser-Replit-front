@@ -133,6 +133,71 @@ def test_business_context_prefers_ai_agent_language_column(monkeypatch):
     assert "ai_agent_language AS language" in conn.cursor_obj.executed[0]
 
 
+def test_generate_news_supports_seo_keyword_prompt_placeholders(monkeypatch):
+    observed: dict[str, str] = {}
+
+    class _Cursor:
+        def __init__(self) -> None:
+            self.last_query = ""
+
+        def execute(self, query, params=None):
+            self.last_query = " ".join(str(query).split())
+
+        def fetchone(self):
+            if "FROM businesses" in self.last_query:
+                return {
+                    "id": "biz_1",
+                    "owner_id": "user_1",
+                    "name": "Оливер",
+                    "language": "ru",
+                    "address": "Санкт-Петербург",
+                    "business_type": "beauty_salon",
+                    "industry": "beauty",
+                    "categories": [],
+                }
+            if "FROM aiprompts" in self.last_query:
+                return {
+                    "prompt_text": (
+                        "Бизнес: {business_name}\n"
+                        "SEO: {seo_keywords}\n"
+                        "Top: {seo_keywords_top10}\n"
+                        "Hint: {seo_generation_hint}\n"
+                        "Контекст: {service_context}\n"
+                        'Верни JSON: {"news": "текст новости"}'
+                    )
+                }
+            return None
+
+        def fetchall(self):
+            return []
+
+    class _Conn:
+        def __init__(self) -> None:
+            self.cursor_obj = _Cursor()
+
+        def cursor(self):
+            return self.cursor_obj
+
+    monkeypatch.setattr(card_automation, "_table_has_column", lambda *_args: True)
+    monkeypatch.setattr(card_automation, "_load_settings_row", lambda *_args: {"news_content_source": "services"})
+    monkeypatch.setattr(card_automation, "load_active_industry_patterns", lambda *_args: [])
+    monkeypatch.setattr(card_automation, "record_ai_learning_event", lambda **_kwargs: None)
+
+    def _fake_analyze(prompt, **_kwargs):
+        observed["prompt"] = prompt
+        return '{"news": "Короткая новость"}'
+
+    monkeypatch.setattr(card_automation, "analyze_text_with_gigachat", _fake_analyze)
+
+    result = card_automation._generate_news_for_business(_Conn(), "biz_1")
+
+    assert result["news_id"]
+    assert "SEO:" in observed["prompt"]
+    assert "Top:" in observed["prompt"]
+    assert "Hint:" in observed["prompt"]
+    assert '{"news": "текст новости"}' in observed["prompt"]
+
+
 def test_digest_plan_lines_follow_weekly_rhythm_for_starter():
     monday = card_automation._digest_plan_lines_for_weekday(date(2026, 5, 4), "starter", False)
     assert "• Ответить на новые отзывы и не оставлять негатив без реакции" in monday
