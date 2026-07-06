@@ -566,10 +566,10 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
         <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-              {language === 'ru' ? 'Автоплатёж' : 'Autopay'}
+              {language === 'ru' ? 'Подписка и автоплатёж' : 'Subscription and autopay'}
             </div>
             <h3 className="mt-2 text-xl font-semibold leading-7 text-slate-950 [text-wrap:balance]">
-              {language === 'ru' ? 'Ежемесячное продление подписки' : 'Monthly subscription renewal'}
+              {language === 'ru' ? 'Автоплатёж и отвязка карты' : 'Autopay and card unlinking'}
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 [text-wrap:pretty]">
               {renewalStatusText}
