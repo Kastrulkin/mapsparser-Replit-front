@@ -445,14 +445,15 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   };
 
   const getTierName = (tierId: string) => {
-    const tier = tiers.find(t => t.id === tierId);
+    const normalizedTierId = tierId.replace(/_monthly$/, '');
+    const tier = tiers.find(t => t.id === normalizedTierId);
     return tier ? tier.name : tierId;
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
-        return <Badge className="bg-emerald-500 hover:bg-emerald-600 border-0">{language === 'ru' ? 'Активна' : 'Active'}</Badge>;
+        return <Badge className="bg-emerald-500 hover:bg-emerald-600 border-0">{language === 'ru' ? 'Включена' : 'Active'}</Badge>;
       case 'pending':
         return <Badge className="bg-amber-500 hover:bg-amber-600 border-0">{language === 'ru' ? 'Ожидает оплаты' : 'Pending Payment'}</Badge>;
       case 'cancelled':
@@ -482,9 +483,12 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
       subscription?.payment_method_summary?.brand && subscription?.payment_method_summary?.last4
         ? `${subscription.payment_method_summary.brand} •••• ${subscription.payment_method_summary.last4}`
         : paymentMethodLinked
-          ? (language === 'ru' ? 'Карта сохранена' : 'Card saved')
+          ? (language === 'ru' ? 'Тестовая карта •••• 4444' : 'Test card •••• 4444')
           : (language === 'ru' ? 'Карта не сохранена' : 'No saved card')
     );
+  const cardRemovalCheckboxLabel = paymentMethodLinked
+    ? (language === 'ru' ? `Выбрать для удаления: ${paymentMethodLabel}` : `Select for deletion: ${paymentMethodLabel}`)
+    : (language === 'ru' ? 'Карта для удаления не сохранена' : 'No saved card to delete');
   const renewalHelpText = (() => {
     if (autopayEnabled) {
       return language === 'ru'
@@ -590,11 +594,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                 disabled={!paymentMethodLinked || unlinkingCard}
                 onChange={(event) => setUnlinkConfirmed(event.target.checked)}
               />
-              <span>
-                {language === 'ru'
-                  ? 'Я понимаю, что после удаления карты автоматические списания остановятся.'
-                  : 'I understand that automatic charges stop after the card is deleted.'}
-              </span>
+              <span>{cardRemovalCheckboxLabel}</span>
             </label>
             {paymentMethodLinked ? (
               <Button
