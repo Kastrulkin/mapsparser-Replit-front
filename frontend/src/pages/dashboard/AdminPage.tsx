@@ -2,12 +2,13 @@ import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, TrendingUp, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, TrendingUp, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
 import { AdminExternalCabinetSettings } from '../../components/AdminExternalCabinetSettings';
 import { ProspectingManagement } from '../../components/ProspectingManagement';
+import { TelegramOpportunityRadar } from '../../components/TelegramOpportunityRadar';
 import {
   DashboardCompactMetricsRow,
   DashboardEmptyState,
@@ -37,7 +38,7 @@ const IndustryPatternsManagement = lazy(() =>
   import('../../components/IndustryPatternsManagement').then((module) => ({ default: module.IndustryPatternsManagement })),
 );
 
-type AdminTabId = 'businesses' | 'subscriptions' | 'agents' | 'agentApi' | 'tokens' | 'growth' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting';
+type AdminTabId = 'businesses' | 'subscriptions' | 'agents' | 'agentApi' | 'tokens' | 'growth' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting' | 'telegramRadar';
 interface Business {
   id: string;
   name: string;
@@ -229,6 +230,7 @@ const adminTabs: AdminTabConfig[] = [
   { id: 'agents', label: 'Агенты пользователей', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
   { id: 'prospecting', label: 'Поиск клиентов', icon: Search },
+  { id: 'telegramRadar', label: 'Telegram-радар', icon: Radar },
   { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
   { id: 'growth', label: 'Схема роста', icon: TrendingUp },
   { id: 'prompts', label: 'Промпты анализа', icon: FileText },
@@ -243,6 +245,7 @@ const primaryAdminTabs: AdminTabConfig[] = [
   { id: 'agents', label: 'Агенты', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
   { id: 'prospecting', label: 'Поиск клиентов', icon: Search },
+  { id: 'telegramRadar', label: 'Telegram-радар', icon: Radar },
 ];
 
 const toolsAdminTabs: AdminTabConfig[] = [
@@ -514,6 +517,7 @@ export const AdminPage: React.FC = () => {
   const [agentBlueprintLoading, setAgentBlueprintLoading] = useState(false);
   const [subscriptionsOverview, setSubscriptionsOverview] = useState<AdminSubscriptionsOverview | null>(null);
   const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
+  const [selectedRadarBusinessId, setSelectedRadarBusinessId] = useState('');
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [settingsModal, setSettingsModal] = useState<{
@@ -911,6 +915,34 @@ export const AdminPage: React.FC = () => {
     () => filterUsersBySearch(users, normalizedSearchQuery),
     [users, normalizedSearchQuery],
   );
+  const radarBusinessOptions = useMemo(() => {
+    const options: Array<{ id: string; name: string; owner: string }> = [];
+    users.forEach((user) => {
+      const owner = user.email || user.name || 'Владелец не указан';
+      (user.direct_businesses || []).forEach((business) => {
+        if (!isLeadBusiness(business)) {
+          options.push({ id: business.id, name: business.name, owner });
+        }
+      });
+      (user.networks || []).forEach((network) => {
+        (network.businesses || []).forEach((business) => {
+          if (!isLeadBusiness(business)) {
+            options.push({ id: business.id, name: `${business.name} · ${network.name}`, owner });
+          }
+        });
+      });
+    });
+    return options.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  }, [users]);
+
+  useEffect(() => {
+    if (selectedRadarBusinessId && radarBusinessOptions.some((item) => item.id === selectedRadarBusinessId)) {
+      return;
+    }
+    const savedBusinessId = localStorage.getItem('selectedBusinessId') || localStorage.getItem('admin_selected_business_id') || '';
+    const nextBusinessId = radarBusinessOptions.find((item) => item.id === savedBusinessId)?.id || radarBusinessOptions[0]?.id || '';
+    setSelectedRadarBusinessId(nextBusinessId);
+  }, [radarBusinessOptions, selectedRadarBusinessId]);
   const adminStats = useMemo(() => {
     let businessCount = 0;
     let networkCount = 0;
@@ -1059,11 +1091,12 @@ export const AdminPage: React.FC = () => {
 
         <div className="rounded-[2rem] border border-slate-200/80 bg-white/95 p-2.5 shadow-sm">
           <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
               {primaryAdminTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
                 const isProspecting = tab.id === 'prospecting';
+                const isTelegramRadar = tab.id === 'telegramRadar';
                 return (
                   <button
                     key={tab.id}
@@ -1072,9 +1105,13 @@ export const AdminPage: React.FC = () => {
                       isActive
                         ? isProspecting
                           ? 'bg-orange-500 text-white shadow-sm shadow-orange-200'
+                          : isTelegramRadar
+                            ? 'bg-sky-600 text-white shadow-sm shadow-sky-200'
                           : 'bg-slate-950 text-white shadow-sm'
                         : isProspecting
                           ? 'bg-orange-50 text-orange-700 hover:bg-orange-100'
+                          : isTelegramRadar
+                            ? 'bg-sky-50 text-sky-700 hover:bg-sky-100'
                           : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
                     }`}
                   >
@@ -1444,6 +1481,34 @@ export const AdminPage: React.FC = () => {
             contentClassName="p-0"
           >
             <ProspectingManagement />
+          </DashboardSection>
+        ) : activeTab === 'telegramRadar' ? (
+          <DashboardSection
+            title={activeTabConfig.label}
+            description="Суперадминский доступ к inbox радара: выберите бизнес, проверьте найденные сообщения и статусы."
+            actions={(
+              <div className="flex w-full flex-col gap-2 sm:w-[420px]">
+                <label className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Бизнес
+                </label>
+                <select
+                  value={selectedRadarBusinessId}
+                  onChange={(event) => setSelectedRadarBusinessId(event.target.value)}
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+                >
+                  {radarBusinessOptions.length === 0 ? (
+                    <option value="">Нет доступных бизнесов</option>
+                  ) : radarBusinessOptions.map((business) => (
+                    <option key={business.id} value={business.id}>
+                      {business.name} · {business.owner}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            contentClassName="p-0"
+          >
+            <TelegramOpportunityRadar businessId={selectedRadarBusinessId || null} mode="work" />
           </DashboardSection>
         ) : (
           <>
