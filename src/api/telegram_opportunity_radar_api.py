@@ -11,11 +11,14 @@ from auth_system import verify_session
 from core.helpers import get_business_owner_id
 from database_manager import DatabaseManager
 from services.telegram_opportunity_radar import (
+    collect_keywords_from_sources,
     ingest_opportunity,
     list_opportunities,
     list_sources,
+    normalize_keywords,
     notify_owner_for_opportunity,
     update_status,
+    update_business_keywords,
     upsert_source,
 )
 
@@ -173,6 +176,31 @@ def sources():
         source = upsert_source(cursor, {**payload, "business_id": business_id, "user_id": user_data["user_id"]})
         db.conn.commit()
         return jsonify({"success": True, "source": source})
+    except Exception as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    finally:
+        db.close()
+
+
+@telegram_opportunity_radar_bp.route("/sources/keywords", methods=["PATCH"])
+def source_keywords():
+    db, cursor, _user_data, business_id, error = _require_business_access()
+    if error:
+        return error
+    assert db is not None and cursor is not None and business_id is not None
+    payload = request.get_json(silent=True) or {}
+    try:
+        keywords = normalize_keywords(payload.get("keywords"))
+        result = update_business_keywords(cursor, business_id, keywords)
+        db.conn.commit()
+        sources = list_sources(cursor, business_id)
+        return jsonify({
+            "success": True,
+            **result,
+            "keywords": collect_keywords_from_sources(sources),
+            "sources": sources,
+        })
     except Exception as exc:
         db.conn.rollback()
         return jsonify({"success": False, "error": str(exc)}), 400

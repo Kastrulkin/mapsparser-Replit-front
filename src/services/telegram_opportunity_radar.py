@@ -11,7 +11,6 @@ from core.channel_delivery import send_telegram_bot_message
 
 
 STATUSES = {"new", "useful", "ignored", "answered", "saved_as_content_idea"}
-
 SIGNAL_RULES: tuple[tuple[str, int, tuple[str, ...]], ...] = (
     (
         "sales_request",
@@ -133,6 +132,63 @@ def build_reply_draft(signal_type: str, text: str) -> str:
     return "Можно сохранить как идею для поста или ответить с коротким практическим комментарием."
 
 
+def normalize_keywords(value: Any) -> list[str]:
+    if isinstance(value, str):
+        raw_items = re.split(r"[,;\n]+", value)
+    elif isinstance(value, list):
+        raw_items = value
+    else:
+        raw_items = []
+
+    keywords: list[str] = []
+    seen: set[str] = set()
+    for item in raw_items:
+        keyword = re.sub(r"\s+", " ", str(item or "")).strip()
+        if not keyword:
+            continue
+        normalized_key = keyword.lower()
+        if normalized_key in seen:
+            continue
+        seen.add(normalized_key)
+        keywords.append(keyword)
+    return keywords
+
+
+def collect_keywords_from_sources(sources: list[dict[str, Any]]) -> list[str]:
+    collected: list[str] = []
+    for source in sources:
+        config = source.get("monitor_config_json")
+        if isinstance(config, str):
+            try:
+                config = json.loads(config)
+            except Exception:
+                config = {}
+        if isinstance(config, dict):
+            collected.extend(normalize_keywords(config.get("keywords")))
+    return normalize_keywords(collected)
+
+
+def update_business_keywords(cursor: Any, business_id: str, keywords: list[str]) -> dict[str, Any]:
+    normalized_keywords = normalize_keywords(keywords)
+    cursor.execute(
+        """
+        UPDATE telegram_opportunity_sources
+        SET monitor_config_json = jsonb_set(
+                COALESCE(monitor_config_json, '{}'::jsonb),
+                '{keywords}',
+                %s::jsonb,
+                true
+            ),
+            updated_at = NOW()
+        WHERE business_id = %s
+        RETURNING id
+        """,
+        (json.dumps(normalized_keywords, ensure_ascii=False), business_id),
+    )
+    updated_count = len(cursor.fetchall() or [])
+    return {"keywords": normalized_keywords, "updated_sources": updated_count}
+
+
 def upsert_source(cursor: Any, payload: dict[str, Any]) -> dict[str, Any]:
     source = payload.get("source") or {}
     account_id = str(payload.get("account_id") or source.get("account_id") or "").strip() or None
@@ -146,6 +202,8 @@ def upsert_source(cursor: Any, payload: dict[str, Any]) -> dict[str, Any]:
     source_type = str(source.get("source_type") or source.get("type") or "chat").strip() or "chat"
     username = str(source.get("telegram_username") or source.get("username") or "").strip().lstrip("@") or None
     monitor_config = source.get("monitor_config") if isinstance(source.get("monitor_config"), dict) else {}
+    if "keywords" in monitor_config:
+        monitor_config = {**monitor_config, "keywords": normalize_keywords(monitor_config.get("keywords"))}
     source_id = str(uuid.uuid4())
 
     cursor.execute(
@@ -389,6 +447,12 @@ def serialize_source(row: dict[str, Any]) -> dict[str, Any]:
     for key in ("created_at", "updated_at", "last_checked_at"):
         if result.get(key) is not None:
             result[key] = str(result[key])
+    config = result.get("monitor_config_json")
+    if isinstance(config, str):
+        try:
+            result["monitor_config_json"] = json.loads(config)
+        except Exception:
+            pass
     return result
 
 

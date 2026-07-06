@@ -14,6 +14,10 @@ type RadarSource = {
   telegram_chat_id: string;
   telegram_username?: string | null;
   is_active: boolean;
+  monitor_config_json?: {
+    keywords?: string[];
+    [key: string]: unknown;
+  } | null;
 };
 
 type RadarOpportunity = {
@@ -51,7 +55,32 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', source
   const [keywords, setKeywords] = useState('заказ, посоветуйте, налоги, мастера, продвижение');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingKeywords, setSavingKeywords] = useState(false);
   const [error, setError] = useState('');
+  const [savedMessage, setSavedMessage] = useState('');
+
+  const parseKeywords = (value: string) => value
+    .split(/[,;\n]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const extractSourceKeywords = (items: RadarSource[]) => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    items.forEach((source) => {
+      const sourceKeywords = Array.isArray(source.monitor_config_json?.keywords)
+        ? source.monitor_config_json?.keywords || []
+        : [];
+      sourceKeywords.forEach((item) => {
+        const keyword = String(item || '').trim();
+        const key = keyword.toLowerCase();
+        if (!keyword || seen.has(key)) return;
+        seen.add(key);
+        result.push(keyword);
+      });
+    });
+    return result;
+  };
 
   const loadRadar = async () => {
     if (!businessId) return;
@@ -62,8 +91,13 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', source
         api.get('/telegram-opportunity-radar/sources', { params: { business_id: businessId } }),
         api.get('/telegram-opportunity-radar/opportunities', { params: { business_id: businessId, limit: 20 } }),
       ]);
-      setSources(sourcesResponse.data?.sources || []);
+      const loadedSources = sourcesResponse.data?.sources || [];
+      setSources(loadedSources);
       setOpportunities(opportunitiesResponse.data?.opportunities || []);
+      const loadedKeywords = extractSourceKeywords(loadedSources);
+      if (loadedKeywords.length > 0) {
+        setKeywords(loadedKeywords.join(', '));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить радар');
     } finally {
@@ -88,7 +122,7 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', source
           telegram_username: peer.trim().startsWith('@') ? peer.trim().slice(1) : '',
           source_type: 'chat',
           monitor_config: {
-            keywords: keywords.split(',').map((item) => item.trim()).filter(Boolean),
+            keywords: parseKeywords(keywords),
           },
         },
       });
@@ -99,6 +133,28 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', source
       setError(err instanceof Error ? err.message : 'Не удалось добавить чат');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveKeywords = async () => {
+    if (!businessId) return;
+    setSavingKeywords(true);
+    setError('');
+    setSavedMessage('');
+    try {
+      const response = await api.patch('/telegram-opportunity-radar/sources/keywords', {
+        business_id: businessId,
+        keywords: parseKeywords(keywords),
+      });
+      const nextSources = response.data?.sources || sources;
+      const nextKeywords = response.data?.keywords || parseKeywords(keywords);
+      setSources(nextSources);
+      setKeywords(nextKeywords.join(', '));
+      setSavedMessage(`Сохранено для ${response.data?.updated_sources ?? nextSources.length} источников`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить слова поиска');
+    } finally {
+      setSavingKeywords(false);
     }
   };
 
@@ -114,6 +170,7 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', source
   const newCount = opportunities.filter((item) => item.status === 'new').length;
   const isWorkMode = mode === 'work';
   const showSourceSetup = sourceSetup === 'visible';
+  const keywordList = parseKeywords(keywords);
 
   return (
     <Card className="overflow-hidden border-slate-200">
@@ -169,17 +226,45 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', source
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="telegram-radar-keywords">Сигналы для LocalOS</Label>
-              <Textarea
-                id="telegram-radar-keywords"
-                value={keywords}
-                onChange={(event) => setKeywords(event.target.value)}
-                className="min-h-20"
-              />
-            </div>
           </>
         ) : null}
+
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <Label htmlFor="telegram-radar-keywords">Слова для поиска</Label>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                LocalOS подсвечивает сообщения, где встречаются эти слова и фразы. Разделяйте их запятыми или переносами строк.
+              </p>
+            </div>
+            <Badge variant="secondary">{keywordList.length} слов</Badge>
+          </div>
+          <Textarea
+            id="telegram-radar-keywords"
+            value={keywords}
+            onChange={(event) => {
+              setKeywords(event.target.value);
+              setSavedMessage('');
+            }}
+            className="mt-3 min-h-24 bg-white"
+            placeholder="производительность, эффективность, клиенты, kpi, смм, посты"
+          />
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" onClick={saveKeywords} disabled={!businessId || savingKeywords}>
+              {savingKeywords ? 'Сохраняем...' : 'Сохранить слова'}
+            </Button>
+            {savedMessage ? <span className="text-xs font-medium text-emerald-700">{savedMessage}</span> : null}
+          </div>
+          {keywordList.length > 0 ? (
+            <div className="mt-3 flex max-h-28 flex-wrap gap-1.5 overflow-auto">
+              {keywordList.map((keyword) => (
+                <span key={keyword.toLowerCase()} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
+                  {keyword}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" size="sm" className="gap-2" onClick={loadRadar} disabled={loading || !businessId}>

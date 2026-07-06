@@ -33,6 +33,24 @@ def test_localos_platform_aliases():
     assert _is_localos_platform_alias("business-1") is False
 
 
+def test_normalize_keywords_deduplicates_and_splits():
+    from services.telegram_opportunity_radar import normalize_keywords
+
+    assert normalize_keywords(" KPI, кпи\nсмм; KPI ;  посты ") == ["KPI", "кпи", "смм", "посты"]
+
+
+def test_collect_keywords_from_sources_handles_json_strings():
+    from services.telegram_opportunity_radar import collect_keywords_from_sources
+
+    sources = [
+        {"monitor_config_json": {"keywords": ["KPI", "смм"]}},
+        {"monitor_config_json": '{"keywords":["kpi","посты"]}'},
+        {"monitor_config_json": {}},
+    ]
+
+    assert collect_keywords_from_sources(sources) == ["KPI", "смм", "посты"]
+
+
 def test_openclaw_signature_accepts_raw_body(monkeypatch):
     from flask import Flask
     from api.telegram_opportunity_radar_api import _verify_openclaw_signature
