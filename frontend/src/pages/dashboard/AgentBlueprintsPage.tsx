@@ -2611,7 +2611,7 @@ const buildTodaySummary = (
   const todayRuns = runs.filter((run) => isWithinLastDay(run.completed_at || run.started_at));
   const todayApprovals = detailValues
     .flatMap((details) => details.approval_queue || [])
-    .filter((approval) => isWithinLastDay(approval.requested_at || approval.run_started_at));
+    .filter((approval) => isWithinLastDay(approval.requested_at || approval.run_started_at) && !isBusinessBlockerApproval(approval));
   const artifacts = detailValues.flatMap((details) => {
     const recentRuns = (details.runs || []).filter((run) => isWithinLastDay(run.completed_at || run.started_at));
     return recentRuns.flatMap((run) => run.artifacts || []);
@@ -2620,7 +2620,7 @@ const buildTodaySummary = (
   const completedRuns = todayRuns.filter((run) => run.status === 'completed').length || listFallbackRuns.filter((item) => item.last_run_status === 'completed').length;
   const failedRuns = todayRuns.filter((run) => run.status === 'failed').length || listFallbackRuns.filter((item) => item.last_run_status === 'failed').length;
   const preparedArtifacts = artifacts.length || todayRuns.reduce((sum, run) => sum + Number(run.observability?.artifacts?.count || 0), 0);
-  const pendingApprovals = todayApprovals.length || blueprints.reduce((sum, item) => sum + Number(item.pending_approvals_count || 0), 0);
+  const pendingApprovals = todayApprovals.length;
   const latestEvent = todayRuns[0]?.completed_at || todayRuns[0]?.started_at || listFallbackRuns[0]?.last_run_completed_at || listFallbackRuns[0]?.last_run_started_at || '';
   return {
     completedRuns,
@@ -2827,10 +2827,14 @@ const buildEmployeeWorkspaceState = (
 const buildEmployeeLastActivity = (
   blueprint: AgentBlueprint,
   details?: AgentBlueprintDetails | null,
+  pendingApproval?: AgentApproval | null,
 ) => {
   const latestRun = details?.runs?.[0];
   if (latestRun) {
     const time = formatShortDate(latestRun.completed_at || latestRun.started_at);
+    if (isBusinessBlockerPayload(findPreparedResultPayload(latestRun, pendingApproval))) {
+      return `Остановился: нужен следующий шаг${time ? ` · ${time}` : ''}`;
+    }
     if (latestRun.status === 'completed') {
       return `Завершил работу${time ? ` · ${time}` : ''}`;
     }
@@ -3042,7 +3046,7 @@ const buildEmployeeWorkspaceStory = (
     state,
     status,
     responsibilities: buildEmployeeResponsibilities(blueprint, details),
-    latestWork: buildEmployeeLastActivity(blueprint, details),
+    latestWork: buildEmployeeLastActivity(blueprint, details, pendingApproval),
     nextWork: blueprint.active_version_number ? 'По расписанию сотрудника' : 'После теста и включения',
     attention,
   };
@@ -3172,6 +3176,14 @@ const isTechnicalApprovalPayload = (value: unknown): boolean => {
 };
 
 const toPlainRecord = (value: unknown): Record<string, unknown> | null => {
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return toPlainRecord(parsed);
+    } catch {
+      return null;
+    }
+  }
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
   }
@@ -3270,6 +3282,10 @@ const isBusinessBlockerPayload = (result: Record<string, unknown> | null): boole
     'blocked',
   ].includes(status);
 };
+
+const isBusinessBlockerApproval = (approval?: AgentApproval | null): boolean => (
+  isBusinessBlockerPayload(extractBusinessResultPayload(approval?.payload_json || null))
+);
 
 const buildEmployeeTestResult = (
   activeRun: AgentRun | null,
@@ -3904,18 +3920,30 @@ export const AgentBlueprintsPage = () => {
   );
 
   const activeRunPendingApprovals = useMemo(
-    () => (activeRun?.approvals || []).filter((item) => item.status === 'pending'),
+    () => (activeRun?.approvals || []).filter((item) => item.status === 'pending' && !isBusinessBlockerApproval(item)),
     [activeRun?.approvals],
   );
 
-  const pendingApprovals = useMemo(
+  const actionablePendingApproval = activeRunPendingApprovals[0] || null;
+
+  const rawPendingApprovals = useMemo(
     () => (blueprintDetails?.approval_queue || []).filter((item) => item.status === 'pending'),
     [blueprintDetails?.approval_queue],
   );
 
+  const pendingApprovals = useMemo(
+    () => rawPendingApprovals.filter((item) => !isBusinessBlockerApproval(item)),
+    [rawPendingApprovals],
+  );
+
   const selectedPendingApproval = useMemo(
-    () => pendingApproval || pendingApprovals[0] || null,
-    [pendingApproval, pendingApprovals],
+    () => pendingApproval || rawPendingApprovals[0] || null,
+    [pendingApproval, rawPendingApprovals],
+  );
+
+  const selectedActionablePendingApproval = useMemo(
+    () => actionablePendingApproval || pendingApprovals[0] || null,
+    [actionablePendingApproval, pendingApprovals],
   );
 
   const queuedButNotDispatched = useMemo(() => {
@@ -4700,10 +4728,15 @@ export const AgentBlueprintsPage = () => {
   };
 
   const decideApproval = async (decision: 'approve' | 'reject') => {
-    const approval = selectedPendingApproval;
+    const approval = selectedActionablePendingApproval;
     const runId = approval?.run_id || activeRun?.id || selectedBlueprint?.last_run_id || '';
     if (!approval || !runId) {
       setError('Не удалось найти запуск для этого решения. Обновите страницу и попробуйте снова.');
+      return;
+    }
+    if (isBusinessBlockerApproval(approval)) {
+      setError('Это не готовый результат, а причина остановки. Исправьте следующий шаг и запустите тест ещё раз.');
+      setWorkspaceMode('results');
       return;
     }
     setActionLoading(true);
@@ -5240,6 +5273,31 @@ export const AgentBlueprintsPage = () => {
     () => buildTodaySummary(blueprints, agentDetailsById),
     [agentDetailsById, blueprints],
   );
+  const employeeListDetailsById = useMemo(() => {
+    if (!selectedBlueprint?.id || !blueprintDetails) {
+      return agentDetailsById;
+    }
+    const selectedDetails = (() => {
+      if (!activeRun?.id) {
+        return blueprintDetails;
+      }
+      const runs = blueprintDetails.runs || [];
+      const runBelongsToSelectedBlueprint = activeRun.blueprint_id === selectedBlueprint.id
+        || activeRun.id === runs[0]?.id
+        || activeRun.id === selectedBlueprint.last_run_id;
+      if (!runBelongsToSelectedBlueprint) {
+        return blueprintDetails;
+      }
+      return {
+        ...blueprintDetails,
+        runs: [activeRun, ...runs.filter((run) => run.id !== activeRun.id)],
+      };
+    })();
+    return {
+      ...agentDetailsById,
+      [selectedBlueprint.id]: selectedDetails,
+    };
+  }, [activeRun, agentDetailsById, blueprintDetails, selectedBlueprint?.id, selectedBlueprint?.last_run_id]);
   const openBlueprintMode = (blueprint: AgentBlueprint, mode: AgentWorkspaceMode) => {
     setSelectedBlueprintId(blueprint.id);
     setActiveRun(null);
@@ -5606,8 +5664,10 @@ export const AgentBlueprintsPage = () => {
           <div className="grid gap-5 lg:grid-cols-[20rem_minmax(0,1fr)]">
             <EmployeeAgentsList
               blueprints={blueprints}
-              detailsById={agentDetailsById}
+              detailsById={employeeListDetailsById}
               selectedBlueprintId={selectedBlueprint?.id || null}
+              selectedActiveRun={activeRun}
+              selectedPendingApproval={selectedPendingApproval}
               loading={loading}
               onOpen={(blueprint) => {
                 setSelectedBlueprintId(blueprint.id);
@@ -8555,12 +8615,16 @@ const EmployeeAgentsList = ({
   blueprints,
   detailsById,
   selectedBlueprintId,
+  selectedActiveRun,
+  selectedPendingApproval,
   loading,
   onOpen,
 }: {
   blueprints: AgentBlueprint[];
   detailsById: Record<string, AgentBlueprintDetails>;
   selectedBlueprintId: string | null;
+  selectedActiveRun?: AgentRun | null;
+  selectedPendingApproval?: AgentApproval | null;
   loading: boolean;
   onOpen: (blueprint: AgentBlueprint) => void;
 }) => (
@@ -8587,10 +8651,22 @@ const EmployeeAgentsList = ({
         </div>
       ) : (
         blueprints.map((blueprint) => {
-          const details = detailsById[blueprint.id];
-          const status = buildEmployeeStatus(blueprint, details);
-          const state = buildEmployeeWorkspaceState(blueprint, details);
           const selected = selectedBlueprintId === blueprint.id;
+          const baseDetails = detailsById[blueprint.id];
+          const details = selected && selectedActiveRun
+            ? {
+              ...baseDetails,
+              runs: [
+                selectedActiveRun,
+                ...(baseDetails?.runs || []).filter((run) => run.id !== selectedActiveRun.id),
+              ],
+            }
+            : baseDetails;
+          const pendingApproval = selected
+            ? selectedPendingApproval || (details?.approval_queue || []).find((item) => item.status === 'pending') || null
+            : (details?.approval_queue || []).find((item) => item.status === 'pending') || null;
+          const status = buildEmployeeStatus(blueprint, details, pendingApproval);
+          const state = buildEmployeeWorkspaceState(blueprint, details, pendingApproval);
           return (
             <button
               key={blueprint.id}
@@ -8610,7 +8686,7 @@ const EmployeeAgentsList = ({
                   </div>
                 </div>
                 <div className={cn('mt-1 truncate text-xs leading-5', selected ? 'text-slate-300' : 'text-slate-500')}>
-                  {buildEmployeeLastActivity(blueprint, details)}
+                  {buildEmployeeLastActivity(blueprint, details, pendingApproval)}
                 </div>
               </div>
               <span className={cn('inline-flex min-h-7 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', employeeToneClass[status.tone])}>
@@ -8676,7 +8752,7 @@ const EmployeeRunningPanel = ({
 
       <div className={cn('mt-5 grid gap-3', healthy ? 'sm:grid-cols-2' : 'lg:grid-cols-3')}>
         <EmployeeAnswerCard label="Следующий запуск" value={blueprint.active_version_number ? 'По расписанию сотрудника' : 'После включения'} tone="emerald" />
-        <EmployeeAnswerCard label="Последняя задача" value={buildEmployeeLastActivity(blueprint, details || undefined)} />
+        <EmployeeAnswerCard label="Последняя задача" value={buildEmployeeLastActivity(blueprint, details || undefined, pendingApproval)} />
         {!healthy ? (
           <EmployeeAnswerCard label="Требует внимания" value={`${attentionItems.length} ${attentionItems.length === 1 ? 'задача' : 'задачи'}`} tone="amber" />
         ) : null}
@@ -8729,7 +8805,7 @@ const EmployeeTestResultPanel = ({
   const labels = approvalActionLabels(pendingApproval);
   const isBlocked = result.state === 'blocker';
   const canApprove = Boolean(pendingApproval && !isBlocked);
-  const canReject = Boolean(pendingApproval);
+  const canReject = Boolean(pendingApproval && !isBlocked);
   const canRebuildScenario = Boolean(needsScenarioRebuild && onRebuildScenario);
   const canRunAfterGoogleReconnect = Boolean(!canRebuildScenario && googleAccessJustConnected && needsGoogleAccessReconnect);
   const canOpenGoogleAccessReconnect = Boolean(!canRunAfterGoogleReconnect && !canRebuildScenario && needsGoogleAccessReconnect && onOpenGoogleAccessReconnect);
