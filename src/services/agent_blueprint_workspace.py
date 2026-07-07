@@ -431,6 +431,23 @@ def _render_message_result(
     workflow = _clean_text(setup.get("workflow_description"))
     google_error = _google_sheets_source_error(extracted)
     if google_error:
+        if _is_google_sheets_api_disabled_error(google_error):
+            return {
+                "title": "Нужно включить Google Sheets API",
+                "status": "needs_google_api_enabled",
+                "summary": [
+                    "Google-доступ подключён, но в Google Cloud проекте LocalOS выключен Google Sheets API.",
+                ],
+                "next_questions": [
+                    "Включите Google Sheets API в проекте 304042072643.",
+                    "После включения API запустите тест ещё раз.",
+                ],
+                "technical_reason": google_error,
+                "rules_applied": rules,
+                "format": output_format,
+                "feedback_notes": feedback_notes,
+                "preparation_method": "Сообщение не готовилось: Google Sheets API выключен в проекте OAuth-клиента.",
+            }
         return {
             "title": "Нужно переподключить Google-доступ",
             "status": "needs_google_access",
@@ -486,6 +503,19 @@ def _google_sheets_source_error(extracted: List[Dict[str, Any]]) -> str:
         if reason:
             return reason
     return ""
+
+
+def _is_google_sheets_api_disabled_error(reason: str) -> bool:
+    text = _clean_text(reason).lower()
+    return (
+        "sheets.googleapis.com" in text
+        and (
+            "has not been used" in text
+            or "it is disabled" in text
+            or "service_disabled" in text
+            or "api has not been used" in text
+        )
+    )
 
 
 def _generate_message_result_with_llm(

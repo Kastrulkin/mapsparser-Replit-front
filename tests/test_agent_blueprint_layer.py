@@ -7608,6 +7608,41 @@ def test_message_result_prompts_google_reconnect_when_sheet_auth_is_revoked():
     assert "invalid_grant" in result["technical_reason"]
 
 
+def test_message_result_for_disabled_google_sheets_api_guides_project_setup():
+    from services.agent_blueprint_workspace import _render_output
+
+    result = _render_output(
+        "custom",
+        {
+            "workflow_description": "Открой таблицу поездок и подготовь сообщение владельцу",
+            "processing_rules": "Не придумывать факты",
+            "output_format": "Готовое сообщение для проверки",
+        },
+        [
+            {
+                "source_name": "google_sheets_error",
+                "summary": "Google Sheets read failed with HTTP 403",
+                "raw": {
+                    "provider_error": "GOOGLE_SHEETS_PROVIDER_NOT_READY",
+                    "provider_error_message": (
+                        "Google Sheets read failed with HTTP 403: "
+                        "Google Sheets API has not been used in project 304042072643 before or it is disabled. "
+                        "Enable it by visiting https://console.developers.google.com/apis/api/sheets.googleapis.com/overview?project=304042072643"
+                    ),
+                },
+            }
+        ],
+        [],
+        {},
+    )
+
+    assert result["status"] == "needs_google_api_enabled"
+    assert result["title"] == "Нужно включить Google Sheets API"
+    assert "Google-доступ подключён" in result["summary"][0]
+    assert "304042072643" in result["next_questions"][0]
+    assert "Переподключите Google-доступ" not in " ".join(result["next_questions"])
+
+
 def test_message_result_uses_google_sheets_rows_for_concrete_draft(monkeypatch):
     import services.agent_blueprint_workspace as workspace
 

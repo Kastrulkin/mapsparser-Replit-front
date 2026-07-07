@@ -3266,6 +3266,7 @@ const isBusinessBlockerPayload = (result: Record<string, unknown> | null): boole
     'validation_error',
     'provider_read_required',
     'needs_google_access',
+    'needs_google_api_enabled',
     'blocked',
   ].includes(status);
 };
@@ -3378,6 +3379,9 @@ const needsGoogleSheetsSourceSetup = (activeRun: AgentRun | null, pendingApprova
     return false;
   }
   if (resultPayloadStatus(resultPayload) === 'needs_google_access') {
+    return false;
+  }
+  if (resultPayloadStatus(resultPayload) === 'needs_google_api_enabled') {
     return false;
   }
   const text = stringifyBusinessValue(resultPayload).toLowerCase();
