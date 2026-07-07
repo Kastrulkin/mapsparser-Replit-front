@@ -420,6 +420,76 @@ async def _fetch_recent_replies_async(
         await client.disconnect()
 
 
+def _normalize_telegram_peer(value: str):
+    raw_peer = str(value or "").strip()
+    if not raw_peer:
+        return raw_peer
+    if raw_peer.startswith("@") or raw_peer.startswith("+"):
+        return raw_peer
+    try:
+        return int(raw_peer)
+    except Exception:
+        return raw_peer
+
+
+async def _fetch_recent_messages_async(
+    auth_data: dict[str, Any],
+    peer: str,
+    *,
+    after_message_id: Any = None,
+    limit: int = 20,
+) -> dict[str, Any]:
+    raw_peer = str(peer or "").strip()
+    normalized = _normalize_telegram_peer(raw_peer)
+    safe_limit = max(1, min(int(limit or 20), 100))
+    try:
+        min_message_id = int(str(after_message_id or "").strip()) if str(after_message_id or "").strip() else 0
+    except Exception:
+        min_message_id = 0
+
+    client = await _connect_client(auth_data)
+    try:
+        route_info = getattr(client, "_localos_route_info", None) or {
+            "route_kind": "unknown",
+            "route_label": "unknown",
+            "route_target": "unknown",
+        }
+        if not await client.is_user_authorized():
+            return {"status": "not_authorized", "peer": raw_peer, "messages": [], **route_info}
+
+        messages = await asyncio.wait_for(
+            client.get_messages(normalized, limit=safe_limit, min_id=max(0, min_message_id)),
+            timeout=REQUEST_TIMEOUT_SEC,
+        )
+        result_messages: list[dict[str, Any]] = []
+        for message in reversed(messages):
+            message_id = getattr(message, "id", None)
+            try:
+                if min_message_id and int(message_id or 0) <= min_message_id:
+                    continue
+            except Exception:
+                pass
+            message_date = _normalize_datetime_utc(getattr(message, "date", None))
+            text = str(
+                getattr(message, "message", None)
+                or getattr(message, "text", None)
+                or ""
+            ).strip()
+            result_messages.append(
+                {
+                    "id": message_id,
+                    "text": text,
+                    "date": message_date.isoformat() if message_date else None,
+                    "sender_id": getattr(getattr(message, "from_id", None), "user_id", None)
+                    or getattr(getattr(message, "from_id", None), "channel_id", None),
+                    "out": bool(getattr(message, "out", False)),
+                }
+            )
+        return {"status": "ok", "peer": raw_peer, "messages": result_messages, **route_info}
+    finally:
+        await client.disconnect()
+
+
 def send_code(auth_data: dict[str, Any]) -> dict[str, Any]:
     return asyncio.run(_send_code_async(auth_data))
 
@@ -445,6 +515,23 @@ def fetch_recent_replies(
             auth_data,
             recipient,
             sent_after=sent_after,
+            after_message_id=after_message_id,
+            limit=limit,
+        )
+    )
+
+
+def fetch_recent_messages(
+    auth_data: dict[str, Any],
+    peer: str,
+    *,
+    after_message_id: Any = None,
+    limit: int = 20,
+) -> dict[str, Any]:
+    return asyncio.run(
+        _fetch_recent_messages_async(
+            auth_data,
+            peer,
             after_message_id=after_message_id,
             limit=limit,
         )

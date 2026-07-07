@@ -57,6 +57,7 @@ from services.operator_refresh_recovery import release_failed_refresh_reservatio
 from services.operator_refresh_telegram_followup import dispatch_operator_refresh_telegram_followup
 from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
 from services.social_post_service import collect_due_social_post_metrics, dispatch_due_social_posts
+from services.telegram_opportunity_monitor import run_telegram_opportunity_monitor
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -74,6 +75,7 @@ _LAST_CARD_AUTOMATION_AT = 0.0
 _LAST_AGENT_SCHEDULE_DISPATCH_AT = 0.0
 _LAST_SOCIAL_POST_DISPATCH_AT = 0.0
 _LAST_SOCIAL_POST_METRICS_AT = 0.0
+_LAST_TELEGRAM_OPPORTUNITY_MONITOR_AT = 0.0
 
 _EDITORIAL_SERVICE_PATTERNS = (
     "хорошее место",
@@ -1578,6 +1580,59 @@ def _collect_social_post_metrics_if_due() -> None:
         print("[SOCIAL_POST_METRICS] error", flush=True)
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
+
+
+def _run_telegram_opportunity_monitor_if_due() -> None:
+    global _LAST_TELEGRAM_OPPORTUNITY_MONITOR_AT
+    if not _env_bool("TELEGRAM_OPPORTUNITY_MONITOR_ENABLED", False):
+        return
+
+    now = time.time()
+    interval_sec = max(30, int(os.getenv("TELEGRAM_OPPORTUNITY_MONITOR_INTERVAL_SEC", "120")))
+    if now - _LAST_TELEGRAM_OPPORTUNITY_MONITOR_AT < interval_sec:
+        return
+
+    _LAST_TELEGRAM_OPPORTUNITY_MONITOR_AT = now
+    db = None
+    try:
+        db = DatabaseManager()
+        business_scope = str(os.getenv("TELEGRAM_OPPORTUNITY_MONITOR_BUSINESS_ID") or "").strip() or None
+        result = run_telegram_opportunity_monitor(db.conn.cursor(), business_id=business_scope)
+        db.conn.commit()
+        if (
+            int(result.get("created") or 0) > 0
+            or int(result.get("matches") or 0) > 0
+            or int(result.get("sources_with_errors") or 0) > 0
+            or business_scope
+        ):
+            print(
+                "[TELEGRAM_OPPORTUNITY_MONITOR] "
+                f"sources_checked={int(result.get('sources_checked') or 0)} "
+                f"errors={int(result.get('sources_with_errors') or 0)} "
+                f"messages_seen={int(result.get('messages_seen') or 0)} "
+                f"matches={int(result.get('matches') or 0)} "
+                f"created={int(result.get('created') or 0)} "
+                f"duplicates={int(result.get('duplicates') or 0)} "
+                f"alerts_sent={int(result.get('alerts_sent') or 0)} "
+                f"skipped_no_account={int(result.get('skipped_no_account') or 0)} "
+                f"business_scope={business_scope or 'all'}",
+                flush=True,
+            )
+    except Exception:
+        try:
+            if db:
+                db.conn.rollback()
+        except Exception:
+            pass
+        print("[TELEGRAM_OPPORTUNITY_MONITOR] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+    finally:
+        try:
+            if db:
+                db.close()
+        except Exception:
+            pass
 
 
 def _dispatch_openclaw_callback_outbox_if_due() -> None:
@@ -6055,6 +6110,7 @@ if __name__ == "__main__":
             _dispatch_agent_schedules_if_due()
             _dispatch_social_posts_if_due()
             _collect_social_post_metrics_if_due()
+            _run_telegram_opportunity_monitor_if_due()
             _dispatch_outreach_queue_if_due()
             _dispatch_openclaw_callback_outbox_if_due()
             _check_openclaw_callback_alerts_if_due()
