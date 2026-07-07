@@ -68,6 +68,7 @@ class GoogleSheetsAppendAdapter:
             raise GoogleSheetsAdapterError("spreadsheet_id is required for Google Sheets read.")
         sheet_name = str(request.get("sheet_name") or "Sheet1").strip() or "Sheet1"
         range_value = str(request.get("range") or request.get("range_name") or "").strip()
+        requested_range = bool(range_value)
         if not range_value:
             range_value = f"{sheet_name}!A1:Z"
         limit = max(1, min(int(request.get("limit") or 100), 500))
@@ -79,6 +80,14 @@ class GoogleSheetsAppendAdapter:
         }
         response = requests.get(url, **request_kwargs)
         response = self._retry_with_refreshed_token_on_unauthorized("get", url, request_kwargs, response, credentials)
+        if response.status_code >= 400 and not requested_range and sheet_name == "Sheet1" and _is_unable_to_parse_range_response(response):
+            fallback_sheet_name = self._load_first_sheet_name(spreadsheet_id, credentials, request_kwargs)
+            if fallback_sheet_name and fallback_sheet_name != sheet_name:
+                sheet_name = fallback_sheet_name
+                range_value = f"{sheet_name}!A1:Z"
+                url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(spreadsheet_id, safe='')}/values/{quote(range_value, safe='')}"
+                response = requests.get(url, **request_kwargs)
+                response = self._retry_with_refreshed_token_on_unauthorized("get", url, request_kwargs, response, credentials)
         if response.status_code >= 400:
             raise GoogleSheetsAdapterError(f"Google Sheets read failed with HTTP {response.status_code}: {_response_excerpt(response)}")
         payload = response.json() if response.content else {}
@@ -100,6 +109,33 @@ class GoogleSheetsAppendAdapter:
             "rows": rows,
             "row_count": len(rows),
         }
+
+    def _load_first_sheet_name(
+        self,
+        spreadsheet_id: str,
+        credentials: Dict[str, Any],
+        base_request_kwargs: Dict[str, Any],
+    ) -> str:
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(spreadsheet_id, safe='')}"
+        request_kwargs = {
+            "params": {"fields": "sheets.properties.title"},
+            "headers": dict(base_request_kwargs.get("headers") or {}),
+            "timeout": self.timeout_seconds,
+        }
+        response = requests.get(url, **request_kwargs)
+        response = self._retry_with_refreshed_token_on_unauthorized("get", url, request_kwargs, response, credentials)
+        if response.status_code >= 400:
+            return ""
+        payload = response.json() if response.content else {}
+        sheets = payload.get("sheets") if isinstance(payload.get("sheets"), list) else []
+        for sheet in sheets:
+            if not isinstance(sheet, dict):
+                continue
+            properties = sheet.get("properties") if isinstance(sheet.get("properties"), dict) else {}
+            title = str(properties.get("title") or "").strip()
+            if title:
+                return title
+        return ""
 
     def _retry_with_refreshed_token_on_unauthorized(
         self,
@@ -384,3 +420,8 @@ def _response_excerpt(response: requests.Response) -> str:
         return response.text[:500]
     except Exception:
         return str(sys.exc_info()[1])[:500]
+
+
+def _is_unable_to_parse_range_response(response: requests.Response) -> bool:
+    text = _response_excerpt(response).lower()
+    return response.status_code == 400 and "unable to parse range" in text

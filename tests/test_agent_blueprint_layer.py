@@ -4759,6 +4759,69 @@ def test_google_sheets_adapter_read_rows_uses_google_sheets_values_api(monkeypat
     assert calls[0]["headers"]["Authorization"] == "Bearer access-token"
 
 
+def test_google_sheets_adapter_read_rows_falls_back_from_default_sheet1_to_first_tab(monkeypatch):
+    from services import agent_google_sheets_adapter
+
+    calls = []
+
+    class InvalidRangeResponse:
+        status_code = 400
+        content = b'{"error":{"message":"Unable to parse range: Sheet1!A1:Z"}}'
+        text = '{"error":{"message":"Unable to parse range: Sheet1!A1:Z"}}'
+
+        def json(self):
+            return {"error": {"message": "Unable to parse range: Sheet1!A1:Z"}}
+
+    class MetadataResponse:
+        status_code = 200
+        content = b"{}"
+        text = "{}"
+
+        def json(self):
+            return {"sheets": [{"properties": {"title": "Trips"}}]}
+
+    class ReadResponse:
+        status_code = 200
+        content = b"{}"
+        text = "{}"
+
+        def json(self):
+            return {
+                "range": "Trips!A1:C2",
+                "values": [
+                    ["date", "from", "to"],
+                    ["2026-04-20", "Tallinn", "Airport"],
+                ],
+            }
+
+    def fake_get(url, **kwargs):
+        calls.append({"url": url, **kwargs})
+        if "/values/Sheet1%21A1%3AZ" in url:
+            return InvalidRangeResponse()
+        if url.endswith("/spreadsheets/spreadsheet-1"):
+            return MetadataResponse()
+        return ReadResponse()
+
+    monkeypatch.setattr(agent_google_sheets_adapter.requests, "get", fake_get)
+    adapter = agent_google_sheets_adapter.GoogleSheetsAppendAdapter(
+        {"token": "access-token", "scopes": [agent_google_sheets_adapter.SHEETS_SCOPE]}
+    )
+
+    result = adapter.read_rows(
+        {
+            "spreadsheet_id": "spreadsheet-1",
+            "sheet_name": "Sheet1",
+            "limit": 10,
+        }
+    )
+
+    assert result["success"] is True
+    assert result["sheet_name"] == "Trips"
+    assert result["row_count"] == 1
+    assert result["rows"][0]["from"] == "Tallinn"
+    assert "/values/Trips%21A1%3AZ" in calls[-1]["url"]
+
+
 def test_google_sheets_adapter_read_rows_refreshes_expired_access_token(monkeypatch):
     from services import agent_google_sheets_adapter
 
@@ -4845,6 +4908,7 @@ def test_google_sheets_read_rows_capability_uses_native_provider(monkeypatch):
             return {
                 "success": True,
                 "range": "Payments!A1:C3",
+                "sheet_name": "Actual tab",
                 "headers": ["date", "type", "amount"],
                 "rows": [{"row_number": 2, "date": "2026-06-09", "type": "revenue", "amount": "12000"}],
                 "row_count": 1,
@@ -4877,6 +4941,7 @@ def test_google_sheets_read_rows_capability_uses_native_provider(monkeypatch):
     assert payload["status"] == "read_completed"
     assert payload["provider_read_performed"] is True
     assert payload["source"] == "google_sheets"
+    assert payload["sheet_name"] == "Actual tab"
     assert payload["count"] == 1
     assert payload["rows"][0]["amount"] == "12000"
 
@@ -7640,6 +7705,39 @@ def test_message_result_for_disabled_google_sheets_api_guides_project_setup():
     assert result["title"] == "Нужно включить Google Sheets API"
     assert "Google-доступ подключён" in result["summary"][0]
     assert "304042072643" in result["next_questions"][0]
+    assert "Переподключите Google-доступ" not in " ".join(result["next_questions"])
+
+
+def test_message_result_for_google_sheets_invalid_range_guides_sheet_tab_setup():
+    from services.agent_blueprint_workspace import _render_output
+
+    result = _render_output(
+        "custom",
+        {
+            "workflow_description": "Открой таблицу поездок и подготовь сообщение владельцу",
+            "processing_rules": "Не придумывать факты",
+            "output_format": "Готовое сообщение для проверки",
+        },
+        [
+            {
+                "source_name": "google_sheets_error",
+                "summary": "Google Sheets read failed with HTTP 400",
+                "raw": {
+                    "provider_error": "GOOGLE_SHEETS_PROVIDER_NOT_READY",
+                    "provider_error_message": (
+                        "Google Sheets read failed with HTTP 400: "
+                        "Unable to parse range: Sheet1!A1:Z"
+                    ),
+                },
+            }
+        ],
+        [],
+        {},
+    )
+
+    assert result["status"] == "needs_sheet_tab"
+    assert result["title"] == "Нужно выбрать лист таблицы"
+    assert "лист таблицы" in result["summary"][0]
     assert "Переподключите Google-доступ" not in " ".join(result["next_questions"])
 
 

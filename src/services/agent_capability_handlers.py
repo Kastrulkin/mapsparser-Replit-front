@@ -1044,7 +1044,7 @@ def _handle_google_sheets_read_rows(envelope: Dict[str, Any], user_data: Dict[st
             provider_read_performed=True,
             integration_id=integration_id,
             spreadsheet_id=spreadsheet_id,
-            sheet_name=sheet_name,
+            sheet_name=read_result.get("sheet_name") or sheet_name,
             rows=read_result.get("rows") if isinstance(read_result.get("rows"), list) else [],
             headers=read_result.get("headers") if isinstance(read_result.get("headers"), list) else [],
             count=int(read_result.get("row_count") or 0),

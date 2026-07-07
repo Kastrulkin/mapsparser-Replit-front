@@ -2904,6 +2904,14 @@ const buildEmployeePrimaryAction = ({
         targetMode: 'results',
       };
     }
+    if (resultPayloadStatus(latestResult) === 'needs_sheet_tab') {
+      return {
+        kind: 'open_result',
+        label: 'Указать лист таблицы',
+        description: 'Google-доступ работает, но лист таблицы не найден. Откройте результат и укажите правильный лист.',
+        targetMode: 'results',
+      };
+    }
     return {
       kind: 'open_result',
       label: 'Разобрать результат',
@@ -3279,6 +3287,7 @@ const isBusinessBlockerPayload = (result: Record<string, unknown> | null): boole
     'provider_read_required',
     'needs_google_access',
     'needs_google_api_enabled',
+    'needs_sheet_tab',
     'blocked',
   ].includes(status);
 };
@@ -3394,19 +3403,25 @@ const needsGoogleSheetsSourceSetup = (activeRun: AgentRun | null, pendingApprova
   if (!isBusinessBlockerPayload(resultPayload)) {
     return false;
   }
+  const text = stringifyBusinessValue(resultPayload).toLowerCase();
   if (resultPayloadStatus(resultPayload) === 'needs_google_access') {
-    return false;
+    return text.includes('unable to parse range');
   }
   if (resultPayloadStatus(resultPayload) === 'needs_google_api_enabled') {
     return false;
   }
-  const text = stringifyBusinessValue(resultPayload).toLowerCase();
+  if (resultPayloadStatus(resultPayload) === 'needs_sheet_tab') {
+    return true;
+  }
   return text.includes('google sheets') || text.includes('таблиц');
 };
 
 const needsGoogleAccessReconnect = (activeRun: AgentRun | null, pendingApproval?: AgentApproval | null) => {
   const resultPayload = findPreparedResultPayload(activeRun, pendingApproval);
-  return resultPayloadStatus(resultPayload) === 'needs_google_access';
+  if (resultPayloadStatus(resultPayload) !== 'needs_google_access') {
+    return false;
+  }
+  return !stringifyBusinessValue(resultPayload).toLowerCase().includes('unable to parse range');
 };
 
 const hasFreshGoogleSheetsAccessAfterResult = (

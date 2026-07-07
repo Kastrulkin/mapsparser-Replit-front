@@ -448,6 +448,23 @@ def _render_message_result(
                 "feedback_notes": feedback_notes,
                 "preparation_method": "Сообщение не готовилось: Google Sheets API выключен в проекте OAuth-клиента.",
             }
+        if _is_google_sheets_range_error(google_error):
+            return {
+                "title": "Нужно выбрать лист таблицы",
+                "status": "needs_sheet_tab",
+                "summary": [
+                    "Google-доступ работает, но сохранённый лист таблицы не найден.",
+                ],
+                "next_questions": [
+                    "Откройте настройку Google Таблицы и укажите правильное имя листа.",
+                    "После сохранения запустите тест ещё раз.",
+                ],
+                "technical_reason": google_error,
+                "rules_applied": rules,
+                "format": output_format,
+                "feedback_notes": feedback_notes,
+                "preparation_method": "Сообщение не готовилось: Google не нашёл указанный лист таблицы.",
+            }
         return {
             "title": "Нужно переподключить Google-доступ",
             "status": "needs_google_access",
@@ -516,6 +533,11 @@ def _is_google_sheets_api_disabled_error(reason: str) -> bool:
             or "api has not been used" in text
         )
     )
+
+
+def _is_google_sheets_range_error(reason: str) -> bool:
+    text = _clean_text(reason).lower()
+    return "unable to parse range" in text or "range not found" in text
 
 
 def _generate_message_result_with_llm(
