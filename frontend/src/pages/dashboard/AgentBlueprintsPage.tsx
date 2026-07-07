@@ -564,6 +564,7 @@ type AgentIntegration = {
 type AgentExternalAuthOption = {
   id: string;
   source: string;
+  provider?: string;
   display_name?: string;
   updated_at?: string;
 };
@@ -857,7 +858,7 @@ type EmployeeStatus = {
 
 type EmployeeNextActionKind = 'approve' | 'connect' | 'run_test' | 'enable' | 'open_result' | 'view_history';
 
-type EmployeeWorkspaceState = 'draft' | 'needs_connection' | 'ready_for_test' | 'running_test' | 'waiting_for_review' | 'working' | 'needs_attention' | 'error';
+type EmployeeWorkspaceState = 'draft' | 'needs_connection' | 'ready_for_test' | 'running_test' | 'waiting_for_review' | 'blocked_result' | 'working' | 'needs_attention' | 'error';
 
 type EmployeeNextAction = {
   kind: EmployeeNextActionKind;
@@ -2639,6 +2640,17 @@ const buildAgentBusinessStatus = (
   const missingConnections = Number(activationGate?.preflight?.missing_count || 0);
   const previewReady = activationGate?.preview_run_status?.ready === true;
   const hasActiveVersion = Boolean(details?.active_version_id || blueprint.active_version_id || blueprint.active_version_number);
+  const latestResult = findPreparedResultPayload(details?.runs?.[0] || null);
+  if (isBusinessBlockerPayload(latestResult)) {
+    return {
+      status: 'needs_check',
+      label: 'Нужно проверить',
+      tone: 'warning',
+      primaryLabel: resultPayloadStatus(latestResult) === 'needs_google_access' ? 'Починить Google' : 'Посмотреть',
+      lastResult: 'Последний результат требует следующего шага',
+      nextRun: 'после исправления',
+    };
+  }
   if (Number(blueprint.pending_approvals_count || 0) > 0 || blueprint.last_run_status === 'waiting_approval') {
     return {
       status: 'needs_approval',
@@ -2717,6 +2729,13 @@ const buildEmployeeStatus = (
   pendingApproval?: AgentApproval | null,
 ): EmployeeStatus => {
   const workspaceState = buildEmployeeWorkspaceState(blueprint, details, pendingApproval);
+  if (workspaceState === 'blocked_result') {
+    return {
+      label: 'Нужно проверить',
+      tone: 'amber',
+      summary: 'Сотрудник не получил данные из источника. Нужно исправить доступ или запустить тест заново.',
+    };
+  }
   if (workspaceState === 'waiting_for_review') {
     return {
       label: 'Ждёт решения',
@@ -2775,6 +2794,11 @@ const buildEmployeeWorkspaceState = (
   const gate = details?.activation_gate;
   const missingConnections = Number(gate?.preflight?.missing_count || 0);
   const hasActiveVersion = Boolean(details?.active_version_id || blueprint.active_version_id || blueprint.active_version_number);
+  const latestRun = details?.runs?.[0] || null;
+  const latestResult = findPreparedResultPayload(latestRun, pendingApproval);
+  if (isBusinessBlockerPayload(latestResult)) {
+    return 'blocked_result';
+  }
   const hasPendingApproval = Boolean(pendingApproval || blueprint.pending_approvals_count || blueprint.last_run_status === 'waiting_approval');
   if (hasPendingApproval) {
     return 'waiting_for_review';
@@ -2825,12 +2849,14 @@ const buildEmployeeNextAction = ({
   blueprint,
   details,
   pendingApproval,
+  googleAccessFreshAfterResult = false,
 }: {
   blueprint: AgentBlueprint;
   details?: AgentBlueprintDetails | null;
   pendingApproval?: AgentApproval | null;
+  googleAccessFreshAfterResult?: boolean;
 }): EmployeeNextAction => {
-  return buildEmployeePrimaryAction({ blueprint, details, pendingApproval });
+  return buildEmployeePrimaryAction({ blueprint, details, pendingApproval, googleAccessFreshAfterResult });
 };
 
 const getMissingConnectorLabel = (
@@ -2846,15 +2872,41 @@ const buildEmployeePrimaryAction = ({
   blueprint,
   details,
   pendingApproval,
+  googleAccessFreshAfterResult = false,
 }: {
   blueprint: AgentBlueprint;
   details?: AgentBlueprintDetails | null;
   pendingApproval?: AgentApproval | null;
+  googleAccessFreshAfterResult?: boolean;
 }): EmployeeNextAction => {
   const state = buildEmployeeWorkspaceState(blueprint, details, pendingApproval);
   const gate = details?.activation_gate;
   const activationVersionId = gate?.active_version_id || details?.active_version_id || blueprint.active_version_id || '';
   const latestResult = findPreparedResultPayload(details?.runs?.[0] || null, pendingApproval);
+  if (state === 'blocked_result') {
+    if (resultPayloadStatus(latestResult) === 'needs_google_access') {
+      if (googleAccessFreshAfterResult) {
+        return {
+          kind: 'run_test',
+          label: 'Запустить тест',
+          description: 'Google-доступ обновлён. Запустите тест ещё раз, чтобы проверить таблицу на свежем доступе.',
+          targetMode: 'results',
+        };
+      }
+      return {
+        kind: 'open_result',
+        label: 'Починить Google-доступ',
+        description: 'Google не дал строки таблицы. Откройте результат, переподключите доступ или запустите тест после подключения.',
+        targetMode: 'results',
+      };
+    }
+    return {
+      kind: 'open_result',
+      label: 'Разобрать результат',
+      description: 'Сотрудник остановился до готового результата. Откройте причину и исправьте следующий шаг.',
+      targetMode: 'results',
+    };
+  }
   if (state === 'waiting_for_review') {
     return {
       kind: 'approve',
@@ -3027,6 +3079,12 @@ const buildReasonCard = (
   state: EmployeeWorkspaceState,
   pendingApproval?: AgentApproval | null,
 ) => {
+  if (state === 'blocked_result') {
+    return {
+      title: 'Почему нельзя подтвердить результат',
+      description: 'Сотрудник не получил нужные данные, поэтому подтверждать нечего. Сначала исправьте доступ или запустите тест заново.',
+    };
+  }
   if (state === 'waiting_for_review') {
     return {
       title: 'Почему сейчас требуется решение',
@@ -3331,6 +3389,27 @@ const needsGoogleAccessReconnect = (activeRun: AgentRun | null, pendingApproval?
   return resultPayloadStatus(resultPayload) === 'needs_google_access';
 };
 
+const hasFreshGoogleSheetsAccessAfterResult = (
+  authOptions: AgentExternalAuthOption[],
+  activeRun: AgentRun | null,
+  pendingApproval?: AgentApproval | null,
+) => {
+  const resultTimeRaw = activeRun?.completed_at || activeRun?.started_at || pendingApproval?.requested_at || pendingApproval?.run_started_at || '';
+  const resultTime = resultTimeRaw ? new Date(resultTimeRaw).getTime() : 0;
+  if (!resultTime || Number.isNaN(resultTime)) {
+    return false;
+  }
+  return authOptions.some((option) => {
+    const source = String(option.source || '').trim();
+    const provider = String(option.provider || '').trim();
+    if (!['google_business', 'google_sheets'].includes(source) && provider !== 'google_sheets') {
+      return false;
+    }
+    const updatedAt = option.updated_at ? new Date(option.updated_at).getTime() : 0;
+    return Boolean(updatedAt && !Number.isNaN(updatedAt) && updatedAt > resultTime);
+  });
+};
+
 const buildEmployeeHistoryStory = (
   details: AgentBlueprintDetails | null,
   activeRun: AgentRun | null,
@@ -3347,7 +3426,20 @@ const buildEmployeeAttentionItems = (
 ) => {
   const items: Array<{ key: string; title: string; description: string; tone: 'amber' | 'rose' }> = [];
   const missingConnections = Number(details?.activation_gate?.preflight?.missing_count || 0);
-  if (pendingApproval || Number(blueprint.pending_approvals_count || 0) > 0) {
+  const latestResult = findPreparedResultPayload(details?.runs?.[0] || null, pendingApproval);
+  const blocker = isBusinessBlockerPayload(latestResult);
+  if (blocker) {
+    const needsGoogle = resultPayloadStatus(latestResult) === 'needs_google_access';
+    items.push({
+      key: needsGoogle ? 'google-access' : 'blocked-result',
+      title: needsGoogle ? 'Нужен Google-доступ к таблице' : 'Нужен следующий шаг перед результатом',
+      description: needsGoogle
+        ? 'Google не дал строки таблицы. Переподключите доступ или запустите тест после подключения.'
+        : 'Сотрудник остановился до готового результата. Откройте причину и исправьте следующий шаг.',
+      tone: 'amber',
+    });
+  }
+  if (!blocker && (pendingApproval || Number(blueprint.pending_approvals_count || 0) > 0)) {
     items.push({
       key: 'approval',
       title: 'Нужно ваше решение',
@@ -3394,7 +3486,22 @@ const buildAttentionInbox = ({
   onSelectBlueprint: (blueprint: AgentBlueprint, mode: AgentWorkspaceMode) => void;
 }): AgentAttentionItem[] => {
   const items: AgentAttentionItem[] = [];
-  if (selectedPendingApproval) {
+  const selectedLatestResult = findPreparedResultPayload(selectedDetails?.runs?.[0] || null, selectedPendingApproval);
+  const selectedBlocker = isBusinessBlockerPayload(selectedLatestResult);
+  if (selectedBlueprint && selectedBlocker) {
+    const needsGoogle = resultPayloadStatus(selectedLatestResult) === 'needs_google_access';
+    items.push({
+      key: `${needsGoogle ? 'google-access' : 'blocked-result'}-${selectedBlueprint.id}`,
+      tone: 'amber',
+      problem: needsGoogle ? 'Нужен Google-доступ к таблице' : 'Нужен следующий шаг перед результатом',
+      reason: needsGoogle
+        ? `${selectedBlueprint.name}: Google не дал строки таблицы.`
+        : `${selectedBlueprint.name}: сотрудник остановился до готового результата.`,
+      actionLabel: needsGoogle ? 'Починить Google' : 'Посмотреть',
+      action: onOpenResults,
+    });
+  }
+  if (!selectedBlocker && selectedPendingApproval) {
     items.push({
       key: `approval-${selectedPendingApproval.id}`,
       tone: 'amber',
@@ -5158,15 +5265,23 @@ export const AgentBlueprintsPage = () => {
         blueprint: selectedBlueprint,
         details: blueprintDetails,
         pendingApproval: selectedPendingApproval,
+        googleAccessFreshAfterResult: hasFreshGoogleSheetsAccessAfterResult(
+          agentExternalAuthOptions,
+          activeRun || blueprintDetails?.runs?.[0] || null,
+          selectedPendingApproval,
+        ),
       })
       : null,
-    [blueprintDetails, selectedBlueprint, selectedPendingApproval],
+    [activeRun, agentExternalAuthOptions, blueprintDetails, selectedBlueprint, selectedPendingApproval],
   );
   const selectedResultRun = activeRun || blueprintDetails?.runs?.[0] || null;
   const resultNeedsScenarioRebuild = needsScenarioRebuildForSourceResult(selectedResultRun, selectedPendingApproval, blueprintDetails);
   const resultNeedsGoogleSheetsSetup = needsGoogleSheetsSourceSetup(selectedResultRun, selectedPendingApproval);
   const resultNeedsGoogleAccessReconnect = needsGoogleAccessReconnect(selectedResultRun, selectedPendingApproval);
-  const resultGoogleAccessReconnected = googleAccessJustConnected && resultNeedsGoogleAccessReconnect;
+  const resultGoogleAccessReconnected = resultNeedsGoogleAccessReconnect && (
+    googleAccessJustConnected
+    || hasFreshGoogleSheetsAccessAfterResult(agentExternalAuthOptions, selectedResultRun, selectedPendingApproval)
+  );
   const openGoogleSheetsSourceSetup = () => {
     const sheetBinding = agentBindingStatus.find((binding) => binding.provider === 'google_sheets' && binding.capability === 'google_sheets.read_rows')
       || agentBindingStatus.find((binding) => binding.provider === 'google_sheets')
@@ -8810,6 +8925,7 @@ const employeeStateTitle = (state: EmployeeWorkspaceState) => ({
   ready_for_test: 'Готов к проверке',
   running_test: 'Проверка идёт',
   waiting_for_review: 'Ждёт вашего решения',
+  blocked_result: 'Нужен следующий шаг',
   working: 'Работает',
   needs_attention: 'Нужно включить',
   error: 'Ошибка',
@@ -8839,7 +8955,7 @@ const EmployeeAgentOverviewPanel = ({
   const detailedLatestRun = activeRun?.id && activeRun.id === latestRun?.id ? activeRun : latestRun;
   const latestResult = findPreparedResultPayload(detailedLatestRun, pendingApproval);
   const healthy = story.state === 'working' && story.attention.length === 0;
-  const problem = story.state === 'error' || story.state === 'waiting_for_review' || story.state === 'needs_connection' || story.state === 'needs_attention';
+  const problem = story.state === 'error' || story.state === 'waiting_for_review' || story.state === 'blocked_result' || story.state === 'needs_connection' || story.state === 'needs_attention';
   const actionDisabled = actionLoading || story.state === 'running_test';
   const userMode = buildAgentUserMode(blueprint, details);
   const reasonCard = buildReasonCard(story.state, pendingApproval);

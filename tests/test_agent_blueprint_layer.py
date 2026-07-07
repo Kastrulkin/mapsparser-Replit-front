@@ -7747,6 +7747,10 @@ def test_agents_page_normal_result_panel_does_not_dump_raw_artifact_payload():
     assert "googleAccessJustConnected" in source
     assert "Google-доступ подключён. Теперь запустите тест ещё раз" in source
     assert "Этот результат был получен до переподключения" in source
+    assert "blocked_result" in source
+    assert "hasFreshGoogleSheetsAccessAfterResult" in source
+    assert "Google-доступ обновлён. Запустите тест ещё раз" in source
+    assert "Почему нельзя подтвердить результат" in source
 
 
 def test_settings_integrations_first_layer_separates_google_sheets_from_google_business():
