@@ -52,6 +52,10 @@ type ContentPlanContext = {
   scope?: {
     scope_options?: ScopeOption[];
   };
+  subscription?: {
+    allowed_horizons?: number[];
+    tier?: string;
+  };
 };
 
 type PlanItem = {
@@ -167,6 +171,7 @@ type CreatePlanDraft = {
 const CONTENT_VIEW_STORAGE_KEY = 'localos_content_view_v1';
 const CONTENT_SECTION_STORAGE_KEY = 'localos_content_section_v1';
 const PLAN_GENERATION_MIN_DURATION_MS = 6500;
+const DEFAULT_PLAN_PERIODS = [30];
 
 const CHANNELS = [
   { key: 'yandex_maps', label: 'Яндекс', mode: 'controlled' },
@@ -564,6 +569,13 @@ export function ContentPage() {
     const options = context?.scope?.scope_options || [];
     return options.find((option) => option.is_current) || options[0] || null;
   }, [context]);
+  const allowedPlanPeriods = useMemo(() => {
+    const rawPeriods = context?.subscription?.allowed_horizons;
+    const periods = Array.isArray(rawPeriods)
+      ? rawPeriods.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0)
+      : [];
+    return periods.length > 0 ? Array.from(new Set(periods)).sort((left, right) => left - right) : DEFAULT_PLAN_PERIODS;
+  }, [context]);
 
   const filledDays = useMemo(() => {
     const filled = new Set(items.filter((item) => itemHasUsableText(item)).map(getItemDateKey).filter(Boolean));
@@ -688,6 +700,13 @@ export function ContentPage() {
     if (section !== 'media' || !currentBusinessId) return;
     void loadMediaAssets();
   }, [section, currentBusinessId]);
+
+  useEffect(() => {
+    setCreateDraft((prev) => {
+      if (allowedPlanPeriods.includes(prev.periodDays)) return prev;
+      return { ...prev, periodDays: allowedPlanPeriods[0] || 30 };
+    });
+  }, [allowedPlanPeriods]);
 
   useEffect(() => {
     if (!generating) return;
@@ -1067,10 +1086,14 @@ export function ContentPage() {
   const createPlan = async () => {
     if (!currentBusinessId) return;
     const generationStartedAt = Date.now();
+    const normalizedPeriodDays = allowedPlanPeriods.includes(createDraft.periodDays)
+      ? createDraft.periodDays
+      : allowedPlanPeriods[0] || 30;
     setGenerating(true);
     setCreateOpen(false);
     setGenerationProgress(8);
     setGenerationCards(2);
+    setCreateDraft((prev) => ({ ...prev, periodDays: normalizedPeriodDays }));
     setError('');
     try {
       const response = await newAuth.makeRequest('/content-plans/generate', {
@@ -1079,7 +1102,7 @@ export function ContentPage() {
           business_id: currentBusinessId,
           scope_type: selectedScopeOption?.scope_type || 'single_business',
           scope_target_id: selectedScopeOption?.scope_target_id || currentBusinessId,
-          period_days: createDraft.periodDays,
+          period_days: normalizedPeriodDays,
           density: createDraft.frequency === 'active' ? 'active' : createDraft.frequency === 'light' ? 'light' : 'standard',
           content_mix: {
             services: true,
@@ -1101,7 +1124,7 @@ export function ContentPage() {
       const remainingDelay = Math.max(750, PLAN_GENERATION_MIN_DURATION_MS - elapsed);
       window.setTimeout(() => {
         setGenerationProgress(100);
-        setGenerationCards(Math.max(32, createDraft.periodDays));
+        setGenerationCards(Math.max(32, normalizedPeriodDays));
         setGenerating(false);
       }, remainingDelay);
     } catch (createError) {
@@ -1215,7 +1238,7 @@ export function ContentPage() {
                 <div>
                   <div className="text-sm font-semibold text-slate-900">Период</div>
                   <div className="mt-2 grid grid-cols-3 gap-2">
-                    {[14, 30, 60, 90, 180, 365].map((days) => (
+                    {allowedPlanPeriods.map((days) => (
                       <button
                         key={days}
                         type="button"
@@ -1228,6 +1251,9 @@ export function ContentPage() {
                         {days} дн.
                       </button>
                     ))}
+                  </div>
+                  <div className="mt-2 text-xs leading-5 text-slate-500">
+                    Доступно по текущему тарифу.
                   </div>
                 </div>
               </div>
