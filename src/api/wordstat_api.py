@@ -106,7 +106,7 @@ def _extract_live_wordstat_queries(api_payload):
     for block in blocks:
         if not isinstance(block, dict):
             continue
-        for section in ("topRequests", "top_requests", "associations", "alsoSearch"):
+        for section in ("results", "topRequests", "top_requests", "associations", "alsoSearch"):
             section_items = block.get(section) or []
             if not isinstance(section_items, list):
                 continue
@@ -154,8 +154,9 @@ def _load_live_wordstat_search(query: str, limit: int) -> list[dict]:
     if not config.is_configured():
         return []
 
-    client = WordstatClient(config.client_id, config.client_secret)
-    client.set_access_token(config.oauth_token)
+    client = WordstatClient.from_config(config)
+    if config.oauth_token:
+        client.set_access_token(config.oauth_token)
     try:
         live_payload = client.get_popular_queries([query], config.default_region)
     except WordstatTemporaryUnavailable as error:
@@ -710,11 +711,10 @@ def trigger_update():
                 conn = None
 
         script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'update_wordstat_data.py')
-        oauth_token = os.getenv('YANDEX_WORDSTAT_OAUTH_TOKEN', '').strip()
-        if not oauth_token:
+        if not config.is_configured():
             return jsonify({
                 'success': False,
-                'error': 'YANDEX_WORDSTAT_OAUTH_TOKEN не задан в окружении контейнера app'
+                'error': 'Wordstat API не настроен: задайте YANDEX_WORDSTAT_API_KEY и YANDEX_WORDSTAT_FOLDER_ID'
             }), 400
         
         # Run in background (nohup) or wait? 

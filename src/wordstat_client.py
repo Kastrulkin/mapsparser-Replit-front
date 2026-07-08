@@ -6,8 +6,13 @@ import os
 from datetime import datetime, timedelta
 
 WORDSTAT_TEMPORARILY_UNAVAILABLE_MESSAGE = (
-    "Яндекс.Вордстат временно недоступен: API вернул некорректный TLS-сертификат. "
+    "Яндекс.Вордстат временно недоступен. "
     "Попробуйте обновить SEO-ключи позже."
+)
+
+WORDSTAT_LEGACY_TLS_MESSAGE = (
+    "Старый API Яндекс.Вордстат сейчас возвращает некорректный TLS-сертификат. "
+    "Подключите Yandex Cloud Search API v2 через YANDEX_WORDSTAT_API_KEY и YANDEX_WORDSTAT_FOLDER_ID."
 )
 
 
@@ -18,13 +23,31 @@ class WordstatTemporaryUnavailable(Exception):
 class WordstatClient:
     """Клиент для работы с API Яндекс.Вордстат"""
     
-    def __init__(self, client_id: str, client_secret: str):
+    def __init__(
+        self,
+        client_id: str = "",
+        client_secret: str = "",
+        api_key: str = "",
+        folder_id: str = "",
+    ):
         self.client_id = client_id
         self.client_secret = client_secret
         self.base_url = "https://api.wordstat.yandex.net"
+        self.cloud_base_url = "https://searchapi.api.cloud.yandex.net/v2/wordstat"
         self.oauth_url = "https://oauth.yandex.ru"
         self.access_token = None
         self.token_expires_at = None
+        self.api_key = (api_key or "").strip()
+        self.folder_id = (folder_id or "").strip()
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(
+            client_id=getattr(config, "client_id", ""),
+            client_secret=getattr(config, "client_secret", ""),
+            api_key=getattr(config, "api_key", ""),
+            folder_id=getattr(config, "folder_id", ""),
+        )
         
     def get_access_token(self) -> str:
         """Получение OAuth токена для доступа к API"""
@@ -47,6 +70,9 @@ class WordstatClient:
     
     def _make_request(self, endpoint: str, payload: Dict = None):
         """Выполнение запроса к API"""
+        if self.api_key and self.folder_id:
+            return self._make_cloud_request(endpoint, payload)
+
         if not self.access_token:
             raise Exception("Необходимо получить access token")
             
@@ -74,8 +100,39 @@ class WordstatClient:
             
         except requests.exceptions.SSLError as e:
             raise WordstatTemporaryUnavailable(
-                f"{WORDSTAT_TEMPORARILY_UNAVAILABLE_MESSAGE} detail={e}"
+                f"{WORDSTAT_LEGACY_TLS_MESSAGE} detail={e}"
             ) from e
+        except requests.exceptions.RequestException as e:
+            raise WordstatTemporaryUnavailable(
+                f"Яндекс.Вордстат временно недоступен. Попробуйте обновить SEO-ключи позже. detail={e}"
+            ) from e
+
+    def _make_cloud_request(self, endpoint: str, payload: Dict = None):
+        """Выполнение запроса к актуальному Yandex Cloud Search API v2."""
+        headers = {
+            'Authorization': f'Api-Key {self.api_key}',
+            'Content-Type': 'application/json;charset=utf-8',
+        }
+        cloud_endpoint = endpoint
+        if cloud_endpoint.startswith("v1/"):
+            cloud_endpoint = cloud_endpoint[3:]
+        if cloud_endpoint.startswith("v2/"):
+            cloud_endpoint = cloud_endpoint[3:]
+        url = f"{self.cloud_base_url}/{cloud_endpoint}"
+        body = dict(payload or {})
+        body['folderId'] = self.folder_id
+
+        try:
+            response = requests.post(url, headers=headers, json=body, timeout=30)
+            if response.status_code == 429:
+                retry_after = int(response.headers.get('Retry-After', 60))
+                print(f"Превышена квота. Повторите через {retry_after} секунд")
+                return None
+            if response.status_code == 503:
+                print("Сервис временно недоступен")
+                return None
+            response.raise_for_status()
+            return response.json()
         except requests.exceptions.RequestException as e:
             raise WordstatTemporaryUnavailable(
                 f"Яндекс.Вордстат временно недоступен. Попробуйте обновить SEO-ключи позже. detail={e}"
@@ -89,7 +146,23 @@ class WordstatClient:
             keywords: Список ключевых слов для анализа
             region: ID региона (225 - Россия)
         """
-        # Wordstat API v1/topRequests принимает phrases (до 128 штук) и regions.
+        if self.api_key and self.folder_id:
+            results = []
+            for keyword in keywords[:128]:
+                phrase = (keyword or "").strip()
+                if not phrase:
+                    continue
+                payload = {
+                    'phrase': phrase,
+                    'regions': [str(region)],
+                    'devices': ['DEVICE_ALL'],
+                    'numPhrases': 50,
+                }
+                data = self._make_request('topRequests', payload)
+                if data:
+                    results.append(data)
+            return results
+
         payload = {
             'phrases': keywords[:128],
             'regions': [region],
@@ -106,6 +179,15 @@ class WordstatClient:
             keyword: Ключевое слово
             region: ID региона
         """
+        if self.api_key and self.folder_id:
+            payload = {
+                'phrase': keyword,
+                'regions': [str(region)],
+                'devices': ['DEVICE_ALL'],
+                'numPhrases': 50,
+            }
+            return self._make_request('topRequests', payload)
+
         payload = {
             'phrase': keyword,
             'regions': [region],
@@ -206,21 +288,34 @@ class WordstatDataProcessor:
 
 # Пример использования
 if __name__ == "__main__":
+    api_key = (
+        os.getenv("YANDEX_WORDSTAT_API_KEY")
+        or os.getenv("YANDEX_AI_API_KEY")
+        or ""
+    ).strip()
+    folder_id = (
+        os.getenv("YANDEX_WORDSTAT_FOLDER_ID")
+        or os.getenv("YANDEX_FOLDER_ID")
+        or ""
+    ).strip()
     client_id = os.getenv("YANDEX_WORDSTAT_CLIENT_ID", "").strip()
     client_secret = os.getenv("YANDEX_WORDSTAT_CLIENT_SECRET", "").strip()
-    if not client_id or not client_secret:
+    if not (api_key and folder_id) and not (client_id and client_secret):
         raise SystemExit(
-            "Set YANDEX_WORDSTAT_CLIENT_ID and YANDEX_WORDSTAT_CLIENT_SECRET before running this helper."
+            "Set YANDEX_WORDSTAT_API_KEY and YANDEX_WORDSTAT_FOLDER_ID for Cloud API, "
+            "or YANDEX_WORDSTAT_CLIENT_ID and YANDEX_WORDSTAT_CLIENT_SECRET for legacy OAuth."
         )
 
     # Инициализация клиента
     client = WordstatClient(
         client_id=client_id,
         client_secret=client_secret,
+        api_key=api_key,
+        folder_id=folder_id,
     )
     
     # Установка токена (получить вручную через OAuth)
     # client.set_access_token("your_oauth_token_here")
     
     print("WordstatClient инициализирован")
-    print("Для работы необходимо получить OAuth токен")
+    print("Для Cloud API используется YANDEX_WORDSTAT_API_KEY/YANDEX_WORDSTAT_FOLDER_ID")

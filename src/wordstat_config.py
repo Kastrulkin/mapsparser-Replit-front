@@ -18,12 +18,38 @@ class WordstatConfig:
         self.client_id = (os.getenv('YANDEX_WORDSTAT_CLIENT_ID') or '').strip()
         self.client_secret = (os.getenv('YANDEX_WORDSTAT_CLIENT_SECRET') or '').strip()
         self.oauth_token = (os.getenv('YANDEX_WORDSTAT_OAUTH_TOKEN') or '').strip()
+        self.api_key = (
+            os.getenv('YANDEX_WORDSTAT_API_KEY')
+            or os.getenv('YANDEX_AI_API_KEY')
+            or ''
+        ).strip()
+        self.folder_id = (
+            os.getenv('YANDEX_WORDSTAT_FOLDER_ID')
+            or os.getenv('YANDEX_FOLDER_ID')
+            or ''
+        ).strip()
         self.update_interval = self._int_env('WORDSTAT_UPDATE_INTERVAL', 604800)  # 7 дней
         self.default_region = self._int_env('WORDSTAT_DEFAULT_REGION', 225)  # Россия
         
     def is_configured(self) -> bool:
         """Проверка, настроен ли API"""
+        return self.is_cloud_configured() or self.is_oauth_configured()
+
+    def is_cloud_configured(self) -> bool:
+        """Проверка настроек актуального Yandex Cloud Search API."""
+        return bool(self.api_key and self.folder_id)
+
+    def is_oauth_configured(self) -> bool:
+        """Проверка legacy OAuth-настроек старого Wordstat API."""
         return bool(self.client_id and self.client_secret and self.oauth_token)
+
+    def auth_mode(self) -> str:
+        """Возвращает режим API, который будет использоваться клиентом."""
+        if self.is_cloud_configured():
+            return "cloud"
+        if self.is_oauth_configured():
+            return "oauth"
+        return "missing"
     
     def get_auth_url(self) -> str:
         """Получение URL для авторизации"""

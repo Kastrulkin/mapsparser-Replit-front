@@ -6,7 +6,34 @@ API Яндекс.Вордстат позволяет автоматически 
 
 ## 🚀 Быстрый старт
 
-### 1. Получение OAuth токена
+### 1. Актуальный способ: Yandex Cloud Search API v2
+
+Старый endpoint `https://api.wordstat.yandex.net` может возвращать сертификат на `wordstat.yandex.ru`, из-за чего нормальная TLS-проверка падает с `certificate verify failed: Hostname mismatch`. Для production используйте актуальный Wordstat в Yandex Cloud Search API v2.
+
+Нужны:
+- API-ключ сервисного аккаунта с доступом к Search API;
+- `folderId` каталога Yandex Cloud.
+
+```bash
+export YANDEX_WORDSTAT_API_KEY=your_api_key_here
+export YANDEX_WORDSTAT_FOLDER_ID=your_folder_id_here
+```
+
+Также поддерживаются общие имена env:
+
+```bash
+export YANDEX_AI_API_KEY=your_api_key_here
+export YANDEX_FOLDER_ID=your_folder_id_here
+```
+
+Клиент будет вызывать:
+
+```text
+POST https://searchapi.api.cloud.yandex.net/v2/wordstat/topRequests
+Authorization: Api-Key <key>
+```
+
+### 2. Legacy fallback: OAuth токен
 
 ```bash
 # Запустите скрипт для получения токена
@@ -20,7 +47,7 @@ python3 get_wordstat_token.py
 - Обменяет код на OAuth токен
 - Протестирует токен
 
-### 2. Установка переменных окружения
+### 3. Установка legacy OAuth переменных окружения
 
 ```bash
 # Установите токен в переменную окружения
@@ -50,6 +77,10 @@ curl -X POST http://localhost:8000/api/wordstat/update \
 | `YANDEX_WORDSTAT_CLIENT_ID` | ID приложения | задается только через env |
 | `YANDEX_WORDSTAT_CLIENT_SECRET` | Секрет приложения | задается только через env |
 | `YANDEX_WORDSTAT_OAUTH_TOKEN` | OAuth токен | - |
+| `YANDEX_WORDSTAT_API_KEY` | API-ключ Yandex Cloud Search API v2 | - |
+| `YANDEX_WORDSTAT_FOLDER_ID` | folderId каталога Yandex Cloud | - |
+| `YANDEX_AI_API_KEY` | Альтернативное имя API-ключа Yandex Cloud | - |
+| `YANDEX_FOLDER_ID` | Альтернативное имя folderId | - |
 | `WORDSTAT_UPDATE_INTERVAL` | Интервал обновления (сек) | `604800` (7 дней) |
 | `WORDSTAT_DEFAULT_REGION` | ID региона | `225` (Россия) |
 

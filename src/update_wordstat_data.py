@@ -132,7 +132,7 @@ def _extract_queries(api_payload):
         if not isinstance(block, dict):
             continue
 
-        for section in ("topRequests", "top_requests", "associations", "alsoSearch"):
+        for section in ("results", "topRequests", "top_requests", "associations", "alsoSearch"):
             items = block.get(section) or []
             if not isinstance(items, list):
                 continue
@@ -177,13 +177,16 @@ def main():
     # Проверяем конфигурацию
     if not config.is_configured():
         print("❌ API Яндекс.Вордстат не настроен")
-        print(f"🔗 Получите OAuth токен по ссылке: {config.get_auth_url()}")
-        print("📝 Установите токен в переменную окружения YANDEX_WORDSTAT_OAUTH_TOKEN")
+        if config.client_id:
+            print(f"🔗 Legacy OAuth URL: {config.get_auth_url()}")
+        print("📝 Для актуального API установите YANDEX_WORDSTAT_API_KEY и YANDEX_WORDSTAT_FOLDER_ID")
+        print("📝 Legacy fallback: YANDEX_WORDSTAT_CLIENT_ID, YANDEX_WORDSTAT_CLIENT_SECRET, YANDEX_WORDSTAT_OAUTH_TOKEN")
         return False
     
     # Инициализируем клиент
-    client = WordstatClient(config.client_id, config.client_secret)
-    client.set_access_token(config.oauth_token)
+    client = WordstatClient.from_config(config)
+    if config.oauth_token:
+        client.set_access_token(config.oauth_token)
     
     # Ключевые слова для анализа бьюти-индустрии (расширены, включая косметологию)
     beauty_keywords = [
