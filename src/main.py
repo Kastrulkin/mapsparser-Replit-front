@@ -2346,6 +2346,136 @@ def _normalize_text_for_semantic_compare(value: str) -> str:
     return text
 
 
+def _format_template_with_literal_json_fallback(template: str, values: dict[str, object]) -> str:
+    try:
+        return template.format(**values)
+    except (KeyError, ValueError, TypeError):
+        result = str(template or "")
+        for key, value in values.items():
+            result = result.replace("{" + key + "}", str(value or ""))
+        return result
+
+
+def _strip_model_markup(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"^\s*```(?:json|JSON)?\s*", "", text)
+    text = re.sub(r"\s*```\s*$", "", text)
+    text = text.strip()
+    return text.strip(" \n\r\t`")
+
+
+def _extract_review_reply_from_model_result(result: object) -> tuple[str, bool]:
+    if result is None:
+        return "", True
+    if isinstance(result, dict):
+        if result.get("error"):
+            return "", True
+        return _strip_model_markup(result.get("reply") or ""), False
+
+    text = _strip_model_markup(result)
+    if not text:
+        return "", True
+
+    json_start = text.find("{")
+    json_end = text.rfind("}") + 1
+    if json_start != -1 and json_end > json_start:
+        json_str = text[json_start:json_end]
+        try:
+            parsed = json.loads(json_str)
+            if isinstance(parsed, dict):
+                if parsed.get("error"):
+                    return "", True
+                return _strip_model_markup(parsed.get("reply") or ""), False
+        except json.JSONDecodeError:
+            match = re.search(r'"reply"\s*:\s*"((?:\\.|[^"\\])*)"', json_str, flags=re.DOTALL)
+            if match:
+                try:
+                    return _strip_model_markup(json.loads('"' + match.group(1) + '"')), True
+                except json.JSONDecodeError:
+                    return _strip_model_markup(match.group(1)), True
+            return _strip_model_markup(text), True
+
+    return text, False
+
+
+def _review_reply_detail_phrase(review_text: object) -> str:
+    normalized = _normalize_text_for_semantic_compare(str(review_text or ""))
+    details: list[str] = []
+    if "аккурат" in normalized:
+        details.append("аккуратность мастера")
+    if "удоб" in normalized and "запис" in normalized:
+        details.append("удобство записи")
+    if "внимател" in normalized:
+        details.append("внимательное отношение")
+    if "быстр" in normalized:
+        details.append("быструю работу")
+    if "чист" in normalized:
+        details.append("чистоту")
+    if "грум" in normalized and not details:
+        details.append("качество груминга")
+    if not details:
+        return ""
+    if len(details) == 1:
+        return details[0]
+    return ", ".join(details[:-1]) + " и " + details[-1]
+
+
+def _review_reply_has_source_detail(reply_text: object, review_text: object) -> bool:
+    reply_normalized = _normalize_text_for_semantic_compare(str(reply_text or ""))
+    review_normalized = _normalize_text_for_semantic_compare(str(review_text or ""))
+    if not reply_normalized or not review_normalized:
+        return False
+    detail_phrase = _review_reply_detail_phrase(review_text)
+    if detail_phrase:
+        detail_terms = [
+            term
+            for term in _normalize_text_for_semantic_compare(detail_phrase).split()
+            if len(term) >= 5
+        ]
+        return any(term in reply_normalized for term in detail_terms)
+    stop_words = {
+        "спасибо", "отзыв", "клиент", "клиента", "демо", "яндекс", "карты",
+        "очень", "ваш", "ваша", "нам", "рады", "будем", "снова",
+    }
+    review_terms = [
+        term
+        for term in review_normalized.split()
+        if len(term) >= 6 and term not in stop_words
+    ]
+    return any(term in reply_normalized for term in review_terms[:8])
+
+
+def _compose_pattern_based_review_reply(review_text: object, language: str = "ru") -> str:
+    if language != "ru":
+        return "Thank you for your review. We are glad you noticed the details of our work and will be happy to see you again."
+    detail_phrase = _review_reply_detail_phrase(review_text)
+    normalized = _normalize_text_for_semantic_compare(str(review_text or ""))
+    has_negative = any(marker in normalized for marker in ("плохо", "ужас", "не понрав", "ждал", "груб", "ошиб", "проблем"))
+    if has_negative:
+        if detail_phrase:
+            return f"Спасибо, что написали. Нам жаль, что {detail_phrase} оставили такое впечатление. Разберём ситуацию внутри команды."
+        return "Спасибо, что написали. Нам жаль, что визит оставил такое впечатление. Разберём ситуацию внутри команды."
+    if detail_phrase:
+        return f"Спасибо за отзыв. Рады, что вы отметили {detail_phrase}. Будем ждать вас снова."
+    return "Спасибо за отзыв. Рады, что визит прошёл хорошо. Будем ждать вас снова."
+
+
+def _normalize_review_reply_output(reply_text: object, review_text: object, *, malformed_model_output: bool = False, language: str = "ru") -> str:
+    cleaned = _strip_model_markup(reply_text)
+    cleaned = re.sub(r"^\s*\{?\s*\"reply\"\s*:\s*\"?", "", cleaned).strip()
+    cleaned = cleaned.strip("{}").strip()
+    cleaned = cleaned.strip('"').strip()
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    has_technical_markup = any(marker in cleaned for marker in ("```", "{\"reply\"", '"reply":', "}") )
+    too_generic = not _review_reply_has_source_detail(cleaned, review_text)
+    if malformed_model_output or has_technical_markup or not cleaned or too_generic:
+        return _compose_pattern_based_review_reply(review_text, language=language)
+    return cleaned
+
+
 def _strip_unchanged_service_suggestions(parsed_result: dict) -> dict:
     """
     Убирает псевдо-оптимизации, которые повторяют исходный текст.
@@ -4880,6 +5010,7 @@ def reviews_reply():
         review_industry_key = "local_business"
         active_reply_patterns: list[dict] = []
         review_industry_context = format_industry_pattern_prompt("local_business", mode="review_reply")
+        business_display_name = ""
         if business_id:
             try:
                 db_profile = DatabaseManager()
@@ -4895,6 +5026,7 @@ def reviews_reply():
                 )
                 profile_row = cur_profile.fetchone()
                 profile_data = _row_to_dict(cur_profile, profile_row) if profile_row else {}
+                business_display_name = str(profile_data.get("name") or "").strip()
                 review_industry_key = detect_industry_key(
                     business_name=profile_data.get("name"),
                     business_type=profile_data.get("business_type"),
@@ -4958,7 +5090,12 @@ def reviews_reply():
                 from core.seo_keywords import collect_ranked_keywords
                 db_kw = DatabaseManager()
                 cur_kw = db_kw.conn.cursor()
-                ranked = collect_ranked_keywords(cur_kw, business_id=business_id, limit=10)
+                ranked = collect_ranked_keywords(
+                    cur_kw,
+                    business_id=business_id,
+                    user_id=user_data['user_id'],
+                    limit=10,
+                )
                 seo_keywords_list = [str((it or {}).get("keyword", "")).strip() for it in (ranked or {}).get("items", [])]
                 seo_keywords_list = [kw for kw in seo_keywords_list if kw]
                 seo_keywords_top10 = ", ".join(seo_keywords_list[:10])
@@ -4975,6 +5112,11 @@ Write the reply in {language_name}.
 {examples_text}
 SEO Wordstat ключи (если есть): {seo_keywords}
 Top-10 SEO ключей: {seo_keywords_top10}
+Обязательные правила качества:
+- Не возвращай Markdown, кодовые блоки, пояснения или текст вне JSON.
+- Ответ должен быть готовым текстом для владельца бизнеса, без технических символов.
+- Упомяни одну конкретную деталь из отзыва, если она есть.
+- Не пиши общий ответ вида "Спасибо за отзыв, будем рады видеть вас снова", если в отзыве есть факты.
 Верни СТРОГО JSON: {{"reply": "текст ответа"}}
 
 Отзыв клиента: {review_text}"""
@@ -5030,30 +5172,39 @@ Top-10 SEO ключей: {seo_keywords_top10}
         review_text_str = str(review_text[:1000]) if review_text else ''
 
         try:
-            prompt = prompt_template.format(
-                tone=tone_str,
-                language_name=language_name_str,
-                examples_text=examples_text_str,
-                review_text=review_text_str,
-                seo_keywords=seo_keywords_top10,
-                seo_keywords_top10=seo_keywords_top10
+            prompt = _format_template_with_literal_json_fallback(
+                prompt_template,
+                {
+                    "tone": tone_str,
+                    "language_name": language_name_str,
+                    "examples_text": examples_text_str,
+                    "review_text": review_text_str,
+                    "seo_keywords": seo_keywords_top10,
+                    "seo_keywords_top10": seo_keywords_top10,
+                    "business_name": business_display_name,
+                },
             )
         except (KeyError, ValueError, TypeError) as format_err:
             print(f"⚠️ Ошибка форматирования промпта: {format_err}, type: {type(format_err)}", flush=True)
             import traceback
             traceback.print_exc()
             # Используем default_prompt_template как fallback
-            prompt = default_prompt_template.format(
-                tone=tone_str,
-                language_name=language_name_str,
-                examples_text=examples_text_str,
-                review_text=review_text_str,
-                seo_keywords=seo_keywords_top10,
-                seo_keywords_top10=seo_keywords_top10
+            prompt = _format_template_with_literal_json_fallback(
+                default_prompt_template,
+                {
+                    "tone": tone_str,
+                    "language_name": language_name_str,
+                    "examples_text": examples_text_str,
+                    "review_text": review_text_str,
+                    "seo_keywords": seo_keywords_top10,
+                    "seo_keywords_top10": seo_keywords_top10,
+                    "business_name": business_display_name,
+                },
             )
         prompt = (
             "Рабочие паттерны индустрии для ответа на отзыв:\n"
             f"{review_industry_context}\n\n"
+            "Финальный ответ должен пройти проверку: чистый текст внутри JSON, одна конкретная деталь из отзыва, без шаблонной воды.\n\n"
             f"{prompt}"
         )
         # Логируем промпт для отладки
@@ -5072,48 +5223,18 @@ Top-10 SEO ключей: {seo_keywords_top10}
         print(f"🔍 DEBUG reviews_reply: result_text type = {type(result_text)}")
         print(f"🔍 DEBUG reviews_reply: result_text = {result_text[:200] if isinstance(result_text, str) else result_text}")
 
-        # Парсим JSON из ответа GigaChat
-        import json
-        reply_text = "Ошибка генерации ответа"
-
-        # Проверяем тип result_text перед обработкой
+        reply_text, malformed_model_output = _extract_review_reply_from_model_result(result_text)
         if result_text is None:
             print("⚠️ result_text is None")
-            reply_text = "Ошибка генерации ответа"
-        elif isinstance(result_text, dict):
-            # Если словарь (не должно быть, но на всякий случай)
-            print(f"⚠️ result_text is dict: {result_text}")
-            if 'error' in result_text:
-                print(f"❌ Ошибка в результате: {result_text.get('error')}")
-                return jsonify({"error": result_text.get('error', 'Ошибка генерации')}), 500
-            reply_text = result_text.get('reply') or str(result_text)
-        elif isinstance(result_text, str):
-            # Если строка - парсим JSON
-            # Ищем JSON объект в строке
-            start_idx = result_text.find('{')
-            end_idx = result_text.rfind('}') + 1
-            if start_idx != -1 and end_idx != 0:
-                json_str = result_text[start_idx:end_idx]
-                try:
-                    parsed_result = json.loads(json_str)
-                    if isinstance(parsed_result, dict):
-                        # Проверяем наличие ошибки в распарсенном JSON
-                        if 'error' in parsed_result:
-                            print(f"❌ Ошибка в распарсенном JSON: {parsed_result.get('error')}")
-                            return jsonify({"error": parsed_result.get('error', 'Ошибка генерации')}), 500
-                    # Извлекаем reply из JSON
-                    reply_text = parsed_result.get('reply', result_text)
-                except json.JSONDecodeError as json_err:
-                    # Если не удалось распарсить JSON, используем весь текст
-                    print(f"⚠️ Ошибка парсинга JSON: {json_err}")
-                    reply_text = result_text
-            else:
-                # Если JSON-объект не найден, возвращаем исходный текст модели
-                reply_text = result_text
-        else:
-            # Если другой тип - конвертируем в строку
-            print(f"⚠️ Неожиданный тип result_text: {type(result_text)}")
-            reply_text = str(result_text) if result_text else "Ошибка генерации ответа"
+        if not reply_text and isinstance(result_text, dict) and result_text.get('error'):
+            print(f"❌ Ошибка в результате: {result_text.get('error')}")
+            return jsonify({"error": result_text.get('error', 'Ошибка генерации')}), 500
+        reply_text = _normalize_review_reply_output(
+            reply_text,
+            review_text,
+            malformed_model_output=malformed_model_output,
+            language=language,
+        )
 
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id') if request else None)
         if active_reply_patterns:
