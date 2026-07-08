@@ -53,15 +53,6 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         : 'Control LocalOS through one chat layer: briefs, actions, and safe next steps.',
     },
     {
-      id: 'agents',
-      label: language === 'ru' ? 'Агенты' : 'Agents',
-      icon: Sparkles,
-      path: '/dashboard/agents',
-      tooltip: language === 'ru'
-        ? 'Запускайте workflow agents с шагами, артефактами и ручными подтверждениями.'
-        : 'Run workflow agents with steps, artifacts, and manual approvals.',
-    },
-    {
       id: 'profile',
       label: t.dashboard.sidebar.profile,
       icon: User,
@@ -87,6 +78,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       tooltip: language === 'ru'
         ? 'Единый календарь публикаций: что готово, что проверить и что выйдет дальше.'
         : 'Unified publication calendar: what is ready, what needs review, and what goes next.',
+    },
+    {
+      id: 'agents',
+      label: language === 'ru' ? 'Агенты' : 'Agents',
+      icon: Sparkles,
+      path: '/dashboard/agents',
+      tooltip: language === 'ru'
+        ? 'Запускайте workflow agents с шагами, артефактами и ручными подтверждениями.'
+        : 'Run workflow agents with steps, artifacts, and manual approvals.',
     },
     {
       id: 'progress',

@@ -961,16 +961,23 @@ export const CardOverviewPage = () => {
               </>
             ) : (
               <>
-                <Button
-                  type="button"
-                  onClick={handleRefreshCardData}
-                  disabled={!currentBusinessId || refreshingCardData || !canTriggerRefresh}
-                  className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
-                  title={isRu ? 'Запускает сбор свежих данных по вашей карточке на карте.' : 'Starts collecting fresh data from your map listing.'}
-                >
-                  <RefreshCw className={cn("mr-2 h-4 w-4", refreshingCardData ? "animate-spin" : "")} />
-                  {refreshingCardData ? (isRu ? 'Запускаем обновление...' : 'Starting refresh...') : (isRu ? 'Обновить данные карточки' : 'Refresh card data')}
-                </Button>
+                <div className="flex flex-col items-start gap-1">
+                  <Button
+                    type="button"
+                    onClick={handleRefreshCardData}
+                    disabled={!currentBusinessId || refreshingCardData || !canTriggerRefresh}
+                    className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
+                    title={isRu ? 'Запускает сбор свежих данных по вашей карточке на карте.' : 'Starts collecting fresh data from your map listing.'}
+                  >
+                    <RefreshCw className={cn("mr-2 h-4 w-4", refreshingCardData ? "animate-spin" : "")} />
+                    {refreshingCardData ? (isRu ? 'Запускаем обновление...' : 'Starting refresh...') : (isRu ? 'Обновить данные карточки' : 'Refresh card data')}
+                  </Button>
+                  <span className="max-w-64 text-xs leading-4 text-slate-500">
+                    {isRu
+                      ? 'Стоит примерно 10 кредитов, зависит от объёма данных в карточке.'
+                      : 'Costs about 10 credits, depending on the amount of listing data.'}
+                  </span>
+                </div>
                 <a
                   href="/dashboard/progress"
                   title={isRu ? 'Открывает аудит карточки, метрики и историю изменений.' : 'Opens the listing audit, metrics, and change history.'}
