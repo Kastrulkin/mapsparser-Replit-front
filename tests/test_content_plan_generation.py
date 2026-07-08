@@ -908,6 +908,23 @@ def test_sanitize_generated_news_text_extracts_fenced_payload():
     assert _sanitize_generated_news_text(raw) == "Новая тема без технических символов"
 
 
+def test_sanitize_generated_news_text_extracts_broken_json_with_business_quotes():
+    raw = (
+        '{"news": "Рада приветствовать вас в сети груминга домашних животных '
+        '"Рога и копыта"! Мы предлагаем уходовые процедуры для ваших любимцев. '
+        'Приходите лично познакомиться с атмосферой нашего салона." }'
+    )
+
+    result = _sanitize_generated_news_text(raw)
+
+    assert '{"news"' not in result
+    assert "}" not in result
+    assert '"Рога и копыта"' in result
+    assert "Приходите лично" in result
+    assert 'любимцев." Приходите' not in result
+    assert result.count('"') == 2
+
+
 def test_relevant_service_names_for_item_prefers_topic_matches():
     services = "\n".join(
         [

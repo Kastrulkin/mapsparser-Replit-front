@@ -3963,7 +3963,42 @@ def _clean_generated_news_text(value: Any) -> str:
     text = re.sub(r"^\s*```(?:json|JSON)?\s*", "", text)
     text = re.sub(r"\s*```\s*$", "", text)
     text = text.replace("\\n", "\n").replace("\\\"", "\"")
+
+    payload_candidates = [text]
+    first_brace = text.find("{")
+    last_brace = text.rfind("}")
+    if first_brace >= 0 and last_brace > first_brace:
+        payload_candidates.append(text[first_brace:last_brace + 1])
+
+    for candidate in payload_candidates:
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            continue
+        if isinstance(parsed, dict):
+            for key in ("news", "text", "content", "draft"):
+                parsed_value = str(parsed.get(key) or "").strip()
+                if parsed_value:
+                    text = parsed_value
+                    break
+        elif isinstance(parsed, str):
+            text = parsed.strip()
+        if text:
+            break
+
+    news_match = re.search(r'"(?:news|text|content|draft)"\s*:\s*"', text, flags=re.IGNORECASE | re.DOTALL)
+    if news_match:
+        text = text[news_match.end():].strip()
+        text = re.sub(r"\s*}\s*$", "", text).strip()
+        text = re.sub(r'\s*,\s*"[^"]+"\s*:\s*.*$', "", text, flags=re.DOTALL).strip()
+
+    text = re.sub(r"^\s*\{?\s*\"(?:news|text|content|draft)\"\s*:\s*\"?", "", text, flags=re.IGNORECASE).strip()
+    text = re.sub(r"\s*}\s*$", "", text).strip()
     text = re.sub(r"\s+", " ", text).strip()
+    if text.count('"') % 2 == 1:
+        last_quote_index = text.rfind('"')
+        if last_quote_index >= 0:
+            text = (text[:last_quote_index] + text[last_quote_index + 1:]).strip()
 
     for _ in range(3):
         stripped = text.strip()

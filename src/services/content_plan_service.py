@@ -3866,6 +3866,15 @@ def _sanitize_generated_news_text(raw_text: str) -> str:
         if text:
             break
 
+    news_match = re.search(r'"(?:news|text|content|draft)"\s*:\s*"', text, flags=re.IGNORECASE | re.DOTALL)
+    if news_match:
+        text = text[news_match.end():].strip()
+        text = re.sub(r"\s*}\s*$", "", text).strip()
+        text = re.sub(r'\s*,\s*"[^"]+"\s*:\s*.*$', "", text, flags=re.DOTALL).strip()
+
+    text = re.sub(r"^\s*\{?\s*\"(?:news|text|content|draft)\"\s*:\s*\"?", "", text, flags=re.IGNORECASE).strip()
+    text = re.sub(r"\s*}\s*$", "", text).strip()
+
     text = text.replace("\\n", "\n")
     text = re.sub(r"[*_`]+", "", text)
     text = re.sub(r"^\s*#+\s*", "", text, flags=re.MULTILINE)
@@ -3877,6 +3886,10 @@ def _sanitize_generated_news_text(raw_text: str) -> str:
         if unicodedata.category(char) not in {"So", "Sk"}
     )
     text = re.sub(r"\s+", " ", text).strip()
+    if text.count('"') % 2 == 1:
+        last_quote_index = text.rfind('"')
+        if last_quote_index >= 0:
+            text = (text[:last_quote_index] + text[last_quote_index + 1:]).strip()
     return text
 
 

@@ -36,3 +36,20 @@ def test_clean_generated_news_text_removes_only_outer_broken_quote() -> None:
     cleaned = _clean_generated_news_text(raw)
 
     assert cleaned == 'Сеть зоосалонов "Рога и копыта" приглашает на груминг-услуги.'
+
+
+def test_clean_generated_news_text_extracts_broken_json_with_business_quotes() -> None:
+    raw = (
+        '{"news": "Рада приветствовать вас в нашей материнской точке сети груминга домашних животных '
+        '"Рога и копыта"! Мы предлагаем профессиональные уходовые процедуры для ваших любимцев. '
+        'Приходите лично познакомиться с атмосферой нашего салона." }'
+    )
+
+    cleaned = _clean_generated_news_text(raw)
+
+    assert '{"news"' not in cleaned
+    assert "}" not in cleaned
+    assert '"Рога и копыта"' in cleaned
+    assert "Приходите лично" in cleaned
+    assert 'любимцев." Приходите' not in cleaned
+    assert cleaned.count('"') == 2
