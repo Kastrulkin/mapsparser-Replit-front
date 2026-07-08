@@ -135,6 +135,7 @@ export const extractMapSources = (data: any, externalPosts: any[]): MapSourcesRe
         hasSupportedConfiguredMapLink = true;
       } else if (url.includes('google')) {
         sources.add('google');
+        hasSupportedConfiguredMapLink = true;
       } else if (url.includes('apple')) {
         sources.add('apple');
       }
@@ -159,10 +160,19 @@ export const loadOperationsLearningMetrics = () => {
 };
 
 export const refreshCardDataFromSource = (businessId: string, source: string) => {
-  const endpoint = source === '2gis'
-    ? `/api/admin/2gis/sync/business/${businessId}`
-    : `/api/admin/yandex/sync/business/${businessId}`;
-  return jsonRequest(endpoint, { method: 'POST' });
+  const apifySourceByMapSource: Record<string, string> = {
+    yandex: 'apify_yandex',
+    '2gis': 'apify_2gis',
+    google: 'apify_google',
+  };
+  return jsonRequest('/api/admin/prospecting/business-parse-apify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      business_id: businessId,
+      source: apifySourceByMapSource[source] || 'apify_yandex',
+    }),
+  });
 };
 
 export const loadNetworkLocationsState = (businessId: string) =>

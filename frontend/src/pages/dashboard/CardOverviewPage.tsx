@@ -656,20 +656,26 @@ export const CardOverviewPage = () => {
     [filteredServices, servicesCurrentPage, servicesItemsPerPage]
   );
 
-  const selectedSyncSource = useMemo(() => {
-    if (selectedSource !== 'all') {
-      return selectedSource;
+  const refreshSyncSources = useMemo(() => {
+    const supportedSources = mapSources.filter(source => source === 'yandex' || source === '2gis' || source === 'google');
+    if (selectedSource === 'all') {
+      return supportedSources;
     }
-    if (mapSources.includes('yandex')) {
-      return 'yandex';
-    }
-    if (mapSources.includes('2gis')) {
-      return '2gis';
-    }
-    return mapSources[0] || '';
+    return supportedSources.includes(selectedSource) ? [selectedSource] : [];
   }, [mapSources, selectedSource]);
 
-  const canRefreshCardData = selectedSyncSource === 'yandex' || selectedSyncSource === '2gis';
+  const refreshAllMapsSelected = selectedSource === 'all';
+  const refreshCardDataLabel = isRu
+    ? (refreshAllMapsSelected ? 'Обновить данные карточек' : 'Обновить данные карточки')
+    : (refreshAllMapsSelected ? 'Refresh card data' : 'Refresh listing data');
+  const refreshCardDataHint = isRu
+    ? (refreshAllMapsSelected
+      ? 'Обновятся все добавленные карты. Стоит примерно 10 кредитов, зависит от объёма данных в карточках.'
+      : 'Обновится только выбранная карта. Стоит примерно 10 кредитов, зависит от объёма данных в карточке.')
+    : (refreshAllMapsSelected
+      ? 'Refreshes all added map listings. Costs about 10 credits, depending on the amount of listing data.'
+      : 'Refreshes only the selected map listing. Costs about 10 credits, depending on the amount of listing data.');
+  const canRefreshCardData = refreshSyncSources.length > 0;
   const refreshBlockedByPolicy = !parseRefreshPolicy.can_refresh;
   const refreshBlockedByActiveParse = parseStatus === 'processing' || parseStatus === 'queued';
   const canTriggerRefresh = canRefreshCardData && !refreshBlockedByPolicy && !refreshBlockedByActiveParse;
@@ -725,8 +731,8 @@ export const CardOverviewPage = () => {
     }
     if (!hasSupportedConfiguredMapLink) {
       return isRu
-        ? 'Ссылка на карту сохранена, но для обновления данных сейчас поддерживаются только Яндекс и 2ГИС.'
-        : 'A map link is saved, but data refresh is currently supported only for Yandex and 2GIS.';
+        ? 'Ссылка на карту сохранена, но для обновления данных сейчас поддерживаются только Яндекс, 2ГИС и Google.'
+        : 'A map link is saved, but data refresh is currently supported only for Yandex, 2GIS, and Google.';
     }
     if (parseStatus === 'error' && parseStatusError) {
       const raw = parseStatusError
@@ -771,16 +777,24 @@ export const CardOverviewPage = () => {
       setRefreshingCardData(true);
       setError(null);
       setSuccess(null);
-      const { response, data } = await refreshCardDataFromSource(currentBusinessId, selectedSyncSource);
-      if (!response.ok || !data.success) {
-        if (data.refresh_policy) {
-          setParseRefreshPolicy(normalizeParseRefreshPolicy(data.refresh_policy));
+      const refreshResults = await Promise.all(
+        refreshSyncSources.map(async source => {
+          const { response, data } = await refreshCardDataFromSource(currentBusinessId, source);
+          return { response, data, source };
+        })
+      );
+      const failedRefresh = refreshResults.find(result => !result.response.ok || !result.data.success);
+      if (failedRefresh) {
+        if (failedRefresh.data.refresh_policy) {
+          setParseRefreshPolicy(normalizeParseRefreshPolicy(failedRefresh.data.refresh_policy));
         }
-        throw new Error(data.message || data.error || 'Не удалось запустить обновление данных карточки');
+        throw new Error(failedRefresh.data.message || failedRefresh.data.error || 'Не удалось запустить обновление данных карточки');
       }
 
       setParseStatus('queued');
-      setSuccess('Собираем данные. Это может занять несколько минут. После завершения аудит и показатели обновятся автоматически.');
+      setSuccess(refreshAllMapsSelected
+        ? 'Собираем данные по всем добавленным картам. Это может занять несколько минут. После завершения аудит и показатели обновятся автоматически.'
+        : 'Собираем данные по выбранной карте. Это может занять несколько минут. После завершения аудит и показатели обновятся автоматически.');
       loadParseStatus();
     } catch (e: any) {
       setError(e?.message || 'Не удалось запустить обновление данных карточки');
@@ -961,31 +975,31 @@ export const CardOverviewPage = () => {
               </>
             ) : (
               <>
-                <div className="flex flex-col items-start gap-1">
-                  <Button
-                    type="button"
-                    onClick={handleRefreshCardData}
-                    disabled={!currentBusinessId || refreshingCardData || !canTriggerRefresh}
-                    className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
-                    title={isRu ? 'Запускает сбор свежих данных по вашей карточке на карте.' : 'Starts collecting fresh data from your map listing.'}
+                <div className="flex flex-wrap items-start gap-2">
+                  <div className="flex flex-col items-start gap-1">
+                    <Button
+                      type="button"
+                      onClick={handleRefreshCardData}
+                      disabled={!currentBusinessId || refreshingCardData || !canTriggerRefresh}
+                      className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
+                      title={isRu ? 'Запускает сбор свежих данных по вашей карточке на карте.' : 'Starts collecting fresh data from your map listing.'}
+                    >
+                      <RefreshCw className={cn("mr-2 h-4 w-4", refreshingCardData ? "animate-spin" : "")} />
+                      {refreshingCardData ? (isRu ? 'Запускаем обновление...' : 'Starting refresh...') : refreshCardDataLabel}
+                    </Button>
+                    <span className="max-w-72 text-xs leading-4 text-slate-500">
+                      {refreshCardDataHint}
+                    </span>
+                  </div>
+                  <a
+                    href="/dashboard/progress"
+                    title={isRu ? 'Открывает аудит карточки, метрики и историю изменений.' : 'Opens the listing audit, metrics, and change history.'}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
                   >
-                    <RefreshCw className={cn("mr-2 h-4 w-4", refreshingCardData ? "animate-spin" : "")} />
-                    {refreshingCardData ? (isRu ? 'Запускаем обновление...' : 'Starting refresh...') : (isRu ? 'Обновить данные карточки' : 'Refresh card data')}
-                  </Button>
-                  <span className="max-w-64 text-xs leading-4 text-slate-500">
-                    {isRu
-                      ? 'Стоит примерно 10 кредитов, зависит от объёма данных в карточке.'
-                      : 'Costs about 10 credits, depending on the amount of listing data.'}
-                  </span>
+                    <FileSearch className="w-4 h-4" />
+                    <span>{t.dashboard.card.progressTab}</span>
+                  </a>
                 </div>
-                <a
-                  href="/dashboard/progress"
-                  title={isRu ? 'Открывает аудит карточки, метрики и историю изменений.' : 'Opens the listing audit, metrics, and change history.'}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
-                >
-                  <FileSearch className="w-4 h-4" />
-                  <span>{t.dashboard.card.progressTab}</span>
-                </a>
               </>
             )
           )}
@@ -1051,7 +1065,7 @@ export const CardOverviewPage = () => {
                     {isRu ? 'Сейчас: ' : 'Now: '}
                     <span className="font-semibold">{parseStatusLabel}</span>
                     {hasConfiguredMapLink && !canRefreshCardData && mapSources.length > 0
-                      ? (isRu ? ' · Обновление сейчас поддержано для Яндекс и 2ГИС.' : ' · Refresh is currently supported for Yandex and 2GIS.')
+                      ? (isRu ? ' · Обновление сейчас поддержано для Яндекс, 2ГИС и Google.' : ' · Refresh is currently supported for Yandex, 2GIS, and Google.')
                       : ''}
                   </span>
                 </span>
