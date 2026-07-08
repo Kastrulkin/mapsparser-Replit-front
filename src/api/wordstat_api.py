@@ -1,6 +1,5 @@
 from flask import Blueprint, jsonify, request
 import sqlite3
-import subprocess
 import os
 import sys
 from datetime import datetime
@@ -24,6 +23,15 @@ STOP_WORDS = {
     "и", "в", "на", "с", "по", "для", "или", "от", "до", "под", "при", "за", "к", "из", "о",
     "the", "and", "for", "with", "from", "to", "of",
     "услуга", "услуги", "салон", "beauty", "service", "services",
+}
+
+SEED_STOP_WORDS = STOP_WORDS | {
+    "network",
+    "сеть",
+    "точка",
+    "адрес",
+    "город",
+    "рядом",
 }
 
 BUSINESS_TYPE_HINTS = {
@@ -95,6 +103,263 @@ def _row_get(row, key: str, idx: int = 0, default=None):
 
 def _normalize_keyword_search_text(value: str) -> str:
     return str(value or "").strip().lower().replace("ё", "е")
+
+
+def _dedupe_preserve_order(values, limit: int = 40):
+    seen = set()
+    result = []
+    for value in values:
+        text = re.sub(r"\s+", " ", str(value or "").strip())
+        key = _normalize_keyword_search_text(text)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        result.append(text)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _keyword_terms(value: str):
+    terms = []
+    for term in re.findall(r"[a-zA-Zа-яА-ЯёЁ0-9]+", str(value or "").lower()):
+        if len(term) < 3 or term in SEED_STOP_WORDS or term.isdigit():
+            continue
+        terms.append(term)
+    return terms
+
+
+def _resolve_wordstat_update_targets(cursor, business_id: str):
+    cursor.execute(
+        """
+        SELECT id, name, city, business_type, network_id
+        FROM businesses
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (business_id,),
+    )
+    selected = cursor.fetchone()
+    if not selected:
+        return [], "business"
+
+    selected_dict = dict(selected) if not isinstance(selected, dict) and hasattr(selected, "keys") else selected
+    network_id = str(_row_get(selected_dict, "network_id", 4, "") or "").strip()
+    selected_id = str(_row_get(selected_dict, "id", 0, "") or "").strip()
+    is_network_scope = bool(network_id) and selected_id == network_id
+
+    if not is_network_scope:
+        return [selected_dict], "business"
+
+    cursor.execute(
+        """
+        SELECT id, name, city, business_type, network_id
+        FROM businesses
+        WHERE network_id = %s
+          AND (is_active IS TRUE OR is_active IS NULL)
+        ORDER BY CASE WHEN id = %s THEN 0 ELSE 1 END, name
+        """,
+        (network_id, network_id),
+    )
+    rows = cursor.fetchall() or []
+    targets = [dict(row) if not isinstance(row, dict) and hasattr(row, "keys") else row for row in rows]
+    return targets or [selected_dict], "network"
+
+
+def _build_business_wordstat_seeds(cursor, business_row):
+    business_id = str(_row_get(business_row, "id", 0, "") or "").strip()
+    business_name = str(_row_get(business_row, "name", 1, "") or "").strip()
+    city = str(_row_get(business_row, "city", 2, "") or "").strip()
+    business_type = str(_row_get(business_row, "business_type", 3, "") or "").strip()
+
+    seeds = []
+    relevance_terms = []
+
+    if business_type:
+        cursor.execute(
+            "SELECT label, description FROM businesstypes WHERE type_key = %s OR id = %s LIMIT 1",
+            (business_type, business_type),
+        )
+        bt_row = cursor.fetchone()
+        label = _row_get(bt_row, "label", 0, "") or ""
+        description = _row_get(bt_row, "description", 1, "") or ""
+        seeds.extend([label, description])
+        relevance_terms.extend(_keyword_terms(label))
+        relevance_terms.extend(_keyword_terms(description))
+        for hint in BUSINESS_TYPE_HINTS.get(business_type, []):
+            seeds.append(hint)
+            relevance_terms.extend(_keyword_terms(hint))
+
+    cursor.execute(
+        """
+        SELECT name, description
+        FROM userservices
+        WHERE business_id = %s
+          AND (is_active IS TRUE OR is_active IS NULL)
+        ORDER BY updated_at DESC NULLS LAST
+        LIMIT 80
+        """,
+        (business_id,),
+    )
+    for row in cursor.fetchall() or []:
+        service_name = str(_row_get(row, "name", 0, "") or "").strip()
+        service_description = str(_row_get(row, "description", 1, "") or "").strip()
+        if service_name:
+            seeds.append(service_name)
+            relevance_terms.extend(_keyword_terms(service_name))
+        if service_description:
+            relevance_terms.extend(_keyword_terms(service_description))
+
+    for token in _keyword_terms(business_type):
+        relevance_terms.append(token)
+    for token in _keyword_terms(business_name):
+        relevance_terms.append(token)
+
+    base_seeds = _dedupe_preserve_order(seeds, limit=10)
+    if city:
+        city_seeds = [f"{seed} {city}" for seed in base_seeds[:3]]
+        base_seeds = _dedupe_preserve_order(base_seeds + city_seeds, limit=13)
+
+    return base_seeds, set(_dedupe_preserve_order(relevance_terms, limit=120))
+
+
+def _filter_business_wordstat_rows(rows, relevance_terms):
+    if not rows:
+        return []
+    result = []
+    by_keyword = {}
+    strong_terms = [term for term in relevance_terms if len(term) >= 4]
+    for row in rows:
+        keyword = str(row.get("keyword") or "").strip()
+        if not keyword:
+            continue
+        normalized = _normalize_keyword_search_text(keyword)
+        if strong_terms and not any(term in normalized for term in strong_terms):
+            continue
+        previous = by_keyword.get(normalized)
+        if previous is None or int(row.get("views") or 0) > int(previous.get("views") or 0):
+            by_keyword[normalized] = row
+    result = sorted(by_keyword.values(), key=lambda item: int(item.get("views") or 0), reverse=True)
+    return result[:80]
+
+
+def _save_business_wordstat_items(cursor, business_id: str, items: list[dict]):
+    _ensure_custom_table(cursor)
+    created_count = 0
+    updated_count = 0
+    for item in items:
+        keyword = str(item.get("keyword") or "").strip()
+        if not keyword:
+            continue
+        cursor.execute(
+            """
+            INSERT INTO wordstatkeywordscustom (id, business_id, keyword, views, category, updated_at, created_at)
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT (business_id, keyword)
+            DO UPDATE SET
+                views = EXCLUDED.views,
+                category = COALESCE(NULLIF(EXCLUDED.category, ''), wordstatkeywordscustom.category),
+                updated_at = CURRENT_TIMESTAMP
+            RETURNING (xmax = 0) AS inserted
+            """,
+            (
+                str(uuid.uuid4()),
+                business_id,
+                keyword,
+                int(item.get("views") or 0),
+                str(item.get("category") or "custom").strip() or "custom",
+            ),
+        )
+        row = cursor.fetchone()
+        inserted = bool(_row_get(row, "inserted", 0, False))
+        if inserted:
+            created_count += 1
+        else:
+            updated_count += 1
+    return created_count, updated_count
+
+
+def _count_existing_business_wordstat_items(cursor, business_id: str):
+    targets, scope = _resolve_wordstat_update_targets(cursor, business_id)
+    target_ids = [
+        str(_row_get(target, "id", 0, "") or "").strip()
+        for target in targets
+        if str(_row_get(target, "id", 0, "") or "").strip()
+    ]
+    if not target_ids:
+        return {"scope": scope, "targets": 0, "existing": 0, "last_update": None}
+
+    _ensure_custom_table(cursor)
+    placeholders = ",".join(["%s"] * len(target_ids))
+    cursor.execute(
+        f"""
+        SELECT COUNT(*) AS existing, MAX(updated_at) AS last_update
+        FROM wordstatkeywordscustom
+        WHERE business_id IN ({placeholders})
+        """,
+        tuple(target_ids),
+    )
+    row = cursor.fetchone()
+    return {
+        "scope": scope,
+        "targets": len(target_ids),
+        "existing": int(_row_get(row, "existing", 0, 0) or 0),
+        "last_update": _row_get(row, "last_update", 1, None),
+    }
+
+
+def _refresh_business_wordstat_keywords(cursor, business_id: str):
+    if not config.is_configured():
+        raise WordstatTemporaryUnavailable("Wordstat API is not configured")
+
+    targets, scope = _resolve_wordstat_update_targets(cursor, business_id)
+    client = WordstatClient.from_config(config)
+    if config.oauth_token:
+        client.set_access_token(config.oauth_token)
+
+    summary = {
+        "scope": scope,
+        "targets": len(targets),
+        "created": 0,
+        "updated": 0,
+        "fetched": 0,
+        "saved": 0,
+        "skipped_targets": 0,
+    }
+
+    for target in targets:
+        target_id = str(_row_get(target, "id", 0, "") or "").strip()
+        if not target_id:
+            continue
+        seeds, relevance_terms = _build_business_wordstat_seeds(cursor, target)
+        if not seeds:
+            summary["skipped_targets"] += 1
+            continue
+        payload = client.get_popular_queries(seeds, config.default_region)
+        rows = _extract_live_wordstat_queries(payload)
+        summary["fetched"] += len(rows)
+        filtered_rows = _filter_business_wordstat_rows(rows, relevance_terms)
+        categorized = []
+        for row in filtered_rows:
+            keyword = str(row.get("keyword") or "").strip()
+            if not keyword:
+                continue
+            categorized.append(
+                {
+                    "keyword": keyword,
+                    "views": int(row.get("views") or 0),
+                    "category": _categorize_wordstat_keyword(keyword),
+                }
+            )
+        created_count, updated_count = _save_business_wordstat_items(cursor, target_id, categorized)
+        summary["created"] += created_count
+        summary["updated"] += updated_count
+        summary["saved"] += len(categorized)
+
+    if summary["saved"] == 0:
+        raise WordstatTemporaryUnavailable("Wordstat returned no rows for scoped business update")
+
+    return summary
 
 
 def _extract_live_wordstat_queries(api_payload):
@@ -689,7 +954,7 @@ def search_keywords():
 
 @wordstat_bp.route('/update', methods=['POST'])
 def trigger_update():
-    """Trigger the background update script"""
+    """Refresh Wordstat keywords for the selected business or network."""
     conn = None
     try:
         user_data, auth_error = _require_auth()
@@ -698,62 +963,60 @@ def trigger_update():
 
         payload = request.get_json(silent=True) or {}
         business_id = (payload.get('business_id') or request.args.get('business_id') or '').strip()
-        if business_id:
-            conn = get_db_connection()
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            try:
-                access_error = _ensure_business_access(cursor, user_data, business_id)
-                if access_error:
-                    return access_error
-            finally:
-                conn.close()
-                conn = None
+        if not business_id:
+            return jsonify({'success': False, 'error': 'Не указан business_id'}), 400
 
-        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'update_wordstat_data.py')
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        access_error = _ensure_business_access(cursor, user_data, business_id)
+        if access_error:
+            return access_error
+
         if not config.is_configured():
             return jsonify({
                 'success': False,
                 'error': 'Wordstat API не настроен: задайте YANDEX_WORDSTAT_API_KEY и YANDEX_WORDSTAT_FOLDER_ID'
             }), 400
-        
-        # Run in background (nohup) or wait? 
-        # Since it can take time, normally background. But user might want feedback.
-        # Let's run it synchronously for now if it's not too long, or use check_update_needed logic.
-        # Actually, let's run it as a subprocess.
-        
-        # Check if auth token is set
-        # We can't easily check env vars passed to subprocess unless we pass them.
-        # Assuming environment is set up.
-        
-        # Using subprocess to run the script
-        process = subprocess.Popen(
-            ['python3', script_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        
-        # Wait for a bit (timeout) to see if it crashes immediately, otherwise return accepted.
-        try:
-            stdout, stderr = process.communicate(timeout=2)
-            if process.returncode != 0:
-                 details = (stderr or stdout or '').strip()
-                 if not details:
-                     details = 'unknown error (stdout/stderr empty)'
-                 if 'WORDSTAT_API_TEMPORARILY_UNAVAILABLE' in details:
-                     return _wordstat_update_error_response(details, user_data)
-                 return jsonify({'success': False, 'error': f"Script failed: {details}"}), 500
-        except subprocess.TimeoutExpired:
-            # Running in background
-            pass
-            
+
+        summary = _refresh_business_wordstat_keywords(cursor, business_id)
+        conn.commit()
+        scope_label = 'сети' if summary.get('scope') == 'network' else 'точки'
         return jsonify({
-            'success': True, 
-            'message': 'Обновление Wordstat запущено. Проверьте данные через несколько минут.'
+            'success': True,
+            'message': (
+                f"SEO-запросы для {scope_label} обновлены: "
+                f"новых {summary.get('created', 0)}, обновлено {summary.get('updated', 0)}."
+            ),
+            'summary': summary,
         })
-        
+    except WordstatTemporaryUnavailable as error:
+        if conn is not None:
+            try:
+                cached_summary = _count_existing_business_wordstat_items(cursor, business_id)
+                if int(cached_summary.get("existing") or 0) > 0:
+                    conn.rollback()
+                    scope_label = 'сети' if cached_summary.get('scope') == 'network' else 'точки'
+                    payload = {
+                        'success': True,
+                        'message': (
+                            f"Wordstat ограничил частоту запросов. "
+                            f"Показываем уже сохранённые SEO-запросы для {scope_label}; "
+                            f"повторите обновление позже."
+                        ),
+                        'warning': 'wordstat_rate_limited_using_cached_keywords',
+                        'summary': cached_summary,
+                    }
+                    if bool((user_data or {}).get('is_superadmin')):
+                        payload['superadmin'] = str(error)
+                    return jsonify(payload)
+            except Exception:
+                pass
+            conn.rollback()
+        return _wordstat_update_error_response(str(error), user_data if 'user_data' in locals() else None)
     except Exception as e:
+        if conn is not None:
+            conn.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         if conn is not None:

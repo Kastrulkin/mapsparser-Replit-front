@@ -126,8 +126,9 @@ class WordstatClient:
             response = requests.post(url, headers=headers, json=body, timeout=30)
             if response.status_code == 429:
                 retry_after = int(response.headers.get('Retry-After', 60))
-                print(f"Превышена квота. Повторите через {retry_after} секунд")
-                return None
+                raise WordstatTemporaryUnavailable(
+                    f"Превышена квота Wordstat API. Повторите через {retry_after} секунд"
+                )
             if response.status_code == 503:
                 print("Сервис временно недоступен")
                 return None
