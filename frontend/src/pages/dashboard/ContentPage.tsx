@@ -15,6 +15,7 @@ import {
   Plus,
   Sparkles,
   Star,
+  Trash2,
   Upload,
   Wand2,
 } from 'lucide-react';
@@ -544,6 +545,7 @@ export function ContentPage() {
   const [mediaError, setMediaError] = useState('');
   const [mediaActionMessage, setMediaActionMessage] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [deletePlanOpen, setDeletePlanOpen] = useState(false);
   const [createStep, setCreateStep] = useState<ModalStep>('setup');
   const [createDraft, setCreateDraft] = useState<CreatePlanDraft>(DEFAULT_CREATE_DRAFT);
   const [generating, setGenerating] = useState(false);
@@ -1108,6 +1110,34 @@ export function ContentPage() {
     }
   };
 
+  const deleteCurrentPlan = async () => {
+    if (!currentBusinessId || !currentPlan?.id) return;
+    setBusyAction('delete-plan');
+    setError('');
+    setActionMessage('');
+    try {
+      await newAuth.makeRequest(`/content-plans/${encodeURIComponent(currentPlan.id)}`, { method: 'DELETE' });
+      const plansResponse = await newAuth.makeRequest(`/content-plans?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
+      const nextPlans = Array.isArray(plansResponse.plans) ? plansResponse.plans : [];
+      setPlans(nextPlans);
+      setSelectedItemId('');
+      setSocialPosts([]);
+      setSocialSummary(null);
+      setDeletePlanOpen(false);
+      const nextPlan = nextPlans.find((plan) => plan.id !== currentPlan.id) || nextPlans[0] || null;
+      if (nextPlan?.id) {
+        await loadCurrentPlan(nextPlan.id);
+      } else {
+        setCurrentPlan(null);
+      }
+      setActionMessage('Контент-план удалён.');
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Не удалось удалить контент-план');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
   const toggleContentType = (key: string) => {
     setCreateDraft((prev) => ({
       ...prev,
@@ -1277,6 +1307,32 @@ export function ContentPage() {
               Создать план
             </Button>
           )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  const renderDeletePlanDialog = () => (
+    <Dialog open={deletePlanOpen} onOpenChange={setDeletePlanOpen}>
+      <DialogContent className="max-w-lg rounded-3xl border-slate-200">
+        <DialogHeader>
+          <DialogTitle>Удалить контент-план?</DialogTitle>
+          <DialogDescription>
+            План «{currentPlan?.title || 'Контент-план'}» и все его публикации будут удалены из календаря. Уже опубликованные внешние посты это действие не удаляет.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button type="button" variant="outline" onClick={() => setDeletePlanOpen(false)} disabled={busyAction === 'delete-plan'}>
+            Оставить
+          </Button>
+          <Button
+            type="button"
+            onClick={deleteCurrentPlan}
+            disabled={busyAction === 'delete-plan'}
+            className="bg-red-600 text-white hover:bg-red-700"
+          >
+            {busyAction === 'delete-plan' ? 'Удаляем...' : 'Удалить план'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2056,6 +2112,7 @@ export function ContentPage() {
   return (
     <div className="mx-auto max-w-[1500px] space-y-6 px-4 py-6">
       {renderPlanModal()}
+      {renderDeletePlanDialog()}
       {renderDrawer()}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2141,7 +2198,7 @@ export function ContentPage() {
                     Быстро проверьте ближайшее, подтвердите готовое и закройте раздел.
                   </div>
                 </div>
-                <div className="grid w-full min-w-0 gap-2 md:grid-cols-3">
+                <div className="grid w-full min-w-0 gap-2 md:grid-cols-4">
                   <Button
                     type="button"
                     variant="outline"
@@ -2174,6 +2231,16 @@ export function ContentPage() {
                     <span className="truncate">
                       {busyAction === 'bulk-queue' ? 'Планируем...' : `Запланировать · ${approvedPosts.length}`}
                     </span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDeletePlanOpen(true)}
+                    disabled={!currentPlan?.id || Boolean(busyAction)}
+                    className="h-12 min-w-0 justify-center gap-2 rounded-2xl border-red-100 bg-white px-4 text-red-700 transition-transform hover:bg-red-50 hover:text-red-800 active:scale-[0.96] disabled:opacity-45"
+                  >
+                    <Trash2 className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Удалить план</span>
                   </Button>
                 </div>
               </div>
