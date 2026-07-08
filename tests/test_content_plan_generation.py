@@ -139,6 +139,33 @@ class _FakeDraftDatabase:
         self.closed = True
 
 
+class _ReadyContentPlanSchemaCursor:
+    def __init__(self):
+        self.description = []
+        self.executed = []
+        self.row = None
+
+    def execute(self, query, params=None):
+        self.executed.append(str(query))
+        self.description = [("has_plans",), ("has_items",), ("has_item_metadata",)]
+        self.row = (True, True, True)
+
+    def fetchone(self):
+        return self.row
+
+
+def test_ensure_content_plan_tables_skips_ddl_when_schema_is_ready():
+    cursor = _ReadyContentPlanSchemaCursor()
+
+    content_plan_service.ensure_content_plan_tables(cursor)
+
+    assert len(cursor.executed) == 1
+    executed_sql = " ".join(cursor.executed[0].split()).lower()
+    assert "information_schema.columns" in executed_sql
+    assert all("create table" not in query.lower() for query in cursor.executed)
+    assert all("alter table" not in query.lower() for query in cursor.executed)
+
+
 def test_content_plan_skeleton_respects_allowed_period_and_sources():
     context = {
         "business": {"name": "LocalOS Cafe", "city": "Санкт-Петербург"},

@@ -1024,7 +1024,36 @@ def _record_content_plan_event(
         return
 
 
+def _content_plan_schema_ready(cursor: Any) -> bool:
+    try:
+        cursor.execute(
+            """
+            SELECT
+                to_regclass('public.contentplans') IS NOT NULL AS has_plans,
+                to_regclass('public.contentplanitems') IS NOT NULL AS has_items,
+                EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'contentplanitems'
+                      AND column_name = 'metadata_json'
+                ) AS has_item_metadata
+            """
+        )
+        row = cursor.fetchone()
+        return bool(
+            _row_get(row, "has_plans", 0, False)
+            and _row_get(row, "has_items", 1, False)
+            and _row_get(row, "has_item_metadata", 2, False)
+        )
+    except Exception:
+        return False
+
+
 def ensure_content_plan_tables(cursor: Any) -> None:
+    if _content_plan_schema_ready(cursor):
+        return
+    cursor.execute("SET LOCAL lock_timeout = '1500ms'")
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS contentplans (
@@ -1069,12 +1098,14 @@ def ensure_content_plan_tables(cursor: Any) -> None:
             draft_text TEXT,
             status TEXT NOT NULL DEFAULT 'planned',
             usernews_id TEXT,
+            metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """
     )
-    cursor.execute("ALTER TABLE contentplanitems ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb")
+    if not _content_plan_schema_ready(cursor):
+        cursor.execute("ALTER TABLE contentplanitems ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb")
 
 
 def _ensure_usernews_table(cursor: Any) -> None:
