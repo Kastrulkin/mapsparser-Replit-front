@@ -492,7 +492,7 @@ def build_content_plan_skeleton(
     content_mix: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     content_mix = content_mix if isinstance(content_mix, dict) else {}
-    period_days = 30 if int(period_days or 30) not in {30, 60, 90} else int(period_days or 30)
+    period_days = 30 if int(period_days or 30) not in {14, 30, 60, 90} else int(period_days or 30)
     frequency_per_week = _weekly_frequency_by_density(density)
     items_target = max(4, round(period_days / 7 * frequency_per_week))
     period_start = date.today()

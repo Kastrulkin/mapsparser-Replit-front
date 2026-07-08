@@ -11,7 +11,7 @@ def test_content_plan_horizons_for_starter(monkeypatch):
         },
     )
 
-    assert subscription_manager.get_allowed_content_plan_horizons("biz-1") == [30]
+    assert subscription_manager.get_allowed_content_plan_horizons("biz-1") == [14, 30]
 
 
 def test_content_plan_horizons_for_concierge(monkeypatch):
@@ -24,7 +24,7 @@ def test_content_plan_horizons_for_concierge(monkeypatch):
         },
     )
 
-    assert subscription_manager.get_allowed_content_plan_horizons("biz-2") == [30, 60, 90]
+    assert subscription_manager.get_allowed_content_plan_horizons("biz-2") == [14, 30, 60, 90]
 
 
 def test_content_plan_horizons_for_superadmin_override(monkeypatch):
@@ -37,4 +37,4 @@ def test_content_plan_horizons_for_superadmin_override(monkeypatch):
         },
     )
 
-    assert subscription_manager.get_allowed_content_plan_horizons("biz-3") == [30, 60, 90]
+    assert subscription_manager.get_allowed_content_plan_horizons("biz-3") == [14, 30, 60, 90]
