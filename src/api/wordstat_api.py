@@ -15,7 +15,7 @@ from auth_system import verify_session
 from core.helpers import get_business_owner_id
 from core.seo_keywords import collect_ranked_keywords
 from service_categorizer import categorizer
-from wordstat_client import WordstatClient
+from wordstat_client import WORDSTAT_TEMPORARILY_UNAVAILABLE_MESSAGE, WordstatClient, WordstatTemporaryUnavailable
 from wordstat_config import config
 
 wordstat_bp = Blueprint('wordstat_api', __name__, url_prefix='/api/wordstat')
@@ -156,7 +156,11 @@ def _load_live_wordstat_search(query: str, limit: int) -> list[dict]:
 
     client = WordstatClient(config.client_id, config.client_secret)
     client.set_access_token(config.oauth_token)
-    live_payload = client.get_popular_queries([query], config.default_region)
+    try:
+        live_payload = client.get_popular_queries([query], config.default_region)
+    except WordstatTemporaryUnavailable as error:
+        print(f"Wordstat live search unavailable: {error}", flush=True)
+        live_payload = None
     rows = _extract_live_wordstat_queries(live_payload)
     normalized_query = _normalize_keyword_search_text(query)
     if not rows and normalized_query:
@@ -261,6 +265,18 @@ def _ensure_business_access(cursor, user_data, business_id: str):
     if owner_id != current_user_id and not is_superadmin:
         return (jsonify({'success': False, 'error': 'Нет доступа к бизнесу'}), 403)
     return None
+
+
+def _wordstat_update_error_response(details: str, user_data):
+    clean_message = WORDSTAT_TEMPORARILY_UNAVAILABLE_MESSAGE
+    payload = {
+        'success': False,
+        'error': clean_message,
+        'code': 'wordstat_api_temporarily_unavailable',
+    }
+    if bool((user_data or {}).get('is_superadmin')):
+        payload['superadmin'] = details
+    return jsonify(payload), 503
 
 
 def _ensure_excluded_table(cursor):
@@ -725,6 +741,8 @@ def trigger_update():
                  details = (stderr or stdout or '').strip()
                  if not details:
                      details = 'unknown error (stdout/stderr empty)'
+                 if 'WORDSTAT_API_TEMPORARILY_UNAVAILABLE' in details:
+                     return _wordstat_update_error_response(details, user_data)
                  return jsonify({'success': False, 'error': f"Script failed: {details}"}), 500
         except subprocess.TimeoutExpired:
             # Running in background

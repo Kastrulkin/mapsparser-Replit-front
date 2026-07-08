@@ -221,7 +221,10 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                 // Reload after a delay to show new data if possible, or user can refresh manually
                 setTimeout(loadKeywords, 3000);
             } else {
-                setError(data.error);
+                const superadminDetails = typeof data.superadmin === 'string' && data.superadmin.trim()
+                    ? `\n\nsuperadmin: ${data.superadmin.trim()}`
+                    : '';
+                setError(`${data.error || 'Не удалось обновить SEO-ключи'}${superadminDetails}`);
             }
         } catch (e: any) {
             setError(e.message);

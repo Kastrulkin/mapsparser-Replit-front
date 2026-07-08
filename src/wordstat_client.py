@@ -5,6 +5,16 @@ from typing import List, Dict, Optional
 import os
 from datetime import datetime, timedelta
 
+WORDSTAT_TEMPORARILY_UNAVAILABLE_MESSAGE = (
+    "Яндекс.Вордстат временно недоступен: API вернул некорректный TLS-сертификат. "
+    "Попробуйте обновить SEO-ключи позже."
+)
+
+
+class WordstatTemporaryUnavailable(Exception):
+    """External Wordstat API is temporarily unavailable or misconfigured upstream."""
+
+
 class WordstatClient:
     """Клиент для работы с API Яндекс.Вордстат"""
     
@@ -62,9 +72,14 @@ class WordstatClient:
             response.raise_for_status()
             return response.json()
             
+        except requests.exceptions.SSLError as e:
+            raise WordstatTemporaryUnavailable(
+                f"{WORDSTAT_TEMPORARILY_UNAVAILABLE_MESSAGE} detail={e}"
+            ) from e
         except requests.exceptions.RequestException as e:
-            print(f"Ошибка запроса к API: {e}")
-            return None
+            raise WordstatTemporaryUnavailable(
+                f"Яндекс.Вордстат временно недоступен. Попробуйте обновить SEO-ключи позже. detail={e}"
+            ) from e
     
     def get_popular_queries(self, keywords: List[str], region: int = 225) -> Dict:
         """

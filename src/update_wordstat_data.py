@@ -13,7 +13,12 @@ from pathlib import Path
 # Добавляем путь к модулям
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__))))
 
-from wordstat_client import WordstatClient, WordstatDataProcessor
+from wordstat_client import (
+    WORDSTAT_TEMPORARILY_UNAVAILABLE_MESSAGE,
+    WordstatClient,
+    WordstatDataProcessor,
+    WordstatTemporaryUnavailable,
+)
 from wordstat_config import config
 
 STOP_TOKENS = {
@@ -325,6 +330,10 @@ def main():
         
         return True
         
+    except WordstatTemporaryUnavailable as e:
+        print(f"WORDSTAT_API_TEMPORARILY_UNAVAILABLE: {WORDSTAT_TEMPORARILY_UNAVAILABLE_MESSAGE}")
+        print(f"superadmin: {e}")
+        return False
     except Exception as e:
         print(f"❌ Ошибка при обновлении данных: {e}")
         import traceback
