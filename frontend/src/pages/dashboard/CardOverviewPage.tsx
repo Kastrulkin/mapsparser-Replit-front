@@ -23,7 +23,8 @@ import {
   Search,
   Wand2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  X
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -1396,7 +1397,7 @@ export const CardOverviewPage = () => {
                           <Button
                             type="button"
                             variant="ghost"
-                            onClick={() => setShowServiceSettings((value) => !value)}
+                            onClick={() => setShowServiceSettings(true)}
                             className="text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                           >
                             Настройки
@@ -1504,37 +1505,56 @@ export const CardOverviewPage = () => {
               />
 
               {showServiceSettings ? (
-                <div className="rounded-3xl border border-slate-200/80 bg-slate-50/70 p-5">
-                  <div className="mb-4 flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Настройки генерации</div>
-                      <div className="mt-1 text-sm text-slate-600">Импорт, распознавание и дополнительные параметры спрятаны здесь, чтобы не перегружать рабочую очередь.</div>
+                <div
+                  className="fixed inset-0 z-[90] flex items-center justify-center bg-black/30 p-3 backdrop-blur-sm sm:p-5"
+                  onClick={() => setShowServiceSettings(false)}
+                >
+                  <div
+                    className="flex max-h-[calc(100dvh-24px)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/10 sm:max-h-[calc(100dvh-40px)]"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="shrink-0 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur sm:px-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Настройки генерации</div>
+                          <h3 className="mt-2 text-xl font-semibold text-slate-950">Обработка услуг</h3>
+                          <div className="mt-1 text-sm leading-6 text-slate-600">Импорт, распознавание и дополнительные параметры спрятаны здесь, чтобы не перегружать рабочую очередь.</div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setShowServiceSettings(false)}
+                          className="h-10 w-10 shrink-0 p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                          aria-label="Закрыть настройки"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <Button type="button" variant="ghost" onClick={() => setShowServiceSettings(false)} className="text-slate-500">
-                      Скрыть
-                    </Button>
+                    <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-slate-50/70 p-5 sm:p-6">
+                      <CardServicesMetaStrip
+                        lastParseDate={serviceLastParseDate}
+                        noNewServicesFound={servicesNoNewFromParse}
+                        locale={language === 'ru' ? 'ru-RU' : 'en-US'}
+                      />
+                      <CardServiceOptimizerPanel
+                        copy={serviceControlsCopy}
+                        businessName={currentBusiness?.name}
+                        businessId={currentBusinessId}
+                        language={language}
+                        servicesCount={userServices.length}
+                        automationAllowed={automationAccess.automationAllowed}
+                        automationLockedMessage={automationLockedMessage}
+                        optimizingAll={optimizingAll}
+                        regeneratingProblematic={regeneratingProblematic}
+                        optimizingServiceId={optimizingServiceId}
+                        problemRegenerationStatus={problemRegenerationStatus}
+                        onOptimizeAll={optimizeAllServices}
+                        onRegenerateProblematic={regenerateProblematicServices}
+                        onServicesImported={loadUserServices}
+                      />
+                    </div>
                   </div>
-                  <CardServicesMetaStrip
-                    lastParseDate={serviceLastParseDate}
-                    noNewServicesFound={servicesNoNewFromParse}
-                    locale={language === 'ru' ? 'ru-RU' : 'en-US'}
-                  />
-                  <CardServiceOptimizerPanel
-                    copy={serviceControlsCopy}
-                    businessName={currentBusiness?.name}
-                    businessId={currentBusinessId}
-                    language={language}
-                    servicesCount={userServices.length}
-                    automationAllowed={automationAccess.automationAllowed}
-                    automationLockedMessage={automationLockedMessage}
-                    optimizingAll={optimizingAll}
-                    regeneratingProblematic={regeneratingProblematic}
-                    optimizingServiceId={optimizingServiceId}
-                    problemRegenerationStatus={problemRegenerationStatus}
-                    onOptimizeAll={optimizeAllServices}
-                    onRegenerateProblematic={regenerateProblematicServices}
-                    onServicesImported={loadUserServices}
-                  />
                 </div>
               ) : null}
             </DashboardSection>
