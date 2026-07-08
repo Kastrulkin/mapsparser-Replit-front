@@ -645,6 +645,16 @@ export const ha = {
       newsGenerator: {
         title: "Mai Hada Labarai",
         subtitle: "Ƙirƙiri labarai don katin kasuwancin ku",
+        settings: "Saituna",
+        generationMode: "Yanayin samarwa",
+        newsMode: "Labari",
+        socialPostMode: "Sako a sada zumunta",
+        socialPostTemplate: "Samfurin sako a sada zumunta",
+        socialPostFormats: {
+          announce: "Sanarwa",
+          case: "Misali",
+          promo: "Tallace-tallace"
+        },
         examplesLabel: "Misalan labarai (har zuwa 5)",
         examplesPlaceholder: "Misali: Sabon sabis — tausa ga masu ciki",
         addExample: "Ƙara",

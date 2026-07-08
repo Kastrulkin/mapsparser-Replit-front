@@ -660,6 +660,16 @@ export const fr = {
       newsGenerator: {
         title: "Générateur de nouvelles",
         subtitle: "Créez des nouvelles pour votre fiche d'entreprise basées sur vos services ou transactions",
+        settings: "Paramètres",
+        generationMode: "Mode de génération",
+        newsMode: "Nouvelle",
+        socialPostMode: "Publication sur les réseaux sociaux",
+        socialPostTemplate: "Modèle de publication sur les réseaux sociaux",
+        socialPostFormats: {
+          announce: "Annonce",
+          case: "Cas",
+          promo: "Promotion"
+        },
         examplesLabel: "Exemples de nouvelles (jusqu'à 5)",
         examplesPlaceholder: "Ex: Nouveau service — massage pour femmes enceintes",
         addExample: "Ajouter",

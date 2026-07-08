@@ -660,6 +660,16 @@ export const el = {
       newsGenerator: {
         title: "Γεννήτρια Ειδήσεων",
         subtitle: "Δημιουργήστε ειδήσεις για την επιχείρησή σας",
+        settings: "Ρυθμίσεις",
+        generationMode: "Λειτουργία δημιουργίας",
+        newsMode: "Είδηση",
+        socialPostMode: "Ανάρτηση στα κοινωνικά δίκτυα",
+        socialPostTemplate: "Πρότυπο ανάρτησης στα κοινωνικά δίκτυα",
+        socialPostFormats: {
+          announce: "Ανακοίνωση",
+          case: "Case",
+          promo: "Προσφορά"
+        },
         examplesLabel: "Παραδείγματα ειδήσεων (έως 5)",
         examplesPlaceholder: "Π.χ.: Νέα υπηρεσία — μασάζ για εγκύους",
         addExample: "Προσθήκη",

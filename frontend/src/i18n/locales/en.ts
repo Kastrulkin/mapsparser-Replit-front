@@ -707,6 +707,16 @@ export const en = {
       newsGenerator: {
         title: "News Generator",
         subtitle: "Create news for your business card based on your services or transactions",
+        settings: "Settings",
+        generationMode: "Generation mode",
+        newsMode: "News",
+        socialPostMode: "Social media post",
+        socialPostTemplate: "Social media post template",
+        socialPostFormats: {
+          announce: "Announcement",
+          case: "Case",
+          promo: "Promotion"
+        },
         examplesLabel: "News examples (up to 5)",
         examplesPlaceholder: "Example: New service — massage for expectant mothers",
         addExample: "Add",

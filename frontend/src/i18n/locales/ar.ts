@@ -645,6 +645,16 @@ export const ar = {
       newsGenerator: {
         title: "مولد الأخبار",
         subtitle: "أنشئ أخباراً لبطاقة عملك",
+        settings: "الإعدادات",
+        generationMode: "وضع التوليد",
+        newsMode: "خبر",
+        socialPostMode: "منشور على الشبكات الاجتماعية",
+        socialPostTemplate: "قالب منشور الشبكات الاجتماعية",
+        socialPostFormats: {
+          announce: "إعلان",
+          case: "حالة",
+          promo: "عرض"
+        },
         examplesLabel: "أمثلة (حتى 5)",
         examplesPlaceholder: "مثال: خدمة جديدة — تدليك للحوامل",
         addExample: "إضافة",

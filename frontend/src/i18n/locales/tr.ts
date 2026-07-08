@@ -668,6 +668,16 @@ export const tr = {
       newsGenerator: {
         title: "Haber Üretici",
         subtitle: "Hizmetlerinize veya işlemlere göre işletme kartınız için haber oluşturun",
+        settings: "Ayarlar",
+        generationMode: "Üretim modu",
+        newsMode: "Haber",
+        socialPostMode: "Sosyal medya gönderisi",
+        socialPostTemplate: "Sosyal medya gönderisi şablonu",
+        socialPostFormats: {
+          announce: "Duyuru",
+          case: "Vaka",
+          promo: "Kampanya"
+        },
         examplesLabel: "Haber örnekleri (en fazla 5)",
         examplesPlaceholder: "Örnek: Yeni hizmet — hamileler için masaj",
         addExample: "Ekle",

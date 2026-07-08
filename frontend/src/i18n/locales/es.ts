@@ -660,6 +660,16 @@ export const es = {
       newsGenerator: {
         title: "Generador de Noticias",
         subtitle: "Crea noticias para tu tarjeta de empresa",
+        settings: "Ajustes",
+        generationMode: "Modo de generación",
+        newsMode: "Noticia",
+        socialPostMode: "Publicación en redes sociales",
+        socialPostTemplate: "Plantilla de publicación en redes sociales",
+        socialPostFormats: {
+          announce: "Anuncio",
+          case: "Caso",
+          promo: "Promoción"
+        },
         examplesLabel: "Ejemplos de noticias (hasta 5)",
         examplesPlaceholder: "Ej: Nuevo servicio — masaje para embarazadas",
         addExample: "Añadir",

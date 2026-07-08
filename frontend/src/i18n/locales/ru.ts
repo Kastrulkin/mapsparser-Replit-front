@@ -728,6 +728,16 @@ export const ru = {
       newsGenerator: {
         title: "Генератор новостей",
         subtitle: "Создавайте новости для карточки компании на основе ваших услуг или транзакций",
+        settings: "Настройки",
+        generationMode: "Режим генерации",
+        newsMode: "Новость",
+        socialPostMode: "Пост в соцсети",
+        socialPostTemplate: "Шаблон поста в соцсети",
+        socialPostFormats: {
+          announce: "Анонс",
+          case: "Кейс",
+          promo: "Акция"
+        },
         examplesLabel: "Примеры новостей (до 5)",
         examplesPlaceholder: "Например: Новая услуга — массаж для будущих мам",
         addExample: "Добавить",

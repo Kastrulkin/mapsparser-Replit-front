@@ -665,6 +665,16 @@ export const th = {
       newsGenerator: {
         title: "ตัวสร้างข่าว",
         subtitle: "สร้างข่าวธุรกิจสำหรับนามบัตรของคุณ",
+        settings: "การตั้งค่า",
+        generationMode: "โหมดการสร้าง",
+        newsMode: "ข่าว",
+        socialPostMode: "โพสต์โซเชียล",
+        socialPostTemplate: "เทมเพลตโพสต์โซเชียล",
+        socialPostFormats: {
+          announce: "ประกาศ",
+          case: "เคส",
+          promo: "โปรโมชัน"
+        },
         examplesLabel: "ตัวอย่างข่าว (สูงสุด 5)",
         examplesPlaceholder: "ตัวอย่าง: บริการใหม่ - นวดสำหรับคนท้อง",
         addExample: "เพิ่ม",

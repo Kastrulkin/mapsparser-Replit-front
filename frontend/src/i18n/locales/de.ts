@@ -668,6 +668,16 @@ export const de = {
       newsGenerator: {
         title: "Nachrichtengenerator",
         subtitle: "Erstelle Nachrichten für deine Visitenkarte",
+        settings: "Einstellungen",
+        generationMode: "Generierungsmodus",
+        newsMode: "Nachricht",
+        socialPostMode: "Social-Media-Beitrag",
+        socialPostTemplate: "Vorlage für Social-Media-Beitrag",
+        socialPostFormats: {
+          announce: "Ankündigung",
+          case: "Case",
+          promo: "Aktion"
+        },
         examplesLabel: "Beispiele (bis zu 5)",
         examplesPlaceholder: "Bsp: Neuer Service — Schwangerschaftsmassage",
         addExample: "Hinzufügen",

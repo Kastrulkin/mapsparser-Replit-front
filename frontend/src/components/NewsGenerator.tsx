@@ -441,13 +441,15 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
 
           {/* Right Column: Settings & Examples */}
           <div className="space-y-6">
-            <div className="text-sm font-bold uppercase tracking-wider text-gray-400">Settings</div>
+            <div className="text-sm font-bold uppercase tracking-wider text-gray-400">
+              {t.dashboard.card.newsGenerator.settings}
+            </div>
 
             <div className="space-y-4">
               <div>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   <Newspaper className="w-4 h-4 text-gray-500" />
-                  Режим генерации
+                  {t.dashboard.card.newsGenerator.generationMode}
                 </label>
                 <div className="grid grid-cols-2 gap-2 rounded-xl border border-gray-200 p-1 bg-gray-50">
                   <button
@@ -458,7 +460,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
                       contentMode === 'news' ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
                     )}
                   >
-                    Новость
+                    {t.dashboard.card.newsGenerator.newsMode}
                   </button>
                   <button
                     type="button"
@@ -468,7 +470,7 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
                       contentMode === 'social' ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
                     )}
                   >
-                    Соцпост
+                    {t.dashboard.card.newsGenerator.socialPostMode}
                   </button>
                 </div>
               </div>
@@ -478,13 +480,13 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
                   <div>
                     <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                       <Sparkles className="w-4 h-4 text-amber-500" />
-                      Шаблон соцпоста
+                      {t.dashboard.card.newsGenerator.socialPostTemplate}
                     </label>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { key: 'announce', label: 'Анонс' },
-                        { key: 'case', label: 'Кейс' },
-                        { key: 'promo', label: 'Акция' },
+                        { key: 'announce', label: t.dashboard.card.newsGenerator.socialPostFormats.announce },
+                        { key: 'case', label: t.dashboard.card.newsGenerator.socialPostFormats.case },
+                        { key: 'promo', label: t.dashboard.card.newsGenerator.socialPostFormats.promo },
                       ].map((item) => (
                         <button
                           key={item.key}
