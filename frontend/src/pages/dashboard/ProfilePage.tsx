@@ -126,6 +126,19 @@ const isGoogleMapUrl = (value: string) => {
   if (normalized.includes('google.com/maps') || normalized.includes('maps.app.goo.gl') || normalized.includes('share.google')) {
     return true;
   }
+  if (
+    (normalized.includes('maps.google.') || normalized.includes('google.com')) &&
+    (
+      normalized.includes('?cid=') ||
+      normalized.includes('&cid=') ||
+      normalized.includes('?ludocid=') ||
+      normalized.includes('&ludocid=') ||
+      normalized.includes('?kgmid=') ||
+      normalized.includes('&kgmid=')
+    )
+  ) {
+    return true;
+  }
   return (
     normalized.includes('google.com/search') &&
     (

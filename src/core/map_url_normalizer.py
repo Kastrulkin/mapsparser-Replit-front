@@ -67,7 +67,9 @@ def is_google_map_url(raw_url: Any) -> bool:
         return False
     if "/maps" in path:
         return True
-    if path == "/search" and query_keys.intersection({"cid", "kgmid", "ludocid", "stick"}):
+    if query_keys.intersection({"cid", "kgmid", "ludocid"}) and host in {"google.com", "www.google.com", "maps.google.com"}:
+        return True
+    if path == "/search" and query_keys.intersection({"stick"}):
         return True
     return False
 

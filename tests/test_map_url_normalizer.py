@@ -32,5 +32,12 @@ def test_google_search_business_panel_is_google_map_url():
     )
 
 
+def test_maps_google_cid_url_is_google_map_url():
+    url = "https://maps.google.com/?cid=demo-roga-i-kopyta-network"
+
+    assert is_google_map_url(url) is True
+    assert normalize_map_url(url) == url
+
+
 def test_google_search_without_business_entity_is_not_map_url():
     assert is_google_map_url("https://www.google.com/search?q=how+to+write+content") is False
