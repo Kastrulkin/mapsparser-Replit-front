@@ -165,6 +165,7 @@ type CreatePlanDraft = {
 
 const CONTENT_VIEW_STORAGE_KEY = 'localos_content_view_v1';
 const CONTENT_SECTION_STORAGE_KEY = 'localos_content_section_v1';
+const PLAN_GENERATION_MIN_DURATION_MS = 6500;
 
 const CHANNELS = [
   { key: 'yandex_maps', label: 'Яндекс', mode: 'controlled' },
@@ -1063,6 +1064,7 @@ export function ContentPage() {
 
   const createPlan = async () => {
     if (!currentBusinessId) return;
+    const generationStartedAt = Date.now();
     setGenerating(true);
     setCreateOpen(false);
     setGenerationProgress(8);
@@ -1086,8 +1088,6 @@ export function ContentPage() {
           },
         }),
       });
-      setGenerationProgress(100);
-      setGenerationCards(Math.max(24, createDraft.periodDays));
       const plan = response.plan || null;
       setCurrentPlan(plan);
       if (plan?.id) {
@@ -1095,9 +1095,13 @@ export function ContentPage() {
       }
       const plansResponse = await newAuth.makeRequest(`/content-plans?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
       setPlans(Array.isArray(plansResponse.plans) ? plansResponse.plans : []);
+      const elapsed = Date.now() - generationStartedAt;
+      const remainingDelay = Math.max(750, PLAN_GENERATION_MIN_DURATION_MS - elapsed);
       window.setTimeout(() => {
+        setGenerationProgress(100);
+        setGenerationCards(Math.max(32, createDraft.periodDays));
         setGenerating(false);
-      }, 750);
+      }, remainingDelay);
     } catch (createError) {
       setGenerating(false);
       setError(createError instanceof Error ? createError.message : 'Не удалось создать план');

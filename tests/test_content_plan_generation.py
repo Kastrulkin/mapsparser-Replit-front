@@ -227,6 +227,42 @@ def test_content_plan_skeleton_uses_grounded_goals_for_each_signal_type():
     assert "«Мало свежих новостей»" in items_by_type["audit"]["goal"]
 
 
+def test_content_plan_audit_service_gap_becomes_client_service_intro():
+    context = {
+        "business": {"name": "Рога и копыта", "city": "Санкт-Петербург"},
+        "services": [],
+        "seo_keywords": [],
+        "sales_signals": [],
+        "audit_signals": [
+            {
+                "id": "services",
+                "title": "Общее описание услуг",
+                "problem": "Не хватает конкретики по услугам и процедурам",
+                "priority": "medium",
+                "section": "content",
+            }
+        ],
+    }
+
+    plan = build_content_plan_skeleton(
+        context,
+        period_days=30,
+        density="light",
+        content_mix={
+            "services": False,
+            "seo": False,
+            "sales": False,
+            "audit": True,
+            "seasonal": False,
+        },
+    )
+
+    item = plan["items"][0]
+    assert item["theme"] == "Знакомство с услугами и процедурами"
+    assert "Не писать о пробелах карточки" in item["goal"]
+    assert content_plan_service._normalize_publication_objective(item) == "service_intro"
+
+
 def test_content_plan_skeleton_prioritizes_stronger_seo_signal():
     context = {
         "business": {"name": "LocalOS Cafe", "city": "Кудрово"},
@@ -601,6 +637,16 @@ def test_content_plan_katok_site_description_prevents_school_fallback(monkeypatc
     assert "Дата, время и запись — в карточке." in draft
     assert "школ" not in draft.lower()
     assert _content_plan_draft_needs_fallback("Каток — школа и пространство для детей и подростков.", facts) is True
+
+
+def test_content_plan_draft_filter_rejects_service_gap_meta_copy():
+    text = (
+        "Хотите узнать, какие именно груминг-процедуры предлагает салон, но не находите подробностей? "
+        "Совет простой: уточните интересующие вас детали непосредственно в салоне. "
+        "Звоните или приходите лично, чтобы получить полную информацию!"
+    )
+
+    assert _content_plan_draft_needs_fallback(text, {"categories": "груминг, зоосалон"}) is True
 
 
 def test_generate_draft_does_not_save_fallback_as_ready_text(monkeypatch):

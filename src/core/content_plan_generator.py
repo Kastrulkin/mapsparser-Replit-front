@@ -150,9 +150,12 @@ def _audit_theme(signal: dict[str, Any]) -> str:
     if section == "search" or "search_intent:" in signal_id:
         return _search_intent_theme(evidence or title or problem)
     clean_title = _clean_audit_signal_text(title)
+    clean_problem = _clean_audit_signal_text(problem)
+    combined = " ".join([clean_title, clean_problem, evidence]).lower()
+    if section in {"services", "content"} and any(marker in combined for marker in ("услуг", "процедур", "направлен")):
+        return "Знакомство с услугами и процедурами"
     if clean_title:
         return clean_title
-    clean_problem = _clean_audit_signal_text(problem)
     if clean_problem:
         return clean_problem
     return "Усилить карточку перед выбором клиента"
@@ -175,6 +178,12 @@ def _audit_goal(signal: dict[str, Any]) -> str:
                 "и как быстро связаться с бизнесом."
             )
         return "Дать клиенту понятный ответ на поисковый запрос и привести его к звонку, маршруту или записи."
+    combined = " ".join([_safe_text(signal.get("title")), problem, evidence]).lower()
+    if section in {"services", "content"} and any(marker in combined for marker in ("услуг", "процедур", "направлен")):
+        return (
+            "Раскрыть одну-две реальные услуги простым языком: для кого они, какую задачу решают "
+            "и какой следующий шаг сделать клиенту. Не писать о пробелах карточки."
+        )
     if problem:
         theme = _audit_theme(signal)
         if theme:
@@ -192,6 +201,9 @@ def _audit_cta(signal: dict[str, Any]) -> str:
             return "Покажите цену, пример результата и один простой способ записаться."
         if evidence:
             return f"Свяжите запрос {_quoted(evidence)} с конкретной услугой, выгодой и действием."
+    combined = " ".join([_safe_text(signal.get("title")), _safe_text(signal.get("problem")), evidence]).lower()
+    if section in {"services", "content"} and any(marker in combined for marker in ("услуг", "процедур", "направлен")):
+        return "Пишите как клиентскую публикацию об услугах: конкретная польза, спокойный тон и запись через карточку."
     return "Сделайте короткую публикацию, которая закрывает пробел карточки и усиливает доверие."
 
 

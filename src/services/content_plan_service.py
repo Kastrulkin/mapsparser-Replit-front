@@ -2986,7 +2986,18 @@ def _normalize_publication_objective(item: dict[str, Any]) -> str:
         return "myth"
     if any(marker in blob for marker in ("новый мастер", "история мастера", "познакомить с мастером")):
         return "author_story"
-    if any(marker in blob for marker in ("новая услуга", "знакомство с услугой", "для кого услуга", "какую проблему решает")):
+    if any(
+        marker in blob
+        for marker in (
+            "новая услуга",
+            "знакомство с услуг",
+            "для кого услуг",
+            "какую проблему решает",
+            "услуги и процедуры",
+            "услугами и процедурами",
+            "реальные услуги",
+        )
+    ):
         return "service_intro"
     if any(marker in blob for marker in ("новый цвет", "новая техника", "новый уход", "новая коллекция", "новый материал")):
         return "news"
@@ -3028,7 +3039,9 @@ def _normalize_publication_objective(item: dict[str, Any]) -> str:
         return "seasonal"
     if any(marker in blob for marker in ("новост", "появил", "открыл", "изменил", "обновил")):
         return "news"
-    if content_type in {"service", "seo", "audit"}:
+    if content_type == "service":
+        return "service_intro"
+    if content_type in {"seo", "audit"}:
         return "advice"
     return "news"
 
@@ -3439,6 +3452,30 @@ def _fallback_draft_text(
         lines.append("Details, booking, and current offers can be checked through the contacts in the listing.")
         return " ".join(lines)
 
+    pet_grooming_markers = (
+        "грум",
+        "зоосалон",
+        "собак",
+        "кош",
+        "питом",
+        "животн",
+        "grooming",
+    )
+    if any(marker in lower_identity for marker in pet_grooming_markers):
+        clean_theme = theme.rstrip(".")
+        directions = ", ".join(service_names[:4])
+        if directions:
+            return (
+                f"{clean_theme}. В фокусе — бережный уход за питомцем: {directions}. "
+                "Публикация должна помочь владельцу понять, какая процедура подходит сейчас, "
+                "и спокойно перейти к записи через контакты в карточке."
+            )
+        return (
+            f"{business_name}: {clean_theme}. Расскажите об одной процедуре груминга через пользу для питомца: "
+            "комфорт, аккуратный внешний вид и внимательный уход без лишнего стресса. "
+            "Запись — по контактам в карточке."
+        )
+
     if bool(facts.get("is_school_space")) or "school" in lower_identity or "школ" in lower_identity or "образован" in lower_identity:
         city = str(facts.get("city") or "").strip()
         city_text = f" в {city}" if city else ""
@@ -3748,6 +3785,11 @@ def _content_plan_draft_needs_fallback(text: str, facts: dict[str, Any]) -> bool
     if any(marker in lower_text for marker in technical_markers):
         return True
     empty_marketing_markers = [
+        "не находите подробностей",
+        "остаются загадкой",
+        "уточните интересующие вас детали непосредственно",
+        "уточните детали непосредственно",
+        "звоните или приходите лично",
         "профессиональные мастера",
         "профессиональная команда",
         "профессиональные стриж",
@@ -3921,7 +3963,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             "- поле «Цель» объясняет, что именно раскрыть; выполни эту цель напрямую;\n"
             "- не превращай узкую тему в общий обзор всех услуг/направлений бизнеса;\n"
             "- реальные услуги/направления используй только как факты, выбирай только те, которые относятся к теме;\n"
-            "- если данных мало, пиши нейтрально: что можно уточнить в карточке и как связаться.\n\n"
+            "- если данных мало, не пиши о нехватке информации, пробелах карточки или необходимости уточнять детали в салоне;\n"
+            "- вместо этого раскрой подтверждённую услугу или пользу из фактов и дай спокойный следующий шаг через карточку.\n\n"
             "Факты о бизнесе:\n"
             f"{_build_content_plan_business_fact_block(business_facts)}\n\n"
             "Факты о публикации:\n"
