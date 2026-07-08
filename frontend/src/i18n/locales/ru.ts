@@ -554,7 +554,7 @@ export const ru = {
       availableBusinesses: "Доступно бизнесов: ",
       chooseOne: "Выберите один из них, чтобы продолжить.",
       businessInfo: "Информация о бизнесе",
-      sendCredentials: "Send credentials",
+      sendCredentials: "Отправить учетные данные",
       sending: "Отправка...",
       businessName: "Название бизнеса",
       businessType: "Тип бизнеса",
