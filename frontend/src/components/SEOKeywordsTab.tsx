@@ -29,6 +29,49 @@ interface SEOKeywordsTabProps {
     businessId?: string | null;
 }
 
+const negativeBulkCopy: Record<string, { placeholder: string; button: string }> = {
+    ru: {
+        placeholder: 'Массовое добавление: одно минус-слово на строку',
+        button: 'Добавить списком',
+    },
+    en: {
+        placeholder: 'Bulk add: one negative keyword per line',
+        button: 'Add in bulk',
+    },
+    fr: {
+        placeholder: 'Ajout groupé : un mot-clé négatif par ligne',
+        button: 'Ajouter en lot',
+    },
+    es: {
+        placeholder: 'Añadir en bloque: una palabra clave negativa por línea',
+        button: 'Añadir en bloque',
+    },
+    el: {
+        placeholder: 'Μαζική προσθήκη: μία αρνητική λέξη-κλειδί ανά γραμμή',
+        button: 'Μαζική προσθήκη',
+    },
+    de: {
+        placeholder: 'Massenhinzufügen: ein negatives Keyword pro Zeile',
+        button: 'Massenhaft hinzufügen',
+    },
+    th: {
+        placeholder: 'เพิ่มจำนวนมาก: คีย์เวิร์ดเชิงลบหนึ่งรายการต่อบรรทัด',
+        button: 'เพิ่มจำนวนมาก',
+    },
+    ar: {
+        placeholder: 'إضافة جماعية: كلمة مفتاحية سلبية واحدة في كل سطر',
+        button: 'إضافة جماعية',
+    },
+    ha: {
+        placeholder: 'Ƙara da yawa: kalmar kullewa mara kyau ɗaya a kowane layi',
+        button: 'Ƙara da yawa',
+    },
+    tr: {
+        placeholder: 'Toplu ekleme: her satıra bir negatif anahtar kelime',
+        button: 'Toplu ekle',
+    },
+};
+
 export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const { language, t } = useLanguage();
     const [loading, setLoading] = useState(false);
@@ -165,7 +208,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             });
             const data = await response.json();
             if (!data.success) {
-                setError(data.error || 'Ошибка bulk-добавления минус-слов');
+                setError(data.error || 'Ошибка массового добавления минус-слов');
                 return;
             }
             setNegativeBulkText('');
@@ -405,6 +448,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
 
     const getSeoText = (key: 'title' | 'subtitle' | 'update' | 'updating' | 'all' | 'loading' | 'empty') => seoCopy[key] || fallbackSeoCopy[key];
     const getSeoColumnText = (key: 'keyword' | 'category' | 'views' | 'updated') => seoCopy.columns?.[key] || fallbackSeoCopy.columns[key];
+    const negativeBulkLabels = negativeBulkCopy[language] || negativeBulkCopy.en;
     const formatCategory = (category: string) => {
         const normalized = String(category || 'other').trim().toLowerCase();
         const categoryLabels = seoCopy.categories || fallbackSeoCopy.categories;
@@ -506,7 +550,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                     <textarea
                         value={negativeBulkText}
                         onChange={(e) => setNegativeBulkText(e.target.value)}
-                        placeholder="Bulk добавление: одно минус-слово на строку"
+                        placeholder={negativeBulkLabels.placeholder}
                         className="rounded-lg border border-amber-200 px-3 py-2 text-sm min-h-[90px]"
                     />
                     <div className="rounded-lg border border-amber-200 bg-white p-2 max-h-[140px] overflow-y-auto">
@@ -538,7 +582,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                     onClick={addNegativeKeywordsBulk}
                     disabled={!businessId || !negativeBulkText.trim()}
                 >
-                    Добавить bulk
+                    {negativeBulkLabels.button}
                 </Button>
             </div>
 
