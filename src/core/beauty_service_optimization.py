@@ -130,6 +130,27 @@ BEAUTY_SERVICE_MARKERS = (
     "косметолог",
 )
 
+PET_GROOMING_MARKERS = (
+    "грум",
+    "зоосалон",
+    "собак",
+    "пес",
+    "пса",
+    "кошка",
+    "кошек",
+    "кошк",
+    "кот",
+    "кота",
+    "котов",
+    "питом",
+    "шерст",
+    "когт",
+    "тримминг",
+    "линьк",
+    "pet grooming",
+    "grooming",
+)
+
 
 def normalize_beauty_text(value: Any) -> str:
     text = str(value or "").strip().lower().replace("ё", "е")
@@ -145,6 +166,8 @@ def is_beauty_profile_text(value: Any) -> bool:
 
 def is_beauty_service_text(value: Any) -> bool:
     normalized = normalize_beauty_text(value)
+    if any(marker in normalized for marker in PET_GROOMING_MARKERS):
+        return False
     return any(marker in normalized for marker in BEAUTY_SERVICE_MARKERS)
 
 
@@ -162,6 +185,9 @@ def is_beauty_optimization_context(
         for item in (business_profile, service_name, category)
         if str(item or "").strip()
     )
+    normalized_joined = normalize_beauty_text(joined)
+    if any(marker in normalized_joined for marker in PET_GROOMING_MARKERS):
+        return False
     return is_beauty_profile_text(joined) or is_beauty_service_text(joined)
 
 

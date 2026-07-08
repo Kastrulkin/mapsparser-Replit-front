@@ -148,6 +148,15 @@ def test_beauty_context_is_not_global_for_other_businesses() -> None:
     ) is True
 
 
+def test_grooming_context_does_not_trigger_beauty_guardrails() -> None:
+    assert is_beauty_optimization_context(
+        vertical_key="grooming_salon_network",
+        business_profile="Рога и копыта | grooming_salon_network | Санкт-Петербург",
+        service_name="Стрижка когтей собак и кошек",
+        category="Быстрые услуги",
+    ) is False
+
+
 def test_canonical_key_supports_duplicate_style_reuse() -> None:
     first = beauty_canonical_service_key("Афро на экстра длинные волосы")
     second = beauty_canonical_service_key("Афро на экстра длинные волосы")

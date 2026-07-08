@@ -2490,6 +2490,53 @@ def _is_beauty_business_context(business_profile: str) -> bool:
     return any(marker in normalized for marker in beauty_markers)
 
 
+def _is_pet_grooming_service_context(
+    service_name: str,
+    source_description: str = "",
+    preferred_category: str | None = None,
+    business_profile: str = "",
+) -> bool:
+    joined = " ".join(
+        str(part or "")
+        for part in (service_name, source_description, preferred_category, business_profile)
+        if str(part or "").strip()
+    ).lower().replace("ё", "е")
+    pet_markers = (
+        "грум", "зоосалон", "собак", "пес", "пса", "кошка", "кошек", "кошк",
+        "кот", "кота", "котов", "питом", "шерст", "когт", "тримминг",
+        "линьк", "pet grooming", "grooming_salon",
+    )
+    return any(marker in joined for marker in pet_markers)
+
+
+def _compose_pet_grooming_service_seo_draft(
+    base_name: str,
+    keywords: object,
+    source_description: str = "",
+) -> str:
+    name = str(base_name or "").strip() or "Услуга груминга"
+    source = str(source_description or "").strip()
+    if source and _normalize_text_for_semantic_compare(source) != _normalize_text_for_semantic_compare(name):
+        return source
+
+    keyword_items = []
+    if isinstance(keywords, list):
+        keyword_items = [str(item).strip() for item in keywords if str(item).strip()]
+
+    normalized = _normalize_text_for_semantic_compare(" ".join([name, " ".join(keyword_items)]))
+    if "когт" in normalized:
+        return f"Аккуратная стрижка когтей собак и кошек с вниманием к комфорту питомца."
+    if "тримминг" in normalized:
+        return f"Тримминг для собак с учетом типа шерсти и состояния питомца."
+    if "линьк" in normalized or "вычес" in normalized:
+        return f"Вычесывание и уход за шерстью питомца, чтобы уменьшить линьку и колтуны."
+    if "кош" in normalized or "кот" in normalized:
+        return f"Груминг для кошек: бережный уход за шерстью, когтями и комфортом питомца."
+    if "собак" in normalized or "пес" in normalized:
+        return f"Груминг для собак: уход за шерстью, когтями и аккуратным внешним видом питомца."
+    return f"{name}: бережный уход за питомцем с учетом его состояния и типа шерсти."
+
+
 def _strip_unwanted_service_vertical_hallucinations(
     text: str,
     *,
@@ -2621,6 +2668,17 @@ def _compose_service_seo_draft(
         keywords=keyword_items,
     )
 
+    if _is_pet_grooming_service_context(
+        base_name,
+        source_description=source_description,
+        preferred_category=preferred_category,
+    ):
+        return _compose_pet_grooming_service_seo_draft(
+            base_name,
+            keyword_items,
+            source_description=source_description,
+        )
+
     if is_beauty_context:
         natural_name = _compose_beauty_service_name(base_name, keyword_items) or str(base_name or "").strip() or "Услуга"
         return f"{natural_name}."
@@ -2709,6 +2767,11 @@ def _normalize_low_quality_service_suggestions(
             fallback_reasons.append("legacy_fallback_phrase")
         if seo_description and len(seo_description) < 80 and not is_beauty_context:
             fallback_reasons.append("too_short_non_beauty_description")
+        if seo_description and (
+            _normalize_text_for_semantic_compare(seo_description) == _normalize_text_for_semantic_compare(optimized_name)
+            or _normalize_text_for_semantic_compare(seo_description) == _normalize_text_for_semantic_compare(original_name)
+        ):
+            fallback_reasons.append("description_repeats_name")
         low_description = bool(fallback_reasons)
         low_keywords = not isinstance(keywords, list) or len([k for k in keywords if str(k).strip()]) == 0
 
