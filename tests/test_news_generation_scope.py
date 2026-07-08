@@ -1,4 +1,5 @@
 from main import (
+    _clean_generated_news_text,
     _news_text_has_demo_platform_drift,
     _news_text_has_service_anchor,
     _service_focused_news_fallback,
@@ -27,3 +28,11 @@ def test_service_focused_news_fallback_keeps_pet_ear_cleaning_as_topic() -> None
     assert "LocalOS" not in text
     assert "материнск" not in text.lower()
     assert "партнер" not in text.lower()
+
+
+def test_clean_generated_news_text_removes_only_outer_broken_quote() -> None:
+    raw = 'Сеть зоосалонов "Рога и копыта" приглашает на груминг-услуги."'
+
+    cleaned = _clean_generated_news_text(raw)
+
+    assert cleaned == 'Сеть зоосалонов "Рога и копыта" приглашает на груминг-услуги.'

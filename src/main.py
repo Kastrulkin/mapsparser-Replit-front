@@ -3956,6 +3956,27 @@ def _service_focused_news_fallback(
     )
 
 
+def _clean_generated_news_text(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"^\s*```(?:json|JSON)?\s*", "", text)
+    text = re.sub(r"\s*```\s*$", "", text)
+    text = text.replace("\\n", "\n").replace("\\\"", "\"")
+    text = re.sub(r"\s+", " ", text).strip()
+
+    for _ in range(3):
+        stripped = text.strip()
+        if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in {'"', "'", "«", "“"}:
+            text = stripped[1:-1].strip()
+            continue
+        if stripped.endswith('"') and stripped.count('"') % 2 == 1:
+            text = stripped[:-1].strip()
+            continue
+        break
+    return text
+
+
 @app.route('/api/news/generate', methods=['POST', 'OPTIONS'])
 @rate_limit_if_available("30 per hour")
 def news_generate():
@@ -4422,6 +4443,8 @@ Write all generated text in {language_name}.
                 else:
                     # Если ключей нет, но это словарь - странно, но оставим result или json dump
                     pass
+
+        generated_text = _clean_generated_news_text(generated_text)
 
         # Проверяем, что generated_text не пустой
         if not generated_text or not generated_text.strip():
