@@ -53,15 +53,6 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         : 'Control LocalOS through one chat layer: briefs, actions, and safe next steps.',
     },
     {
-      id: 'telegram-radar',
-      label: language === 'ru' ? 'Telegram-радар' : 'Telegram Radar',
-      icon: Radar,
-      path: '/dashboard/telegram-radar',
-      tooltip: language === 'ru'
-        ? 'Рабочий inbox сообщений из выбранных Telegram-чатов: ответить, сохранить идею или скрыть.'
-        : 'Work inbox for selected Telegram chats: reply, save an idea, or dismiss.',
-    },
-    {
       id: 'agents',
       label: language === 'ru' ? 'Агенты' : 'Agents',
       icon: Sparkles,
@@ -132,6 +123,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       tooltip: language === 'ru'
         ? 'Ищите потенциальных партнёров и работайте с собранными лидами.'
         : 'Find potential partners and work with collected leads.',
+    },
+    {
+      id: 'telegram-radar',
+      label: language === 'ru' ? 'Telegram-радар' : 'Telegram Radar',
+      icon: Radar,
+      path: '/dashboard/telegram-radar',
+      tooltip: language === 'ru'
+        ? 'Рабочий inbox сообщений из выбранных Telegram-чатов: ответить, сохранить идею или скрыть.'
+        : 'Work inbox for selected Telegram chats: reply, save an idea, or dismiss.',
     },
     {
       id: 'finance',
