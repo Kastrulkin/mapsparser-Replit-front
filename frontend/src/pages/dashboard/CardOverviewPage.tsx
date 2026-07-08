@@ -743,8 +743,8 @@ export const CardOverviewPage = () => {
 
       if (raw) {
         return isRu
-          ? `Не удалось обновить карточку: ссылка ведёт на другую организацию (${raw}). Проверьте ссылку на карту во вкладке «Профиль и бизнес».`
-          : `We could not update the listing because the map link points to a different business (${raw}). Check the map link in Profile & Business.`;
+          ? `Не удалось обновить карточку: ссылка ведёт на другую организацию${user?.is_superadmin ? ` (${raw})` : ''}. Проверьте ссылку на карту во вкладке «Профиль и бизнес».`
+          : `We could not update the listing because the map link points to a different business${user?.is_superadmin ? ` (${raw})` : ''}. Check the map link in Profile & Business.`;
       }
     }
     if (parseStatus === 'processing' || parseStatus === 'queued' || parseRefreshPolicy.reason === 'active_parse') {
@@ -767,7 +767,7 @@ export const CardOverviewPage = () => {
         : 'You already invited a friend, so refresh is available earlier than the standard weekly interval.';
     }
     return null;
-  }, [firstRunCopy.helpMissingMap, hasConfiguredMapLink, hasSupportedConfiguredMapLink, isRu, parseRefreshPolicy.accepted_invites_count, parseRefreshPolicy.cooldown_until, parseRefreshPolicy.invite_override_available, parseRefreshPolicy.last_completed_at, parseRefreshPolicy.reason, parseStatus, parseStatusError]);
+  }, [firstRunCopy.helpMissingMap, hasConfiguredMapLink, hasSupportedConfiguredMapLink, isRu, parseRefreshPolicy.accepted_invites_count, parseRefreshPolicy.cooldown_until, parseRefreshPolicy.invite_override_available, parseRefreshPolicy.last_completed_at, parseRefreshPolicy.reason, parseStatus, parseStatusError, user?.is_superadmin]);
 
   const handleRefreshCardData = async () => {
     if (!currentBusinessId || !canRefreshCardData) {
