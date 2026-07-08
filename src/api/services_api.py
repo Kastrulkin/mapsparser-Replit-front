@@ -1058,22 +1058,58 @@ def add_service():
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
-        # Добавляем услугу
         import uuid
         service_id = str(uuid.uuid4())
+
+        keywords = data.get('keywords', '')
+        if isinstance(keywords, list):
+            keywords = json.dumps(keywords, ensure_ascii=False)
+        elif not isinstance(keywords, str):
+            keywords = json.dumps([])
+
         cursor.execute("""
-            INSERT INTO userservices (id, user_id, business_id, category, name, description, keywords, price, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-        """, (
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'userservices'
+            ORDER BY ordinal_position
+        """)
+        columns = {_cell(row, 'column_name', _cell(row, 0)) for row in cursor.fetchall()}
+
+        insert_columns = ['id', 'user_id', 'business_id', 'category', 'name', 'description', 'keywords', 'price']
+        insert_values = [
             service_id,
             user_data["user_id"],
             business_id,
             data.get('category', ''),
             data.get('name', ''),
             data.get('description', ''),
-            data.get('keywords', ''),
-            data.get('price', 0)
-        ))
+            keywords,
+            data.get('price', 0),
+        ]
+        optional_fields = {
+            'optimized_name': data.get('optimized_name', ''),
+            'optimized_description': data.get('optimized_description', ''),
+            'source': data.get('source', 'localos'),
+            'fallback_used': bool(data.get('fallback_used', False)),
+            'fallback_reason': data.get('fallback_reason', ''),
+            'guardrail_reasons': json.dumps(data.get('guardrail_reasons') or [], ensure_ascii=False),
+            'pattern_version_ids': json.dumps(data.get('pattern_version_ids') or [], ensure_ascii=False),
+        }
+        for field, value in optional_fields.items():
+            if field in columns:
+                insert_columns.append(field)
+                insert_values.append(value)
+
+        placeholders = ', '.join(['%s'] * len(insert_columns))
+
+        # Добавляем услугу
+        cursor.execute(
+            f"""
+            INSERT INTO userservices ({', '.join(insert_columns)}, created_at)
+            VALUES ({placeholders}, CURRENT_TIMESTAMP)
+            """,
+            tuple(insert_values),
+        )
         
         db.conn.commit()
         db.close()

@@ -136,6 +136,45 @@ export function useCardServiceController({
     );
   };
 
+  const isServiceNotFoundError = (error: unknown) => {
+    const message = String(error instanceof Error ? error.message : error || '').toLowerCase();
+    return message.includes('404') || message.includes('услуга не найдена') || message.includes('service not found');
+  };
+
+  const createLocalServiceDraft = async (
+    sourceServiceId: string,
+    service: ServiceTableItem,
+    updateData: Record<string, any>
+  ) => {
+    const keywords = normalizeKeywords(service.keywords);
+    const { response, data } = await createCardService({
+      business_id: currentBusinessId,
+      category: service.category || updateData.category || '',
+      name: service.name || updateData.name || '',
+      description: service.description || updateData.description || '',
+      optimized_name: updateData.optimized_name || '',
+      optimized_description: updateData.optimized_description || '',
+      keywords,
+      price: service.price || updateData.price || '',
+      source: service.source || 'localos',
+    });
+
+    if (!response.ok || !data.success || !data.service_id) {
+      throw new Error(data.error || copy.error);
+    }
+
+    const localServiceId = String(data.service_id);
+    patchServiceInState(sourceServiceId, {
+      ...updateData,
+      id: localServiceId,
+      source: service.source || 'localos',
+      is_external: false,
+      keywords,
+    });
+
+    return localServiceId;
+  };
+
   const resolvedQualityPatch = {
     fallback_used: false,
     fallback_reason: '',
@@ -249,8 +288,20 @@ export function useCardServiceController({
           patchServiceInState(serviceId, statePatch);
           if (!options?.silent) setSuccess(copy.success);
           return 'ok';
-        } catch {
-          if (!options?.silent) setError(copy.error);
+        } catch (updateError) {
+          if (isServiceNotFoundError(updateError) && currentBusinessId) {
+            try {
+              await createLocalServiceDraft(serviceId, service, updateData);
+              if (!options?.silent) {
+                setSuccess('SEO-вариант готов. Создана LocalOS-копия услуги для редактирования и принятия.');
+              }
+              return 'ok';
+            } catch (createError: any) {
+              if (!options?.silent) setError(`${copy.error}: ${createError.message}`);
+              return 'error';
+            }
+          }
+          if (!options?.silent) setError(updateError instanceof Error ? updateError.message : copy.error);
           return 'error';
         }
       }
