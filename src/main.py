@@ -3879,6 +3879,83 @@ def _news_text_has_school_hallucination(text: str) -> bool:
     return any(marker in lower for marker in school_markers)
 
 
+def _news_service_scope_terms(service_context: Any) -> list[str]:
+    normalized = _normalize_text_for_semantic_compare(str(service_context or ""))
+    stop_words = {
+        "услуга", "описание", "питомца", "питомцев", "животных", "домашних",
+        "безопасная", "аккуратная", "бережная", "проверкой", "проверка",
+    }
+    return [
+        term
+        for term in normalized.split()
+        if len(term) >= 4 and term not in stop_words
+    ][:10]
+
+
+def _news_text_has_service_anchor(generated_text: Any, service_context: Any) -> bool:
+    terms = _news_service_scope_terms(service_context)
+    if not terms:
+        return True
+    normalized = _normalize_text_for_semantic_compare(str(generated_text or ""))
+    return any(term in normalized for term in terms)
+
+
+def _news_text_has_demo_platform_drift(generated_text: Any) -> bool:
+    normalized = _normalize_text_for_semantic_compare(str(generated_text or ""))
+    drift_markers = [
+        "localos",
+        "ai инструмент",
+        "платформ",
+        "автоматизац",
+        "материнск",
+        "обзорн визит",
+        "центр обслуживан партнер",
+        "партнерск программ",
+        "получить новых клиент",
+        "ведение зоо салон",
+        "делимся опытом",
+    ]
+    return any(marker in normalized for marker in drift_markers)
+
+
+def _service_focused_news_fallback(
+    *,
+    business_name: str,
+    service_context: Any,
+    language_code: str,
+) -> str:
+    service_text = str(service_context or "").strip()
+    service_name = service_text
+    if service_text.lower().startswith("услуга:"):
+        service_name = service_text.split(".", 1)[0].replace("Услуга:", "").strip()
+    service_name = service_name or "услуга"
+
+    normalized = _normalize_text_for_semantic_compare(service_name)
+    if language_code == "ru":
+        if "уш" in normalized:
+            return (
+                f"Новость компании: в {business_name} доступна услуга «{service_name}». "
+                "Это аккуратный уход за ушами питомца с вниманием к комфорту и состоянию животного. "
+                "Запись и подробности — по телефону или в сообщениях."
+            )
+        return (
+            f"Новость компании: в {business_name} доступна услуга «{service_name}». "
+            "Администратор подскажет детали услуги и поможет выбрать удобное время визита. "
+            "Запись и подробности — по телефону или в сообщениях."
+        )
+
+    if "ear" in normalized or "уш" in normalized:
+        return (
+            f"Business update: {business_name} offers {service_name}. "
+            "This is gentle ear care for pets with attention to comfort and condition. "
+            "For details or booking, contact us by phone or message."
+        )
+    return (
+        f"Business update: {business_name} offers {service_name}. "
+        "Contact us by phone or message to check details and choose a convenient visit time."
+    )
+
+
 @app.route('/api/news/generate', methods=['POST', 'OPTIONS'])
 @rate_limit_if_available("30 per hour")
 def news_generate():
@@ -4048,25 +4125,28 @@ def news_generate():
                 business_data = _row_to_dict(cur, business_row)
                 business_name = str(business_data.get('name') or "").strip() or business_name
                 business_categories = str(business_data.get('categories') or "").strip()
-                business_type_context = " | ".join(
-                    item
-                    for item in [
-                        str(business_data.get('business_type') or "").strip(),
-                        str(business_data.get('industry') or "").strip(),
-                        business_categories,
-                        str(business_data.get('address') or "").strip(),
-                        str(business_data.get('description') or "").strip(),
-                        str(business_data.get('site') or business_data.get('website') or "").strip(),
-                    ]
-                    if item
-                )
-                site_description = _fetch_news_site_description(
-                    business_data.get('site') or business_data.get('website')
-                )
-                if site_description:
-                    business_type_context = " | ".join(
-                        item for item in [business_type_context, f"Описание сайта: {site_description}"] if item
+                business_context_parts = [
+                    str(business_data.get('business_type') or "").strip(),
+                    str(business_data.get('industry') or "").strip(),
+                    business_categories,
+                    str(business_data.get('address') or "").strip(),
+                ]
+                if not use_service:
+                    business_context_parts.extend(
+                        [
+                            str(business_data.get('description') or "").strip(),
+                            str(business_data.get('site') or business_data.get('website') or "").strip(),
+                        ]
                     )
+                business_type_context = " | ".join(item for item in business_context_parts if item)
+                if not use_service:
+                    site_description = _fetch_news_site_description(
+                        business_data.get('site') or business_data.get('website')
+                    )
+                    if site_description:
+                        business_type_context = " | ".join(
+                            item for item in [business_type_context, f"Описание сайта: {site_description}"] if item
+                        )
                 industry_key = detect_industry_key(
                     business_name=business_name,
                     business_type=business_data.get('business_type'),
@@ -4199,6 +4279,7 @@ Write all generated text in {language_name}.
 Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
 Контекст бизнеса: {business_context}
 Ограничения фактов: {forbidden_industry_examples}
+Если указан контекст услуги, главная тема новости обязана быть именно эта услуга. Не пиши о платформе LocalOS, автоматизации, партнёрских программах, материнской точке сети или обзорных визитах, если этого нет в контексте услуги.
 Свободная информация (может отсутствовать): {raw_info}
 Если уместно, ориентируйся на стиль этих примеров (если они есть):
 {news_examples}"""
@@ -4268,6 +4349,7 @@ Write all generated text in {language_name}.
             f"{forbidden_industry_examples}\n"
             f"Рабочие паттерны индустрии для новости:\n{industry_pattern_context}\n"
             "Пиши только о фактах, которые совместимы с контекстом бизнеса выше.\n\n"
+            "Если новость генерируется по услуге, не используй описание сайта, описание LocalOS, материнской точки сети, партнёрских программ или автоматизации как тему публикации.\n\n"
             f"{prompt}"
         )
 
@@ -4345,6 +4427,16 @@ Write all generated text in {language_name}.
         if not generated_text or not generated_text.strip():
             db.close()
             return jsonify({"error": "Пустой результат генерации"}), 500
+
+        if service_context and (
+            _news_text_has_demo_platform_drift(generated_text)
+            or not _news_text_has_service_anchor(generated_text, service_context)
+        ):
+            generated_text = _service_focused_news_fallback(
+                business_name=business_name,
+                service_context=service_context,
+                language_code=language,
+            )
 
         business_identity_text = f"{business_name} {business_type_context} {business_categories}".lower()
         generated_text_lower = str(generated_text or "").lower()
