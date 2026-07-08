@@ -3,7 +3,7 @@ import { useOutletContext, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { newAuth } from '@/lib/auth_new';
-import { Network, MapPin, User, Building2, Clock, Mail, Phone, Edit2, ShieldCheck, AlertTriangle, CheckCircle2, ArrowRight, FileSearch, RefreshCw, Plus, Trash2, Info, ExternalLink } from 'lucide-react';
+import { Network, MapPin, User, Building2, Clock, Mail, Phone, Edit2, ShieldCheck, AlertTriangle, CheckCircle2, ArrowRight, FileSearch, Plus, Trash2, Info, ExternalLink } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { cn } from '@/lib/utils';
 import { SubscriptionManagement } from '@/components/SubscriptionManagement';
@@ -195,7 +195,6 @@ export const ProfilePage = () => {
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [retryInfo, setRetryInfo] = useState<{ hours: number; minutes: number } | null>(null);
   const [retryCountdown, setRetryCountdown] = useState<{ hours: number; minutes: number } | null>(null);
-  const [refreshingAudit, setRefreshingAudit] = useState(false);
   const [parseRefreshPolicy, setParseRefreshPolicy] = useState<{
     can_refresh: boolean;
     reason: string | null;
@@ -266,16 +265,6 @@ export const ProfilePage = () => {
     }
     return null;
   })();
-  const supportedSavedMapSource = (() => {
-    const links = Array.isArray(savedClientInfo.mapLinks) ? savedClientInfo.mapLinks : [];
-    for (const link of links) {
-      const type = detectMapType(String(link?.url || ''));
-      if (type === 'yandex') return 'yandex';
-      if (type === '2gis') return '2gis';
-    }
-    return null;
-  })();
-
   const formatRefreshDate = (isoValue: string | null) => {
     if (!isoValue) return null;
     const parsedDate = new Date(isoValue);
@@ -350,23 +339,14 @@ export const ProfilePage = () => {
     }
     if (parseStatus === 'error') {
       return isRu
-        ? 'Если аудит не собрался, проверьте ссылку на карту и запустите сбор ещё раз.'
-        : 'If the audit did not complete, check the map link and run the collection again.';
+        ? 'Если аудит не собрался, проверьте ссылку на карту и запустите сбор в разделе «Работа с картами».'
+        : 'If the audit did not complete, check the map link and run collection in Maps workspace.';
     }
     return isRu
-      ? 'После сохранения ссылки можно сразу запустить сбор данных и создать аудит.'
-      : 'After saving the link, you can start the data collection and create the audit right away.';
+      ? 'После сохранения ссылки перейдите в «Работа с картами», чтобы обновить данные карточки.'
+      : 'After saving the link, go to Maps workspace to refresh listing data.';
   })();
 
-  const canStartAudit = Boolean(
-    effectiveBusinessId &&
-    hasSavedMapLinks &&
-    supportedSavedMapSource &&
-    !hasUnsavedClientInfoChanges &&
-    parseRefreshPolicy.can_refresh &&
-    parseStatus !== 'processing' &&
-    parseStatus !== 'queued'
-  );
   const businessInfoHelperText = isRu
     ? 'Добавьте ваш город, тип бизнеса и ссылку на бизнес на картах. Это нужно для сбора данных по заполнению вашей карточки, расчёта показателей, SEO-оптимизации и создания аудита.'
     : 'Add your city, business type, and business map link. This is needed to collect listing data, calculate metrics, prepare SEO optimization, and generate the audit.';
@@ -856,64 +836,6 @@ export const ProfilePage = () => {
     };
   };
 
-  const handleStartAudit = async () => {
-    if (hasUnsavedClientInfoChanges) {
-      setError(isRu ? 'Сначала сохраните информацию о бизнесе, чтобы аудит запустился по актуальной ссылке.' : 'Save the business information first so the audit runs using the current map link.');
-      return;
-    }
-
-    if (!effectiveBusinessId || !supportedSavedMapSource) {
-      setError(isRu ? 'Сначала сохраните ссылку на карту Яндекс или 2ГИС.' : 'Save a Yandex or 2GIS map link first.');
-      return;
-    }
-
-    const endpoint = supportedSavedMapSource === '2gis'
-      ? `/api/admin/2gis/sync/business/${effectiveBusinessId}`
-      : `/api/admin/yandex/sync/business/${effectiveBusinessId}`;
-
-    try {
-      setRefreshingAudit(true);
-      setError(null);
-      setSuccess(null);
-      const response = await fetch(`${window.location.origin}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`,
-        },
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) {
-        const refreshPolicy = data.refresh_policy && typeof data.refresh_policy === 'object' ? data.refresh_policy : {};
-        setParseRefreshPolicy({
-          can_refresh: Boolean(refreshPolicy.can_refresh ?? true),
-          reason: String(refreshPolicy.reason || '').trim() || null,
-          message: String(refreshPolicy.message || '').trim() || null,
-          cooldown_days: Number(refreshPolicy.cooldown_days || 7),
-          last_completed_at: String(refreshPolicy.last_completed_at || '').trim() || null,
-          cooldown_until: String(refreshPolicy.cooldown_until || '').trim() || null,
-          invite_override_available: Boolean(refreshPolicy.invite_override_available),
-          accepted_invites_count: Number(refreshPolicy.accepted_invites_count || 0),
-        });
-        throw new Error(String(data.message || data.error || '').trim() || (isRu ? 'Не удалось запустить аудит.' : 'Could not start the audit.'));
-      }
-
-      setParseStatus('queued');
-      const message = isRu
-        ? 'Собираем данные для аудита. Это может занять несколько минут. Когда аудит будет готов, покажем уведомление.'
-        : 'We are collecting data for the audit. This may take a few minutes. We will notify you when it is ready.';
-      setSuccess(message);
-      toast({
-        title: isRu ? 'Сбор данных запущен' : 'Data collection started',
-        description: message,
-      });
-      void loadParseStatus();
-    } catch (startError: any) {
-      setError(startError?.message || (isRu ? 'Не удалось запустить аудит.' : 'Could not start the audit.'));
-    } finally {
-      setRefreshingAudit(false);
-    }
-  };
-
   const profileCompletion = (() => {
     const fieldsTotal = 10;
     let filled = 0;
@@ -976,11 +898,11 @@ export const ProfilePage = () => {
       };
     }
     return {
-      label: refreshingAudit ? (isRu ? 'Собираем данные...' : 'Collecting data...') : (isRu ? 'Собрать данные' : 'Collect data'),
-      title: isRu ? 'Запускает сбор данных по карте и создаёт аудит карточки.' : 'Starts map data collection and creates the listing audit.',
-      onClick: handleStartAudit,
-      disabled: !canStartAudit || refreshingAudit,
-      icon: RefreshCw,
+      label: isRu ? 'К картам' : 'Maps',
+      title: isRu ? 'Открывает раздел работы с картами, где запускается обновление данных карточки.' : 'Opens maps management where listing data refresh is started.',
+      onClick: () => navigate('/dashboard/card'),
+      disabled: false,
+      icon: ArrowRight,
     };
   })();
 
@@ -1068,7 +990,7 @@ export const ProfilePage = () => {
             className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
             title={primaryProfileAction.title}
           >
-            <PrimaryProfileIcon className={cn('mr-2 h-4 w-4', refreshingAudit && PrimaryProfileIcon === RefreshCw ? 'animate-spin' : '')} />
+            <PrimaryProfileIcon className="mr-2 h-4 w-4" />
             {primaryProfileAction.label}
           </Button>
         )}
@@ -1485,31 +1407,11 @@ export const ProfilePage = () => {
                   </div>
                   <div className="mt-1 text-sm leading-6 text-sky-900/85">
                     {isRu
-                      ? 'Сохраните изменения и соберите данные карточки, чтобы увидеть аудит и рекомендации.'
-                      : 'Save changes and collect listing data to see the audit and recommendations.'}
+                      ? 'Сохраните изменения и перейдите в «Работа с картами», чтобы обновить данные карточки.'
+                      : 'Save changes and go to Maps workspace to refresh listing data.'}
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    onClick={hasUnsavedClientInfoChanges ? handleSaveClientInfo : handleStartAudit}
-                    disabled={hasUnsavedClientInfoChanges ? savingClientInfo : (!canStartAudit || refreshingAudit)}
-                    className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
-                    title={hasUnsavedClientInfoChanges
-                      ? (isRu ? 'Сохранит текущие изменения.' : 'Saves the current changes.')
-                      : (isRu ? 'Запускает сбор данных по карте и создаёт аудит карточки.' : 'Starts map data collection and creates the listing audit.')}
-                  >
-                    {hasUnsavedClientInfoChanges ? (
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                    ) : (
-                      <RefreshCw className={cn('mr-2 h-4 w-4', refreshingAudit ? 'animate-spin' : '')} />
-                    )}
-                    {hasUnsavedClientInfoChanges
-                      ? (isRu ? 'Сохранить' : 'Save')
-                      : refreshingAudit
-                        ? (isRu ? 'Собираем...' : 'Collecting...')
-                        : (isRu ? 'Собрать данные' : 'Collect data')}
-                  </Button>
                   <Button
                     type="button"
                     variant="outline"
