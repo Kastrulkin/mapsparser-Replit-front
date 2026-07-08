@@ -664,6 +664,19 @@ export const CardOverviewPage = () => {
     }
     return supportedSources.includes(selectedSource) ? [selectedSource] : [];
   }, [mapSources, selectedSource]);
+  const orderedMapSources = useMemo(() => {
+    const priority: Record<string, number> = {
+      yandex: 0,
+      '2gis': 1,
+      google: 2,
+    };
+    return [...mapSources].sort((left, right) => {
+      const leftPriority = priority[left] ?? Number.MAX_SAFE_INTEGER;
+      const rightPriority = priority[right] ?? Number.MAX_SAFE_INTEGER;
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+      return mapSources.indexOf(left) - mapSources.indexOf(right);
+    });
+  }, [mapSources]);
 
   const refreshAllMapsSelected = selectedSource === 'all';
   const refreshCardDataLabel = isRu
@@ -1154,7 +1167,7 @@ export const CardOverviewPage = () => {
             >
               Все карты
             </button>
-            {mapSources.map(source => (
+            {orderedMapSources.map(source => (
               <button
                 key={source}
                 onClick={() => setSelectedSource(source)}
