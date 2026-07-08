@@ -249,8 +249,8 @@ export const ProgressPage = () => {
         .trim();
       if (raw) {
         return isRu
-          ? `Последний запуск не сохранил данные: ссылка ведёт на другую карточку${user?.is_superadmin ? ` (${raw})` : ''}. Исправьте ссылку в «Профиль и бизнес».`
-          : `The last run did not save data because the link points to a different listing${user?.is_superadmin ? ` (${raw})` : ''}. Fix the map link in Profile & Business.`;
+          ? `Последний запуск не сохранил данные: ссылка ведёт на другую карточку${user?.is_superadmin ? ` (superadmin: ${raw})` : ''}. Исправьте ссылку в «Профиль и бизнес».`
+          : `The last run did not save data because the link points to a different listing${user?.is_superadmin ? ` (superadmin: ${raw})` : ''}. Fix the map link in Profile & Business.`;
       }
     }
     if (parseRefreshPolicy.reason === 'weekly_cooldown' && parseRefreshPolicy.cooldown_until) {

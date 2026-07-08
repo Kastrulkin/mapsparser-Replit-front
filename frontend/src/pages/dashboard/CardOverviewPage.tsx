@@ -743,8 +743,8 @@ export const CardOverviewPage = () => {
 
       if (raw) {
         return isRu
-          ? `Не удалось обновить карточку: ссылка ведёт на другую организацию${user?.is_superadmin ? ` (${raw})` : ''}. Проверьте ссылку на карту во вкладке «Профиль и бизнес».`
-          : `We could not update the listing because the map link points to a different business${user?.is_superadmin ? ` (${raw})` : ''}. Check the map link in Profile & Business.`;
+          ? `Не удалось обновить карточку: ссылка ведёт на другую организацию${user?.is_superadmin ? ` (superadmin: ${raw})` : ''}. Проверьте ссылку на карту во вкладке «Профиль и бизнес».`
+          : `We could not update the listing because the map link points to a different business${user?.is_superadmin ? ` (superadmin: ${raw})` : ''}. Check the map link in Profile & Business.`;
       }
     }
     if (parseStatus === 'processing' || parseStatus === 'queued' || parseRefreshPolicy.reason === 'active_parse') {
