@@ -8,9 +8,10 @@ import { useLanguage } from '@/i18n/LanguageContext';
 
 interface TelegramConnectionProps {
   currentBusinessId?: string | null;
+  compact?: boolean;
 }
 
-const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusinessId }) => {
+const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusinessId, compact = false }) => {
   const [bindToken, setBindToken] = useState<string | null>(null);
   const [tokenExpiresAt, setTokenExpiresAt] = useState<string | null>(null);
   const [isLinked, setIsLinked] = useState(false);
@@ -115,6 +116,20 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
     return `https://t.me/${botUsername}?start=${bindToken}`;
   };
 
+  const compactCopy = language === 'ru'
+    ? {
+        title: 'Бот LocalOS для аккаунта',
+        description: 'Привяжите Telegram владельца: бот будет присылать уведомления, результаты работы и команды для управления аккаунтом LocalOS.',
+        instruction: 'Сгенерируйте персональную ссылку и откройте ее в Telegram. Код привяжет бот именно к текущему аккаунту и выбранному бизнесу.',
+        connected: 'Бот LocalOS привязан к этому аккаунту.',
+      }
+    : {
+        title: 'LocalOS account bot',
+        description: 'Link the owner Telegram: the bot will send notifications, work results, and account control commands.',
+        instruction: 'Generate a personal link and open it in Telegram. The code links the bot to this account and selected business.',
+        connected: 'The LocalOS bot is linked to this account.',
+      };
+
   return (
     <Card key={currentBusinessId || 'no-business'} className="overflow-hidden rounded-3xl border-slate-200/80 bg-white shadow-sm">
       <CardHeader className="pb-4">
@@ -124,10 +139,10 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
               <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-900 text-white">
                 <Bot className="h-4 w-4" />
               </span>
-              {t.dashboard.settings.telegram.title}
+              {compact ? compactCopy.title : t.dashboard.settings.telegram.title}
             </CardTitle>
             <CardDescription className="mt-2 leading-6">
-              {t.dashboard.settings.telegram.description}
+              {compact ? compactCopy.description : t.dashboard.settings.telegram.description}
             </CardDescription>
           </div>
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isLinked ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'}`}>
@@ -139,7 +154,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
         {isLinked && currentBusinessId ? (
           <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900">
             <AlertDescription>
-              {t.dashboard.settings.telegram.connected}
+              {compact ? compactCopy.connected : t.dashboard.settings.telegram.connected}
             </AlertDescription>
           </Alert>
         ) : (
@@ -159,14 +174,16 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
             {!bindToken ? (
               <div className="space-y-4">
                 <p className="text-sm leading-6 text-slate-600">
-                  {t.dashboard.settings.telegram.instruction}
+                  {compact ? compactCopy.instruction : t.dashboard.settings.telegram.instruction}
                 </p>
-                <ol className="list-decimal space-y-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 pl-8 text-sm text-slate-700">
-                  <li>{t.dashboard.settings.telegram.step1}</li>
-                  <li>{t.dashboard.settings.telegram.step2}</li>
-                  <li>{t.dashboard.settings.telegram.step3} <code className="rounded bg-white px-1.5 py-0.5 font-mono text-xs ring-1 ring-slate-200">/start &lt;code&gt;</code></li>
-                  <li>{t.dashboard.settings.telegram.step4}</li>
-                </ol>
+                {!compact ? (
+                  <ol className="list-decimal space-y-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 pl-8 text-sm text-slate-700">
+                    <li>{t.dashboard.settings.telegram.step1}</li>
+                    <li>{t.dashboard.settings.telegram.step2}</li>
+                    <li>{t.dashboard.settings.telegram.step3} <code className="rounded bg-white px-1.5 py-0.5 font-mono text-xs ring-1 ring-slate-200">/start &lt;code&gt;</code></li>
+                    <li>{t.dashboard.settings.telegram.step4}</li>
+                  </ol>
+                ) : null}
                 <Button className="bg-slate-900 text-white shadow-sm hover:bg-slate-800" onClick={generateToken} disabled={loading}>
                   {loading ? (
                     <>
@@ -230,15 +247,17 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                  <p className="mb-2 text-sm font-semibold text-slate-900">{t.dashboard.settings.telegram.instructionTitle}</p>
-                  <ol className="list-decimal space-y-1 pl-5 text-sm leading-6 text-slate-700">
-                    <li>{t.dashboard.settings.telegram.manualStep1}</li>
-                    <li>{t.dashboard.settings.telegram.manualStep2}</li>
-                    <li>{t.dashboard.settings.telegram.manualStep3} <code className="rounded bg-white px-1.5 py-0.5 font-mono text-xs ring-1 ring-slate-200">/start {bindToken}</code></li>
-                    <li>{t.dashboard.settings.telegram.manualStep4}</li>
-                  </ol>
-                </div>
+                {!compact ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                    <p className="mb-2 text-sm font-semibold text-slate-900">{t.dashboard.settings.telegram.instructionTitle}</p>
+                    <ol className="list-decimal space-y-1 pl-5 text-sm leading-6 text-slate-700">
+                      <li>{t.dashboard.settings.telegram.manualStep1}</li>
+                      <li>{t.dashboard.settings.telegram.manualStep2}</li>
+                      <li>{t.dashboard.settings.telegram.manualStep3} <code className="rounded bg-white px-1.5 py-0.5 font-mono text-xs ring-1 ring-slate-200">/start {bindToken}</code></li>
+                      <li>{t.dashboard.settings.telegram.manualStep4}</li>
+                    </ol>
+                  </div>
+                ) : null}
 
                 <Button variant="outline" onClick={() => {
                   setBindToken(null);
@@ -253,6 +272,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
           </>
         )}
 
+        {!compact ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -270,6 +290,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
             <li>{t.dashboard.settings.telegram.feature4}</li>
           </ul>
         </div>
+        ) : null}
       </CardContent>
     </Card>
   );
