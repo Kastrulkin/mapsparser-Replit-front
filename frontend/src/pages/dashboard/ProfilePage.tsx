@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useLocation, useOutletContext, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { newAuth } from '@/lib/auth_new';
@@ -152,6 +152,7 @@ const isGoogleMapUrl = (value: string) => {
 
 export const ProfilePage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, currentBusinessId, currentBusiness, updateBusiness, businesses, setBusinesses, reloadBusinesses, onBusinessChange } = useOutletContext<any>();
   const [editMode, setEditMode] = useState(false);
   const [editClientInfo, setEditClientInfo] = useState(false);
@@ -160,6 +161,7 @@ export const ProfilePage = () => {
   const isRu = language === 'ru';
   const previousParseStatusRef = useRef<string>('idle');
   const businessInfoSectionRef = useRef<HTMLElement | null>(null);
+  const subscriptionSectionRef = useRef<HTMLDivElement | null>(null);
 
   // Функция для преобразования значения типа бизнеса в читаемый текст
   const getBusinessTypeLabel = (type: string): string => {
@@ -373,6 +375,19 @@ export const ProfilePage = () => {
       ? 'Добавьте ссылку на карточку в Яндекс или 2ГИС. По ней LocalOS запускает сбор данных и создаёт аудит.'
       : 'Add the listing link from Yandex or 2GIS. LocalOS uses it to collect data and create the audit.',
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const shouldFocusSubscription = (
+      location.hash === '#subscription' ||
+      params.get('focus') === 'subscription' ||
+      params.get('payment') === 'required'
+    );
+    if (!shouldFocusSubscription) return;
+    window.setTimeout(() => {
+      subscriptionSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+  }, [location.hash, location.search]);
 
   useEffect(() => {
     const checkIfNetworkMaster = async () => {
@@ -1449,12 +1464,14 @@ export const ProfilePage = () => {
       </DashboardSection>
 
       {/* Тарифы */}
-      <DashboardSection
-        title="Подписка и доступ"
-        description="Тариф, срок действия и доступные возможности для текущего бизнеса."
-      >
-        <SubscriptionManagement businessId={currentBusinessId} business={currentBusiness} />
-      </DashboardSection>
+      <div id="subscription" ref={subscriptionSectionRef} className="scroll-mt-24">
+        <DashboardSection
+          title="Подписка и доступ"
+          description="Тариф, срок действия и доступные возможности для текущего бизнеса."
+        >
+          <SubscriptionManagement businessId={currentBusinessId} business={currentBusiness} />
+        </DashboardSection>
+      </div>
 
       {/* Счётчик кредитов */}
       <UserTokenUsageSummary

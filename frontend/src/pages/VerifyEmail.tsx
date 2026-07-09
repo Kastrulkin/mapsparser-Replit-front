@@ -43,7 +43,7 @@ const VerifyEmail: React.FC = () => {
           setMessage('Email подтверждён. Открываем оплату выбранного тарифа...');
           localStorage.removeItem('selectedTier');
           localStorage.removeItem('selectedTierSource');
-          setTimeout(() => navigate(`/dashboard/settings?payment=required&source=pricing&autostart=1&tier=${encodeURIComponent(selectedTier)}`, { replace: true }), 1200);
+          setTimeout(() => navigate(`/dashboard/profile?payment=required&source=pricing&autostart=1&tier=${encodeURIComponent(selectedTier)}#subscription`, { replace: true }), 1200);
           return;
         }
 

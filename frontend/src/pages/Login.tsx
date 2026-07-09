@@ -176,7 +176,7 @@ const Login = () => {
         if (tierFromUrl && source === 'pricing') {
           localStorage.setItem('selectedTier', tierFromUrl);
           localStorage.setItem('selectedTierSource', 'pricing');
-          navigate(`/dashboard/settings?payment=required&source=pricing&autostart=1&tier=${tierFromUrl}`);
+          navigate(`/dashboard/profile?payment=required&source=pricing&autostart=1&tier=${tierFromUrl}#subscription`);
         } else {
           navigate('/dashboard');
         }

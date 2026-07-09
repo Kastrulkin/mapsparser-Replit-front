@@ -222,7 +222,7 @@ export const DashboardLayout = () => {
                         Заполнить профиль
                       </a>
                       <a
-                        href="/dashboard/settings?focus=billing"
+                        href="/dashboard/profile?focus=subscription#subscription"
                         className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
                       >
                         Выбрать тариф
