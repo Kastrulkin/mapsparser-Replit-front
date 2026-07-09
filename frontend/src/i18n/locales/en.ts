@@ -447,9 +447,9 @@ export const en = {
         saveButton: "Save credentials"
       },
       telegram2: {
-        title: "Telegram Bot Token",
-        description: "Enter your Telegram bot token to send messages to clients",
-        subtitle: "If you have your own Telegram bot, specify its token here. This will allow you to send messages to clients via AI agent from your bot.",
+        title: "Telegram posts",
+        description: "Choose the channel or chat where LocalOS will send approved content-plan posts.",
+        subtitle: "If you have your own Telegram bot, you can add its token here.",
         tokenLabel: "Bot Token",
         tokenPlaceholder: "Enter bot token",
         tokenHelp: "Token can be obtained from @BotFather in Telegram",
@@ -458,9 +458,9 @@ export const en = {
         successSave: "Telegram bot token saved",
         errorSave: "Error saving token",
         selectBusiness: "Select a business first",
-        alert: "This allows you to send messages to clients via AI agent from your bot.",
+        alert: "The usual setup only needs the global LocalOS bot and a post channel.",
         errorEmpty: "Enter bot token",
-        saveButton: "Save token"
+        saveButton: "Save Telegram"
       }
     },
     network: {

@@ -276,12 +276,9 @@ export const SettingsDiagnosticsPage = () => {
 };
 
 export const SettingsPublicationsPage = () => {
-  const location = useLocation();
   const { language } = useLanguage();
   const copy = useMemo(() => getSettingsHubCopy(language), [language]);
   const { currentBusinessId, currentBusiness } = useOutletContext<SettingsHubOutletContext>();
-  const params = new URLSearchParams(location.search);
-  const focus = params.get('focus') || 'telegram';
 
   return (
     <div className="mx-auto max-w-6xl space-y-7 pb-10">
@@ -292,9 +289,32 @@ export const SettingsPublicationsPage = () => {
         icon={ClipboardCheck}
         actions={<Button type="button" variant="outline" asChild><Link to="/dashboard/settings">{copy.routes.backToHub}</Link></Button>}
       />
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,760px)_minmax(280px,1fr)]">
         <TelegramBotCredentials businessId={currentBusinessId || null} business={currentBusiness} />
-        <ExternalIntegrations currentBusinessId={currentBusinessId || null} focusedPlatform={focus} />
+        <div className="space-y-4">
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="text-base font-semibold text-slate-950">Две настройки Telegram</h3>
+            <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+              <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <div className="font-semibold text-slate-950">1. Бот LocalOS</div>
+                <div>Для управления аккаунтом, уведомлений и действий из Telegram.</div>
+              </div>
+              <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <div className="font-semibold text-slate-950">2. Канал для постов</div>
+                <div>Для публикаций из контент-плана после предпросмотра и подтверждения.</div>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="text-base font-semibold text-slate-950">Остальные каналы</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Google, VK, Meta, CRM и технические проверки вынесены в общий раздел подключений, чтобы не мешать настройке Telegram.
+            </p>
+            <Button type="button" variant="outline" className="mt-4" asChild>
+              <Link to="/dashboard/settings/integrations">Открыть подключения</Link>
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

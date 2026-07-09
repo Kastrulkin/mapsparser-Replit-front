@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Bot, Eye, EyeOff, Info } from 'lucide-react';
+import { Loader2, Send, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface TelegramBotCredentialsProps {
   businessId: string | null;
@@ -241,7 +239,7 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
       <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-2 text-slate-950">
           <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
-            <Bot className="h-4 w-4" />
+            <Send className="h-4 w-4" />
           </span>
           {t.dashboard.settings.telegram2.title}
         </CardTitle>
@@ -250,92 +248,35 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Alert className="rounded-2xl border-slate-200 bg-slate-50/80">
-          <AlertDescription>
-            {t.dashboard.settings.telegram2.subtitle}
-            {t.dashboard.settings.telegram2.alert}
-          </AlertDescription>
-        </Alert>
-
         <div
           data-testid="telegram-first-api-post-setup"
-          className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900"
+          className="grid gap-3 sm:grid-cols-2"
         >
-          <div className="font-semibold text-blue-950">Первый API-пост начинается с Telegram</div>
-          <div className="mt-1">
-            Чтобы LocalOS смог опубликовать пост из контент-плана по расписанию, нужен глобальный бот LocalOS + chat_id канала или чата.
-            Если хотите свой брендированный бот, добавьте bot token и chat_id. Без цели публикации посты останутся на проверке и не уйдут наружу.
-          </div>
-          <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
-            <div
-              data-testid="telegram-global-bot-transport-status"
-              className={`rounded-xl bg-white px-3 py-2 ring-1 ${configured || globalBotConfigured ? 'text-emerald-800 ring-emerald-100' : 'text-amber-800 ring-amber-100'}`}
-            >
-              <span className="font-semibold">{configured || globalBotConfigured ? 'Готово: ' : 'Нужно: '}</span>
-              {configured ? 'bot token бизнеса' : (globalBotConfigured ? 'глобальный бот LocalOS' : 'bot token или глобальный бот')}
+          <div
+            data-testid="telegram-global-bot-transport-status"
+            className={`rounded-2xl border px-4 py-3 ${configured || globalBotConfigured ? 'border-emerald-100 bg-emerald-50 text-emerald-900' : 'border-amber-100 bg-amber-50 text-amber-900'}`}
+          >
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              {configured || globalBotConfigured ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+              Бот для отправки
             </div>
-            <div className={`rounded-xl bg-white px-3 py-2 ring-1 ${configuredChatId ? 'text-emerald-800 ring-emerald-100' : 'text-amber-800 ring-amber-100'}`}>
-              <span className="font-semibold">{configuredChatId ? 'Готово: ' : 'Нужно: '}</span>
-              chat_id
+            <div className="mt-1 text-xs leading-5">
+              {configured ? 'Подключён свой бот бизнеса' : (globalBotConfigured ? 'Можно использовать глобальный бот LocalOS' : 'Нужен глобальный бот LocalOS или свой token')}
+            </div>
+          </div>
+          <div className={`rounded-2xl border px-4 py-3 ${configuredChatId ? 'border-emerald-100 bg-emerald-50 text-emerald-900' : 'border-amber-100 bg-amber-50 text-amber-900'}`}>
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              {configuredChatId ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+              Канал для постов
+            </div>
+            <div className="mt-1 truncate text-xs leading-5">
+              {configuredChatId ? configuredChatId : 'Укажите @channel или chat_id'}
             </div>
           </div>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="telegram-bot-token">{t.dashboard.settings.telegram2.tokenLabel}</Label>
-          <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${configured ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
-            {loadingStatus
-              ? 'Проверка статуса токена...'
-              : configured
-                ? `Токен подключён (${maskedToken || 'скрыт'})`
-                : globalBotConfigured
-                  ? 'Используется глобальный бот LocalOS'
-                  : 'Токен пока не подключён'}
-          </div>
-          <div className="relative">
-            <Input
-              id="telegram-bot-token"
-              type={showToken ? 'text' : 'password'}
-              placeholder={t.dashboard.settings.telegram2.tokenPlaceholder}
-              value={botToken}
-              onChange={(e) => setBotToken(e.target.value)}
-              disabled={saving}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="absolute right-0 top-0 h-full px-3"
-              onClick={() => setShowToken(!showToken)}
-            >
-              {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </Button>
-          </div>
-          <p className="text-xs text-slate-500">
-            {globalBotConfigured
-              ? 'Для первого API-proof отдельный bot token не обязателен: LocalOS может использовать глобальный бот, если указан chat_id цели публикации.'
-              : t.dashboard.settings.telegram2.tokenHelp}
-          </p>
-          {globalBotConfigured ? (
-            <div
-              data-testid="telegram-global-bot-save-chat-only"
-              className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900"
-            >
-              <div className="font-semibold text-emerald-950">Можно сохранить только chat_id</div>
-              <div className="mt-1">
-                Глобальный бот LocalOS уже доступен как transport
-                {publishTransport ? ` (${publishTransport})` : ''}.
-                Добавьте его в канал/группу, укажите chat_id и запустите проверку цели без отправки сообщения.
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="telegram-chat-id">Канал или чат для публикаций</Label>
-          <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${configuredChatId ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'}`}>
-            {configuredChatId ? `chat_id сохранён: ${configuredChatId}` : 'Для постов из контент-плана нужен telegram_chat_id'}
-          </div>
+          <Label htmlFor="telegram-chat-id">Канал или чат для постов</Label>
           <Input
             id="telegram-chat-id"
             placeholder="@channelname или -1001234567890"
@@ -344,25 +285,51 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
             disabled={saving}
           />
           <p className="text-xs text-slate-500">
-            Для канала добавьте бота администратором и укажите username канала или числовой chat_id. Без этого LocalOS подготовит пост, но не сможет отправить его по API.
+            Добавьте бота администратором в канал или группу. Сюда будут уходить только подтверждённые посты из контент-плана.
           </p>
-          <div
-            data-testid="telegram-publish-target-distinction"
-            className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900"
-          >
-            <div className="flex items-start gap-2">
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-              <div>
-                <div className="font-semibold text-amber-950">Важно для живого теста Telegram</div>
-                <div className="mt-1">
-                  @LocalOspro_bot и miniapp могут управлять LocalOS и слать уведомления, но публикация поста из контент-плана идёт в выбранный chat_id канала или чата. Номер телефона сам по себе не является целью публикации; отправка человеку через Telegram app — отдельный supervised/outreach transport proof.
-                </div>
-              </div>
+        </div>
+
+        <details className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+          <summary className="cursor-pointer select-none text-sm font-semibold text-slate-900">
+            Свой брендированный бот вместо бота LocalOS
+          </summary>
+          <div className="mt-3 space-y-2">
+            <Label htmlFor="telegram-bot-token">{t.dashboard.settings.telegram2.tokenLabel}</Label>
+            <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${configured ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
+              {loadingStatus
+                ? 'Проверка статуса токена...'
+                : configured
+                  ? `Токен подключён (${maskedToken || 'скрыт'})`
+                  : globalBotConfigured
+                    ? 'По умолчанию используется глобальный бот LocalOS'
+                    : 'Токен пока не подключён'}
             </div>
+            <div className="relative">
+              <Input
+                id="telegram-bot-token"
+                type={showToken ? 'text' : 'password'}
+                placeholder={t.dashboard.settings.telegram2.tokenPlaceholder}
+                value={botToken}
+                onChange={(e) => setBotToken(e.target.value)}
+                disabled={saving}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-0 top-0 h-full px-3"
+                onClick={() => setShowToken(!showToken)}
+              >
+                {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Это необязательно. Обычно достаточно глобального бота LocalOS и канала для постов.
+            </p>
           </div>
-          <p className="text-xs font-medium text-slate-700">
-            После сохранения LocalOS сразу обновит готовность каналов для постов из контент-плана.
-          </p>
+        </details>
+
+        <div className="space-y-2">
           {publishTargetProbe ? (
             <div
               data-testid="telegram-publish-target-probe-result"
@@ -437,23 +404,10 @@ export const TelegramBotCredentials = ({ businessId, business, onSaved }: Telegr
                 </div>
               ) : null}
               <div className="mt-2 font-medium">
-                Дальше: {publishTargetProbe.next_action_ru || 'вернитесь в контент-план и проверьте готовность каналов.'}
-              </div>
-              <div className="mt-1 text-slate-600">
-                Проверка не отправляет social post и не заменяет preview → подтверждение → расписание.
-                {publishTargetProbe.send_message_performed === false ? ' Сообщение не отправлялось.' : ''}
+                {publishTargetProbe.next_action_ru || 'Теперь можно вернуться в контент-план.'}
               </div>
             </div>
           ) : null}
-          <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
-            <div className="font-semibold text-sky-950">После подключения Telegram</div>
-            <div className="mt-1">
-              Вернитесь в контент-план, нажмите “Проверить готовность”, откройте предпросмотр и подтвердите публикацию перед расписанием.
-            </div>
-            <Button type="button" size="sm" variant="outline" className="mt-2 h-7 bg-white px-2 text-[11px]" asChild>
-              <Link to="/dashboard/card?tab=news&mode=plan">Открыть контент-план</Link>
-            </Button>
-          </div>
         </div>
 
         <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
