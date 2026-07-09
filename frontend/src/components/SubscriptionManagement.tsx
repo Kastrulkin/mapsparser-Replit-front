@@ -89,6 +89,8 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const paymentStatus = searchParams.get('payment');
+  const paymentSource = searchParams.get('source');
+  const autoStartCheckout = searchParams.get('autostart') === '1';
   const selectedTierFromUrl = searchParams.get('tier');
   const autoCheckoutStartedRef = useRef(false);
   const { language, t } = useLanguage();
@@ -336,6 +338,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     if (autoCheckoutStartedRef.current) return;
     if (processing) return;
     if (paymentStatus !== 'required') return;
+    if (paymentSource !== 'pricing' || !autoStartCheckout) return;
 
     const tierId = selectedTierFromUrl || 'starter';
     if (!tierId) return;
@@ -346,7 +349,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
 
     autoCheckoutStartedRef.current = true;
     handleSubscribe(tierId);
-  }, [paymentStatus, selectedTierFromUrl, subscription, processing]);
+  }, [autoStartCheckout, paymentSource, paymentStatus, selectedTierFromUrl, subscription, processing]);
 
   const handleSubscribe = async (tierId: string) => {
     if (!businessId) {

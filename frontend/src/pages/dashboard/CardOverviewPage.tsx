@@ -692,7 +692,7 @@ export const CardOverviewPage = () => {
   const canRefreshCardData = refreshSyncSources.length > 0;
   const refreshBlockedByPolicy = !parseRefreshPolicy.can_refresh;
   const refreshBlockedByActiveParse = parseStatus === 'processing' || parseStatus === 'queued';
-  const canTriggerRefresh = canRefreshCardData && !refreshBlockedByPolicy && !refreshBlockedByActiveParse;
+  const canTriggerRefresh = automationAccess.automationAllowed && canRefreshCardData && !refreshBlockedByPolicy && !refreshBlockedByActiveParse;
 
   const formatRefreshDate = (isoValue: string | null) => {
     if (!isoValue) {
@@ -743,6 +743,9 @@ export const CardOverviewPage = () => {
     if (!hasConfiguredMapLink) {
       return firstRunCopy.helpMissingMap;
     }
+    if (!automationAccess.automationAllowed) {
+      return automationLockedMessage;
+    }
     if (!hasSupportedConfiguredMapLink) {
       return isRu
         ? 'Ссылка на карту сохранена, но для обновления данных сейчас поддерживаются только Яндекс, 2ГИС и Google.'
@@ -780,10 +783,13 @@ export const CardOverviewPage = () => {
         : 'You already invited a friend, so refresh is available earlier than the standard weekly interval.';
     }
     return null;
-  }, [firstRunCopy.helpMissingMap, hasConfiguredMapLink, hasSupportedConfiguredMapLink, isRu, parseRefreshPolicy.accepted_invites_count, parseRefreshPolicy.cooldown_until, parseRefreshPolicy.invite_override_available, parseRefreshPolicy.last_completed_at, parseRefreshPolicy.reason, parseStatus, parseStatusError, user?.is_superadmin]);
+  }, [automationAccess.automationAllowed, automationLockedMessage, firstRunCopy.helpMissingMap, hasConfiguredMapLink, hasSupportedConfiguredMapLink, isRu, parseRefreshPolicy.accepted_invites_count, parseRefreshPolicy.cooldown_until, parseRefreshPolicy.invite_override_available, parseRefreshPolicy.last_completed_at, parseRefreshPolicy.reason, parseStatus, parseStatusError, user?.is_superadmin]);
 
   const handleRefreshCardData = async () => {
-    if (!currentBusinessId || !canRefreshCardData) {
+    if (!currentBusinessId || !automationAccess.automationAllowed || !canRefreshCardData) {
+      if (!automationAccess.automationAllowed) {
+        setError(automationLockedMessage);
+      }
       return;
     }
 

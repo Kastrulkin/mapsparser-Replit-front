@@ -94,8 +94,8 @@ const Login = () => {
     signingIn: isRu ? 'Вход...' : 'Signing in...',
     signUp: isRu ? 'Зарегистрироваться' : 'Sign up',
     signingUp: isRu ? 'Регистрация...' : 'Registering...',
-    postRegisterHint: isRu ? 'После регистрации вам будет предложено выбрать тариф и оплатить подписку' : 'After registration you will be able to choose a plan and pay for your subscription.',
-    checkEmailHint: isRu ? 'Мы отправили письмо со ссылкой подтверждения. После подтверждения email вы автоматически войдёте в кабинет.' : 'We sent a confirmation link. After confirming the email you will be signed in.',
+    postRegisterHint: isRu ? 'После подтверждения email откроется кабинет: можно заполнить профиль и добавить ссылку на компанию. Платные действия включаются отдельно.' : 'After email confirmation you can fill in your profile and add a company link. Paid actions are enabled separately.',
+    checkEmailHint: isRu ? 'Мы отправили письмо со ссылкой подтверждения. После подтверждения email вы автоматически войдёте в кабинет без оплаты.' : 'We sent a confirmation link. After confirming the email you will be signed in without payment.',
     resendVerification: isRu ? 'Отправить письмо ещё раз' : 'Send email again',
     resendVerificationDone: isRu ? 'Письмо подтверждения отправлено повторно.' : 'Confirmation email was sent again.',
     sendReset: isRu ? 'Восстановить пароль' : 'Reset password',
@@ -172,7 +172,7 @@ const Login = () => {
 
         if (tierFromUrl && source === 'pricing') {
           localStorage.setItem('selectedTier', tierFromUrl);
-          navigate(`/dashboard/settings?payment=required&tier=${tierFromUrl}`);
+          navigate(`/dashboard/settings?payment=required&source=pricing&autostart=1&tier=${tierFromUrl}`);
         } else {
           navigate('/dashboard');
         }

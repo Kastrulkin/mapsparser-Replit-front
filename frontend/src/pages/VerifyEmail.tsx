@@ -36,8 +36,8 @@ const VerifyEmail: React.FC = () => {
         }
 
         setStatus('success');
-        setMessage('Email подтверждён. Открываем кабинет...');
-        setTimeout(() => navigate('/dashboard/profile?payment=required'), 1200);
+        setMessage('Email подтверждён. Открываем кабинет без автоматической оплаты...');
+        setTimeout(() => navigate('/dashboard/profile?onboarding=1', { replace: true }), 1200);
       } catch (error) {
         setStatus('error');
         setMessage('Не удалось подтвердить email. Попробуйте открыть ссылку ещё раз.');
