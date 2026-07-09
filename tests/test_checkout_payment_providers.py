@@ -205,7 +205,7 @@ def test_subscription_renewal_state_reports_missing_payment_method() -> None:
         }
     )
 
-    assert renewal_state["state"] == "disabled"
+    assert renewal_state["state"] == "needs_payment_method"
     assert renewal_state["reason"] == "missing_payment_method_id"
 
 
@@ -226,3 +226,179 @@ def test_subscription_renewal_state_reports_retry_pending() -> None:
 def test_billing_routes_expose_payment_method_unlink() -> None:
     actual = {rule.rule: rule.endpoint for rule in main.app.url_map.iter_rules()}
     assert actual.get("/api/billing/payment-method/unlink") == "billing.billing_payment_method_unlink"
+
+
+def test_yookassa_checkout_webhook_attaches_saved_payment_method(monkeypatch) -> None:
+    calls = {}
+
+    class _FakeYooKassaClient:
+        def configured(self) -> bool:
+            return True
+
+        def get_payment(self, payment_id):
+            calls["get_payment"] = payment_id
+            return {
+                "id": payment_id,
+                "status": "succeeded",
+                "metadata": {"checkout_session_id": "checkout-1"},
+                "payment_method": {"id": "pm-saved-1", "saved": True},
+            }
+
+    class _FakeCursor:
+        rowcount = 1
+
+        def __init__(self):
+            self.update_params = None
+
+        def execute(self, query, params=None):
+            if "UPDATE subscriptions" in query:
+                self.update_params = params
+                calls["update_params"] = params
+
+        def fetchone(self):
+            return {
+                "id": "sub-1",
+                "payment_method_id": "pm-saved-1",
+                "next_billing_date": "2026-08-06T12:00:00+00:00",
+            }
+
+    class _FakeConn:
+        def __init__(self):
+            self.cursor_obj = _FakeCursor()
+
+        def cursor(self):
+            return self.cursor_obj
+
+        def commit(self):
+            calls["committed"] = True
+
+        def rollback(self):
+            calls["rolled_back"] = True
+
+    class _FakeDb:
+        def __init__(self):
+            self.conn = _FakeConn()
+
+        def close(self):
+            calls["closed"] = True
+
+    monkeypatch.setattr(yookassa_integration, "YooKassaClient", _FakeYooKassaClient)
+    monkeypatch.setattr(yookassa_integration, "DatabaseManager", _FakeDb)
+    monkeypatch.setattr(
+        yookassa_integration,
+        "mark_checkout_paid",
+        lambda session_id, **kwargs: calls.update({"mark_checkout_paid": (session_id, kwargs)}),
+    )
+    monkeypatch.setattr(
+        yookassa_integration,
+        "complete_checkout",
+        lambda session_id: {"session_id": session_id, "subscription_id": "sub-1"},
+    )
+
+    with main.app.test_request_context(
+        "/api/yookassa/webhook",
+        method="POST",
+        json={"event": "payment.succeeded", "object": {"id": "pay-1"}},
+    ):
+        response, status_code = yookassa_integration.yookassa_webhook()
+
+    assert status_code == 200
+    assert response.get_json()["ok"] is True
+    assert calls["get_payment"] == "pay-1"
+    assert calls["mark_checkout_paid"][0] == "checkout-1"
+    assert calls["update_params"] == ("pm-saved-1", "pay-1", "sub-1")
+    assert calls["committed"] is True
+
+
+def test_run_due_renewals_blocks_subscription_without_payment_method(monkeypatch) -> None:
+    calls = {}
+
+    class _FakeYooKassaClient:
+        def configured(self) -> bool:
+            return True
+
+        def create_payment(self, *, payload, idempotency_key):
+            raise AssertionError("renewal payment must not be created without payment_method_id")
+
+    class _FakeCursor:
+        def __init__(self):
+            self.rows = [
+                {
+                    "id": "sub-missing",
+                    "user_id": "user-1",
+                    "business_id": "biz-1",
+                    "tariff_id": "starter_monthly",
+                    "status": "active",
+                    "next_billing_date": "2026-07-01T00:00:00+00:00",
+                    "payment_method_id": None,
+                    "retry_count": 0,
+                    "next_retry_at": None,
+                }
+            ]
+            self.last_update = None
+
+        def execute(self, query, params=None):
+            if "SELECT *" in query and "FROM subscriptions" in query:
+                return
+            if "UPDATE subscriptions" in query:
+                self.last_update = params
+                calls["subscription_blocked"] = True
+                return
+            if "INSERT INTO billing_attempts" in query:
+                calls["attempt_params"] = params
+                return
+            if "information_schema.columns" in query:
+                self.rows = []
+                return
+
+        def fetchall(self):
+            rows = self.rows
+            self.rows = []
+            return rows
+
+        def fetchone(self):
+            return {
+                "id": "sub-missing",
+                "user_id": "user-1",
+                "business_id": "biz-1",
+                "tariff_id": "starter_monthly",
+                "status": "blocked",
+                "next_billing_date": "2026-07-01T00:00:00+00:00",
+                "payment_method_id": None,
+                "retry_count": 3,
+                "next_retry_at": None,
+            }
+
+    class _FakeConn:
+        def __init__(self):
+            self.cursor_obj = _FakeCursor()
+
+        def cursor(self):
+            return self.cursor_obj
+
+        def commit(self):
+            calls["committed"] = True
+
+        def rollback(self):
+            calls["rolled_back"] = True
+
+    class _FakeDb:
+        def __init__(self):
+            self.conn = _FakeConn()
+
+        def close(self):
+            calls["closed"] = True
+
+    monkeypatch.setattr(yookassa_integration, "YooKassaClient", _FakeYooKassaClient)
+    monkeypatch.setattr(yookassa_integration, "DatabaseManager", _FakeDb)
+
+    result = yookassa_integration.run_due_renewals(batch_size=1)
+
+    assert result["success"] is True
+    assert result["processed"] == 1
+    assert result["errors"] == 1
+    assert result["details"][0]["error"] == "missing payment_method_id"
+    assert calls["subscription_blocked"] is True
+    assert calls["attempt_params"][5] == "needs_payment_method"
+    assert calls["attempt_params"][10] == "missing_payment_method_id"
+    assert calls["committed"] is True

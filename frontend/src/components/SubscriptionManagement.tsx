@@ -447,8 +447,17 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     }
   };
 
+  const normalizeTierId = (tierId?: string | null) => String(tierId || 'starter').replace(/_monthly$/, '') || 'starter';
+
+  const handlePaymentMethodSetup = () => {
+    if (!subscription?.tier) {
+      return;
+    }
+    void handleSubscribe(normalizeTierId(subscription.tier));
+  };
+
   const getTierName = (tierId: string) => {
-    const normalizedTierId = tierId.replace(/_monthly$/, '');
+    const normalizedTierId = normalizeTierId(tierId);
     const tier = tiers.find(t => t.id === normalizedTierId);
     return tier ? tier.name : tierId;
   };
@@ -478,9 +487,25 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   const autopayEnabled = Boolean(subscription?.autopay_enabled);
   const paymentMethodLinked = Boolean(subscription?.payment_method_linked);
   const latestAttempt = recentAttempts[0] || null;
-  const nextChargeText = subscription?.next_billing_date ? formatDateTime(subscription.next_billing_date) : (language === 'ru' ? 'Появится после первой успешной оплаты' : 'Will appear after the first successful payment');
-  const autopayStatusTone = autopayEnabled ? 'bg-emerald-500 hover:bg-emerald-600 border-0' : 'bg-slate-500 hover:bg-slate-600 border-0';
-  const autopayStatusLabel = autopayEnabled ? (language === 'ru' ? 'Включён' : 'Enabled') : (language === 'ru' ? 'Выключен' : 'Disabled');
+  const periodEndText = subscription?.next_billing_date || subscription?.subscription_ends_at
+    ? formatDateTime(subscription?.next_billing_date || subscription?.subscription_ends_at || null)
+    : (language === 'ru' ? 'Появится после первой успешной оплаты' : 'Will appear after the first successful payment');
+  const nextChargeText = subscription?.next_billing_date && autopayEnabled
+    ? formatDateTime(subscription.next_billing_date)
+    : paymentMethodLinked
+      ? (language === 'ru' ? 'После восстановления подписки' : 'After the subscription is restored')
+      : (language === 'ru' ? 'После привязки карты' : 'After card setup');
+  const needsPaymentMethod = renewalStatus?.state === 'needs_payment_method' || !paymentMethodLinked;
+  const autopayStatusTone = autopayEnabled
+    ? 'bg-emerald-500 hover:bg-emerald-600 border-0'
+    : needsPaymentMethod
+      ? 'bg-amber-500 hover:bg-amber-600 border-0'
+      : 'bg-slate-500 hover:bg-slate-600 border-0';
+  const autopayStatusLabel = autopayEnabled
+    ? (language === 'ru' ? 'Включён' : 'Enabled')
+    : needsPaymentMethod
+      ? (language === 'ru' ? 'Нужна карта' : 'Card needed')
+      : (language === 'ru' ? 'Выключен' : 'Disabled');
   const paymentMethodLabel = subscription?.payment_method_summary?.label
     || (
       subscription?.payment_method_summary?.brand && subscription?.payment_method_summary?.last4
@@ -495,8 +520,8 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   const renewalHelpText = (() => {
     if (autopayEnabled) {
       return language === 'ru'
-        ? 'Подписка продлевается ежемесячно автоматически. Карту можно отвязать в любой момент прямо в кабинете.'
-        : 'Your subscription renews monthly automatically. You can unlink the card anytime in your account.';
+        ? `Оплаченный период действует до ${periodEndText}. Следующее ежемесячное списание пройдёт в эту дату.`
+        : `The paid period is active until ${periodEndText}. The next monthly charge will run on that date.`;
     }
     if (paymentMethodLinked) {
       return language === 'ru'
@@ -504,11 +529,15 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
         : 'The card is saved, but automatic renewal is not available right now.';
     }
     return language === 'ru'
-      ? 'Автоплатёж выключен. Текущий период сохранится, а следующее продление потребует ручной оплаты.'
-      : 'Autopay is off. Your current period stays active, and the next renewal will require a manual payment.';
+      ? 'Чтобы включить ежемесячное списание, оплатите текущий тариф через ЮKassa и сохраните карту.'
+      : 'To enable monthly charging, pay the current plan through YooKassa and save the card.';
   })();
   const renewalStatusText = (() => {
     switch (renewalStatus?.state) {
+      case 'needs_payment_method':
+        return language === 'ru'
+          ? 'Для ежемесячного списания нужно привязать карту. Оплаченный период будет показан после успешной оплаты.'
+          : 'A saved card is required for monthly charging. The paid period will appear after successful payment.';
       case 'retry_pending':
         return language === 'ru'
           ? `Повторная попытка запланирована на ${formatDateTime(renewalStatus.next_retry_at)}`
@@ -588,41 +617,49 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
               {renewalStatusText}
             </p>
           </div>
-          <div className="flex shrink-0 flex-col gap-2">
-            <label className={cn('flex max-w-sm items-start gap-2 rounded-2xl border px-3 py-2 text-sm leading-5', paymentMethodLinked ? 'border-slate-200 bg-white text-slate-700' : 'border-slate-100 bg-slate-50 text-slate-400')}>
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900"
-                checked={paymentMethodLinked ? unlinkConfirmed : false}
-                disabled={!paymentMethodLinked || unlinkingCard}
-                onChange={(event) => setUnlinkConfirmed(event.target.checked)}
-              />
-              <span>{cardRemovalCheckboxLabel}</span>
-            </label>
-            {paymentMethodLinked ? (
-              <Button
-                variant="outline"
-                className="min-h-11 active:scale-[0.96] transition-transform"
-                disabled={unlinkingCard || !unlinkConfirmed}
-                onClick={handleUnlinkCard}
-              >
-                {unlinkingCard ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Link2Off className="mr-2 h-4 w-4" />}
-                {language === 'ru' ? 'Удалить карту' : 'Delete card'}
-              </Button>
+          <div className="flex shrink-0 flex-col gap-2 lg:max-w-sm">
+            {!paymentMethodLinked ? (
+              <>
+                <Button
+                  className="min-h-11 bg-slate-950 text-white hover:bg-slate-800 active:scale-[0.96] transition-transform"
+                  disabled={processing || !subscription?.tier}
+                  onClick={handlePaymentMethodSetup}
+                >
+                  {processing ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
+                  {language === 'ru' ? 'Оплатить и сохранить карту' : 'Pay and save card'}
+                </Button>
+                <p className="max-w-sm text-xs leading-5 text-slate-500 [text-wrap:pretty]">
+                  {language === 'ru'
+                    ? 'Откроется ЮKassa. После успешной оплаты карта будет сохранена для ежемесячного списания.'
+                    : 'YooKassa will open. After successful payment, the card will be saved for monthly charging.'}
+                </p>
+              </>
             ) : (
-              <Button
-                variant="outline"
-                className="min-h-11"
-                disabled
-                title={language === 'ru' ? 'Кнопка станет активной после сохранения карты при оплате' : 'This action becomes available after a card is saved during payment'}
-              >
-                <Link2Off className="mr-2 h-4 w-4" />
-                {language === 'ru' ? 'Удалить карту' : 'Delete card'}
-              </Button>
+              <>
+                <label className="flex max-w-sm items-start gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm leading-5 text-slate-700">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900"
+                    checked={unlinkConfirmed}
+                    disabled={unlinkingCard}
+                    onChange={(event) => setUnlinkConfirmed(event.target.checked)}
+                  />
+                  <span>{cardRemovalCheckboxLabel}</span>
+                </label>
+                <Button
+                  variant="outline"
+                  className="min-h-11 active:scale-[0.96] transition-transform"
+                  disabled={unlinkingCard || !unlinkConfirmed}
+                  onClick={handleUnlinkCard}
+                >
+                  {unlinkingCard ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Link2Off className="mr-2 h-4 w-4" />}
+                  {language === 'ru' ? 'Удалить карту' : 'Delete card'}
+                </Button>
+              </>
             )}
           </div>
         </div>
-        <div className="grid gap-px bg-slate-100 md:grid-cols-3">
+        <div className="grid gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-4">
           <div className="bg-white px-5 py-4">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
               <CreditCard className="h-4 w-4" />
@@ -637,6 +674,20 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
               {language === 'ru'
                 ? 'Карту можно отвязать самостоятельно без обращения в поддержку.'
                 : 'You can unlink the card yourself without contacting support.'}
+            </div>
+          </div>
+          <div className="bg-white px-5 py-4">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              <CalendarClock className="h-4 w-4" />
+              <span>{language === 'ru' ? 'Период оплачен до' : 'Paid until'}</span>
+            </div>
+            <div className="mt-2 text-lg font-semibold text-slate-950 tabular-nums">
+              {billingLoading ? (language === 'ru' ? 'Загрузка...' : 'Loading...') : periodEndText}
+            </div>
+            <div className="mt-2 text-sm leading-6 text-slate-600 [text-wrap:pretty]">
+              {language === 'ru'
+                ? 'До этой даты доступ остаётся активным при успешной оплате периода.'
+                : 'Access remains active until this date after a successful period payment.'}
             </div>
           </div>
           <div className="bg-white px-5 py-4">

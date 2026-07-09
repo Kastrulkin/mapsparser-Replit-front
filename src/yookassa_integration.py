@@ -345,6 +345,61 @@ def _is_recurring_not_allowed_error(error: Exception) -> bool:
     )
 
 
+def _is_invalid_payment_method_error(error: Exception) -> bool:
+    message = str(error).lower()
+    return "payment_method_id" in message and (
+        "doesn't exist" in message
+        or "does not exist" in message
+        or "not found" in message
+        or "invalid" in message
+        or "permission_revoked" in message
+    )
+
+
+def _mark_subscription_needs_payment_method(cursor, *, sub: Dict[str, Any], reason: str, clear_payment_method: bool) -> Dict[str, Any]:
+    subscription_id = str(sub.get("id") or "")
+    if not subscription_id:
+        return sub
+
+    if clear_payment_method:
+        cursor.execute(
+            """
+            UPDATE subscriptions
+            SET status = 'blocked',
+                payment_method_id = NULL,
+                retry_count = 3,
+                next_retry_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            RETURNING *
+            """,
+            (subscription_id,),
+        )
+    else:
+        cursor.execute(
+            """
+            UPDATE subscriptions
+            SET status = 'blocked',
+                retry_count = 3,
+                next_retry_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            RETURNING *
+            """,
+            (subscription_id,),
+        )
+    updated = _row_to_dict(cursor, cursor.fetchone()) or sub
+    _mark_business_subscription(
+        cursor,
+        updated.get("business_id"),
+        tariff_id=str(updated.get("tariff_id") or "starter_monthly"),
+        status="blocked",
+        next_billing_date=_parse_dt(updated.get("next_billing_date")),
+    )
+    updated["renewal_block_reason"] = reason
+    return updated
+
+
 def _build_checkout_return_url(session: Dict[str, Any]) -> str:
     frontend_base = (os.getenv("FRONTEND_BASE_URL") or "http://localhost:8000").rstrip("/")
     if str(session.get("entry_point") or "").strip() == "registered_paywall" and str(session.get("business_id") or "").strip():
@@ -481,12 +536,23 @@ def _subscription_renewal_state(row: Dict[str, Any]) -> Dict[str, Any]:
     payment_method_linked = bool(str(row.get("payment_method_id") or "").strip())
     next_billing = _parse_dt(row.get("next_billing_date"))
     next_retry = _parse_dt(row.get("next_retry_at"))
+    retry_count = int(row.get("retry_count") or 0)
 
     if status == "canceled":
         return {"state": "canceled", "reason": "subscription_canceled"}
     if not payment_method_linked:
-        return {"state": "disabled", "reason": "missing_payment_method_id"}
+        return {
+            "state": "needs_payment_method",
+            "reason": str(row.get("renewal_block_reason") or "missing_payment_method_id"),
+            "next_billing_date": _as_str_dt(next_billing),
+        }
     if status == "blocked":
+        if retry_count >= 3 and not next_retry:
+            return {
+                "state": "needs_payment_method",
+                "reason": "invalid_payment_method_id",
+                "next_billing_date": _as_str_dt(next_billing),
+            }
         return {
             "state": "retry_pending" if next_retry else "blocked",
             "reason": "retry_scheduled" if next_retry else "subscription_blocked",
@@ -732,8 +798,31 @@ def run_due_renewals(batch_size: int = 25) -> Dict[str, Any]:
                 continue
 
             if not sub.get("payment_method_id"):
+                _mark_subscription_needs_payment_method(
+                    cursor,
+                    sub=sub,
+                    reason="missing_payment_method_id",
+                    clear_payment_method=False,
+                )
+                attempt_type = "renewal" if sub.get("status") == "active" else "retry"
+                attempt_no = int(sub.get("retry_count") or 0)
+                _create_billing_attempt(
+                    cursor,
+                    subscription_id=str(sub["id"]),
+                    attempt_type=attempt_type,
+                    attempt_no=attempt_no,
+                    status="needs_payment_method",
+                    scheduled_at=now,
+                    amount=TARIFFS[tariff_id]["amount"],
+                    currency=TARIFFS[tariff_id]["currency"],
+                    idempotency_key=_short_idempotency_key("pm", str(sub["id"]), now.strftime("%Y-%m-%d")),
+                    payment_id=None,
+                    error_message="missing_payment_method_id",
+                    metadata={"source": "run_due_renewals", "action": "blocked_until_payment_method"},
+                )
                 summary["errors"] += 1
                 summary["details"].append({"subscription_id": sub.get("id"), "error": "missing payment_method_id"})
+                summary["processed"] += 1
                 continue
 
             attempt_type = "renewal" if sub.get("status") == "active" else "retry"
@@ -790,19 +879,30 @@ def run_due_renewals(batch_size: int = 25) -> Dict[str, Any]:
                     }
                 )
             except Exception as e:
+                invalid_payment_method = _is_invalid_payment_method_error(e)
+                if invalid_payment_method:
+                    _mark_subscription_needs_payment_method(
+                        cursor,
+                        sub=sub,
+                        reason="invalid_payment_method_id",
+                        clear_payment_method=True,
+                    )
                 _create_billing_attempt(
                     cursor,
                     subscription_id=str(sub["id"]),
                     attempt_type=attempt_type,
                     attempt_no=attempt_no,
-                    status="failed",
+                    status="needs_payment_method" if invalid_payment_method else "failed",
                     scheduled_at=now,
                     amount=amount,
                     currency=currency,
                     idempotency_key=idem_key,
                     payment_id=None,
                     error_message=str(e),
-                    metadata={"source": "run_due_renewals"},
+                    metadata={
+                        "source": "run_due_renewals",
+                        "action": "cleared_invalid_payment_method" if invalid_payment_method else "payment_failed",
+                    },
                 )
                 summary["errors"] += 1
                 summary["details"].append({"subscription_id": sub.get("id"), "error": str(e)})
