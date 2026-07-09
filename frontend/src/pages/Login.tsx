@@ -130,6 +130,9 @@ const Login = () => {
     if (tierFromUrl) {
       // Запоминаем выбранный тариф для последующего редиректа на оплату
       localStorage.setItem('selectedTier', tierFromUrl);
+      if (source === 'pricing') {
+        localStorage.setItem('selectedTierSource', 'pricing');
+      }
     }
 
     if (source === 'public_audit') {
@@ -172,6 +175,7 @@ const Login = () => {
 
         if (tierFromUrl && source === 'pricing') {
           localStorage.setItem('selectedTier', tierFromUrl);
+          localStorage.setItem('selectedTierSource', 'pricing');
           navigate(`/dashboard/settings?payment=required&source=pricing&autostart=1&tier=${tierFromUrl}`);
         } else {
           navigate('/dashboard');

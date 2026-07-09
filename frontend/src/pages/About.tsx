@@ -16,6 +16,13 @@ const About = () => {
   const handleSubscribeLanding = async (tierId: "starter" | "professional" | "concierge") => {
     const token = newAuth.getToken();
 
+    if (!token) {
+      localStorage.setItem("selectedTier", tierId);
+      localStorage.setItem("selectedTierSource", "pricing");
+      navigate(`/login?tab=register&source=pricing&tier=${tierId}`);
+      return;
+    }
+
     let paymentProvider = "yookassa";
     if (!isRu) {
       try {
@@ -30,13 +37,7 @@ const About = () => {
       paymentProvider = "yookassa";
     }
 
-    let email = "";
-    if (!token) {
-      email = window.prompt("Введите email, на который оформить доступ к LocalOS")?.trim() || "";
-      if (!email) {
-        return;
-      }
-    }
+    const selectedBusinessId = localStorage.getItem("selectedBusinessId") || "";
 
     try {
       const response = await fetch("/api/billing/checkout/session/start", {
@@ -47,10 +48,10 @@ const About = () => {
         },
         body: JSON.stringify({
           provider: paymentProvider,
-          entry_point: "pricing_page",
+          entry_point: "registered_paywall",
           channel: "web",
           tariff_id: tierId,
-          email: email || undefined,
+          business_id: selectedBusinessId || undefined,
           source: "about_pricing_page",
         }),
       });

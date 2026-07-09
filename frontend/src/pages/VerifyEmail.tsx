@@ -36,6 +36,17 @@ const VerifyEmail: React.FC = () => {
         }
 
         setStatus('success');
+        const selectedTier = localStorage.getItem('selectedTier') || '';
+        const selectedTierSource = localStorage.getItem('selectedTierSource') || '';
+        const shouldStartPricingCheckout = Boolean(selectedTier && selectedTierSource === 'pricing');
+        if (shouldStartPricingCheckout) {
+          setMessage('Email подтверждён. Открываем оплату выбранного тарифа...');
+          localStorage.removeItem('selectedTier');
+          localStorage.removeItem('selectedTierSource');
+          setTimeout(() => navigate(`/dashboard/settings?payment=required&source=pricing&autostart=1&tier=${encodeURIComponent(selectedTier)}`, { replace: true }), 1200);
+          return;
+        }
+
         setMessage('Email подтверждён. Открываем кабинет без автоматической оплаты...');
         setTimeout(() => navigate('/dashboard/profile?onboarding=1', { replace: true }), 1200);
       } catch (error) {

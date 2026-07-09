@@ -231,7 +231,7 @@ export const en = {
     pricingStarterPoint6: "Plan to 5 stars on maps",
     pricingStarterResult: "Result: +3-5 clients per month",
     pricingStarterROI: "Payback: 1-2 services",
-    pricingStarterButton: "Start Maps",
+    pricingStarterButton: "Start",
     pricingOption0Title: "Professional",
     pricingOption0Price: "$55 / month",
     pricingOption0Point1: "Work on the card, we'll guide you every step",

@@ -247,7 +247,7 @@ export const ru = {
     pricingStarterPoint6: "План до 5 звёзд на картах",
     pricingStarterResult: "Результат: +3-5 клиентов в месяц",
     pricingStarterROI: "Окупается за: 1-2 услуги",
-    pricingStarterButton: "Начать карты",
+    pricingStarterButton: "Начать",
     pricingOption1Title: "🟠 КОНСЬЕРЖ",
     pricingOption1Price: "25000 ₽/месяц",
     pricingOption1Tagline: "Не надо разбираться, сделаем за вас",
