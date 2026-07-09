@@ -174,7 +174,7 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
       status: telegramStatus,
       displayStatus: telegramReady ? 'ready' : telegramPartial ? 'partially_configured' : 'not_configured',
       label: 'Telegram',
-      description: 'Управление и публикации в выбранный чат.',
+      description: 'Бот LocalOS для управления и отдельный канал/чат для постов.',
       primaryAction: {
         label: !ownerBotConnected ? 'Connect bot' : !publicationTargetSet ? 'Set publication target' : 'Check connection',
         type: 'drawer',
@@ -276,10 +276,10 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
     },
   };
 
-  const nextStep: SettingsHubState['nextStep'] = !publicationTargetSet
-    ? { module: 'telegram', title: 'Set Telegram publication target', actionLabel: 'Set publication target', drawer: 'telegram' }
-    : !ownerBotConnected
-      ? { module: 'telegram', title: 'Connect Telegram owner bot', actionLabel: 'Connect bot', drawer: 'telegram' }
+  const nextStep: SettingsHubState['nextStep'] = !ownerBotConnected
+    ? { module: 'telegram', title: 'Connect Telegram owner bot', actionLabel: 'Connect bot', drawer: 'telegram' }
+    : !publicationTargetSet
+      ? { module: 'telegram', title: 'Set Telegram publication target', actionLabel: 'Set publication target', drawer: 'telegram' }
       : !phoneAdded
         ? { module: 'whatsapp', title: 'Add WhatsApp number', actionLabel: 'Connect number', drawer: 'whatsapp' }
         : !googleSheetsReady

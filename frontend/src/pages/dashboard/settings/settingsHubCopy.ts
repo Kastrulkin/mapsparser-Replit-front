@@ -95,8 +95,8 @@ const en: SettingsHubCopy = {
     eyebrow: 'Recommended next step',
     description: 'Finish this first so the rest of setup has a clear path forward.',
     titles: {
-      'Set Telegram publication target': 'Set Telegram publication target',
-      'Connect Telegram owner bot': 'Connect Telegram owner bot',
+      'Set Telegram publication target': 'Choose a Telegram channel for posts',
+      'Connect Telegram owner bot': 'Connect the LocalOS bot in Telegram',
       'Add WhatsApp number': 'Add WhatsApp number',
       'Connect Google Sheets': 'Connect Google Sheets',
       'Connect Google Business': 'Connect Google Business',
@@ -105,8 +105,8 @@ const en: SettingsHubCopy = {
       'Connect CRM': 'Connect CRM',
     },
     actions: {
-      'Set publication target': 'Set publication target',
-      'Connect bot': 'Connect bot',
+      'Set publication target': 'Choose post channel',
+      'Connect bot': 'Connect LocalOS bot',
       'Connect number': 'Connect number',
       'Connect Google': 'Connect Google',
       'Configure Meta': 'Configure Meta',
@@ -115,7 +115,7 @@ const en: SettingsHubCopy = {
     },
   },
   modules: {
-    telegram: { label: 'Telegram', description: 'Management messages and approved posts to a selected chat.' },
+    telegram: { label: 'Telegram', description: 'LocalOS bot for account control plus a separate channel or chat for posts.' },
     whatsapp: { label: 'WhatsApp', description: 'Business number and client message sending.' },
     google_sheets: { label: 'Google Sheets', description: 'Agent access to table rows.' },
     google: { label: 'Google Business', description: 'Google profile, reviews, and posts.' },
@@ -125,8 +125,8 @@ const en: SettingsHubCopy = {
     maton: { label: 'Maton.ai', description: 'Shared key for external services.' },
   },
   metaRows: {
-    ownerBot: 'Owner bot',
-    publicationTarget: 'Publication target',
+    ownerBot: 'LocalOS owner bot',
+    publicationTarget: 'Post channel/chat',
     connected: 'connected',
     missing: 'missing',
     set: 'set',
@@ -137,8 +137,8 @@ const en: SettingsHubCopy = {
     notConfigured: 'not configured',
   },
   actions: {
-    'Connect bot': 'Connect bot',
-    'Set publication target': 'Set publication target',
+    'Connect bot': 'Connect LocalOS bot',
+    'Set publication target': 'Choose post channel',
     'Check connection': 'Check connection',
     Advanced: 'Advanced',
     'Configure sending': 'Configure sending',
@@ -158,7 +158,7 @@ const en: SettingsHubCopy = {
   details: {
     telegram: {
       title: 'Telegram setup',
-      description: 'Connect the owner bot and choose where approved posts should be sent.',
+      description: 'Connect the LocalOS bot for account control, updates, work results, and Telegram-side actions. Separately choose the channel or chat where approved posts should be sent.',
     },
     whatsapp: {
       title: 'WhatsApp setup',
@@ -220,8 +220,8 @@ const ru: SettingsHubCopy = {
     eyebrow: 'Рекомендуемый следующий шаг',
     description: 'Сделайте это первым, чтобы остальные настройки шли по понятному маршруту.',
     titles: {
-      'Set Telegram publication target': 'Выберите чат для публикаций в Telegram',
-      'Connect Telegram owner bot': 'Подключите Telegram владельца',
+      'Set Telegram publication target': 'Выберите Telegram-канал для постов',
+      'Connect Telegram owner bot': 'Привяжите бот LocalOS в Telegram',
       'Add WhatsApp number': 'Добавьте номер WhatsApp',
       'Connect Google Sheets': 'Подключите Google Таблицы',
       'Connect Google Business': 'Подключите Google Business',
@@ -230,8 +230,8 @@ const ru: SettingsHubCopy = {
       'Connect CRM': 'Подключите CRM',
     },
     actions: {
-      'Set publication target': 'Выбрать чат публикаций',
-      'Connect bot': 'Подключить бот',
+      'Set publication target': 'Выбрать канал для постов',
+      'Connect bot': 'Привязать бот LocalOS',
       'Connect number': 'Подключить номер',
       'Connect Google': 'Подключить Google',
       'Configure Meta': 'Настроить Meta',
@@ -240,7 +240,7 @@ const ru: SettingsHubCopy = {
     },
   },
   modules: {
-    telegram: { label: 'Telegram', description: 'Управление и публикации в выбранный чат.' },
+    telegram: { label: 'Telegram', description: 'Бот LocalOS для управления аккаунтом и отдельный канал/чат для постов.' },
     whatsapp: { label: 'WhatsApp', description: 'Номер бизнеса и отправка сообщений клиентам.' },
     google_sheets: { label: 'Google Таблицы', description: 'Доступ агентов к строкам таблиц.' },
     google: { label: 'Google Business', description: 'Карточка, отзывы и публикации Google.' },
@@ -250,8 +250,8 @@ const ru: SettingsHubCopy = {
     maton: { label: 'Maton.ai', description: 'Единый ключ для сторонних сервисов.' },
   },
   metaRows: {
-    ownerBot: 'Telegram владельца',
-    publicationTarget: 'Чат публикаций',
+    ownerBot: 'Бот LocalOS в Telegram',
+    publicationTarget: 'Канал/чат для постов',
     connected: 'подключен',
     missing: 'не указан',
     set: 'выбран',
@@ -262,8 +262,8 @@ const ru: SettingsHubCopy = {
     notConfigured: 'не настроена',
   },
   actions: {
-    'Connect bot': 'Подключить бот',
-    'Set publication target': 'Выбрать чат публикаций',
+    'Connect bot': 'Привязать бот LocalOS',
+    'Set publication target': 'Выбрать канал для постов',
     'Check connection': 'Проверить подключение',
     Advanced: 'Расширенные настройки',
     'Configure sending': 'Настроить отправку',
@@ -283,7 +283,7 @@ const ru: SettingsHubCopy = {
   details: {
     telegram: {
       title: 'Настройка Telegram',
-      description: 'Подключите Telegram владельца и выберите, куда отправлять согласованные публикации.',
+      description: 'Привяжите бот LocalOS для управления аккаунтом, уведомлений, результатов работы и действий из Telegram. Отдельно выберите канал или чат, куда LocalOS будет отправлять согласованные посты.',
     },
     whatsapp: {
       title: 'Настройка WhatsApp',
