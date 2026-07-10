@@ -6223,11 +6223,11 @@ export const AgentBlueprintsPage = () => {
       ) : null}
 
       {currentBusinessId && showAdvancedAgentTools ? (
-        <details className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <details className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <summary className="cursor-pointer text-sm font-semibold text-slate-800">
             Служебные инструменты миграции и поддержки
           </summary>
-          <div className="mt-4 space-y-5">
+          <div className="mt-4 min-w-0 space-y-5">
             <AgentCockpitPanel
               blueprints={blueprints}
               systemAgents={systemAgents}

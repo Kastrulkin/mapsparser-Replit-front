@@ -82,12 +82,12 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       "sticky top-0 z-30 px-4 py-4 transition-all duration-300 sm:px-6",
       "border-b border-slate-200/70 bg-white/82 backdrop-blur-xl supports-[backdrop-filter]:bg-white/74"
     )}>
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex min-w-0 items-center justify-between gap-2 sm:gap-4">
         {/* Left Side: Context Switchers */}
-        <div className="flex items-center gap-3 flex-1">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           {isSuperadmin && (
-            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500">
-              <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-700">
+            <div className="flex min-w-0 flex-1 items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500">
+              <span className="hidden rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-700 sm:inline-flex">
                 SuperAdmin
               </span>
               {currentBusiness?.network_id && (
@@ -120,7 +120,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         </div>
 
         {/* Right Side: Actions & Profile */}
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           {/* Quick Actions for superadmins */}
           {currentUser?.is_superadmin && (
             <Button
@@ -136,25 +136,29 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
           <div className="hidden h-6 w-px bg-slate-200 sm:block"></div>
 
-          <LanguageSwitcher />
+          <div className="hidden md:block">
+            <LanguageSwitcher />
+          </div>
 
-          <Select value={currency} onValueChange={(value) => setCurrency(value as 'RUB' | 'USD' | 'EUR')}>
-            <SelectTrigger className="h-9 w-14 border-0 bg-transparent hover:bg-slate-100/80 focus:ring-0">
-              <span className="text-base font-medium text-slate-700">
-                {currency === 'RUB' ? '₽' : currency === 'USD' ? '$' : '€'}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="RUB">₽ RUB</SelectItem>
-              <SelectItem value="USD">$ USD</SelectItem>
-              <SelectItem value="EUR">€ EUR</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="hidden sm:block">
+            <Select value={currency} onValueChange={(value) => setCurrency(value as 'RUB' | 'USD' | 'EUR')}>
+              <SelectTrigger className="h-9 w-14 border-0 bg-transparent hover:bg-slate-100/80 focus:ring-0">
+                <span className="text-base font-medium text-slate-700">
+                  {currency === 'RUB' ? '₽' : currency === 'USD' ? '$' : '€'}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="RUB">₽ RUB</SelectItem>
+                <SelectItem value="USD">$ USD</SelectItem>
+                <SelectItem value="EUR">€ EUR</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className="hidden h-6 w-px bg-slate-200 sm:block"></div>
 
           {isAuthenticated && currentUser ? (
-            <div className="flex items-center gap-3 pl-2">
+            <div className="hidden items-center gap-3 pl-2 sm:flex">
               <Link to="/dashboard/profile" className="flex items-center gap-2 group">
                 <div className="h-9 w-9 rounded-full border border-slate-200 bg-white p-[2px] shadow-sm transition-all group-hover:border-slate-300 group-hover:shadow-md">
                   <div className="flex h-full w-full items-center justify-center rounded-full bg-slate-50">
