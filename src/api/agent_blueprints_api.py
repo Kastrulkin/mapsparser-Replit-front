@@ -82,9 +82,23 @@ def _agent_today_summary(cursor, business_id: str) -> dict:
             "pending_approvals": 0,
             "failed_runs": 0,
         }
-    cursor.execute("SELECT COALESCE(timezone, 'UTC') AS timezone FROM businesses WHERE id = %s", (business_id,))
-    business_row = cursor.fetchone() or {}
-    timezone_name = str(business_row.get("timezone") or "UTC")
+    timezone_name = "Europe/Moscow"
+    cursor.execute(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'businesses'
+              AND column_name = 'timezone'
+        ) AS has_timezone
+        """
+    )
+    timezone_column = cursor.fetchone() or {}
+    if bool(timezone_column.get("has_timezone")):
+        cursor.execute("SELECT timezone FROM businesses WHERE id = %s", (business_id,))
+        business_row = cursor.fetchone() or {}
+        timezone_name = str(business_row.get("timezone") or timezone_name)
     try:
         business_timezone = ZoneInfo(timezone_name)
     except ZoneInfoNotFoundError:

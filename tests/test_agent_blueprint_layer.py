@@ -11751,7 +11751,9 @@ def test_agent_today_summary_is_computed_server_side(monkeypatch):
 
         def execute(self, query, params=None):
             normalized = " ".join(query.split()).lower()
-            if normalized.startswith("select coalesce(timezone"):
+            if "from information_schema.columns" in normalized:
+                self.result = {"has_timezone": True}
+            elif normalized.startswith("select timezone from businesses"):
                 self.result = {"timezone": "Europe/Tallinn"}
             elif "count(distinct r.id) filter" in normalized:
                 self.result = {
@@ -11771,6 +11773,32 @@ def test_agent_today_summary_is_computed_server_side(monkeypatch):
     assert summary["prepared_results"] == 2
     assert summary["pending_approvals"] == 1
     assert summary["timezone"] == "Europe/Tallinn"
+
+
+def test_agent_today_summary_supports_businesses_without_timezone_column():
+    from api import agent_blueprints_api
+
+    class Cursor:
+        def execute(self, query, params=None):
+            normalized = " ".join(query.split()).lower()
+            if "from information_schema.columns" in normalized:
+                self.result = {"has_timezone": False}
+            elif "count(distinct r.id) filter" in normalized:
+                self.result = {
+                    "completed_runs": 1,
+                    "prepared_results": 1,
+                    "pending_approvals": 0,
+                    "failed_runs": 0,
+                }
+            else:
+                raise AssertionError(f"Unexpected SQL: {query}")
+
+        def fetchone(self):
+            return self.result
+
+    summary = agent_blueprints_api._agent_today_summary(Cursor(), "biz1")
+    assert summary["completed_runs"] == 1
+    assert summary["timezone"] == "Europe/Moscow"
 
 
 def test_blueprint_access_never_trusts_requested_business_id(monkeypatch):
