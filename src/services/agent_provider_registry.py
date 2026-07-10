@@ -63,6 +63,9 @@ CAPABILITY_PROVIDER_MAP: Dict[str, List[Dict[str, Any]]] = {
     "news.generate": [
         {"provider": "native_localos", "state": "available", "role": "draft_store"},
     ],
+    "content_plan.item.create_draft": [
+        {"provider": "native_localos", "state": "available", "role": "internal_draft_store"},
+    ],
     "appointments.read": [
         {"provider": "native_localos", "state": "available", "role": "domain_read"},
         {"provider": "composio", "state": "planned", "role": "external_calendar_or_crm_read"},

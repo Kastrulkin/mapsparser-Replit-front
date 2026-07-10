@@ -163,6 +163,7 @@ class AgentBlueprintRunner:
                 "preflight": preflight,
             }
 
+        self._supersede_pending_runs(str(version.get("blueprint_id") or ""))
         run_id = str(uuid.uuid4())
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
         self.cursor.execute(
@@ -305,6 +306,17 @@ class AgentBlueprintRunner:
         step = steps[next_index]
         step_type = str(step.get("type") or "artifact")
         if step_type == "approval":
+            if str(step.get("approval_type") or "").strip() == "final_output":
+                self._insert_step(
+                    run,
+                    step,
+                    next_index,
+                    "completed",
+                    {},
+                    {"approval": "not_required", "reason": "internal_result_only"},
+                )
+                self._advance_run(run_id, user_data)
+                return
             self._create_approval_step(run, step, next_index, user_data)
             return
         if step_type == "capability":
@@ -332,6 +344,56 @@ class AgentBlueprintRunner:
                 str(step.get("title") or step.get("key") or "Artifact"),
                 json.dumps(payload, ensure_ascii=False, default=str),
             ),
+        )
+        self.cursor.execute(
+            "UPDATE agent_run_steps SET output_json = %s::jsonb WHERE id = %s",
+            (
+                json.dumps(
+                    {
+                        "artifact": payload,
+                        "artifact_id": artifact_id,
+                        "artifact_type": str(step.get("artifact_type") or "step_output"),
+                    },
+                    ensure_ascii=False,
+                    default=str,
+                ),
+                step_id,
+            ),
+        )
+
+    def _supersede_pending_runs(self, blueprint_id: str) -> None:
+        if not blueprint_id:
+            return
+        self.cursor.execute(
+            """
+            UPDATE agent_approvals a
+            SET status = 'superseded',
+                decision_reason = 'Superseded by a newer agent run',
+                decided_at = NOW()
+            FROM agent_runs r
+            WHERE a.run_id = r.id
+              AND r.blueprint_id = %s
+              AND a.status = 'pending'
+            """,
+            (blueprint_id,),
+        )
+        self.cursor.execute(
+            """
+            UPDATE agent_runs
+            SET status = 'superseded',
+                error_text = 'superseded by a newer run',
+                completed_at = COALESCE(completed_at, NOW()),
+                updated_at = NOW()
+            WHERE blueprint_id = %s
+              AND status = 'waiting_approval'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM agent_approvals a
+                  WHERE a.run_id = agent_runs.id
+                    AND a.status = 'pending'
+              )
+            """,
+            (blueprint_id,),
         )
 
     def _build_artifact_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
@@ -1333,6 +1395,9 @@ class AgentBlueprintRunner:
         if not isinstance(run_input, dict):
             run_input = {}
         payload = {**run_input, **step_payload}
+        payload["run_id"] = str(run.get("id") or "")
+        if str(payload.get("source_run_id") or "").startswith("{{"):
+            payload["source_run_id"] = str(run.get("id") or "")
         self._apply_binding_runtime_config(run, step, payload)
         self._apply_step_output_references(str(run.get("id") or ""), payload)
         return payload
@@ -1576,7 +1641,49 @@ class AgentBlueprintRunner:
         approvals = [self._normalize_json_row(dict(row)) for row in (self.cursor.fetchall() or [])]
         normalized_run = self._normalize_json_row(run)
         observability = self._build_run_observability(normalized_run, steps, artifacts, approvals, user_data or {})
-        return {**normalized_run, "steps": steps, "artifacts": artifacts, "approvals": approvals, "observability": observability}
+        business_result, result_state = self._business_result(normalized_run, artifacts)
+        current_approval = next((item for item in reversed(approvals) if item.get("status") == "pending"), None)
+        return {
+            **normalized_run,
+            "steps": steps,
+            "artifacts": artifacts,
+            "approvals": approvals,
+            "observability": observability,
+            "business_result": business_result,
+            "result_state": result_state,
+            "current_approval": current_approval,
+        }
+
+    def _business_result(
+        self,
+        run: Dict[str, Any],
+        artifacts: List[Dict[str, Any]],
+    ) -> tuple[Dict[str, Any], str]:
+        priority = ["agent_final_result", "agent_output_draft", "telegram_post_draft"]
+        if str(run.get("status") or "") != "completed":
+            priority = ["agent_output_draft", "telegram_post_draft", "agent_final_result"]
+        for artifact_type in priority:
+            for artifact in reversed(artifacts):
+                if str(artifact.get("artifact_type") or "") != artifact_type:
+                    continue
+                payload = artifact.get("payload_json") if isinstance(artifact.get("payload_json"), dict) else {}
+                result = payload.get("result") if isinstance(payload.get("result"), dict) else payload
+                if not isinstance(result, dict) or not result:
+                    continue
+                saved_destination = payload.get("saved_destination") if isinstance(payload.get("saved_destination"), dict) else {}
+                if saved_destination:
+                    result = {**result, "saved_destination": saved_destination}
+                status = str(result.get("status") or payload.get("status") or "").strip().lower()
+                if status.startswith("needs_") or status in {"blocked", "validation_error"}:
+                    return result, "blocked"
+                destination_status = str(saved_destination.get("status") or "").strip().lower()
+                if destination_status.startswith("needs_") or destination_status == "blocked":
+                    return result, "blocked"
+                run_input = parse_json_field(run.get("input_json"), {})
+                preview_mode = isinstance(run_input, dict) and run_input.get("preview_mode") is True
+                state = "saved" if artifact_type == "agent_final_result" and not preview_mode else "prepared"
+                return result, state
+        return {}, "missing"
 
     def build_run_support_export(self, run_id: str, user_data: Dict[str, Any]) -> Dict[str, Any]:
         run = self.load_run(run_id, user_data)

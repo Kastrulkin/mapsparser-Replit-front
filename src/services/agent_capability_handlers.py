@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import uuid
+from datetime import date, timedelta
 from typing import Any, Callable, Dict
 
 from database_manager import DatabaseManager
@@ -15,6 +16,7 @@ from services.outreach_send_capability import (
 )
 from services.agent_provider_registry import capability_provider_candidates, get_provider_registry
 from services.agent_google_sheets_adapter import GoogleSheetsAdapterError, load_google_sheets_read_adapter
+from services.content_plan_service import ensure_content_plan_tables
 
 
 CapabilityHandler = Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, Any]]
@@ -44,6 +46,11 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
     "news.generate": {
         "risk": "draft",
         "side_effects": "none",
+        "approval_required": False,
+    },
+    "content_plan.item.create_draft": {
+        "risk": "internal_draft_write",
+        "side_effects": "creates one LocalOS content-plan draft; never publishes externally",
         "approval_required": False,
     },
     "appointments.read": {
@@ -172,6 +179,7 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "reviews.reply.publish_request": _handle_reviews_reply_publish_request,
         "services.optimize": _handle_services_optimize,
         "news.generate": _handle_news_generate,
+        "content_plan.item.create_draft": _handle_content_plan_item_create_draft,
         "appointments.read": _handle_appointments_read,
         "appointments.create_request": _handle_appointments_create_request,
         "communications.draft": _handle_communications_draft,
@@ -895,6 +903,144 @@ def _handle_news_generate(envelope: Dict[str, Any], user_data: Dict[str, Any]) -
             "body": str(payload.get("body") or "").strip(),
             "publish_performed": False,
         },
+    )
+
+
+def _handle_content_plan_item_create_draft(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _payload(envelope)
+    business_id = str(envelope.get("tenant_id") or "").strip()
+    user_id = _actor_user_id(envelope, user_data)
+    draft_text = str(payload.get("draft_text") or "").strip()
+    theme = str(payload.get("theme") or "Черновик агента").strip() or "Черновик агента"
+    scheduled_for_text = str(payload.get("scheduled_for") or "").strip()
+    source_run_id = str(payload.get("source_run_id") or payload.get("run_id") or envelope.get("trace_id") or "").strip()
+    try:
+        scheduled_for = date.fromisoformat(scheduled_for_text)
+    except ValueError:
+        return _result(
+            "needs_future_date",
+            reason_code="CONTENT_PLAN_DATE_REQUIRED",
+            message="Выберите дату для черновика в контент-плане.",
+            localos_write_performed=False,
+        )
+    if scheduled_for < date.today():
+        return _result(
+            "needs_future_date",
+            reason_code="CONTENT_PLAN_DATE_IN_PAST",
+            message="Выберите новую дату: указанная дата уже прошла.",
+            scheduled_for=scheduled_for.isoformat(),
+            localos_write_performed=False,
+        )
+    if not draft_text:
+        return _result(
+            "blocked",
+            reason_code="CONTENT_PLAN_DRAFT_EMPTY",
+            message="Сначала подготовьте текст черновика.",
+            localos_write_performed=False,
+        )
+    if payload.get("preview_mode") is True:
+        return _result(
+            "preview_ready",
+            scheduled_for=scheduled_for.isoformat(),
+            theme=theme,
+            draft_text=draft_text,
+            localos_write_performed=False,
+            preview=True,
+        )
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_content_plan_tables(cursor)
+        plan_id = str(payload.get("plan_id") or "").strip()
+        if plan_id:
+            cursor.execute(
+                "SELECT id FROM contentplans WHERE id = %s AND business_id = %s LIMIT 1",
+                (plan_id, business_id),
+            )
+            if not cursor.fetchone():
+                plan_id = ""
+        if not plan_id:
+            cursor.execute(
+                """
+                SELECT id
+                FROM contentplans
+                WHERE business_id = %s
+                  AND period_start <= %s
+                  AND period_end >= %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (business_id, scheduled_for, scheduled_for),
+            )
+            row = cursor.fetchone()
+            plan_id = str((row or {}).get("id") or "") if isinstance(row, dict) else str(row[0] if row else "")
+        if not plan_id:
+            plan_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"localos:agent-content-plan:{business_id}:{scheduled_for.isoformat()}"))
+            period_end = scheduled_for + timedelta(days=13)
+            cursor.execute(
+                """
+                INSERT INTO contentplans (
+                    id, business_id, scope_type, title, period_days, period_start, period_end,
+                    plan_status, generation_mode, input_snapshot_json, generated_plan_json,
+                    published_plan_json, created_by
+                )
+                VALUES (%s, %s, 'single_business', %s, 14, %s, %s, 'generated', 'manual',
+                        '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, %s)
+                ON CONFLICT (id) DO NOTHING
+                """,
+                (
+                    plan_id,
+                    business_id,
+                    f"Контент-план с {scheduled_for.strftime('%d.%m.%Y')}",
+                    scheduled_for,
+                    period_end,
+                    user_id or None,
+                ),
+            )
+        item_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"localos:agent-content-item:{business_id}:{source_run_id}:{scheduled_for.isoformat()}"))
+        cursor.execute(
+            """
+            INSERT INTO contentplanitems (
+                id, plan_id, business_id, scheduled_for, content_type, theme, goal,
+                source_kind, source_ref, status, draft_text, metadata_json
+            )
+            VALUES (%s, %s, %s, %s, 'news', %s, %s, 'agent_run', %s,
+                    'draft_generated', %s, %s::jsonb)
+            ON CONFLICT (id) DO UPDATE
+            SET theme = EXCLUDED.theme,
+                draft_text = EXCLUDED.draft_text,
+                scheduled_for = EXCLUDED.scheduled_for,
+                status = 'draft_generated',
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                item_id,
+                plan_id,
+                business_id,
+                scheduled_for,
+                theme,
+                "Подготовлено агентом LocalOS",
+                source_run_id,
+                draft_text,
+                json.dumps({"source": "agent_run", "run_id": source_run_id}, ensure_ascii=False),
+            ),
+        )
+        db.conn.commit()
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+    return _result(
+        "draft_saved",
+        plan_id=plan_id,
+        item_id=item_id,
+        scheduled_for=scheduled_for.isoformat(),
+        theme=theme,
+        draft_text=draft_text,
+        localos_write_performed=True,
+        content_plan_url=f"/dashboard/content?plan_id={plan_id}",
     )
 
 

@@ -32,6 +32,8 @@ WRITE_CAPABILITY_MARKERS = [
     "send_",
 ]
 
+SAFE_INTERNAL_DRAFT_CAPABILITIES = {"content_plan.item.create_draft"}
+
 
 def build_workflow_dsl_document(version_payload: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
     compiled_process = metadata.get("compiled_process") if isinstance(metadata.get("compiled_process"), dict) else {}
@@ -129,7 +131,7 @@ def validate_workflow_dsl_document(document: Dict[str, Any]) -> Dict[str, Any]:
                     errors.append(_issue(f"steps[{index}].provider", "provider_action_ref is supported only for OpenClaw actions in v1."))
                 if not provider_action_matches_capability(provider_action_ref, capability):
                     errors.append(_issue(f"steps[{index}].provider_action_ref", "OpenClaw action ref does not match step capability."))
-            if _looks_like_write_capability(capability):
+            if _looks_like_write_capability(capability) and capability not in SAFE_INTERNAL_DRAFT_CAPABILITIES:
                 if step.get("requires_approval") is not True:
                     errors.append(_issue(f"steps[{index}].requires_approval", "Write capability must require approval."))
                 required_approval_type = str(step.get("required_approval_type") or "").strip()
@@ -200,7 +202,10 @@ def _looks_like_write_capability(capability: str) -> bool:
 
 
 def _contains_write_capability(capabilities: set[str]) -> bool:
-    return any(_looks_like_write_capability(capability) for capability in capabilities)
+    return any(
+        _looks_like_write_capability(capability) and capability not in SAFE_INTERNAL_DRAFT_CAPABILITIES
+        for capability in capabilities
+    )
 
 
 def _issue(field: str, message: str) -> Dict[str, str]:

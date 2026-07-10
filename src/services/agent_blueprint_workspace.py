@@ -335,7 +335,7 @@ def _build_output_draft_payload(cursor: Any, run: Dict[str, Any], base_payload: 
         "provenance": output.get("provenance") if isinstance(output, dict) else [],
         "analysis_source": output.get("analysis_source") if isinstance(output, dict) else "",
         "llm_analysis_used": bool(output.get("llm_analysis_used")) if isinstance(output, dict) else False,
-        "approval_required": True,
+        "approval_required": False,
         "external_dispatch_performed": False,
         "dispatch_state": "not_dispatched",
     }
@@ -343,15 +343,41 @@ def _build_output_draft_payload(cursor: Any, run: Dict[str, Any], base_payload: 
 
 def _build_final_result_payload(cursor: Any, run: Dict[str, Any], base_payload: Dict[str, Any], workspace: Dict[str, Any]) -> Dict[str, Any]:
     output_payload = _latest_artifact_payload(cursor, _clean_text(run.get("id")), "agent_output_draft")
+    content_plan_result = _run_capability_result(cursor, _clean_text(run.get("id")), "save_content_plan_draft")
     return {
         **base_payload,
         "status": "accepted",
         "result": output_payload.get("result") if isinstance(output_payload.get("result"), dict) else {},
+        "saved_destination": content_plan_result,
         "approval_required": False,
         "external_dispatch_performed": False,
         "delivery_state": "not_dispatched",
         "feedback_applied": len(workspace.get("feedback_history") or []),
     }
+
+
+def _run_capability_result(cursor: Any, run_id: str, step_key: str) -> Dict[str, Any]:
+    if not run_id or not step_key:
+        return {}
+    cursor.execute(
+        """
+        SELECT output_json
+        FROM agent_run_steps
+        WHERE run_id = %s
+          AND step_key = %s
+          AND status = 'completed'
+        ORDER BY step_index DESC
+        LIMIT 1
+        """,
+        (run_id, step_key),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return {}
+    output = workspace_parse_json_field(row.get("output_json") if isinstance(row, dict) else row[0], {})
+    orchestrator = output.get("orchestrator") if isinstance(output, dict) and isinstance(output.get("orchestrator"), dict) else {}
+    result = orchestrator.get("result") if isinstance(orchestrator.get("result"), dict) else {}
+    return result
 
 
 def _render_output(

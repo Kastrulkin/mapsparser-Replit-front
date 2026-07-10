@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any, Dict, List
 
 from services.agent_blueprint_runner import default_supervised_outreach_version_payload
@@ -21,6 +22,40 @@ def _normalized_text(value: Any) -> str:
 def _contains_any(text: str, words: List[str]) -> bool:
     lowered = text.lower()
     return any(word in lowered for word in words)
+
+
+def _extract_requested_date(description: str) -> str:
+    iso_match = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", description)
+    if iso_match:
+        try:
+            return date(int(iso_match.group(1)), int(iso_match.group(2)), int(iso_match.group(3))).isoformat()
+        except ValueError:
+            return ""
+    months = {
+        "январ": 1,
+        "феврал": 2,
+        "март": 3,
+        "апрел": 4,
+        "ма": 5,
+        "июн": 6,
+        "июл": 7,
+        "август": 8,
+        "сентябр": 9,
+        "октябр": 10,
+        "ноябр": 11,
+        "декабр": 12,
+    }
+    match = re.search(r"\b(\d{1,2})\s+([а-яё]+)\s+(20\d{2})", description.lower())
+    if not match:
+        return ""
+    month_text = match.group(2)
+    month = next((number for prefix, number in months.items() if month_text.startswith(prefix)), 0)
+    if not month:
+        return ""
+    try:
+        return date(int(match.group(3)), month, int(match.group(1))).isoformat()
+    except ValueError:
+        return ""
 
 
 def infer_blueprint_category(description: str) -> str:
@@ -749,6 +784,11 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
     schedule = intent.get("schedule") if isinstance(intent.get("schedule"), dict) else {}
     source_binding = _source_binding(source, trigger)
     source_step_key = f"read_{source.get('key') or 'source'}"
+    save_to_content_plan = _contains_any(
+        description.lower(),
+        ["контент-план", "контент план", "content plan"],
+    ) and _contains_any(description.lower(), ["сохран", "добав", "запиш", "созда"])
+    scheduled_for = _extract_requested_date(description)
     steps = [
         _source_step(source, trigger),
         {
@@ -766,27 +806,45 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
                 "delivery_state": "not_dispatched",
             },
         },
-        {
-            "key": "approve_output",
-            "type": "approval",
-            "title": "Подтвердить результат",
-            "approval_type": "final_output",
-        },
+    ]
+    if save_to_content_plan:
+        steps.append(
+            {
+                "key": "save_content_plan_draft",
+                "type": "capability",
+                "title": "Сохранить черновик в контент-план",
+                "capability": "content_plan.item.create_draft",
+                "requires_approval": False,
+                "payload": {
+                    "scheduled_for": scheduled_for,
+                    "source_run_id": "{{run_id}}",
+                    "input_mappings": [
+                        {"from_step": "prepare_output", "path": "artifact.result.draft_text", "target": "draft_text"},
+                        {"from_step": "prepare_output", "path": "artifact.result.title", "target": "theme"},
+                    ],
+                },
+            }
+        )
+    steps.append(
         {
             "key": "save_result",
             "type": "artifact",
             "title": "Сохранить итог",
             "artifact_type": "agent_final_result",
             "payload": {
-                "status": "pending_approval",
+                "status": "saved",
                 "source_step": source_step_key,
+                "content_plan_step": "save_content_plan_draft" if save_to_content_plan else "",
                 "external_dispatch_performed": False,
                 "delivery_state": "not_dispatched",
             },
-        },
-    ]
+        }
+    )
     steps = annotate_steps_with_openclaw_action_refs(steps)
     read_capability = str(source.get("default_capability") or "")
+    capability_allowlist = [read_capability] if read_capability else []
+    if save_to_content_plan:
+        capability_allowlist.append("content_plan.item.create_draft")
     version_payload = {
         "goal": description,
         "trigger": trigger,
@@ -801,12 +859,10 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
             },
         },
         "steps": steps,
-        "capability_allowlist": [read_capability] if read_capability else [],
+        "capability_allowlist": capability_allowlist,
         "approval_policy": {
-            "required_for": ["final_output"],
-            "final_output": "manual_approval_required",
-            "first_run": "manual_approval_required",
-            "mode": "review_result_only",
+            "required_for": [],
+            "mode": "external_actions_only",
         },
         "required_integration_bindings": [source_binding],
         "limits": {
@@ -819,10 +875,10 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
             "properties": {
                 "source_items": {"type": "array"},
                 "result": {"type": "object"},
-                "approval_required": {"type": "boolean"},
+                "content_plan_item": {"type": "object"},
             },
         },
-        "side_effects_performed": False,
+        "side_effects_performed": save_to_content_plan,
     }
     if schedule:
         version_payload["schedule"] = schedule
@@ -833,7 +889,7 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
         "trigger": trigger,
         "schedule": schedule,
         "source": read_capability or str(source.get("key") or ""),
-        "target": "agent_output_draft",
+        "target": "content_plan.item.create_draft" if save_to_content_plan else "agent_output_draft",
         "runtime": "agent_blueprints",
         "archetype": f"{source.get('key')}_to_business_result",
         "binding_status": "requires_user_connection",
@@ -842,7 +898,12 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
         "schema": "compiled_source_to_result_workflow_v1",
         "source_binding": str(source_binding.get("key") or ""),
         "runtime_truth": "agent_blueprint_versions.steps_json",
-        "approval_boundary": "final_output",
+        "approval_boundary": "external_actions_only",
+    }
+    metadata["execution_mode"] = "scheduled" if trigger == "schedule.daily" else "manual"
+    metadata["content_plan_destination"] = {
+        "enabled": save_to_content_plan,
+        "scheduled_for": scheduled_for,
     }
     metadata["compiler_contract"] = {
         "llm_usage": "design_time_only",

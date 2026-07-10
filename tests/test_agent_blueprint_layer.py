@@ -681,22 +681,24 @@ def test_agent_compiler_creates_source_only_blueprint_for_google_sheet_result_ur
     assert draft["category"] == "custom"
     assert draft["metadata"]["custom_process"]["kind"] == "source_to_result_workflow"
     assert draft["metadata"]["custom_process"]["source"] == "google_sheets.read_rows"
-    assert draft["metadata"]["custom_process"]["target"] == "agent_output_draft"
+    assert draft["metadata"]["custom_process"]["target"] == "content_plan.item.create_draft"
     assert draft["metadata"]["compiled_process"]["schema"] == "compiled_source_to_result_workflow_v1"
     assert payload["mode"] == "source_to_reviewed_result"
-    assert payload["capability_allowlist"] == ["google_sheets.read_rows"]
+    assert payload["capability_allowlist"] == ["google_sheets.read_rows", "content_plan.item.create_draft"]
     assert payload["required_integration_bindings"][0]["key"] == "google_sheets_read"
     assert [step["key"] for step in payload["steps"]] == [
         "read_google_sheets",
         "prepare_output",
-        "approve_output",
+        "save_content_plan_draft",
         "save_result",
     ]
+    assert "content_plan.item.create_draft" in payload["capability_allowlist"]
+    assert payload["approval_policy"]["required_for"] == []
     assert payload["steps"][0]["capability"] == "google_sheets.read_rows"
     assert payload["steps"][0]["provider_action_ref"] == "openclaw.google_sheets.read_rows"
     assert payload["steps"][1]["artifact_type"] == "agent_output_draft"
     assert payload["steps"][1]["payload"]["rows_from_step"] == "read_google_sheets"
-    assert payload["approval_policy"]["final_output"] == "manual_approval_required"
+    assert payload["approval_policy"]["mode"] == "external_actions_only"
     assert payload["limits"]["autonomous_external_write_allowed"] is False
     assert draft["metadata"]["compiled_artifact_candidate"]["status"] == "validation_passed"
     assert draft["metadata"]["compiled_validation"]["valid"] is True
@@ -5442,7 +5444,7 @@ def test_scheduled_trigger_runtime_starts_active_safe_schedule_agent():
             "custom_process": {
                 "kind": "source_destination_workflow",
                 "trigger": "schedule.daily",
-                "schedule": {"frequency": "daily", "time": "19:00"},
+                    "schedule": {"frequency": "daily", "time": "19:00", "timezone": "Europe/Moscow"},
             },
         },
     }
@@ -5489,7 +5491,7 @@ def test_due_scheduled_trigger_dispatcher_runs_each_business_once_per_day():
             "custom_process": {
                 "kind": "source_destination_workflow",
                 "trigger": "schedule.daily",
-                "schedule": {"frequency": "daily", "time": "19:00"},
+                "schedule": {"frequency": "daily", "time": "19:00", "timezone": "Europe/Moscow"},
             },
         },
     }
@@ -5516,9 +5518,10 @@ def test_due_scheduled_trigger_dispatcher_runs_each_business_once_per_day():
     )
 
     assert first["dispatched_count"] == 1
-    assert first["dispatched"][0]["matched_count"] == 1
+    assert first["dispatched"][0]["blueprint_id"] == "bp1"
+    assert first["dispatched"][0]["run_id"]
     assert second["dispatched_count"] == 0
-    assert second["skipped"][0]["reason"] == "already_recorded_today"
+    assert second["skipped"][0]["reason"] == "already_recorded_for_schedule"
     assert len(cursor.tables["agent_runs"]) == 1
 
 
@@ -5538,9 +5541,16 @@ def test_due_scheduled_trigger_dispatcher_waits_until_schedule_time():
             "required_integration_bindings": [],
             "custom_process": {
                 "trigger": "schedule.daily",
-                "schedule": {"frequency": "daily", "time": "19:00"},
+                "schedule": {"frequency": "daily", "time": "19:00", "timezone": "UTC"},
             },
         },
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "version_number": 1,
+        "steps_json": [],
+        "output_schema_json": {"trigger": "schedule.daily"},
     }
 
     result = dispatch_due_scheduled_agent_blueprints(
@@ -5548,9 +5558,287 @@ def test_due_scheduled_trigger_dispatcher_waits_until_schedule_time():
         now=datetime(2026, 6, 10, 18, 59, tzinfo=timezone.utc),
     )
 
-    assert result["checked_businesses"] == 0
+    assert result["checked_businesses"] == 1
     assert result["dispatched_count"] == 0
     assert cursor.tables["agent_runs"] == {}
+
+
+def test_due_scheduler_runs_two_blueprints_for_same_business():
+    from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
+
+    cursor = FakeActiveTelegramTriggerCursor()
+    for index, schedule_time in enumerate(["09:00", "10:00"], start=1):
+        blueprint_id = f"bp{index}"
+        version_id = f"ver{index}"
+        cursor.tables["agent_blueprints"][blueprint_id] = {
+            "id": blueprint_id,
+            "business_id": "biz1",
+            "name": f"Scheduled {index}",
+            "category": "custom",
+            "status": "active",
+            "created_by_user_id": "user1",
+            "metadata_json": {
+                "active_version_id": version_id,
+                "required_integration_bindings": [],
+                "custom_process": {
+                    "trigger": "schedule.daily",
+                    "schedule": {"time": schedule_time, "timezone": "Europe/Tallinn"},
+                },
+            },
+        }
+        cursor.tables["agent_blueprint_versions"][version_id] = {
+            "id": version_id,
+            "blueprint_id": blueprint_id,
+            "version_number": 1,
+            "steps_json": [],
+            "output_schema_json": {"trigger": "schedule.daily"},
+        }
+
+    result = dispatch_due_scheduled_agent_blueprints(
+        cursor,
+        now=datetime(2026, 7, 10, 8, 5, tzinfo=timezone.utc),
+    )
+
+    assert result["checked_businesses"] == 1
+    assert result["checked_blueprints"] == 2
+    assert result["dispatched_count"] == 2
+    assert {item["blueprint_id"] for item in result["dispatched"]} == {"bp1", "bp2"}
+    assert len(cursor.tables["agent_runs"]) == 2
+
+
+def test_run_business_result_prefers_final_artifact():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    cursor.tables["agent_runs"]["run1"] = {
+        "id": "run1",
+        "blueprint_id": "bp1",
+        "blueprint_version_id": "ver1",
+        "business_id": "biz1",
+        "status": "completed",
+        "input_json": {},
+        "output_json": {},
+    }
+    cursor.tables["agent_artifacts"]["draft"] = {
+        "id": "draft",
+        "run_id": "run1",
+        "step_id": "step1",
+        "artifact_type": "agent_output_draft",
+        "title": "Draft",
+        "payload_json": {"result": {"draft_text": "old draft"}},
+    }
+    cursor.tables["agent_artifacts"]["final"] = {
+        "id": "final",
+        "run_id": "run1",
+        "step_id": "step2",
+        "artifact_type": "agent_final_result",
+        "title": "Final",
+        "payload_json": {"result": {"draft_text": "saved final"}},
+    }
+
+    run = AgentBlueprintRunner(cursor).load_run("run1")
+
+    assert run["business_result"]["draft_text"] == "saved final"
+    assert run["result_state"] == "saved"
+
+
+def test_new_run_supersedes_old_pending_approval():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "status": "draft",
+        "metadata_json": {"required_integration_bindings": []},
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "version_number": 1,
+        "steps_json": [],
+    }
+    cursor.tables["agent_runs"]["old"] = {
+        "id": "old",
+        "blueprint_id": "bp1",
+        "blueprint_version_id": "ver1",
+        "business_id": "biz1",
+        "status": "waiting_approval",
+        "input_json": {},
+        "output_json": {},
+    }
+    cursor.tables["agent_approvals"]["approval-old"] = {
+        "id": "approval-old",
+        "run_id": "old",
+        "step_id": "approval-step",
+        "status": "pending",
+        "approval_type": "final_output",
+        "title": "Old approval",
+        "payload_json": {},
+    }
+
+    result = AgentBlueprintRunner(cursor).start_run("ver1", {"preview_mode": True}, {"user_id": "user1"})
+
+    assert result["success"] is True
+    assert cursor.tables["agent_approvals"]["approval-old"]["status"] == "superseded"
+    assert cursor.tables["agent_runs"]["old"]["status"] == "superseded"
+
+
+def test_content_plan_draft_capability_preview_and_past_date_do_not_write():
+    from services.agent_capability_handlers import _handle_content_plan_item_create_draft
+
+    preview = _handle_content_plan_item_create_draft(
+        {
+            "tenant_id": "biz1",
+            "trace_id": "run1",
+            "payload": {
+                "preview_mode": True,
+                "scheduled_for": "2099-07-27",
+                "draft_text": "Prepared post",
+                "theme": "Trip",
+            },
+        },
+        {"user_id": "user1"},
+    )["result"]
+    past = _handle_content_plan_item_create_draft(
+        {
+            "tenant_id": "biz1",
+            "trace_id": "run2",
+            "payload": {
+                "scheduled_for": "2020-01-01",
+                "draft_text": "Prepared post",
+                "theme": "Trip",
+            },
+        },
+        {"user_id": "user1"},
+    )["result"]
+
+    assert preview["status"] == "preview_ready"
+    assert preview["localos_write_performed"] is False
+    assert past["status"] == "needs_future_date"
+    assert past["reason_code"] == "CONTENT_PLAN_DATE_IN_PAST"
+    assert past["localos_write_performed"] is False
+
+
+def test_legacy_final_output_approval_is_skipped_for_internal_result():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "status": "draft",
+        "metadata_json": {"required_integration_bindings": []},
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "version_number": 1,
+        "steps_json": [
+            {"key": "draft", "type": "artifact", "artifact_type": "agent_output_draft"},
+            {"key": "approve", "type": "approval", "approval_type": "final_output"},
+            {"key": "final", "type": "artifact", "artifact_type": "agent_final_result"},
+        ],
+    }
+
+    result = AgentBlueprintRunner(cursor).start_run("ver1", {"preview_mode": True}, {"user_id": "user1"})
+
+    assert result["success"] is True
+    assert result["run"]["status"] == "completed"
+    assert cursor.tables["agent_approvals"] == {}
+
+
+def test_content_plan_draft_capability_is_idempotent(monkeypatch):
+    from services import agent_capability_handlers
+
+    class ContentPlanCursor:
+        def __init__(self):
+            self.plan_id = ""
+            self.items = {}
+            self.fetchone_value = None
+
+        def execute(self, query, params=None):
+            normalized = " ".join(query.split()).lower()
+            params = params or ()
+            if normalized.startswith("select id from contentplans"):
+                self.fetchone_value = {"id": self.plan_id} if self.plan_id else None
+            elif normalized.startswith("insert into contentplans"):
+                self.plan_id = str(params[0])
+                self.fetchone_value = None
+            elif normalized.startswith("insert into contentplanitems"):
+                self.items[str(params[0])] = {"plan_id": params[1], "draft_text": params[8]}
+                self.fetchone_value = None
+            else:
+                raise AssertionError(f"Unhandled content-plan SQL: {query}")
+
+        def fetchone(self):
+            return self.fetchone_value
+
+    class ContentPlanConnection:
+        def __init__(self):
+            self.cursor_value = ContentPlanCursor()
+
+        def cursor(self):
+            return self.cursor_value
+
+        def commit(self):
+            return None
+
+        def rollback(self):
+            return None
+
+    connection = ContentPlanConnection()
+
+    class ContentPlanDatabase:
+        def __init__(self):
+            self.conn = connection
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(agent_capability_handlers, "DatabaseManager", ContentPlanDatabase)
+    monkeypatch.setattr(agent_capability_handlers, "ensure_content_plan_tables", lambda _cursor: None)
+    envelope = {
+        "tenant_id": "biz1",
+        "trace_id": "run1",
+        "payload": {
+            "scheduled_for": "2099-07-27",
+            "draft_text": "Prepared post",
+            "theme": "Trip",
+            "source_run_id": "run1",
+        },
+    }
+
+    first = agent_capability_handlers._handle_content_plan_item_create_draft(envelope, {"user_id": "user1"})["result"]
+    second = agent_capability_handlers._handle_content_plan_item_create_draft(envelope, {"user_id": "user1"})["result"]
+
+    assert first["status"] == "draft_saved"
+    assert second["item_id"] == first["item_id"]
+    assert len(connection.cursor_value.items) == 1
+
+
+def test_execution_modes_and_scheduled_next_run_are_explicit():
+    from api.agent_blueprints_api import _agent_execution_mode, _agent_schedule_status
+
+    one_off = {"metadata_json": {"execution_mode": "one_off"}}
+    manual = {"metadata_json": {"execution_mode": "manual", "custom_process": {"trigger": "manual.run"}}}
+    scheduled = {
+        "metadata_json": {
+            "execution_mode": "scheduled",
+            "custom_process": {
+                "trigger": "schedule.daily",
+                "schedule": {"time": "09:30", "timezone": "Europe/Tallinn"},
+            },
+        }
+    }
+
+    assert _agent_execution_mode(one_off) == "one_off"
+    assert _agent_execution_mode(manual) == "manual"
+    assert _agent_execution_mode(scheduled) == "scheduled"
+    schedule_status = _agent_schedule_status(scheduled)
+    assert schedule_status["ready"] is True
+    assert schedule_status["timezone"] == "Europe/Tallinn"
+    assert schedule_status["next_run_at"]
 
 
 def test_activate_version_marks_blueprint_active_for_trigger_runtime(monkeypatch):
@@ -7374,7 +7662,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "finalize_reserved_action_credits" in capability_handlers_source
 
 
-def test_generic_document_runner_uses_sources_and_stops_for_final_approval():
+def test_generic_document_runner_uses_sources_and_completes_internal_result():
     from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
     from services.agent_blueprint_runner import AgentBlueprintRunner
 
@@ -7417,12 +7705,13 @@ def test_generic_document_runner_uses_sources_and_stops_for_final_approval():
 
     assert result["success"] is True
     run = result["run"]
-    assert run["status"] == "waiting_approval"
+    assert run["status"] == "completed"
     assert [step["step_key"] for step in run["steps"]] == [
         "collect_inputs",
         "extract_context",
         "prepare_output",
         "approve_output",
+        "save_result",
     ]
     output = [item for item in run["artifacts"] if item["artifact_type"] == "agent_output_draft"][0]
     assert output["payload_json"]["external_dispatch_performed"] is False
@@ -7431,7 +7720,7 @@ def test_generic_document_runner_uses_sources_and_stops_for_final_approval():
     assert output["payload_json"]["result"]["fields"]["Оплата"]
     assert output["payload_json"]["result"]["fields"]["Ответственность"]
     assert output["payload_json"]["dispatch_state"] == "not_dispatched"
-    assert run["approvals"][0]["approval_type"] == "final_output"
+    assert run["approvals"] == []
 
 
 def test_generic_email_runner_prepares_draft_and_never_dispatches():
@@ -7477,7 +7766,7 @@ def test_generic_email_runner_prepares_draft_and_never_dispatches():
 
     assert result["success"] is True
     run = result["run"]
-    assert run["status"] == "waiting_approval"
+    assert run["status"] == "completed"
     assert not [step for step in run["steps"] if step["step_type"] == "capability"]
     output = [item for item in run["artifacts"] if item["artifact_type"] == "agent_output_draft"][0]
     payload = output["payload_json"]
@@ -7491,7 +7780,7 @@ def test_generic_email_runner_prepares_draft_and_never_dispatches():
     assert email_result["body"]
     assert email_result["checklist"]
     assert email_result["provenance"] == ["Контекст письма"]
-    assert run["approvals"][0]["approval_type"] == "final_output"
+    assert run["approvals"] == []
 
 
 def test_generic_table_runner_prepares_report_and_never_dispatches():
@@ -7537,7 +7826,7 @@ def test_generic_table_runner_prepares_report_and_never_dispatches():
 
     assert result["success"] is True
     run = result["run"]
-    assert run["status"] == "waiting_approval"
+    assert run["status"] == "completed"
     assert not [step for step in run["steps"] if step["step_type"] == "capability"]
     output = [item for item in run["artifacts"] if item["artifact_type"] == "agent_output_draft"][0]
     payload = output["payload_json"]
@@ -7552,7 +7841,7 @@ def test_generic_table_runner_prepares_report_and_never_dispatches():
     assert table_result["rows_to_review"]
     assert table_result["recommendations"]
     assert table_result["provenance"] == ["clients.csv"]
-    assert run["approvals"][0]["approval_type"] == "final_output"
+    assert run["approvals"] == []
 
 
 def test_generic_reviews_runner_prepares_reply_drafts_and_never_publishes():
@@ -7603,7 +7892,7 @@ def test_generic_reviews_runner_prepares_reply_drafts_and_never_publishes():
 
     assert result["success"] is True
     run = result["run"]
-    assert run["status"] == "waiting_approval"
+    assert run["status"] == "completed"
     assert not [step for step in run["steps"] if step["step_type"] == "capability"]
     output = [item for item in run["artifacts"] if item["artifact_type"] == "agent_output_draft"][0]
     payload = output["payload_json"]
@@ -7618,7 +7907,7 @@ def test_generic_reviews_runner_prepares_reply_drafts_and_never_publishes():
     assert review_result["manual_review_reasons"]
     assert review_result["checklist"]
     assert review_result["provenance"] == ["Отзывы"]
-    assert run["approvals"][0]["approval_type"] == "final_output"
+    assert run["approvals"] == []
 
 
 def test_message_result_needs_source_data_without_sheet_rows():
@@ -9929,6 +10218,26 @@ class FakeCursor:
             return None
         if normalized_query.startswith("create index if not exists"):
             return None
+        if normalized_query.startswith("update agent_approvals a set status = 'superseded'"):
+            blueprint_id = params[0]
+            for approval in self.tables["agent_approvals"].values():
+                run = self.tables["agent_runs"].get(approval.get("run_id"))
+                if run and run.get("blueprint_id") == blueprint_id and approval.get("status") == "pending":
+                    approval["status"] = "superseded"
+                    approval["decision_reason"] = "Superseded by a newer agent run"
+            return None
+        if normalized_query.startswith("update agent_runs set status = 'superseded'"):
+            blueprint_id = params[0]
+            for run in self.tables["agent_runs"].values():
+                if run.get("blueprint_id") != blueprint_id or run.get("status") != "waiting_approval":
+                    continue
+                has_pending = any(
+                    approval.get("run_id") == run.get("id") and approval.get("status") == "pending"
+                    for approval in self.tables["agent_approvals"].values()
+                )
+                if not has_pending:
+                    run["status"] = "superseded"
+            return None
         if "from agent_sheet_operation_requests" in normalized_query:
             business_id = params[0]
             request_ids = set(params[1])
@@ -11067,34 +11376,45 @@ class FakeActiveTelegramTriggerCursor(FakeCursor):
         if normalized_query.startswith("create table") or normalized_query.startswith("create index"):
             return None
         if normalized_query.startswith("insert into agent_trigger_events"):
-            is_scheduler_event = len(params) == 4
+            is_single_blueprint_scheduler_event = len(params) == 5
+            is_scheduler_event = len(params) == 4 or is_single_blueprint_scheduler_event
             self.trigger_events.append(
                 {
                     "id": params[0],
                     "business_id": params[1],
                     "source": "scheduler" if is_scheduler_event else "telegram",
-                    "event_type": params[2] if is_scheduler_event else "telegram.message.received",
+                    "event_type": params[3] if is_single_blueprint_scheduler_event else params[2] if is_scheduler_event else "telegram.message.received",
                     "status": "received",
-                    "payload_json": json.loads(params[3] if is_scheduler_event else params[2]),
+                    "payload_json": json.loads(params[4] if is_single_blueprint_scheduler_event else params[3] if is_scheduler_event else params[2]),
                     "reason_code": None,
-                    "blueprint_id": None,
+                    "blueprint_id": params[2] if is_single_blueprint_scheduler_event else None,
                     "run_id": None,
                 }
             )
             return None
         if normalized_query.startswith("select id from agent_trigger_events"):
-            business_id = params[0]
+            blueprint_id = params[0]
             event_type = params[1]
             self.last_result = next(
                 (
                     item
                     for item in self.trigger_events
-                    if item.get("business_id") == business_id
+                    if item.get("blueprint_id") == blueprint_id
                     and item.get("source") == "scheduler"
                     and item.get("event_type") == event_type
+                    and item.get("payload_json", {}).get("schedule_date") == params[2]
+                    and item.get("payload_json", {}).get("schedule_time") == params[3]
                 ),
                 None,
             )
+            return None
+        if normalized_query.startswith("select * from agent_blueprints where status = 'active'"):
+            limit = int(params[0])
+            self.last_results = [
+                row
+                for row in self.tables["agent_blueprints"].values()
+                if row.get("status") == "active" and row.get("category") in {"custom", "tables"}
+            ][:limit]
             return None
         if normalized_query.startswith("select id, business_id, metadata_json from agent_blueprints"):
             limit = int(params[0])
@@ -11136,6 +11456,13 @@ class FakeActiveTelegramTriggerCursor(FakeCursor):
                 if item["id"] == params[1]:
                     item["status"] = "ignored"
                     item["reason_code"] = params[0]
+            return None
+        if normalized_query.startswith("update agent_trigger_events set run_id"):
+            for item in self.trigger_events:
+                if item["id"] == params[3]:
+                    item["run_id"] = params[0]
+                    item["status"] = params[1]
+                    item["reason_code"] = params[2]
             return None
         return super().execute(query, params)
 

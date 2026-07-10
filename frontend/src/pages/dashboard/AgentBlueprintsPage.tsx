@@ -115,6 +115,8 @@ type AgentBlueprint = {
   sources_count?: number;
   journal_entries_count?: number;
   versions_count?: number;
+  execution_mode?: 'one_off' | 'manual' | 'scheduled';
+  next_run_at?: string | null;
   metadata_json?: Record<string, unknown>;
 };
 
@@ -364,6 +366,7 @@ type AgentRun = {
   id: string;
   status: string;
   blueprint_id: string;
+  blueprint_version_id?: string;
   input_json?: Record<string, unknown>;
   steps?: AgentRunStep[];
   artifacts?: AgentArtifact[];
@@ -372,6 +375,9 @@ type AgentRun = {
   started_at?: string | null;
   completed_at?: string | null;
   observability?: AgentRunObservability;
+  business_result?: Record<string, unknown>;
+  result_state?: 'missing' | 'prepared' | 'saved' | 'blocked';
+  current_approval?: AgentApproval | null;
 };
 
 type AgentMetricsSummary = {
@@ -461,6 +467,10 @@ type AgentBlueprintDetails = {
   active_version?: Record<string, unknown> | null;
   active_version_id?: string;
   active_version_number?: number;
+  candidate_version?: Record<string, unknown> | null;
+  candidate_version_id?: string;
+  execution_mode?: 'one_off' | 'manual' | 'scheduled';
+  next_run_at?: string | null;
   learning_events?: AgentLearningEvent[];
   version_events?: AgentVersionEvent[];
   feedback_history?: Array<Record<string, unknown>>;
@@ -856,7 +866,7 @@ type EmployeeStatus = {
   summary: string;
 };
 
-type EmployeeNextActionKind = 'approve' | 'connect' | 'run_test' | 'enable' | 'open_result' | 'view_history';
+type EmployeeNextActionKind = 'approve' | 'connect' | 'run_test' | 'run_work' | 'enable' | 'configure_schedule' | 'open_result' | 'view_history';
 
 type EmployeeWorkspaceState = 'draft' | 'needs_connection' | 'ready_for_test' | 'running_test' | 'waiting_for_review' | 'blocked_result' | 'working' | 'needs_attention' | 'error';
 
@@ -2608,12 +2618,12 @@ const buildTodaySummary = (
 ): AgentTodaySummary => {
   const detailValues = Object.values(detailsById);
   const runs = detailValues.flatMap((details) => details.runs || []);
-  const todayRuns = runs.filter((run) => isWithinLastDay(run.completed_at || run.started_at));
+  const todayRuns = runs.filter((run) => run.status !== 'superseded' && isWithinLastDay(run.completed_at || run.started_at));
   const todayApprovals = detailValues
     .flatMap((details) => details.approval_queue || [])
     .filter((approval) => isWithinLastDay(approval.requested_at || approval.run_started_at) && !isBusinessBlockerApproval(approval));
   const artifacts = detailValues.flatMap((details) => {
-    const recentRuns = (details.runs || []).filter((run) => isWithinLastDay(run.completed_at || run.started_at));
+    const recentRuns = (details.runs || []).filter((run) => run.status !== 'superseded' && isWithinLastDay(run.completed_at || run.started_at));
     return recentRuns.flatMap((run) => run.artifacts || []);
   });
   const listFallbackRuns = blueprints.filter((blueprint) => isWithinLastDay(blueprint.last_run_completed_at || blueprint.last_run_started_at));
@@ -2794,6 +2804,7 @@ const buildEmployeeWorkspaceState = (
   const gate = details?.activation_gate;
   const missingConnections = Number(gate?.preflight?.missing_count || 0);
   const hasActiveVersion = Boolean(details?.active_version_id || blueprint.active_version_id || blueprint.active_version_number);
+  const hasCandidateVersion = Boolean(details?.candidate_version_id || blueprint.latest_version_id || blueprint.latest_version_number);
   const latestRun = details?.runs?.[0] || null;
   const latestResult = findPreparedResultPayload(latestRun, pendingApproval);
   if (isBusinessBlockerPayload(latestResult)) {
@@ -2812,14 +2823,14 @@ const buildEmployeeWorkspaceState = (
   if (missingConnections > 0) {
     return 'needs_connection';
   }
-  if (!hasActiveVersion || blueprint.status === 'draft') {
-    return 'draft';
-  }
   if (gate?.preview_run_status?.ready === false) {
     return 'ready_for_test';
   }
-  if (gate?.can_activate === true) {
+  if (!hasActiveVersion && hasCandidateVersion && (gate?.can_activate === true || gate?.next_step === 'configure_schedule')) {
     return 'needs_attention';
+  }
+  if (!hasActiveVersion || blueprint.status === 'draft') {
+    return 'draft';
   }
   return 'working';
 };
@@ -2887,6 +2898,7 @@ const buildEmployeePrimaryAction = ({
   const gate = details?.activation_gate;
   const activationVersionId = gate?.active_version_id || details?.active_version_id || blueprint.active_version_id || '';
   const latestResult = findPreparedResultPayload(details?.runs?.[0] || null, pendingApproval);
+  const userMode = buildAgentUserMode(blueprint, details);
   if (state === 'blocked_result') {
     if (resultPayloadStatus(latestResult) === 'needs_google_access') {
       if (googleAccessFreshAfterResult) {
@@ -2969,12 +2981,39 @@ const buildEmployeePrimaryAction = ({
     };
   }
   if (state === 'needs_attention' && activationVersionId) {
+    if (userMode.mode === 'one_off') {
+      return {
+        kind: 'run_work',
+        label: 'Выполнить задачу',
+        description: 'Тест пройден. Выполните задачу и сохраните рабочий результат.',
+        targetMode: 'results',
+        versionId: activationVersionId,
+      };
+    }
+    if (gate?.next_step === 'configure_schedule') {
+      return {
+        kind: 'configure_schedule',
+        label: 'Настроить расписание',
+        description: 'Укажите время и часовой пояс, затем включите агента.',
+        targetMode: 'advanced',
+        versionId: activationVersionId,
+      };
+    }
     return {
       kind: 'enable',
-      label: 'Включить сотрудника',
+      label: userMode.mode === 'scheduled' ? 'Включить по расписанию' : 'Включить агента',
       description: 'Включите сотрудника после успешной проверки результата.',
       targetMode: 'overview',
       versionId: activationVersionId,
+    };
+  }
+  if (state === 'working' && userMode.mode === 'manual') {
+    return {
+      kind: 'run_work',
+      label: 'Запустить работу',
+      description: 'Агент выполнит опубликованный сценарий и сохранит новый результат.',
+      targetMode: 'results',
+      versionId: details?.active_version_id || blueprint.active_version_id || '',
     };
   }
   return {
@@ -3050,12 +3089,21 @@ const buildEmployeeWorkspaceStory = (
   const state = buildEmployeeWorkspaceState(blueprint, details, pendingApproval);
   const status = buildEmployeeStatus(blueprint, details, pendingApproval);
   const attention = buildEmployeeAttentionItems(blueprint, details, pendingApproval);
+  const userMode = buildAgentUserMode(blueprint, details);
   return {
     state,
     status,
     responsibilities: buildEmployeeResponsibilities(blueprint, details),
     latestWork: buildEmployeeLastActivity(blueprint, details, pendingApproval),
-    nextWork: blueprint.active_version_number ? 'По расписанию сотрудника' : 'После теста и включения',
+    nextWork: userMode.mode === 'scheduled'
+      ? blueprint.status === 'active'
+        ? (details?.next_run_at || blueprint.next_run_at)
+          ? `Следующий запуск: ${formatShortDate(details?.next_run_at || blueprint.next_run_at)}`
+          : 'Расписание включено, время следующего запуска уточняется'
+        : 'После теста, настройки времени и включения'
+      : userMode.mode === 'one_off'
+        ? 'Задача завершится после выполнения'
+        : blueprint.status === 'active' ? 'Когда вы нажмёте «Запустить работу»' : 'После теста и включения',
     attention,
   };
 };
@@ -3065,26 +3113,31 @@ const buildAgentUserMode = (
   details?: AgentBlueprintDetails | null,
 ) => {
   const preview = getBlueprintBuilderPreview(details?.blueprint || blueprint);
-  const text = [
-    blueprint.name,
-    blueprint.description,
-    blueprint.active_goal,
-    blueprint.latest_goal,
-    preview?.understood_task,
-    preview?.trigger,
-  ].filter(Boolean).join(' ').toLowerCase();
-  const oneShot = ['разово', 'один раз', 'one-shot', 'one shot', 'разовая'].some((marker) => text.includes(marker));
-  return oneShot
-    ? {
+  const explicitMode = details?.execution_mode || blueprint.execution_mode;
+  const trigger = String(preview?.trigger || '').trim();
+  const mode = explicitMode || (trigger.includes('schedule') ? 'scheduled' : 'manual');
+  if (mode === 'one_off') {
+    return {
+      mode,
       label: 'Разовая задача',
       flow: 'Запрос → выполнение → результат',
       description: 'После результата задача считается завершённой.',
-    }
-    : {
-      label: 'Повторяемая работа',
-      flow: 'Описание → проверка → включение → работа',
-      description: 'Сотрудник работает по опубликованному сценарию и ждёт разрешения перед внешними действиями.',
     };
+  }
+  if (mode === 'scheduled') {
+    return {
+      mode,
+      label: 'По расписанию',
+      flow: 'Описание → тест → включение → расписание',
+      description: 'Сотрудник запускается в указанное время. Внешние действия по-прежнему требуют подтверждения.',
+    };
+  }
+  return {
+    mode: 'manual',
+    label: 'Запуск по кнопке',
+    flow: 'Описание → тест → включение → запуск',
+    description: 'Сотрудник выполняет задачу только когда вы нажимаете кнопку запуска.',
+  };
 };
 
 const buildReasonCard = (
@@ -3250,15 +3303,25 @@ const findPreparedResultPayload = (
   activeRun: AgentRun | null,
   pendingApproval?: AgentApproval | null,
 ): Record<string, unknown> | null => {
-  const approvalPayload = pendingApproval?.payload_json || null;
-  const approvalResult = extractBusinessResultPayload(approvalPayload);
-  if (approvalResult) {
-    return approvalResult;
+  if (activeRun?.business_result && Object.keys(activeRun.business_result).length > 0) {
+    return activeRun.business_result;
   }
   const artifacts = activeRun?.artifacts || [];
-  const preferredArtifact = artifacts.find((item) => item.artifact_type === 'agent_output_draft' || item.artifact_type === 'telegram_post_draft' || item.artifact_type === 'agent_final_result')
+  const priority = activeRun?.status === 'completed'
+    ? ['agent_final_result', 'agent_output_draft', 'telegram_post_draft']
+    : ['agent_output_draft', 'telegram_post_draft', 'agent_final_result'];
+  const preferredArtifact = priority
+    .map((artifactType) => artifacts.find((item) => item.artifact_type === artifactType))
+    .find(Boolean)
     || artifacts.find((item) => extractBusinessResultPayload(item.payload_json));
-  return extractBusinessResultPayload(preferredArtifact?.payload_json || null);
+  const artifactResult = extractBusinessResultPayload(preferredArtifact?.payload_json || null);
+  if (artifactResult) {
+    return artifactResult;
+  }
+  if (pendingApproval?.run_id && activeRun?.id && pendingApproval.run_id !== activeRun.id) {
+    return null;
+  }
+  return extractBusinessResultPayload(pendingApproval?.payload_json || null);
 };
 
 const hasPreparedMessageText = (result: Record<string, unknown> | null): boolean => {
@@ -3312,6 +3375,7 @@ const buildEmployeeTestResult = (
         ? 'Проверка остановилась до сохранения результата. Посмотрите причину в настройках и запустите тест ещё раз.'
         : '';
   const status = activeRun?.status || pendingApproval?.run_status || '';
+  const isWorkRun = activeRun?.input_json?.preview_mode === false;
   const summary = blocker
     ? 'Нужен следующий шаг перед результатом'
     : pendingApproval
@@ -3319,7 +3383,7 @@ const buildEmployeeTestResult = (
       ? 'Проверьте подготовленный пост'
       : approvalDecisionTitle(pendingApproval)
     : status === 'completed'
-      ? 'Тест завершён. Сотрудник подготовил результат.'
+      ? isWorkRun ? 'Работа завершена. Сотрудник сохранил результат.' : 'Тест завершён. Сотрудник подготовил результат.'
       : status === 'failed'
         ? 'Тест остановился. Результат требует проверки.'
         : activeRun
@@ -3692,7 +3756,7 @@ const buildBusinessHistoryEvents = (
       sort: date && !Number.isNaN(date.getTime()) ? date.getTime() : Date.now(),
     });
   };
-  (details?.runs || []).slice(0, 8).forEach((run) => {
+  (details?.runs || []).filter((run) => run.status !== 'superseded').slice(0, 8).forEach((run) => {
     const artifactCount = Number(run.observability?.artifacts?.count || run.artifacts?.length || 0);
     if (run.status === 'completed') {
       add(`run-${run.id}`, run.completed_at || run.started_at, 'Запуск завершён', artifactCount ? `Подготовлено результатов: ${artifactCount}.` : 'Агент сохранил итог работы.');
@@ -3713,6 +3777,20 @@ const buildBusinessHistoryEvents = (
   });
   (activeRun?.artifacts || []).slice(0, 5).forEach((artifact) => {
     add(`artifact-${artifact.id}`, activeRun.completed_at || activeRun.started_at, artifact.title || 'Подготовлен результат', userFacingAgentTechText(humanizeMeta(artifact.artifact_type || 'result')));
+  });
+  (activeRun?.steps || []).forEach((step) => {
+    if (step.status !== 'completed') {
+      return;
+    }
+    if (step.step_key === 'read_google_sheets') {
+      add(`step-${step.id}`, activeRun.completed_at || activeRun.started_at, 'Прочитал таблицу поездок', 'Получил строки из подключённой Google-таблицы.');
+    }
+    if (step.step_key === 'prepare_output') {
+      add(`step-${step.id}`, activeRun.completed_at || activeRun.started_at, 'Подготовил результат', 'Собрал текст только из данных выбранной строки.');
+    }
+    if (step.step_key === 'save_content_plan_draft') {
+      add(`step-${step.id}`, activeRun.completed_at || activeRun.started_at, 'Сохранил черновик', 'Добавил результат в контент-план LocalOS.');
+    }
   });
   return events
     .sort((a, b) => b.sort - a.sort)
@@ -3871,6 +3949,8 @@ export const AgentBlueprintsPage = () => {
   const [matonDailyCap, setMatonDailyCap] = useState('50');
   const [processRowValues, setProcessRowValues] = useState('{{received_at}}, {{telegram_username}}, {{message_text}}');
   const [processPreviewMessage, setProcessPreviewMessage] = useState('Новая заявка: Анна, телефон +7 900 000-00-00, хочет консультацию');
+  const [scheduleTime, setScheduleTime] = useState('09:00');
+  const [scheduleTimezone, setScheduleTimezone] = useState('Europe/Moscow');
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackTrigger, setFeedbackTrigger] = useState('manual_edit');
   const [feedbackVersionNotice, setFeedbackVersionNotice] = useState<FeedbackVersionNotice | null>(null);
@@ -3929,6 +4009,20 @@ export const AgentBlueprintsPage = () => {
     [blueprints, selectedBlueprintId],
   );
 
+  useEffect(() => {
+    const metadata = selectedBlueprint?.metadata_json;
+    const customProcess = recordValue(metadata?.custom_process);
+    const schedule = recordValue(customProcess?.schedule);
+    if (schedule && typeof schedule.time === 'string' && schedule.time) {
+      setScheduleTime(schedule.time);
+    }
+    if (schedule && typeof schedule.timezone === 'string' && schedule.timezone && schedule.timezone !== 'business_timezone') {
+      setScheduleTimezone(schedule.timezone);
+    } else if ((currentBusiness?.name || '').toLowerCase().includes('tallinn')) {
+      setScheduleTimezone('Europe/Tallinn');
+    }
+  }, [currentBusiness?.name, selectedBlueprint]);
+
   const pendingApproval = useMemo(
     () => activeRun?.approvals?.find((item) => item.status === 'pending') || null,
     [activeRun],
@@ -3942,8 +4036,13 @@ export const AgentBlueprintsPage = () => {
   const actionablePendingApproval = activeRunPendingApprovals[0] || null;
 
   const rawPendingApprovals = useMemo(
-    () => (blueprintDetails?.approval_queue || []).filter((item) => item.status === 'pending'),
-    [blueprintDetails?.approval_queue],
+    () => {
+      const latestRunId = blueprintDetails?.runs?.[0]?.id || '';
+      return (blueprintDetails?.approval_queue || []).filter((item) => (
+        item.status === 'pending' && (!latestRunId || item.run_id === latestRunId)
+      ));
+    },
+    [blueprintDetails?.approval_queue, blueprintDetails?.runs],
   );
 
   const pendingApprovals = useMemo(
@@ -4134,6 +4233,10 @@ export const AgentBlueprintsPage = () => {
         active_version: response.data?.active_version || null,
         active_version_id: typeof response.data?.active_version_id === 'string' ? response.data.active_version_id : '',
         active_version_number: typeof response.data?.active_version_number === 'number' ? response.data.active_version_number : 0,
+        candidate_version: response.data?.candidate_version || null,
+        candidate_version_id: typeof response.data?.candidate_version_id === 'string' ? response.data.candidate_version_id : '',
+        execution_mode: response.data?.execution_mode,
+        next_run_at: typeof response.data?.next_run_at === 'string' ? response.data.next_run_at : null,
         learning_events: Array.isArray(response.data?.learning_events) ? response.data.learning_events : [],
         version_events: Array.isArray(response.data?.version_events) ? response.data.version_events : [],
         feedback_history: Array.isArray(response.data?.feedback_history) ? response.data.feedback_history : [],
@@ -4193,6 +4296,10 @@ export const AgentBlueprintsPage = () => {
               active_version: response.data?.active_version || null,
               active_version_id: typeof response.data?.active_version_id === 'string' ? response.data.active_version_id : '',
               active_version_number: typeof response.data?.active_version_number === 'number' ? response.data.active_version_number : 0,
+              candidate_version: response.data?.candidate_version || null,
+              candidate_version_id: typeof response.data?.candidate_version_id === 'string' ? response.data.candidate_version_id : '',
+              execution_mode: response.data?.execution_mode,
+              next_run_at: typeof response.data?.next_run_at === 'string' ? response.data.next_run_at : null,
               learning_events: Array.isArray(response.data?.learning_events) ? response.data.learning_events : [],
               version_events: Array.isArray(response.data?.version_events) ? response.data.version_events : [],
               feedback_history: Array.isArray(response.data?.feedback_history) ? response.data.feedback_history : [],
@@ -4647,6 +4754,64 @@ export const AgentBlueprintsPage = () => {
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось запустить агента.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const executeRun = async (blueprintToRun?: AgentBlueprint | null, blueprintVersionId = '') => {
+    const targetBlueprint = blueprintToRun || selectedBlueprint;
+    if (!targetBlueprint) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    setDecisionNotice(null);
+    try {
+      const selectedVersionId = blueprintVersionId || blueprintDetails?.active_version_id || blueprintDetails?.candidate_version_id || '';
+      const response = await api.post(`/agent-blueprints/${targetBlueprint.id}/runs`, {
+        blueprint_version_id: selectedVersionId || undefined,
+        input: {
+          preview_mode: false,
+          source: 'dashboard_work_run',
+          dashboard_source: 'dashboard',
+          business_id: currentBusinessId,
+          external_side_effects_allowed: false,
+          approval_required_for_external_actions: true,
+          limit: Number(runLimit) > 0 ? Math.min(Number(runLimit), 100) : 30,
+        },
+      });
+      const nextRun = response.data?.run || null;
+      setActiveRun(nextRun);
+      setWorkspaceMode('results');
+      setDecisionNotice(nextRun?.id ? 'Работа выполнена. Ниже показан свежий сохранённый результат.' : 'Работа запущена.');
+      await loadBlueprintDetails(targetBlueprint.id);
+      await loadBlueprintReview(targetBlueprint.id);
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось выполнить задачу агента.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const saveSchedule = async () => {
+    if (!selectedBlueprint) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.post(`/agent-blueprints/${selectedBlueprint.id}/schedule`, {
+        time: scheduleTime,
+        timezone: scheduleTimezone,
+      });
+      setDecisionNotice('Расписание сохранено. Теперь включите агента.');
+      await loadBlueprints();
+      await loadBlueprintDetails(selectedBlueprint.id);
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось сохранить расписание.'));
     } finally {
       setActionLoading(false);
     }
@@ -5384,8 +5549,16 @@ export const AgentBlueprintsPage = () => {
       void startRun(selectedBlueprint);
       return;
     }
+    if (selectedEmployeeAction.kind === 'run_work') {
+      void executeRun(selectedBlueprint, selectedEmployeeAction.versionId || '');
+      return;
+    }
     if (selectedEmployeeAction.kind === 'enable' && selectedEmployeeAction.versionId) {
       void activateVersion(selectedEmployeeAction.versionId, 'activate');
+      return;
+    }
+    if (selectedEmployeeAction.kind === 'configure_schedule') {
+      setWorkspaceMode('overview');
       return;
     }
     if (selectedEmployeeAction.targetMode === 'results') {
@@ -5697,16 +5870,28 @@ export const AgentBlueprintsPage = () => {
             <main className="min-w-0 space-y-4">
               {selectedBlueprint && selectedEmployeeAction ? (
                 workspaceMode === 'overview' || workspaceMode === 'run' ? (
-                  <EmployeeAgentOverviewPanel
-                    blueprint={selectedBlueprint}
-                    details={blueprintDetails}
-                    activeRun={activeRun}
-                    pendingApproval={selectedPendingApproval}
-                    action={selectedEmployeeAction}
-                    actionLoading={actionLoading}
-                    onPrimaryAction={runEmployeePrimaryAction}
-                    onOpenAdvanced={() => setWorkspaceMode('settings')}
-                  />
+                  <div className="space-y-4">
+                    <EmployeeAgentOverviewPanel
+                      blueprint={selectedBlueprint}
+                      details={blueprintDetails}
+                      activeRun={activeRun}
+                      pendingApproval={selectedPendingApproval}
+                      action={selectedEmployeeAction}
+                      actionLoading={actionLoading}
+                      onPrimaryAction={runEmployeePrimaryAction}
+                      onOpenAdvanced={() => setWorkspaceMode('settings')}
+                    />
+                    {selectedEmployeeAction.kind === 'configure_schedule' ? (
+                      <AgentScheduleSetupPanel
+                        time={scheduleTime}
+                        timezone={scheduleTimezone}
+                        actionLoading={actionLoading}
+                        onTimeChange={setScheduleTime}
+                        onTimezoneChange={setScheduleTimezone}
+                        onSave={saveSchedule}
+                      />
+                    ) : null}
+                  </div>
                 ) : workspaceMode === 'results' ? (
                   selectedResultRun || selectedPendingApproval ? (
                     <EmployeeTestResultPanel
@@ -5717,12 +5902,16 @@ export const AgentBlueprintsPage = () => {
                       needsGoogleSheetsSetup={resultNeedsGoogleSheetsSetup}
                       needsGoogleAccessReconnect={resultNeedsGoogleAccessReconnect}
                       googleAccessJustConnected={resultGoogleAccessReconnected}
+                      nextAction={selectedEmployeeAction}
                       onApprove={() => decideApproval('approve')}
                       onReject={() => decideApproval('reject')}
-                      onRunAgain={() => startRun(selectedBlueprint)}
+                      onRunAgain={() => selectedResultRun?.input_json?.preview_mode === false
+                        ? executeRun(selectedBlueprint, selectedResultRun.blueprint_version_id || '')
+                        : startRun(selectedBlueprint)}
                       onRebuildScenario={rebuildScenarioAndRun}
                       onOpenGoogleSheetsSetup={openGoogleSheetsSourceSetup}
                       onOpenGoogleAccessReconnect={openGoogleAccessReconnect}
+                      onNextAction={runEmployeePrimaryAction}
                     />
                   ) : (
                     <EmployeeHistoryPanel
@@ -8795,12 +8984,14 @@ const EmployeeTestResultPanel = ({
   needsGoogleSheetsSetup = false,
   needsGoogleAccessReconnect = false,
   googleAccessJustConnected = false,
+  nextAction,
   onApprove,
   onReject,
   onRunAgain,
   onRebuildScenario,
   onOpenGoogleSheetsSetup,
   onOpenGoogleAccessReconnect,
+  onNextAction,
 }: {
   activeRun: AgentRun | null;
   pendingApproval: AgentApproval | null;
@@ -8809,14 +9000,17 @@ const EmployeeTestResultPanel = ({
   needsGoogleSheetsSetup?: boolean;
   needsGoogleAccessReconnect?: boolean;
   googleAccessJustConnected?: boolean;
+  nextAction?: EmployeeNextAction | null;
   onApprove: () => void;
   onReject: () => void;
   onRunAgain: () => void;
   onRebuildScenario?: () => void;
   onOpenGoogleSheetsSetup?: () => void;
   onOpenGoogleAccessReconnect?: () => void;
+  onNextAction?: () => void;
 }) => {
   const result = buildEmployeeTestResult(activeRun, pendingApproval);
+  const isWorkRun = activeRun?.input_json?.preview_mode === false;
   const labels = approvalActionLabels(pendingApproval);
   const isBlocked = result.state === 'blocker';
   const canApprove = Boolean(pendingApproval && !isBlocked);
@@ -8825,6 +9019,13 @@ const EmployeeTestResultPanel = ({
   const canRunAfterGoogleReconnect = Boolean(!canRebuildScenario && googleAccessJustConnected && needsGoogleAccessReconnect);
   const canOpenGoogleAccessReconnect = Boolean(!canRunAfterGoogleReconnect && !canRebuildScenario && needsGoogleAccessReconnect && onOpenGoogleAccessReconnect);
   const canOpenGoogleSheetsSetup = Boolean(!canRebuildScenario && !canOpenGoogleAccessReconnect && needsGoogleSheetsSetup && onOpenGoogleSheetsSetup);
+  const canContinue = Boolean(
+    !canApprove
+    && !isBlocked
+    && nextAction
+    && ['enable', 'run_work', 'configure_schedule'].includes(nextAction.kind)
+    && onNextAction,
+  );
   const rerunLabel = canRebuildScenario
     ? 'Пересобрать сценарий'
     : canRunAfterGoogleReconnect
@@ -8833,7 +9034,7 @@ const EmployeeTestResultPanel = ({
         ? 'Переподключить Google-доступ'
         : canOpenGoogleSheetsSetup
           ? 'Указать Google-таблицу'
-          : 'Запустить тест ещё раз';
+          : isWorkRun ? 'Запустить похожую' : 'Запустить тест ещё раз';
   const handleRerun = () => {
     if (canRebuildScenario && onRebuildScenario) {
       onRebuildScenario();
@@ -8853,13 +9054,19 @@ const EmployeeTestResultPanel = ({
     <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
         <div className="min-w-0 max-w-4xl">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Результат проверки</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{isWorkRun ? 'Результат работы' : 'Результат проверки'}</div>
           <h2 className="mt-2 max-w-3xl text-2xl font-semibold leading-8 text-slate-950 [text-wrap:balance]">{result.summary}</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 [text-wrap:pretty]">
             Это только бизнес-результат. Технические подробности находятся в расширенных настройках.
           </p>
         </div>
         <div className="flex min-w-0 flex-wrap gap-2 xl:justify-end">
+          {canContinue && nextAction && onNextAction ? (
+            <Button type="button" className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform" onClick={onNextAction} disabled={actionLoading}>
+              {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : nextAction.kind === 'configure_schedule' ? <Clock3 className="mr-2 h-4 w-4" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              {nextAction.label}
+            </Button>
+          ) : null}
           {canApprove ? (
             <Button type="button" className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform" onClick={onApprove} disabled={actionLoading}>
               {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
@@ -8873,7 +9080,7 @@ const EmployeeTestResultPanel = ({
           ) : null}
           <Button
             type="button"
-            variant={pendingApproval && !canRebuildScenario && !canOpenGoogleSheetsSetup ? 'outline' : 'default'}
+            variant={canContinue || pendingApproval && !canRebuildScenario && !canOpenGoogleSheetsSetup ? 'outline' : 'default'}
             className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform"
             onClick={handleRerun}
             disabled={actionLoading}
@@ -9012,6 +9219,58 @@ const EmployeeResponsibilitiesList = ({ items }: { items: EmployeeResponsibility
       </div>
     ))}
   </div>
+);
+
+const AgentScheduleSetupPanel = ({
+  time,
+  timezone,
+  actionLoading,
+  onTimeChange,
+  onTimezoneChange,
+  onSave,
+}: {
+  time: string;
+  timezone: string;
+  actionLoading: boolean;
+  onTimeChange: (value: string) => void;
+  onTimezoneChange: (value: string) => void;
+  onSave: () => void;
+}) => (
+  <section className="rounded-2xl bg-amber-50 p-5 shadow-[0_0_0_1px_rgba(217,119,6,0.2)]">
+    <div className="max-w-3xl">
+      <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">Расписание</div>
+      <h2 className="mt-2 text-xl font-semibold leading-7 text-amber-950 [text-wrap:balance]">Когда агент должен начинать работу</h2>
+      <p className="mt-1 text-sm leading-6 text-amber-900 [text-wrap:pretty]">Время хранится вместе с часовым поясом, поэтому запуск не сдвинется при переходе на летнее время.</p>
+    </div>
+    <div className="mt-4 grid gap-3 sm:grid-cols-[10rem_minmax(0,16rem)_auto] sm:items-end">
+      <label className="block text-sm font-medium text-amber-950">
+        Время
+        <input
+          type="time"
+          value={time}
+          onChange={(event) => onTimeChange(event.target.value)}
+          className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 text-sm text-slate-950 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none focus:shadow-[inset_0_0_0_2px_rgba(249,115,22,0.65)]"
+        />
+      </label>
+      <label className="block text-sm font-medium text-amber-950">
+        Часовой пояс
+        <select
+          value={timezone}
+          onChange={(event) => onTimezoneChange(event.target.value)}
+          className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 text-sm text-slate-950 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none focus:shadow-[inset_0_0_0_2px_rgba(249,115,22,0.65)]"
+        >
+          <option value="Europe/Tallinn">Tallinn</option>
+          <option value="Europe/Moscow">Москва</option>
+          <option value="Europe/Helsinki">Helsinki</option>
+          <option value="Europe/Riga">Riga</option>
+        </select>
+      </label>
+      <Button type="button" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onSave} disabled={actionLoading || !time || !timezone}>
+        {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Clock3 className="mr-2 h-4 w-4" />}
+        Сохранить расписание
+      </Button>
+    </div>
+  </section>
 );
 
 const employeeStateTitle = (state: EmployeeWorkspaceState) => ({
@@ -12854,7 +13113,10 @@ const toRecordOrNull = (value: unknown): Record<string, unknown> | null => {
 };
 
 const HumanResultView = ({ result }: { result: Record<string, unknown> }) => {
-  const entries = Object.entries(result).filter(([, value]) => value !== '' && value !== null && value !== undefined);
+  const savedDestination = toRecordOrNull(result.saved_destination);
+  const destinationStatus = String(savedDestination?.status || '');
+  const contentPlanUrl = String(savedDestination?.content_plan_url || '');
+  const entries = Object.entries(result).filter(([key, value]) => key !== 'saved_destination' && value !== '' && value !== null && value !== undefined);
   const priorityKeys = [
     'title',
     'draft_text',
@@ -12885,6 +13147,19 @@ const HumanResultView = ({ result }: { result: Record<string, unknown> }) => {
     .filter((entry) => entry.value !== '' && entry.value !== null && entry.value !== undefined);
   return (
     <div className="space-y-2">
+      {destinationStatus === 'draft_saved' ? (
+        <div className="rounded-lg bg-emerald-50 px-3 py-3 text-sm leading-6 text-emerald-950 shadow-[inset_0_0_0_1px_rgba(5,150,105,0.18)]">
+          <div className="font-semibold">Черновик сохранён в контент-план</div>
+          <div className="mt-1">Дата: {String(savedDestination?.scheduled_for || '')}</div>
+          {contentPlanUrl ? <a className="mt-2 inline-flex min-h-10 items-center font-semibold text-emerald-800 underline" href={contentPlanUrl}>Открыть контент-план</a> : null}
+        </div>
+      ) : null}
+      {destinationStatus === 'needs_future_date' ? (
+        <div className="rounded-lg bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-950 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.2)]">
+          <div className="font-semibold">Выберите новую дату</div>
+          <div className="mt-1">{String(savedDestination?.message || 'Указанная дата контент-плана уже прошла.')}</div>
+        </div>
+      ) : null}
       {priorityEntries.slice(0, 6).map(({ key, value }) => (
         <div key={key} className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{resultFieldLabels[key] || humanizeMeta(key)}</div>
