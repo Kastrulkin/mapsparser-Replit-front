@@ -8,6 +8,7 @@ import {
   Bot,
   CheckCircle2,
   Clock3,
+  Copy,
   Database,
   Download,
   FileCheck2,
@@ -3030,8 +3031,8 @@ const buildEmployeePrimaryAction = ({
   if (state === 'completed') {
     return {
       kind: 'run_similar',
-      label: 'Запустить похожую',
-      description: 'Создайте новую разовую задачу с теми же источниками и правилами.',
+      label: 'Создать копию агента',
+      description: 'Будет создан новый агент с теми же источниками и правилами, но без истории запусков и результатов.',
       targetMode: 'overview',
     };
   }
@@ -5917,9 +5918,11 @@ export const AgentBlueprintsPage = () => {
       }}>
         <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Создать агента</DialogTitle>
+            <DialogTitle>{cloneFromBlueprintId ? 'Создать копию агента' : 'Создать агента'}</DialogTitle>
             <DialogDescription>
-              Опишите задачу обычным языком. LocalOS уточнит недостающие детали и покажет понятную проверку перед созданием.
+              {cloneFromBlueprintId
+                ? 'LocalOS создаст нового агента с теми же источниками и правилами. История запусков, результаты и решения не копируются.'
+                : 'Опишите задачу обычным языком. LocalOS уточнит недостающие детали и покажет понятную проверку перед созданием.'}
             </DialogDescription>
           </DialogHeader>
           <DialogAgentBuilder
@@ -9645,6 +9648,7 @@ const EmployeeTestResultPanel = ({
     && ['enable', 'run_work', 'configure_schedule'].includes(nextAction.kind)
     && onNextAction,
   );
+  const canCloneAgent = Boolean(nextAction?.kind === 'run_similar' && onNextAction);
   const rerunLabel = canRebuildScenario
     ? 'Пересобрать сценарий'
     : canRunAfterGoogleReconnect
@@ -9653,7 +9657,9 @@ const EmployeeTestResultPanel = ({
         ? 'Переподключить Google-доступ'
         : canOpenGoogleSheetsSetup
           ? 'Указать Google-таблицу'
-          : isWorkRun ? 'Запустить похожую' : 'Запустить тест ещё раз';
+          : canCloneAgent
+            ? 'Создать копию агента'
+            : isWorkRun ? 'Запустить работу ещё раз' : 'Запустить тест ещё раз';
   const handleRerun = () => {
     if (canRebuildScenario && onRebuildScenario) {
       onRebuildScenario();
@@ -9665,6 +9671,10 @@ const EmployeeTestResultPanel = ({
     }
     if (canOpenGoogleSheetsSetup && onOpenGoogleSheetsSetup) {
       onOpenGoogleSheetsSetup();
+      return;
+    }
+    if (canCloneAgent && onNextAction) {
+      onNextAction();
       return;
     }
     onRunAgain();
@@ -9704,7 +9714,7 @@ const EmployeeTestResultPanel = ({
             onClick={handleRerun}
             disabled={actionLoading}
           >
-            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : canRunAfterGoogleReconnect ? <Play className="mr-2 h-4 w-4" /> : canOpenGoogleAccessReconnect || canOpenGoogleSheetsSetup ? <Database className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : canCloneAgent ? <Copy className="mr-2 h-4 w-4" /> : canRunAfterGoogleReconnect ? <Play className="mr-2 h-4 w-4" /> : canOpenGoogleAccessReconnect || canOpenGoogleSheetsSetup ? <Database className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             {rerunLabel}
           </Button>
         </div>

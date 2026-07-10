@@ -7383,6 +7383,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Зафиксировать улучшение" in agents_page_source
     assert "auto_activate: false" in agents_page_source
     assert 'title="Агенты"' in agents_page_source
+    assert "Создать копию агента" in agents_page_source
+    assert "Запустить похожую" not in agents_page_source
     assert "Состояние миграции" in agents_page_source
     assert "Ручные решения" in agents_page_source
     assert "Обучение" in agents_page_source
