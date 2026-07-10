@@ -178,6 +178,38 @@ def test_social_post_runtime_status_allows_explicit_unscoped_dispatch(monkeypatc
     assert payload["owner_status"]["tone"] == "warning"
 
 
+def test_social_post_runtime_status_reports_multi_tenant_dispatch(monkeypatch):
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_ENABLED", "true")
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_MODE", "multi_tenant")
+    monkeypatch.setenv("SOCIAL_POST_DISPATCH_BUSINESS_ID", "stale-pilot-scope")
+    monkeypatch.delenv("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED", raising=False)
+
+    payload = social_posts_api.social_post_runtime_status_payload()
+
+    assert payload["dispatch"]["mode"] == "multi_tenant"
+    assert payload["dispatch"]["business_scope"] == ""
+    assert payload["dispatch"]["allow_unscoped"] is True
+    assert payload["dispatch"]["blocked_without_scope"] is False
+    assert payload["dispatch"]["tenant_isolation"] == "per_social_post_business_id"
+    assert payload["owner_status"]["status"] == "dispatch_multi_tenant"
+    assert payload["owner_status"]["tone"] == "ready"
+
+
+def test_social_post_runtime_status_reports_multi_tenant_metrics(monkeypatch):
+    monkeypatch.setenv("SOCIAL_POST_METRICS_ENABLED", "true")
+    monkeypatch.setenv("SOCIAL_POST_METRICS_MODE", "multi_tenant")
+    monkeypatch.setenv("SOCIAL_POST_METRICS_BUSINESS_ID", "stale-pilot-scope")
+    monkeypatch.delenv("SOCIAL_POST_METRICS_ALLOW_UNSCOPED", raising=False)
+
+    payload = social_posts_api.social_post_runtime_status_payload()
+
+    assert payload["metrics"]["mode"] == "multi_tenant"
+    assert payload["metrics"]["business_scope"] == ""
+    assert payload["metrics"]["allow_unscoped"] is True
+    assert payload["metrics"]["blocked_without_scope"] is False
+    assert payload["owner_status"]["metrics_status"] == "metrics_multi_tenant"
+
+
 def test_social_post_runtime_status_blocks_enabled_unscoped_metrics(monkeypatch):
     monkeypatch.setenv("SOCIAL_POST_METRICS_ENABLED", "true")
     monkeypatch.delenv("SOCIAL_POST_METRICS_BUSINESS_ID", raising=False)

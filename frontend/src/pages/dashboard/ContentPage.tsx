@@ -81,6 +81,12 @@ type PlanPayload = {
   items_count?: number;
   needs_draft_count?: number;
   ready_count?: number;
+  generated_plan_json?: {
+    selected_channels?: string[];
+    meta?: {
+      selected_channels?: string[];
+    };
+  };
 };
 
 type SocialPost = {
@@ -96,6 +102,16 @@ type SocialPost = {
   last_error?: string;
   publish_mode?: string;
   external_account_id?: string;
+  provider_post_id?: string;
+  provider_post_url?: string;
+  views?: number;
+  reach?: number;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  clicks?: number;
+  inquiries?: number;
+  leads?: number;
   metadata_json?: {
     platform_rule_readiness?: {
       label?: string;
@@ -106,6 +122,14 @@ type SocialPost = {
     };
     queue_preflight_action_label?: string;
     queue_preflight_message_ru?: string;
+    manual_publish_handoff?: {
+      target_url?: string;
+      copy_ready_text?: string;
+    };
+    supervised_publish?: {
+      target_url?: string;
+      copy_ready_text?: string;
+    };
   };
 };
 
@@ -217,6 +241,21 @@ const DEFAULT_CREATE_DRAFT: CreatePlanDraft = {
     instagram: true,
     facebook: true,
   },
+};
+
+const buildChannelSelection = (selectedChannels?: string[]) => {
+  const selected = new Set((selectedChannels || []).map((value) => String(value || '').trim()).filter(Boolean));
+  return CHANNELS.reduce<Record<string, boolean>>((result, channel) => {
+    result[channel.key] = selected.size === 0 || selected.has(channel.key);
+    return result;
+  }, {});
+};
+
+const selectedChannelsFromPlan = (plan?: PlanPayload | null) => {
+  const direct = plan?.generated_plan_json?.selected_channels;
+  const nested = plan?.generated_plan_json?.meta?.selected_channels;
+  const channels = Array.isArray(direct) ? direct : Array.isArray(nested) ? nested : [];
+  return channels.map((value) => String(value || '').trim()).filter(Boolean);
 };
 
 const normalizeIsoDate = (value?: string) => {
@@ -511,6 +550,12 @@ const platformShortLabel = (post: SocialPost) => {
   return formatPlatformLabel(label);
 };
 
+const placementTargetUrl = (post: SocialPost) => String(
+  post.metadata_json?.supervised_publish?.target_url
+  || post.metadata_json?.manual_publish_handoff?.target_url
+  || '',
+).trim();
+
 export function ContentPage() {
   const navigate = useNavigate();
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardOutletContext>();
@@ -538,6 +583,9 @@ export function ContentPage() {
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [themeEdits, setThemeEdits] = useState<Record<string, string>>({});
   const [dateEdits, setDateEdits] = useState<Record<string, string>>({});
+  const [publicationChannels, setPublicationChannels] = useState<Record<string, boolean>>(() => buildChannelSelection());
+  const [platformTextEdits, setPlatformTextEdits] = useState<Record<string, string>>({});
+  const [editingPlatformPostId, setEditingPlatformPostId] = useState('');
   const [mediaRecommendations, setMediaRecommendations] = useState<Record<string, MediaRecommendation>>({});
   const [mediaLoadingItemId, setMediaLoadingItemId] = useState('');
   const [mediaAssets, setMediaAssets] = useState<PhotoAsset[]>([]);
@@ -678,7 +726,15 @@ export function ContentPage() {
 
   useEffect(() => {
     setChannelDetailsOpen(false);
+    setEditingPlatformPostId('');
   }, [selectedItemId]);
+
+  useEffect(() => {
+    if (!currentPlan?.id) return;
+    const planChannels = selectedChannelsFromPlan(currentPlan);
+    const existingChannels = Array.from(new Set(socialPosts.map((post) => String(post.platform || '').trim()).filter(Boolean)));
+    setPublicationChannels(buildChannelSelection(planChannels.length > 0 ? planChannels : existingChannels));
+  }, [currentPlan?.id, currentPlan?.generated_plan_json, socialPosts]);
 
   useEffect(() => {
     if (!selectedItemId || !currentBusinessId) return;
@@ -858,7 +914,7 @@ export function ContentPage() {
     setBusyAction('photo-usage');
     setError('');
     try {
-      await newAuth.makeRequest(`/media-intelligence/photos/${encodeURIComponent(assetId)}/usage`, {
+      const response = await newAuth.makeRequest(`/media-intelligence/photos/${encodeURIComponent(assetId)}/usage`, {
         method: 'POST',
         body: JSON.stringify({
           business_id: currentBusinessId,
@@ -870,8 +926,14 @@ export function ContentPage() {
           },
         }),
       });
-      setActionMessage('Фото сохранено для публикации. Повторный анализ и списание кредитов не нужны.');
+      const approvalsReset = Number(response.approvals_reset || 0);
+      setActionMessage(
+        approvalsReset > 0
+          ? `Фото сохранено. Проверьте итоговый вид и подтвердите публикации заново: ${approvalsReset}.`
+          : 'Фото сохранено для публикации. Повторный анализ и списание кредитов не нужны.',
+      );
       await loadMediaRecommendation(selectedItem.id);
+      if (currentPlan?.id) await loadSocialPosts(currentPlan.id);
       if (section === 'media') await loadMediaAssets();
     } catch (usageError) {
       setError(usageError instanceof Error ? usageError.message : 'Не удалось сохранить фото для публикации');
@@ -986,14 +1048,93 @@ export function ContentPage() {
     setBusyAction('prepare');
     setError('');
     try {
-      await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
+      const selectedPlatforms = CHANNELS.filter((channel) => publicationChannels[channel.key]).map((channel) => channel.key);
+      if (selectedPlatforms.length === 0) {
+        setError('Выберите хотя бы один канал публикации.');
+        return [];
+      }
+      const response = await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
         method: 'POST',
-        body: JSON.stringify({ item_ids: [selectedItem.id] }),
+        body: JSON.stringify({
+          item_ids: [selectedItem.id],
+          platforms: selectedPlatforms,
+          replace_platforms: true,
+        }),
       });
+      const removed = Array.isArray(response.removed_platforms) ? response.removed_platforms.length : 0;
+      const preserved = Array.isArray(response.preserved_platforms) ? response.preserved_platforms.length : 0;
+      setActionMessage(
+        preserved > 0
+          ? `Каналы обновлены. Уже исполняемые или опубликованные варианты сохранены: ${preserved}.`
+          : removed > 0
+            ? `Каналы обновлены. Ненужные черновики убраны: ${removed}.`
+            : `Подготовлено каналов: ${selectedPlatforms.length}.`,
+      );
       return await loadSocialPosts(currentPlan.id);
     } catch (prepareError) {
       setError(prepareError instanceof Error ? prepareError.message : 'Не удалось подготовить каналы');
       return [];
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const savePlatformText = async (post: SocialPost) => {
+    if (!currentPlan?.id || !post.id) return;
+    setBusyAction(`platform-text-${post.id}`);
+    setError('');
+    try {
+      await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          platform_text: platformTextEdits[post.id] ?? post.platform_text ?? '',
+          base_text: post.base_text || draftEdits[selectedItem?.id || ''] || '',
+        }),
+      });
+      await loadSocialPosts(currentPlan.id);
+      setEditingPlatformPostId('');
+      setActionMessage(`${platformShortLabel(post)}: текст сохранён. Проверьте и подтвердите публикацию.`);
+    } catch (platformError) {
+      setError(platformError instanceof Error ? platformError.message : 'Не удалось сохранить текст канала');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const recordPublishedResult = async (post: SocialPost, eventType: 'inquiry' | 'lead') => {
+    if (!currentPlan?.id) return;
+    setBusyAction(`result-${post.id}-${eventType}`);
+    setError('');
+    try {
+      await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/attribution-events`, {
+        method: 'POST',
+        body: JSON.stringify({ event_type: eventType, value: 1, event_source: 'manual' }),
+      });
+      await loadSocialPosts(currentPlan.id);
+      setActionMessage(eventType === 'lead' ? 'Заявка сохранена и попадёт в корректировку следующего плана.' : 'Обращение сохранено и попадёт в корректировку следующего плана.');
+    } catch (resultError) {
+      setError(resultError instanceof Error ? resultError.message : 'Не удалось сохранить результат');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const markPlacementPublished = async (post: SocialPost) => {
+    if (!currentPlan?.id) return;
+    const providerPostUrl = typeof window === 'undefined'
+      ? ''
+      : window.prompt('Вставьте ссылку на опубликованный пост. Если площадка не даёт ссылку, оставьте поле пустым.', '') ?? '';
+    setBusyAction(`manual-published-${post.id}`);
+    setError('');
+    try {
+      await newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}/mark-manual-published`, {
+        method: 'POST',
+        body: JSON.stringify({ provider_post_url: providerPostUrl.trim() }),
+      });
+      await loadSocialPosts(currentPlan.id);
+      setActionMessage(`${platformShortLabel(post)}: публикация отмечена размещённой.`);
+    } catch (markError) {
+      setError(markError instanceof Error ? markError.message : 'Не удалось отметить размещение');
     } finally {
       setBusyAction('');
     }
@@ -1085,6 +1226,10 @@ export function ContentPage() {
 
   const createPlan = async () => {
     if (!currentBusinessId) return;
+    if (getSelectedCount(createDraft.channels) === 0) {
+      setError('Выберите хотя бы один канал для контент-плана.');
+      return;
+    }
     const generationStartedAt = Date.now();
     const normalizedPeriodDays = allowedPlanPeriods.includes(createDraft.periodDays)
       ? createDraft.periodDays
@@ -1110,6 +1255,7 @@ export function ContentPage() {
             sales: Boolean(createDraft.contentTypes.promos),
             audit: Boolean(createDraft.contentTypes.faq || createDraft.contentTypes.reviews),
             seasonal: Boolean(createDraft.contentTypes.seasonal),
+            channels: CHANNELS.filter((channel) => createDraft.channels[channel.key]).map((channel) => channel.key),
           },
         }),
       });
@@ -1173,6 +1319,10 @@ export function ContentPage() {
       ...prev,
       channels: { ...prev.channels, [key]: !prev.channels[key] },
     }));
+  };
+
+  const togglePublicationChannel = (key: string) => {
+    setPublicationChannels((previous) => ({ ...previous, [key]: !previous[key] }));
   };
 
   const renderPlanModal = () => (
@@ -1329,7 +1479,7 @@ export function ContentPage() {
               Далее
             </Button>
           ) : (
-            <Button type="button" onClick={createPlan} className="bg-slate-950 text-white hover:bg-slate-800">
+            <Button type="button" onClick={createPlan} disabled={getSelectedCount(createDraft.channels) === 0} className="bg-slate-950 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-500">
               Создать план
             </Button>
           )}
@@ -1773,7 +1923,8 @@ export function ContentPage() {
     const currentDraftText = String(draftEdits[item?.id || ''] ?? item?.draft_text ?? '').trim();
     const hasFallbackDraft = itemGenerationSource(item) === 'fallback';
     const hasDraftText = Boolean(currentDraftText) && itemGenerationSource(item) !== 'fallback';
-    const channelCount = hasPosts ? selectedPosts.length : CHANNELS.length;
+    const selectedChannelCount = getSelectedCount(publicationChannels);
+    const channelCount = hasPosts ? selectedPosts.length : selectedChannelCount;
     const needsReviewChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Нужно проверить').length;
     const readyTextChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Текст готов').length;
     const approvedPostCount = selectedPosts.filter((post) => String(post.status || '').toLowerCase() === 'approved').length;
@@ -1811,7 +1962,9 @@ export function ContentPage() {
         : readyTextChannelCount > 0
           ? `Текст готов: ${readyTextChannelCount}`
           : `${channelCount} каналов в плане`
-      : `${channelCount} каналов после подготовки`;
+      : selectedChannelCount > 0
+        ? `Выбрано: ${selectedChannelCount}`
+        : 'Выберите каналы';
     const channelDetailsId = item ? `content-channels-${item.id}` : 'content-channels';
     const mediaRecommendation = item ? mediaRecommendations[item.id] : null;
     const selectedPhoto = mediaRecommendation?.selected_asset || null;
@@ -1999,51 +2152,148 @@ export function ContentPage() {
                       <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-500 transition-transform', channelDetailsOpen ? 'rotate-180' : '')} />
                     </button>
                     {channelDetailsOpen ? (
-                      hasPosts ? (
-                        <div id={channelDetailsId} className="mt-2 space-y-2">
-                          {selectedPosts.map((post) => {
-                            const statusLabel = getChannelStatusDisplay(post);
-                            const readiness = getPostPlatformReadiness(post);
-                            return (
-                              <div key={post.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-sm font-semibold text-slate-900">{platformShortLabel(post)}</span>
-                                  <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1', getStatusClassName(statusLabel))}>
-                                    {statusLabel}
-                                  </span>
+                      <div id={channelDetailsId} className="mt-3 space-y-3">
+                        <div>
+                          <div className="mb-2 text-xs font-medium text-slate-500">Куда должна выйти публикация</div>
+                          <div className="flex flex-wrap gap-2">
+                            {CHANNELS.map((channel) => {
+                              const selected = Boolean(publicationChannels[channel.key]);
+                              return (
+                                <button
+                                  key={channel.key}
+                                  type="button"
+                                  onClick={() => togglePublicationChannel(channel.key)}
+                                  aria-pressed={selected}
+                                  className={cn(
+                                    'inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold ring-1 transition-colors active:scale-[0.96] transition-transform',
+                                    selected
+                                      ? 'bg-slate-950 text-white ring-slate-950'
+                                      : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-100',
+                                  )}
+                                >
+                                  <Check className={cn('h-3.5 w-3.5', selected ? 'opacity-100' : 'opacity-20')} />
+                                  {channel.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        {hasPosts ? (
+                          <div className="space-y-2 border-t border-slate-100 pt-3">
+                            {selectedPosts.map((post) => {
+                              const statusLabel = getChannelStatusDisplay(post);
+                              const readiness = getPostPlatformReadiness(post);
+                              const canEditPlatformText = !['queued', 'publishing', 'published'].includes(String(post.status || '').toLowerCase());
+                              const isEditing = editingPlatformPostId === post.id;
+                              return (
+                                <div key={post.id} className="rounded-2xl bg-slate-50 px-3 py-3 ring-1 ring-slate-100">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-sm font-semibold text-slate-900">{platformShortLabel(post)}</span>
+                                    <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1', getStatusClassName(statusLabel))}>
+                                      {statusLabel}
+                                    </span>
+                                  </div>
+                                  <div className="mt-1 text-xs leading-5 text-slate-500">{getChannelNextAction(post)}</div>
+                                  {String(post.status || '').toLowerCase() === 'published' ? (
+                                    <div className="mt-3 rounded-xl bg-white p-3 ring-1 ring-slate-100">
+                                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600 tabular-nums">
+                                        <span>Просмотры {Number(post.views || post.reach || 0)}</span>
+                                        <span>Реакции {Number(post.likes || 0) + Number(post.comments || 0) + Number(post.shares || 0)}</span>
+                                        <span>Обращения {Number(post.inquiries || 0)}</span>
+                                        <span>Заявки {Number(post.leads || 0)}</span>
+                                      </div>
+                                      <div className="mt-2 flex flex-wrap gap-2">
+                                        <Button type="button" variant="outline" size="sm" onClick={() => { void recordPublishedResult(post, 'inquiry'); }} disabled={Boolean(busyAction)} className="min-h-10 rounded-xl px-3 text-xs active:scale-[0.96] transition-transform">
+                                          + Обращение
+                                        </Button>
+                                        <Button type="button" variant="outline" size="sm" onClick={() => { void recordPublishedResult(post, 'lead'); }} disabled={Boolean(busyAction)} className="min-h-10 rounded-xl px-3 text-xs active:scale-[0.96] transition-transform">
+                                          + Заявка
+                                        </Button>
+                                        {post.provider_post_url ? (
+                                          <a href={post.provider_post_url} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-xl px-3 text-xs font-semibold text-sky-700 hover:bg-sky-50">
+                                            Открыть пост
+                                          </a>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {['needs_manual_publish', 'needs_supervised_publish'].includes(String(post.status || '').toLowerCase()) ? (
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                      {placementTargetUrl(post) ? (
+                                        <a href={placementTargetUrl(post)} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-xl bg-white px-3 text-xs font-semibold text-sky-700 ring-1 ring-slate-200 hover:bg-sky-50">
+                                          Открыть размещение
+                                        </a>
+                                      ) : null}
+                                      <Button type="button" variant="outline" size="sm" onClick={() => { void navigator.clipboard?.writeText(post.platform_text || post.base_text || ''); setActionMessage('Текст скопирован.'); }} className="min-h-10 rounded-xl bg-white px-3 text-xs">
+                                        Скопировать текст
+                                      </Button>
+                                      <Button type="button" variant="outline" size="sm" onClick={() => { void markPlacementPublished(post); }} disabled={Boolean(busyAction)} className="min-h-10 rounded-xl bg-white px-3 text-xs active:scale-[0.96] transition-transform">
+                                        Отметить размещённым
+                                      </Button>
+                                    </div>
+                                  ) : null}
+                                  {isEditing ? (
+                                    <div className="mt-3 space-y-2">
+                                      <Textarea
+                                        value={platformTextEdits[post.id] ?? post.platform_text ?? ''}
+                                        onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setPlatformTextEdits((previous) => ({ ...previous, [post.id]: event.target.value }))}
+                                        className="min-h-32 rounded-xl bg-white text-sm leading-6"
+                                      />
+                                      <div className="flex gap-2">
+                                        <Button type="button" size="sm" onClick={() => { void savePlatformText(post); }} disabled={busyAction === `platform-text-${post.id}`} className="min-h-10 rounded-xl bg-slate-950 px-3 text-white active:scale-[0.96] transition-transform">
+                                          {busyAction === `platform-text-${post.id}` ? 'Сохраняем...' : 'Сохранить текст'}
+                                        </Button>
+                                        <Button type="button" size="sm" variant="outline" onClick={() => setEditingPlatformPostId('')} className="min-h-10 rounded-xl bg-white px-3">
+                                          Отмена
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      {canEditPlatformText ? (
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => {
+                                            setPlatformTextEdits((previous) => ({ ...previous, [post.id]: previous[post.id] ?? post.platform_text ?? '' }));
+                                            setEditingPlatformPostId(post.id);
+                                          }}
+                                          className="min-h-10 rounded-xl bg-white px-3 text-xs"
+                                        >
+                                          Изменить текст
+                                        </Button>
+                                      ) : null}
+                                      {readiness?.action_label && isPlatformRuleBlocked(post) ? (
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => {
+                                            if (readiness.action_label === 'Добавить фото' || readiness.action_label === 'Заменить фото' || readiness.action_label === 'Выбрать фото') {
+                                              setSection('media');
+                                              setSelectedItemId('');
+                                            } else {
+                                              navigate('/dashboard/settings');
+                                            }
+                                          }}
+                                          className="min-h-10 rounded-xl bg-white px-3 text-xs"
+                                        >
+                                          {readiness.action_label}
+                                        </Button>
+                                      ) : null}
+                                    </div>
+                                  )}
                                 </div>
-                                <div className="mt-1 text-xs leading-5 text-slate-500">{getChannelNextAction(post)}</div>
-                                {readiness?.action_label && isPlatformRuleBlocked(post) ? (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      if (readiness.action_label === 'Добавить фото' || readiness.action_label === 'Заменить фото' || readiness.action_label === 'Выбрать фото') {
-                                        setSection('media');
-                                        setSelectedItemId('');
-                                      } else {
-                                        navigate('/dashboard/settings');
-                                      }
-                                    }}
-                                    className="mt-2 h-8 rounded-xl bg-white px-3 text-xs"
-                                  >
-                                    {readiness.action_label}
-                                  </Button>
-                                ) : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div id={channelDetailsId} className="mt-2 flex flex-wrap gap-2">
-                          {CHANNELS.map((channel) => (
-                            <span key={channel.key} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                              {channel.label}
-                            </span>
-                          ))}
-                        </div>
-                      )
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="border-t border-slate-100 pt-3 text-xs leading-5 text-slate-500">
+                            LocalOS создаст только выбранные варианты. Наружу ничего не отправится.
+                          </div>
+                        )}
+                      </div>
                     ) : null}
                   </div>
                   {!hasPosts ? (
@@ -2061,8 +2311,8 @@ export function ContentPage() {
                   <Button type="button" variant="outline" onClick={saveSelectedItem} disabled={Boolean(busyAction)} className="rounded-2xl">
                     {busyAction === 'save' ? 'Сохраняем...' : 'Сохранить'}
                   </Button>
-                  <Button type="button" variant="outline" onClick={prepareSelectedItem} disabled={Boolean(busyAction)} className="rounded-2xl">
-                    {busyAction === 'prepare' ? 'Готовим...' : 'Подготовить каналы'}
+                  <Button type="button" variant="outline" onClick={prepareSelectedItem} disabled={Boolean(busyAction) || selectedChannelCount === 0} className="rounded-2xl">
+                    {busyAction === 'prepare' ? 'Готовим...' : hasPosts ? 'Применить выбор каналов' : 'Подготовить выбранные каналы'}
                   </Button>
                   <Button
                     type="button"

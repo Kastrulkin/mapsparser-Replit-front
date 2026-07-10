@@ -43,6 +43,44 @@ def _require_business(cursor, business_id: str, user_data: dict):
     return True, None
 
 
+def _invalidate_social_approvals_for_photo_usage(
+    cursor,
+    *,
+    business_id: str,
+    content_plan_item_id: str,
+    photo_asset_id: str,
+    target_platform: str = "",
+) -> int:
+    if not business_id or not content_plan_item_id or not photo_asset_id:
+        return 0
+    platform_clause = "AND platform = %s" if target_platform else ""
+    params = [photo_asset_id, business_id, content_plan_item_id]
+    if target_platform:
+        params.append(target_platform)
+    cursor.execute(
+        f"""
+        UPDATE social_posts
+        SET status = 'needs_review',
+            approved_at = NULL,
+            approval_id = NULL,
+            automation_task_id = NULL,
+            last_error = NULL,
+            metadata_json = COALESCE(metadata_json, '{{}}'::jsonb) || jsonb_build_object(
+                'selected_photo_asset_id', %s,
+                'media_selection_changed_at', NOW(),
+                'media_requires_review', TRUE
+            ),
+            updated_at = NOW()
+        WHERE business_id = %s
+          AND content_plan_item_id = %s
+          AND status NOT IN ('published', 'publishing')
+          {platform_clause}
+        """,
+        tuple(params),
+    )
+    return max(int(getattr(cursor, "rowcount", 0) or 0), 0)
+
+
 @media_intelligence_bp.route("/settings", methods=["GET"])
 def media_settings_get():
     user_data = require_auth_from_request()
@@ -346,17 +384,35 @@ def media_photo_usage(asset_id: str):
         ok, error_response = _require_business(cursor, business_id, user_data)
         if not ok:
             return error_response
+        usage_type = str(payload.get("usage_type") or "publication")
+        target_id = str(payload.get("target_id") or "").strip()
+        target_platform = str(payload.get("target_platform") or "").strip()
         record_photo_usage(
             cursor,
             business_id=business_id,
             photo_asset_id=str(asset_id or "").strip(),
-            usage_type=str(payload.get("usage_type") or "publication"),
-            target_id=str(payload.get("target_id") or "").strip(),
-            target_platform=str(payload.get("target_platform") or "").strip(),
+            usage_type=usage_type,
+            target_id=target_id,
+            target_platform=target_platform,
             metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
         )
+        approvals_reset = 0
+        if usage_type == "publication":
+            approvals_reset = _invalidate_social_approvals_for_photo_usage(
+                cursor,
+                business_id=business_id,
+                content_plan_item_id=target_id,
+                photo_asset_id=str(asset_id or "").strip(),
+                target_platform=target_platform,
+            )
         db.conn.commit()
-        return jsonify({"success": True})
+        return jsonify(
+            {
+                "success": True,
+                "approvals_reset": approvals_reset,
+                "requires_review": approvals_reset > 0,
+            }
+        )
     except Exception:
         db.conn.rollback()
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500

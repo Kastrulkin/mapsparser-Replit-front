@@ -75,14 +75,17 @@ def _bool_env(name: str, default: bool = False) -> bool:
 
 
 def social_post_runtime_status_payload() -> dict[str, object]:
-    dispatch_business_scope = str(os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
-    metrics_business_scope = str(os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
-    dispatch_allow_unscoped = _bool_env("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED", False)
+    dispatch_mode = "multi_tenant" if str(os.getenv("SOCIAL_POST_DISPATCH_MODE") or "").strip().lower() == "multi_tenant" else "scoped"
+    metrics_mode = "multi_tenant" if str(os.getenv("SOCIAL_POST_METRICS_MODE") or "").strip().lower() == "multi_tenant" else "scoped"
+    dispatch_business_scope = "" if dispatch_mode == "multi_tenant" else str(os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
+    metrics_business_scope = "" if metrics_mode == "multi_tenant" else str(os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
+    dispatch_allow_unscoped = dispatch_mode == "multi_tenant" or _bool_env("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED", False)
     dispatch_enabled = _bool_env("SOCIAL_POST_DISPATCH_ENABLED", False)
-    metrics_allow_unscoped = _bool_env("SOCIAL_POST_METRICS_ALLOW_UNSCOPED", False)
+    metrics_allow_unscoped = metrics_mode == "multi_tenant" or _bool_env("SOCIAL_POST_METRICS_ALLOW_UNSCOPED", False)
     metrics_enabled = _bool_env("SOCIAL_POST_METRICS_ENABLED", False)
     dispatch_status = {
         "enabled": dispatch_enabled,
+        "mode": dispatch_mode,
         "interval_sec": max(15, _int_env("SOCIAL_POST_DISPATCH_INTERVAL_SEC", 60)),
         "batch_size": max(1, min(_int_env("SOCIAL_POST_DISPATCH_BATCH_SIZE", 20), 200)),
         "business_scope": dispatch_business_scope,
@@ -90,9 +93,11 @@ def social_post_runtime_status_payload() -> dict[str, object]:
         "allow_unscoped": dispatch_allow_unscoped,
         "requires_business_scope": not dispatch_allow_unscoped,
         "blocked_without_scope": dispatch_enabled and not dispatch_business_scope and not dispatch_allow_unscoped,
+        "tenant_isolation": "per_social_post_business_id",
     }
     metrics_status = {
         "enabled": metrics_enabled,
+        "mode": metrics_mode,
         "interval_sec": max(60, _int_env("SOCIAL_POST_METRICS_INTERVAL_SEC", 3600)),
         "batch_size": max(1, min(_int_env("SOCIAL_POST_METRICS_BATCH_SIZE", 50), 500)),
         "business_scope": metrics_business_scope,
@@ -100,6 +105,7 @@ def social_post_runtime_status_payload() -> dict[str, object]:
         "allow_unscoped": metrics_allow_unscoped,
         "requires_business_scope": not metrics_allow_unscoped,
         "blocked_without_scope": metrics_enabled and not metrics_business_scope and not metrics_allow_unscoped,
+        "tenant_isolation": "per_social_post_business_id",
     }
     return {
         "dispatch": dispatch_status,
@@ -203,10 +209,12 @@ def _social_runtime_owner_status(dispatch_status: dict[str, object], metrics_sta
     dispatch_blocked = bool(dispatch_status.get("blocked_without_scope"))
     dispatch_scoped = bool(dispatch_status.get("scoped"))
     dispatch_allow_unscoped = bool(dispatch_status.get("allow_unscoped"))
+    dispatch_multi_tenant = str(dispatch_status.get("mode") or "").strip() == "multi_tenant"
     metrics_enabled = bool(metrics_status.get("enabled"))
     metrics_blocked = bool(metrics_status.get("blocked_without_scope"))
     metrics_scoped = bool(metrics_status.get("scoped"))
     metrics_allow_unscoped = bool(metrics_status.get("allow_unscoped"))
+    metrics_multi_tenant = str(metrics_status.get("mode") or "").strip() == "multi_tenant"
 
     if dispatch_blocked:
         status = "dispatch_guarded_without_scope"
@@ -227,15 +235,24 @@ def _social_runtime_owner_status(dispatch_status: dict[str, object], metrics_sta
         summary_en = f"The worker will process only due posts for business {scope}: API through keys, Yandex/2GIS through supervised/manual flow."
         next_action_ru = "Сверьте, что открыт тот же бизнес, затем запустите preflight или дождитесь worker."
         next_action_en = "Check that the same business is open, then run preflight or wait for the worker."
+    elif dispatch_enabled and dispatch_multi_tenant:
+        status = "dispatch_multi_tenant"
+        tone = "ready"
+        title_ru = "Публикация по расписанию работает для всех бизнесов"
+        title_en = "Scheduled publishing is active for all businesses"
+        summary_ru = "Worker обрабатывает подтверждённые due-посты каждого бизнеса отдельно и использует только его подключения."
+        summary_en = "The worker processes approved due posts per business and uses only that business's connections."
+        next_action_ru = "Для конкретного бизнеса проверьте его каналы, подтвердите публикацию и поставьте её в расписание."
+        next_action_en = "For a business, check its channels, approve the post, and schedule it."
     elif dispatch_enabled and dispatch_allow_unscoped:
         status = "dispatch_unscoped_allowed"
         tone = "warning"
-        title_ru = "Публикация включена для всех due-постов"
-        title_en = "Publishing is enabled for all due posts"
-        summary_ru = "Это явный allow-all режим: используйте только после проверки, потому что worker смотрит все доступные due-посты."
-        summary_en = "This is explicit allow-all mode: use only after verification because the worker scans all available due posts."
-        next_action_ru = "Для первого цикла безопаснее ограничить запуск конкретным SOCIAL_POST_DISPATCH_BUSINESS_ID."
-        next_action_en = "For the first cycle, it is safer to scope dispatch to a specific SOCIAL_POST_DISPATCH_BUSINESS_ID."
+        title_ru = "Включён устаревший allow-all режим"
+        title_en = "Legacy allow-all mode is enabled"
+        summary_ru = "Переключите runtime на явный multi_tenant режим, чтобы состояние было однозначным."
+        summary_en = "Switch runtime to explicit multi_tenant mode so the state is unambiguous."
+        next_action_ru = "Установите SOCIAL_POST_DISPATCH_MODE=multi_tenant."
+        next_action_en = "Set SOCIAL_POST_DISPATCH_MODE=multi_tenant."
     elif dispatch_enabled:
         status = "dispatch_enabled_needs_scope"
         tone = "warning"
@@ -263,6 +280,10 @@ def _social_runtime_owner_status(dispatch_status: dict[str, object], metrics_sta
         metrics_status_label = "metrics_scoped"
         metrics_summary_ru = "Сбор реакций ограничен тем же бизнесом, если scope совпадает."
         metrics_summary_en = "Metrics collection is scoped to one business when the scope matches."
+    elif metrics_enabled and metrics_multi_tenant:
+        metrics_status_label = "metrics_multi_tenant"
+        metrics_summary_ru = "Реакции собираются отдельно для опубликованных постов каждого бизнеса."
+        metrics_summary_en = "Metrics are collected separately for each business's published posts."
     elif metrics_enabled and metrics_allow_unscoped:
         metrics_status_label = "metrics_unscoped_allowed"
         metrics_summary_ru = "Сбор реакций включён для всех опубликованных постов в явном allow-all режиме."
@@ -339,7 +360,12 @@ def social_posts_prepare(item_id: str):
     data = request.get_json(silent=True) or {}
     platforms = data.get("platforms") if isinstance(data.get("platforms"), list) else None
     try:
-        payload = prepare_social_posts_for_item(str(user_data.get("user_id") or ""), item_id, platforms)
+        payload = prepare_social_posts_for_item(
+            str(user_data.get("user_id") or ""),
+            item_id,
+            platforms,
+            replace_platforms=bool(data.get("replace_platforms")),
+        )
         return jsonify({"success": True, **payload})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
@@ -379,7 +405,12 @@ def social_posts_bulk_prepare():
     item_ids = data.get("item_ids") if isinstance(data.get("item_ids"), list) else []
     platforms = data.get("platforms") if isinstance(data.get("platforms"), list) else None
     try:
-        payload = prepare_social_posts_for_items(str(user_data.get("user_id") or ""), item_ids, platforms)
+        payload = prepare_social_posts_for_items(
+            str(user_data.get("user_id") or ""),
+            item_ids,
+            platforms,
+            replace_platforms=bool(data.get("replace_platforms")),
+        )
         return jsonify({"success": True, **payload})
     except PermissionError:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403

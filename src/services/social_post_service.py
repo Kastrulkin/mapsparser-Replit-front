@@ -16,6 +16,7 @@ from database_manager import DatabaseManager
 from core.telegram_network import telegram_urlopen
 from core.telegram_token_store import decode_telegram_bot_token
 from core.helpers import get_business_owner_id
+from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
 
 
@@ -120,7 +121,12 @@ def ensure_social_post_tables(cursor: Any) -> None:
         )
 
 
-def prepare_social_posts_for_item(user_id: str, item_id: str, platforms: list[str] | None = None) -> dict[str, Any]:
+def prepare_social_posts_for_item(
+    user_id: str,
+    item_id: str,
+    platforms: list[str] | None = None,
+    replace_platforms: bool = False,
+) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -132,10 +138,21 @@ def prepare_social_posts_for_item(user_id: str, item_id: str, platforms: list[st
         for platform in requested_platforms:
             post = _upsert_social_post(cursor, user_id, item, platform, base_text)
             created_or_updated.append(post)
+        removed_platforms: list[str] = []
+        preserved_platforms: list[str] = []
+        if replace_platforms:
+            removed_platforms, preserved_platforms = _remove_unselected_social_posts(
+                cursor,
+                item_id=item_id,
+                selected_platforms=requested_platforms,
+            )
         db.conn.commit()
         return {
             "posts": created_or_updated,
             "summary": _summary_for_posts(created_or_updated),
+            "selected_platforms": requested_platforms,
+            "removed_platforms": removed_platforms,
+            "preserved_platforms": preserved_platforms,
         }
     except Exception:
         db.conn.rollback()
@@ -2676,13 +2693,22 @@ def _metrics_preview_recommended_env(business_scope: str) -> dict[str, str]:
     }
 
 
-def prepare_social_posts_for_items(user_id: str, item_ids: list[str], platforms: list[str] | None = None) -> dict[str, Any]:
+def prepare_social_posts_for_items(
+    user_id: str,
+    item_ids: list[str],
+    platforms: list[str] | None = None,
+    replace_platforms: bool = False,
+) -> dict[str, Any]:
     posts: list[dict[str, Any]] = []
     failed: list[dict[str, str]] = []
+    removed_platforms: list[str] = []
+    preserved_platforms: list[str] = []
     for item_id in _normalize_ids(item_ids):
         try:
-            payload = prepare_social_posts_for_item(user_id, item_id, platforms)
+            payload = prepare_social_posts_for_item(user_id, item_id, platforms, replace_platforms=replace_platforms)
             posts.extend(payload.get("posts") or [])
+            removed_platforms.extend([str(item) for item in payload.get("removed_platforms") or [] if str(item or "").strip()])
+            preserved_platforms.extend([str(item) for item in payload.get("preserved_platforms") or [] if str(item or "").strip()])
         except Exception:
             failed.append({"id": item_id, "error": str(sys.exc_info()[1])})
     return {
@@ -2690,7 +2716,44 @@ def prepare_social_posts_for_items(user_id: str, item_ids: list[str], platforms:
         "failed": failed,
         "summary": _summary_for_posts(posts),
         "queue_groups": build_social_queue_groups(posts),
+        "removed_platforms": sorted(set(removed_platforms)),
+        "preserved_platforms": sorted(set(preserved_platforms)),
     }
+
+
+def _remove_unselected_social_posts(
+    cursor: Any,
+    *,
+    item_id: str,
+    selected_platforms: list[str],
+) -> tuple[list[str], list[str]]:
+    cursor.execute(
+        """
+        SELECT id, platform, status
+        FROM social_posts
+        WHERE content_plan_item_id = %s
+          AND NOT (platform = ANY(%s))
+        """,
+        (item_id, selected_platforms),
+    )
+    removable_statuses = {"draft", "needs_review", "approved", "failed", "needs_manual_publish", "needs_supervised_publish"}
+    removable_ids: list[str] = []
+    removed_platforms: list[str] = []
+    preserved_platforms: list[str] = []
+    for row in cursor.fetchall() or []:
+        data = _row_to_dict(cursor, row)
+        post_id = str(data.get("id") or "").strip()
+        platform = str(data.get("platform") or "").strip()
+        status = str(data.get("status") or "").strip()
+        if status in removable_statuses and post_id:
+            removable_ids.append(post_id)
+            if platform:
+                removed_platforms.append(platform)
+        elif platform:
+            preserved_platforms.append(platform)
+    if removable_ids:
+        cursor.execute("DELETE FROM social_posts WHERE id = ANY(%s)", (removable_ids,))
+    return removed_platforms, preserved_platforms
 
 
 def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
@@ -3532,15 +3595,33 @@ def collect_social_post_metrics(user_id: str, business_id: str = "", post_id: st
 
 
 def _social_dispatch_business_scope(business_id: str = "") -> str:
-    return str(business_id or os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
+    explicit_scope = str(business_id or "").strip()
+    if explicit_scope:
+        return explicit_scope
+    if _social_dispatch_multi_tenant():
+        return ""
+    return str(os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
 
 
 def _social_metrics_business_scope(business_id: str = "") -> str:
-    return str(business_id or os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
+    explicit_scope = str(business_id or "").strip()
+    if explicit_scope:
+        return explicit_scope
+    if _social_metrics_multi_tenant():
+        return ""
+    return str(os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
+
+
+def _social_dispatch_multi_tenant() -> bool:
+    return str(os.getenv("SOCIAL_POST_DISPATCH_MODE") or "").strip().lower() == "multi_tenant"
+
+
+def _social_metrics_multi_tenant() -> bool:
+    return str(os.getenv("SOCIAL_POST_METRICS_MODE") or "").strip().lower() == "multi_tenant"
 
 
 def _social_dispatch_allow_unscoped() -> bool:
-    return str(os.getenv("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED") or "").strip().lower() in {
+    return _social_dispatch_multi_tenant() or str(os.getenv("SOCIAL_POST_DISPATCH_ALLOW_UNSCOPED") or "").strip().lower() in {
         "1",
         "true",
         "yes",
@@ -3550,7 +3631,7 @@ def _social_dispatch_allow_unscoped() -> bool:
 
 
 def _social_metrics_allow_unscoped() -> bool:
-    return str(os.getenv("SOCIAL_POST_METRICS_ALLOW_UNSCOPED") or "").strip().lower() in {
+    return _social_metrics_multi_tenant() or str(os.getenv("SOCIAL_POST_METRICS_ALLOW_UNSCOPED") or "").strip().lower() in {
         "1",
         "true",
         "yes",
@@ -3571,10 +3652,12 @@ def _social_bool_env(name: str) -> bool:
 
 def _social_launch_runtime_alignment(business_id: str) -> dict[str, Any]:
     scope = str(business_id or "").strip()
-    dispatch_scope = str(os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
+    dispatch_multi_tenant = _social_dispatch_multi_tenant()
+    dispatch_scope = "" if dispatch_multi_tenant else str(os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
     dispatch_enabled = _social_bool_env("SOCIAL_POST_DISPATCH_ENABLED")
     dispatch_allow_unscoped = _social_dispatch_allow_unscoped()
-    metrics_scope = str(os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
+    metrics_multi_tenant = _social_metrics_multi_tenant()
+    metrics_scope = "" if metrics_multi_tenant else str(os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
     metrics_enabled = _social_bool_env("SOCIAL_POST_METRICS_ENABLED")
     metrics_allow_unscoped = _social_metrics_allow_unscoped()
 
@@ -3607,6 +3690,7 @@ def _social_launch_runtime_alignment(business_id: str) -> dict[str, Any]:
         "business_id": scope,
         "dispatch": {
             "enabled": dispatch_enabled,
+            "mode": "multi_tenant" if dispatch_multi_tenant else "scoped",
             "business_scope": dispatch_scope,
             "allow_unscoped": dispatch_allow_unscoped,
             "status": dispatch_status,
@@ -3616,6 +3700,7 @@ def _social_launch_runtime_alignment(business_id: str) -> dict[str, Any]:
         },
         "metrics": {
             "enabled": metrics_enabled,
+            "mode": "multi_tenant" if metrics_multi_tenant else "scoped",
             "business_scope": metrics_scope,
             "allow_unscoped": metrics_allow_unscoped,
             "status": metrics_status,
@@ -7355,13 +7440,7 @@ def _publish_api_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
     if platform == "google_business":
         return _publish_google_business_post(cursor, post)
     if platform in {"instagram", "facebook"}:
-        return _publish_external_account_post(
-            cursor,
-            post,
-            ("meta", "facebook", "instagram"),
-            "Meta Graph permissions или бизнес-аккаунт ещё не подтверждены.",
-            "meta_graph_permissions_required",
-        )
+        return _publish_meta_post(cursor, post)
     return {
         "status": "needs_manual_publish",
         "last_error": "Для канала не настроен API-адаптер",
@@ -7388,6 +7467,332 @@ def _telegram_publish_error_state(status_code: int = 0, description: str = "") -
     if int(status_code or 0) in {401, 403}:
         return "needs_manual_publish", "telegram_connection_invalid"
     return "failed", "telegram_api_error"
+
+
+def _selected_media_assets(cursor: Any, post: dict[str, Any], limit: int = 10) -> list[dict[str, Any]]:
+    normalized_limit = max(1, min(int(limit or 10), 10))
+    result: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
+    def append_media(value: Any) -> None:
+        if not isinstance(value, dict):
+            return
+        asset_id = str(value.get("id") or value.get("asset_id") or value.get("photo_asset_id") or "").strip()
+        dedupe_key = asset_id or str(value.get("url") or value.get("original_url") or value.get("public_url") or "").strip()
+        if not dedupe_key or dedupe_key in seen_ids or len(result) >= normalized_limit:
+            return
+        seen_ids.add(dedupe_key)
+        versions = _json_dict(value.get("versions_json"))
+        original = _json_dict(versions.get("original"))
+        upload_metadata = _json_dict(_json_dict(value.get("metadata_json")).get("upload"))
+        original_url = str(value.get("original_url") or value.get("url") or "").strip()
+        public_url = str(value.get("public_url") or original.get("public_url") or "").strip()
+        if not public_url and (original_url.startswith("https://") or original_url.startswith("http://")):
+            public_url = original_url
+        result.append(
+            {
+                "id": asset_id,
+                "original_url": original_url,
+                "public_url": public_url,
+                "storage_path": str(value.get("storage_path") or original.get("storage_path") or value.get("storage_key") or "").strip(),
+                "mime_type": str(value.get("mime_type") or original.get("mime_type") or "image/jpeg").strip(),
+                "original_name": str(value.get("original_name") or upload_metadata.get("original_name") or "").strip(),
+            }
+        )
+
+    media_json = post.get("media_json")
+    if isinstance(media_json, list):
+        for item in media_json:
+            append_media(item)
+    elif isinstance(media_json, dict):
+        append_media(media_json)
+    if len(result) >= normalized_limit or not hasattr(cursor, "execute"):
+        return result[:normalized_limit]
+
+    business_id = str(post.get("business_id") or "").strip()
+    post_id = str(post.get("id") or "").strip()
+    item_id = str(post.get("content_plan_item_id") or "").strip()
+    platform = str(post.get("platform") or "").strip()
+    target_ids = [value for value in (post_id, item_id) if value]
+    if not business_id or not target_ids:
+        return result[:normalized_limit]
+    try:
+        cursor.execute(
+            """
+            SELECT pa.id, pa.original_url, pa.storage_key, pa.versions_json, pa.metadata_json,
+                   usage.target_platform, usage.created_at
+            FROM photo_asset_usage_events usage
+            JOIN photo_assets pa
+              ON pa.id = usage.photo_asset_id
+             AND pa.business_id = usage.business_id
+            WHERE usage.business_id = %s
+              AND usage.usage_type = 'publication'
+              AND usage.target_id = ANY(%s)
+              AND (usage.target_platform IS NULL OR usage.target_platform = '' OR usage.target_platform = %s)
+            ORDER BY usage.created_at DESC
+            LIMIT %s
+            """,
+            (business_id, target_ids, platform, normalized_limit * 3),
+        )
+        for row in cursor.fetchall() or []:
+            append_media(_row_to_dict(cursor, row))
+    except Exception:
+        return result[:normalized_limit]
+    return result[:normalized_limit]
+
+
+def _media_asset_file(asset: dict[str, Any]) -> dict[str, Any]:
+    storage_path = str(asset.get("storage_path") or "").strip()
+    content = load_media_file(storage_path) if storage_path else None
+    public_url = str(asset.get("public_url") or "").strip()
+    if content is None and (public_url.startswith("https://") or public_url.startswith("http://")):
+        try:
+            response = urllib.request.urlopen(public_url, timeout=20)
+            try:
+                content = response.read()
+            finally:
+                response.close()
+        except Exception:
+            content = None
+    if not content:
+        return {}
+    mime_type = str(asset.get("mime_type") or "image/jpeg").strip().lower()
+    extensions = {
+        "image/jpeg": "jpg",
+        "image/jpg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+    }
+    extension = extensions.get(mime_type, "jpg")
+    filename = str(asset.get("original_name") or "").strip() or f"{str(asset.get('id') or 'photo').strip()}.{extension}"
+    return {"content": content, "mime_type": mime_type, "filename": filename}
+
+
+def _multipart_form_data(
+    fields: dict[str, Any],
+    files: list[dict[str, Any]],
+) -> tuple[bytes, str]:
+    boundary = f"----LocalOS{uuid.uuid4().hex}"
+    body = bytearray()
+    for name, value in fields.items():
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
+        body.extend(str(value).encode("utf-8"))
+        body.extend(b"\r\n")
+    for file_data in files:
+        field_name = str(file_data.get("field_name") or "file").strip()
+        filename = str(file_data.get("filename") or "photo.jpg").replace('"', "")
+        mime_type = str(file_data.get("mime_type") or "application/octet-stream").strip()
+        content = file_data.get("content")
+        if not isinstance(content, bytes):
+            continue
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode("utf-8"))
+        body.extend(f"Content-Type: {mime_type}\r\n\r\n".encode("utf-8"))
+        body.extend(content)
+        body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
+    return bytes(body), f"multipart/form-data; boundary={boundary}"
+
+
+def _telegram_api_call(
+    bot_token: str,
+    method: str,
+    payload: dict[str, Any],
+    files: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    request_files = files if isinstance(files, list) else []
+    if request_files:
+        request_data, content_type = _multipart_form_data(payload, request_files)
+    else:
+        request_data = json.dumps(payload).encode("utf-8")
+        content_type = "application/json"
+    request = urllib.request.Request(
+        f"https://api.telegram.org/bot{bot_token}/{method}",
+        data=request_data,
+        headers={"Content-Type": content_type},
+        method="POST",
+    )
+    try:
+        response = telegram_urlopen(request, timeout=20)
+        try:
+            body = response.read().decode("utf-8", errors="ignore")
+            parsed = _json_dict(body)
+            status_code = int(getattr(response, "status", 500) or 500)
+        finally:
+            response.close()
+    except urllib.error.HTTPError:
+        error = sys.exc_info()[1]
+        body = ""
+        try:
+            body = error.read().decode("utf-8", errors="ignore")
+        except Exception:
+            body = str(error)
+        status_code = int(getattr(error, "code", 0) or 0)
+        description = str(_json_dict(body).get("description") or body or str(error))[:1000]
+        status, provider_status = _telegram_publish_error_state(status_code, description)
+        return {"ok": False, "status": status, "provider_status": provider_status, "error": description, "status_code": status_code}
+    except (urllib.error.URLError, TimeoutError):
+        return {"ok": False, "status": "failed", "provider_status": "telegram_network_error", "error": str(sys.exc_info()[1])}
+    except Exception:
+        return {"ok": False, "status": "failed", "provider_status": "telegram_unexpected_error", "error": str(sys.exc_info()[1])}
+    if not (200 <= status_code < 300) or not bool(parsed.get("ok")):
+        description = str(parsed.get("description") or body or f"Telegram HTTP {status_code}")[:1000]
+        status, provider_status = _telegram_publish_error_state(status_code, description)
+        return {"ok": False, "status": status, "provider_status": provider_status, "error": description, "status_code": status_code}
+    return {"ok": True, "result": parsed.get("result"), "response": parsed}
+
+
+def _publish_telegram_media_post(
+    *,
+    bot_token: str,
+    chat_id: str,
+    text: str,
+    media_assets: list[dict[str, Any]],
+    transport_source: str,
+) -> dict[str, Any]:
+    files: list[dict[str, Any]] = []
+    for index, asset in enumerate(media_assets[:10]):
+        file_data = _media_asset_file(asset)
+        if not file_data:
+            continue
+        files.append({**file_data, "field_name": f"photo{index}"})
+    if not files:
+        return {
+            "status": "needs_review",
+            "last_error": "Выбранное фото недоступно. Замените его или загрузите заново.",
+            "metadata_json": {"provider_status": "telegram_media_unavailable"},
+        }
+
+    caption = text if len(text) <= 1024 else ""
+    if len(files) == 1:
+        media_result = _telegram_api_call(
+            bot_token,
+            "sendPhoto",
+            {"chat_id": chat_id, "caption": caption},
+            [{**files[0], "field_name": "photo"}],
+        )
+    else:
+        media_payload = []
+        for index, file_data in enumerate(files):
+            item = {"type": "photo", "media": f"attach://{file_data['field_name']}"}
+            if index == 0 and caption:
+                item["caption"] = caption
+            media_payload.append(item)
+        media_result = _telegram_api_call(
+            bot_token,
+            "sendMediaGroup",
+            {"chat_id": chat_id, "media": json.dumps(media_payload, ensure_ascii=False)},
+            files,
+        )
+    if not bool(media_result.get("ok")):
+        return {
+            "status": str(media_result.get("status") or "failed"),
+            "last_error": str(media_result.get("error") or "Telegram не принял фото."),
+            "metadata_json": {"provider_status": str(media_result.get("provider_status") or "telegram_media_error")},
+        }
+
+    raw_media_result = media_result.get("result")
+    messages = raw_media_result if isinstance(raw_media_result, list) else [raw_media_result]
+    message_ids = [str(item.get("message_id") or "").strip() for item in messages if isinstance(item, dict) and str(item.get("message_id") or "").strip()]
+    delivery_warning = ""
+    text_response: dict[str, Any] | None = None
+    if not caption:
+        text_response = _telegram_api_call(
+            bot_token,
+            "sendMessage",
+            {"chat_id": chat_id, "text": text, "disable_web_page_preview": True},
+        )
+        if bool(text_response.get("ok")) and isinstance(text_response.get("result"), dict):
+            text_message_id = str(text_response.get("result", {}).get("message_id") or "").strip()
+            if text_message_id:
+                message_ids.append(text_message_id)
+        else:
+            delivery_warning = str(text_response.get("error") or "Фото опубликовано, но полный текст не отправился.")
+    first_message_id = message_ids[0] if message_ids else ""
+    return {
+        "status": "published",
+        "provider_post_id": first_message_id,
+        "provider_post_url": _telegram_post_url(chat_id, first_message_id),
+        "last_error": delivery_warning,
+        "metadata_json": {
+            "provider_status": "telegram_published" if not delivery_warning else "telegram_published_with_warning",
+            "telegram_transport": transport_source,
+            "provider_write_performed": True,
+            "external_publish_performed": True,
+            "media_attachment_count": len(files),
+            "telegram_message_ids": message_ids,
+            "delivery_warning": delivery_warning,
+        },
+    }
+
+
+def _vk_api_request(url: str, data: dict[str, Any] | None = None, files: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    request_files = files if isinstance(files, list) else []
+    if request_files:
+        body, content_type = _multipart_form_data(data or {}, request_files)
+    elif data is not None:
+        body = urllib.parse.urlencode(data).encode("utf-8")
+        content_type = "application/x-www-form-urlencoded"
+    else:
+        body = None
+        content_type = ""
+    headers = {"Content-Type": content_type} if content_type else {}
+    request = urllib.request.Request(url, data=body, headers=headers, method="POST" if body is not None else "GET")
+    try:
+        response = urllib.request.urlopen(request, timeout=20)
+        try:
+            return _json_dict(response.read().decode("utf-8", errors="ignore"))
+        finally:
+            response.close()
+    except Exception:
+        return {"error": {"error_msg": str(sys.exc_info()[1])}}
+
+
+def _upload_vk_wall_photos(
+    *,
+    token: str,
+    owner_id: str,
+    api_version: str,
+    media_assets: list[dict[str, Any]],
+) -> dict[str, Any]:
+    group_id = owner_id[1:] if owner_id.startswith("-") else owner_id
+    query = urllib.parse.urlencode({"access_token": token, "group_id": group_id, "v": api_version})
+    server_payload = _vk_api_request(f"https://api.vk.com/method/photos.getWallUploadServer?{query}")
+    upload_url = str(_json_dict(server_payload.get("response")).get("upload_url") or "").strip()
+    if not upload_url:
+        return {"success": False, "status": "vk_upload_server_failed", "error": str(_json_dict(server_payload.get("error")).get("error_msg") or "VK не вернул адрес загрузки фото.")}
+    attachments: list[str] = []
+    for asset in media_assets[:10]:
+        file_data = _media_asset_file(asset)
+        if not file_data:
+            return {"success": False, "status": "vk_media_unavailable", "error": "Выбранное фото недоступно. Замените его или загрузите заново."}
+        uploaded = _vk_api_request(upload_url, files=[{**file_data, "field_name": "photo"}])
+        if uploaded.get("error"):
+            return {"success": False, "status": "vk_media_upload_failed", "error": str(_json_dict(uploaded.get("error")).get("error_msg") or "VK не принял фото.")}
+        saved = _vk_api_request(
+            "https://api.vk.com/method/photos.saveWallPhoto",
+            data={
+                "access_token": token,
+                "group_id": group_id,
+                "server": uploaded.get("server"),
+                "photo": uploaded.get("photo"),
+                "hash": uploaded.get("hash"),
+                "v": api_version,
+            },
+        )
+        if saved.get("error"):
+            return {"success": False, "status": "vk_media_save_failed", "error": str(_json_dict(saved.get("error")).get("error_msg") or "VK не сохранил фото.")}
+        saved_items = saved.get("response") if isinstance(saved.get("response"), list) else []
+        if not saved_items or not isinstance(saved_items[0], dict):
+            return {"success": False, "status": "vk_media_save_empty", "error": "VK не вернул сохранённое фото."}
+        saved_photo = saved_items[0]
+        photo_owner_id = str(saved_photo.get("owner_id") or owner_id).strip()
+        photo_id = str(saved_photo.get("id") or "").strip()
+        if not photo_id:
+            return {"success": False, "status": "vk_media_save_empty", "error": "VK не вернул ID фото."}
+        attachments.append(f"photo{photo_owner_id}_{photo_id}")
+    return {"success": True, "attachments": attachments}
 
 
 def _resolve_telegram_publish_transport(business: dict[str, Any]) -> dict[str, Any]:
@@ -7439,6 +7844,15 @@ def _publish_telegram_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "last_error": "Пустой текст нельзя отправить в Telegram.",
             "metadata_json": {"provider_status": "telegram_empty_text"},
         }
+    media_assets = _selected_media_assets(cursor, post, limit=10)
+    if media_assets:
+        return _publish_telegram_media_post(
+            bot_token=bot_token,
+            chat_id=chat_id,
+            text=text,
+            media_assets=media_assets,
+            transport_source=str(transport.get("token_source") or ""),
+        )
     try:
         payload = json.dumps(
             {
@@ -7541,11 +7955,31 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "last_error": "Пустой текст нельзя отправить во VK.",
             "metadata_json": {"provider_status": "vk_empty_text"},
         }
+    media_assets = _selected_media_assets(cursor, post, limit=10)
+    attachments: list[str] = []
+    if media_assets:
+        upload_result = _upload_vk_wall_photos(
+            token=token,
+            owner_id=owner_id,
+            api_version=str(auth_data.get("api_version") or "5.199"),
+            media_assets=media_assets,
+        )
+        if not bool(upload_result.get("success")):
+            return {
+                "status": "needs_review",
+                "last_error": str(upload_result.get("error") or "Не удалось подготовить фото для VK."),
+                "metadata_json": {
+                    "provider_status": str(upload_result.get("status") or "vk_media_upload_failed"),
+                    "external_account_id": account.get("id"),
+                },
+            }
+        attachments = [str(item) for item in upload_result.get("attachments") or [] if str(item or "").strip()]
     payload = urllib.parse.urlencode(
         {
             "access_token": token,
             "owner_id": owner_id,
             "message": text,
+            "attachments": ",".join(attachments),
             "from_group": "1",
             "v": str(auth_data.get("api_version") or "5.199"),
         }
@@ -7618,6 +8052,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "provider_write_performed": True,
             "external_publish_performed": True,
             "external_account_id": account.get("id"),
+            "media_attachment_count": len(attachments),
             "vk_response": parsed,
         },
     }
@@ -7646,6 +8081,10 @@ def _publish_google_business_post(cursor: Any, post: dict[str, Any]) -> dict[str
             "url": "",
         },
     }
+    media_assets = _selected_media_assets(cursor, post, limit=1)
+    media_url = str(media_assets[0].get("public_url") or "").strip() if media_assets else ""
+    if media_url.startswith("https://") or media_url.startswith("http://"):
+        post_data["media"] = [{"mediaFormat": "PHOTO", "sourceUrl": media_url}]
     try:
         from google_business_sync_worker import GoogleBusinessSyncWorker
         worker = GoogleBusinessSyncWorker()
@@ -7677,6 +8116,164 @@ def _publish_google_business_post(cursor: Any, post: dict[str, Any]) -> dict[str
         "metadata_json": {
             "provider_status": "google_business_published",
             "external_account_id": account.get("id"),
+            "media_attached": bool(post_data.get("media")),
+        },
+    }
+
+
+def _meta_graph_post(path: str, access_token: str, params: dict[str, Any]) -> dict[str, Any]:
+    api_version = str(os.getenv("META_GRAPH_API_VERSION") or "v20.0").strip().strip("/")
+    clean_path = str(path or "").strip().lstrip("/")
+    payload = dict(params)
+    payload["access_token"] = access_token
+    request = urllib.request.Request(
+        f"https://graph.facebook.com/{api_version}/{clean_path}",
+        data=urllib.parse.urlencode(payload).encode("utf-8"),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        response = urllib.request.urlopen(request, timeout=20)
+        try:
+            body = response.read().decode("utf-8", errors="ignore")
+            status_code = int(getattr(response, "status", 500))
+        finally:
+            response.close()
+    except urllib.error.HTTPError:
+        error = sys.exc_info()[1]
+        body = ""
+        try:
+            body = error.read().decode("utf-8", errors="ignore")
+        except Exception:
+            body = str(error)
+        parsed_error = _json_dict(body)
+        graph_error = _json_dict(parsed_error.get("error"))
+        return {
+            "success": False,
+            "status_code": int(getattr(error, "code", 0) or 0),
+            "error": str(graph_error.get("message") or body or error)[:1000],
+            "error_code": str(graph_error.get("code") or "").strip(),
+            "response": parsed_error,
+        }
+    except (urllib.error.URLError, TimeoutError):
+        return {"success": False, "status_code": 0, "error": str(sys.exc_info()[1]), "response": {}}
+    except Exception:
+        return {"success": False, "status_code": 0, "error": str(sys.exc_info()[1]), "response": {}}
+    parsed = _json_dict(body)
+    if not (200 <= status_code < 300) or isinstance(parsed.get("error"), dict):
+        graph_error = _json_dict(parsed.get("error"))
+        return {
+            "success": False,
+            "status_code": status_code,
+            "error": str(graph_error.get("message") or body or f"Meta Graph HTTP {status_code}")[:1000],
+            "error_code": str(graph_error.get("code") or "").strip(),
+            "response": parsed,
+        }
+    return {"success": True, "status_code": status_code, "response": parsed}
+
+
+def _meta_publish_error_result(platform: str, result: dict[str, Any], account_id: Any) -> dict[str, Any]:
+    status_code = int(result.get("status_code") or 0)
+    error_code = str(result.get("error_code") or "").strip()
+    needs_connection = status_code in {400, 401, 403} or error_code in {"10", "100", "190", "200"}
+    return {
+        "status": "needs_manual_publish" if needs_connection else "failed",
+        "last_error": str(result.get("error") or "Meta Graph не принял публикацию."),
+        "metadata_json": {
+            "provider_status": "meta_connection_invalid" if needs_connection else "meta_graph_error",
+            "platform": platform,
+            "status_code": status_code,
+            "error_code": error_code,
+            "external_account_id": account_id,
+        },
+    }
+
+
+def _publish_meta_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
+    platform = str(post.get("platform") or "").strip()
+    account = _find_active_external_account(
+        cursor,
+        str(post.get("business_id") or ""),
+        ("meta", "facebook", "instagram"),
+    )
+    auth_data = _external_account_auth_data(account)
+    publish_status = _meta_publish_status(account, auth_data, platform)
+    if publish_status != "ready":
+        return {
+            "status": "needs_manual_publish",
+            "last_error": _meta_readiness_error(platform, publish_status, True),
+            "metadata_json": {
+                "provider_status": publish_status,
+                "external_account_id": account.get("id") if account else None,
+            },
+        }
+    access_token = str(auth_data.get("access_token") or auth_data.get("token") or "").strip()
+    text = str(post.get("platform_text") or post.get("base_text") or "").strip()
+    media_assets = _selected_media_assets(cursor, post, limit=1)
+    media_url = str(media_assets[0].get("public_url") or "").strip() if media_assets else ""
+    account_id = account.get("id") if account else None
+
+    if platform == "instagram":
+        ig_user_id = str(auth_data.get("ig_user_id") or auth_data.get("instagram_business_account_id") or "").strip()
+        if not media_url.startswith(("https://", "http://")):
+            return {
+                "status": "needs_review",
+                "last_error": "Instagram: выерите фото, доступное для публикации.",
+                "metadata_json": {"provider_status": "media_public_url_required", "external_account_id": account_id},
+            }
+        created = _meta_graph_post(
+            f"{ig_user_id}/media",
+            access_token,
+            {"image_url": media_url, "caption": text},
+        )
+        if not created.get("success"):
+            return _meta_publish_error_result(platform, created, account_id)
+        creation_id = str(_json_dict(created.get("response")).get("id") or "").strip()
+        if not creation_id:
+            return {
+                "status": "failed",
+                "last_error": "Instagram не вернул ID подготовленной публикации.",
+                "metadata_json": {"provider_status": "instagram_creation_id_missing", "external_account_id": account_id},
+            }
+        published = _meta_graph_post(
+            f"{ig_user_id}/media_publish",
+            access_token,
+            {"creation_id": creation_id},
+        )
+        if not published.get("success"):
+            return _meta_publish_error_result(platform, published, account_id)
+        provider_post_id = str(_json_dict(published.get("response")).get("id") or "").strip()
+        provider_post_url = ""
+        provider_status = "instagram_published"
+    else:
+        page_id = str(auth_data.get("page_id") or (account.get("external_id") if account else "") or "").strip()
+        if media_url.startswith(("https://", "http://")):
+            published = _meta_graph_post(f"{page_id}/photos", access_token, {"url": media_url, "caption": text})
+        else:
+            published = _meta_graph_post(f"{page_id}/feed", access_token, {"message": text})
+        if not published.get("success"):
+            return _meta_publish_error_result(platform, published, account_id)
+        response = _json_dict(published.get("response"))
+        provider_post_id = str(response.get("post_id") or response.get("id") or "").strip()
+        provider_post_url = f"https://www.facebook.com/{provider_post_id}" if provider_post_id else ""
+        provider_status = "facebook_published"
+
+    if not provider_post_id:
+        return {
+            "status": "failed",
+            "last_error": f"{platform_label(platform)} не вернул ID публикации.",
+            "metadata_json": {"provider_status": "meta_post_id_missing", "external_account_id": account_id},
+        }
+    return {
+        "status": "published",
+        "provider_post_id": provider_post_id,
+        "provider_post_url": provider_post_url,
+        "metadata_json": {
+            "provider_status": provider_status,
+            "provider_write_performed": True,
+            "external_publish_performed": True,
+            "external_account_id": account_id,
+            "media_attached": bool(media_url),
         },
     }
 
@@ -8284,8 +8881,8 @@ def _meta_channel_readiness(account: dict[str, Any], auth_data: dict[str, Any], 
     status = _meta_publish_status(account, auth_data, platform)
     if status == "ready":
         return {
-            "ready": False,
-            "status": "adapter_pending",
+            "ready": True,
+            "status": "ready",
         }
     return {
         "ready": False,
@@ -8681,7 +9278,7 @@ def _platform_text(platform: str, base_text: str) -> str:
 
 
 def _normalize_platforms(platforms: list[str] | None) -> list[str]:
-    if not platforms:
+    if platforms is None:
         return list(SOCIAL_POST_PLATFORMS)
     result = []
     seen = set()
@@ -9361,12 +9958,12 @@ def evaluate_social_post_publish_rules(cursor: Any, post: dict[str, Any]) -> lis
             rules.append(
                 _platform_rule_readiness(
                     platform,
-                    ready=False,
-                    status="caption_too_long",
-                    label="Сократите подпись",
-                    message="Telegram ограничивает подпись к фото или видео 1024 символами.",
-                    action_label="Сократить текст",
-                    severity="blocking",
+                    ready=True,
+                    status="text_will_follow_media",
+                    label="Готово к отправке",
+                    message="Фото выйдет первым, а длинный текст — следующим сообщением.",
+                    action_label="Запланировать отправку",
+                    severity="info",
                 )
             )
         elif not has_media and text_len > 4096:
@@ -9589,6 +10186,9 @@ def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, An
     vk_auth = _external_account_auth_data(vk_account)
     vk_binding = _vk_publish_binding(vk_account, vk_auth)
     google_account = _find_active_external_account(cursor, business_id, ("google_business",))
+    google_has_location = bool(str(google_account.get("external_id") or "").strip()) if google_account else False
+    google_ready = bool(google_account) and google_has_location
+    google_status = "ready" if google_ready else ("missing_binding" if google_account else "missing_connection")
     meta_account = _find_active_external_account(cursor, business_id, ("meta", "facebook", "instagram"))
     meta_auth = _external_account_auth_data(meta_account)
     instagram_readiness = _meta_channel_readiness(meta_account, meta_auth, "instagram")
@@ -9623,8 +10223,8 @@ def _build_channel_readiness(cursor: Any, business_id: str) -> list[dict[str, An
         _channel_readiness(
             "google_business",
             "api",
-            bool(google_account),
-            "ready" if google_account else "missing_connection",
+            google_ready,
+            google_status,
             _google_business_connection_checks(google_account),
         ),
         _channel_readiness(
@@ -10403,6 +11003,8 @@ def _channel_readiness_missing_fields(platform: str, status: str) -> list[str]:
             return ["vk_group_id_or_owner_id"]
         return ["vk_access_token", "vk_group_id_or_owner_id", "wall.post"]
     if platform_key == "google_business":
+        if status_key == "missing_binding":
+            return ["google_business_location"]
         return ["google_business_account", "google_business_location"]
     if platform_key == "instagram":
         if status_key == "missing_permissions":
@@ -10492,9 +11094,12 @@ def _social_learning_readiness(posts: list[dict[str, Any]]) -> dict[str, Any]:
     if posts_with_primary_result:
         status = "ready_from_leads"
         confidence = "high"
-    elif posts_with_early_signal:
+    elif posts_with_early_signal and published_posts >= 3:
         status = "early_signals_only"
         confidence = "medium"
+    elif posts_with_early_signal:
+        status = "collect_more_data"
+        confidence = "low"
     elif published_posts:
         status = "published_without_signals"
         confidence = "low"
@@ -10641,6 +11246,12 @@ def _social_learning_readiness_summary(status: str, is_ru: bool) -> str:
             if is_ru
             else "Posts are published, but no result is visible yet: collect reactions or record leads manually first."
         )
+    if status == "collect_more_data":
+        return (
+            "Появились первые реакции, но данных пока мало для изменения плана."
+            if is_ru
+            else "Early reactions exist, but there is not enough data to change the plan yet."
+        )
     if status == "finish_pending_publish":
         return (
             "Часть публикаций ещё ждёт ручного/контролируемого размещения или исправления ошибки."
@@ -10673,6 +11284,12 @@ def _social_learning_readiness_next_action(status: str, is_ru: bool) -> str:
             if is_ru
             else 'Click "Collect reactions" or record inquiries manually, then recalculate recommendations.'
         )
+    if status == "collect_more_data":
+        return (
+            "Опубликуйте минимум три поста или отметьте заявку/обращение, затем пересчитайте рекомендации."
+            if is_ru
+            else "Publish at least three posts or record a lead/inquiry, then recalculate recommendations."
+        )
     if status == "finish_pending_publish":
         return (
             "Сначала завершите ручные/контролируемые публикации или исправьте failed-каналы."
@@ -10694,6 +11311,12 @@ def _social_learning_apply_blocked_reason(status: str, is_ru: bool) -> str:
             "Применение заблокировано: сначала соберите реакции или отметьте заявку/обращение вручную."
             if is_ru
             else "Apply is blocked: collect reactions or record a lead/inquiry manually first."
+        )
+    if status == "collect_more_data":
+        return (
+            "Применение заблокировано: дождитесь результатов минимум трёх постов или отметьте заявку/обращение."
+            if is_ru
+            else "Apply is blocked: wait for results from at least three posts or record a lead/inquiry."
         )
     if status == "finish_pending_publish":
         return (

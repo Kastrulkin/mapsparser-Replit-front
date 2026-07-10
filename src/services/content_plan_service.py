@@ -1802,6 +1802,17 @@ def create_generated_content_plan(
             density=str(density or "standard"),
             content_mix=content_mix if isinstance(content_mix, dict) else {},
         )
+        raw_channels = content_mix.get("channels") if isinstance(content_mix, dict) else []
+        selected_channels = [
+            str(channel or "").strip()
+            for channel in (raw_channels if isinstance(raw_channels, list) else [])
+            if str(channel or "").strip()
+        ]
+        if selected_channels:
+            skeleton["selected_channels"] = selected_channels
+            skeleton_meta = skeleton.get("meta") if isinstance(skeleton.get("meta"), dict) else {}
+            skeleton_meta["selected_channels"] = selected_channels
+            skeleton["meta"] = skeleton_meta
         plan_id = str(uuid.uuid4())
         normalized_scope = _normalize_scope_type(scope_type)
         target_id = str(scope_target_id or "").strip() or str(context.get("scope", {}).get("scope_target_id") or business_id)

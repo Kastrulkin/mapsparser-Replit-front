@@ -1555,7 +1555,12 @@ def _dispatch_social_posts_if_due() -> None:
     _LAST_SOCIAL_POST_DISPATCH_AT = now
     try:
         batch_size = max(1, min(int(os.getenv("SOCIAL_POST_DISPATCH_BATCH_SIZE", "20")), 200))
-        business_scope = str(os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
+        dispatch_mode = str(os.getenv("SOCIAL_POST_DISPATCH_MODE") or "").strip().lower()
+        business_scope = (
+            ""
+            if dispatch_mode == "multi_tenant"
+            else str(os.getenv("SOCIAL_POST_DISPATCH_BUSINESS_ID") or "").strip()
+        )
         result = dispatch_due_social_posts(batch_size=batch_size, business_id=business_scope)
         if bool(result.get("blocked")):
             print(
@@ -1578,7 +1583,7 @@ def _dispatch_social_posts_if_due() -> None:
                 f"manual={int(result.get('manual') or 0)} failed={failed} "
                 f"by_action={json.dumps(by_action, ensure_ascii=False, sort_keys=True)} "
                 f"by_status={json.dumps(by_status, ensure_ascii=False, sort_keys=True)} "
-                f"business_scope={business_scope or 'all'}",
+                f"business_scope={business_scope or 'all'} mode={dispatch_mode or 'scoped'}",
                 flush=True,
             )
     except Exception:
@@ -1600,7 +1605,12 @@ def _collect_social_post_metrics_if_due() -> None:
     _LAST_SOCIAL_POST_METRICS_AT = now
     try:
         batch_size = max(1, min(int(os.getenv("SOCIAL_POST_METRICS_BATCH_SIZE", "50")), 500))
-        business_scope = str(os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
+        metrics_mode = str(os.getenv("SOCIAL_POST_METRICS_MODE") or "").strip().lower()
+        business_scope = (
+            ""
+            if metrics_mode == "multi_tenant"
+            else str(os.getenv("SOCIAL_POST_METRICS_BUSINESS_ID") or "").strip()
+        )
         result = collect_due_social_post_metrics(batch_size=batch_size, business_id=business_scope)
         if bool(result.get("blocked")):
             print(
@@ -1617,7 +1627,7 @@ def _collect_social_post_metrics_if_due() -> None:
             print(
                 "[SOCIAL_POST_METRICS] "
                 f"picked={picked} collected={int(result.get('collected') or 0)} failed={failed} "
-                f"business_scope={business_scope or 'all'}",
+                f"business_scope={business_scope or 'all'} mode={metrics_mode or 'scoped'}",
                 flush=True,
             )
     except Exception:
