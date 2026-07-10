@@ -106,7 +106,9 @@ the runtime source of truth.
 Runs should fail early with a connection preflight when an external source is
 missing. Native LocalOS destinations, such as Finance, are already available
 inside the product boundary and should not be presented as another business
-profile to connect.
+profile to connect. In the controlled beta, accepted runs are idempotently
+queued and executed by the worker. The HTTP request is not the lifetime of the
+task; a saved run can recover after an app or browser restart.
 
 Scheduled agents use the same compiled runtime. A `schedule.daily` trigger
 records a scheduler event, runs connection preflight, then starts the saved
@@ -114,6 +116,11 @@ blueprint version through the normal runner. It is not a separate cron script
 that bypasses approvals, audit, limits, billing or recovery. Worker dispatch is
 an explicit opt-in (`AGENT_SCHEDULE_DISPATCH_ENABLED`), so deploying code does
 not silently start customer agents.
+
+The first Agents beta permits one-off/manual read, draft and safe internal-draft
+capabilities. Capability catalog entries declare `runtime_status` and
+`beta_enabled`; request-only or planned capabilities may remain visible in
+technical catalogs but cannot activate a compiled workflow in this cohort.
 
 ## Mandatory Human Approval
 

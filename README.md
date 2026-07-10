@@ -63,6 +63,7 @@ LocalOS помогает владельцам и управляющим лока
 - OpenClaw / Action Orchestrator выступает execution boundary; LocalOS добавляет policy, billing, approval, audit, recovery и support export.
 - Поддержанные маршруты включают native LocalOS capabilities, Maton delivery route, Google Sheets/table provider executor, Telegram/WhatsApp webhooks и manual handoff там, где нужен человек.
 - Scheduled agents проходят тот же preflight, approval, audit, limits и billing; worker dispatch включается отдельным runtime-флагом.
+- Agent runs поддерживают пилотный durable queue-контур: idempotent enqueue, worker execution, retry/recovery, server-side result metrics и credit reservation. Контур включается только через `AGENT_ASYNC_RUNS_ENABLED` и список `AGENT_BETA_BUSINESS_IDS`.
 - Для каждого аккаунта предусмотрен стартовый набор из 10 популярных draft/templates: Telegram-дайджест владельцу, ответы на негативные отзывы, новости для карточек, SEO-правки услуг, партнёрский outreach, browser-use мониторинг конкурентов, Google Sheets to Telegram, WhatsApp/Telegram FAQ, импорт расходов и проверка записей на завтра.
 
 ### Интеграции и внешние write-действия

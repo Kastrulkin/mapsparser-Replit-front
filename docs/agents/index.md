@@ -45,6 +45,7 @@ Current capability areas:
 | Finance | `available/beta` | read KPIs, prepare import previews/proposals, apply only approved rows | money/billing/payment-related operations require approval |
 | Partnerships and outreach | `beta` | search/import leads, classify fit, draft offers, prepare approval-ready batches | sending is capped, approved, and never implied by draft generation |
 | Operator | `beta` | use attention briefs, action cards, refresh status, draft helpers and Telegram parity | same approval, billing and audit policy as dashboard workflows |
+| User-created Agents | `beta` | one-off/manual read, draft and safe internal-draft runs through AgentBlueprint | async runs and scheduler are cohort-flagged; external actions remain behind approval |
 | Public MCP server | `gap` | do not claim MCP availability | only documented static manifests/OpenAPI aliases are available |
 
 ## LocalOS Operator

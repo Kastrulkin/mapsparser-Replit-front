@@ -11,6 +11,7 @@ from services.agent_integration_preflight import (
     build_agent_integration_preflight,
     resolve_agent_binding_runtime_config,
 )
+from services.agent_run_contract import RESERVED_AGENT_INPUT_FIELDS, effective_agent_input_schema
 
 
 RUNNING_STATUSES = {"running", "waiting_approval"}
@@ -188,6 +189,28 @@ class AgentBlueprintRunner:
         self._create_openclaw_preview_observations(run_id, input_payload or {})
         self._advance_run(run_id, user_data)
         return {"success": True, "run": self.load_run(run_id)}
+
+    def execute_queued_run(self, run_id: str, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        run = self._load_run_header(run_id)
+        if not run:
+            return {"success": False, "error": "run_not_found"}
+        if str(run.get("status") or "") not in {"queued", "retry_wait", "running"}:
+            return {"success": True, "run": self.load_run(run_id, user_data), "already_final": True}
+        self.cursor.execute(
+            """
+            UPDATE agent_runs
+            SET status = 'running',
+                started_at = COALESCE(started_at, NOW()),
+                heartbeat_at = NOW(),
+                next_attempt_at = NULL,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (run_id,),
+        )
+        self._create_openclaw_preview_observations(run_id, parse_json_field(run.get("input_json"), {}), idempotent=True)
+        self._advance_run(run_id, user_data)
+        return {"success": True, "run": self.load_run(run_id, user_data)}
 
     def approve(self, run_id: str, approval_id: str, user_data: Dict[str, Any], decision_reason: str = "") -> Dict[str, Any]:
         approval = self._load_approval(run_id, approval_id)
@@ -416,9 +439,16 @@ class AgentBlueprintRunner:
             return generic_payload
         return dict(base_payload)
 
-    def _create_openclaw_preview_observations(self, run_id: str, input_payload: Dict[str, Any]) -> None:
+    def _create_openclaw_preview_observations(self, run_id: str, input_payload: Dict[str, Any], idempotent: bool = False) -> None:
         if not self._is_safe_preview_input(input_payload):
             return
+        if idempotent:
+            self.cursor.execute(
+                "SELECT id FROM agent_run_steps WHERE run_id = %s AND step_index = -1 LIMIT 1",
+                (run_id,),
+            )
+            if self.cursor.fetchone():
+                return
         route_plan = input_payload.get("openclaw_preview_routes") if isinstance(input_payload.get("openclaw_preview_routes"), list) else []
         action_plan = input_payload.get("openclaw_action_plan") if isinstance(input_payload.get("openclaw_action_plan"), list) else []
         handler_contracts = input_payload.get("connector_action_handlers") if isinstance(input_payload.get("connector_action_handlers"), list) else []
@@ -1394,7 +1424,22 @@ class AgentBlueprintRunner:
         run_input = parse_json_field(run.get("input_json"), {})
         if not isinstance(run_input, dict):
             run_input = {}
-        payload = {**run_input, **step_payload}
+        version = self._load_version(str(run.get("blueprint_version_id") or "")) or {}
+        public_schema = effective_agent_input_schema(version.get("inputs_schema_json"), version.get("steps_json"))
+        public_keys = set(public_schema.get("properties") or {})
+        payload = {
+            **{
+                key: value
+                for key, value in run_input.items()
+                if key in RESERVED_AGENT_INPUT_FIELDS
+            },
+            **step_payload,
+            **{
+                key: value
+                for key, value in run_input.items()
+                if key in public_keys and value not in (None, "")
+            },
+        }
         payload["run_id"] = str(run.get("id") or "")
         if str(payload.get("source_run_id") or "").startswith("{{"):
             payload["source_run_id"] = str(run.get("id") or "")
@@ -1640,6 +1685,7 @@ class AgentBlueprintRunner:
         )
         approvals = [self._normalize_json_row(dict(row)) for row in (self.cursor.fetchall() or [])]
         normalized_run = self._normalize_json_row(run)
+        run_output = normalized_run.get("output_json") if isinstance(normalized_run.get("output_json"), dict) else {}
         observability = self._build_run_observability(normalized_run, steps, artifacts, approvals, user_data or {})
         business_result, result_state = self._business_result(normalized_run, artifacts)
         current_approval = next((item for item in reversed(approvals) if item.get("status") == "pending"), None)
@@ -1652,6 +1698,15 @@ class AgentBlueprintRunner:
             "business_result": business_result,
             "result_state": result_state,
             "current_approval": current_approval,
+            "run_billing": run_output.get("run_billing") if isinstance(run_output.get("run_billing"), dict) else {},
+            "queue_state": {
+                "status": normalized_run.get("status"),
+                "queued_at": normalized_run.get("queued_at"),
+                "heartbeat_at": normalized_run.get("heartbeat_at"),
+                "next_attempt_at": normalized_run.get("next_attempt_at"),
+                "attempt_count": int(normalized_run.get("attempt_count") or 0),
+                "max_attempts": int(normalized_run.get("max_attempts") or 0),
+            },
         }
 
     def _business_result(

@@ -56,6 +56,7 @@ from services.operator_apify_settlement import settle_apify_actual_cost
 from services.operator_refresh_recovery import release_failed_refresh_reservation
 from services.operator_refresh_telegram_followup import dispatch_operator_refresh_telegram_followup
 from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
+from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent_run
 from services.social_post_service import collect_due_social_post_metrics, dispatch_due_social_posts
 from services.telegram_opportunity_monitor import run_telegram_opportunity_monitor
 
@@ -73,6 +74,7 @@ _LAST_YOOKASSA_RENEWALS_AT = 0.0
 _LAST_OUTREACH_DISPATCH_AT = 0.0
 _LAST_CARD_AUTOMATION_AT = 0.0
 _LAST_AGENT_SCHEDULE_DISPATCH_AT = 0.0
+_LAST_AGENT_RUN_QUEUE_AT = 0.0
 _LAST_SOCIAL_POST_DISPATCH_AT = 0.0
 _LAST_SOCIAL_POST_METRICS_AT = 0.0
 _LAST_TELEGRAM_OPPORTUNITY_MONITOR_AT = 0.0
@@ -1488,6 +1490,48 @@ def _dispatch_agent_schedules_if_due() -> None:
         except Exception:
             pass
         print("[AGENT_SCHEDULE_DISPATCH] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+    finally:
+        try:
+            if db:
+                db.close()
+        except Exception:
+            pass
+
+
+def _process_agent_run_queue_if_due() -> None:
+    global _LAST_AGENT_RUN_QUEUE_AT
+    if not _env_bool("AGENT_ASYNC_RUNS_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(1, int(os.getenv("AGENT_RUN_QUEUE_INTERVAL_SEC", "2")))
+    if now - _LAST_AGENT_RUN_QUEUE_AT < interval_sec:
+        return
+    _LAST_AGENT_RUN_QUEUE_AT = now
+
+    db = None
+    try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        run = claim_next_agent_run(cursor)
+        db.conn.commit()
+        if not run:
+            return
+        result = execute_claimed_agent_run(cursor, run)
+        db.conn.commit()
+        print(
+            "[AGENT_RUN_QUEUE] "
+            f"run_id={run.get('id')} status={str((result.get('run') or {}).get('status') or 'retry_wait')}",
+            flush=True,
+        )
+    except Exception:
+        try:
+            if db:
+                db.conn.rollback()
+        except Exception:
+            pass
+        print("[AGENT_RUN_QUEUE] error", flush=True)
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
     finally:
@@ -6108,6 +6152,7 @@ if __name__ == "__main__":
             process_queue()
             _run_card_automation_if_due()
             _dispatch_agent_schedules_if_due()
+            _process_agent_run_queue_if_due()
             _dispatch_social_posts_if_due()
             _collect_social_post_metrics_if_due()
             _run_telegram_opportunity_monitor_if_due()

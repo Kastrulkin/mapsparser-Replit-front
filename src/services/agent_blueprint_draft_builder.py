@@ -880,6 +880,15 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
         },
         "side_effects_performed": save_to_content_plan,
     }
+    if save_to_content_plan:
+        version_payload["inputs_schema"]["properties"]["scheduled_for"] = {
+            "type": "string",
+            "format": "date",
+            "title": "Дата в контент-плане",
+            "description": "Будущая дата, на которую нужно сохранить черновик.",
+            "default": scheduled_for,
+        }
+        version_payload["inputs_schema"]["required"] = ["scheduled_for"]
     if schedule:
         version_payload["schedule"] = schedule
     sources = [str(source.get("key") or "source"), "business_profile"]

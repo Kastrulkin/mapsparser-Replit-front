@@ -376,12 +376,43 @@ type AgentRun = {
   artifacts?: AgentArtifact[];
   approvals?: AgentApproval[];
   error_text?: string | null;
+  queued_at?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
+  attempt_count?: number;
+  max_attempts?: number;
+  next_attempt_at?: string | null;
+  billing_reservation_id?: string | null;
+  run_billing?: Record<string, unknown>;
   observability?: AgentRunObservability;
   business_result?: Record<string, unknown>;
   result_state?: 'missing' | 'prepared' | 'saved' | 'blocked';
   current_approval?: AgentApproval | null;
+};
+
+type AgentRunInputField = {
+  type?: 'string' | 'number' | 'integer' | 'boolean' | 'array';
+  format?: 'date' | 'time' | 'date-time' | 'textarea';
+  title?: string;
+  description?: string;
+  default?: unknown;
+  example?: unknown;
+  enum?: unknown[];
+};
+
+type AgentRunInputSchema = {
+  type?: 'object';
+  properties?: Record<string, AgentRunInputField>;
+  required?: string[];
+};
+
+type AgentServerTodaySummary = {
+  completed_runs?: number;
+  prepared_results?: number;
+  pending_approvals?: number;
+  failed_runs?: number;
+  timezone?: string;
+  day?: string;
 };
 
 type AgentMetricsSummary = {
@@ -473,6 +504,9 @@ type AgentBlueprintDetails = {
   active_version_number?: number;
   candidate_version?: Record<string, unknown> | null;
   candidate_version_id?: string;
+  run_input_schema?: AgentRunInputSchema;
+  candidate_run_input_schema?: AgentRunInputSchema;
+  active_run_input_schema?: AgentRunInputSchema;
   execution_mode?: 'one_off' | 'manual' | 'scheduled';
   execution_mode_source?: 'explicit' | 'legacy_trigger';
   execution_mode_confirmation_required?: boolean;
@@ -2762,6 +2796,53 @@ const buildTodaySummary = (
   };
 };
 
+const initialRunParameters = (
+  schema: AgentRunInputSchema | undefined,
+  previousInput?: Record<string, unknown>,
+) => {
+  const values: Record<string, unknown> = {};
+  Object.entries(schema?.properties || {}).forEach(([key, field]) => {
+    const previous = previousInput?.[key];
+    const candidate = previous !== undefined ? previous : field.default;
+    if (candidate === undefined || candidate === null) {
+      return;
+    }
+    if (field.format === 'date' && typeof candidate === 'string') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const parsed = new Date(`${candidate}T00:00:00`);
+      if (!Number.isNaN(parsed.getTime()) && parsed < today) {
+        return;
+      }
+    }
+    values[key] = candidate;
+  });
+  return values;
+};
+
+const validateRunParameters = (
+  schema: AgentRunInputSchema | undefined,
+  values: Record<string, unknown>,
+) => {
+  const errors: Record<string, string> = {};
+  (schema?.required || []).forEach((key) => {
+    const value = values[key];
+    if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+      errors[key] = 'Заполните обязательное поле.';
+    }
+  });
+  Object.entries(schema?.properties || {}).forEach(([key, field]) => {
+    const value = values[key];
+    if (field.format === 'date' && typeof value === 'string' && value) {
+      const parsed = new Date(`${value}T00:00:00`);
+      if (Number.isNaN(parsed.getTime())) {
+        errors[key] = 'Укажите корректную дату.';
+      }
+    }
+  });
+  return errors;
+};
+
 const buildAgentBusinessStatus = (
   blueprint: AgentBlueprint,
   details?: AgentBlueprintDetails | null,
@@ -4044,6 +4125,7 @@ export const AgentBlueprintsPage = () => {
   const [selectedBlueprintId, setSelectedBlueprintId] = useState<string | null>(null);
   const [blueprintDetails, setBlueprintDetails] = useState<AgentBlueprintDetails | null>(null);
   const [agentDetailsById, setAgentDetailsById] = useState<Record<string, AgentBlueprintDetails>>({});
+  const [serverTodaySummary, setServerTodaySummary] = useState<AgentServerTodaySummary | null>(null);
   const [activeRun, setActiveRun] = useState<AgentRun | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -4056,6 +4138,8 @@ export const AgentBlueprintsPage = () => {
   const [runCity, setRunCity] = useState('');
   const [runCategory, setRunCategory] = useState('');
   const [runLimit, setRunLimit] = useState('30');
+  const [runParameters, setRunParameters] = useState<Record<string, unknown>>({});
+  const [runParameterErrors, setRunParameterErrors] = useState<Record<string, string>>({});
   const [createWizardOpen, setCreateWizardOpen] = useState(false);
   const [createWizardStep, setCreateWizardStep] = useState(0);
   const [workspaceMode, setWorkspaceMode] = useState<AgentWorkspaceMode>('overview');
@@ -4312,6 +4396,9 @@ export const AgentBlueprintsPage = () => {
       const response = await api.get('/agent-blueprints', { params: { business_id: currentBusinessId } });
       const items = Array.isArray(response.data?.blueprints) ? response.data.blueprints : [];
       setBlueprints(items);
+      setServerTodaySummary(response.data?.today_summary && typeof response.data.today_summary === 'object'
+        ? response.data.today_summary
+        : null);
       if (!selectedBlueprintId && items.length > 0) {
         setSelectedBlueprintId(items[0].id);
       }
@@ -4403,6 +4490,9 @@ export const AgentBlueprintsPage = () => {
         active_version_number: typeof response.data?.active_version_number === 'number' ? response.data.active_version_number : 0,
         candidate_version: response.data?.candidate_version || null,
         candidate_version_id: typeof response.data?.candidate_version_id === 'string' ? response.data.candidate_version_id : '',
+        run_input_schema: response.data?.run_input_schema && typeof response.data.run_input_schema === 'object' ? response.data.run_input_schema : undefined,
+        candidate_run_input_schema: response.data?.candidate_run_input_schema && typeof response.data.candidate_run_input_schema === 'object' ? response.data.candidate_run_input_schema : undefined,
+        active_run_input_schema: response.data?.active_run_input_schema && typeof response.data.active_run_input_schema === 'object' ? response.data.active_run_input_schema : undefined,
         execution_mode: response.data?.execution_mode,
         execution_mode_source: response.data?.execution_mode_source,
         execution_mode_confirmation_required: response.data?.execution_mode_confirmation_required === true,
@@ -4435,6 +4525,15 @@ export const AgentBlueprintsPage = () => {
       setActiveRun(null);
     }
   }, [loadBlueprintDetails, selectedBlueprint?.id]);
+
+  useEffect(() => {
+    const previousWorkRun = (blueprintDetails?.runs || []).find((run) => run.input_json?.preview_mode === false);
+    const schema = blueprintDetails?.active_version_id
+      ? blueprintDetails.active_run_input_schema
+      : blueprintDetails?.candidate_run_input_schema || blueprintDetails?.run_input_schema;
+    setRunParameters(initialRunParameters(schema, previousWorkRun?.input_json));
+    setRunParameterErrors({});
+  }, [blueprintDetails?.candidate_version_id, blueprintDetails?.active_version_id, selectedBlueprint?.id]);
 
   useEffect(() => {
     if (!currentBusinessId || !blueprints.length) {
@@ -4470,6 +4569,9 @@ export const AgentBlueprintsPage = () => {
               active_version_number: typeof response.data?.active_version_number === 'number' ? response.data.active_version_number : 0,
               candidate_version: response.data?.candidate_version || null,
               candidate_version_id: typeof response.data?.candidate_version_id === 'string' ? response.data.candidate_version_id : '',
+              run_input_schema: response.data?.run_input_schema && typeof response.data.run_input_schema === 'object' ? response.data.run_input_schema : undefined,
+              candidate_run_input_schema: response.data?.candidate_run_input_schema && typeof response.data.candidate_run_input_schema === 'object' ? response.data.candidate_run_input_schema : undefined,
+              active_run_input_schema: response.data?.active_run_input_schema && typeof response.data.active_run_input_schema === 'object' ? response.data.active_run_input_schema : undefined,
               execution_mode: response.data?.execution_mode,
               execution_mode_source: response.data?.execution_mode_source,
               execution_mode_confirmation_required: response.data?.execution_mode_confirmation_required === true,
@@ -4940,9 +5042,42 @@ export const AgentBlueprintsPage = () => {
     setRunAnimation((current) => current ? { ...current, status: 'error', error: message } : current);
   };
 
+  const validatedRunParameters = (preview: boolean) => {
+    const schema = preview
+      ? blueprintDetails?.candidate_run_input_schema || blueprintDetails?.run_input_schema
+      : blueprintDetails?.active_run_input_schema || blueprintDetails?.candidate_run_input_schema || blueprintDetails?.run_input_schema;
+    const errors = validateRunParameters(schema, runParameters);
+    setRunParameterErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setWorkspaceMode('overview');
+      setError('Заполните параметры задачи перед запуском.');
+      return null;
+    }
+    return runParameters;
+  };
+
+  const waitForAgentRun = async (runId: string) => {
+    for (let attempt = 0; attempt < 600; attempt += 1) {
+      const response = await api.get(`/agent-runs/${runId}`);
+      const run = response.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
+      if (run) {
+        setActiveRun(run);
+        if (['completed', 'waiting_approval', 'failed', 'rejected', 'superseded'].includes(String(run.status || ''))) {
+          return run;
+        }
+      }
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 1000));
+    }
+    throw new Error('Агент продолжает работу дольше ожидаемого. Результат появится в истории после завершения.');
+  };
+
   const startRun = async (blueprintToRun?: AgentBlueprint | null, blueprintVersionId = '') => {
     const targetBlueprint = blueprintToRun || selectedBlueprint;
     if (!targetBlueprint) {
+      return;
+    }
+    const parameters = validatedRunParameters(true);
+    if (!parameters) {
       return;
     }
     setActionLoading(true);
@@ -4966,6 +5101,7 @@ export const AgentBlueprintsPage = () => {
         external_side_effects_allowed: false,
         approval_required_for_external_actions: true,
         limit: Number(runLimit) > 0 ? Math.min(Number(runLimit), 100) : 30,
+        ...parameters,
       };
       const preflightResponse = await api.post(`/agent-blueprints/${targetBlueprint.id}/preflight`, {
         blueprint_version_id: selectedVersionId || undefined,
@@ -4989,11 +5125,18 @@ export const AgentBlueprintsPage = () => {
         return;
       }
       const response = await api.post(`/agent-blueprints/${targetBlueprint.id}/runs`, {
+        idempotency_key: window.crypto.randomUUID(),
         blueprint_version_id: selectedVersionId || undefined,
         input: runInput,
       });
-      const nextRun = response.data?.run || null;
+      let nextRun = response.data?.run || null;
       setActiveRun(nextRun);
+      if (nextRun?.id && ['queued', 'running', 'retry_wait'].includes(String(nextRun.status || ''))) {
+        nextRun = await waitForAgentRun(nextRun.id);
+      }
+      if (nextRun?.status === 'failed') {
+        throw new Error(nextRun.error_text || 'Агент не смог завершить тест.');
+      }
       await finishRunAnimation(animationStartedAt);
       setRunAnimation(null);
       setWorkspaceMode('results');
@@ -5015,6 +5158,10 @@ export const AgentBlueprintsPage = () => {
     if (!targetBlueprint) {
       return;
     }
+    const parameters = validatedRunParameters(false);
+    if (!parameters) {
+      return;
+    }
     setActionLoading(true);
     setError(null);
     setDecisionNotice(null);
@@ -5022,6 +5169,7 @@ export const AgentBlueprintsPage = () => {
     try {
       const selectedVersionId = blueprintVersionId || blueprintDetails?.active_version_id || blueprintDetails?.candidate_version_id || '';
       const response = await api.post(`/agent-blueprints/${targetBlueprint.id}/runs`, {
+        idempotency_key: window.crypto.randomUUID(),
         blueprint_version_id: selectedVersionId || undefined,
         input: {
           preview_mode: false,
@@ -5031,10 +5179,17 @@ export const AgentBlueprintsPage = () => {
           external_side_effects_allowed: false,
           approval_required_for_external_actions: true,
           limit: Number(runLimit) > 0 ? Math.min(Number(runLimit), 100) : 30,
+          ...parameters,
         },
       });
-      const nextRun = response.data?.run || null;
+      let nextRun = response.data?.run || null;
       setActiveRun(nextRun);
+      if (nextRun?.id && ['queued', 'running', 'retry_wait'].includes(String(nextRun.status || ''))) {
+        nextRun = await waitForAgentRun(nextRun.id);
+      }
+      if (nextRun?.status === 'failed') {
+        throw new Error(nextRun.error_text || 'Агент не смог завершить задачу.');
+      }
       await finishRunAnimation(animationStartedAt);
       setRunAnimation(null);
       setWorkspaceMode('results');
@@ -5732,8 +5887,24 @@ export const AgentBlueprintsPage = () => {
     && !postCreateReadyForRun
     && (recentPostCreateHandoff?.workspace_mode === 'connections' || recentPostCreateHandoff?.status === 'needs_connections');
   const todaySummary = useMemo(
-    () => buildTodaySummary(blueprints, agentDetailsById),
-    [agentDetailsById, blueprints],
+    () => {
+      if (!serverTodaySummary) {
+        return buildTodaySummary(blueprints, agentDetailsById);
+      }
+      const completedRuns = Number(serverTodaySummary.completed_runs || 0);
+      const preparedArtifacts = Number(serverTodaySummary.prepared_results || 0);
+      const pendingApprovals = Number(serverTodaySummary.pending_approvals || 0);
+      const failedRuns = Number(serverTodaySummary.failed_runs || 0);
+      return {
+        completedRuns,
+        preparedArtifacts,
+        pendingApprovals,
+        failedRuns,
+        latestEvent: '',
+        empty: completedRuns + preparedArtifacts + pendingApprovals + failedRuns === 0,
+      };
+    },
+    [agentDetailsById, blueprints, serverTodaySummary],
   );
   const employeeListDetailsById = useMemo(() => {
     if (!selectedBlueprint?.id || !blueprintDetails) {
@@ -6081,11 +6252,19 @@ export const AgentBlueprintsPage = () => {
       </Dialog>
 
       {error ? (
-        <DashboardActionPanel
-          title="Ошибка"
-          description={error}
-          tone="amber"
-        />
+        <div className="space-y-2">
+          <DashboardActionPanel
+            title="Ошибка"
+            description={error}
+            tone="amber"
+          />
+          {error.toLowerCase().includes('кредит') ? (
+            <Button type="button" variant="outline" onClick={() => { window.location.href = '/dashboard/profile?focus=subscription#subscription'; }}>
+              <ReceiptText className="mr-2 h-4 w-4" />
+              Пополнить кредиты
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       {decisionNotice ? (
@@ -6269,6 +6448,24 @@ export const AgentBlueprintsPage = () => {
                       onPrimaryAction={runEmployeePrimaryAction}
                       onCloneAgent={openSelectedAgentClone}
                       onOpenAdvanced={() => setWorkspaceMode('settings')}
+                    />
+                    <AgentRunParametersPanel
+                      schema={selectedEmployeeAction.kind === 'run_test'
+                        ? blueprintDetails?.candidate_run_input_schema || blueprintDetails?.run_input_schema
+                        : blueprintDetails?.active_run_input_schema || blueprintDetails?.candidate_run_input_schema || blueprintDetails?.run_input_schema}
+                      values={runParameters}
+                      errors={runParameterErrors}
+                      onChange={(key, value) => {
+                        setRunParameters((current) => ({ ...current, [key]: value }));
+                        setRunParameterErrors((current) => {
+                          if (!current[key]) {
+                            return current;
+                          }
+                          const next = { ...current };
+                          delete next[key];
+                          return next;
+                        });
+                      }}
                     />
                     {selectedEmployeeAction.kind === 'configure_schedule' ? (
                       <AgentScheduleSetupPanel
@@ -9667,6 +9864,7 @@ const EmployeeTestResultPanel = ({
 }) => {
   const result = buildEmployeeTestResult(activeRun, pendingApproval);
   const isWorkRun = activeRun?.input_json?.preview_mode === false;
+  const chargedCredits = Number(activeRun?.run_billing?.actual_credits || activeRun?.run_billing?.charge_credits || 0);
   const labels = approvalActionLabels(pendingApproval);
   const isBlocked = result.state === 'blocker';
   const canApprove = Boolean(pendingApproval && !isBlocked);
@@ -9756,6 +9954,11 @@ const EmployeeTestResultPanel = ({
           {estimatedRunCredits && nextAction && ['run_work', 'run_test'].includes(nextAction.kind) ? (
             <div className="w-full text-right text-xs font-medium tabular-nums text-slate-500">
               Следующий запуск: примерно {estimatedRunCredits} {estimatedRunCredits === 1 ? 'кредит' : estimatedRunCredits < 5 ? 'кредита' : 'кредитов'}
+            </div>
+          ) : null}
+          {activeRun?.id ? (
+            <div className="w-full text-right text-xs font-medium tabular-nums text-slate-500">
+              {isWorkRun ? `За эту работу списано: ${chargedCredits} кредитов` : 'Проверка выполнена бесплатно'}
             </div>
           ) : null}
         </div>
@@ -10036,6 +10239,75 @@ const employeeStateTitle = (state: EmployeeWorkspaceState) => ({
   needs_attention: 'Нужно включить',
   error: 'Ошибка',
 }[state]);
+
+const AgentRunParametersPanel = ({
+  schema,
+  values,
+  errors,
+  onChange,
+}: {
+  schema?: AgentRunInputSchema;
+  values: Record<string, unknown>;
+  errors: Record<string, string>;
+  onChange: (key: string, value: unknown) => void;
+}) => {
+  const fields = Object.entries(schema?.properties || {});
+  if (!fields.length) {
+    return null;
+  }
+  const required = new Set(schema?.required || []);
+  return (
+    <section className="rounded-2xl bg-white px-5 py-5 shadow-sm ring-1 ring-slate-200">
+      <div className="text-sm font-semibold text-slate-950">Параметры этой работы</div>
+      <p className="mt-1 text-sm leading-6 text-slate-600">Проверьте значения перед тестом или рабочим запуском.</p>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        {fields.map(([key, field]) => {
+          const label = field.title || key.replaceAll('_', ' ');
+          const value = values[key];
+          const inputClassName = cn(
+            'mt-1 min-h-10 w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:ring-2',
+            errors[key] ? 'border-rose-300 focus:border-rose-400 focus:ring-rose-100' : 'border-slate-200 focus:border-slate-400 focus:ring-slate-100',
+          );
+          return (
+            <label key={key} className={cn('text-sm text-slate-700', field.format === 'textarea' || field.type === 'array' ? 'md:col-span-2' : '')}>
+              <span className="font-medium text-slate-900">{label}{required.has(key) ? ' *' : ''}</span>
+              {field.enum?.length ? (
+                <select className={inputClassName} value={String(value ?? '')} onChange={(event) => onChange(key, event.target.value)}>
+                  <option value="">Выберите</option>
+                  {field.enum.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}
+                </select>
+              ) : field.type === 'boolean' ? (
+                <span className="mt-2 flex min-h-10 items-center gap-2">
+                  <input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(key, event.target.checked)} />
+                  <span>{Boolean(value) ? 'Да' : 'Нет'}</span>
+                </span>
+              ) : field.format === 'textarea' || field.type === 'array' ? (
+                <textarea
+                  className={cn(inputClassName, 'min-h-24 resize-y')}
+                  value={Array.isArray(value) ? value.join('\n') : String(value ?? '')}
+                  onChange={(event) => onChange(key, event.target.value)}
+                />
+              ) : (
+                <input
+                  className={inputClassName}
+                  type={field.format === 'date' ? 'date' : field.format === 'time' ? 'time' : field.format === 'date-time' ? 'datetime-local' : field.type === 'number' || field.type === 'integer' ? 'number' : 'text'}
+                  min={field.format === 'date' ? new Date().toISOString().slice(0, 10) : undefined}
+                  step={field.type === 'integer' ? '1' : undefined}
+                  value={String(value ?? '')}
+                  placeholder={field.example === undefined ? undefined : String(field.example)}
+                  onChange={(event) => onChange(key, event.target.value)}
+                />
+              )}
+              {field.description ? <span className="mt-1 block text-xs leading-5 text-slate-500">{field.description}</span> : null}
+              {errors[key] ? <span className="mt-1 block text-xs font-medium text-rose-700">{errors[key]}</span> : null}
+            </label>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
+
 
 const EmployeeAgentOverviewPanel = ({
   blueprint,
@@ -13209,9 +13481,9 @@ const VersionSummary = ({
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-700">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="font-semibold text-slate-950">Версия агента</div>
+        <div className="font-semibold text-slate-950">Версии агента</div>
         <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
-          {latestVersionNumber ? `Активна v${latestVersionNumber}` : 'Нет активной версии'}
+          {latestVersionNumber ? `Рабочая версия v${latestVersionNumber}` : 'Рабочая версия не включена'}
         </span>
       </div>
       <div className="mt-1 text-xs text-slate-500">
@@ -13219,7 +13491,7 @@ const VersionSummary = ({
       </div>
       {newestVersions.length ? (
         <div className="mt-3 space-y-2">
-          {newestVersions.map((version) => {
+          {newestVersions.map((version, index) => {
             const versionNumber = getVersionNumber(version);
             const versionId = typeof version.id === 'string' ? version.id : '';
             const isActive = Boolean(version.is_active) || Boolean(versionId && versionId === activeVersionId);
@@ -13231,11 +13503,12 @@ const VersionSummary = ({
             const changedFieldsValue = 'changed_fields' in diffValue ? diffValue.changed_fields : [];
             const changedFields = Array.isArray(changedFieldsValue) ? changedFieldsValue.map((item) => humanizeMeta(String(item))) : [];
             const createdAt = typeof version.created_at === 'string' ? version.created_at : '';
+            const versionRole = isActive ? 'Рабочая версия' : index === 0 ? 'Тестируемая версия' : 'Предыдущая версия';
             return (
               <div key={String(version.id || versionNumber || 'version')} className={cn('rounded-lg px-2 py-2 text-xs text-slate-600 ring-1', isActive ? 'bg-emerald-50 ring-emerald-200' : 'bg-slate-50 ring-slate-200')}>
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-medium text-slate-900">{versionNumber ? `v${versionNumber}` : 'версия'}</span>
-                  <span>{isActive ? 'активна сейчас' : 'кандидат / архив'}</span>
+                  <span>{versionRole}</span>
                 </div>
                 {summary ? <div className="mt-1 text-slate-500">{summary}</div> : null}
                 {changedFields.length ? (
@@ -13259,7 +13532,7 @@ const VersionSummary = ({
                   ) : null}
                   {!isActive && versionNumber && latestVersionNumber && versionNumber < latestVersionNumber ? (
                     <Button type="button" size="sm" variant="outline" onClick={() => onRollbackVersion(versionId)} disabled={!versionId}>
-                      Откатиться сюда
+                      Вернуть эту версию
                     </Button>
                   ) : null}
                 </div>

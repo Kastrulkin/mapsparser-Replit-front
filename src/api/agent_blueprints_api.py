@@ -45,6 +45,9 @@ from services.agent_provider_registry import (
 )
 from services.agent_integration_preflight import build_agent_integration_preflight
 from services.agent_metrics import build_agent_metrics_summary
+from services.agent_capability_handlers import capability_runtime_contract
+from services.agent_run_contract import RESERVED_AGENT_INPUT_FIELDS, effective_agent_input_schema, validate_agent_run_input
+from services.agent_run_queue import async_agent_runs_enabled, enqueue_agent_run
 from api.agent_builder_api import (
     _apply_selected_provider_routes,
     _missing_required_provider_routes,
@@ -69,6 +72,64 @@ def _require_auth():
 
 def _user_id(user_data: dict) -> str:
     return str(user_data.get("user_id") or user_data.get("id") or "")
+
+
+def _agent_today_summary(cursor, business_id: str) -> dict:
+    if not business_id:
+        return {
+            "completed_runs": 0,
+            "prepared_results": 0,
+            "pending_approvals": 0,
+            "failed_runs": 0,
+        }
+    cursor.execute("SELECT COALESCE(timezone, 'UTC') AS timezone FROM businesses WHERE id = %s", (business_id,))
+    business_row = cursor.fetchone() or {}
+    timezone_name = str(business_row.get("timezone") or "UTC")
+    try:
+        business_timezone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        business_timezone = timezone.utc
+    local_now = datetime.now(timezone.utc).astimezone(business_timezone)
+    local_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_utc = local_start.astimezone(timezone.utc)
+    end_utc = (local_start + timedelta(days=1)).astimezone(timezone.utc)
+    cursor.execute(
+        """
+        SELECT
+            COUNT(DISTINCT r.id) FILTER (
+                WHERE r.status = 'completed'
+                  AND COALESCE(r.input_json->>'preview_mode', 'false') <> 'true'
+            ) AS completed_runs,
+            COUNT(DISTINCT r.id) FILTER (
+                WHERE a.artifact_type IN ('agent_final_result', 'agent_output_draft', 'telegram_post_draft')
+            ) AS prepared_results,
+            COUNT(DISTINCT ap.id) FILTER (
+                WHERE ap.status = 'pending'
+                  AND b.status <> 'archived'
+                  AND r.status = 'waiting_approval'
+            ) AS pending_approvals,
+            COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'failed') AS failed_runs
+        FROM agent_blueprints b
+        LEFT JOIN agent_runs r
+          ON r.blueprint_id = b.id
+         AND COALESCE(r.completed_at, r.started_at, r.queued_at, r.updated_at) >= %s
+         AND COALESCE(r.completed_at, r.started_at, r.queued_at, r.updated_at) < %s
+         AND r.status <> 'superseded'
+        LEFT JOIN agent_artifacts a ON a.run_id = r.id
+        LEFT JOIN agent_approvals ap ON ap.run_id = r.id
+        WHERE b.business_id = %s
+        """,
+        (start_utc, end_utc, business_id),
+    )
+    row = cursor.fetchone() or {}
+    return {
+        "completed_runs": int(row.get("completed_runs") or 0),
+        "prepared_results": int(row.get("prepared_results") or 0),
+        "pending_approvals": int(row.get("pending_approvals") or 0),
+        "failed_runs": int(row.get("failed_runs") or 0),
+        "timezone": timezone_name,
+        "day": local_now.date().isoformat(),
+    }
 
 
 def _normalize_json_row(row: dict) -> dict:
@@ -2115,6 +2176,7 @@ def list_agent_blueprints():
                    lr.id last_run_id,
                    lr.status last_run_status,
                    lr.input_json last_run_input_json,
+                   lr.queued_at last_run_queued_at,
                    lr.started_at last_run_started_at,
                    lr.completed_at last_run_completed_at,
                    ra.payload_json last_result_payload_json,
@@ -2139,11 +2201,11 @@ def list_agent_blueprints():
                 LIMIT 1
             ) av ON TRUE
             LEFT JOIN LATERAL (
-                SELECT id, status, input_json, started_at, completed_at
+                SELECT id, status, input_json, queued_at, started_at, completed_at
                 FROM agent_runs
                 WHERE blueprint_id = b.id
                   AND status <> 'superseded'
-                ORDER BY started_at DESC
+                ORDER BY COALESCE(queued_at, started_at, updated_at) DESC
                 LIMIT 1
             ) lr ON TRUE
             LEFT JOIN LATERAL (
@@ -2190,12 +2252,19 @@ def list_agent_blueprints():
             decorated["execution_mode"] = _agent_execution_mode(row)
             decorated["execution_mode_source"] = _agent_execution_mode_source(row)
             decorated["execution_mode_confirmation_required"] = _agent_execution_mode_confirmation_required(row)
+            decorated["suggested_execution_mode"] = _agent_execution_mode(row)
             decorated["lifecycle_state"] = _agent_lifecycle_state(row)
             decorated["last_business_result"] = _agent_business_result_from_artifact(row.get("last_result_payload_json"))
             schedule_status = _agent_schedule_status(row)
             decorated["next_run_at"] = schedule_status.get("next_run_at") if row.get("status") == "active" else None
             decorated_rows.append(decorated)
-        return jsonify({"success": True, "blueprints": decorated_rows})
+        return jsonify(
+            {
+                "success": True,
+                "blueprints": decorated_rows,
+                "today_summary": _agent_today_summary(cursor, business_id) if business_id else None,
+            }
+        )
     finally:
         db.close()
 
@@ -2581,7 +2650,7 @@ def get_agent_blueprint(blueprint_id: str):
             SELECT *
             FROM agent_runs
             {run_where}
-            ORDER BY started_at DESC
+            ORDER BY COALESCE(queued_at, started_at, updated_at) DESC
             LIMIT 50
             """,
             tuple(run_params),
@@ -2636,6 +2705,7 @@ def get_agent_blueprint(blueprint_id: str):
         decorated_blueprint["execution_mode"] = _agent_execution_mode(blueprint)
         decorated_blueprint["execution_mode_source"] = _agent_execution_mode_source(blueprint)
         decorated_blueprint["execution_mode_confirmation_required"] = _agent_execution_mode_confirmation_required(blueprint)
+        decorated_blueprint["suggested_execution_mode"] = _agent_execution_mode(blueprint)
         lifecycle_blueprint = {
             **blueprint,
             "last_run_status": (runs[0] if runs else {}).get("status"),
@@ -2654,6 +2724,18 @@ def get_agent_blueprint(blueprint_id: str):
                 "active_version_number": _version_number(active_version),
                 "candidate_version": candidate_version if candidate_version else None,
                 "candidate_version_id": str((candidate_version or {}).get("id") or ""),
+                "run_input_schema": effective_agent_input_schema(
+                    (candidate_version or {}).get("inputs_schema_json"),
+                    (candidate_version or {}).get("steps_json"),
+                ),
+                "candidate_run_input_schema": effective_agent_input_schema(
+                    (candidate_version or {}).get("inputs_schema_json"),
+                    (candidate_version or {}).get("steps_json"),
+                ),
+                "active_run_input_schema": effective_agent_input_schema(
+                    (active_version or {}).get("inputs_schema_json"),
+                    (active_version or {}).get("steps_json"),
+                ),
                 "execution_mode": _agent_execution_mode(blueprint),
                 "execution_mode_source": decorated_blueprint.get("execution_mode_source"),
                 "execution_mode_confirmation_required": decorated_blueprint.get("execution_mode_confirmation_required"),
@@ -2679,6 +2761,8 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
     blockers = []
     compiled_validation = {}
     version_payload = {}
+    capability_contracts = []
+    unsupported_capabilities = []
     preview_run_status = _activation_preview_run_status(
         cursor,
         str(blueprint.get("id") or ""),
@@ -2704,9 +2788,23 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         )
         if not compiled_validation.get("ready"):
             blockers.append({"type": "compiled_validation", "message": "Compiled workflow не прошёл проверку."})
+        capability_contracts = [
+            capability_runtime_contract(str(capability or ""))
+            for capability in version_payload.get("capability_allowlist", [])
+            if str(capability or "").strip()
+        ]
+        unsupported_capabilities = [item for item in capability_contracts if not item.get("beta_enabled")]
     approval_policy_status = _build_activation_approval_policy_status(version_payload, compiled_validation)
     if active_version and not approval_policy_status.get("ready"):
         blockers.append({"type": "approval_policy", "message": str(approval_policy_status.get("summary") or "Approval policy и limits требуют проверки.")})
+    if unsupported_capabilities:
+        blockers.append(
+            {
+                "type": "capability",
+                "message": "Часть обязательных действий ещё не сертифицирована для Agents beta.",
+                "capabilities": unsupported_capabilities,
+            }
+        )
     schedule_status = _agent_schedule_status(blueprint)
     if not schedule_status.get("ready"):
         blockers.append(
@@ -2750,6 +2848,7 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         and bool(schedule_status.get("ready"))
         and bool(preflight.get("ready"))
         and bool(preview_run_status.get("ready"))
+        and all(item.get("beta_enabled") for item in capability_contracts)
     )
     next_step = "activate_version" if ready else _activation_gate_next_step(blockers)
     human_blockers = _activation_gate_human_blockers(blockers, preflight, compiled_validation)
@@ -2768,6 +2867,7 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         "schedule_status": schedule_status,
         "preflight": preflight,
         "preview_run_status": preview_run_status,
+        "capability_contracts": capability_contracts,
         "blockers": blockers,
         "human_blockers": human_blockers,
         "summary": _activation_gate_summary_text(ready, next_step, human_blockers),
@@ -2962,6 +3062,8 @@ def _activation_gate_next_step(blockers: list[dict]) -> str:
         return "create_version"
     if "compiled_validation" in blocker_types or "approval_policy" in blocker_types:
         return "fix_compiled_workflow"
+    if "capability" in blocker_types:
+        return "review_unsupported_capability"
     if "route" in blocker_types:
         return "choose_provider_route"
     if "connection" in blocker_types:
@@ -3022,6 +3124,17 @@ def _activation_gate_human_blockers(blockers: list[dict], preflight: dict, compi
                     "type": "approval_policy",
                     "title": "Проверьте approval policy и limits",
                     "message": str(item.get("message") or "Для внешних действий нужен human gate и безопасные limits."),
+                    "action": "open_logic",
+                }
+            )
+        elif blocker_type == "capability":
+            capabilities = item.get("capabilities") if isinstance(item.get("capabilities"), list) else []
+            names = ", ".join(str(capability.get("capability") or "") for capability in capabilities if isinstance(capability, dict))
+            result.append(
+                {
+                    "type": "capability",
+                    "title": "Действие пока недоступно в beta",
+                    "message": f"Нельзя включить агента, пока не сертифицировано: {names}." if names else str(item.get("message") or "Действие пока недоступно."),
                     "action": "open_logic",
                 }
             )
@@ -4177,7 +4290,55 @@ def start_agent_blueprint_run(blueprint_id: str):
         if not version_id:
             return _json_error("Blueprint has no version", 400, "NO_VERSION")
         version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id)
-        run_input = _build_agent_preview_run_input(blueprint, version, payload) if raw_input.get("preview_mode") else raw_input
+        user_input = {
+            str(key): value
+            for key, value in raw_input.items()
+            if str(key) not in RESERVED_AGENT_INPUT_FIELDS
+        }
+        validation = validate_agent_run_input(
+            (version or {}).get("inputs_schema_json"),
+            user_input,
+            (version or {}).get("steps_json"),
+        )
+        if not validation.get("valid"):
+            return jsonify(
+                {
+                    "success": False,
+                    "code": "AGENT_RUN_INPUT_INVALID",
+                    "error": "Проверьте параметры запуска.",
+                    "validation_errors": validation.get("errors") or [],
+                    "run_input_schema": validation.get("public_schema") or {},
+                }
+            ), 400
+        normalized_raw_input = {
+            **{
+                str(key): value
+                for key, value in raw_input.items()
+                if str(key) in RESERVED_AGENT_INPUT_FIELDS
+            },
+            **(validation.get("input") or {}),
+        }
+        normalized_payload = {**payload, "input": normalized_raw_input}
+        run_input = (
+            _build_agent_preview_run_input(blueprint, version, normalized_payload)
+            if preview_mode
+            else normalized_raw_input
+        )
+        if async_agent_runs_enabled(str(blueprint.get("business_id") or "")):
+            result = enqueue_agent_run(
+                cursor,
+                blueprint=blueprint,
+                version=version or {},
+                input_payload=run_input,
+                user_data=user_data,
+                idempotency_key=str(payload.get("idempotency_key") or ""),
+            )
+            if not result.get("success"):
+                db.conn.rollback()
+                status = 409 if result.get("code") == "AGENT_RUN_ALREADY_IN_PROGRESS" else 402 if result.get("code") == "AGENT_RUN_BILLING_BLOCKED" else 400
+                return jsonify(result), status
+            db.conn.commit()
+            return jsonify(result), 200 if result.get("reused") else 202
         runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
         result = runner.start_run(version_id, run_input, user_data)
         db.conn.commit()

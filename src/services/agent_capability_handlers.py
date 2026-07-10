@@ -126,6 +126,30 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
 }
 
 
+CAPABILITY_RUNTIME_STATUS = {
+    "reviews.reply.draft": ("production_draft", True),
+    "services.optimize": ("production_draft", True),
+    "news.generate": ("production_draft", True),
+    "content_plan.item.create_draft": ("production_internal_write", True),
+    "appointments.read": ("production_read", True),
+    "communications.draft": ("production_draft", True),
+    "support.export": ("production_read", True),
+    "google_sheets.read_rows": ("production_read", True),
+    "partnership.audit_card": ("production_read", True),
+    "partnership.match_services": ("production_read", True),
+    "partnership.draft_offer": ("production_draft", True),
+    "outreach.send_batch": ("request_only", False),
+    "reviews.reply.publish_request": ("request_only", False),
+    "appointments.create_request": ("request_only", False),
+    "communications.send_reminder": ("request_only", False),
+    "communications.send_offer": ("request_only", False),
+    "sheets.append_row_request": ("request_only", False),
+    "finance.transaction.create": ("request_only", False),
+    "billing.reserve": ("manual_only", False),
+    "billing.settle": ("manual_only", False),
+}
+
+
 LEGACY_CAPABILITY_ALIASES = {
     "reviews.reply": "reviews.reply.draft",
     "appointments.create": "appointments.create_request",
@@ -172,6 +196,16 @@ def build_capability_catalog() -> Dict[str, Any]:
     }
 
 
+def capability_runtime_contract(name: str) -> Dict[str, Any]:
+    canonical = LEGACY_CAPABILITY_ALIASES.get(str(name or "").strip(), str(name or "").strip())
+    runtime_status, beta_enabled = CAPABILITY_RUNTIME_STATUS.get(canonical, ("planned_gap", False))
+    return {
+        "capability": canonical,
+        "runtime_status": runtime_status,
+        "beta_enabled": beta_enabled,
+    }
+
+
 def build_capability_handlers() -> Dict[str, CapabilityHandler]:
     handlers: Dict[str, CapabilityHandler] = {
         OUTREACH_SEND_BATCH_CAPABILITY: handle_outreach_send_batch,
@@ -207,11 +241,14 @@ def normalize_capability_name(value: Any) -> str:
 
 
 def _catalog_item(name: str, meta: Dict[str, Any]) -> Dict[str, Any]:
+    runtime = capability_runtime_contract(name)
     return {
         "name": name,
         "risk": str(meta.get("risk") or "unknown"),
         "side_effects": str(meta.get("side_effects") or "unknown"),
         "approval_required": bool(meta.get("approval_required")),
+        "runtime_status": runtime["runtime_status"],
+        "beta_enabled": runtime["beta_enabled"],
         "provider_candidates": capability_provider_candidates(name),
         "timeout_seconds": 30,
         "retry": {

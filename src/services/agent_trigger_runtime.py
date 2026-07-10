@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator
 from services.agent_blueprint_runner import AgentBlueprintRunner, parse_json_field
+from services.agent_run_queue import async_agent_runs_enabled, enqueue_agent_run
 
 
 def dispatch_telegram_message_to_agent_blueprints(cursor: Any, business_id: str, telegram_event: Dict[str, Any]) -> Dict[str, Any]:
@@ -376,8 +377,18 @@ def _dispatch_scheduled_blueprint(
     for key, value in _custom_process_defaults(blueprint, version).items():
         if value and not run_input.get(key):
             run_input[key] = value
-    runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
-    result = runner.start_run(str(version.get("id") or ""), run_input, user_data)
+    if async_agent_runs_enabled(business_id):
+        result = enqueue_agent_run(
+            cursor,
+            blueprint=blueprint,
+            version=version,
+            input_payload=run_input,
+            user_data=user_data,
+            idempotency_key=f"scheduler:{blueprint_id}:{schedule_context.get('schedule_date')}:{schedule_context.get('schedule_time')}",
+        )
+    else:
+        runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
+        result = runner.start_run(str(version.get("id") or ""), run_input, user_data)
     run = result.get("run") if isinstance(result.get("run"), dict) else {}
     run_id = str(run.get("id") or "")
     cursor.execute(
