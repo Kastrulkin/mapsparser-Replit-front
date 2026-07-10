@@ -899,6 +899,7 @@ type EmployeeNextAction = {
   description: string;
   targetMode: AgentWorkspaceMode;
   versionId?: string;
+  secondaryAction?: 'clone_agent';
 };
 
 type EmployeeTestResult = {
@@ -2159,6 +2160,24 @@ const businessResultPrimaryText = (result: Record<string, unknown>) => {
   return typeof text === 'string' ? text : '';
 };
 
+const estimatedAgentRunCredits = (
+  details?: AgentBlueprintDetails | null,
+  preview = false,
+) => {
+  const key = preview ? 'preview_run' : 'production_run';
+  const items = details?.metrics?.unified_billing_ledger?.items
+    || details?.metrics?.billing_breakdown?.items
+    || details?.metrics?.cost_tokens?.breakdown
+    || [];
+  const item = items.find((entry) => entry.key === key);
+  const explicitCredits = Number(item?.estimated_credits || 0);
+  if (explicitCredits > 0) {
+    return explicitCredits;
+  }
+  const estimatedTokens = Number(item?.estimated_tokens || 0);
+  return estimatedTokens > 0 ? Math.max(1, Math.ceil(estimatedTokens / 1000)) : 0;
+};
+
 const workflowStepsForAnimation = (
   details: AgentBlueprintDetails | null,
   kind: AgentRunAnimation['kind'],
@@ -3030,10 +3049,12 @@ const buildEmployeePrimaryAction = ({
   }
   if (state === 'completed') {
     return {
-      kind: 'run_similar',
-      label: 'Создать копию агента',
-      description: 'Будет создан новый агент с теми же источниками и правилами, но без истории запусков и результатов.',
-      targetMode: 'overview',
+      kind: 'run_work',
+      label: 'Запустить ещё раз',
+      description: 'Агент ещё раз выполнит ту же задачу и сохранит новый результат в своей истории.',
+      targetMode: 'results',
+      versionId: details?.active_version_id || details?.candidate_version_id || blueprint.active_version_id || blueprint.latest_version_id || '',
+      secondaryAction: 'clone_agent',
     };
   }
   if (state === 'blocked_result') {
@@ -3239,7 +3260,7 @@ const buildEmployeeWorkspaceStory = (
           : 'Расписание включено, время следующего запуска уточняется'
         : 'После теста, настройки времени и включения'
       : userMode.mode === 'one_off'
-        ? 'Задача завершится после выполнения'
+        ? state === 'completed' ? 'Можно запустить ещё раз вручную' : 'После выполнения результат сохранится в истории'
         : blueprint.status === 'active' ? 'Когда вы нажмёте «Запустить работу»' : 'После теста и включения',
     attention,
   };
@@ -3258,7 +3279,7 @@ const buildAgentUserMode = (
       mode,
       label: 'Разовая задача',
       flow: 'Запрос → выполнение → результат',
-      description: 'После результата задача считается завершённой.',
+      description: 'Не запускается автоматически. После результата этого же агента можно запустить ещё раз вручную.',
     };
   }
   if (mode === 'scheduled') {
@@ -5824,6 +5845,17 @@ export const AgentBlueprintsPage = () => {
     });
     window.location.href = `/dashboard/settings/integrations?${params.toString()}`;
   };
+  const openSelectedAgentClone = () => {
+    if (!selectedBlueprint) {
+      return;
+    }
+    setCloneFromBlueprintId(selectedBlueprint.id);
+    setDialogBuilderInput(selectedBlueprint.description || selectedBlueprint.latest_goal || selectedBlueprint.name);
+    setAgentPrompt(selectedBlueprint.description || selectedBlueprint.latest_goal || selectedBlueprint.name);
+    setBuilderExecutionMode(agentExecutionMode(selectedBlueprint, blueprintDetails));
+    setBuilderExecutionModeConfirmed(false);
+    setCreateWizardOpen(true);
+  };
   const runEmployeePrimaryAction = () => {
     if (!selectedBlueprint || !selectedEmployeeAction) {
       return;
@@ -5837,12 +5869,7 @@ export const AgentBlueprintsPage = () => {
       return;
     }
     if (selectedEmployeeAction.kind === 'run_similar') {
-      setCloneFromBlueprintId(selectedBlueprint.id);
-      setDialogBuilderInput(selectedBlueprint.description || selectedBlueprint.latest_goal || selectedBlueprint.name);
-      setAgentPrompt(selectedBlueprint.description || selectedBlueprint.latest_goal || selectedBlueprint.name);
-      setBuilderExecutionMode('one_off');
-      setBuilderExecutionModeConfirmed(false);
-      setCreateWizardOpen(true);
+      openSelectedAgentClone();
       return;
     }
     if (selectedEmployeeAction.kind === 'confirm_mode') {
@@ -6240,6 +6267,7 @@ export const AgentBlueprintsPage = () => {
                       action={selectedEmployeeAction}
                       actionLoading={actionLoading}
                       onPrimaryAction={runEmployeePrimaryAction}
+                      onCloneAgent={openSelectedAgentClone}
                       onOpenAdvanced={() => setWorkspaceMode('settings')}
                     />
                     {selectedEmployeeAction.kind === 'configure_schedule' ? (
@@ -6276,6 +6304,7 @@ export const AgentBlueprintsPage = () => {
                       needsGoogleSheetsSetup={resultNeedsGoogleSheetsSetup}
                       needsGoogleAccessReconnect={resultNeedsGoogleAccessReconnect}
                       googleAccessJustConnected={resultGoogleAccessReconnected}
+                      estimatedRunCredits={estimatedAgentRunCredits(blueprintDetails, selectedEmployeeAction.kind === 'run_test')}
                       nextAction={selectedEmployeeAction}
                       onApprove={() => decideApproval('approve')}
                       onReject={() => decideApproval('reject')}
@@ -6286,6 +6315,7 @@ export const AgentBlueprintsPage = () => {
                       onOpenGoogleSheetsSetup={openGoogleSheetsSourceSetup}
                       onOpenGoogleAccessReconnect={openGoogleAccessReconnect}
                       onNextAction={runEmployeePrimaryAction}
+                      onCloneAgent={openSelectedAgentClone}
                     />
                   ) : (
                     <EmployeeHistoryPanel
@@ -9606,6 +9636,7 @@ const EmployeeTestResultPanel = ({
   needsGoogleSheetsSetup = false,
   needsGoogleAccessReconnect = false,
   googleAccessJustConnected = false,
+  estimatedRunCredits = 0,
   nextAction,
   onApprove,
   onReject,
@@ -9614,6 +9645,7 @@ const EmployeeTestResultPanel = ({
   onOpenGoogleSheetsSetup,
   onOpenGoogleAccessReconnect,
   onNextAction,
+  onCloneAgent,
 }: {
   activeRun: AgentRun | null;
   pendingApproval: AgentApproval | null;
@@ -9622,6 +9654,7 @@ const EmployeeTestResultPanel = ({
   needsGoogleSheetsSetup?: boolean;
   needsGoogleAccessReconnect?: boolean;
   googleAccessJustConnected?: boolean;
+  estimatedRunCredits?: number;
   nextAction?: EmployeeNextAction | null;
   onApprove: () => void;
   onReject: () => void;
@@ -9630,6 +9663,7 @@ const EmployeeTestResultPanel = ({
   onOpenGoogleSheetsSetup?: () => void;
   onOpenGoogleAccessReconnect?: () => void;
   onNextAction?: () => void;
+  onCloneAgent?: () => void;
 }) => {
   const result = buildEmployeeTestResult(activeRun, pendingApproval);
   const isWorkRun = activeRun?.input_json?.preview_mode === false;
@@ -9648,7 +9682,7 @@ const EmployeeTestResultPanel = ({
     && ['enable', 'run_work', 'configure_schedule'].includes(nextAction.kind)
     && onNextAction,
   );
-  const canCloneAgent = Boolean(nextAction?.kind === 'run_similar' && onNextAction);
+  const canCloneAgent = Boolean(nextAction?.secondaryAction === 'clone_agent' && onCloneAgent);
   const rerunLabel = canRebuildScenario
     ? 'Пересобрать сценарий'
     : canRunAfterGoogleReconnect
@@ -9673,8 +9707,8 @@ const EmployeeTestResultPanel = ({
       onOpenGoogleSheetsSetup();
       return;
     }
-    if (canCloneAgent && onNextAction) {
-      onNextAction();
+    if (canCloneAgent && onCloneAgent) {
+      onCloneAgent();
       return;
     }
     onRunAgain();
@@ -9707,16 +9741,23 @@ const EmployeeTestResultPanel = ({
               {labels.reject}
             </Button>
           ) : null}
-          <Button
-            type="button"
-            variant={canContinue || pendingApproval && !canRebuildScenario && !canOpenGoogleSheetsSetup ? 'outline' : 'default'}
-            className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform"
-            onClick={handleRerun}
-            disabled={actionLoading}
-          >
-            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : canCloneAgent ? <Copy className="mr-2 h-4 w-4" /> : canRunAfterGoogleReconnect ? <Play className="mr-2 h-4 w-4" /> : canOpenGoogleAccessReconnect || canOpenGoogleSheetsSetup ? <Database className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-            {rerunLabel}
-          </Button>
+          {!canContinue || canCloneAgent || canRebuildScenario || canRunAfterGoogleReconnect || canOpenGoogleAccessReconnect || canOpenGoogleSheetsSetup ? (
+            <Button
+              type="button"
+              variant={canContinue || pendingApproval && !canRebuildScenario && !canOpenGoogleSheetsSetup ? 'outline' : 'default'}
+              className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform"
+              onClick={handleRerun}
+              disabled={actionLoading}
+            >
+              {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : canCloneAgent ? <Copy className="mr-2 h-4 w-4" /> : canRunAfterGoogleReconnect ? <Play className="mr-2 h-4 w-4" /> : canOpenGoogleAccessReconnect || canOpenGoogleSheetsSetup ? <Database className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              {rerunLabel}
+            </Button>
+          ) : null}
+          {estimatedRunCredits && nextAction && ['run_work', 'run_test'].includes(nextAction.kind) ? (
+            <div className="w-full text-right text-xs font-medium tabular-nums text-slate-500">
+              Следующий запуск: примерно {estimatedRunCredits} {estimatedRunCredits === 1 ? 'кредит' : estimatedRunCredits < 5 ? 'кредита' : 'кредитов'}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -10004,6 +10045,7 @@ const EmployeeAgentOverviewPanel = ({
   action,
   actionLoading,
   onPrimaryAction,
+  onCloneAgent,
   onOpenAdvanced,
 }: {
   blueprint: AgentBlueprint;
@@ -10013,6 +10055,7 @@ const EmployeeAgentOverviewPanel = ({
   action: EmployeeNextAction;
   actionLoading: boolean;
   onPrimaryAction: () => void;
+  onCloneAgent: () => void;
   onOpenAdvanced: () => void;
 }) => {
   const story = buildEmployeeWorkspaceStory(blueprint, details, pendingApproval);
@@ -10023,6 +10066,11 @@ const EmployeeAgentOverviewPanel = ({
   const problem = story.state === 'error' || story.state === 'waiting_for_review' || story.state === 'blocked_result' || story.state === 'needs_connection' || story.state === 'needs_attention';
   const actionDisabled = actionLoading || story.state === 'running_test';
   const userMode = buildAgentUserMode(blueprint, details);
+  const actionCredits = action.kind === 'run_test'
+    ? estimatedAgentRunCredits(details, true)
+    : action.kind === 'run_work'
+      ? estimatedAgentRunCredits(details)
+      : 0;
   return (
     <div className={cn('space-y-4', healthy ? 'max-w-4xl' : 'max-w-5xl')}>
       <section className={cn(
@@ -10043,18 +10091,31 @@ const EmployeeAgentOverviewPanel = ({
             <h1 className="mt-3 text-3xl font-semibold leading-9 text-slate-950 [text-wrap:balance]">{blueprint.name}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 [text-wrap:pretty]">{story.status.summary}</p>
           </div>
-          <Button
-            type="button"
-            className={cn(
-              'min-h-12 shrink-0 px-5 active:scale-[0.96] transition-transform',
-              story.state === 'error' ? 'bg-rose-600 text-white hover:bg-rose-700' : '',
-            )}
-            onClick={onPrimaryAction}
-            disabled={actionDisabled}
-          >
-            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : action.kind === 'connect' ? <Database className="mr-2 h-4 w-4" /> : action.kind === 'approve' ? <ShieldCheck className="mr-2 h-4 w-4" /> : action.kind === 'enable' ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-            {action.label}
-          </Button>
+          <div className="shrink-0">
+            <Button
+              type="button"
+              className={cn(
+                'min-h-12 w-full px-5 active:scale-[0.96] transition-transform',
+                story.state === 'error' ? 'bg-rose-600 text-white hover:bg-rose-700' : '',
+              )}
+              onClick={onPrimaryAction}
+              disabled={actionDisabled}
+            >
+              {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : action.kind === 'connect' ? <Database className="mr-2 h-4 w-4" /> : action.kind === 'approve' ? <ShieldCheck className="mr-2 h-4 w-4" /> : action.kind === 'enable' ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+              {action.label}
+            </Button>
+            {action.secondaryAction === 'clone_agent' ? (
+              <Button type="button" variant="outline" className="mt-2 min-h-10 w-full active:scale-[0.96] transition-transform" onClick={onCloneAgent} disabled={actionLoading}>
+                <Copy className="mr-2 h-4 w-4" />
+                Создать копию агента
+              </Button>
+            ) : null}
+            {actionCredits ? (
+              <div className="mt-2 text-center text-xs font-medium tabular-nums text-slate-500">
+                Примерно {actionCredits} {actionCredits === 1 ? 'кредит' : actionCredits < 5 ? 'кредита' : 'кредитов'} за запуск
+              </div>
+            ) : null}
+          </div>
         </div>
       </section>
 
