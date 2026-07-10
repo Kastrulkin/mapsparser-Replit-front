@@ -575,6 +575,8 @@ def _matches_telegram_trigger(blueprint: Dict[str, Any], version: Dict[str, Any]
 
 def _matches_schedule_trigger(blueprint: Dict[str, Any], version: Dict[str, Any], trigger: str) -> bool:
     metadata = _metadata(blueprint)
+    if str(metadata.get("execution_mode") or "").strip().lower() != "scheduled":
+        return False
     custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
     if str(custom_process.get("trigger") or "") == trigger:
         return True

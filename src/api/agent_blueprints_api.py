@@ -1758,6 +1758,49 @@ def _agent_execution_mode(blueprint: dict) -> str:
     return "manual"
 
 
+def _agent_execution_mode_source(blueprint: dict) -> str:
+    metadata = _blueprint_metadata(blueprint)
+    explicit = str(metadata.get("execution_mode") or "").strip().lower()
+    return "explicit" if explicit in {"one_off", "manual", "scheduled"} else "legacy_trigger"
+
+
+def _agent_execution_mode_confirmation_required(blueprint: dict) -> bool:
+    return _agent_execution_mode_source(blueprint) != "explicit"
+
+
+def _agent_lifecycle_state(blueprint: dict) -> str:
+    status = str(blueprint.get("status") or "draft").strip().lower()
+    last_run_status = str(blueprint.get("last_run_status") or "").strip().lower()
+    last_run_input = parse_json_field(blueprint.get("last_run_input_json"), {})
+    last_run_input = last_run_input if isinstance(last_run_input, dict) else {}
+    if status == "error" or last_run_status == "failed":
+        return "error"
+    if _agent_execution_mode_confirmation_required(blueprint):
+        return "needs_setup"
+    if (
+        _agent_execution_mode(blueprint) == "one_off"
+        and last_run_status == "completed"
+        and last_run_input.get("preview_mode") is False
+    ):
+        return "completed"
+    if status == "active":
+        return "active"
+    if last_run_status == "completed" and last_run_input.get("preview_mode") is True:
+        return "ready"
+    return "draft"
+
+
+def _agent_business_result_from_artifact(payload: object) -> dict:
+    payload = parse_json_field(payload, {})
+    if not isinstance(payload, dict):
+        return {}
+    result = payload.get("result") if isinstance(payload.get("result"), dict) else payload
+    if not isinstance(result, dict):
+        return {}
+    destination = payload.get("saved_destination") if isinstance(payload.get("saved_destination"), dict) else {}
+    return {**result, **({"saved_destination": destination} if destination else {})}
+
+
 def _agent_schedule_status(blueprint: dict) -> dict:
     if _agent_execution_mode(blueprint) != "scheduled":
         return {"ready": True, "required": False}
@@ -2071,8 +2114,10 @@ def list_agent_blueprints():
                    av.persona_agent_id active_persona_agent_id,
                    lr.id last_run_id,
                    lr.status last_run_status,
+                   lr.input_json last_run_input_json,
                    lr.started_at last_run_started_at,
                    lr.completed_at last_run_completed_at,
+                   ra.payload_json last_result_payload_json,
                    COALESCE(pq.pending_approvals_count, 0) pending_approvals_count,
                    COALESCE(vs.versions_count, 0) versions_count,
                    COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(b.metadata_json->'agent_sources') = 'array' THEN b.metadata_json->'agent_sources' ELSE '[]'::jsonb END), 0) sources_count,
@@ -2094,12 +2139,25 @@ def list_agent_blueprints():
                 LIMIT 1
             ) av ON TRUE
             LEFT JOIN LATERAL (
-                SELECT id, status, started_at, completed_at
+                SELECT id, status, input_json, started_at, completed_at
                 FROM agent_runs
                 WHERE blueprint_id = b.id
+                  AND status <> 'superseded'
                 ORDER BY started_at DESC
                 LIMIT 1
             ) lr ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT payload_json
+                FROM agent_artifacts
+                WHERE run_id = lr.id
+                  AND artifact_type IN ('agent_final_result', 'agent_output_draft', 'telegram_post_draft')
+                ORDER BY CASE artifact_type
+                    WHEN 'agent_final_result' THEN 0
+                    WHEN 'agent_output_draft' THEN 1
+                    ELSE 2
+                END, created_at DESC
+                LIMIT 1
+            ) ra ON TRUE
             LEFT JOIN LATERAL (
                 SELECT COUNT(*) pending_approvals_count
                 FROM agent_approvals a
@@ -2130,6 +2188,10 @@ def list_agent_blueprints():
             }
             decorated = attach_product_agent_to_blueprint(row, active_version, personas)
             decorated["execution_mode"] = _agent_execution_mode(row)
+            decorated["execution_mode_source"] = _agent_execution_mode_source(row)
+            decorated["execution_mode_confirmation_required"] = _agent_execution_mode_confirmation_required(row)
+            decorated["lifecycle_state"] = _agent_lifecycle_state(row)
+            decorated["last_business_result"] = _agent_business_result_from_artifact(row.get("last_result_payload_json"))
             schedule_status = _agent_schedule_status(row)
             decorated["next_run_at"] = schedule_status.get("next_run_at") if row.get("status") == "active" else None
             decorated_rows.append(decorated)
@@ -2161,6 +2223,8 @@ def create_agent_blueprint():
         metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
         requested_mode = str(payload.get("execution_mode") or metadata.get("execution_mode") or "manual").strip().lower()
         metadata["execution_mode"] = requested_mode if requested_mode in {"one_off", "manual", "scheduled"} else "manual"
+        metadata["execution_mode_confirmed_at"] = _utc_now_text()
+        metadata["execution_mode_confirmed_by_user_id"] = _user_id(user_data)
         cursor.execute(
             """
             INSERT INTO agent_blueprints (
@@ -2217,6 +2281,24 @@ def create_agent_blueprint_draft():
         allowed, access_error = _require_business_access(cursor, business_id, user_data)
         if not allowed:
             return access_error
+        clone_from_blueprint_id = str(payload.get("clone_from_blueprint_id") or "").strip()
+        clone_metadata = {}
+        if clone_from_blueprint_id:
+            clone_blueprint, clone_access_error = _require_blueprint_access(cursor, clone_from_blueprint_id, user_data)
+            if clone_access_error:
+                return clone_access_error
+            if str(clone_blueprint.get("business_id") or "") != business_id:
+                return _json_error("Копия должна принадлежать тому же бизнесу.", 400, "CLONE_BUSINESS_MISMATCH")
+            source_metadata = _blueprint_metadata(clone_blueprint)
+            clone_keys = {
+                "agent_sources",
+                "agent_integration_ids",
+                "agent_integration_bindings",
+                "agent_binding_provider_routes",
+                "required_integration_bindings",
+                "agent_setup",
+            }
+            clone_metadata = {key: source_metadata.get(key) for key in clone_keys if key in source_metadata}
         connection_inventory = _load_direct_builder_connection_inventory(cursor, business_id)
         builder_state = build_agent_builder_state(
             [{"role": "user", "content": description}],
@@ -2307,7 +2389,10 @@ def create_agent_blueprint_draft():
                     "billing": billing,
                 }
             ), 402
-        metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+        metadata = {
+            **clone_metadata,
+            **(draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}),
+        }
         version_payload = draft.get("version_payload") if isinstance(draft.get("version_payload"), dict) else {}
         requested_mode = str(payload.get("execution_mode") or "").strip().lower()
         trigger = str(version_payload.get("trigger") or "manual.run").strip()
@@ -2316,6 +2401,21 @@ def create_agent_blueprint_draft():
             if requested_mode in {"one_off", "manual", "scheduled"}
             else "scheduled" if trigger == "schedule.daily" else "manual"
         )
+        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+        if metadata["execution_mode"] == "scheduled":
+            custom_process["trigger"] = "schedule.daily"
+            schedule_time = str(payload.get("schedule_time") or payload.get("time") or "").strip()
+            schedule_timezone = str(payload.get("schedule_timezone") or payload.get("timezone") or "").strip()
+            if schedule_time and schedule_timezone:
+                custom_process["schedule"] = {"time": schedule_time, "timezone": schedule_timezone}
+        else:
+            custom_process["trigger"] = "manual.run"
+            custom_process.pop("schedule", None)
+        metadata["custom_process"] = custom_process
+        metadata["execution_mode_confirmed_at"] = _utc_now_text()
+        metadata["execution_mode_confirmed_by_user_id"] = _user_id(user_data)
+        if clone_from_blueprint_id:
+            metadata["cloned_from_blueprint_id"] = clone_from_blueprint_id
         metadata["builder"] = str(metadata.get("builder") or "direct_description_builder_v1")
         metadata["direct_draft_envelope"] = "localos_openclaw_policy_envelope_v1"
         metadata["agent_builder_preview"] = preview
@@ -2490,6 +2590,23 @@ def get_agent_blueprint(blueprint_id: str):
         latest_run_id = str((runs[0] if runs else {}).get("id") or "")
         cursor.execute(
             """
+            SELECT payload_json
+            FROM agent_artifacts
+            WHERE run_id = %s
+              AND artifact_type IN ('agent_final_result', 'agent_output_draft', 'telegram_post_draft')
+            ORDER BY CASE artifact_type
+                WHEN 'agent_final_result' THEN 0
+                WHEN 'agent_output_draft' THEN 1
+                ELSE 2
+            END, created_at DESC
+            LIMIT 1
+            """,
+            (latest_run_id,),
+        )
+        latest_result_row = cursor.fetchone() or {}
+        last_business_result = _agent_business_result_from_artifact(latest_result_row.get("payload_json"))
+        cursor.execute(
+            """
             SELECT a.*,
                    r.status run_status,
                    r.started_at run_started_at
@@ -2517,6 +2634,15 @@ def get_agent_blueprint(blueprint_id: str):
             metadata=metadata,
         )
         decorated_blueprint["execution_mode"] = _agent_execution_mode(blueprint)
+        decorated_blueprint["execution_mode_source"] = _agent_execution_mode_source(blueprint)
+        decorated_blueprint["execution_mode_confirmation_required"] = _agent_execution_mode_confirmation_required(blueprint)
+        lifecycle_blueprint = {
+            **blueprint,
+            "last_run_status": (runs[0] if runs else {}).get("status"),
+            "last_run_input_json": (runs[0] if runs else {}).get("input_json"),
+        }
+        decorated_blueprint["lifecycle_state"] = _agent_lifecycle_state(lifecycle_blueprint)
+        decorated_blueprint["last_business_result"] = last_business_result
         schedule_status = _agent_schedule_status(blueprint)
         decorated_blueprint["next_run_at"] = schedule_status.get("next_run_at") if blueprint.get("status") == "active" else None
         return jsonify(
@@ -2529,6 +2655,10 @@ def get_agent_blueprint(blueprint_id: str):
                 "candidate_version": candidate_version if candidate_version else None,
                 "candidate_version_id": str((candidate_version or {}).get("id") or ""),
                 "execution_mode": _agent_execution_mode(blueprint),
+                "execution_mode_source": decorated_blueprint.get("execution_mode_source"),
+                "execution_mode_confirmation_required": decorated_blueprint.get("execution_mode_confirmation_required"),
+                "lifecycle_state": decorated_blueprint.get("lifecycle_state"),
+                "last_business_result": last_business_result,
                 "next_run_at": decorated_blueprint.get("next_run_at"),
                 "versions": versions,
                 "runs": runs,
@@ -2554,6 +2684,16 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         str(blueprint.get("id") or ""),
         str((active_version or {}).get("id") or ""),
     )
+    mode_blueprint = {**blueprint, "metadata_json": metadata}
+    mode_confirmation_required = _agent_execution_mode_confirmation_required(mode_blueprint)
+    if mode_confirmation_required:
+        blockers.append(
+            {
+                "type": "execution_mode",
+                "message": "Подтвердите, как должен запускаться агент.",
+                "suggested_mode": _agent_execution_mode(mode_blueprint),
+            }
+        )
     if not active_version:
         blockers.append({"type": "version", "message": "Создайте или выберите версию агента."})
     else:
@@ -2604,6 +2744,7 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         blockers.append({"type": "preview_run", "message": "Запустите безопасный preview run перед активацией."})
     ready = (
         bool(active_version)
+        and not mode_confirmation_required
         and bool(compiled_validation.get("ready"))
         and bool(approval_policy_status.get("ready"))
         and bool(schedule_status.get("ready"))
@@ -2621,6 +2762,7 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         "requires_preflight_ready": True,
         "requires_preview_run": True,
         "requires_approval_policy": True,
+        "requires_execution_mode_confirmation": mode_confirmation_required,
         "compiled_validation": compiled_validation,
         "approval_policy_status": approval_policy_status,
         "schedule_status": schedule_status,
@@ -2814,6 +2956,8 @@ def _activation_has_approval_step(steps: list, approval_type: str) -> bool:
 
 def _activation_gate_next_step(blockers: list[dict]) -> str:
     blocker_types = {str(item.get("type") or "") for item in blockers if isinstance(item, dict)}
+    if "execution_mode" in blocker_types:
+        return "confirm_execution_mode"
     if "version" in blocker_types:
         return "create_version"
     if "compiled_validation" in blocker_types or "approval_policy" in blocker_types:
@@ -2890,6 +3034,16 @@ def _activation_gate_human_blockers(blockers: list[dict], preflight: dict, compi
                     "action": "configure_schedule",
                 }
             )
+        elif blocker_type == "execution_mode":
+            result.append(
+                {
+                    "type": "execution_mode",
+                    "title": "Как запускать агента",
+                    "message": "Выберите: один раз, по кнопке или по расписанию.",
+                    "action": "confirm_execution_mode",
+                    "suggested_mode": str(item.get("suggested_mode") or "manual"),
+                }
+            )
         elif blocker_type == "version":
             result.append(
                 {
@@ -2937,6 +3091,8 @@ def _activation_gate_summary_text(ready: bool, next_step: str, human_blockers: l
         return "Запустите безопасный preview run перед активацией."
     if next_step == "configure_schedule":
         return "Укажите время и часовой пояс перед включением агента."
+    if next_step == "confirm_execution_mode":
+        return "Подтвердите, как должен запускаться агент."
     return "Проверьте требования активации агента."
 
 
@@ -2949,6 +3105,7 @@ def _activation_gate_primary_action_label(next_step: str) -> str:
         "create_version": "Создать версию",
         "run_preview": "Запустить preview",
         "configure_schedule": "Настроить расписание",
+        "confirm_execution_mode": "Выбрать тип запуска",
         "review_blockers": "Проверить требования",
     }
     return labels.get(next_step, "Проверить требования")
@@ -3704,6 +3861,8 @@ def save_agent_blueprint_schedule(blueprint_id: str):
         custom_process["schedule"] = {"time": schedule_time, "timezone": timezone_name}
         metadata["custom_process"] = custom_process
         metadata["execution_mode"] = "scheduled"
+        metadata["execution_mode_confirmed_at"] = _utc_now_text()
+        metadata["execution_mode_confirmed_by_user_id"] = _user_id(user_data)
         _save_blueprint_metadata(cursor, blueprint_id, metadata)
         refreshed = _load_blueprint(cursor, blueprint_id) or blueprint
         candidate_version = _resolve_candidate_version(cursor, refreshed)
@@ -3719,6 +3878,73 @@ def save_agent_blueprint_schedule(blueprint_id: str):
                 "success": True,
                 "execution_mode": "scheduled",
                 "schedule": custom_process["schedule"],
+                "activation_gate": activation_gate,
+            }
+        )
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/execution-mode", methods=["POST"])
+def save_agent_blueprint_execution_mode(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    execution_mode = str(payload.get("execution_mode") or "").strip().lower()
+    if execution_mode not in {"one_off", "manual", "scheduled"}:
+        return _json_error("Выберите тип запуска агента.", 400, "EXECUTION_MODE_INVALID")
+    schedule_time = str(payload.get("time") or "").strip()
+    timezone_name = str(payload.get("timezone") or "").strip()
+    if execution_mode == "scheduled":
+        try:
+            schedule_time = datetime.strptime(schedule_time, "%H:%M").strftime("%H:%M")
+        except ValueError:
+            return _json_error("Укажите время в формате ЧЧ:ММ.", 400, "SCHEDULE_TIME_INVALID")
+        try:
+            ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            return _json_error("Укажите корректный часовой пояс.", 400, "SCHEDULE_TIMEZONE_INVALID")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        metadata = _blueprint_metadata(blueprint)
+        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+        if execution_mode == "scheduled":
+            custom_process["trigger"] = "schedule.daily"
+            custom_process["schedule"] = {"time": schedule_time, "timezone": timezone_name}
+        else:
+            custom_process["trigger"] = "manual.run"
+            custom_process.pop("schedule", None)
+        metadata["custom_process"] = custom_process
+        metadata["execution_mode"] = execution_mode
+        metadata["execution_mode_confirmed_at"] = _utc_now_text()
+        metadata["execution_mode_confirmed_by_user_id"] = _user_id(user_data)
+        _save_blueprint_metadata(cursor, blueprint_id, metadata)
+        refreshed = _load_blueprint(cursor, blueprint_id) or blueprint
+        candidate_version = _resolve_candidate_version(cursor, refreshed)
+        activation_gate = _build_activation_gate_summary(
+            cursor,
+            blueprint=refreshed,
+            active_version=candidate_version,
+            metadata=metadata,
+        )
+        schedule_status = _agent_schedule_status(refreshed)
+        db.conn.commit()
+        return jsonify(
+            {
+                "success": True,
+                "execution_mode": execution_mode,
+                "execution_mode_source": "explicit",
+                "execution_mode_confirmation_required": False,
+                "schedule": custom_process.get("schedule") if execution_mode == "scheduled" else None,
+                "next_run_at": schedule_status.get("next_run_at") if execution_mode == "scheduled" else None,
                 "activation_gate": activation_gate,
             }
         )
@@ -3932,6 +4158,12 @@ def start_agent_blueprint_run(blueprint_id: str):
         raw_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
         preview_mode = raw_input.get("preview_mode") is True
         execution_mode = _agent_execution_mode(blueprint)
+        if not preview_mode and _agent_execution_mode_confirmation_required(blueprint):
+            return _json_error(
+                "Сначала выберите, как должен запускаться агент.",
+                400,
+                "AGENT_EXECUTION_MODE_REQUIRED",
+            )
         version_id = str(payload.get("blueprint_version_id") or "").strip()
         if not version_id:
             selected_version = _resolve_candidate_version(cursor, blueprint) if preview_mode or execution_mode == "one_off" else _resolve_active_version(cursor, blueprint)

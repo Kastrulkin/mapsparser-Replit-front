@@ -959,7 +959,59 @@ def create_blueprint_from_agent_builder_session(session_id: str):
             user_id=_user_id(user_data),
             planner_context=planner_context,
         )
-        metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+        clone_from_blueprint_id = str(payload.get("clone_from_blueprint_id") or "").strip()
+        clone_metadata = {}
+        if clone_from_blueprint_id:
+            cursor.execute(
+                "SELECT business_id, metadata_json FROM agent_blueprints WHERE id = %s",
+                (clone_from_blueprint_id,),
+            )
+            clone_blueprint = cursor.fetchone()
+            if not clone_blueprint:
+                db.conn.rollback()
+                return _json_error("Исходный агент не найден.", 404, "CLONE_BLUEPRINT_NOT_FOUND")
+            if str(clone_blueprint.get("business_id") or "") != business_id:
+                db.conn.rollback()
+                return _json_error("Копия должна принадлежать тому же бизнесу.", 400, "CLONE_BUSINESS_MISMATCH")
+            source_metadata = parse_json_field(clone_blueprint.get("metadata_json"), {})
+            source_metadata = source_metadata if isinstance(source_metadata, dict) else {}
+            clone_keys = {
+                "agent_sources",
+                "agent_integration_ids",
+                "agent_integration_bindings",
+                "agent_binding_provider_routes",
+                "required_integration_bindings",
+                "agent_setup",
+            }
+            clone_metadata = {key: source_metadata.get(key) for key in clone_keys if key in source_metadata}
+        metadata = {
+            **clone_metadata,
+            **(draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}),
+        }
+        requested_mode = str(payload.get("execution_mode") or "").strip().lower()
+        workflow_draft = preview.get("compiler_policy_review") if isinstance(preview.get("compiler_policy_review"), dict) else {}
+        workflow_draft = workflow_draft.get("workflow_draft") if isinstance(workflow_draft.get("workflow_draft"), dict) else {}
+        suggested_trigger = str(workflow_draft.get("trigger") or "manual.run")
+        metadata["execution_mode"] = (
+            requested_mode
+            if requested_mode in {"one_off", "manual", "scheduled"}
+            else "scheduled" if "schedule" in suggested_trigger else "manual"
+        )
+        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+        if metadata["execution_mode"] == "scheduled":
+            custom_process["trigger"] = "schedule.daily"
+            schedule_time = str(payload.get("schedule_time") or payload.get("time") or "").strip()
+            schedule_timezone = str(payload.get("schedule_timezone") or payload.get("timezone") or "").strip()
+            if schedule_time and schedule_timezone:
+                custom_process["schedule"] = {"time": schedule_time, "timezone": schedule_timezone}
+        else:
+            custom_process["trigger"] = "manual.run"
+            custom_process.pop("schedule", None)
+        metadata["custom_process"] = custom_process
+        metadata["execution_mode_confirmed_at"] = datetime.now(timezone.utc).isoformat()
+        metadata["execution_mode_confirmed_by_user_id"] = _user_id(user_data)
+        if clone_from_blueprint_id:
+            metadata["cloned_from_blueprint_id"] = clone_from_blueprint_id
         metadata["builder"] = "dialog_builder_v1"
         metadata["compiler"] = "agent_compiler_v1"
         metadata["builder_session_id"] = session_id

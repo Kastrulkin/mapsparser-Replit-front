@@ -47,7 +47,6 @@ import {
   DashboardPageHeader,
   DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
-import { BetaFeedbackBanner } from '@/components/dashboard/BetaFeedbackBanner';
 import { newAuth } from '@/lib/auth_new';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
@@ -116,6 +115,10 @@ type AgentBlueprint = {
   journal_entries_count?: number;
   versions_count?: number;
   execution_mode?: 'one_off' | 'manual' | 'scheduled';
+  execution_mode_source?: 'explicit' | 'legacy_trigger';
+  execution_mode_confirmation_required?: boolean;
+  lifecycle_state?: 'draft' | 'needs_setup' | 'ready' | 'active' | 'completed' | 'error';
+  last_business_result?: Record<string, unknown> | null;
   next_run_at?: string | null;
   metadata_json?: Record<string, unknown>;
 };
@@ -470,6 +473,10 @@ type AgentBlueprintDetails = {
   candidate_version?: Record<string, unknown> | null;
   candidate_version_id?: string;
   execution_mode?: 'one_off' | 'manual' | 'scheduled';
+  execution_mode_source?: 'explicit' | 'legacy_trigger';
+  execution_mode_confirmation_required?: boolean;
+  lifecycle_state?: 'draft' | 'needs_setup' | 'ready' | 'active' | 'completed' | 'error';
+  last_business_result?: Record<string, unknown> | null;
   next_run_at?: string | null;
   learning_events?: AgentLearningEvent[];
   version_events?: AgentVersionEvent[];
@@ -861,14 +868,29 @@ type AgentBusinessStatus = {
 };
 
 type EmployeeStatus = {
-  label: 'Работает' | 'Нужны данные' | 'Ждёт решения' | 'Нужно проверить' | 'Ошибка' | 'Черновик';
+  label: 'Работает' | 'Выполнено' | 'Нужны данные' | 'Ждёт решения' | 'Нужно проверить' | 'Ошибка' | 'Черновик';
   tone: 'emerald' | 'amber' | 'rose' | 'slate';
   summary: string;
 };
 
-type EmployeeNextActionKind = 'approve' | 'connect' | 'run_test' | 'run_work' | 'enable' | 'configure_schedule' | 'open_result' | 'view_history';
+type AgentExecutionMode = 'one_off' | 'manual' | 'scheduled';
 
-type EmployeeWorkspaceState = 'draft' | 'needs_connection' | 'ready_for_test' | 'running_test' | 'waiting_for_review' | 'blocked_result' | 'working' | 'needs_attention' | 'error';
+type EmployeeNextActionKind = 'approve' | 'connect' | 'confirm_mode' | 'run_test' | 'run_work' | 'run_similar' | 'enable' | 'configure_schedule' | 'open_result' | 'view_history';
+
+type EmployeeWorkspaceState = 'draft' | 'needs_mode' | 'needs_connection' | 'ready_for_test' | 'running_test' | 'waiting_for_review' | 'blocked_result' | 'working' | 'completed' | 'needs_attention' | 'error';
+
+type AgentRegistryFilter = 'all' | 'working' | 'attention' | 'completed';
+
+type AgentRunAnimation = {
+  kind: 'test' | 'work';
+  blueprintId: string;
+  startedAt: number;
+  progress: number;
+  stepIndex: number;
+  steps: string[];
+  status: 'running' | 'finishing' | 'error';
+  error?: string;
+};
 
 type EmployeeNextAction = {
   kind: EmployeeNextActionKind;
@@ -2105,6 +2127,84 @@ const getRunnableVersionId = (blueprint: AgentBlueprint, details?: AgentBlueprin
   getActiveVersionId(blueprint, details) || getLatestVersionId(blueprint, details)
 );
 
+const agentExecutionMode = (blueprint: AgentBlueprint, details?: AgentBlueprintDetails | null): AgentExecutionMode => (
+  details?.execution_mode || blueprint.execution_mode || 'manual'
+);
+
+const agentExecutionModeLabel = (mode: AgentExecutionMode) => ({
+  one_off: 'Один раз',
+  manual: 'По кнопке',
+  scheduled: 'По расписанию',
+}[mode]);
+
+const agentNextRunLabel = (blueprint: AgentBlueprint, details?: AgentBlueprintDetails | null) => {
+  const nextRunAt = details?.next_run_at || blueprint.next_run_at;
+  if (nextRunAt) {
+    return formatShortDate(nextRunAt);
+  }
+  const mode = agentExecutionMode(blueprint, details);
+  if (mode === 'manual') {
+    return 'После запуска';
+  }
+  if (mode === 'one_off') {
+    return (details?.lifecycle_state || blueprint.lifecycle_state) === 'completed' ? 'Задача выполнена' : 'После подтверждения';
+  }
+  return 'После включения';
+};
+
+const businessResultPrimaryText = (result: Record<string, unknown>) => {
+  const candidates = [result.draft_text, result.final_text, result.message_text, result.summary, result.title];
+  const text = candidates.find((value) => typeof value === 'string' && value.trim());
+  return typeof text === 'string' ? text : '';
+};
+
+const workflowStepsForAnimation = (
+  details: AgentBlueprintDetails | null,
+  kind: AgentRunAnimation['kind'],
+) => {
+  const version = details?.candidate_version || details?.active_version || details?.versions?.[0] || null;
+  const rawSteps = recordValue(version)?.steps_json;
+  const steps = Array.isArray(rawSteps) ? rawSteps : [];
+  const labels: string[] = [];
+  const add = (label: string) => {
+    if (label && !labels.includes(label)) {
+      labels.push(label);
+    }
+  };
+  steps.forEach((rawStep) => {
+    const step = recordValue(rawStep);
+    if (!step) {
+      return;
+    }
+    const key = String(step.key || step.id || '').toLowerCase();
+    const capability = String(step.capability || step.capability_key || '').toLowerCase();
+    const title = String(step.title || step.label || '').trim();
+    const external = capability.includes('publish') || capability.includes('send') || capability.includes('dispatch');
+    if (external) {
+      return;
+    }
+    if (capability === 'google_sheets.read_rows' || key.includes('google_sheet')) {
+      add('Открываю Google Таблицу');
+      add('Читаю строки');
+    } else if (key.includes('select') || key.includes('filter') || key.includes('find')) {
+      add('Выбираю нужные данные');
+    } else if (capability.includes('content_plan') || key.includes('content_plan')) {
+      add(kind === 'test' ? 'Проверяю сохранение результата' : 'Сохраняю результат');
+    } else if (key.includes('draft') || key.includes('prepare') || key.includes('generate')) {
+      add('Готовлю черновик');
+    } else if (title) {
+      add(userFacingAgentTechText(title));
+    }
+  });
+  if (!labels.length) {
+    add('Проверяю исходные данные');
+    add('Выполняю задачу');
+    add('Готовлю результат');
+  }
+  add(kind === 'test' ? 'Проверяю готовый результат' : 'Сохраняю результат');
+  return labels.slice(0, 5);
+};
+
 const getAgentVoiceName = (blueprint: AgentBlueprint, details?: AgentBlueprintDetails | null) => {
   const detailVoice = details?.active_version?.voice;
   if (typeof detailVoice === 'object' && detailVoice !== null) {
@@ -2768,6 +2868,20 @@ const buildEmployeeStatus = (
       summary: `${missingConnections || 1} ${missingConnections === 1 ? 'подключение нужно завершить' : 'подключения нужно завершить'}.`,
     };
   }
+  if (workspaceState === 'needs_mode') {
+    return {
+      label: 'Нужно проверить',
+      tone: 'amber',
+      summary: 'Выберите, как должен запускаться агент: один раз, по кнопке или по расписанию.',
+    };
+  }
+  if (workspaceState === 'completed') {
+    return {
+      label: 'Выполнено',
+      tone: 'emerald',
+      summary: 'Разовая задача выполнена. Результат сохранён в истории.',
+    };
+  }
   if (workspaceState === 'draft') {
     return {
       label: 'Черновик',
@@ -2801,6 +2915,12 @@ const buildEmployeeWorkspaceState = (
   details?: AgentBlueprintDetails | null,
   pendingApproval?: AgentApproval | null,
 ): EmployeeWorkspaceState => {
+  if (details?.execution_mode_confirmation_required || blueprint.execution_mode_confirmation_required) {
+    return 'needs_mode';
+  }
+  if ((details?.lifecycle_state || blueprint.lifecycle_state) === 'completed') {
+    return 'completed';
+  }
   const gate = details?.activation_gate;
   const missingConnections = Number(gate?.preflight?.missing_count || 0);
   const hasActiveVersion = Boolean(details?.active_version_id || blueprint.active_version_id || blueprint.active_version_number);
@@ -2899,6 +3019,22 @@ const buildEmployeePrimaryAction = ({
   const activationVersionId = gate?.active_version_id || details?.active_version_id || blueprint.active_version_id || '';
   const latestResult = findPreparedResultPayload(details?.runs?.[0] || null, pendingApproval);
   const userMode = buildAgentUserMode(blueprint, details);
+  if (state === 'needs_mode') {
+    return {
+      kind: 'confirm_mode',
+      label: 'Выбрать тип запуска',
+      description: 'Подтвердите, будет это разовая задача, запуск по кнопке или работа по расписанию.',
+      targetMode: 'settings',
+    };
+  }
+  if (state === 'completed') {
+    return {
+      kind: 'run_similar',
+      label: 'Запустить похожую',
+      description: 'Создайте новую разовую задачу с теми же источниками и правилами.',
+      targetMode: 'overview',
+    };
+  }
   if (state === 'blocked_result') {
     if (resultPayloadStatus(latestResult) === 'needs_google_access') {
       if (googleAccessFreshAfterResult) {
@@ -3890,6 +4026,9 @@ export const AgentBlueprintsPage = () => {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [agentSearch, setAgentSearch] = useState('');
+  const [agentRegistryFilter, setAgentRegistryFilter] = useState<AgentRegistryFilter>('all');
+  const [runAnimation, setRunAnimation] = useState<AgentRunAnimation | null>(null);
   const [runStatusFilter, setRunStatusFilter] = useState('all');
   const [runSource, setRunSource] = useState('dashboard');
   const [runCity, setRunCity] = useState('');
@@ -3906,6 +4045,9 @@ export const AgentBlueprintsPage = () => {
   const [builderProcessingRules, setBuilderProcessingRules] = useState('не придумывать факты, ссылаться только на добавленные данные, отдельно показывать риски');
   const [builderOutputFormat, setBuilderOutputFormat] = useState('краткий отчёт: summary, риски, что уточнить, черновик письма при необходимости');
   const [builderManualControl, setBuilderManualControl] = useState('перед использованием результата и перед любым внешним действием');
+  const [builderExecutionMode, setBuilderExecutionMode] = useState<AgentExecutionMode>('manual');
+  const [builderExecutionModeConfirmed, setBuilderExecutionModeConfirmed] = useState(false);
+  const [cloneFromBlueprintId, setCloneFromBlueprintId] = useState('');
   const [builderSourceName, setBuilderSourceName] = useState('');
   const [builderSourceText, setBuilderSourceText] = useState('');
   const [builderFileSource, setBuilderFileSource] = useState<File | null>(null);
@@ -3951,6 +4093,7 @@ export const AgentBlueprintsPage = () => {
   const [processPreviewMessage, setProcessPreviewMessage] = useState('Новая заявка: Анна, телефон +7 900 000-00-00, хочет консультацию');
   const [scheduleTime, setScheduleTime] = useState('09:00');
   const [scheduleTimezone, setScheduleTimezone] = useState('Europe/Moscow');
+  const [selectedExecutionMode, setSelectedExecutionMode] = useState<AgentExecutionMode>('manual');
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackTrigger, setFeedbackTrigger] = useState('manual_edit');
   const [feedbackVersionNotice, setFeedbackVersionNotice] = useState<FeedbackVersionNotice | null>(null);
@@ -4021,7 +4164,10 @@ export const AgentBlueprintsPage = () => {
     } else if ((currentBusiness?.name || '').toLowerCase().includes('tallinn')) {
       setScheduleTimezone('Europe/Tallinn');
     }
-  }, [currentBusiness?.name, selectedBlueprint]);
+    if (selectedBlueprint) {
+      setSelectedExecutionMode(agentExecutionMode(selectedBlueprint, blueprintDetails));
+    }
+  }, [blueprintDetails?.execution_mode, currentBusiness?.name, selectedBlueprint]);
 
   const pendingApproval = useMemo(
     () => activeRun?.approvals?.find((item) => item.status === 'pending') || null,
@@ -4236,6 +4382,10 @@ export const AgentBlueprintsPage = () => {
         candidate_version: response.data?.candidate_version || null,
         candidate_version_id: typeof response.data?.candidate_version_id === 'string' ? response.data.candidate_version_id : '',
         execution_mode: response.data?.execution_mode,
+        execution_mode_source: response.data?.execution_mode_source,
+        execution_mode_confirmation_required: response.data?.execution_mode_confirmation_required === true,
+        lifecycle_state: response.data?.lifecycle_state,
+        last_business_result: response.data?.last_business_result && typeof response.data.last_business_result === 'object' ? response.data.last_business_result : null,
         next_run_at: typeof response.data?.next_run_at === 'string' ? response.data.next_run_at : null,
         learning_events: Array.isArray(response.data?.learning_events) ? response.data.learning_events : [],
         version_events: Array.isArray(response.data?.version_events) ? response.data.version_events : [],
@@ -4299,6 +4449,10 @@ export const AgentBlueprintsPage = () => {
               candidate_version: response.data?.candidate_version || null,
               candidate_version_id: typeof response.data?.candidate_version_id === 'string' ? response.data.candidate_version_id : '',
               execution_mode: response.data?.execution_mode,
+              execution_mode_source: response.data?.execution_mode_source,
+              execution_mode_confirmation_required: response.data?.execution_mode_confirmation_required === true,
+              lifecycle_state: response.data?.lifecycle_state,
+              last_business_result: response.data?.last_business_result && typeof response.data.last_business_result === 'object' ? response.data.last_business_result : null,
               next_run_at: typeof response.data?.next_run_at === 'string' ? response.data.next_run_at : null,
               learning_events: Array.isArray(response.data?.learning_events) ? response.data.learning_events : [],
               version_events: Array.isArray(response.data?.version_events) ? response.data.version_events : [],
@@ -4521,6 +4675,8 @@ export const AgentBlueprintsPage = () => {
       setSelectedBuilderProviderRoutes(autoProviderRoutes);
       setAcceptedBuilderCompilerPlan(false);
       setAcceptedBuilderProviderRoutes(Object.keys(autoProviderRoutes).length > 0);
+      setBuilderExecutionMode(String(preview?.compiler_workflow_draft?.trigger || '').includes('schedule') ? 'scheduled' : 'manual');
+      setBuilderExecutionModeConfirmed(false);
       setAgentPrompt(dialogBuilderInput.trim());
       if (preview && typeof preview.category === 'string') {
         setBuilderCategory(preview.category);
@@ -4566,6 +4722,8 @@ export const AgentBlueprintsPage = () => {
       setSelectedBuilderProviderRoutes(autoProviderRoutes);
       setAcceptedBuilderCompilerPlan(false);
       setAcceptedBuilderProviderRoutes(Object.keys(autoProviderRoutes).length > 0);
+      setBuilderExecutionMode(String(preview?.compiler_workflow_draft?.trigger || '').includes('schedule') ? 'scheduled' : builderExecutionMode);
+      setBuilderExecutionModeConfirmed(false);
       setDialogBuilderReply('');
     } catch (requestError) {
       console.error(requestError);
@@ -4588,6 +4746,10 @@ export const AgentBlueprintsPage = () => {
         selected_provider_routes: acceptedBuilderProviderRoutes ? selectedBuilderProviderRoutes : {},
         accepted_compiler_plan: acceptedBuilderCompilerPlan,
         accepted_provider_routes: acceptedBuilderProviderRoutes,
+        execution_mode: builderExecutionMode,
+        schedule_time: builderExecutionMode === 'scheduled' ? scheduleTime : undefined,
+        schedule_timezone: builderExecutionMode === 'scheduled' ? scheduleTimezone : undefined,
+        clone_from_blueprint_id: cloneFromBlueprintId || undefined,
       });
       const blueprint = response.data?.blueprint;
       const handoff = normalizePostCreateHandoff(response.data?.post_create_handoff);
@@ -4614,6 +4776,8 @@ export const AgentBlueprintsPage = () => {
       setSelectedBuilderProviderRoutes({});
       setAcceptedBuilderCompilerPlan(false);
       setAcceptedBuilderProviderRoutes(false);
+      setBuilderExecutionModeConfirmed(false);
+      setCloneFromBlueprintId('');
       setCreateWizardOpen(false);
       setWorkspaceMode('overview');
     } catch (requestError) {
@@ -4635,6 +4799,10 @@ export const AgentBlueprintsPage = () => {
         business_id: currentBusinessId,
         description: agentPrompt.trim(),
         category: builderCategory,
+        execution_mode: builderExecutionMode,
+        schedule_time: builderExecutionMode === 'scheduled' ? scheduleTime : undefined,
+        schedule_timezone: builderExecutionMode === 'scheduled' ? scheduleTimezone : undefined,
+        clone_from_blueprint_id: cloneFromBlueprintId || undefined,
       });
       const blueprint = response.data?.blueprint;
       const handoff = normalizePostCreateHandoff(response.data?.post_create_handoff);
@@ -4686,6 +4854,8 @@ export const AgentBlueprintsPage = () => {
       setBuilderSourceName('');
       setBuilderSourceText('');
       setBuilderFileSource(null);
+      setBuilderExecutionModeConfirmed(false);
+      setCloneFromBlueprintId('');
       setCreateWizardOpen(false);
       setCreateWizardStep(0);
     } catch (requestError) {
@@ -4696,6 +4866,58 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
+  useEffect(() => {
+    if (!runAnimation || runAnimation.status !== 'running') {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setRunAnimation((current) => {
+        if (!current || current.status !== 'running') {
+          return current;
+        }
+        const progress = Math.min(92, current.progress + 7);
+        const stepIndex = Math.min(
+          current.steps.length - 1,
+          Math.floor((progress / 100) * current.steps.length),
+        );
+        return { ...current, progress, stepIndex };
+      });
+    }, 420);
+    return () => window.clearInterval(timer);
+  }, [runAnimation?.blueprintId, runAnimation?.startedAt, runAnimation?.status]);
+
+  const beginRunAnimation = (blueprintId: string, kind: AgentRunAnimation['kind']) => {
+    const animation: AgentRunAnimation = {
+      kind,
+      blueprintId,
+      startedAt: Date.now(),
+      progress: 8,
+      stepIndex: 0,
+      steps: workflowStepsForAnimation(blueprintDetails, kind),
+      status: 'running',
+    };
+    setRunAnimation(animation);
+    return animation.startedAt;
+  };
+
+  const finishRunAnimation = async (startedAt: number) => {
+    const waitMs = Math.max(0, 6500 - (Date.now() - startedAt));
+    if (waitMs > 0) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, waitMs));
+    }
+    setRunAnimation((current) => current ? {
+      ...current,
+      progress: 100,
+      stepIndex: Math.max(0, current.steps.length - 1),
+      status: 'finishing',
+    } : current);
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 360));
+  };
+
+  const failRunAnimation = (message: string) => {
+    setRunAnimation((current) => current ? { ...current, status: 'error', error: message } : current);
+  };
+
   const startRun = async (blueprintToRun?: AgentBlueprint | null, blueprintVersionId = '') => {
     const targetBlueprint = blueprintToRun || selectedBlueprint;
     if (!targetBlueprint) {
@@ -4704,6 +4926,7 @@ export const AgentBlueprintsPage = () => {
     setActionLoading(true);
     setError(null);
     setDecisionNotice(null);
+    const animationStartedAt = beginRunAnimation(targetBlueprint.id, 'test');
     try {
       const selectedVersionId = blueprintVersionId || getRunnableVersionId(targetBlueprint, blueprintDetails);
       const runInput = {
@@ -4737,7 +4960,9 @@ export const AgentBlueprintsPage = () => {
           setSelectedConnectionBindingKey(nextBindingKey);
         }
         setWorkspaceMode('overview');
-        setError(formatPreflightBlock(preflight) || 'Перед запуском нужно подключить источники агента.');
+        const message = formatPreflightBlock(preflight) || 'Перед запуском нужно подключить источники агента.';
+        setError(message);
+        failRunAnimation(message);
         await loadBlueprintDetails(targetBlueprint.id);
         return;
       }
@@ -4747,13 +4972,17 @@ export const AgentBlueprintsPage = () => {
       });
       const nextRun = response.data?.run || null;
       setActiveRun(nextRun);
+      await finishRunAnimation(animationStartedAt);
+      setRunAnimation(null);
       setWorkspaceMode('results');
       setDecisionNotice(nextRun?.id ? 'Тест запущен заново. Ниже показан свежий результат проверки.' : 'Тест запущен заново.');
       await loadBlueprintDetails(targetBlueprint.id);
       await loadBlueprintReview(targetBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
-      setError(getRequestErrorMessage(requestError, 'Не удалось запустить агента.'));
+      const message = getRequestErrorMessage(requestError, 'Не удалось запустить агента.');
+      setError(message);
+      failRunAnimation(message);
     } finally {
       setActionLoading(false);
     }
@@ -4767,6 +4996,7 @@ export const AgentBlueprintsPage = () => {
     setActionLoading(true);
     setError(null);
     setDecisionNotice(null);
+    const animationStartedAt = beginRunAnimation(targetBlueprint.id, 'work');
     try {
       const selectedVersionId = blueprintVersionId || blueprintDetails?.active_version_id || blueprintDetails?.candidate_version_id || '';
       const response = await api.post(`/agent-blueprints/${targetBlueprint.id}/runs`, {
@@ -4783,13 +5013,17 @@ export const AgentBlueprintsPage = () => {
       });
       const nextRun = response.data?.run || null;
       setActiveRun(nextRun);
+      await finishRunAnimation(animationStartedAt);
+      setRunAnimation(null);
       setWorkspaceMode('results');
       setDecisionNotice(nextRun?.id ? 'Работа выполнена. Ниже показан свежий сохранённый результат.' : 'Работа запущена.');
       await loadBlueprintDetails(targetBlueprint.id);
       await loadBlueprintReview(targetBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
-      setError(getRequestErrorMessage(requestError, 'Не удалось выполнить задачу агента.'));
+      const message = getRequestErrorMessage(requestError, 'Не удалось выполнить задачу агента.');
+      setError(message);
+      failRunAnimation(message);
     } finally {
       setActionLoading(false);
     }
@@ -4812,6 +5046,32 @@ export const AgentBlueprintsPage = () => {
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось сохранить расписание.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const saveExecutionMode = async () => {
+    if (!selectedBlueprint) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.post(`/agent-blueprints/${selectedBlueprint.id}/execution-mode`, {
+        execution_mode: selectedExecutionMode,
+        time: selectedExecutionMode === 'scheduled' ? scheduleTime : undefined,
+        timezone: selectedExecutionMode === 'scheduled' ? scheduleTimezone : undefined,
+      });
+      setDecisionNotice(selectedExecutionMode === 'scheduled'
+        ? 'Тип запуска и расписание сохранены. После успешного теста агента можно включить.'
+        : 'Тип запуска сохранён. Теперь можно проверить агента.');
+      await loadBlueprints();
+      await loadBlueprintDetails(selectedBlueprint.id);
+      setWorkspaceMode('overview');
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось сохранить тип запуска.'));
     } finally {
       setActionLoading(false);
     }
@@ -5478,6 +5738,28 @@ export const AgentBlueprintsPage = () => {
       [selectedBlueprint.id]: selectedDetails,
     };
   }, [activeRun, agentDetailsById, blueprintDetails, selectedBlueprint?.id, selectedBlueprint?.last_run_id]);
+  const filteredBlueprints = useMemo(() => {
+    const query = agentSearch.trim().toLowerCase();
+    return blueprints.filter((blueprint) => {
+      const details = employeeListDetailsById[blueprint.id];
+      const state = buildEmployeeWorkspaceState(blueprint, details);
+      const matchesSearch = !query || [blueprint.name, buildEmployeeDescription(blueprint, details)]
+        .some((value) => String(value || '').toLowerCase().includes(query));
+      if (!matchesSearch) {
+        return false;
+      }
+      if (agentRegistryFilter === 'working') {
+        return state === 'working';
+      }
+      if (agentRegistryFilter === 'completed') {
+        return state === 'completed';
+      }
+      if (agentRegistryFilter === 'attention') {
+        return ['needs_mode', 'needs_connection', 'ready_for_test', 'waiting_for_review', 'blocked_result', 'needs_attention', 'error'].includes(state);
+      }
+      return true;
+    });
+  }, [agentRegistryFilter, agentSearch, blueprints, employeeListDetailsById]);
   const openBlueprintMode = (blueprint: AgentBlueprint, mode: AgentWorkspaceMode) => {
     setSelectedBlueprintId(blueprint.id);
     setActiveRun(null);
@@ -5553,6 +5835,19 @@ export const AgentBlueprintsPage = () => {
       void executeRun(selectedBlueprint, selectedEmployeeAction.versionId || '');
       return;
     }
+    if (selectedEmployeeAction.kind === 'run_similar') {
+      setCloneFromBlueprintId(selectedBlueprint.id);
+      setDialogBuilderInput(selectedBlueprint.description || selectedBlueprint.latest_goal || selectedBlueprint.name);
+      setAgentPrompt(selectedBlueprint.description || selectedBlueprint.latest_goal || selectedBlueprint.name);
+      setBuilderExecutionMode('one_off');
+      setBuilderExecutionModeConfirmed(false);
+      setCreateWizardOpen(true);
+      return;
+    }
+    if (selectedEmployeeAction.kind === 'confirm_mode') {
+      setWorkspaceMode('settings');
+      return;
+    }
     if (selectedEmployeeAction.kind === 'enable' && selectedEmployeeAction.versionId) {
       void activateVersion(selectedEmployeeAction.versionId, 'activate');
       return;
@@ -5575,11 +5870,12 @@ export const AgentBlueprintsPage = () => {
     <div className="space-y-5">
       <DashboardPageHeader
         eyebrow="LocalOS"
-        title="Мои агенты"
-        description="Создайте агента обычным языком, подключите данные и проверьте первый запуск перед внешним действием."
+        title="Агенты"
+        description="Задачи, которые LocalOS выполняет один раз, по кнопке или по расписанию."
         icon={Bot}
         actions={(
           <>
+            <span className="inline-flex min-h-8 items-center rounded-full bg-slate-100 px-3 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">Beta</span>
             <Button type="button" variant="outline" onClick={loadBlueprints} disabled={loading || !currentBusinessId}>
               <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
               Обновить
@@ -5592,14 +5888,6 @@ export const AgentBlueprintsPage = () => {
         )}
       />
 
-      <BetaFeedbackBanner
-        area="agents"
-        title="Функция в стадии beta-тестирования"
-        description="Если в Агентах что-то не запускается, показывает странный результат или ведёт себя не так, как вы ожидали, сообщите о проблеме."
-        businessId={currentBusinessId}
-        businessName={currentBusiness?.name || null}
-      />
-
       <Dialog open={createWizardOpen} onOpenChange={(open) => {
         setCreateWizardOpen(open);
         if (!open && !actionLoading) {
@@ -5610,6 +5898,9 @@ export const AgentBlueprintsPage = () => {
           setSelectedBuilderProviderRoutes({});
           setAcceptedBuilderCompilerPlan(false);
           setAcceptedBuilderProviderRoutes(false);
+          setBuilderExecutionMode('manual');
+          setBuilderExecutionModeConfirmed(false);
+          setCloneFromBlueprintId('');
           setAgentPrompt('');
           setCreateWizardStep(0);
           setBuilderCategory('documents');
@@ -5645,6 +5936,17 @@ export const AgentBlueprintsPage = () => {
             selectedProviderRoutes={selectedBuilderProviderRoutes}
             acceptedCompilerPlan={acceptedBuilderCompilerPlan}
             acceptedProviderRoutes={acceptedBuilderProviderRoutes}
+            executionMode={builderExecutionMode}
+            executionModeConfirmed={builderExecutionModeConfirmed}
+            scheduleTime={scheduleTime}
+            scheduleTimezone={scheduleTimezone}
+            onExecutionModeChange={(mode) => {
+              setBuilderExecutionMode(mode);
+              setBuilderExecutionModeConfirmed(false);
+            }}
+            onExecutionModeConfirm={() => setBuilderExecutionModeConfirmed(true)}
+            onScheduleTimeChange={setScheduleTime}
+            onScheduleTimezoneChange={setScheduleTimezone}
             onAcceptCompilerPlan={() => setAcceptedBuilderCompilerPlan(true)}
             onAcceptProviderRoutes={() => setAcceptedBuilderProviderRoutes(true)}
             onSelectConnectionBinding={(bindingKey, integrationId) => {
@@ -5666,6 +5968,20 @@ export const AgentBlueprintsPage = () => {
               Расширенная ручная настройка
             </summary>
             <div className="mt-4">
+          <AgentExecutionModePanel
+            mode={builderExecutionMode}
+            confirmationRequired={!builderExecutionModeConfirmed}
+            time={scheduleTime}
+            timezone={scheduleTimezone}
+            actionLoading={false}
+            onModeChange={(mode) => {
+              setBuilderExecutionMode(mode);
+              setBuilderExecutionModeConfirmed(false);
+            }}
+            onTimeChange={setScheduleTime}
+            onTimezoneChange={setScheduleTimezone}
+            onSave={() => setBuilderExecutionModeConfirmed(true)}
+          />
           <CreateAgentWizard
             step={createWizardStep}
             prompt={agentPrompt}
@@ -5682,7 +5998,7 @@ export const AgentBlueprintsPage = () => {
             fileSource={builderFileSource}
             internalSource={builderInternalSource}
             actionLoading={actionLoading}
-            canCreate={Boolean(currentBusinessId && agentPrompt.trim())}
+            canCreate={Boolean(currentBusinessId && agentPrompt.trim() && builderExecutionModeConfirmed)}
             onStepChange={setCreateWizardStep}
             onScenarioSelect={applyBuilderScenario}
             onPromptChange={setAgentPrompt}
@@ -5826,32 +6142,49 @@ export const AgentBlueprintsPage = () => {
 
       {currentBusinessId ? (
         <div className="space-y-4">
-          <AgentsTodaySection
-            summary={todaySummary}
-            loading={loading}
-            onOpenToday={() => setWorkspaceMode('results')}
-          />
-          <AgentsAttentionInbox
-            items={attentionItems}
-            loading={loading}
-          />
-          <section className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Агенты</div>
-                <h2 className="mt-1 text-xl font-semibold leading-7 text-slate-950">ИИ-сотрудники бизнеса</h2>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  Откройте сотрудника, чтобы увидеть его роль, последний результат и один следующий шаг.
-                </p>
-              </div>
-              <span className="inline-flex min-h-8 items-center rounded-full bg-slate-50 px-3 py-1 text-sm font-medium tabular-nums text-slate-600 ring-1 ring-slate-200">
-                {blueprints.length} всего
-              </span>
+          <section className="rounded-2xl bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
+              <span className="font-semibold text-slate-950">Сегодня</span>
+              <span><strong className="tabular-nums text-slate-950">{todaySummary.completedRuns}</strong> выполнено</span>
+              <span><strong className="tabular-nums text-slate-950">{todaySummary.preparedArtifacts}</strong> результатов</span>
+              <span><strong className="tabular-nums text-slate-950">{todaySummary.pendingApprovals}</strong> ждут решения</span>
+              {todaySummary.failedRuns ? <span className="text-rose-700"><strong className="tabular-nums">{todaySummary.failedRuns}</strong> ошибок</span> : null}
             </div>
           </section>
-          <div className="grid gap-5 lg:grid-cols-[20rem_minmax(0,1fr)]">
+          <section className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
+            <div className="grid gap-3 lg:grid-cols-[minmax(16rem,1fr)_auto] lg:items-center">
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={agentSearch}
+                  onChange={(event) => setAgentSearch(event.target.value)}
+                  placeholder="Найти агента"
+                  className="min-h-10 w-full rounded-lg bg-slate-50 pl-10 pr-3 text-sm text-slate-950 outline-none shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] focus:shadow-[inset_0_0_0_2px_rgba(249,115,22,0.55)]"
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:flex">
+                {([
+                  ['all', 'Все'],
+                  ['working', 'Работают'],
+                  ['attention', 'Нужны действия'],
+                  ['completed', 'Выполненные'],
+                ]).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setAgentRegistryFilter(value === 'working' || value === 'attention' || value === 'completed' ? value : 'all')}
+                    className={cn('min-h-9 rounded-lg px-3 text-xs font-semibold transition-[background-color,color,box-shadow] active:scale-[0.96]', agentRegistryFilter === value ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950')}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+          <div className="grid gap-5 lg:grid-cols-[28rem_minmax(0,1fr)]">
             <EmployeeAgentsList
-              blueprints={blueprints}
+              blueprints={filteredBlueprints}
               detailsById={employeeListDetailsById}
               selectedBlueprintId={selectedBlueprint?.id || null}
               selectedActiveRun={activeRun}
@@ -5868,8 +6201,33 @@ export const AgentBlueprintsPage = () => {
             />
 
             <main className="min-w-0 space-y-4">
+              {selectedBlueprint && selectedEmployeeAction && !runAnimation ? (
+                <nav className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1" aria-label="Разделы агента">
+                  {([
+                    ['overview', 'Обзор'],
+                    ['results', 'Результаты'],
+                    ['settings', 'Настройка'],
+                  ]).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setWorkspaceMode(value === 'results' || value === 'settings' ? value : 'overview')}
+                      className={cn('min-h-10 shrink-0 rounded-lg px-4 text-sm font-semibold transition-[background-color,color,box-shadow] active:scale-[0.96]', workspaceMode === value || (value === 'overview' && workspaceMode === 'run') ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950')}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </nav>
+              ) : null}
               {selectedBlueprint && selectedEmployeeAction ? (
-                workspaceMode === 'overview' || workspaceMode === 'run' ? (
+                runAnimation?.blueprintId === selectedBlueprint.id ? (
+                  <AgentRunProgressPanel
+                    animation={runAnimation}
+                    onRetry={() => runAnimation.kind === 'work'
+                      ? executeRun(selectedBlueprint, selectedEmployeeAction.versionId || '')
+                      : startRun(selectedBlueprint)}
+                  />
+                ) : workspaceMode === 'overview' || workspaceMode === 'run' ? (
                   <div className="space-y-4">
                     <EmployeeAgentOverviewPanel
                       blueprint={selectedBlueprint}
@@ -5889,6 +6247,19 @@ export const AgentBlueprintsPage = () => {
                         onTimeChange={setScheduleTime}
                         onTimezoneChange={setScheduleTimezone}
                         onSave={saveSchedule}
+                      />
+                    ) : null}
+                    {selectedEmployeeAction.kind === 'confirm_mode' ? (
+                      <AgentExecutionModePanel
+                        mode={selectedExecutionMode}
+                        confirmationRequired={Boolean(blueprintDetails?.execution_mode_confirmation_required || selectedBlueprint.execution_mode_confirmation_required)}
+                        time={scheduleTime}
+                        timezone={scheduleTimezone}
+                        actionLoading={actionLoading}
+                        onModeChange={setSelectedExecutionMode}
+                        onTimeChange={setScheduleTime}
+                        onTimezoneChange={setScheduleTimezone}
+                        onSave={saveExecutionMode}
                       />
                     ) : null}
                   </div>
@@ -5919,6 +6290,125 @@ export const AgentBlueprintsPage = () => {
                       activeRun={activeRun}
                     />
                   )
+                ) : workspaceMode === 'settings' ? (
+                  <div className="space-y-4">
+                    <AgentExecutionModePanel
+                      mode={selectedExecutionMode}
+                      confirmationRequired={Boolean(blueprintDetails?.execution_mode_confirmation_required || selectedBlueprint.execution_mode_confirmation_required)}
+                      time={scheduleTime}
+                      timezone={scheduleTimezone}
+                      actionLoading={actionLoading}
+                      onModeChange={setSelectedExecutionMode}
+                      onTimeChange={setScheduleTime}
+                      onTimezoneChange={setScheduleTimezone}
+                      onSave={saveExecutionMode}
+                    />
+                    <AgentDetailPanel
+                  mode={workspaceMode}
+                  blueprint={selectedBlueprint}
+                  blueprintDetails={blueprintDetails}
+                  activeRun={activeRun}
+                  availablePersonaAgents={availablePersonaAgents}
+                  pendingApproval={selectedPendingApproval}
+                  queuedButNotDispatched={queuedButNotDispatched}
+                  agentReview={agentReview}
+                  feedbackText={feedbackText}
+                  feedbackTrigger={feedbackTrigger}
+                  feedbackVersionNotice={feedbackVersionNotice}
+                  actionLoading={actionLoading}
+                  setupDataSources={setupDataSources}
+                  setupExtractionRules={setupExtractionRules}
+                  setupProcessingRules={setupProcessingRules}
+                  setupOutputFormat={setupOutputFormat}
+                  setupManualControl={setupManualControl}
+                  sourceName={sourceName}
+                  sourceText={sourceText}
+                  internalSource={internalSource}
+                  sourceCatalog={sourceCatalog}
+                  agentIntegrations={agentIntegrations}
+                  availableAgentIntegrations={availableAgentIntegrations}
+                  agentIntegrationCatalog={agentIntegrationCatalog}
+                  agentExternalAuthOptions={agentExternalAuthOptions}
+                  agentBindingStatus={agentBindingStatus}
+                  agentConnectionPlan={agentConnectionPlan}
+                  selectedConnectionBindingKey={selectedConnectionBindingKey}
+                  sheetSpreadsheetId={sheetSpreadsheetId}
+                  sheetName={sheetName}
+                  sheetAuthRef={sheetAuthRef}
+                  sheetDailyCap={sheetDailyCap}
+                  browserTargetUrls={browserTargetUrls}
+                  browserDailyCap={browserDailyCap}
+                  telegramBotMode={telegramBotMode}
+                  telegramDailyCap={telegramDailyCap}
+                  whatsappChannelMode={whatsappChannelMode}
+                  whatsappDailyCap={whatsappDailyCap}
+                  matonAuthRef={matonAuthRef}
+                  matonChannel={matonChannel}
+                  matonDailyCap={matonDailyCap}
+                  processRowValues={processRowValues}
+                  processPreviewMessage={processPreviewMessage}
+                  runSource={runSource}
+                  runCity={runCity}
+                  runCategory={runCategory}
+                  runLimit={runLimit}
+                  onModeChange={setWorkspaceMode}
+                  onStartRun={() => startRun(selectedBlueprint)}
+                  onStartVersionRun={(versionId) => startRun(selectedBlueprint, versionId)}
+                  onActivateVersion={(versionId) => activateVersion(versionId, 'activate')}
+                  onRollbackVersion={(versionId) => activateVersion(versionId, 'rollback')}
+                  onApprove={() => decideApproval('approve')}
+                  onReject={() => decideApproval('reject')}
+                  onDeleteAgent={deleteSelectedAgent}
+                  onFeedbackTextChange={setFeedbackText}
+                  onFeedbackTriggerChange={setFeedbackTrigger}
+                  onSubmitFeedback={sendRunFeedback}
+                  onActivateFeedbackVersion={(versionId) => activateVersion(versionId, 'activate')}
+                  onRollbackFeedbackVersion={(versionId) => activateVersion(versionId, 'rollback')}
+                  onSetupDataSourcesChange={setSetupDataSources}
+                  onSetupExtractionRulesChange={setSetupExtractionRules}
+                  onSetupProcessingRulesChange={setSetupProcessingRules}
+                  onSetupOutputFormatChange={setSetupOutputFormat}
+                  onSetupManualControlChange={setSetupManualControl}
+                  onSourceNameChange={setSourceName}
+                  onSourceTextChange={setSourceText}
+                  onInternalSourceChange={setInternalSource}
+                  onSaveSetup={saveAgentSetup}
+                  onAddTextSource={addTextSource}
+                  onAddInternalSource={addInternalSource}
+                  onAddCatalogSource={addInternalSourceByKey}
+                  onAddFileSource={addFileSource}
+                  onSheetSpreadsheetIdChange={setSheetSpreadsheetId}
+                  onSheetNameChange={setSheetName}
+                  onSheetAuthRefChange={setSheetAuthRef}
+                  onSheetDailyCapChange={setSheetDailyCap}
+                  onBrowserTargetUrlsChange={setBrowserTargetUrls}
+                  onBrowserDailyCapChange={setBrowserDailyCap}
+                  onTelegramBotModeChange={setTelegramBotMode}
+                  onTelegramDailyCapChange={setTelegramDailyCap}
+                  onWhatsappChannelModeChange={setWhatsappChannelMode}
+                  onWhatsappDailyCapChange={setWhatsappDailyCap}
+                  onMatonAuthRefChange={setMatonAuthRef}
+                  onMatonChannelChange={setMatonChannel}
+                  onMatonDailyCapChange={setMatonDailyCap}
+                  onProcessRowValuesChange={setProcessRowValues}
+                  onProcessPreviewMessageChange={setProcessPreviewMessage}
+                  onSaveSheetIntegration={saveSheetIntegration}
+                  onSaveBrowserUseIntegration={saveBrowserUseIntegration}
+                  onSaveTelegramIntegration={saveTelegramIntegration}
+                  onSaveWhatsappIntegration={saveWhatsappIntegration}
+                  onSaveMatonIntegration={saveMatonIntegration}
+                  onChooseProviderRoute={chooseProviderRoute}
+                  onAttachExistingIntegration={attachExistingAgentIntegration}
+                  onSelectConnectionBinding={setSelectedConnectionBindingKey}
+                  onSaveCustomProcess={saveCustomProcess}
+                  onRunCustomProcessPreview={runCustomProcessPreview}
+                  onRunSourceChange={setRunSource}
+                  onRunCityChange={setRunCity}
+                  onRunCategoryChange={setRunCategory}
+                  onRunLimitChange={setRunLimit}
+                  showAdvancedTools={showAdvancedAgentTools}
+                />
+                  </div>
                 ) : (
                   <AgentDetailPanel
                   mode={workspaceMode}
@@ -6680,8 +7170,16 @@ const DialogAgentBuilder = ({
   selectedProviderRoutes,
   acceptedCompilerPlan,
   acceptedProviderRoutes,
+  executionMode,
+  executionModeConfirmed,
+  scheduleTime,
+  scheduleTimezone,
   onAcceptCompilerPlan,
   onAcceptProviderRoutes,
+  onExecutionModeChange,
+  onExecutionModeConfirm,
+  onScheduleTimeChange,
+  onScheduleTimezoneChange,
   onSelectConnectionBinding,
   onSelectProviderRoute,
 }: {
@@ -6698,8 +7196,16 @@ const DialogAgentBuilder = ({
   selectedProviderRoutes: Record<string, string>;
   acceptedCompilerPlan: boolean;
   acceptedProviderRoutes: boolean;
+  executionMode: AgentExecutionMode;
+  executionModeConfirmed: boolean;
+  scheduleTime: string;
+  scheduleTimezone: string;
   onAcceptCompilerPlan: () => void;
   onAcceptProviderRoutes: () => void;
+  onExecutionModeChange: (mode: AgentExecutionMode) => void;
+  onExecutionModeConfirm: () => void;
+  onScheduleTimeChange: (value: string) => void;
+  onScheduleTimezoneChange: (value: string) => void;
   onSelectConnectionBinding: (bindingKey: string, integrationId: string) => void;
   onSelectProviderRoute: (bindingKey: string, routeProvider: string) => void;
 }) => {
@@ -6729,7 +7235,9 @@ const DialogAgentBuilder = ({
   const setupFlowNextStep = String(preview?.setup_flow?.next_step || '');
   const setupFlowAllowsDraft = preview?.setup_flow?.can_create_draft !== false || setupFlowNextStep.startsWith('create_draft_then');
   const canCreateDraft = setupFlowAllowsDraft
-    && !previewIsStale;
+    && !previewIsStale
+    && executionModeConfirmed
+    && (executionMode !== 'scheduled' || Boolean(scheduleTime && scheduleTimezone));
   const createBlockers: Array<{ key: string; label: string }> = [];
   const addCreateBlocker = (key: string, label: string) => {
     const cleanKey = key.trim();
@@ -6834,6 +7342,38 @@ const DialogAgentBuilder = ({
 
       {session ? (
         <div className="space-y-4">
+          <section className="rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.10)]">
+            <div className="text-sm font-semibold text-slate-950">Как запускать агента</div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">LocalOS предложил вариант. Подтвердите его или выберите другой.</div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {agentExecutionModeOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onExecutionModeChange(option.value)}
+                  className={cn('min-h-20 rounded-xl px-3 py-2 text-left shadow-[0_0_0_1px_rgba(15,23,42,0.10)] transition-[background-color,color,box-shadow] active:scale-[0.96]', executionMode === option.value ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-950')}
+                >
+                  <span className="block text-sm font-semibold">{agentExecutionModeLabel(option.value)}</span>
+                  <span className={cn('mt-1 block text-xs leading-5', executionMode === option.value ? 'text-slate-300' : 'text-slate-500')}>{option.description}</span>
+                </button>
+              ))}
+            </div>
+            {executionMode === 'scheduled' ? (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <input type="time" value={scheduleTime} onChange={(event) => onScheduleTimeChange(event.target.value)} className="min-h-10 rounded-lg px-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none" aria-label="Время запуска" />
+                <select value={scheduleTimezone} onChange={(event) => onScheduleTimezoneChange(event.target.value)} className="min-h-10 rounded-lg px-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none" aria-label="Часовой пояс">
+                  <option value="Europe/Tallinn">Tallinn</option>
+                  <option value="Europe/Moscow">Москва</option>
+                  <option value="Europe/Helsinki">Helsinki</option>
+                  <option value="Europe/Riga">Riga</option>
+                </select>
+              </div>
+            ) : null}
+            <Button type="button" size="sm" variant={executionModeConfirmed ? 'outline' : 'default'} className="mt-3 active:scale-[0.96] transition-transform" onClick={onExecutionModeConfirm} disabled={executionMode === 'scheduled' && (!scheduleTime || !scheduleTimezone)}>
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              {executionModeConfirmed ? 'Тип подтверждён' : 'Подтвердить тип'}
+            </Button>
+          </section>
           <div className={cn(
             'rounded-2xl border px-4 py-4',
             canCreateDraft ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50',
@@ -8815,6 +9355,73 @@ const EmployeeStatusPill = ({ status }: { status: EmployeeStatus }) => (
   </span>
 );
 
+const AgentRunProgressPanel = ({
+  animation,
+  onRetry,
+}: {
+  animation: AgentRunAnimation;
+  onRetry: () => void;
+}) => {
+  const failed = animation.status === 'error';
+  const currentStep = animation.steps[animation.stepIndex] || 'Выполняю задачу';
+  return (
+    <section className="overflow-hidden rounded-2xl bg-white shadow-[0_18px_48px_rgba(15,23,42,0.08),0_0_0_1px_rgba(15,23,42,0.08)]">
+      <div className="bg-slate-950 px-5 py-5 text-white sm:px-7 sm:py-7">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10">
+            {failed ? <AlertTriangle className="h-5 w-5 text-rose-300" /> : <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-semibold uppercase text-slate-400">{animation.kind === 'test' ? 'Безопасный тест' : 'Рабочий запуск'}</div>
+            <h2 className="mt-1 text-2xl font-semibold leading-8 [text-wrap:balance]">{failed ? 'Работа остановилась' : 'Агент выполняет задачу'}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300 [text-wrap:pretty]">{failed ? animation.error : currentStep}</p>
+          </div>
+          <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-300">{animation.progress}%</span>
+        </div>
+        <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
+          <div
+            className={cn('h-full rounded-full transition-[width] duration-500 ease-out motion-reduce:transition-none', failed ? 'bg-rose-400' : 'bg-orange-400')}
+            style={{ width: `${animation.progress}%` }}
+          />
+        </div>
+      </div>
+      <div className="px-5 py-5 sm:px-7">
+        <ol className="grid gap-2">
+          {animation.steps.map((step, index) => {
+            const done = animation.status === 'finishing' || index < animation.stepIndex;
+            const current = index === animation.stepIndex;
+            return (
+              <li
+                key={`${index}-${step}`}
+                className={cn(
+                  'flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm transition-[background-color,color,opacity] duration-300 motion-reduce:transition-none',
+                  done ? 'bg-emerald-50 text-emerald-900' : current ? failed ? 'bg-rose-50 text-rose-900' : 'bg-orange-50 text-orange-950' : 'text-slate-400',
+                )}
+              >
+                <span className={cn(
+                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ring-1',
+                  done ? 'bg-emerald-600 text-white ring-emerald-600' : current ? failed ? 'bg-rose-100 text-rose-700 ring-rose-200' : 'bg-orange-100 text-orange-700 ring-orange-200' : 'bg-slate-50 text-slate-400 ring-slate-200',
+                )}>
+                  {done ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
+                </span>
+                <span className="font-medium [text-wrap:pretty]">{step}</span>
+              </li>
+            );
+          })}
+        </ol>
+        {failed ? (
+          <Button type="button" className="mt-4 min-h-10 active:scale-[0.96] transition-transform" onClick={onRetry}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Запустить ещё раз
+          </Button>
+        ) : (
+          <p className="mt-4 text-xs leading-5 text-slate-500">Можно оставить страницу открытой: результат появится здесь сразу после завершения.</p>
+        )}
+      </div>
+    </section>
+  );
+};
+
 const EmployeeAgentsList = ({
   blueprints,
   detailsById,
@@ -8836,7 +9443,7 @@ const EmployeeAgentsList = ({
     <div className="flex items-center justify-between gap-3 px-1">
       <div>
         <h2 className="text-sm font-semibold leading-6 text-slate-950">Сотрудники</h2>
-        <p className="text-xs leading-5 text-slate-500">Быстрый список задач команды</p>
+        <p className="text-xs leading-5 text-slate-500">Тип, состояние и следующий шаг</p>
       </div>
       <span className="inline-flex min-h-7 items-center rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-slate-600 ring-1 ring-slate-200">
         {blueprints.length}
@@ -8871,31 +9478,43 @@ const EmployeeAgentsList = ({
             : (details?.approval_queue || []).find((item) => item.status === 'pending') || null;
           const status = buildEmployeeStatus(blueprint, details, pendingApproval);
           const state = buildEmployeeWorkspaceState(blueprint, details, pendingApproval);
+          const mode = agentExecutionMode(blueprint, details);
+          const lastResult = blueprint.last_business_result || details?.last_business_result;
+          const resultText = lastResult ? businessResultPrimaryText(lastResult) : '';
           return (
             <button
               key={blueprint.id}
               type="button"
               onClick={() => onOpen(blueprint)}
               className={cn(
-                'mb-1 grid min-h-[4.25rem] w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl px-3 py-2 text-left transition-shadow',
+                'mb-2 grid min-h-[7.5rem] w-full gap-3 rounded-xl px-3 py-3 text-left transition-[box-shadow,background-color,color] active:scale-[0.99]',
                 selected ? 'bg-slate-950 text-white shadow-[0_0_0_1px_rgba(15,23,42,1)]' : 'bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08)] hover:shadow-[0_6px_18px_rgba(15,23,42,0.08),0_0_0_1px_rgba(15,23,42,0.12)]',
                 !selected && (state === 'waiting_for_review' || state === 'needs_connection' || state === 'needs_attention') ? 'bg-amber-50/60' : '',
                 !selected && state === 'error' ? 'bg-rose-50/70' : '',
               )}
             >
               <div className="min-w-0">
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className={cn('truncate text-sm font-semibold leading-5', selected ? 'text-white' : 'text-slate-950')}>
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <div className={cn('line-clamp-2 text-sm font-semibold leading-5', selected ? 'text-white' : 'text-slate-950')}>
                     {blueprint.name}
                   </div>
+                  <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', selected ? 'bg-white/10 text-slate-200 ring-white/15' : 'bg-sky-50 text-sky-700 ring-sky-100')}>
+                    {agentExecutionModeLabel(mode)}
+                  </span>
                 </div>
-                <div className={cn('mt-1 truncate text-xs leading-5', selected ? 'text-slate-300' : 'text-slate-500')}>
-                  {buildEmployeeLastActivity(blueprint, details, pendingApproval)}
+                <div className={cn('mt-1 line-clamp-1 text-xs leading-5', selected ? 'text-slate-300' : 'text-slate-500')}>
+                  {buildEmployeeDescription(blueprint, details)}
                 </div>
               </div>
-              <span className={cn('inline-flex min-h-7 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', employeeToneClass[status.tone])}>
-                {status.label}
-              </span>
+              <div className="grid gap-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={cn('inline-flex min-h-7 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1', employeeToneClass[status.tone])}>{status.label}</span>
+                  <span className={cn('text-[11px] tabular-nums', selected ? 'text-slate-300' : 'text-slate-500')}>{agentNextRunLabel(blueprint, details)}</span>
+                </div>
+                <div className={cn('line-clamp-1 text-xs leading-5', selected ? 'text-slate-300' : 'text-slate-500')}>
+                  {resultText || buildEmployeeLastActivity(blueprint, details, pendingApproval)}
+                </div>
+              </div>
             </button>
           );
         })
@@ -9221,6 +9840,86 @@ const EmployeeResponsibilitiesList = ({ items }: { items: EmployeeResponsibility
   </div>
 );
 
+const agentExecutionModeOptions: Array<{ value: AgentExecutionMode; label: string; description: string }> = [
+  { value: 'one_off', label: 'Сделать один раз', description: 'После выполнения задача попадёт в завершённые.' },
+  { value: 'manual', label: 'Запускать по кнопке', description: 'Вы запускаете работу, когда она нужна.' },
+  { value: 'scheduled', label: 'По расписанию', description: 'Агент запускается в указанное время.' },
+];
+
+const AgentExecutionModePanel = ({
+  mode,
+  confirmationRequired,
+  time,
+  timezone,
+  actionLoading,
+  onModeChange,
+  onTimeChange,
+  onTimezoneChange,
+  onSave,
+}: {
+  mode: AgentExecutionMode;
+  confirmationRequired: boolean;
+  time: string;
+  timezone: string;
+  actionLoading: boolean;
+  onModeChange: (mode: AgentExecutionMode) => void;
+  onTimeChange: (value: string) => void;
+  onTimezoneChange: (value: string) => void;
+  onSave: () => void;
+}) => (
+  <section className={cn(
+    'rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]',
+    confirmationRequired ? 'shadow-[0_0_0_2px_rgba(249,115,22,0.25)]' : '',
+  )}>
+    <div className="max-w-3xl">
+      <div className="text-xs font-semibold uppercase text-slate-500">Как запускается</div>
+      <h2 className="mt-2 text-xl font-semibold leading-7 text-slate-950 [text-wrap:balance]">
+        {confirmationRequired ? 'Подтвердите тип агента' : 'Тип запуска'}
+      </h2>
+      <p className="mt-1 text-sm leading-6 text-slate-600 [text-wrap:pretty]">
+        Выбор меняет только способ запуска. Он не включает агента и не запускает работу.
+      </p>
+    </div>
+    <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      {agentExecutionModeOptions.map(({ value, label, description }) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onModeChange(value)}
+          className={cn(
+            'min-h-24 rounded-xl px-4 py-3 text-left shadow-[0_0_0_1px_rgba(15,23,42,0.10)] transition-[box-shadow,background-color,color] active:scale-[0.96] motion-reduce:transition-none',
+            mode === value ? 'bg-slate-950 text-white shadow-[0_0_0_2px_rgba(15,23,42,1)]' : 'bg-white text-slate-950 hover:bg-slate-50',
+          )}
+        >
+          <span className="block text-sm font-semibold">{label}</span>
+          <span className={cn('mt-1 block text-xs leading-5', mode === value ? 'text-slate-300' : 'text-slate-500')}>{description}</span>
+        </button>
+      ))}
+    </div>
+    {mode === 'scheduled' ? (
+      <div className="mt-4 grid gap-3 sm:grid-cols-[10rem_minmax(0,16rem)]">
+        <label className="text-sm font-medium text-slate-800">
+          Время
+          <input type="time" value={time} onChange={(event) => onTimeChange(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none" />
+        </label>
+        <label className="text-sm font-medium text-slate-800">
+          Часовой пояс
+          <select value={timezone} onChange={(event) => onTimezoneChange(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none">
+            <option value="Europe/Tallinn">Tallinn</option>
+            <option value="Europe/Moscow">Москва</option>
+            <option value="Europe/Helsinki">Helsinki</option>
+            <option value="Europe/Riga">Riga</option>
+          </select>
+        </label>
+      </div>
+    ) : null}
+    <Button type="button" className="mt-4 min-h-10 active:scale-[0.96] transition-transform" onClick={onSave} disabled={actionLoading || (mode === 'scheduled' && (!time || !timezone))}>
+      {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+      {confirmationRequired ? 'Подтвердить тип запуска' : 'Сохранить'}
+    </Button>
+  </section>
+);
+
 const AgentScheduleSetupPanel = ({
   time,
   timezone,
@@ -9275,12 +9974,14 @@ const AgentScheduleSetupPanel = ({
 
 const employeeStateTitle = (state: EmployeeWorkspaceState) => ({
   draft: 'Черновик',
+  needs_mode: 'Выберите тип запуска',
   needs_connection: 'Не хватает подключения',
   ready_for_test: 'Готов к проверке',
   running_test: 'Проверка идёт',
   waiting_for_review: 'Ждёт вашего решения',
   blocked_result: 'Нужен следующий шаг',
   working: 'Работает',
+  completed: 'Выполнено',
   needs_attention: 'Нужно включить',
   error: 'Ошибка',
 }[state]);
@@ -9312,8 +10013,6 @@ const EmployeeAgentOverviewPanel = ({
   const problem = story.state === 'error' || story.state === 'waiting_for_review' || story.state === 'blocked_result' || story.state === 'needs_connection' || story.state === 'needs_attention';
   const actionDisabled = actionLoading || story.state === 'running_test';
   const userMode = buildAgentUserMode(blueprint, details);
-  const reasonCard = buildReasonCard(story.state, pendingApproval);
-  const confidenceFacts = buildBuildConfidenceFacts(details);
   return (
     <div className={cn('space-y-4', healthy ? 'max-w-4xl' : 'max-w-5xl')}>
       <section className={cn(
@@ -9356,29 +10055,10 @@ const EmployeeAgentOverviewPanel = ({
         </div>
       </EmployeeWorkspaceSection>
 
-      <EmployeeWorkspaceSection title="Текущее состояние" tone={story.state === 'error' ? 'error' : problem ? 'attention' : 'quiet'}>
-        <div className="text-base font-semibold leading-7 text-slate-950">{story.status.summary}</div>
-        <div className="mt-1 text-sm leading-6 opacity-75">{action.description}</div>
+      <EmployeeWorkspaceSection title="Как запускается" tone={story.state === 'error' ? 'error' : problem ? 'attention' : 'quiet'}>
+        <div className="text-base font-semibold leading-7 text-slate-950">{userMode.label}</div>
+        <div className="mt-1 text-sm leading-6 opacity-75">{userMode.description}</div>
       </EmployeeWorkspaceSection>
-
-      <div className={cn('grid gap-4', healthy ? 'lg:grid-cols-1' : 'lg:grid-cols-2')}>
-        <EmployeeWorkspaceSection title="Почему сейчас именно так" tone={healthy ? 'quiet' : problem ? 'attention' : 'default'}>
-          <div className="text-sm font-semibold leading-6 text-slate-950">{reasonCard.title}</div>
-          <div className="mt-1 text-sm leading-6 text-slate-600">{reasonCard.description}</div>
-        </EmployeeWorkspaceSection>
-        {!healthy ? (
-          <EmployeeWorkspaceSection title="Почему этому можно доверять">
-            <div className="grid gap-2">
-              {confidenceFacts.map((fact) => (
-                <div key={fact.key} className="flex items-start gap-2 text-sm leading-6 text-slate-700">
-                  <CheckCircle2 className={cn('mt-1 h-4 w-4 shrink-0', fact.ready ? 'text-emerald-600' : 'text-amber-600')} />
-                  <span>{fact.label}</span>
-                </div>
-              ))}
-            </div>
-          </EmployeeWorkspaceSection>
-        ) : null}
-      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <EmployeeWorkspaceSection title="Последняя работа" tone={healthy ? 'quiet' : 'default'}>
@@ -9415,8 +10095,6 @@ const EmployeeAgentOverviewPanel = ({
           </div>
         </EmployeeWorkspaceSection>
       ) : null}
-
-      <EmployeeHistoryPanel details={details} activeRun={null} />
 
       <details className="rounded-2xl bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.08)]">
         <summary className="cursor-pointer text-sm font-semibold text-slate-700">Расширенные настройки</summary>

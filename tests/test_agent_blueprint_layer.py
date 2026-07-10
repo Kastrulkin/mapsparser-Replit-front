@@ -2633,6 +2633,7 @@ def test_compiled_agent_creation_contract_google_sheets_to_telegram():
         planner_context=preview["openclaw_planner_context"],
     )
     metadata = dict(draft["metadata"])
+    metadata["execution_mode"] = "manual"
     metadata["agent_builder_preview"] = preview
     metadata["required_connectors"] = preview["required_connectors"]
     metadata["builder_setup_flow"] = setup_flow
@@ -3012,6 +3013,7 @@ def test_agent_preview_run_and_activation_endpoints_enforce_safe_gate(monkeypatc
         "Результат нужен как черновик поста. Перед публикацией человек проверяет результат."
     )
     metadata = dict(draft["metadata"])
+    metadata["execution_mode"] = "manual"
     metadata["custom_process"] = {
         "google_sheets_read": {
             "integration_id": "sheets-1",
@@ -3755,6 +3757,7 @@ def test_agent_builder_provider_routes_create_action_handler_contracts():
     from api import agent_builder_api
 
     metadata = {
+        "execution_mode": "manual",
         "required_integration_bindings": [
             {"key": "google_sheets_read", "provider": "google_sheets"},
             {"key": "telegram_delivery", "provider": "telegram"},
@@ -5328,6 +5331,7 @@ def test_telegram_trigger_runtime_starts_active_custom_agent_and_waits_for_sheet
         "created_by_user_id": "user1",
         "metadata_json": {
             **draft["metadata"],
+            "execution_mode": "scheduled",
             "active_version_id": "ver1",
             "custom_process": {
                 **draft["metadata"]["custom_process"],
@@ -5398,6 +5402,7 @@ def test_scheduled_trigger_runtime_blocks_when_required_sheet_connection_missing
         "created_by_user_id": "user1",
         "metadata_json": {
             **draft["metadata"],
+            "execution_mode": "scheduled",
             "active_version_id": "ver1",
         },
     }
@@ -5439,6 +5444,7 @@ def test_scheduled_trigger_runtime_starts_active_safe_schedule_agent():
         "status": "active",
         "created_by_user_id": "user1",
         "metadata_json": {
+            "execution_mode": "scheduled",
             "active_version_id": "ver1",
             "required_integration_bindings": [],
             "custom_process": {
@@ -5486,6 +5492,7 @@ def test_due_scheduled_trigger_dispatcher_runs_each_business_once_per_day():
         "status": "active",
         "created_by_user_id": "user1",
         "metadata_json": {
+            "execution_mode": "scheduled",
             "active_version_id": "ver1",
             "required_integration_bindings": [],
             "custom_process": {
@@ -5537,6 +5544,7 @@ def test_due_scheduled_trigger_dispatcher_waits_until_schedule_time():
         "status": "active",
         "created_by_user_id": "user1",
         "metadata_json": {
+            "execution_mode": "scheduled",
             "active_version_id": "ver1",
             "required_integration_bindings": [],
             "custom_process": {
@@ -5578,6 +5586,7 @@ def test_due_scheduler_runs_two_blueprints_for_same_business():
             "status": "active",
             "created_by_user_id": "user1",
             "metadata_json": {
+                "execution_mode": "scheduled",
                 "active_version_id": version_id,
                 "required_integration_bindings": [],
                 "custom_process": {
@@ -5883,6 +5892,7 @@ def test_agent_integration_binding_status_tracks_required_compiled_bindings():
     from api import agent_blueprints_api
 
     metadata = {
+        "execution_mode": "manual",
         "required_integration_bindings": [
             {"key": "telegram_trigger", "provider": "telegram", "direction": "trigger", "trigger": "telegram.message.received"},
             {
@@ -6759,6 +6769,7 @@ def test_activation_gate_summary_explains_missing_connector(monkeypatch):
     )
 
     metadata = {
+        "execution_mode": "manual",
         "required_integration_bindings": [
             {
                 "key": "google_sheets_read",
@@ -6786,6 +6797,40 @@ def test_activation_gate_summary_explains_missing_connector(monkeypatch):
     assert gate["connection_plan"]["items"][0]["action"] == "connect_required"
     assert gate["connection_plan"]["items"][0]["recommended_route"]["provider"] == "openclaw"
     assert gate["next_binding_key"] == "google_sheets_read"
+
+
+def test_legacy_agent_requires_execution_mode_confirmation():
+    from api import agent_blueprints_api
+
+    blueprint = {
+        "status": "active",
+        "metadata_json": {
+            "custom_process": {
+                "trigger": "schedule.daily",
+                "schedule": {"time": "09:00", "timezone": "Europe/Tallinn"},
+            }
+        },
+    }
+
+    assert agent_blueprints_api._agent_execution_mode(blueprint) == "scheduled"
+    assert agent_blueprints_api._agent_execution_mode_source(blueprint) == "legacy_trigger"
+    assert agent_blueprints_api._agent_execution_mode_confirmation_required(blueprint) is True
+    assert agent_blueprints_api._agent_lifecycle_state(blueprint) == "needs_setup"
+
+
+def test_completed_one_off_has_completed_lifecycle():
+    from api import agent_blueprints_api
+
+    blueprint = {
+        "status": "active",
+        "last_run_status": "completed",
+        "last_run_input_json": {"preview_mode": False},
+        "metadata_json": {"execution_mode": "one_off"},
+    }
+
+    assert agent_blueprints_api._agent_execution_mode_source(blueprint) == "explicit"
+    assert agent_blueprints_api._agent_execution_mode_confirmation_required(blueprint) is False
+    assert agent_blueprints_api._agent_lifecycle_state(blueprint) == "completed"
 
 
 def test_activation_gate_requires_safe_preview_run(monkeypatch):
@@ -6819,7 +6864,7 @@ def test_activation_gate_requires_safe_preview_run(monkeypatch):
         Cursor(),
         {"id": "bp1", "business_id": "biz1"},
         {"id": "version-1", "version_number": 1},
-        {"required_integration_bindings": []},
+        {"execution_mode": "manual", "required_integration_bindings": []},
     )
 
     assert gate["can_activate"] is False
@@ -6877,7 +6922,7 @@ def test_activation_gate_accepts_completed_safe_preview_run(monkeypatch):
         Cursor(),
         {"id": "bp1", "business_id": "biz1"},
         {"id": "version-1", "version_number": 1},
-        {"required_integration_bindings": []},
+        {"execution_mode": "manual", "required_integration_bindings": []},
     )
 
     assert gate["can_activate"] is True
@@ -6957,7 +7002,7 @@ def test_activation_gate_blocks_autonomous_write_limits_even_after_preview(monke
             "approval_policy_json": {"sheet_update": "manual_approval_required"},
             "capability_allowlist_json": ["sheets.append_row_request"],
         },
-        {"required_integration_bindings": []},
+        {"execution_mode": "manual", "required_integration_bindings": []},
     )
 
     assert gate["can_activate"] is False
@@ -7337,7 +7382,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Candidate-версия" in agents_page_source
     assert "Зафиксировать улучшение" in agents_page_source
     assert "auto_activate: false" in agents_page_source
-    assert "Мои агенты" in agents_page_source
+    assert 'title="Агенты"' in agents_page_source
     assert "Состояние миграции" in agents_page_source
     assert "Ручные решения" in agents_page_source
     assert "Обучение" in agents_page_source
@@ -7563,7 +7608,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Сохранить и перейти к тесту" in agents_page_source
     assert "LocalOS покажет следующий шаг" in agents_page_source
     assert "GenericRunProgress" in agents_page_source
-    assert "Мои агенты" in agents_page_source
+    assert 'title="Агенты"' in agents_page_source
     assert "getAgentListStatus" in agents_page_source
     assert "AgentSummaryPill" in agents_page_source
     assert "Последний run" in agents_page_source
