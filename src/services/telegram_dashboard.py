@@ -35,6 +35,14 @@ from services.operator_services_optimization import (
     optimize_services_from_operator,
 )
 from services.operator_social_post_generation import classify_social_post_generate_intent, generate_social_post_draft_from_operator
+from services.operator_core import route_operator_message
+from services.operator_conversations import (
+    append_operator_message,
+    conversation_pending_context,
+    create_pending_operator_action,
+    get_or_create_operator_conversation,
+    set_operator_pending_context,
+)
 from subscription_manager import get_subscription_access, get_subscription_info
 
 
@@ -474,147 +482,67 @@ def route_operator_chat_for_telegram(
     user_id: str,
     message: Any,
     limit: Any = 5,
+    transport_key: Any = None,
 ) -> dict[str, Any]:
-    if classify_operator_help_intent(message):
-        return build_operator_help_response()
-    if classify_unanswered_reviews_status_intent(message):
-        return get_unanswered_reviews_status(cursor, business_id=business_id, limit=limit)
-    if classify_bulk_review_reply_intent(message):
-        return generate_review_reply_drafts_for_unanswered_reviews(
+    persistence_enabled = hasattr(cursor, "execute") and hasattr(cursor, "fetchone")
+    conversation = get_or_create_operator_conversation(
+        cursor,
+        business_id=business_id,
+        user_id=user_id,
+        channel="telegram",
+        transport_key=transport_key or user_id,
+    ) if persistence_enabled else {"id": "", "pending_context": {}}
+    conversation_id = str(conversation.get("id") or "")
+    if persistence_enabled:
+        append_operator_message(
             cursor,
+            conversation_id=conversation_id,
             business_id=business_id,
             user_id=user_id,
-            limit=limit,
-            channel="telegram",
+            role="user",
+            content=message,
         )
-    if classify_fresh_reviews_intent(message):
-        return refresh_reviews_from_operator(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            channel="telegram",
-        )
-    if classify_services_apply_intent(message):
-        return apply_service_optimization_suggestions(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            limit=limit,
-            channel="telegram",
-            explicit_confirmation=True,
-        )
-    if classify_services_optimize_intent(message):
-        return optimize_services_from_operator(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            limit=limit,
-            channel="telegram",
-        )
-    if classify_social_post_generate_intent(message):
-        return generate_social_post_draft_from_operator(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            message=message,
-            channel="telegram",
-        )
-    if classify_news_generate_intent(message):
-        return generate_news_draft_from_operator(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            message=message,
-            channel="telegram",
-        )
-
-    result = process_operator_chat_message(
+    result, next_pending_context = route_operator_message(
         cursor,
         business_id=business_id,
         user_id=user_id,
         message=message,
         channel="telegram",
+        limit=limit,
+        pending_context=conversation_pending_context(conversation),
+        refresh_handler=refresh_reviews_from_operator,
+        ai_router_handler=classify_operator_intent_with_ai,
+        manual_review_handler=process_operator_chat_message,
     )
-    if result.get("status") != "unsupported":
-        return result
-    if not should_use_ai_intent_router(message):
-        return _unsupported_operator_chat_result(message)
-
-    ai_router = classify_operator_intent_with_ai(
-        cursor,
-        business_id=business_id,
-        user_id=user_id,
-        message=message,
-        channel="telegram",
-    )
-    if ai_router.get("status") != "completed":
-        return ai_router
-
-    ai_intent = str(ai_router.get("normalized_intent") or "unknown")
-    if ai_intent == "operator_help":
-        routed = build_operator_help_response()
-    elif ai_intent == "card_refresh":
-        routed = refresh_reviews_from_operator(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            channel="telegram",
-        )
-    elif ai_intent == "review_replies_generate":
-        routed = generate_review_reply_drafts_for_unanswered_reviews(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            limit=limit,
-            channel="telegram",
-        )
-    elif ai_intent == "manual_review_add_and_reply":
-        if _has_explicit_manual_review_text(message):
-            routed = process_operator_chat_message(
+    result["conversation_id"] = conversation_id
+    if persistence_enabled:
+        approval = result.get("approval") if isinstance(result.get("approval"), dict) else {}
+        envelope = approval.get("envelope") if isinstance(approval.get("envelope"), dict) else {}
+        if result.get("status") == "approval_required" and envelope:
+            pending_action = create_pending_operator_action(
                 cursor,
+                conversation_id=conversation_id,
                 business_id=business_id,
                 user_id=user_id,
-                message="добавь отзыв и сгенерируй ответ: " + str(message or ""),
-                channel="telegram",
+                capability=str(result.get("capability") or result.get("intent") or "unknown"),
+                envelope=envelope,
             )
-        else:
-            routed = _manual_review_guard_result(message)
-    elif ai_intent == "services_apply":
-        routed = apply_service_optimization_suggestions(
+            action_id = str(pending_action.get("id") or "")
+            approval["action_id"] = action_id
+            result["approval"] = approval
+        set_operator_pending_context(cursor, conversation_id, next_pending_context)
+        append_operator_message(
             cursor,
+            conversation_id=conversation_id,
             business_id=business_id,
             user_id=user_id,
-            limit=limit,
-            channel="telegram",
-            explicit_confirmation=True,
+            role="operator",
+            content=result.get("chat_response") or result.get("summary"),
+            capability=result.get("capability"),
+            status=result.get("status"),
+            result=result,
         )
-    elif ai_intent == "services_optimize":
-        routed = optimize_services_from_operator(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            limit=limit,
-            channel="telegram",
-        )
-    elif ai_intent == "social_post_generate":
-        routed = generate_social_post_draft_from_operator(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            message=message,
-            channel="telegram",
-        )
-    elif ai_intent == "news_generate":
-        routed = generate_news_draft_from_operator(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            message=message,
-            channel="telegram",
-        )
-    else:
-        routed = _unsupported_operator_chat_result(message)
-    return _attach_ai_router(routed, ai_router)
+    return result
 
 
 def _format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:
@@ -636,10 +564,24 @@ def _format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:
         lines.extend(["", "Черновик ответа:", reply_text])
     draft = result.get("draft") if isinstance(result.get("draft"), dict) else {}
     generated_text = str(draft.get("generated_text") or "").strip()
+    if not generated_text:
+        for draft_key in ("news_draft", "social_post_draft"):
+            candidate = result.get(draft_key) if isinstance(result.get(draft_key), dict) else {}
+            generated_text = str(candidate.get("generated_text") or "").strip()
+            if generated_text:
+                break
     if generated_text and generated_text != reply_text:
         lines.extend(["", "Черновик:", generated_text])
     if result.get("billing_url"):
         lines.append("Пополнить счёт: " + _base_web_url() + str(result.get("billing_url")))
+    approval = result.get("approval") if isinstance(result.get("approval"), dict) else {}
+    if approval.get("action_id"):
+        lines.extend(["", "Действие ждёт отдельного подтверждения кнопкой ниже."])
+    result_ref = result.get("result_ref") if isinstance(result.get("result_ref"), dict) else {}
+    result_href = str(result_ref.get("href") or "").strip()
+    if result_href:
+        absolute_href = result_href if result_href.startswith("http") else _base_web_url() + result_href
+        lines.extend(["", str(result_ref.get("label") or "Открыть результат") + ": " + absolute_href])
     lines.extend(
         [
             "",
@@ -650,7 +592,7 @@ def _format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:
     return "\n".join(line for line in lines if line is not None)
 
 
-def build_operator_chat_text(business_ctx: dict[str, Any], message_text: Any) -> str:
+def build_operator_chat_result(business_ctx: dict[str, Any], message_text: Any) -> dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -662,6 +604,7 @@ def build_operator_chat_text(business_ctx: dict[str, Any], message_text: Any) ->
             user_id=user_id,
             message=message_text,
             limit=5,
+            transport_key=business_ctx.get("telegram_id") or user_id,
         )
         ai_router = result.get("ai_router") if isinstance(result.get("ai_router"), dict) else {}
         ai_finalization = ai_router.get("finalization_result") if isinstance(ai_router.get("finalization_result"), dict) else {}
@@ -692,12 +635,30 @@ def build_operator_chat_text(business_ctx: dict[str, Any], message_text: Any) ->
                 },
             )
         conn.commit()
-        return _format_operator_chat_result_for_telegram(result)
+        return result
     except Exception:
         conn.rollback()
-        return "Не удалось выполнить команду Operator: " + str(sys.exc_info()[1])
+        return {
+            "status": "blocked",
+            "capability": "operator.help",
+            "chat_response": "Не удалось выполнить команду Operator: " + str(sys.exc_info()[1]),
+            "blocked_reasons": ["operator_chat_failed"],
+        }
     finally:
         conn.close()
+
+
+def build_operator_chat_text(business_ctx: dict[str, Any], message_text: Any) -> str:
+    return _format_operator_chat_result_for_telegram(build_operator_chat_result(business_ctx, message_text))
+
+
+def build_operator_chat_payload(business_ctx: dict[str, Any], message_text: Any) -> dict[str, Any]:
+    result = build_operator_chat_result(business_ctx, message_text)
+    return {"text": _format_operator_chat_result_for_telegram(result), "result": result}
+
+
+def format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:
+    return _format_operator_chat_result_for_telegram(result)
 
 
 def build_refresh_retry_text(business_ctx: dict, message_text: Any = "") -> str:

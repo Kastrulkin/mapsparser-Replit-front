@@ -10,7 +10,7 @@ import { TelegramOpportunityRadar } from '@/components/TelegramOpportunityRadar'
 import WhatsAppConnection from '@/components/WhatsAppConnection';
 import { WABACredentials } from '@/components/WABACredentials';
 import { Button } from '@/components/ui/button';
-import { DashboardPageHeader, DashboardSection } from '@/components/dashboard/DashboardPrimitives';
+import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { newAuth } from '@/lib/auth_new';
 
@@ -250,27 +250,6 @@ export const SettingsHubPage = () => {
           />
         )}
       </SettingsDetailSheet>
-    </div>
-  );
-};
-
-export const SettingsDiagnosticsPage = () => {
-  const { language } = useLanguage();
-  const copy = useMemo(() => getSettingsHubCopy(language), [language]);
-  const { currentBusinessId } = useOutletContext<SettingsHubOutletContext>();
-
-  return (
-    <div className="mx-auto max-w-6xl space-y-7 pb-10">
-      <DashboardPageHeader
-        eyebrow={copy.routes.advancedEyebrow}
-        title={copy.routes.diagnosticsTitle}
-        description={copy.routes.diagnosticsDescription}
-        icon={ClipboardCheck}
-        actions={<Button type="button" variant="outline" asChild><Link to="/dashboard/settings">{copy.routes.backToHub}</Link></Button>}
-      />
-      <DashboardSection title={copy.routes.diagnosticsSectionTitle} description={copy.routes.diagnosticsSectionDescription}>
-        <ExternalIntegrations currentBusinessId={currentBusinessId || null} />
-      </DashboardSection>
     </div>
   );
 };

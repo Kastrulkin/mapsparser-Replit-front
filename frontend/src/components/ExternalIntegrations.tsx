@@ -866,7 +866,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
                 ? 'Каналы публикаций'
                 : expandedDetails === 'crm'
                   ? 'CRM и ключи'
-                  : 'Другие подключения и технические детали'}
+                  : 'Дополнительные параметры подключения'}
           </summary>
           <div className="mt-4 space-y-6">
         <div className="rounded-3xl border border-slate-200 bg-white p-5">

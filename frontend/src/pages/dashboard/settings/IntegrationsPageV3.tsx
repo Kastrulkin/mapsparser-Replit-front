@@ -87,6 +87,7 @@ type GoogleLocation = {
 
 type StatusFilter = ConnectionStatus | 'all' | 'needs_action';
 type TypeFilter = ConnectionType | 'all' | 'crm';
+type ServiceGroupKey = 'owner' | 'publishing' | 'data';
 
 const emptyLoadState: RegistryLoadState = {
   telegramOwnerLinked: null,
@@ -137,6 +138,18 @@ const serviceHelp: Record<string, string[]> = {
   yclients: ['Возьмите ID филиала.', 'Заполните partner token и user token.', 'Сначала проверьте preview, потом подтверждайте импорт.'],
   altegio: ['Возьмите ID филиала.', 'Заполните partner token и user token.', 'Сначала проверьте preview, потом подтверждайте импорт.'],
   maton: ['Скопируйте API-ключ Maton.ai.', 'Сохраните ключ в LocalOS.', 'Проверьте, что агент видит этот маршрут.'],
+};
+
+const serviceGroups: Array<{ key: ServiceGroupKey; title: string; description: string }> = [
+  { key: 'owner', title: 'Связь с владельцем', description: 'Уведомления, команды и рабочие сообщения.' },
+  { key: 'publishing', title: 'Публикации и сообщения', description: 'Каналы, где внешнее действие требует проверки и подтверждения.' },
+  { key: 'data', title: 'Данные и CRM', description: 'Источники данных для агентов, финансов и отчётности.' },
+];
+
+const serviceGroup = (serviceId: string): ServiceGroupKey => {
+  if (serviceId === 'telegram') return 'owner';
+  if (['whatsapp', 'google_business', 'vk', 'meta', 'yandex_maps', '2gis'].includes(serviceId)) return 'publishing';
+  return 'data';
 };
 
 const authHeaders = () => {
@@ -212,6 +225,8 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
   const { toast } = useToast();
   const [loadState, setLoadState] = useState<RegistryLoadState>(emptyLoadState);
   const [loading, setLoading] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [activeServiceId, setActiveServiceId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -250,6 +265,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       }
 
       setLoading(true);
+      setLoadError(null);
       const headers = authHeaders();
       try {
         const [ownerStatus, telegramStatus, readiness, accounts, crmProviders] = await Promise.all([
@@ -273,8 +289,12 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
           externalAccounts: accounts.response.ok && accounts.data.success ? firstArray(accounts.data.accounts) : [],
           crmProviders: crmProviders.response.ok && crmProviders.data.success ? firstArray(crmProviders.data.providers) : [],
         });
+        setLastCheckedAt(new Date());
       } catch {
-        if (!cancelled) setLoadState(emptyLoadState);
+        if (!cancelled) {
+          setLoadState(emptyLoadState);
+          setLoadError('Не удалось получить состояние подключений. Повторите проверку.');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -306,7 +326,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       || service.description.toLowerCase().includes(query.trim().toLowerCase())
       || String(service.tag || '').toLowerCase().includes(query.trim().toLowerCase());
     const matchesStatus = statusFilter === 'all'
-      || (statusFilter === 'needs_action' ? ['action_required', 'error'].includes(service.status) : service.status === statusFilter);
+      || (statusFilter === 'needs_action' ? ['action_required', 'not_connected', 'error'].includes(service.status) : service.status === statusFilter);
     const matchesType = typeFilter === 'all'
       || (typeFilter === 'crm' ? service.tag === 'CRM' : service.connectionType === typeFilter);
     return matchesQuery && matchesStatus && matchesType;
@@ -680,13 +700,64 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     </div>
   );
 
+  const renderCheck = (service: ServiceConnection) => {
+    const readiness = readinessForService(service.id, loadState.socialReadiness);
+    return (
+      <div className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="text-balance text-base font-semibold text-slate-950">Состояние подключения</h3>
+            <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">
+              LocalOS повторно читает сохранённое состояние и доступную готовность канала. Публикация, отправка сообщения или запись данных при этой проверке не выполняются.
+            </p>
+          </div>
+          <ServiceStatusBadge status={loadError ? 'error' : service.status} />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <LogRow label="Результат" value={loadError || service.nextAction} wide />
+          <LogRow label="Проверено" value={lastCheckedAt ? lastCheckedAt.toLocaleString('ru-RU') : 'Проверка ещё не выполнялась'} />
+          <LogRow
+            label="Проверка провайдера"
+            value={readiness ? String(readiness.status || (readiness.ready ? 'Готово' : 'Требует действия')) : 'Отдельная тестовая операция недоступна'}
+          />
+        </div>
+        <Button type="button" variant="outline" onClick={refresh} disabled={loading} className="min-h-10 gap-2 active:scale-[0.96] transition-transform">
+          <RefreshCw className={cn('h-4 w-4', loading ? 'animate-spin' : '')} />
+          {loading ? 'Проверяем…' : 'Проверить состояние'}
+        </Button>
+      </div>
+    );
+  };
+
+  const renderSafety = (service: ServiceConnection) => {
+    const readOnly = service.id === 'google_sheets';
+    const manual = service.status === 'manual' || ['yandex_maps', '2gis'].includes(service.id);
+    const crm = ['yclients', 'altegio'].includes(service.id);
+    return (
+      <div className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div>
+          <h3 className="text-balance text-base font-semibold text-slate-950">Безопасные действия</h3>
+          <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">Здесь показаны действующие границы. Числовые лимиты в этой версии не настраиваются.</p>
+        </div>
+        <div className="space-y-3 text-sm leading-6">
+          <SafetyRow allowed title="Подключение и проверка" description="Можно менять доступы и читать состояние без внешней отправки." />
+          {readOnly ? <SafetyRow allowed title="Чтение данных" description="Доступ используется для чтения таблиц; наружу ничего не публикуется." /> : null}
+          {manual ? <SafetyRow title="Внешнее изменение" description="LocalOS готовит материал, а финальное действие выполняет человек в сервисе." /> : null}
+          {crm ? <SafetyRow title="Импорт в финансы" description="Сначала показывается предварительный просмотр; применение требует подтверждения." /> : null}
+          {!readOnly && !manual && !crm ? <SafetyRow title="Публикация или отправка" description="Перед внешним действием обязательны предпросмотр и подтверждение человека." /> : null}
+        </div>
+      </div>
+    );
+  };
+
   const renderLogs = (service: ServiceConnection) => {
     const accounts = accountsForService(service.id, loadState.externalAccounts);
     const readiness = readinessForService(service.id, loadState.socialReadiness);
     return (
       <div className="space-y-4">
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-base font-semibold text-slate-950">Logs / Technical state</h3>
+          <h3 className="text-balance text-base font-semibold text-slate-950">Сведения для поддержки</h3>
+          <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">Техническое состояние без токенов, ключей и других секретов.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <LogRow label="Статус" value={statusCopy[service.status]} />
             <LogRow label="Тип подключения" value={typeCopy[service.connectionType]} />
@@ -694,8 +765,8 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
             {readiness ? <LogRow label="Проверка канала" value={String(readiness.status || (readiness.ready ? 'ready' : 'needs_action'))} /> : null}
           </div>
         </div>
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-base font-semibold text-slate-950">Подключённые записи</h3>
+        <details className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <summary className="min-h-10 cursor-pointer select-none text-base font-semibold leading-10 text-slate-950">Сохранённые записи подключения</summary>
           {accounts.length ? (
             <div className="mt-4 space-y-2">
               {accounts.map((account) => (
@@ -710,7 +781,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
           ) : (
             <p className="mt-3 text-sm leading-6 text-slate-600">Для этого сервиса пока нет сохранённой записи подключения.</p>
           )}
-        </div>
+        </details>
       </div>
     );
   };
@@ -720,7 +791,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       <DashboardPageHeader
         eyebrow="Настройки"
         title="Подключения"
-        description="Все сервисы, которые можно подключить для связи, публикаций и данных."
+        description="Подключите сервис, проверьте его состояние и посмотрите границы безопасных действий."
         icon={ListFilter}
       />
 
@@ -741,7 +812,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Все</SelectItem>
-              <SelectItem value="needs_action">Требуют действия</SelectItem>
+              <SelectItem value="needs_action">Нужно настроить</SelectItem>
               <SelectItem value="connected">Подключены</SelectItem>
               <SelectItem value="error">Ошибки</SelectItem>
               <SelectItem value="manual">Ручной режим</SelectItem>
@@ -768,16 +839,28 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="divide-y divide-slate-100">
-          {filteredServices.map((service) => (
-            <ServiceRow key={service.id} service={service} active={service.id === activeServiceId} onOpen={setActiveServiceId} />
-          ))}
-          {!filteredServices.length ? (
-            <div className="px-5 py-8 text-sm text-slate-600">Ничего не найдено. Сбросьте поиск или фильтр.</div>
-          ) : null}
-        </div>
-      </section>
+      <div className="space-y-5">
+        {serviceGroups.map((group) => {
+          const groupServices = filteredServices.filter((service) => serviceGroup(service.id) === group.key);
+          if (!groupServices.length) return null;
+          return (
+            <section key={group.key} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-4">
+                <h2 className="text-balance text-base font-semibold text-slate-950">{group.title}</h2>
+                <p className="mt-1 text-pretty text-sm text-slate-600">{group.description}</p>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {groupServices.map((service) => (
+                  <ServiceRow key={service.id} service={service} active={service.id === activeServiceId} onOpen={setActiveServiceId} />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+        {!filteredServices.length ? (
+          <div className="rounded-3xl border border-slate-200 bg-white px-5 py-8 text-sm text-slate-600 shadow-sm">Ничего не найдено. Сбросьте поиск или фильтр.</div>
+        ) : null}
+      </div>
 
       <SettingsDetailSheet
         open={Boolean(selectedService)}
@@ -789,18 +872,19 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       >
         {selectedService ? (
           <Tabs defaultValue="setup" className="space-y-4">
-            <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl bg-slate-200/70 p-1">
-              <TabsTrigger value="setup" className="min-h-10 rounded-xl">Setup</TabsTrigger>
-              <TabsTrigger value="help" className="min-h-10 rounded-xl">Help</TabsTrigger>
-              <TabsTrigger value="logs" className="min-h-10 rounded-xl">Logs / Technical state</TabsTrigger>
+            <TabsList className="grid h-auto w-full grid-cols-2 rounded-2xl bg-slate-200/70 p-1 sm:grid-cols-4">
+              <TabsTrigger value="setup" className="min-h-10 rounded-xl">Настройка</TabsTrigger>
+              <TabsTrigger value="check" className="min-h-10 rounded-xl">Проверка</TabsTrigger>
+              <TabsTrigger value="safety" className="min-h-10 rounded-xl">Безопасность</TabsTrigger>
+              <TabsTrigger value="support" className="min-h-10 rounded-xl">Для поддержки</TabsTrigger>
             </TabsList>
             <TabsContent value="setup" className="space-y-4">
               {renderSetup(selectedService)}
-            </TabsContent>
-            <TabsContent value="help">
               {renderHelp(selectedService)}
             </TabsContent>
-            <TabsContent value="logs">
+            <TabsContent value="check">{renderCheck(selectedService)}</TabsContent>
+            <TabsContent value="safety">{renderSafety(selectedService)}</TabsContent>
+            <TabsContent value="support">
               {renderLogs(selectedService)}
             </TabsContent>
           </Tabs>
@@ -870,6 +954,26 @@ const SetupPanel = ({
       <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
     </div>
     {children}
+  </div>
+);
+
+const SafetyRow = ({
+  allowed = false,
+  title,
+  description,
+}: {
+  allowed?: boolean;
+  title: string;
+  description: string;
+}) => (
+  <div className={cn('grid grid-cols-[40px_minmax(0,1fr)] gap-3 rounded-2xl px-4 py-3 ring-1', allowed ? 'bg-emerald-50 ring-emerald-100' : 'bg-amber-50 ring-amber-100')}>
+    <span className={cn('flex h-10 w-10 items-center justify-center rounded-xl', allowed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
+      {allowed ? <CheckCircle2 className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+    </span>
+    <span>
+      <span className="block font-semibold text-slate-950">{title}</span>
+      <span className="block text-slate-700">{description}</span>
+    </span>
   </div>
 );
 

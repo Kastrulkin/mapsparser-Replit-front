@@ -1,4 +1,4 @@
-import { Link, useLocation, useOutletContext } from 'react-router-dom';
+import { Link, Navigate, useLocation, useOutletContext } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import TelegramConnection from '@/components/TelegramConnection';
@@ -19,7 +19,6 @@ import {
 } from '@/components/dashboard/DashboardPrimitives';
 import { featureFlags } from '@/config/featureFlags';
 import {
-  SettingsDiagnosticsPage,
   SettingsHubPage,
   SettingsIntegrationsPage,
   SettingsPublicationsPage,
@@ -240,7 +239,7 @@ export const SettingsPage = () => {
   }
 
   if (location.pathname.endsWith('/diagnostics')) {
-    return <SettingsDiagnosticsPage />;
+    return <Navigate to={`/dashboard/settings/integrations${location.search}`} replace />;
   }
 
   if (location.pathname.endsWith('/publications')) {

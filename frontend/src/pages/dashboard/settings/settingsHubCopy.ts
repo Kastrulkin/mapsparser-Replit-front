@@ -49,16 +49,10 @@ export type SettingsHubCopy = {
   secondaryLinks: {
     agents: string;
     network: string;
-    diagnostics: string;
   };
   details: Record<string, { title: string; description: string }>;
   routes: {
-    advancedEyebrow: string;
     settingsEyebrow: string;
-    diagnosticsTitle: string;
-    diagnosticsDescription: string;
-    diagnosticsSectionTitle: string;
-    diagnosticsSectionDescription: string;
     publicationsTitle: string;
     publicationsDescription: string;
     integrationsTitle: string;
@@ -70,9 +64,9 @@ export type SettingsHubCopy = {
 const en: SettingsHubCopy = {
   page: {
     eyebrow: 'LocalOS',
-    title: 'Settings readiness',
-    description: 'See what is ready, what needs one step, and where to open detailed setup.',
-    openDetails: 'Open details',
+    title: 'Settings and connections',
+    description: 'Connect services, check their state, and control the safety of external actions.',
+    openDetails: 'All connections',
     loading: 'Refreshing setup state...',
   },
   status: {
@@ -153,7 +147,6 @@ const en: SettingsHubCopy = {
   secondaryLinks: {
     agents: 'Agents',
     network: 'Network',
-    diagnostics: 'Diagnostics',
   },
   details: {
     telegram: {
@@ -178,12 +171,7 @@ const en: SettingsHubCopy = {
     },
   },
   routes: {
-    advancedEyebrow: 'Advanced',
     settingsEyebrow: 'Settings',
-    diagnosticsTitle: 'Settings diagnostics',
-    diagnosticsDescription: 'Technical channel checks, delivery health, and support exports live here instead of the main setup hub.',
-    diagnosticsSectionTitle: 'Diagnostics and support tools',
-    diagnosticsSectionDescription: 'Use this when a setup looks wrong or a support export is needed.',
     publicationsTitle: 'Publication channels',
     publicationsDescription: 'Connect channels that can receive approved content from LocalOS.',
     integrationsTitle: 'Connections',
@@ -195,9 +183,9 @@ const en: SettingsHubCopy = {
 const ru: SettingsHubCopy = {
   page: {
     eyebrow: 'LocalOS',
-    title: 'Готовность настроек',
-    description: 'Посмотрите, что уже готово, какой один шаг важнее всего и где открыть подробную настройку.',
-    openDetails: 'Открыть детали',
+    title: 'Настройки и подключения',
+    description: 'Подключайте сервисы, проверяйте их состояние и управляйте безопасностью внешних действий.',
+    openDetails: 'Все подключения',
     loading: 'Обновляем состояние настроек...',
   },
   status: {
@@ -278,7 +266,6 @@ const ru: SettingsHubCopy = {
   secondaryLinks: {
     agents: 'Сотрудники ИИ',
     network: 'Сеть локаций',
-    diagnostics: 'Диагностика',
   },
   details: {
     telegram: {
@@ -303,17 +290,12 @@ const ru: SettingsHubCopy = {
     },
   },
   routes: {
-    advancedEyebrow: 'Дополнительно',
     settingsEyebrow: 'Настройки',
-    diagnosticsTitle: 'Диагностика настроек',
-    diagnosticsDescription: 'Проверки каналов, состояния доставки и материалы для поддержки находятся здесь, а не на главном экране.',
-    diagnosticsSectionTitle: 'Диагностика и поддержка',
-    diagnosticsSectionDescription: 'Используйте этот раздел, если настройка выглядит неправильно или нужен экспорт для поддержки.',
     publicationsTitle: 'Каналы публикаций',
     publicationsDescription: 'Подключите каналы, куда LocalOS сможет отправлять согласованный контент.',
     integrationsTitle: 'Подключения',
     integrationsDescription: 'Войдите в Google, VK или Meta либо добавьте API-ключ Maton.',
-    backToHub: 'Назад к готовности',
+    backToHub: 'Назад к настройкам',
   },
 };
 

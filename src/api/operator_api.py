@@ -35,6 +35,16 @@ from services.operator_services_optimization import (
     optimize_services_from_operator,
 )
 from services.operator_social_post_generation import classify_social_post_generate_intent, generate_social_post_draft_from_operator
+from services.operator_core import confirm_pending_operator_action, operator_capability_catalog, route_operator_message
+from services.operator_conversations import (
+    append_operator_message,
+    conversation_pending_context,
+    create_pending_operator_action,
+    find_latest_operator_conversation,
+    get_or_create_operator_conversation,
+    list_operator_messages,
+    set_operator_pending_context,
+)
 
 
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
@@ -414,6 +424,73 @@ def operator_paid_action_execute(action_key: str):
         db.close()
 
 
+@operator_bp.route("/capabilities", methods=["GET"])
+def operator_capabilities():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    return jsonify({"success": True, "capabilities": operator_capability_catalog()})
+
+
+@operator_bp.route("/conversations/<conversation_id>/messages", methods=["GET"])
+def operator_conversation_messages(conversation_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    business_id = str(request.args.get("business_id") or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            return jsonify({"success": False, "error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
+        items = list_operator_messages(
+            cursor,
+            conversation_id=conversation_id,
+            business_id=business_id,
+            limit=request.args.get("limit") or 100,
+        )
+        return jsonify({"success": True, "conversation_id": conversation_id, "messages": items})
+    finally:
+        db.close()
+
+
+@operator_bp.route("/conversations/current", methods=["GET"])
+def current_operator_conversation():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    business_id = str(request.args.get("business_id") or "").strip()
+    channel = str(request.args.get("channel") or "web").strip() or "web"
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            return jsonify({"success": False, "error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        conversation = find_latest_operator_conversation(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            channel=channel,
+        )
+        conversation_id = str(conversation.get("id") or "")
+        messages = list_operator_messages(
+            cursor,
+            conversation_id=conversation_id,
+            business_id=business_id,
+            limit=request.args.get("limit") or 100,
+        ) if conversation_id else []
+        return jsonify({"success": True, "conversation": conversation or None, "messages": messages})
+    finally:
+        db.close()
+
+
 @operator_bp.route("/chat", methods=["POST"])
 def operator_chat():
     user_data = require_auth_from_request()
@@ -447,155 +524,72 @@ def operator_chat():
             input_summary={"message": message[:500]},
             output_summary={"channel": "web"},
         )
-        if classify_operator_help_intent(message):
-            result = build_operator_help_response()
-        elif classify_unanswered_reviews_status_intent(message):
-            result = get_unanswered_reviews_status(
+        conversation = get_or_create_operator_conversation(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            channel=str(payload.get("channel") or "web").strip() or "web",
+            conversation_id=payload.get("conversation_id"),
+            transport_key=payload.get("transport_key"),
+        )
+        conversation_id = str(conversation.get("id") or "")
+        append_operator_message(
+            cursor,
+            conversation_id=conversation_id,
+            business_id=business_id,
+            user_id=user_id,
+            role="user",
+            content=message,
+        )
+        result, next_pending_context = route_operator_message(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            message=message,
+            channel=str(payload.get("channel") or "web").strip() or "web",
+            limit=payload.get("limit") or 5,
+            explicit_url=payload.get("url"),
+            pending_context=conversation_pending_context(conversation),
+            action_payload=payload,
+            refresh_handler=refresh_reviews_from_operator,
+            ai_router_handler=classify_operator_intent_with_ai,
+            manual_review_handler=process_operator_chat_message,
+        )
+        result["conversation_id"] = conversation_id
+        approval = result.get("approval") if isinstance(result.get("approval"), dict) else {}
+        approval_envelope = approval.get("envelope") if isinstance(approval.get("envelope"), dict) else {}
+        if result.get("status") == "approval_required" and approval_envelope:
+            pending_action = create_pending_operator_action(
                 cursor,
-                business_id=business_id,
-                limit=payload.get("limit") or 5,
-            )
-        elif classify_bulk_review_reply_intent(message):
-            result = generate_review_reply_drafts_for_unanswered_reviews(
-                cursor,
-                business_id=business_id,
-                user_id=user_id,
-                limit=payload.get("limit") or 5,
-                channel="web",
-            )
-        elif classify_fresh_reviews_intent(message):
-            result = refresh_reviews_from_operator(
-                cursor,
-                business_id=business_id,
-                user_id=user_id,
-                explicit_url=payload.get("url"),
-                channel="web",
-            )
-        elif classify_services_apply_intent(message):
-            result = apply_service_optimization_suggestions(
-                cursor,
-                business_id=business_id,
-                user_id=user_id,
-                job_id=payload.get("job_id"),
-                item_ids=payload.get("item_ids"),
-                limit=payload.get("limit") or 5,
-                channel="web",
-                explicit_confirmation=True,
-            )
-        elif classify_services_optimize_intent(message):
-            result = optimize_services_from_operator(
-                cursor,
-                business_id=business_id,
-                user_id=user_id,
-                limit=payload.get("limit") or 5,
-                channel="web",
-            )
-        elif classify_social_post_generate_intent(message):
-            result = generate_social_post_draft_from_operator(
-                cursor,
+                conversation_id=conversation_id,
                 business_id=business_id,
                 user_id=user_id,
-                message=message,
-                channel="web",
+                capability=str(result.get("capability") or result.get("intent") or "unknown"),
+                envelope=approval_envelope,
             )
-        elif classify_news_generate_intent(message):
-            result = generate_news_draft_from_operator(
-                cursor,
-                business_id=business_id,
-                user_id=user_id,
-                message=message,
-                channel="web",
-            )
-        else:
-            result = process_operator_chat_message(
-                cursor,
-                business_id=business_id,
-                user_id=user_id,
-                message=message,
-                channel="web",
-            )
-            if result.get("status") == "unsupported":
-                if not should_use_ai_intent_router(message):
-                    result = _unsupported_operator_result(message)
-                else:
-                    ai_router = classify_operator_intent_with_ai(
-                        cursor,
-                        business_id=business_id,
-                        user_id=user_id,
-                        message=message,
-                        channel="web",
-                    )
-                    if ai_router.get("status") != "completed":
-                        result = ai_router
-                    else:
-                        ai_intent = str(ai_router.get("normalized_intent") or "unknown")
-                        if ai_intent == "operator_help":
-                            result = build_operator_help_response()
-                        elif ai_intent == "card_refresh":
-                            result = refresh_reviews_from_operator(
-                                cursor,
-                                business_id=business_id,
-                                user_id=user_id,
-                                explicit_url=payload.get("url"),
-                                channel="web",
-                            )
-                        elif ai_intent == "review_replies_generate":
-                            result = generate_review_reply_drafts_for_unanswered_reviews(
-                                cursor,
-                                business_id=business_id,
-                                user_id=user_id,
-                                limit=payload.get("limit") or 5,
-                                channel="web",
-                            )
-                        elif ai_intent == "manual_review_add_and_reply":
-                            if _has_explicit_manual_review_text(message):
-                                result = process_operator_chat_message(
-                                    cursor,
-                                    business_id=business_id,
-                                    user_id=user_id,
-                                    message="добавь отзыв и сгенерируй ответ: " + message,
-                                    channel="web",
-                                )
-                            else:
-                                result = _manual_review_guard_result(message)
-                        elif ai_intent == "services_apply":
-                            result = apply_service_optimization_suggestions(
-                                cursor,
-                                business_id=business_id,
-                                user_id=user_id,
-                                job_id=payload.get("job_id"),
-                                item_ids=payload.get("item_ids"),
-                                limit=payload.get("limit") or 5,
-                                channel="web",
-                                explicit_confirmation=True,
-                            )
-                        elif ai_intent == "services_optimize":
-                            result = optimize_services_from_operator(
-                                cursor,
-                                business_id=business_id,
-                                user_id=user_id,
-                                limit=payload.get("limit") or 5,
-                                channel="web",
-                            )
-                        elif ai_intent == "social_post_generate":
-                            result = generate_social_post_draft_from_operator(
-                                cursor,
-                                business_id=business_id,
-                                user_id=user_id,
-                                message=message,
-                                channel="web",
-                            )
-                        elif ai_intent == "news_generate":
-                            result = generate_news_draft_from_operator(
-                                cursor,
-                                business_id=business_id,
-                                user_id=user_id,
-                                message=message,
-                                channel="web",
-                            )
-                        else:
-                            result = _unsupported_operator_result(message)
-                        result = _attach_ai_router(result, ai_router)
+            action_id = str(pending_action.get("id") or "")
+            approval["action_id"] = action_id
+            result["approval"] = approval
+            result["ui_actions"] = list(result.get("ui_actions") or []) + [
+                {
+                    "action": "confirm_operator_action",
+                    "label": "Подтвердить",
+                    "href": "",
+                    "payload": {"action_id": action_id},
+                }
+            ]
+        set_operator_pending_context(cursor, conversation_id, next_pending_context)
+        append_operator_message(
+            cursor,
+            conversation_id=conversation_id,
+            business_id=business_id,
+            user_id=user_id,
+            role="operator",
+            content=result.get("chat_response") or result.get("summary"),
+            capability=result.get("capability"),
+            status=result.get("status"),
+            result=result,
+        )
         status = str(result.get("status") or "blocked")
         review = result.get("review") if isinstance(result.get("review"), dict) else {}
         draft = result.get("draft") if isinstance(result.get("draft"), dict) else {}
@@ -735,7 +729,48 @@ def operator_chat():
                 },
             )
         db.conn.commit()
-        return jsonify({"success": status in {"completed", "queued"}, "operator_result": result})
+        return jsonify({
+            "success": status in {"completed", "queued", "processing", "clarification_required", "manual_handoff", "approval_required"},
+            "conversation_id": result.get("conversation_id"),
+            "operator_result": result,
+        })
+    except Exception:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+@operator_bp.route("/actions/<action_id>/confirm", methods=["POST"])
+def confirm_operator_action(action_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            return jsonify({"success": False, "error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        result, idempotent = confirm_pending_operator_action(
+            cursor,
+            action_id=action_id,
+            business_id=business_id,
+            user_id=user_id,
+        )
+        if "action_not_found" in list(result.get("blocked_reasons") or []):
+            return jsonify({"success": False, "error": "Действие не найдено"}), 404
+        db.conn.commit()
+        return jsonify({
+            "success": str(result.get("status") or "") == "completed",
+            "idempotent": idempotent,
+            "operator_result": result,
+        })
     except Exception:
         db.conn.rollback()
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500

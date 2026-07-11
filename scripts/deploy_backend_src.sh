@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 src_dir="${repo_root}/src"
 migrations_dir="${repo_root}/alembic_migrations"
 entrypoint_file="${repo_root}/entrypoint.sh"
+telegram_bot_launcher="${repo_root}/scripts/run_localos_telegram_bot.sh"
 runtime_script_files=(
   "scripts/social_posting_acceptance_probe.py"
   "scripts/smoke_social_production_readiness.py"
@@ -109,6 +110,7 @@ retry_command "remote temp dir prepare" remote_exec "rm -rf ${remote_tmp} && mkd
 retry_command "upload src" rsync -a --delete -e "${server_rsync_ssh}" "${local_bundle_dir}/src/" "${server_host}:${remote_tmp}/src/"
 retry_command "upload alembic migrations" rsync -a --delete -e "${server_rsync_ssh}" "${local_bundle_dir}/alembic_migrations/" "${server_host}:${remote_tmp}/alembic_migrations/"
 retry_command "upload entrypoint" "${server_scp_prefix[@]}" "${local_bundle_dir}/entrypoint.sh" "${server_host}:${remote_tmp}/entrypoint.sh"
+retry_command "upload Telegram owner-bot launcher" "${server_scp_prefix[@]}" "${telegram_bot_launcher}" "${server_host}:${remote_tmp}/run_localos_telegram_bot.sh"
 retry_command "prepare runtime social scripts" remote_exec "mkdir -p ${remote_tmp}/scripts"
 for runtime_script in "${runtime_script_files[@]}"; do
   retry_command "upload ${runtime_script}" "${server_scp_prefix[@]}" "${repo_root}/${runtime_script}" "${server_host}:${remote_tmp}/${runtime_script}"
@@ -120,7 +122,10 @@ retry_command "sync backend source on server" remote_exec "\
   rsync -a --delete ${remote_tmp}/src/ src/ && \
   rsync -a --delete ${remote_tmp}/alembic_migrations/ alembic_migrations/ && \
   rsync -a ${remote_tmp}/scripts/ scripts/ && \
-  install -m 755 ${remote_tmp}/entrypoint.sh entrypoint.sh"
+  install -m 755 ${remote_tmp}/entrypoint.sh entrypoint.sh && \
+  mkdir -p runtime_bot && \
+  install -m 755 ${remote_tmp}/run_localos_telegram_bot.sh runtime_bot/run_localos_telegram_bot.sh && \
+  if [ ! -e runtime_bot/bot.env ]; then ln -s ../.env runtime_bot/bot.env; fi"
 
 if [[ "${restart_services}" -eq 1 ]]; then
   echo "Recreating affected services to apply compose/runtime source mounts..."

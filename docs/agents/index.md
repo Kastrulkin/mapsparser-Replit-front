@@ -50,7 +50,7 @@ Current capability areas:
 
 ## LocalOS Operator
 
-[LocalOS Operator](localos-operator.md) is the beta control layer above the dashboard. It treats web chat, action cards and Telegram owner-bot commands as surfaces for the same governed core.
+[LocalOS Operator](localos-operator.md) is the beta control layer above the dashboard. It treats web chat, action cards and Telegram owner-bot commands as surfaces for the same governed core. The current domain-by-domain truth table is the [Operator capability coverage manifest](operator-capability-coverage.md).
 
 Operator can currently expose:
 
@@ -83,6 +83,7 @@ The Operator model keeps one context, one permission system, one credit/usage le
 - Sandbox self-test: `POST /api/agent-api/self-test`
 - [Capabilities](capabilities.md)
 - [LocalOS Operator](localos-operator.md)
+- [Operator capability coverage](operator-capability-coverage.md)
 - [Harness architecture](harness-architecture.md)
 - [Tool registry](tool-registry.md)
 - [Planning and goal loops](planning-and-goals.md)

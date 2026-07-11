@@ -232,7 +232,7 @@ export const SettingsModuleCard = ({
 };
 
 export const SecondaryLinks = ({ copy }: { copy: SettingsHubCopy }) => (
-  <section data-settings-hub-first-layer="secondary-links" className="grid gap-3 md:grid-cols-3">
+  <section data-settings-hub-first-layer="secondary-links" className="grid gap-3 md:grid-cols-2">
     <Button type="button" variant="outline" className="min-h-12 justify-start gap-2 rounded-2xl bg-white" asChild>
       <Link to="/dashboard/agents">
         <ClipboardList className="h-4 w-4" />
@@ -243,12 +243,6 @@ export const SecondaryLinks = ({ copy }: { copy: SettingsHubCopy }) => (
       <Link to="/dashboard/network">
         <ClipboardList className="h-4 w-4" />
         {copy.secondaryLinks.network}
-      </Link>
-    </Button>
-    <Button type="button" variant="outline" className="min-h-12 justify-start gap-2 rounded-2xl bg-white" asChild>
-      <Link to="/dashboard/settings/diagnostics">
-        <ClipboardList className="h-4 w-4" />
-        {copy.secondaryLinks.diagnostics}
       </Link>
     </Button>
   </section>

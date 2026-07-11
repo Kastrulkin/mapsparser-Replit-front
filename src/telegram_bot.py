@@ -60,12 +60,14 @@ from services.telegram_dashboard import (
     build_automation_text,
     build_card_text,
     build_growth_text,
+    build_operator_chat_payload,
     build_operator_chat_text,
     build_refresh_retry_text,
     build_refresh_jobs_text,
     build_reviews_text,
     build_subscription_text,
     build_today_text,
+    format_operator_chat_result_for_telegram,
 )
 from services.operator_audit import record_operator_event
 from services.operator_manual_review import classify_operator_chat_intent, process_operator_chat_message
@@ -74,6 +76,7 @@ from services.operator_review_reply_bulk import (
     format_bulk_review_reply_result_for_telegram,
     generate_review_reply_drafts_for_unanswered_reviews,
 )
+from services.operator_core import confirm_pending_operator_action, should_route_operator_message
 from services.telegram_compare_flow import build_guest_compare_result
 from services.telegram_lead_intake import parse_map_links_from_text
 from services.telegram_response_router import classify_client_intent, classify_guest_intent
@@ -1812,6 +1815,21 @@ def _build_ask_localos_menu() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
         ]
     )
+
+
+def _build_operator_result_markup(result: dict[str, Any]) -> InlineKeyboardMarkup:
+    rows = []
+    result_ref = result.get("result_ref") if isinstance(result.get("result_ref"), dict) else {}
+    href = str(result_ref.get("href") or "").strip()
+    if href:
+        absolute_href = href if href.startswith("http") else str(os.getenv("PUBLIC_BASE_URL") or "https://localos.pro").rstrip("/") + href
+        rows.append([InlineKeyboardButton(str(result_ref.get("label") or "Открыть результат"), url=absolute_href)])
+    approval = result.get("approval") if isinstance(result.get("approval"), dict) else {}
+    action_id = str(approval.get("action_id") or "").strip()
+    if action_id:
+        rows.append([InlineKeyboardButton("✅ Подтвердить", callback_data=f"operator_confirm:{action_id}")])
+    rows.append([InlineKeyboardButton("💬 Новая команда", callback_data="client_ask")])
+    return InlineKeyboardMarkup(rows)
 
 
 def _guest_welcome_text() -> str:
@@ -3708,6 +3726,35 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if business_ctx:
         business_ctx = {**business_ctx, "telegram_id": user_id, "telegram_name": update.effective_user.full_name}
 
+    if data.startswith("operator_confirm:"):
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден активный бизнес.", reply_markup=_build_client_more_menu())
+            return
+        action_id = data.replace("operator_confirm:", "", 1).strip()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            result, _idempotent = confirm_pending_operator_action(
+                cursor,
+                action_id=action_id,
+                business_id=str(business_ctx.get("business_id") or ""),
+                user_id=str(business_ctx.get("user_id") or ""),
+            )
+            conn.commit()
+            await query.edit_message_text(
+                format_operator_chat_result_for_telegram(result),
+                reply_markup=_build_operator_result_markup(result),
+            )
+        except Exception as exc:
+            conn.rollback()
+            await query.edit_message_text(
+                "Не удалось подтвердить действие.\n\nПричина: " + str(exc),
+                reply_markup=_build_ask_localos_menu(),
+            )
+        finally:
+            conn.close()
+        return
+
     if data.startswith("client_") and (not business_ctx or not business_ctx.get("business_id")):
         await query.edit_message_text(
             "❌ Для аккаунта пока не найден активный бизнес. Сначала добавьте бизнес в кабинете LocalOS.",
@@ -5025,6 +5072,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "Для аккаунта пока не найден активный бизнес. Добавьте бизнес в кабинете LocalOS.",
                 reply_markup=_build_client_more_menu(),
+            )
+            return
+        if should_route_operator_message(text):
+            operator_payload = build_operator_chat_payload(business_ctx, text)
+            await update.message.reply_text(
+                str(operator_payload.get("text") or "Команда обработана."),
+                reply_markup=_build_operator_result_markup(operator_payload.get("result") or {}),
             )
             return
         operator_intent = classify_operator_chat_intent(text)

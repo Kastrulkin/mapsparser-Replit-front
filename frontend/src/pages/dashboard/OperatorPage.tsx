@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import {
   Bot,
@@ -38,6 +38,24 @@ type OperatorChatResult = {
   credit_charged?: boolean;
   manual_publication_only?: boolean;
   blocked_reasons?: string[];
+  conversation_id?: string;
+  capability?: string;
+  capability_status?: string;
+  summary?: string;
+  result_ref?: {
+    entity_type?: string;
+    entity_id?: string | null;
+    label?: string;
+    href?: string;
+  };
+  clarification?: {
+    question?: string;
+  };
+  approval?: {
+    status?: string;
+    action_id?: string;
+    summary?: string;
+  };
   ai_router?: {
     status?: string;
     intent?: string;
@@ -50,6 +68,7 @@ type OperatorChatResult = {
     href?: string;
     payload?: {
       action_key?: string;
+      action_id?: string;
       text?: string;
     };
   }>;
@@ -164,15 +183,10 @@ type ChatMessage = {
 
 const exampleCommands = [
   'Что ты умеешь?',
-  'У нас есть неотвеченные отзывы сейчас в базе?',
-  'Обнови карточку',
-  'Спарси данные карточки',
-  'Проверь новые отзывы',
-  'Подготовь ответы на отзывы',
-  'Добавь новый отзыв в список и сгенерируй ответ: ...',
-  'Подготовь новость для карточки',
-  'Подготовь пост для соцсетей',
-  'Оптимизируй услуги',
+  'Измени цену услуги Маникюр на 1500',
+  'Создай новость про летнюю акцию',
+  'Сделай контент-план на 30 дней',
+  'Покажи отзывы без ответа',
 ];
 
 const resultText = (result: OperatorChatResult | RefreshResult | null) => {
@@ -193,6 +207,18 @@ const draftText = (result: OperatorChatResult | RefreshResult | null) => {
   );
 };
 
+const mapStoredMessages = (items: Array<{
+  id?: string;
+  role?: string;
+  content?: string;
+  result_json?: OperatorChatResult;
+}>): ChatMessage[] => items.map((item) => ({
+  id: item.id || `${Date.now()}-${Math.random()}`,
+  role: item.role === 'user' ? 'user' : 'operator',
+  text: item.content || '',
+  result: item.role === 'operator' ? item.result_json : undefined,
+}));
+
 export const OperatorPage = () => {
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
   const [chatMessage, setChatMessage] = useState('');
@@ -204,6 +230,46 @@ export const OperatorPage = () => {
   const [manualPublishDraftId, setManualPublishDraftId] = useState<string | null>(null);
   const [recoveringQueueId, setRecoveringQueueId] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!currentBusinessId) {
+      setConversationId(null);
+      setMessages([]);
+      return;
+    }
+    const storageKey = `localos_operator_conversation_${currentBusinessId}`;
+    const storedConversationId = window.localStorage.getItem(storageKey);
+    let cancelled = false;
+    setHistoryLoading(true);
+    const request = storedConversationId
+      ? api.get(`/operator/conversations/${encodeURIComponent(storedConversationId)}/messages`, {
+          params: { business_id: currentBusinessId, limit: 100 },
+        })
+      : api.get('/operator/conversations/current', {
+          params: { business_id: currentBusinessId, channel: 'web', limit: 100 },
+        });
+    request.then((response) => {
+      if (cancelled) return;
+      const storedMessages = Array.isArray(response.data.messages) ? response.data.messages : [];
+      const loadedConversationId = storedConversationId || response.data.conversation?.id || null;
+      setConversationId(loadedConversationId);
+      setMessages(mapStoredMessages(storedMessages));
+      if (loadedConversationId) window.localStorage.setItem(storageKey, loadedConversationId);
+    }).catch(() => {
+      if (cancelled) return;
+      window.localStorage.removeItem(storageKey);
+      setConversationId(null);
+      setMessages([]);
+    }).finally(() => {
+      if (!cancelled) setHistoryLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentBusinessId]);
 
   const appendPair = (userText: string, result: OperatorChatResult) => {
     const stamp = String(Date.now());
@@ -234,12 +300,19 @@ export const OperatorPage = () => {
       const response = await api.post('/operator/chat', {
         business_id: currentBusinessId,
         message: text,
+        conversation_id: conversationId,
+        channel: 'web',
       });
       const result = response.data.operator_result || {
         status: 'blocked',
         chat_response: 'Не получил ответ Operator.',
       };
       appendPair(text, result);
+      const nextConversationId = response.data.conversation_id || result.conversation_id;
+      if (nextConversationId) {
+        setConversationId(nextConversationId);
+        window.localStorage.setItem(`localos_operator_conversation_${currentBusinessId}`, nextConversationId);
+      }
       if (!overrideText) setChatMessage('');
     } catch (err) {
       appendPair(text, {
@@ -397,6 +470,30 @@ export const OperatorPage = () => {
     }
   };
 
+  const confirmOperatorAction = async (actionId: string | undefined) => {
+    if (!currentBusinessId || !actionId) return;
+    setConfirmingActionId(actionId);
+    try {
+      const response = await api.post(`/operator/actions/${encodeURIComponent(actionId)}/confirm`, {
+        business_id: currentBusinessId,
+      });
+      appendOperatorResult(
+        response.data.operator_result || { status: 'blocked', chat_response: 'Не удалось выполнить подтверждённое действие.' },
+        'approval',
+      );
+    } catch (err) {
+      appendOperatorResult(
+        {
+          status: 'blocked',
+          chat_response: err instanceof Error ? err.message : 'Не удалось подтвердить действие',
+        },
+        'approval-error',
+      );
+    } finally {
+      setConfirmingActionId(null);
+    }
+  };
+
   const copyText = async (key: string, text: string) => {
     if (!text.trim()) return;
     await navigator.clipboard.writeText(text);
@@ -409,7 +506,7 @@ export const OperatorPage = () => {
       <DashboardPageHeader
         eyebrow="LocalOS Operator"
         title="Оператор"
-        description="Управление LocalOS через чат: напишите, что нужно сделать с отзывами, картами, услугами, новостями или постами."
+        description="Напишите задачу обычным языком. Оператор выполнит её, уточнит недостающее или безопасно передаст в нужный раздел."
         icon={Bot}
       />
 
@@ -431,22 +528,27 @@ export const OperatorPage = () => {
           </div>
         </div>
 
-        <div className="min-h-[420px] space-y-4 bg-slate-50/70 px-4 py-4">
-          {messages.length === 0 ? (
+        <div className="max-h-[62vh] min-h-[480px] space-y-4 overflow-y-auto bg-slate-50/70 px-4 py-4">
+          {historyLoading ? (
+            <div className="flex min-h-[320px] items-center justify-center text-sm text-slate-500">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Загружаем историю…
+            </div>
+          ) : messages.length === 0 ? (
             <div className="mx-auto flex min-h-[320px] max-w-2xl flex-col items-center justify-center text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
                 <Bot className="h-6 w-6" />
               </div>
               <h2 className="mt-4 text-lg font-semibold text-slate-950">Напишите команду</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Например: “обнови карточку”, “есть ли отзывы без ответа”, “подготовь ответы” или “оптимизируй услуги”.
+              <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">
+                Можно изменить услугу, создать контент, проверить данные или попросить открыть нужный результат.
               </p>
               <div className="mt-4 flex flex-wrap justify-center gap-2">
                 {exampleCommands.map((command) => (
                   <button
                     key={command}
                     type="button"
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50"
+                    className="min-h-10 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition-[background-color,border-color,transform] active:scale-[0.96] hover:border-slate-300 hover:bg-slate-50"
                     onClick={() => setChatMessage(command)}
                   >
                     {command}
@@ -476,6 +578,7 @@ export const OperatorPage = () => {
                         applyingServiceJobId,
                         manualPublishDraftId,
                         recoveringQueueId,
+                        confirmingActionId,
                       }}
                       onCopy={copyText}
                       onCheckRefresh={checkRefreshResult}
@@ -483,6 +586,7 @@ export const OperatorPage = () => {
                       onRecoverRefresh={recoverRefreshJob}
                       onApplyServices={applyServiceSuggestions}
                       onMarkManualPublished={markManualPublished}
+                      onConfirmOperatorAction={confirmOperatorAction}
                     />
                   ) : null}
                 </div>
@@ -497,7 +601,7 @@ export const OperatorPage = () => {
               className="min-h-[96px] flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-950 outline-none ring-sky-200 placeholder:text-slate-400 focus:ring-2"
               value={chatMessage}
               onChange={(event) => setChatMessage(event.target.value)}
-              placeholder="Напишите команду: проверь новые отзывы, подготовь ответы, добавь отзыв..."
+              placeholder="Напишите задачу: измени цену услуги, создай новость, сделай контент-план…"
               onKeyDown={(event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
                   void sendOperatorChatMessage();
@@ -529,6 +633,7 @@ type OperatorResultActionsProps = {
     applyingServiceJobId: string | null;
     manualPublishDraftId: string | null;
     recoveringQueueId: string | null;
+    confirmingActionId: string | null;
   };
   onCopy: (key: string, text: string) => Promise<void>;
   onCheckRefresh: (queueId: string | undefined) => Promise<void>;
@@ -536,6 +641,7 @@ type OperatorResultActionsProps = {
   onRecoverRefresh: (queueId: string | undefined, confirmRelease?: boolean) => Promise<void>;
   onApplyServices: (jobId: string | undefined) => Promise<void>;
   onMarkManualPublished: (draftId: string | undefined) => Promise<void>;
+  onConfirmOperatorAction: (actionId: string | undefined) => Promise<void>;
 };
 
 const OperatorResultActions = ({
@@ -548,6 +654,7 @@ const OperatorResultActions = ({
   onRecoverRefresh,
   onApplyServices,
   onMarkManualPublished,
+  onConfirmOperatorAction,
 }: OperatorResultActionsProps) => {
   const textToCopy = draftText(result);
   const hasNewUnansweredReviews =
@@ -558,6 +665,8 @@ const OperatorResultActions = ({
   const appliedItems = 'applied_items' in result ? result.applied_items || [] : [];
   const drafts = 'drafts' in result ? result.drafts || [] : [];
   const billingUrl = 'billing_url' in result ? result.billing_url : undefined;
+  const resultRef = 'result_ref' in result ? result.result_ref : undefined;
+  const approval = 'approval' in result ? result.approval : undefined;
   const aiRouter = result.ai_router;
   const queueId = result.queue_id;
   const status = result.status || '';
@@ -702,6 +811,25 @@ const OperatorResultActions = ({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
+        {approval?.action_id && approval.status === 'pending' ? (
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void onConfirmOperatorAction(approval.action_id)}
+            disabled={loading.confirmingActionId === approval.action_id}
+          >
+            {loading.confirmingActionId === approval.action_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+            Подтвердить
+          </Button>
+        ) : null}
+        {resultRef?.href ? (
+          <Button type="button" size="sm" asChild>
+            <Link to={resultRef.href}>
+              {resultRef.label || 'Открыть результат'}
+              <ExternalLink className="ml-2 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        ) : null}
         {queueId ? (
           <Button
             type="button"
