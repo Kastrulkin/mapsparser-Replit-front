@@ -27,6 +27,9 @@ class ServiceCursor:
                 for item in ordered[:limit]
             ]
             return
+        if normalized.startswith("select name from businesses"):
+            self._row = {"name": "Test Business"}
+            return
         if normalized.startswith("select id, name, price from userservices"):
             self.description = [("id",), ("name",), ("price",)]
             pattern = str((params or ["", ""])[1]).strip("%").lower()
@@ -105,6 +108,8 @@ def test_read_top_three_services_returns_structured_list_and_link() -> None:
     assert result["status"] == "completed"
     assert result["capability"] == "services.read"
     assert result["count"] == 3
+    assert result["business_label"] == "Test Business"
+    assert "Test Business" in result["chat_response"]
     assert [item["name"] for item in result["services"]] == ["Manicure", "Pedicure", "Styling"]
     assert result["result_ref"]["href"] == "/dashboard/card?tab=services"
     assert pending == {}

@@ -340,11 +340,20 @@ def _read_services(cursor: Any, *, business_id: str, message: str, fallback_limi
                 "description": str(row.get("description") or "").strip(),
             }
         )
+    cursor.execute("SELECT name FROM businesses WHERE id = %s LIMIT 1", (business_id,))
+    business_row = cursor.fetchone()
+    if isinstance(business_row, dict):
+        business_label = str(business_row.get("name") or "").strip()
+    elif isinstance(business_row, (tuple, list)) and business_row:
+        business_label = str(business_row[0] or "").strip()
+    else:
+        business_label = ""
+    account_context = f"аккаунте «{business_label}»" if business_label else "выбранном аккаунте"
     found_count = len(services)
     chat_response = (
-        f"Показываю {found_count} первых услуг в текущем порядке списка."
+        f"Показываю {found_count} первых услуг в {account_context} в текущем порядке списка."
         if services
-        else "В этом аккаунте нет активных услуг."
+        else f"В {account_context} нет активных услуг. Если услуги находятся в другом бизнесе, переключите аккаунт сверху и повторите команду."
     )
     return standardize_operator_result(
         {
@@ -354,6 +363,7 @@ def _read_services(cursor: Any, *, business_id: str, message: str, fallback_limi
             "services": services,
             "count": found_count,
             "requested_limit": requested_limit,
+            "business_label": business_label,
             "external_writes_performed": False,
             "result_ref": _result_ref("services.read", label="Открыть услуги"),
         },
