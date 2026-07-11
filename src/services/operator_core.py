@@ -56,6 +56,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("news.generate", "Черновик новости", "draft_only", "paid_compute", "credit_policy", "/dashboard/content", ("Создай новость про акцию",)),
     OperatorCapability("social_post.generate", "Черновик поста", "draft_only", "paid_compute", "credit_policy", "/dashboard/content", ("Подготовь пост для соцсетей",)),
     OperatorCapability("content_plan.generate", "Контент-план", "available", "write_internal", "explicit_command", "/dashboard/content", ("Сделай контент-план на 30 дней",), "content_plan.item.create_draft"),
+    OperatorCapability("services.read", "Список услуг", "available", "read_only", "none", "/dashboard/card?tab=services", ("Выдай 3 верхние услуги", "Покажи первые 5 услуг")),
     OperatorCapability("services.optimize", "Оптимизация услуг", "draft_only", "paid_compute", "credit_policy", "/dashboard/card?tab=services", ("Оптимизируй услуги",)),
     OperatorCapability("services.apply", "Применение предложений по услугам", "approval_required", "bulk_write", "separate_confirmation", "/dashboard/card?tab=services", ("Примени предложения по услугам",)),
     OperatorCapability("services.price.update", "Изменение цены одной услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Измени цену услуги Маникюр на 1500",)),
@@ -107,6 +108,9 @@ OPERATOR_ACTION_MARKERS = (
     "оптимиз",
     "примени",
     "удали",
+    "выдай",
+    "назови",
+    "перечисл",
 )
 
 
@@ -278,6 +282,83 @@ def _extract_service_price(message: str) -> tuple[str, Decimal | None]:
 def _is_service_price_intent(message: str) -> bool:
     lowered = str(message or "").lower()
     return "услуг" in lowered and "цен" in lowered and any(marker in lowered for marker in ("измени", "поменя", "установ", "постав"))
+
+
+def _is_services_read_intent(message: str) -> bool:
+    lowered = str(message or "").lower()
+    return "услуг" in lowered and any(
+        marker in lowered for marker in ("выдай", "покаж", "назови", "перечисл", "какие")
+    )
+
+
+def _requested_services_limit(message: str, fallback: Any = 5) -> int:
+    number_match = re.search(r"\b(\d{1,2})\b", str(message or ""))
+    if number_match:
+        return max(1, min(int(number_match.group(1)), 20))
+    word_limits = {
+        "одну": 1,
+        "две": 2,
+        "три": 3,
+        "четыре": 4,
+        "пять": 5,
+        "десять": 10,
+    }
+    lowered = str(message or "").lower()
+    for word, value in word_limits.items():
+        if re.search(rf"\b{word}\b", lowered):
+            return value
+    try:
+        return max(1, min(int(fallback or 5), 20))
+    except (TypeError, ValueError):
+        return 5
+
+
+def _read_services(cursor: Any, *, business_id: str, message: str, fallback_limit: Any) -> dict[str, Any]:
+    requested_limit = _requested_services_limit(message, fallback_limit)
+    cursor.execute(
+        """
+        SELECT id, category, name, price, description
+        FROM userservices
+        WHERE business_id = %s AND COALESCE(is_active, TRUE) = TRUE
+        ORDER BY category NULLS LAST, name NULLS LAST, updated_at DESC NULLS LAST
+        LIMIT %s
+        """,
+        (business_id, requested_limit),
+    )
+    columns = [item[0] for item in (getattr(cursor, "description", None) or [])]
+    services: list[dict[str, Any]] = []
+    for raw in cursor.fetchall() or []:
+        row = dict(raw) if isinstance(raw, dict) else {
+            columns[index]: raw[index] for index in range(min(len(columns), len(raw)))
+        }
+        services.append(
+            {
+                "id": str(row.get("id") or ""),
+                "category": str(row.get("category") or "").strip(),
+                "name": str(row.get("name") or "").strip(),
+                "price": str(row.get("price") or "").strip(),
+                "description": str(row.get("description") or "").strip(),
+            }
+        )
+    found_count = len(services)
+    chat_response = (
+        f"Показываю {found_count} первых услуг в текущем порядке списка."
+        if services
+        else "В этом аккаунте нет активных услуг."
+    )
+    return standardize_operator_result(
+        {
+            "status": "completed",
+            "intent": "services.read",
+            "chat_response": chat_response,
+            "services": services,
+            "count": found_count,
+            "requested_limit": requested_limit,
+            "external_writes_performed": False,
+            "result_ref": _result_ref("services.read", label="Открыть услуги"),
+        },
+        "services.read",
+    )
 
 
 def _update_one_service_price(cursor: Any, *, business_id: str, message: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -478,6 +559,13 @@ def route_operator_message(
 
     if _is_service_price_intent(clean_message):
         return _update_one_service_price(cursor, business_id=business_id, message=clean_message)
+    if _is_services_read_intent(clean_message):
+        return _read_services(
+            cursor,
+            business_id=business_id,
+            message=clean_message,
+            fallback_limit=limit,
+        ), {}
     lowered_message = clean_message.lower()
     if "опублик" in lowered_message and any(marker in lowered_message for marker in ("отзыв", "яндекс", "картах", "карты")):
         return _manual_result("reviews.publish_external"), {}

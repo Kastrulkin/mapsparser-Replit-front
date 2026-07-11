@@ -572,6 +572,14 @@ def _format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:
                 break
     if generated_text and generated_text != reply_text:
         lines.extend(["", "Черновик:", generated_text])
+    services = result.get("services") if isinstance(result.get("services"), list) else []
+    if services:
+        lines.extend([""])
+        for index, service in enumerate(services, start=1):
+            item = service if isinstance(service, dict) else {}
+            name = str(item.get("name") or "Без названия").strip()
+            price = str(item.get("price") or "").strip()
+            lines.append(f"{index}. {name}" + (f" — {price} ₽" if price else " — цена не указана"))
     if result.get("billing_url"):
         lines.append("Пополнить счёт: " + _base_web_url() + str(result.get("billing_url")))
     approval = result.get("approval") if isinstance(result.get("approval"), dict) else {}
@@ -582,13 +590,9 @@ def _format_operator_chat_result_for_telegram(result: dict[str, Any]) -> str:
     if result_href:
         absolute_href = result_href if result_href.startswith("http") else _base_web_url() + result_href
         lines.extend(["", str(result_ref.get("label") or "Открыть результат") + ": " + absolute_href])
-    lines.extend(
-        [
-            "",
-            "Внешних публикаций нет. Ответы, новости и посты нужно копировать и публиковать вручную.",
-            "Открыть Operator в кабинете: " + _base_web_url() + "/dashboard/operator",
-        ]
-    )
+    if result.get("manual_publication_only") or generated_text or reply_text:
+        lines.extend(["", "Внешних публикаций нет. Ответы, новости и посты нужно копировать и публиковать вручную."])
+    lines.extend(["", "Открыть Operator в кабинете: " + _base_web_url() + "/dashboard/operator"])
     return "\n".join(line for line in lines if line is not None)
 
 

@@ -104,6 +104,13 @@ type OperatorChatResult = {
     optimized_name?: string;
     seo_description?: string;
   }>;
+  services?: Array<{
+    id?: string;
+    category?: string;
+    name?: string;
+    price?: string;
+    description?: string;
+  }>;
   applied_count?: number;
   applied_items?: Array<{
     id?: string;
@@ -662,6 +669,7 @@ const OperatorResultActions = ({
   const draftId = 'draft' in result ? result.draft?.id : undefined;
   const optimizationJobId = 'optimization_job' in result ? result.optimization_job?.id : undefined;
   const serviceSuggestions = 'service_suggestions' in result ? result.service_suggestions || [] : [];
+  const services = 'services' in result ? result.services || [] : [];
   const appliedItems = 'applied_items' in result ? result.applied_items || [] : [];
   const drafts = 'drafts' in result ? result.drafts || [] : [];
   const billingUrl = 'billing_url' in result ? result.billing_url : undefined;
@@ -769,6 +777,26 @@ const OperatorResultActions = ({
               <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{item.before_name}</div>
               <div className="font-semibold text-slate-950">{item.optimized_name}</div>
               {item.seo_description ? <div className="text-slate-700">{item.seo_description}</div> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {services.length > 0 ? (
+        <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="font-semibold text-slate-950">Услуги из списка</div>
+          {services.map((service, index) => (
+            <div key={service.id || `${service.name}-${index}`} className="rounded-lg bg-white px-3 py-2 shadow-sm ring-1 ring-slate-950/5">
+              <div className="flex items-start gap-3">
+                <span className="min-w-5 pt-0.5 text-right text-xs font-semibold tabular-nums text-slate-400">{index + 1}</span>
+                <div className="min-w-0 flex-1">
+                  {service.category ? <div className="text-xs font-medium text-slate-500">{service.category}</div> : null}
+                  <div className="text-pretty font-semibold text-slate-950">{service.name || 'Без названия'}</div>
+                </div>
+                <div className="shrink-0 font-semibold tabular-nums text-slate-700">
+                  {service.price ? `${service.price} ₽` : 'Цена не указана'}
+                </div>
+              </div>
             </div>
           ))}
         </div>

@@ -191,6 +191,25 @@ def test_client_intent_leaves_free_operator_command_for_ai_fallback() -> None:
     assert classify_client_intent("надо ответить людям") == ""
 
 
+def test_services_read_result_is_formatted_as_numbered_telegram_list() -> None:
+    text = telegram_dashboard.format_operator_chat_result_for_telegram(
+        {
+            "status": "completed",
+            "chat_response": "Показываю 2 первых услуги.",
+            "services": [
+                {"name": "Маникюр", "price": "1500"},
+                {"name": "Педикюр", "price": ""},
+            ],
+            "result_ref": {"label": "Открыть услуги", "href": "/dashboard/card?tab=services"},
+        }
+    )
+
+    assert "1. Маникюр — 1500 ₽" in text
+    assert "2. Педикюр — цена не указана" in text
+    assert "Открыть услуги: https://localos.pro/dashboard/card?tab=services" in text
+    assert "Внешних публикаций нет" not in text
+
+
 def test_telegram_operator_ai_fallback_routes_card_refresh(monkeypatch) -> None:
     calls = {"process": 0, "ai": 0, "refresh": 0}
 

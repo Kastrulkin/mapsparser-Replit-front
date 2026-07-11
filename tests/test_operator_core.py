@@ -12,6 +12,21 @@ class ServiceCursor:
 
     def execute(self, query, params=None):
         normalized = " ".join(str(query).split()).lower()
+        if normalized.startswith("select id, category, name, price, description from userservices"):
+            self.description = [("id",), ("category",), ("name",), ("price",), ("description",)]
+            limit = int((params or ["", 5])[1])
+            ordered = sorted(self.services, key=lambda item: (item.get("category") or "~", item["name"]))
+            self._rows = [
+                (
+                    item["id"],
+                    item.get("category"),
+                    item["name"],
+                    item.get("price"),
+                    item.get("description"),
+                )
+                for item in ordered[:limit]
+            ]
+            return
         if normalized.startswith("select id, name, price from userservices"):
             self.description = [("id",), ("name",), ("price",)]
             pattern = str((params or ["", ""])[1]).strip("%").lower()
@@ -67,6 +82,49 @@ def test_exact_service_price_update_returns_result_link() -> None:
     assert result["service"]["price"] == Decimal("1500")
     assert result["result_ref"]["href"] == "/dashboard/card?tab=services"
     assert pending == {}
+
+
+def test_read_top_three_services_returns_structured_list_and_link() -> None:
+    cursor = ServiceCursor(
+        [
+            {"id": "service-4", "category": "B", "name": "Spa", "price": Decimal("5000")},
+            {"id": "service-2", "category": "A", "name": "Pedicure", "price": Decimal("2000")},
+            {"id": "service-1", "category": "A", "name": "Manicure", "price": Decimal("1500")},
+            {"id": "service-3", "category": "A", "name": "Styling", "price": Decimal("3000")},
+        ]
+    )
+
+    result, pending = route_operator_message(
+        cursor,
+        business_id="business-1",
+        user_id="user-1",
+        message="Выдай мне 3 верхних услуги в этом аккаунте",
+        channel="web",
+    )
+
+    assert result["status"] == "completed"
+    assert result["capability"] == "services.read"
+    assert result["count"] == 3
+    assert [item["name"] for item in result["services"]] == ["Manicure", "Pedicure", "Styling"]
+    assert result["result_ref"]["href"] == "/dashboard/card?tab=services"
+    assert pending == {}
+
+
+def test_read_services_understands_number_as_word() -> None:
+    cursor = ServiceCursor(
+        [{"id": f"service-{index}", "category": "A", "name": f"Service {index}"} for index in range(1, 6)]
+    )
+
+    result, _ = route_operator_message(
+        cursor,
+        business_id="business-1",
+        user_id="user-1",
+        message="Назови три первые услуги",
+        channel="telegram",
+    )
+
+    assert result["requested_limit"] == 3
+    assert len(result["services"]) == 3
 
 
 def test_service_price_update_requests_missing_price_and_resumes() -> None:

@@ -16,6 +16,7 @@ coverage boundary; it must not be used to imply unsupported provider writes.
 | Content | `social_post.generate` | `draft_only` | Existing paid draft handler | `/dashboard/content` |
 | Content | `content_plan.generate` | `available` | Existing content-plan service | `/dashboard/content` |
 | Content | `content.publish_external` | `gap` | No generic provider write; manual handoff only | `/dashboard/content` |
+| Services | `services.read` | `available` | Tenant-scoped active-service read in dashboard order | `/dashboard/card?tab=services` |
 | Services | `services.price.update` | `available` | Tenant-scoped narrow internal write | `/dashboard/card?tab=services` |
 | Services | `services.optimize` | `draft_only` | Existing paid preview handler | `/dashboard/card?tab=services` |
 | Services | `services.apply` | `approval_required` | Stored action envelope and idempotent confirm | `/dashboard/card?tab=services` |
