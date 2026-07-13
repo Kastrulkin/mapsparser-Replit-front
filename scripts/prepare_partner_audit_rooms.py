@@ -131,6 +131,32 @@ def _wait_for_parse(task_id: str, timeout_seconds: int) -> tuple[str, str]:
     return "timeout", last_error or f"last_status={last_status}"
 
 
+def _is_transient_parse_error(status: str, error: str) -> bool:
+    normalized = f"{status} {error}".lower()
+    permanent_markers = (
+        "business_closed",
+        "permanent_closed",
+        "not_found",
+        "invalid url",
+        "identity_mismatch",
+    )
+    if any(marker in normalized for marker in permanent_markers):
+        return False
+    transient_markers = (
+        "timeout",
+        "timed out",
+        "connection",
+        "temporar",
+        "provider",
+        "rate limit",
+        "429",
+        "502",
+        "503",
+        "504",
+    )
+    return any(marker in normalized for marker in transient_markers)
+
+
 def _load_lead(lead_id: str, business_id: str) -> dict[str, Any]:
     conn = get_db_connection()
     try:
@@ -187,7 +213,7 @@ def _enqueue_and_wait_parse(lead: dict[str, Any], user_id: str, timeout_seconds:
         status, last_error = _wait_for_parse(task_id, timeout_seconds)
         if status in SUCCESS_PARSE_STATUSES:
             return task, status
-        if attempt == 0 and status in {"failed", "error", "timeout"}:
+        if attempt == 0 and _is_transient_parse_error(status, last_error):
             continue
         raise RuntimeError(f"parse_{status}:{last_error}")
     raise RuntimeError(f"parse_failed:{last_error}")
@@ -287,9 +313,15 @@ def _execute_lead(
         result["quality"] = quality_error.quality if isinstance(quality_error, admin_prospecting.AuditQualityError) else {}
         result["reason"] = "audit_quality_blocked"
     except Exception:
-        result["status"] = "failed"
-        result["qa"] = "failed"
-        result["reason"] = str(sys.exc_info()[1])
+        failure_reason = str(sys.exc_info()[1])
+        if "business_closed" in failure_reason or "permanent_closed" in failure_reason:
+            result["status"] = "skipped"
+            result["qa"] = "not_run"
+            result["reason"] = "closed_business"
+        else:
+            result["status"] = "failed"
+            result["qa"] = "failed"
+            result["reason"] = failure_reason
     return result
 
 
