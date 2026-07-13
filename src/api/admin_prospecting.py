@@ -1144,7 +1144,21 @@ def _find_yandex_candidates_for_partnership_lead(
     lead: dict[str, Any],
     limit: int = 5,
 ) -> tuple[list[dict[str, Any]], str | None]:
-    return _find_yandex_candidates_for_partner_card(_partnership_lead_as_partner_card(lead), limit=limit)
+    partner_card = _partnership_lead_as_partner_card(lead)
+    candidates: list[dict[str, Any]] = []
+    provider_error: str | None = None
+    for attempt in range(2):
+        candidates, provider_error = _find_yandex_candidates_for_partner_card(partner_card, limit=limit)
+        if not provider_error:
+            return candidates, None
+        normalized_error = provider_error.lower()
+        transient = any(
+            marker in normalized_error
+            for marker in ("timeout", "timed out", "temporar", "connection", "429", "502", "503", "504")
+        )
+        if attempt > 0 or not transient:
+            break
+    return candidates, provider_error
 
 
 def _select_partnership_map_candidate(candidates: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, str]:

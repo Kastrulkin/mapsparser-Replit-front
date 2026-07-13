@@ -1,3 +1,4 @@
+from src.api import admin_prospecting
 from src.api.admin_prospecting import (
     _build_organika_partner_offer_text,
     _candidate_is_closed,
@@ -117,6 +118,24 @@ def test_partner_map_match_requires_confidence_and_margin() -> None:
     )
     assert confirmed is not None
     assert status == "confirmed"
+
+
+def test_partner_map_search_retries_one_transient_provider_error(monkeypatch) -> None:
+    calls = []
+
+    def fake_search(_card, limit=5):
+        calls.append(limit)
+        if len(calls) == 1:
+            return [], "provider timeout 503"
+        return [{"confidence": 0.91, "yandex_maps_url": "https://yandex.ru/maps/org/123"}], None
+
+    monkeypatch.setattr(admin_prospecting, "_find_yandex_candidates_for_partner_card", fake_search)
+    candidates, error = admin_prospecting._find_yandex_candidates_for_partnership_lead(
+        {"name": "Naomi", "city": "Санкт-Петербург"}
+    )
+    assert error is None
+    assert len(candidates) == 1
+    assert len(calls) == 2
 
 
 def test_closed_candidate_and_synthetic_group_are_not_processed() -> None:
