@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import {
   Bot,
   CheckCircle2,
+  ChevronDown,
   Copy,
   ExternalLink,
   Loader2,
@@ -42,6 +43,13 @@ type OperatorChatResult = {
   conversation_id?: string;
   capability?: string;
   capability_status?: string;
+  capabilities?: string[];
+  capability_catalog?: Array<{
+    name?: string;
+    title?: string;
+    status?: string;
+    examples?: string[];
+  }>;
   summary?: string;
   result_ref?: {
     entity_type?: string;
@@ -680,6 +688,8 @@ const OperatorResultActions = ({
   onMarkManualPublished,
   onConfirmOperatorAction,
 }: OperatorResultActionsProps) => {
+  const capabilityPanelId = useId();
+  const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
   const textToCopy = draftText(result);
   const hasNewUnansweredReviews =
     'new_unanswered_reviews_count' in result && Number(result.new_unanswered_reviews_count || 0) > 0;
@@ -692,6 +702,9 @@ const OperatorResultActions = ({
   const billingUrl = 'billing_url' in result ? result.billing_url : undefined;
   const resultRef = 'result_ref' in result ? result.result_ref : undefined;
   const approval = 'approval' in result ? result.approval : undefined;
+  const capabilityCatalog = 'capability_catalog' in result ? result.capability_catalog || [] : [];
+  const capabilityExamples = 'capabilities' in result ? result.capabilities || [] : [];
+  const isOperatorHelp = result.capability === 'operator.help' || result.intent === 'operator_help';
   const aiRouter = result.ai_router;
   const queueId = result.queue_id;
   const status = result.status || '';
@@ -867,7 +880,23 @@ const OperatorResultActions = ({
             Подтвердить
           </Button>
         ) : null}
-        {resultRef?.href ? (
+        {isOperatorHelp ? (
+          <Button
+            type="button"
+            size="sm"
+            aria-expanded={capabilitiesOpen}
+            aria-controls={capabilityPanelId}
+            onClick={() => setCapabilitiesOpen((current) => !current)}
+          >
+            {capabilitiesOpen ? 'Скрыть возможности' : resultRef?.label || 'Открыть возможности оператора'}
+            <ChevronDown
+              className={cn(
+                'ml-2 h-4 w-4 transition-transform duration-200',
+                capabilitiesOpen && 'rotate-180',
+              )}
+            />
+          </Button>
+        ) : resultRef?.href ? (
           <Button type="button" size="sm" asChild>
             <Link to={resultRef.href}>
               {resultRef.label || 'Открыть результат'}
@@ -960,6 +989,95 @@ const OperatorResultActions = ({
           </Button>
         ) : null}
       </div>
+
+      {isOperatorHelp && capabilitiesOpen ? (
+        <OperatorCapabilitiesPanel
+          id={capabilityPanelId}
+          capabilities={capabilityCatalog}
+          fallbackItems={capabilityExamples}
+        />
+      ) : null}
+    </div>
+  );
+};
+
+type OperatorCapabilityItem = {
+  name?: string;
+  title?: string;
+  status?: string;
+  examples?: string[];
+};
+
+const capabilityGroup = (status: string | undefined) => {
+  if (status === 'request_only' || status === 'manual') return 'section';
+  if (status === 'gap') return 'manual';
+  return 'chat';
+};
+
+const capabilityStatusLabel = (status: string | undefined) => {
+  if (status === 'draft_only') return 'Готовлю черновик';
+  if (status === 'approval_required') return 'После подтверждения';
+  if (status === 'request_only' || status === 'manual') return 'Открою раздел';
+  if (status === 'gap') return 'Только вручную';
+  return 'Выполняю';
+};
+
+const OperatorCapabilitiesPanel = ({
+  id,
+  capabilities,
+  fallbackItems,
+}: {
+  id: string;
+  capabilities: OperatorCapabilityItem[];
+  fallbackItems: string[];
+}) => {
+  const groups = [
+    { key: 'chat', title: 'Могу выполнить в чате' },
+    { key: 'section', title: 'Открою нужный раздел' },
+    { key: 'manual', title: 'Пока только вручную' },
+  ];
+
+  return (
+    <div id={id} className="border-t border-slate-200 pt-3">
+      {capabilities.length > 0 ? (
+        <div className="space-y-4">
+          {groups.map((group) => {
+            const items = capabilities.filter((item) => capabilityGroup(item.status) === group.key);
+            if (items.length === 0) return null;
+            return (
+              <section key={group.key} aria-labelledby={`${id}-${group.key}`}>
+                <h3 id={`${id}-${group.key}`} className="mb-2 text-xs font-semibold uppercase text-slate-500">
+                  {group.title}
+                </h3>
+                <div className="divide-y divide-slate-100">
+                  {items.map((item) => (
+                    <div key={item.name || item.title} className="flex flex-col gap-1 py-2 first:pt-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                      <div className="min-w-0">
+                        <div className="font-medium text-slate-950">{item.title || 'Возможность LocalOS'}</div>
+                        {item.examples?.[0] ? (
+                          <div className="text-pretty text-xs text-slate-500">Например: «{item.examples[0]}»</div>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 text-xs font-medium text-slate-500">
+                        {capabilityStatusLabel(item.status)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <ul className="space-y-2 text-sm text-slate-700">
+          {fallbackItems.map((item) => (
+            <li key={item} className="flex gap-2">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 };
