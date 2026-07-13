@@ -2011,13 +2011,17 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _lead_snapshot_business_id(lead: Dict[str, Any]) -> str:
+    return str(lead.get("parse_business_id") or lead.get("business_id") or "").strip()
+
+
 def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     """
     Try to resolve an existing LocalOS business for a lead and enrich preview metrics.
     Returns partial snapshot; empty dict means no business match found.
     """
     recent_days = int(policy_value("activity", "recent_days", 45))
-    explicit_business_id = str(lead.get("business_id") or "").strip()
+    explicit_business_id = _lead_snapshot_business_id(lead)
     raw_source_url = str(lead.get("source_url") or "").strip()
     normalized_source_url = normalize_map_url(raw_source_url) if raw_source_url else ""
     source_url = normalized_source_url or raw_source_url

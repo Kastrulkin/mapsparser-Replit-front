@@ -10,6 +10,7 @@ from src.core import card_audit
 from src.core.card_audit import (
     _build_reasoning_fields,
     _detect_audit_profile_details,
+    _lead_snapshot_business_id,
     build_lead_card_preview_snapshot,
 )
 from scripts.prepare_partner_audit_rooms import _is_transient_parse_error
@@ -87,6 +88,15 @@ def test_specialized_audit_does_not_invent_demo_services_or_revenue(monkeypatch)
     assert audit["audit_profile"] == "education_children"
     assert audit["services_preview"] == []
     assert audit["revenue_potential"]["label"] == "Без денежной оценки"
+
+
+def test_partner_audit_uses_the_parsed_company_snapshot() -> None:
+    lead = {
+        "business_id": "organika-tenant",
+        "parse_business_id": "partner-map-card",
+    }
+    assert _lead_snapshot_business_id(lead) == "partner-map-card"
+    assert _lead_snapshot_business_id({"business_id": "regular-business"}) == "regular-business"
 
 
 def test_partner_map_match_requires_confidence_and_margin() -> None:
