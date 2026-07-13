@@ -5,6 +5,7 @@ from src.api.admin_prospecting import (
     _select_partnership_map_candidate,
 )
 from src.core.audit_quality import evaluate_audit_quality
+from src.core.audit_editorial import apply_audit_editorial_pass
 from src.core import card_audit
 from src.core.card_audit import (
     _build_reasoning_fields,
@@ -131,6 +132,29 @@ def test_audit_quality_blocks_technical_and_foreign_industry_copy() -> None:
     assert "industry_drift" in codes
 
 
+def test_uncertain_photo_copy_uses_the_business_profile() -> None:
+    audit = apply_audit_editorial_pass(
+        {
+            "audit_profile": "fashion",
+            "summary_text": "Проверили карточку магазина.",
+            "issue_blocks": [
+                {
+                    "id": "photo_story_gap",
+                    "title": "Фото не работают как витрина магазина",
+                    "problem": "Карточка не показывает ассортимент.",
+                    "evidence": "Фото требуют проверки.",
+                    "fix": "Добавить фото товаров.",
+                }
+            ],
+        }
+    )
+    evidence = audit["issue_blocks"][0]["evidence"].lower()
+    assert "витрина" in evidence
+    assert "ассортимент" in evidence
+    assert "кабинет" not in evidence
+    assert "стойка администратора" not in evidence
+
+
 def test_organika_offer_has_one_safe_test_and_no_automatic_action() -> None:
     text = _build_organika_partner_offer_text(
         business_name="Органика",
@@ -141,3 +165,14 @@ def test_organika_offer_has_one_safe_test_and_no_automatic_action() -> None:
     assert "20-минутн" in text
     assert "автоматической рассылки" in text
     assert "заранее не обещаются" in text
+
+
+def test_organika_fashion_offer_names_the_shared_family_audience() -> None:
+    text = _build_organika_partner_offer_text(
+        business_name="Органика",
+        lead_name="Acoola",
+        audit_json={"audit_profile": "fashion"},
+    ).lower()
+    assert "семьи района" in text
+    assert "детской одежды" in text
+    assert "наличия конкретных товаров" in text

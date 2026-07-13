@@ -254,6 +254,7 @@ const getIssueOutcome = (
   auditProfile?: string,
 ): string => {
   const combined = `${issue?.id || ''} ${issue?.section || ''} ${issue?.title || ''} ${issue?.problem || ''}`.toLowerCase();
+  const profile = String(auditProfile || '').trim().toLowerCase();
   if (lang === 'ru' && String(auditProfile || '').trim().toLowerCase() === 'shopping_center') {
     if (combined.includes('review') || combined.includes('отзыв')) return 'Посетитель видит, что администрация замечает обратную связь о навигации, парковке и общих зонах.';
     if (combined.includes('photo') || combined.includes('visual') || combined.includes('фото')) return 'До поездки видно фасад, входы, парковку, навигацию и ключевые зоны центра.';
@@ -266,6 +267,22 @@ const getIssueOutcome = (
     if (combined.includes('activity') || combined.includes('news')) return 'Recent posts and updates appear in the listing regularly.';
     if (combined.includes('service') || combined.includes('positioning')) return 'The main services, prices or next step are clear before the customer calls.';
     return 'The next customer can understand the offer and take action faster.';
+  }
+  if (profile === 'fashion' || profile === 'retail') {
+    if (combined.includes('review') || combined.includes('отзыв')) return 'В отзывах появляются конкретные подтверждения ассортимента, качества товаров и удобства покупки.';
+    if (combined.includes('photo') || combined.includes('visual') || combined.includes('фото')) return 'По фото заранее видны витрина, ассортимент, интерьер и условия выбора товара.';
+    if (combined.includes('activity') || combined.includes('news') || combined.includes('новост')) return 'Свежие поступления и актуальные подборки дают покупателю понятный повод зайти в магазин.';
+    return 'Покупатель быстро понимает ассортимент, ценовой ориентир и стоит ли ехать в магазин.';
+  }
+  if (profile === 'education_children') {
+    if (combined.includes('review') || combined.includes('отзыв')) return 'Отзывы помогают родителю оценить формат занятий, преподавателей и впечатления других семей.';
+    if (combined.includes('photo') || combined.includes('visual') || combined.includes('фото')) return 'По фото видны вход, классы, материалы и реальная обстановка занятий.';
+    if (combined.includes('activity') || combined.includes('news') || combined.includes('новост')) return 'В карточке регулярно появляются актуальные программы, расписание и изменения условий.';
+    return 'Родитель понимает возраст групп, формат занятий, расписание и способ записаться.';
+  }
+  if (profile === 'commercial_center') {
+    if (combined.includes('photo') || combined.includes('visual') || combined.includes('фото')) return 'По фото видны фасад, входы, навигация, общие зоны и арендаторы комплекса.';
+    return 'Посетитель или арендатор понимает, что находится в комплексе, как войти и куда пройти.';
   }
   if (combined.includes('review') || combined.includes('отзыв')) {
     return 'В ответах видны услуги, за которые благодарят клиенты, и мягкий следующий шаг по смежным направлениям.';
@@ -286,6 +303,7 @@ const buildSelfHelpMaterials = (
   lang: PageLang,
   displayName: string,
   category: string | undefined,
+  auditProfile: string | undefined,
   strongDemand: string[],
   photoShots: string[],
   reviewSignals: string[],
@@ -296,6 +314,10 @@ const buildSelfHelpMaterials = (
   const mapTextFocus = lang === 'ru' && serviceFocus.length > 0 ? `${focusText} и прочие` : focusText;
   const businessType = String(category || '').trim() || (lang === 'ru' ? 'ваш бизнес' : 'your business');
   const normalizedBusinessType = businessType.toLowerCase().replaceAll('ё', 'е');
+  const normalizedProfile = String(auditProfile || '').trim().toLowerCase();
+  const isRetail = normalizedProfile === 'fashion' || normalizedProfile === 'retail';
+  const isChildrenEducation = normalizedProfile === 'education_children';
+  const isCommercialCenter = normalizedProfile === 'commercial_center';
   const isFoodBusiness = [
     'кафе',
     'ресторан',
@@ -343,6 +365,24 @@ const buildSelfHelpMaterials = (
           'События и семейные активности с точной датой, временем и местом.',
           news.length > 0 ? 'Обновить информацию об изменениях часов и навигации.' : 'Опубликовать актуальные часы, входы и изменения в работе центра.',
         ]
+      : isRetail
+      ? [
+          'Новые поступления и сезонные подборки с реальными фото товаров.',
+          'Как выбрать размер, комплект или нужную товарную группу до визита.',
+          news.length > 0 ? 'Обновить информацию о фактических изменениях ассортимента и часов.' : 'Опубликовать актуальные часы и подтверждённые изменения ассортимента.',
+        ]
+      : isChildrenEducation
+      ? [
+          'Как устроены занятия: возраст групп, формат и длительность.',
+          'Что взять на первое занятие и как подготовить ребёнка.',
+          news.length > 0 ? 'Обновить расписание и фактические изменения программы.' : 'Опубликовать актуальное расписание и правила первого посещения.',
+        ]
+      : isCommercialCenter
+      ? [
+          'Какие компании и сервисы работают в комплексе и на каких этажах.',
+          'Как найти нужный вход, парковку и пройти к арендатору.',
+          'Фактические изменения часов, навигации и состава арендаторов.',
+        ]
       : isFoodBusiness
       ? [
           'Какие есть блюда в меню, что популярно',
@@ -364,6 +404,21 @@ const buildSelfHelpMaterials = (
       ? [
           'Спасибо за отзыв. Рады, что вам было удобно посетить центр. Передадим команде ваши слова о навигации и работе общих зон.',
           'Спасибо за обратную связь. Проверим описанную вами ситуацию и обновим информацию в карточке, если данные изменились.',
+        ]
+      : isRetail
+      ? [
+          'Спасибо за отзыв. Рады, что вам понравились ассортимент и обслуживание. Будем ждать вас снова.',
+          'Спасибо за обратную связь. Проверим информацию о товаре и обновим карточку, если данные изменились.',
+        ]
+      : isChildrenEducation
+      ? [
+          'Спасибо за отзыв. Рады, что ребёнку понравились занятия и атмосфера. Будем ждать вас снова.',
+          'Спасибо за обратную связь. Проверим расписание и условия, чтобы информация в карточке оставалась актуальной.',
+        ]
+      : isCommercialCenter
+      ? [
+          'Спасибо за отзыв. Рады, что вам было удобно посетить комплекс.',
+          'Спасибо за обратную связь. Проверим навигацию и указанную информацию и обновим карточку при необходимости.',
         ]
       : isFoodBusiness
       ? [
@@ -402,6 +457,12 @@ const buildSelfHelpMaterials = (
     descriptionTemplate: lang === 'ru'
       ? isShoppingCenter
         ? `Для «${displayName}» стоит коротко описать состав центра, основные зоны, входы, парковку и удобства. В публикациях — сообщать только реальные открытия, события и изменения часов.`
+        : isRetail
+        ? `Для «${displayName}» стоит показать товарные группы, ценовой ориентир, витрину и условия выбора. В публикациях — сообщать только о реальных поступлениях и изменениях.`
+        : isChildrenEducation
+        ? `Для «${displayName}» стоит ясно указать возраст групп, формат занятий, расписание и правила первого посещения. В публикациях — сообщать только актуальные изменения программы.`
+        : isCommercialCenter
+        ? `Для «${displayName}» стоит показать состав арендаторов, входы, навигацию, парковку и часы работы. В публикациях — сообщать только реальные изменения.`
         : isFoodBusiness
         ? `Для «${displayName}» стоит добавить понятные описания к ключевым товарам и услугам, с учётом популярных поисковых запросов. В публикациях можно объяснить, что есть в меню, что популярно, какие есть акции.`
         : `Для «${displayName}» стоит добавить понятные описания к ключевым услугам, с учётом популярных поисковых запросов: ${mapTextFocus}. В публикациях можно объяснить, когда обращаться, как проходит приём и как записаться.`
@@ -415,6 +476,24 @@ const buildSelfHelpMaterials = (
             today: 'Сегодня: проверить категории, часы, контакты, входы, парковку и ссылку на схему центра.',
             week: 'За 7 дней: обновить описание, навигационные фото и 2–3 публикации о реальных событиях.',
             regular: 'Регулярно: обновлять арендаторов и события, отвечать на отзывы и проверять практические данные карточки.',
+          }
+        : isRetail
+        ? {
+            today: 'Сегодня: проверить категории, часы, контакты, товарные группы и ценовой ориентир.',
+            week: 'За 7 дней: добавить фото витрины и ассортимента, затем опубликовать 2–3 актуальных обновления.',
+            regular: 'Регулярно: обновлять ассортимент, отвечать на отзывы и проверять практические данные карточки.',
+          }
+        : isChildrenEducation
+        ? {
+            today: 'Сегодня: проверить возраст групп, формат занятий, расписание, контакты и способ записи.',
+            week: 'За 7 дней: добавить фото классов и материалов, затем опубликовать актуальную программу.',
+            regular: 'Регулярно: обновлять расписание, отвечать на отзывы и проверять условия первого посещения.',
+          }
+        : isCommercialCenter
+        ? {
+            today: 'Сегодня: проверить адрес, часы, входы, навигацию и список арендаторов.',
+            week: 'За 7 дней: добавить фото фасада и общих зон, затем опубликовать актуальные изменения.',
+            regular: 'Регулярно: обновлять арендаторов, навигацию, часы и ответы на отзывы.',
           }
         : {
             today: 'Сегодня: обновить тексты услуг и закрыть самые заметные пробелы.',
@@ -486,6 +565,7 @@ const buildAuditFunnelSummary = (
 ): AuditFunnelSummary => {
   const state = page.audit?.current_state || {};
   const locations = page.audit?.network_locations || [];
+  const profile = String(page.audit?.audit_profile || '').trim().toLowerCase();
   const childrenNetwork = lang === 'ru' && isChildrenEducationNetworkAudit(page);
   if (childrenNetwork) {
     return {
@@ -559,9 +639,13 @@ const buildAuditFunnelSummary = (
         hint: lang === 'ru' ? 'социальное доказательство' : 'social proof',
       },
       {
-        label: lang === 'ru' ? 'Услуги' : 'Services',
+        label: lang === 'ru'
+          ? (profile === 'fashion' || profile === 'retail' ? 'Товары' : profile === 'education_children' ? 'Направления' : 'Услуги')
+          : 'Services',
         value: formatNum(state.services_count),
-        hint: lang === 'ru' ? 'понятность предложения' : 'offer clarity',
+        hint: lang === 'ru'
+          ? (profile === 'fashion' || profile === 'retail' ? 'понятность ассортимента' : profile === 'education_children' ? 'понятность программы' : 'понятность предложения')
+          : 'offer clarity',
       },
     ],
     scoreHint: lang === 'ru'
@@ -671,6 +755,7 @@ const buildLocalOsOfferTasks = (page: OfferPagePayload, lang: PageLang): string[
 };
 
 const buildBusinessOutcomeBlock = (page: OfferPagePayload, lang: PageLang): string[] => {
+  const profile = String(page.audit?.audit_profile || '').trim().toLowerCase();
   if (lang === 'ru' && isChildrenEducationNetworkAudit(page)) {
     return [
       'Карточки выглядят единообразно во всех районах.',
@@ -684,6 +769,27 @@ const buildBusinessOutcomeBlock = (page: OfferPagePayload, lang: PageLang): stri
       'Посетитель заранее понимает, какие магазины, кафе и развлечения есть в центре.',
       'Входы, парковка, часы и навигация не требуют поиска в сторонних источниках.',
       'Свежие события и ответы на отзывы дают понятный повод построить маршрут и приехать.',
+    ];
+  }
+  if (lang === 'ru' && (profile === 'fashion' || profile === 'retail')) {
+    return [
+      'Покупатель заранее понимает ассортимент и для кого он подходит.',
+      'Фото и товарные группы помогают решить, стоит ли ехать в магазин.',
+      'Свежие поступления и часы работы дают понятный повод построить маршрут.',
+    ];
+  }
+  if (lang === 'ru' && profile === 'education_children') {
+    return [
+      'Родитель заранее понимает возраст групп и формат занятий.',
+      'Расписание, фото классов и отзывы снижают неопределённость перед первым посещением.',
+      'Способ записи и подготовка к занятию становятся понятнее.',
+    ];
+  }
+  if (lang === 'ru' && profile === 'commercial_center') {
+    return [
+      'Посетитель понимает, какие компании и сервисы находятся в комплексе.',
+      'Входы, навигация, парковка и часы не требуют поиска в сторонних источниках.',
+      'Актуальный состав арендаторов помогает спланировать визит.',
     ];
   }
   return lang === 'ru'
@@ -2560,6 +2666,7 @@ const extractStreet = (address?: string | null): string => {
       lower.includes('шоссе') ||
       lower.includes('бульвар') ||
       lower.includes('переул') ||
+      lower.includes('площад') ||
       lower.includes('коса') ||
       lower.includes('street') ||
       lower.includes('st') ||
@@ -3235,7 +3342,16 @@ const PublicPartnershipOfferPage: React.FC = () => {
     String(page.audit?.audit_profile_label || page.audit?.audit_profile || '').trim(),
   );
   const reviewSignals = buildReviewSignals(reviews, lang);
-  const selfHelp = buildSelfHelpMaterials(lang, compactDisplayName, page.category, strongDemand, photoShots, reviewSignals, news);
+  const selfHelp = buildSelfHelpMaterials(
+    lang,
+    compactDisplayName,
+    page.category,
+    page.audit?.audit_profile,
+    strongDemand,
+    photoShots,
+    reviewSignals,
+    news,
+  );
   const funnelSummary = buildAuditFunnelSummary(page, lang, displayName, localizedSummary, localizedHealth);
   const funnelProblems = buildAuditProblemCards(page, lang, issueBlocks);
   const diyChecklist = buildDiyChecklist(page, lang, selfHelp);

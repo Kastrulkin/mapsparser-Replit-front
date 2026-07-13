@@ -370,6 +370,19 @@ def _clean_focus_term(value: str, *, audit_profile: str) -> str:
 
 def _state_facts(audit: dict[str, Any]) -> list[str]:
     state = audit.get("current_state") if isinstance(audit.get("current_state"), dict) else {}
+    audit_profile = str(audit.get("audit_profile") or "").strip().lower()
+    if audit_profile in {"fashion", "retail"}:
+        offer_plural = "товаров"
+        offer_missing = "товары и товарные группы не раскрыты в карточке"
+        description_missing = "описание не объясняет ассортимент"
+    elif audit_profile == "education_children":
+        offer_plural = "направлений"
+        offer_missing = "программы и направления занятий не раскрыты в карточке"
+        description_missing = "описание не объясняет формат занятий"
+    else:
+        offer_plural = "услуг"
+        offer_missing = "услуги не раскрыты в карточке"
+        description_missing = "описание не объясняет основные услуги"
     primary_facts: list[str] = []
     secondary_facts: list[str] = []
     services_count = _safe_int(state.get("services_count"))
@@ -384,9 +397,9 @@ def _state_facts(audit: dict[str, Any]) -> list[str]:
     photo_confidence = detect_photo_signal_confidence(audit)
 
     if services_count > 0 and priced_count <= 0:
-        primary_facts.append(f"услуг {services_count}, но цены не показаны")
+        primary_facts.append(f"{offer_plural} {services_count}, но цены не показаны")
     elif services_count <= 0:
-        primary_facts.append("услуги не раскрыты в карточке")
+        primary_facts.append(offer_missing)
     if reviews_count > 0 and unanswered > 0:
         primary_facts.append(f"без ответа {unanswered} отзывов")
     elif reviews_count <= 0:
@@ -401,7 +414,7 @@ def _state_facts(audit: dict[str, Any]) -> list[str]:
     if has_website is False:
         primary_facts.append("сайт не указан")
     if not description_present:
-        primary_facts.append("описание не объясняет основные услуги")
+        primary_facts.append(description_missing)
     if has_activity is False:
         secondary_facts.append("карточка давно не обновлялась")
 
@@ -829,7 +842,12 @@ def audit_quality_gate(audit: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _sanitize_uncertain_photo_issue(item: dict[str, Any], *, photo_confidence: str) -> dict[str, Any]:
+def _sanitize_uncertain_photo_issue(
+    item: dict[str, Any],
+    *,
+    photo_confidence: str,
+    audit_profile: str,
+) -> dict[str, Any]:
     if photo_confidence == "confirmed":
         return item
     next_item = copy.deepcopy(item)
@@ -847,9 +865,24 @@ def _sanitize_uncertain_photo_issue(item: dict[str, Any], *, photo_confidence: s
     title_text = str(next_item.get("title") or "").lower().replace("ё", "е")
     problem_text = str(next_item.get("problem") or "").lower().replace("ё", "е")
     is_medical_photo_issue = "клиник" in title_text or "клиник" in problem_text or "пациент" in problem_text
+    profile_photo_evidence = {
+        "fashion": "вход, витрина, ассортимент, примерочная и интерьер магазина",
+        "retail": "вход, витрина, ассортимент, ключевые товары и интерьер магазина",
+        "education_children": "вход, классы, материалы, преподаватели и формат занятий",
+        "family_entertainment": "вход, игровые зоны, правила посещения и пространство для семьи",
+        "fitness": "вход, тренировочные зоны, раздевалки, оборудование и тренеры",
+        "commercial_center": "фасад, входы, навигация, общие зоны и арендаторы",
+        "travel": "вход, офис, рабочие зоны и понятные материалы о направлениях",
+        "financial_services": "вход, зона обслуживания, навигация и доступная среда",
+        "repair_service": "вход, приёмная зона, рабочее место и примеры выполненных работ",
+    }
+    visible_details = profile_photo_evidence.get(
+        audit_profile,
+        "вход, стойка администратора, кабинеты, оборудование и специалисты",
+    )
     next_item["evidence"] = (
         "По собранным данным визуальный блок требует ручной проверки: важно убедиться, "
-        "что в карточке видны вход, стойка администратора, кабинеты, оборудование и специалисты."
+        f"что в карточке видны {visible_details}."
     )
     if is_medical_photo_issue:
         next_item["problem"] = "Пациент не видит вход, интерьер, оборудование и реальный уровень сервиса."
@@ -909,7 +942,11 @@ def apply_audit_editorial_pass(audit: dict[str, Any]) -> dict[str, Any]:
             for text_key in ("title", "problem", "description", "evidence", "impact", "fix"):
                 if text_key in next_item:
                     next_item[text_key] = normalize_audit_text(next_item.get(text_key), audit_profile=audit_profile)
-            next_item = _sanitize_uncertain_photo_issue(next_item, photo_confidence=photo_confidence)
+            next_item = _sanitize_uncertain_photo_issue(
+                next_item,
+                photo_confidence=photo_confidence,
+                audit_profile=audit_profile,
+            )
             if audit_profile == "medical":
                 next_item = _strengthen_review_issue(next_item)
             next_items.append(next_item)
