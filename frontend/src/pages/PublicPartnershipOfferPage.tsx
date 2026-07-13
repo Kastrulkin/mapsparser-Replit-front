@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import {
   AuditCtaPanel,
@@ -13,8 +14,14 @@ import {
 import { newAuth } from '@/lib/auth_new';
 import {
   AlertCircle,
+  Building2,
+  Camera,
   CheckCircle2,
   ExternalLink,
+  Loader2,
+  MapPinned,
+  MessageSquareText,
+  Search,
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
@@ -244,8 +251,15 @@ const buildReviewSignals = (reviews: ReturnType<typeof localizeReviewPreview>[],
 const getIssueOutcome = (
   issue: OfferPagePayload['audit']['issue_blocks'][number],
   lang: PageLang,
+  auditProfile?: string,
 ): string => {
   const combined = `${issue?.id || ''} ${issue?.section || ''} ${issue?.title || ''} ${issue?.problem || ''}`.toLowerCase();
+  if (lang === 'ru' && String(auditProfile || '').trim().toLowerCase() === 'shopping_center') {
+    if (combined.includes('review') || combined.includes('отзыв')) return 'Посетитель видит, что администрация замечает обратную связь о навигации, парковке и общих зонах.';
+    if (combined.includes('photo') || combined.includes('visual') || combined.includes('фото')) return 'До поездки видно фасад, входы, парковку, навигацию и ключевые зоны центра.';
+    if (combined.includes('activity') || combined.includes('news') || combined.includes('новост')) return 'В карточке видны актуальные события, открытия и изменения часов.';
+    return 'Посетитель понимает, что находится внутри, как добраться и как подготовить поездку.';
+  }
   if (lang !== 'ru') {
     if (combined.includes('review')) return 'More reviews have replies, and new customers see that the business is attentive.';
     if (combined.includes('photo') || combined.includes('visual')) return 'The listing shows the place, team, and work examples clearly enough for a first-time customer.';
@@ -295,6 +309,15 @@ const buildSelfHelpMaterials = (
     'restaurant',
     'cafe',
   ].some((token) => normalizedBusinessType.includes(token));
+  const isShoppingCenter = [
+    'торговый центр',
+    'торгово-развлекатель',
+    'торговый комплекс',
+    'shopping center',
+    'shopping mall',
+    'трц',
+    'молл',
+  ].some((token) => normalizedBusinessType.includes(token));
   const visitBusinessType = (() => {
     if (lang !== 'ru') return businessType;
     if (normalizedBusinessType === 'ветеринарная клиника') return 'Ветеринарной клиники';
@@ -304,7 +327,9 @@ const buildSelfHelpMaterials = (
     return businessType;
   })();
   const isChildrenDanceStudio = normalizedBusinessType === 'детская танцевальная студия';
-  const photoList = isChildrenDanceStudio && lang === 'ru'
+  const photoList = isShoppingCenter && lang === 'ru'
+    ? ['Фасад и основные входы', 'Парковка и подъезд', 'Навигация по этажам', 'Магазины и общие зоны', 'Кафе и развлечения']
+    : isChildrenDanceStudio && lang === 'ru'
     ? ['Зал', 'Педагог', 'Группа по возрасту', 'Пробное занятие', 'Ожидание для родителей', 'Навигация и вход']
     : photoShots.length > 0
     ? photoShots.slice(0, 5)
@@ -312,7 +337,13 @@ const buildSelfHelpMaterials = (
       ? ['Вход и вывеска', 'Зал или кабинет', 'Специалисты в рабочей обстановке', 'Оборудование или рабочее место', 'Примеры результата']
       : ['Entrance and sign', 'Room or workspace', 'Specialists at work', 'Equipment or workplace', 'Examples of results'];
   const postIdeas = lang === 'ru'
-    ? isFoodBusiness
+    ? isShoppingCenter
+      ? [
+          'Новые магазины, кафе и сервисы: что открылось и где находится.',
+          'События и семейные активности с точной датой, временем и местом.',
+          news.length > 0 ? 'Обновить информацию об изменениях часов и навигации.' : 'Опубликовать актуальные часы, входы и изменения в работе центра.',
+        ]
+      : isFoodBusiness
       ? [
           'Какие есть блюда в меню, что популярно',
           'Обновления меню и истории из жизни кафе',
@@ -329,7 +360,12 @@ const buildSelfHelpMaterials = (
         news.length > 0 ? 'Share current updates: what changed and which services are available now.' : 'Share current updates: service of the week, new specialist, or seasonal demand.',
       ];
   const reviewTemplates = lang === 'ru'
-    ? isFoodBusiness
+    ? isShoppingCenter
+      ? [
+          'Спасибо за отзыв. Рады, что вам было удобно посетить центр. Передадим команде ваши слова о навигации и работе общих зон.',
+          'Спасибо за обратную связь. Проверим описанную вами ситуацию и обновим информацию в карточке, если данные изменились.',
+        ]
+      : isFoodBusiness
       ? [
           'Спасибо за отзыв. Рады, что вам понравился плов. Будем ждать вас снова.',
           'Спасибо за обратную связь. Учтём ваш комментарий и постараемся сделать следующий визит более приятным.',
@@ -364,7 +400,9 @@ const buildSelfHelpMaterials = (
       ? 'Это можно сделать без LocalOS. Ниже — короткие заготовки, чтобы карточка стала понятнее уже после первых правок.'
       : 'You can do this without LocalOS. These templates help make the listing clearer after the first edits.',
     descriptionTemplate: lang === 'ru'
-      ? isFoodBusiness
+      ? isShoppingCenter
+        ? `Для «${displayName}» стоит коротко описать состав центра, основные зоны, входы, парковку и удобства. В публикациях — сообщать только реальные открытия, события и изменения часов.`
+        : isFoodBusiness
         ? `Для «${displayName}» стоит добавить понятные описания к ключевым товарам и услугам, с учётом популярных поисковых запросов. В публикациях можно объяснить, что есть в меню, что популярно, какие есть акции.`
         : `Для «${displayName}» стоит добавить понятные описания к ключевым услугам, с учётом популярных поисковых запросов: ${mapTextFocus}. В публикациях можно объяснить, когда обращаться, как проходит приём и как записаться.`
       : `For “${displayName}”, add clear texts for key services based on popular search queries: ${focusText}. In posts, explain when to visit, what the appointment looks like, and how to book.`,
@@ -372,11 +410,17 @@ const buildSelfHelpMaterials = (
     postIdeas,
     reviewTemplates,
     plan: lang === 'ru'
-      ? {
-          today: 'Сегодня: обновить тексты услуг и закрыть самые заметные пробелы.',
-          week: 'За 7 дней: добавить фото, цены/формат услуг и 2–3 публикации.',
-          regular: 'Регулярно: отвечать на отзывы, добавлять новости и проверять, что изменилось после правок.',
-        }
+      ? isShoppingCenter
+        ? {
+            today: 'Сегодня: проверить категории, часы, контакты, входы, парковку и ссылку на схему центра.',
+            week: 'За 7 дней: обновить описание, навигационные фото и 2–3 публикации о реальных событиях.',
+            regular: 'Регулярно: обновлять арендаторов и события, отвечать на отзывы и проверять практические данные карточки.',
+          }
+        : {
+            today: 'Сегодня: обновить тексты услуг и закрыть самые заметные пробелы.',
+            week: 'За 7 дней: добавить фото, цены/формат услуг и 2–3 публикации.',
+            regular: 'Регулярно: отвечать на отзывы, добавлять новости и проверять, что изменилось после правок.',
+          }
       : {
           today: 'Today: update the description and close the most visible gaps.',
           week: 'In 7 days: add photos, service price/format, and 2–3 posts.',
@@ -404,6 +448,11 @@ type AuditFunnelSummary = {
 const isChildrenEducationNetworkAudit = (page: OfferPagePayload): boolean => {
   const profile = String(page.audit?.audit_profile || '').trim().toLowerCase();
   return profile === 'network_children_education';
+};
+
+const isShoppingCenterAudit = (page: OfferPagePayload): boolean => {
+  const profile = String(page.audit?.audit_profile || '').trim().toLowerCase();
+  return profile === 'shopping_center';
 };
 
 const formatRatingRange = (locations: NonNullable<OfferPagePayload['audit']>['network_locations'] = []): string => {
@@ -463,6 +512,32 @@ const buildAuditFunnelSummary = (
         },
       ],
       scoreHint: 'Оценка выше — вспомогательный ориентир. Главное здесь не сама цифра, а разница между филиалами.',
+    };
+  }
+
+  if (lang === 'ru' && isShoppingCenterAudit(page)) {
+    return {
+      title: displayName,
+      eyebrow: 'Публичный аудит карточки',
+      diagnosis: localizedSummary || localizedHealth || 'Проверили, насколько карточка помогает посетителю понять состав центра и подготовить поездку.',
+      facts: [
+        {
+          label: 'Рейтинг',
+          value: state.rating ? Number(state.rating).toFixed(1) : '—',
+          hint: 'общее впечатление посетителей',
+        },
+        {
+          label: 'Отзывы',
+          value: formatNum(state.reviews_count),
+          hint: 'темы инфраструктуры и сервиса',
+        },
+        {
+          label: 'Фото',
+          value: formatNum(state.photos_count),
+          hint: 'входы, навигация и зоны центра',
+        },
+      ],
+      scoreHint: 'Оценка — ориентир. Важнее точность данных, удобство маршрута и актуальная информация для поездки.',
     };
   }
 
@@ -575,6 +650,13 @@ const buildLocalOsOfferTasks = (page: OfferPagePayload, lang: PageLang): string[
       'Покажем, где после правок выросло доверие и что ещё проседает.',
     ];
   }
+  if (lang === 'ru' && isShoppingCenterAudit(page)) {
+    return [
+      'Соберём правки по категориям, описанию, часам, входам и парковке.',
+      'Подготовим навигационные материалы, публикации о событиях и ответы на отзывы.',
+      'После обновления снова проверим карточку и покажем, какие данные ещё требуют внимания.',
+    ];
+  }
   return lang === 'ru'
     ? [
         'Соберём первые правки в понятный план.',
@@ -595,6 +677,13 @@ const buildBusinessOutcomeBlock = (page: OfferPagePayload, lang: PageLang): stri
       'Слабые филиалы догоняют сильные.',
       'Родителю проще найти вас в поиске, выбрать и понять, как записаться.',
       'Сеть видна как один сильный бренд.',
+    ];
+  }
+  if (lang === 'ru' && isShoppingCenterAudit(page)) {
+    return [
+      'Посетитель заранее понимает, какие магазины, кафе и развлечения есть в центре.',
+      'Входы, парковка, часы и навигация не требуют поиска в сторонних источниках.',
+      'Свежие события и ответы на отзывы дают понятный повод построить маршрут и приехать.',
     ];
   }
   return lang === 'ru'
@@ -2576,6 +2665,119 @@ const stateBadgeClass = (score?: number) => {
   return 'bg-rose-50 text-rose-700 border-rose-200';
 };
 
+const PublicAuditProgress = () => {
+  const reducedMotion = useReducedMotion();
+  const [progress, setProgress] = useState(8);
+  const steps = [
+    {
+      title: 'Открываем карточку на картах',
+      description: 'Проверяем адрес, категорию, часы и контакты.',
+      icon: MapPinned,
+    },
+    {
+      title: 'Собираем фактические данные',
+      description: 'Читаем рейтинг, отзывы, фотографии и наполнение.',
+      icon: Search,
+    },
+    {
+      title: 'Определяем тип бизнеса',
+      description: 'Применяем правила именно для этой категории.',
+      icon: Building2,
+    },
+    {
+      title: 'Ищем точки роста',
+      description: 'Сверяем карточку с правилами заполнения карт.',
+      icon: Camera,
+    },
+    {
+      title: 'Собираем понятный план',
+      description: 'Готовим конкретные правки без технических формулировок.',
+      icon: MessageSquareText,
+    },
+  ];
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    const timer = window.setInterval(() => {
+      setProgress((current) => Math.min(92, current + 3));
+    }, 650);
+    return () => window.clearInterval(timer);
+  }, [reducedMotion]);
+
+  const activeStep = reducedMotion
+    ? 0
+    : Math.min(steps.length - 1, Math.floor(Math.max(0, progress - 8) / 18));
+
+  return (
+    <main className="min-h-screen bg-slate-50 px-4 py-8 md:py-14" role="status" aria-live="polite">
+      <div className="mx-auto max-w-6xl">
+        <div className="flex items-center gap-3 text-sm font-semibold text-slate-600">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-white shadow-sm">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          LocalOS проводит аудит
+        </div>
+
+        <div className="mt-10 grid items-start gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.75fr)] lg:gap-16">
+          <section>
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-orange-600">Работа уже идёт</p>
+            <h1 className="mt-4 max-w-3xl text-4xl font-black text-slate-950 [text-wrap:balance] md:text-6xl">
+              Собираем аудит вашей карточки
+            </h1>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 [text-wrap:pretty] md:text-lg">
+              LocalOS читает реальные данные с карт и проверяет их по правилам вашей категории. Страницу обновлять не нужно.
+            </p>
+
+            <div className="mt-9">
+              <div className="flex items-center justify-between gap-4 text-sm font-semibold text-slate-700">
+                <span>{progress < 92 ? 'Анализируем карточку' : 'Завершаем проверку данных'}</span>
+                <span className="tabular-nums">{progress}%</span>
+              </div>
+              <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200 shadow-inner">
+                <motion.div
+                  className="h-full rounded-full bg-orange-500"
+                  initial={false}
+                  animate={{ width: `${progress}%` }}
+                  transition={reducedMotion ? { duration: 0 } : { duration: 0.45, ease: [0.2, 0, 0, 1] }}
+                />
+              </div>
+              <p className="mt-3 text-sm text-slate-500">Обычно аудит занимает от 1 до 3 минут.</p>
+            </div>
+          </section>
+
+          <section className="rounded-[28px] bg-slate-950 p-5 text-white shadow-[0_24px_70px_rgba(15,23,42,0.18)] md:p-6">
+            <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Что делает LocalOS</div>
+            <div className="mt-6 space-y-2">
+              {steps.map((step, index) => {
+                const Icon = step.icon;
+                const done = !reducedMotion && index < activeStep;
+                const active = reducedMotion ? index === 0 : index === activeStep;
+                return (
+                  <motion.div
+                    key={step.title}
+                    initial={false}
+                    animate={{ opacity: done || active || reducedMotion ? 1 : 0.46 }}
+                    transition={{ duration: reducedMotion ? 0 : 0.25, ease: [0.2, 0, 0, 1] }}
+                    className="flex min-h-20 items-start gap-3 rounded-2xl px-3 py-3"
+                  >
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${done ? 'bg-emerald-400/15 text-emerald-300' : active ? 'bg-orange-400/15 text-orange-300' : 'bg-white/5 text-slate-500'}`}>
+                      {done ? <CheckCircle2 className="h-5 w-5" /> : active && !reducedMotion ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icon className="h-5 w-5" />}
+                    </div>
+                    <div className="min-w-0 pt-0.5">
+                      <div className="font-semibold text-white">{step.title}</div>
+                      <div className="mt-1 text-sm leading-5 text-slate-400">{step.description}</div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  );
+};
+
 const PublicPartnershipOfferPage: React.FC = () => {
   const { offerSlug } = useParams<{ offerSlug: string }>();
   const [searchParams] = useSearchParams();
@@ -2584,32 +2786,67 @@ const PublicPartnershipOfferPage: React.FC = () => {
   const [page, setPage] = useState<OfferPagePayload | null>(null);
 
   useEffect(() => {
-    const run = async () => {
+    let cancelled = false;
+    let pollTimer: number | undefined;
+    let usePublicReportEndpoint = false;
+
+    const loadPage = async (initialLoad: boolean) => {
       if (!offerSlug) return;
       try {
-        setLoading(true);
-        setError(null);
-        try {
-          const data = await newAuth.makeRequest(`/partnership/public/offer/${encodeURIComponent(offerSlug)}`, {
-            method: 'GET',
-          });
-          const nextPage: OfferPagePayload | null = data?.page || null;
-          setPage(nextPage);
-        } catch (_) {
-          const fallback = await newAuth.makeRequest(`/public/report-offer/${encodeURIComponent(offerSlug)}`, {
-            method: 'GET',
-          });
-          const nextPage: OfferPagePayload | null = fallback?.page || null;
-          setPage(nextPage);
+        if (initialLoad) {
+          setLoading(true);
+          setError(null);
         }
-      } catch (e: any) {
-        setError(e.message || 'Не удалось загрузить страницу');
-        setPage(null);
+        let data;
+        if (!usePublicReportEndpoint) {
+          try {
+            data = await newAuth.makeRequest(`/partnership/public/offer/${encodeURIComponent(offerSlug)}`, {
+              method: 'GET',
+            });
+          } catch (_) {
+            usePublicReportEndpoint = true;
+          }
+        }
+        if (usePublicReportEndpoint) {
+          data = await newAuth.makeRequest(`/public/report-offer/${encodeURIComponent(offerSlug)}`, {
+            method: 'GET',
+          });
+        }
+        const nextPage: OfferPagePayload | null = data?.page || null;
+        if (!cancelled) {
+          setPage(nextPage);
+          setError(null);
+          if (nextPage?.processing) {
+            pollTimer = window.setTimeout(() => {
+              void loadPage(false);
+            }, 1800);
+          }
+        }
+      } catch (requestError) {
+        if (!cancelled) {
+          const message = requestError instanceof Error ? requestError.message : 'Не удалось загрузить страницу';
+          if (initialLoad) {
+            setError(message);
+            setPage(null);
+          } else {
+            pollTimer = window.setTimeout(() => {
+              void loadPage(false);
+            }, 3000);
+          }
+        }
       } finally {
-        setLoading(false);
+        if (initialLoad && !cancelled) {
+          setLoading(false);
+        }
       }
     };
-    void run();
+    void loadPage(true);
+    return () => {
+      cancelled = true;
+      if (pollTimer !== undefined) {
+        window.clearTimeout(pollTimer);
+      }
+    };
   }, [offerSlug]);
 
   const requestedLang = String(searchParams.get('lang') || '').trim().toLowerCase();
@@ -2715,6 +2952,10 @@ const PublicPartnershipOfferPage: React.FC = () => {
     );
   }
 
+  if (page.processing) {
+    return <PublicAuditProgress />;
+  }
+
   const rawFindings = Array.isArray(page.audit?.findings) ? page.audit?.findings || [] : [];
   const rawActions = Array.isArray(page.audit?.recommended_actions) ? page.audit?.recommended_actions || [] : [];
   const rawIssueBlocks = Array.isArray(page.audit?.issue_blocks) ? page.audit?.issue_blocks || [] : [];
@@ -2778,6 +3019,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
   const logoUrl = normalizeMediaUrl(page.logo_url || '') || photos[0] || '';
   const isNetworkAudit = String(page.audit?.audit_profile || '').trim().toLowerCase().startsWith('network_')
     || String(parse.scope || '').trim().toLowerCase() === 'network';
+  const isShoppingCenter = isShoppingCenterAudit(page);
   const confirmedServicesCount = Number(state.services_count || 0);
   const hasServicesPreviewOnly = confirmedServicesCount <= 0 && services.length > 0;
   const locationsCount = Number(state.locations_count || 0);
@@ -3004,9 +3246,13 @@ const PublicPartnershipOfferPage: React.FC = () => {
 
   const quickState = [
     {
-      label: isNetworkAudit && lang === 'ru' ? 'Меню/товары в точках' : text.stateServices,
-      ok: Number(state.services_count || 0) > 0,
-      hint: isNetworkAudit && lang === 'ru'
+      label: isShoppingCenter && lang === 'ru'
+        ? 'Категория и формат'
+        : isNetworkAudit && lang === 'ru' ? 'Меню/товары в точках' : text.stateServices,
+      ok: isShoppingCenter ? Boolean(String(page.category || '').trim()) : Number(state.services_count || 0) > 0,
+      hint: isShoppingCenter && lang === 'ru'
+        ? String(page.category || 'Категория не распознана')
+        : isNetworkAudit && lang === 'ru'
         ? `${formatValue(state.services_count)} из ${formatValue(locationsCount)} точек`
         : Number(state.services_count || 0) > 0 ? `${formatValue(state.services_count)} ${text.found}` : text.servicesMissing,
     },
@@ -3384,7 +3630,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
                     evidence={item.evidence}
                     meaning={compactAuditText(item.impact, lang === 'ru' ? 'Это может снижать доверие и мешать клиенту выбрать вас.' : 'This can reduce trust and make it harder for customers to choose you.')}
                     action={compactAuditText(item.fix, text.noDescription)}
-                    outcome={getIssueOutcome(item, lang)}
+                    outcome={getIssueOutcome(item, lang, page.audit?.audit_profile)}
                   />
                 ))
               ) : (
@@ -3430,6 +3676,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
           ) : null}
         </section>
 
+        {!isShoppingCenter ? (
         <section className="rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">
             {isNetworkAudit && lang === 'ru' ? 'Меню и товары в карточках' : text.servicesTitle}
@@ -3490,6 +3737,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
             </div>
           )}
         </section>
+        ) : null}
 
         {photos.length > 0 ? (
           <section className="rounded-2xl border bg-white p-6 shadow-sm">

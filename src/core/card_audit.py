@@ -282,6 +282,18 @@ AUDIT_PROFILE_HINTS = {
         "коллекц",
         "ассортимент",
     ),
+    "shopping_center": (
+        "shopping center",
+        "shopping mall",
+        "retail center",
+        "торговый центр",
+        "торгово-развлекатель",
+        "торговый комплекс",
+        "трц",
+        "тц ",
+        "молл",
+        "универмаг",
+    ),
     "wellness": ("wellness", "massage", "spa", "detox", "реабил", "оздоров", "массаж", "relax"),
     "food": (
         "cafe", "coffee", "restaurant", "bar", "bakery", "кафе", "ресторан", "пицц", "кофе", "еда",
@@ -294,6 +306,7 @@ AUDIT_PROFILE_LABELS = {
     "default_local_business": "Локальный бизнес",
     "beauty": "Бьюти / сервисные услуги",
     "fashion": "Retail / магазин / шоурум",
+    "shopping_center": "Торговый / развлекательный центр",
     "medical": "Медицина / клиника",
     "wellness": "Wellness / SPA / массаж",
     "food": "HoReCa / еда и напитки",
@@ -951,6 +964,15 @@ def _is_editorial_service_entry(name: str, description: str | None) -> bool:
     return False
 
 
+def _is_non_service_entry(name: str, description: str | None, category: str | None) -> bool:
+    normalized_category = str(category or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized_category in SERVICE_EXCLUDED_CATEGORIES:
+        return True
+    if "payment_method" in normalized_category or normalized_category.startswith("promotion"):
+        return True
+    return _is_editorial_service_entry(name, description)
+
+
 def _is_placeholder_review_entry(text: str | None, response: str | None = None) -> bool:
     review_text = str(text or "").strip().lower()
     response_text = str(response or "").strip().lower()
@@ -1134,6 +1156,25 @@ def _normalize_generated_location_phrases(text: str, city: str) -> str:
     return result
 
 
+def _has_meaningful_business_description(description: Any, address: Any) -> bool:
+    raw_description = re.sub(r"\s+", " ", str(description or "").strip())
+    if not raw_description:
+        return False
+    normalized_description = re.sub(r"[^a-zа-яё0-9]+", " ", raw_description.lower()).strip()
+    normalized_address = re.sub(r"[^a-zа-яё0-9]+", " ", str(address or "").lower()).strip()
+    if normalized_address and (
+        normalized_description == normalized_address
+        or normalized_description in normalized_address
+        or normalized_address in normalized_description
+    ):
+        return False
+    address_markers = (" улица ", " ул ", " проспект ", " просп ", " шоссе ", " владение ", " вл ", " дом ")
+    padded_description = f" {normalized_description} "
+    if len(normalized_description) < 80 and any(marker in padded_description for marker in address_markers) and any(char.isdigit() for char in normalized_description):
+        return False
+    return True
+
+
 def _detect_audit_profile(business_type: Any, business_name: Any, overview: Any) -> str:
     return str(_detect_audit_profile_details(business_type, business_name, overview).get("profile") or "default_local_business")
 
@@ -1181,6 +1222,15 @@ def _detect_audit_profile_details(business_type: Any, business_name: Any, overvi
             "conflicts": [],
             "scores": {},
         }
+    shopping_center_hints = AUDIT_PROFILE_HINTS.get("shopping_center") or ()
+    if any(token in combined for token in shopping_center_hints):
+        return {
+            "profile": "shopping_center",
+            "confidence": 0.94,
+            "reasons": ["shopping center category marker"],
+            "conflicts": [],
+            "scores": {"shopping_center": 10},
+        }
     if any(token in combined for token in DEFAULT_LOCAL_BUSINESS_HINTS):
         return {
             "profile": "default_local_business",
@@ -1198,7 +1248,7 @@ def _detect_audit_profile_details(business_type: Any, business_name: Any, overvi
             strong_beauty_service_hits += 1
     medical_identity_present = any(token in combined for token in MEDICAL_IDENTITY_HINTS)
     profile_scores: Dict[str, int] = {}
-    for profile_name in ("medical", "beauty", "fashion", "wellness", "food", "fitness"):
+    for profile_name in ("shopping_center", "medical", "beauty", "fashion", "wellness", "food", "fitness"):
         hints = AUDIT_PROFILE_HINTS.get(profile_name) or ()
         score = 0
         for token in hints:
@@ -1453,6 +1503,35 @@ def _build_reasoning_fields(
             "Соединить услуги, цены и фото в единый конверсионный блок",
             "Делать ответы на отзывы продолжением обещания бренда",
         ]
+    elif audit_profile == "shopping_center":
+        best_fit = [
+            f"Жители и гости, которые выбирают торговый или развлекательный центр в {location_in}",
+            "Посетители, которым заранее важны магазины, кафе, развлечения и бытовые сервисы",
+            "Семьи и автомобилисты, которые проверяют парковку, входы, навигацию и удобства до поездки",
+        ]
+        weak_fit = [
+            "Посетители, которым по карточке неясно, какие магазины и зоны работают сейчас",
+            "Люди, которым не хватает точных часов, схемы входов, парковки и понятного маршрута внутри центра",
+        ]
+        intents = [
+            f"торговый центр {location}",
+            f"магазины и кафе в торговом центре {location}",
+            f"кинотеатр и развлечения {location}",
+            f"торговый центр с парковкой {location}",
+            f"часы работы торгового центра {location}",
+        ]
+        photo_shots = [
+            "Фасад и каждый основной вход с понятными ориентирами",
+            "Парковка, подъезд, остановки и доступный вход",
+            "Навигация по этажам, галереи и ключевые зоны центра",
+            "Магазины, кафе, развлечения и семейные пространства без рекламной постановки",
+        ]
+        positioning_focus = [
+            "Показать состав центра: категории арендаторов, развлечения, кафе и практические сервисы",
+            "Дать точные часы, контакты, входы, парковку, доступность и маршрут до нужной зоны",
+            "Поддерживать актуальность через открытия, события, изменения часов и новые фото",
+            "Использовать отзывы для контроля навигации, чистоты, парковки и качества инфраструктуры",
+        ]
     elif audit_profile == "fashion":
         best_fit = [
             f"Покупатели, которые ищут магазин одежды или шоурум в {location_in}",
@@ -1619,9 +1698,6 @@ def _extract_services_from_products_payload(products_payload: Any, *, limit: int
         name = str(item.get("name") or "").strip()
         if not name:
             return
-        description = str(item.get("description") or "").strip()
-        if _is_editorial_service_entry(name, description):
-            return
         category = str(
             item.get("category")
             or item.get("category_name")
@@ -1629,7 +1705,8 @@ def _extract_services_from_products_payload(products_payload: Any, *, limit: int
             or item.get("section")
             or fallback_category
         ).strip() or fallback_category
-        if category.lower() in SERVICE_EXCLUDED_CATEGORIES:
+        description = str(item.get("description") or "").strip()
+        if _is_non_service_entry(name, description, category):
             return
         price = item.get("price") or item.get("price_from") or item.get("price_to")
         if (price is None or not str(price).strip()) and not description:
@@ -1717,7 +1794,9 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
         and services_total_count <= len(preview_source)
     )
 
-    if services_total_count <= 0 and isinstance(full_source, list):
+    if isinstance(full_source, list):
+        effective_services_total_count = 0
+        effective_services_with_price_count = 0
         for item in full_source:
             if not isinstance(item, dict):
                 continue
@@ -1725,11 +1804,15 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
             if not name:
                 continue
             description = str(item.get("description") or "").strip()
-            if _is_editorial_service_entry(name, description):
+            category = str(item.get("category") or "").strip()
+            if _is_non_service_entry(name, description, category):
                 continue
-            services_total_count += 1
+            effective_services_total_count += 1
             if str(item.get("price") or "").strip():
-                services_with_price_count += 1
+                effective_services_with_price_count += 1
+        if isinstance(full_services_payload, list) or services_total_count <= len(full_source):
+            services_total_count = effective_services_total_count
+            services_with_price_count = effective_services_with_price_count
 
     services_profile_names: List[str] = []
     if isinstance(full_source, list):
@@ -1740,11 +1823,11 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
             if not name:
                 continue
             description = str(item.get("description") or "").strip()
-            if _is_editorial_service_entry(name, description):
+            category = str(item.get("category") or "").strip()
+            if _is_non_service_entry(name, description, category):
                 continue
             description_value = _normalize_generated_location_phrases(description, lead_city) or None
             price = str(item.get("price") or "").strip()
-            category = str(item.get("category") or "").strip()
             profile_name = " ".join(part for part in [name, category] if part).strip()
             if profile_name:
                 services_profile_names.append(profile_name)
@@ -1756,11 +1839,11 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
             if not name:
                 continue
             description = str(item.get("description") or "").strip()
-            if _is_editorial_service_entry(name, description):
+            category = str(item.get("category") or "").strip()
+            if _is_non_service_entry(name, description, category):
                 continue
             description_value = _normalize_generated_location_phrases(description, lead_city) or None
             price = str(item.get("price") or "").strip()
-            category = str(item.get("category") or "").strip()
             note_parts = []
             if price:
                 note_parts.append(f"Цена: {price}")
@@ -2864,6 +2947,51 @@ def _build_fashion_action_plan(
     return {"next_24h": next_24h[:4], "next_7d": next_7d[:4], "ongoing": ongoing}
 
 
+def _build_shopping_center_action_plan(
+    *,
+    has_description: bool,
+    has_website: bool,
+    photos_count: int,
+    news_count: int,
+    has_recent_activity: bool,
+    unanswered_reviews_count: int,
+) -> Dict[str, List[str]]:
+    next_24h: List[str] = []
+    next_7d: List[str] = []
+    if not has_description:
+        next_24h.append(
+            "Добавить описание центра: основные категории магазинов, кафе и развлечений, ключевые удобства, парковка и кому подходит формат посещения."
+        )
+    next_24h.append(
+        "Проверить основную и дополнительные категории, точные часы работы, телефон, адрес, входы, парковку и атрибуты доступности."
+    )
+    if not has_website:
+        next_24h.append(
+            "Добавить официальный сайт или страницу со списком арендаторов, схемой этажей и актуальными часами, чтобы посетитель мог подготовить поездку."
+        )
+    if unanswered_reviews_count > 0:
+        next_24h.append(
+            "Ответить на отзывы без реакции и отдельно разобрать повторяющиеся темы: навигацию, чистоту, парковку, ассортимент и работу общих зон."
+        )
+    if photos_count < 12:
+        next_7d.append(
+            "Добавить серию реальных фото: фасад и входы, парковка, навигация по этажам, галереи, кафе, развлечения и семейные зоны."
+        )
+    if news_count <= 0 or not has_recent_activity:
+        next_7d.append(
+            "Запустить публикации об открытиях, событиях, изменениях часов и новых зонах. Публикации должны отражать реальные изменения центра."
+        )
+    next_7d.append(
+        "Сверить карточку с фактической навигацией на месте: названия входов, ориентиры, доступный маршрут и путь от парковки или остановки."
+    )
+    ongoing = [
+        "Ежемесячно проверять часы, контакты, категории, атрибуты, входы и ссылки.",
+        "Поддерживать актуальный список арендаторов, событий и изменений общих зон.",
+        "Отслеживать темы отзывов по навигации, парковке, чистоте и инфраструктуре и показывать исправления в карточке.",
+    ]
+    return {"next_24h": next_24h[:4], "next_7d": next_7d[:4], "ongoing": ongoing}
+
+
 def _build_food_action_plan(
     *,
     has_description: bool,
@@ -3637,6 +3765,89 @@ def _build_fashion_issue_blocks(
     return issue_blocks
 
 
+def _build_shopping_center_issue_blocks(
+    *,
+    business_name: str,
+    city: str,
+    has_description: bool,
+    has_website: bool,
+    photos_count: int,
+    reviews_count: int,
+    unanswered_reviews_count: int,
+    news_count: int,
+    has_recent_activity: bool,
+) -> List[Dict[str, Any]]:
+    issue_blocks: List[Dict[str, Any]] = []
+    city_in = _format_ru_location_prepositional(city)
+    if not has_description:
+        issue_blocks.append(
+            {
+                "id": "shopping_center_description_gap",
+                "section": "positioning",
+                "priority": "high",
+                "title": "Карточка не объясняет состав и формат центра",
+                "problem": "Посетитель видит адрес и категорию, но не получает короткого ответа, какие магазины, кафе, развлечения и удобства доступны внутри.",
+                "evidence": f"У {business_name} не найдено отдельное содержательное описание торгового и развлекательного формата в {city_in}.",
+                "impact": "До поездки сложнее понять, подходит ли центр под нужный сценарий: покупки, еда, кино, семейный досуг или бытовые задачи.",
+                "fix": "Добавить фактическое описание: категории арендаторов, ключевые зоны, парковка, доступность и основные сценарии посещения без рекламных обещаний.",
+            }
+        )
+    if not has_website:
+        issue_blocks.append(
+            {
+                "id": "shopping_center_directory_gap",
+                "section": "profile",
+                "priority": "high",
+                "title": "Нет ссылки на актуальный список магазинов и схему центра",
+                "problem": "В карточке нет официального источника, где можно проверить арендаторов, этажи, события и изменения часов.",
+                "evidence": "Официальный сайт или страница центра в данных карточки не найдены.",
+                "impact": "Посетителю приходится искать сведения в сторонних источниках, а часть поездок откладывается из-за неопределённости.",
+                "fix": "Добавить официальный сайт или страницу со списком арендаторов, схемой этажей, часами и контактами.",
+            }
+        )
+    if news_count <= 0 or not has_recent_activity:
+        issue_blocks.append(
+            {
+                "id": "shopping_center_activity_gap",
+                "section": "activity",
+                "priority": "medium",
+                "title": "Карточка не показывает актуальные события и изменения",
+                "problem": "В профиле не видно свежих открытий, мероприятий, изменений часов или обновлений общих зон.",
+                "evidence": f"Публикаций в срезе: {news_count}; свежая активность: {'есть' if has_recent_activity else 'нет'}.",
+                "impact": "Карточка хуже отвечает на вопрос, что происходит в центре сейчас и есть ли повод приехать повторно.",
+                "fix": "Публиковать только реальные обновления: события, открытия, изменения часов, новые зоны и важные изменения навигации.",
+            }
+        )
+    if photos_count < 12:
+        issue_blocks.append(
+            {
+                "id": "shopping_center_photo_gap",
+                "section": "visual",
+                "priority": "medium",
+                "title": "Фото не покрывают путь посетителя",
+                "problem": "Недостаточно визуальных ориентиров от подъезда и входа до навигации, парковки и ключевых зон центра.",
+                "evidence": f"Фото в доступном срезе: {photos_count}. Для крупного объекта важны разные входы и сценарии движения.",
+                "impact": "Новый посетитель хуже ориентируется до поездки и тратит больше времени на месте.",
+                "fix": "Добавить реальные фото фасада с разных направлений, входов, парковки, навигации по этажам и ключевых зон.",
+            }
+        )
+    if unanswered_reviews_count > 0:
+        issue_blocks.append(
+            {
+                "id": "shopping_center_reviews_unanswered",
+                "section": "reviews",
+                "priority": "medium",
+                "title": "Часть отзывов остаётся без ответа",
+                "problem": "Обратная связь о навигации, парковке, чистоте или инфраструктуре не получает публичной реакции.",
+                "evidence": f"Отзывов: {reviews_count}; без ответа: {unanswered_reviews_count}.",
+                "impact": "Посетители не видят, что администрация замечает повторяющиеся проблемы и сообщает об изменениях.",
+                "fix": "Отвечать по существу и связывать повторяющиеся темы отзывов с проверкой конкретных зон и процессов центра.",
+            }
+        )
+    issue_blocks.sort(key=lambda item: _issue_priority_rank(str(item.get("priority") or "")))
+    return issue_blocks
+
+
 def _build_food_issue_blocks(
     *,
     business_name: str,
@@ -4080,6 +4291,10 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     reviews_count = imported_reviews_count if imported_reviews_count > 0 else snapshot_reviews_count
     parsed_contacts = snapshot.get("parsed_contacts") or {}
     has_website = bool(str(lead.get("website") or parsed_contacts.get("website") or business.get("website") or "").strip())
+    has_description = bool(snapshot.get("description_present")) or _has_meaningful_business_description(
+        lead.get("description"),
+        lead.get("address"),
+    )
     has_phone = bool(str(lead.get("phone") or parsed_contacts.get("phone") or business.get("phone") or "").strip())
     has_email = bool(str(lead.get("email") or parsed_contacts.get("email") or business.get("email") or "").strip())
     has_messenger = bool(
@@ -4143,11 +4358,17 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         reputation_score -= 8
     reputation_score = max(30, min(100, reputation_score))
 
-    service_score = 48
-    if services_count <= 0:
-        service_score -= 20
-    if priced_services_count <= 0:
-        service_score -= 8
+    service_score = 70 if audit_profile == "shopping_center" else 48
+    if audit_profile == "shopping_center":
+        if not has_description:
+            service_score -= 18
+        if not has_website:
+            service_score -= 12
+    else:
+        if services_count <= 0:
+            service_score -= 20
+        if priced_services_count <= 0:
+            service_score -= 8
     service_score = max(20, min(100, service_score))
 
     activity_score = 42
@@ -4203,7 +4424,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             continue
         review_signal_rows.append({"review_text": item.get("review") or item.get("text") or ""})
     hospitality_signals = _extract_hospitality_review_signals(review_signal_rows) if hospitality_mode else {}
-    baseline_profiles = {"default_local_business", "medical", "beauty", "food", "fitness", "wellness", "fashion", "hospitality"}
+    baseline_profiles = {"default_local_business", "medical", "beauty", "food", "fitness", "wellness", "fashion", "shopping_center", "hospitality"}
     baseline_is_default = audit_profile == "default_local_business"
     baseline_is_fashion = audit_profile == "fashion"
     baseline_is_hospitality = hospitality_mode
@@ -4232,7 +4453,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         issue_blocks = _build_hospitality_issue_blocks(
             business_name=lead_name,
             city=city,
-            has_description=bool(snapshot.get("description_present") or lead.get("description")),
+            has_description=has_description,
             has_real_services=has_real_services,
             booking_offer_count=booking_offer_count,
             photos_count=photos_count,
@@ -4249,7 +4470,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         issue_blocks = _build_medical_issue_blocks(
             business_name=lead_name,
             city=city,
-            has_description=bool(snapshot.get("description_present") or lead.get("description")),
+            has_description=has_description,
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
@@ -4262,7 +4483,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         issue_blocks = _build_beauty_issue_blocks(
             business_name=lead_name,
             city=city,
-            has_description=bool(snapshot.get("description_present")),
+            has_description=has_description,
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
@@ -4271,11 +4492,24 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             focus_terms=beauty_focus_terms,
         )
         issue_blocks = _merge_issue_blocks(issue_blocks, baseline_issue_blocks)
+    elif audit_profile == "shopping_center":
+        issue_blocks = _build_shopping_center_issue_blocks(
+            business_name=lead_name,
+            city=city,
+            has_description=has_description,
+            has_website=has_website,
+            photos_count=photos_count,
+            reviews_count=reviews_count,
+            unanswered_reviews_count=unanswered_reviews_count,
+            news_count=news_count,
+            has_recent_activity=has_recent_activity,
+        )
+        issue_blocks = _merge_issue_blocks(issue_blocks, baseline_issue_blocks)
     elif audit_profile == "fashion":
         issue_blocks = _build_fashion_issue_blocks(
             business_name=lead_name,
             city=city,
-            has_description=bool(snapshot.get("description_present")),
+            has_description=has_description,
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
@@ -4289,7 +4523,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         issue_blocks = _build_wellness_issue_blocks(
             business_name=lead_name,
             city=city,
-            has_description=bool(snapshot.get("description_present")),
+            has_description=has_description,
             services_count=services_count,
             photos_count=photos_count,
             reviews_count=reviews_count,
@@ -4300,7 +4534,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         issue_blocks = _build_food_issue_blocks(
             business_name=lead_name,
             city=city,
-            has_description=bool(snapshot.get("description_present")),
+            has_description=has_description,
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
@@ -4312,7 +4546,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         issue_blocks = _build_fitness_issue_blocks(
             business_name=lead_name,
             city=city,
-            has_description=bool(snapshot.get("description_present")),
+            has_description=has_description,
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
@@ -4324,7 +4558,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         issue_blocks = _build_default_local_business_issue_blocks(
             business_name=lead_name,
             city=city,
-            has_description=bool(snapshot.get("description_present")),
+            has_description=has_description,
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
@@ -4439,7 +4673,16 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     top_driver = "заполнении карточки"
-    if revenue_potential["rating_gap"]["max"] >= max(
+    if audit_profile == "shopping_center":
+        top_driver = "актуальности информации, навигации и событиях"
+        revenue_potential = {
+            "total_min": 0,
+            "total_max": 0,
+            "dominant_driver": "profile_completeness",
+            "label": "Без денежной оценки",
+            "description": "Для торгового центра аудит оценивает полноту и актуальность карточки, а не выдумывает стоимость потерянной записи.",
+        }
+    elif revenue_potential["rating_gap"]["max"] >= max(
         revenue_potential["content_gap"]["max"],
         revenue_potential["service_gap"]["max"],
     ):
@@ -4476,6 +4719,12 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         summary_text = (
             f"{health_label}. Карточка уже может приводить запись из локального поиска, но пока слабо продаёт направления услуг, цены и результат. "
             f"Главные зоны роста сейчас — понятные услуги, фото работ и живой ритм обновлений."
+        )
+    elif audit_profile == "shopping_center":
+        summary_text = (
+            f"{health_label}. У карточки уже есть сильное доверие через рейтинг {rating_text} и {reviews_count} отзывов, "
+            "но посетителю не хватает актуального объяснения состава центра и практической информации для поездки. "
+            "Главные задачи — описание формата, список арендаторов и зон, входы, парковка, навигация и свежие события."
         )
     elif audit_profile == "fashion":
         summary_text = (
@@ -4544,7 +4793,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     )
     if hospitality_mode:
         action_plan = _build_hospitality_action_plan(
-            has_description=bool(snapshot.get("description_present") or lead.get("description")),
+            has_description=has_description,
             has_real_services=has_real_services,
             photos_count=photos_count,
             top_negative=hospitality_signals.get("top_negative") or [],
@@ -4554,7 +4803,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         )
     elif audit_profile == "medical":
         action_plan = _build_medical_action_plan(
-            has_description=bool(snapshot.get("description_present") or lead.get("description")),
+            has_description=has_description,
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
@@ -4562,16 +4811,25 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         )
     elif audit_profile == "beauty":
         action_plan = _build_beauty_action_plan(
-            has_description=bool(snapshot.get("description_present")),
+            has_description=has_description,
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
             unanswered_reviews_count=unanswered_reviews_count,
             focus_terms=beauty_focus_terms,
         )
+    elif audit_profile == "shopping_center":
+        action_plan = _build_shopping_center_action_plan(
+            has_description=has_description,
+            has_website=has_website,
+            photos_count=photos_count,
+            news_count=news_count,
+            has_recent_activity=has_recent_activity,
+            unanswered_reviews_count=unanswered_reviews_count,
+        )
     elif audit_profile == "fashion":
         action_plan = _build_fashion_action_plan(
-            has_description=bool(snapshot.get("description_present")),
+            has_description=has_description,
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
@@ -4582,14 +4840,14 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         )
     elif audit_profile == "wellness":
         action_plan = _build_wellness_action_plan(
-            has_description=bool(snapshot.get("description_present")),
+            has_description=has_description,
             services_count=services_count,
             photos_count=photos_count,
             unanswered_reviews_count=unanswered_reviews_count,
         )
     elif audit_profile == "food":
         action_plan = _build_food_action_plan(
-            has_description=bool(snapshot.get("description_present")),
+            has_description=has_description,
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
@@ -4597,7 +4855,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         )
     elif audit_profile == "fitness":
         action_plan = _build_fitness_action_plan(
-            has_description=bool(snapshot.get("description_present")),
+            has_description=has_description,
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
@@ -4605,7 +4863,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         )
     else:
         action_plan = _build_default_local_business_action_plan(
-            has_description=bool(snapshot.get("description_present")),
+            has_description=has_description,
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
@@ -4622,7 +4880,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         services_preview = snapshot_services_preview
     elif imported_services_preview and not hospitality_mode:
         services_preview = imported_services_preview
-    elif not services_preview:
+    elif not services_preview and audit_profile != "shopping_center":
         services_preview = _lead_demo_services_preview(business_type)
     news_preview = (
         snapshot.get("news_preview")
@@ -4640,7 +4898,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         address=str(lead.get("address") or "").strip(),
         overview_text=str(lead.get("description") or profile_overview or "").strip(),
         services_count=services_count,
-        has_description=bool(snapshot.get("description_present") or lead.get("description")),
+        has_description=has_description,
         photos_count=photos_count,
         reviews_count=reviews_count,
         unanswered_reviews_count=unanswered_reviews_count,
@@ -4701,7 +4959,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "news_status": news_status or None,
             "photos_state": photos_state,
             "photos_count": photos_count,
-            "description_present": bool(snapshot.get("description_present") or lead.get("description")),
+            "description_present": has_description,
             "booking_offer_count": booking_offer_count if hospitality_mode else 0,
         },
         "revenue_potential": revenue_potential,
@@ -4723,7 +4981,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "photos_per_month_min": cadence_photos_min,
             "reviews_response_hours_max": cadence_response_hours_max,
         },
-        "services_preview": services_preview or _lead_demo_services_preview(business_type),
+        "services_preview": services_preview or ([] if audit_profile == "shopping_center" else _lead_demo_services_preview(business_type)),
         "reviews_preview": reviews_preview,
         "news_preview": news_preview,
         "preview_meta": {
@@ -4973,15 +5231,21 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
             reputation_score -= min(22, unanswered_reviews_count * 3)
         reputation_score = max(0, min(100, reputation_score))
 
-        service_score = 100
-        if services_count <= 0:
-            service_score -= 45
-        elif services_count < services_minimum_visible:
-            service_score -= 22
-        if services_count > 0 and priced_services_count <= 0:
-            service_score -= 12
-        elif services_count > 0 and priced_services_count < max(1, services_count // 2):
-            service_score -= 6
+        service_score = 82 if audit_profile == "shopping_center" else 100
+        if audit_profile == "shopping_center":
+            if not description_text:
+                service_score -= 18
+            if not has_website:
+                service_score -= 12
+        else:
+            if services_count <= 0:
+                service_score -= 45
+            elif services_count < services_minimum_visible:
+                service_score -= 22
+            if services_count > 0 and priced_services_count <= 0:
+                service_score -= 12
+            elif services_count > 0 and priced_services_count < max(1, services_count // 2):
+                service_score -= 6
         service_score = max(0, min(100, service_score))
 
         activity_score = 100
@@ -5057,7 +5321,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
 
         issue_blocks: List[Dict[str, Any]] = []
         hospitality_signals: Dict[str, Any] = {}
-        baseline_profiles = {"default_local_business", "medical", "beauty", "food", "fitness", "wellness", "fashion", "hospitality"}
+        baseline_profiles = {"default_local_business", "medical", "beauty", "food", "fitness", "wellness", "fashion", "shopping_center", "hospitality"}
         baseline_is_default = audit_profile == "default_local_business"
         baseline_is_fashion = audit_profile == "fashion"
         baseline_is_hospitality = hospitality_mode
@@ -5134,6 +5398,19 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 reviews_count=reviews_count,
                 unanswered_reviews_count=unanswered_reviews_count,
                 focus_terms=beauty_focus_terms,
+            )
+            issue_blocks = _merge_issue_blocks(issue_blocks, baseline_issue_blocks)
+        elif audit_profile == "shopping_center":
+            issue_blocks = _build_shopping_center_issue_blocks(
+                business_name=str(business.get("name") or "").strip(),
+                city=str(business.get("city") or "").strip(),
+                has_description=bool(description_text),
+                has_website=has_website,
+                photos_count=photos_count,
+                reviews_count=reviews_count,
+                unanswered_reviews_count=unanswered_reviews_count,
+                news_count=news_count,
+                has_recent_activity=has_recent_activity,
             )
             issue_blocks = _merge_issue_blocks(issue_blocks, baseline_issue_blocks)
         elif audit_profile == "fashion":
@@ -5294,6 +5571,14 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
             current_revenue=current_revenue,
             business_type=business.get("business_type"),
         )
+        if audit_profile == "shopping_center":
+            revenue_potential = {
+                "total_min": 0,
+                "total_max": 0,
+                "dominant_driver": "profile_completeness",
+                "label": "Без денежной оценки",
+                "description": "Для торгового центра аудит оценивает полноту и актуальность карточки, а не выдумывает стоимость потерянной записи.",
+            }
 
         issue_blocks.sort(key=lambda item: _issue_priority_rank(str(item.get("priority") or "")))
         findings: List[Dict[str, Any]] = [
@@ -5365,6 +5650,15 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 unanswered_reviews_count=unanswered_reviews_count,
                 focus_terms=beauty_focus_terms,
             )
+        elif audit_profile == "shopping_center":
+            action_plan = _build_shopping_center_action_plan(
+                has_description=bool(description_text),
+                has_website=has_website,
+                photos_count=photos_count,
+                news_count=news_count,
+                has_recent_activity=has_recent_activity,
+                unanswered_reviews_count=unanswered_reviews_count,
+            )
         elif audit_profile == "fashion":
             action_plan = _build_fashion_action_plan(
                 has_description=bool(description_text),
@@ -5414,7 +5708,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         if audit_profile in baseline_profiles:
             action_plan = _merge_action_plan(action_plan, baseline_action_plan)
 
-        top_driver = max(
+        top_driver = "актуальности информации, навигации и событиях" if audit_profile == "shopping_center" else max(
             [
                 ("рейтинга", revenue_potential["rating_gap"]["max"]),
                 ("неполной карточки", revenue_potential["content_gap"]["max"]),
@@ -5451,6 +5745,11 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
             summary_text = (
                 f"{health_label}. Карточка уже может приводить запись из локального поиска, но пока слабо продаёт направления услуг, цены и результат. "
                 f"Главные зоны роста сейчас — понятные услуги, фото работ и живой ритм обновлений."
+            )
+        elif audit_profile == "shopping_center":
+            summary_text = (
+                f"{health_label}. У карточки уже есть сильное доверие через рейтинг и отзывы, но посетителю не хватает актуальной информации для подготовки поездки. "
+                "Главные задачи — описание формата, список арендаторов и зон, входы, парковка, навигация и свежие события."
             )
         elif audit_profile == "fashion":
             summary_text = (
@@ -5575,7 +5874,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 "description_present": bool(description_text),
                 "booking_offer_count": booking_offer_count,
             },
-            "services_preview": services_preview[:12] if hospitality_mode else raw_services_preview[:12],
+            "services_preview": [] if audit_profile == "shopping_center" else services_preview[:12] if hospitality_mode else raw_services_preview[:12],
         }
         result["summary_text"] = build_editorial_summary(result)
         return apply_audit_editorial_pass(result)

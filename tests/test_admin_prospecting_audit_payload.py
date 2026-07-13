@@ -28,6 +28,8 @@ from src.core.card_audit import (
     _build_food_issue_blocks,
     _build_medical_issue_blocks,
     _build_reasoning_fields,
+    _build_shopping_center_action_plan,
+    _build_shopping_center_issue_blocks,
     _build_wellness_issue_blocks,
     _build_news_activity,
     _detect_audit_profile_details,
@@ -39,6 +41,7 @@ from src.core.card_audit import (
     _normalize_generated_location_phrases,
     estimate_card_revenue_gap,
 )
+from src.core.audit_editorial import build_editorial_summary
 
 
 def test_audit_profile_detection_keeps_beauty_laser_out_of_medical_without_medical_services() -> None:
@@ -99,6 +102,100 @@ def test_audit_profile_detection_prefers_medical_when_services_are_medical() -> 
 
     assert details["profile"] == "medical"
     assert "medical service hits" in " ".join(details["reasons"])
+
+
+def test_shopping_center_profile_ignores_payment_methods_and_uses_visit_language() -> None:
+    import_payload = _extract_lead_import_payload(
+        {
+            "address": "Советский просп., вл2А, Ивантеевка",
+            "search_payload_json": {
+                "services_total_count": 5,
+                "menu_full": [
+                    {"title": "наличными", "category": "payment_method"},
+                    {"title": "оплата картой", "category": "payment_method"},
+                    {"title": "рассрочка", "category": "payment_method"},
+                    {"title": "скидки", "category": "promotions"},
+                    {"title": "бонусы", "category": "promotions"},
+                ],
+            },
+        }
+    )
+    assert import_payload["services_total_count"] == 0
+    assert import_payload["services_preview"] == []
+    assert import_payload["services_profile_names"] == []
+
+    details = _detect_audit_profile_details(
+        "Торговый центр / развлекательный центр",
+        "Гагарин",
+        {"category": "Торговый центр / развлекательный центр"},
+    )
+    assert details["profile"] == "shopping_center"
+
+    reasoning = _build_reasoning_fields(
+        audit_profile="shopping_center",
+        business_name="Гагарин",
+        city="Ивантеевка",
+        address="Советский просп., вл2А",
+        overview_text="Торговый и развлекательный центр",
+        services_count=0,
+        has_description=False,
+        photos_count=20,
+        reviews_count=2484,
+        unanswered_reviews_count=0,
+    )
+    reasoning_text = " | ".join(
+        reasoning["search_intents_to_target"]
+        + reasoning["photo_shots_missing"]
+        + reasoning["positioning_focus"]
+    ).lower()
+    assert "торговый центр" in reasoning_text
+    assert "парков" in reasoning_text
+    assert "запис" not in reasoning_text
+    assert "консультац" not in reasoning_text
+
+
+def test_shopping_center_audit_uses_map_listing_rules_instead_of_service_fallbacks() -> None:
+    issues = _build_shopping_center_issue_blocks(
+        business_name="Гагарин",
+        city="Ивантеевка",
+        has_description=False,
+        has_website=False,
+        photos_count=20,
+        reviews_count=2484,
+        unanswered_reviews_count=0,
+        news_count=0,
+        has_recent_activity=False,
+    )
+    plan = _build_shopping_center_action_plan(
+        has_description=False,
+        has_website=False,
+        photos_count=20,
+        news_count=0,
+        has_recent_activity=False,
+        unanswered_reviews_count=0,
+    )
+    summary = build_editorial_summary(
+        {
+            "name": "Гагарин",
+            "audit_profile": "shopping_center",
+            "issue_blocks": issues,
+            "top_3_issues": issues[:3],
+            "search_intents_to_target": ["торговый центр Ивантеевка", "магазины и кафе Ивантеевка"],
+            "current_state": {"rating": 4.8, "reviews_count": 2484, "services_count": 0},
+        }
+    )
+    combined = " | ".join(
+        [str(item.get("title") or "") + " " + str(item.get("fix") or "") for item in issues]
+        + plan["next_24h"]
+        + plan["next_7d"]
+        + [summary]
+    ).lower()
+    assert "категор" in combined
+    assert "час" in combined
+    assert "парков" in combined
+    assert "запис" not in combined
+    assert "консультац" not in combined
+    assert "ценов" not in combined
 
 
 def test_build_admin_lead_offer_payload_exposes_current_state_top_level_facts() -> None:

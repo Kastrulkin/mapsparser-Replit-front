@@ -57,11 +57,13 @@ TECHNICAL_PUBLIC_KEYS = {
 PROFILE_ACTOR = {
     "medical": "пациент",
     "hospitality": "гость",
+    "shopping_center": "посетитель",
 }
 
 PROFILE_ACTOR_DATIVE = {
     "medical": "пациенту",
     "hospitality": "гостю",
+    "shopping_center": "посетителю",
 }
 
 
@@ -296,6 +298,8 @@ def _services_focus(audit: dict[str, Any]) -> str:
         candidates = ["формат заведения", "меню", "бронь или заказ"]
     if not candidates and audit_profile == "fashion":
         candidates = ["ассортимент", "цены", "наличие"]
+    if not candidates and audit_profile == "shopping_center":
+        candidates = ["магазины и зоны", "входы и парковка", "события и часы работы"]
     if not candidates and audit_profile == "fitness":
         candidates = ["форматы тренировок", "расписание", "запись"]
     if not candidates and audit_profile == "hospitality":
@@ -482,6 +486,17 @@ def _summary_variant_index(audit: dict[str, Any]) -> int:
 
 
 def _summary_impact(audit: dict[str, Any], *, actor: str, actor_dative: str) -> str:
+    if str(audit.get("audit_profile") or "").strip().lower() == "shopping_center":
+        variants = (
+            "Посетитель открывает карточку, но не понимает, какие магазины, развлечения и удобства доступны сейчас.",
+            "Часть поездок откладывается, когда часы, входы, парковка и состав центра приходится уточнять в других источниках.",
+            "Карточка хуже помогает подготовить визит: не хватает актуальных ориентиров и понятного состава центра.",
+            "Посетителю приходится вручную искать арендаторов, схему этажей и события, поэтому выбор места усложняется.",
+            "Интерес к центру уже есть, но карточка не всегда переводит его в построенный маршрут и визит.",
+            "На этапе выбора не хватает короткого ответа: что есть внутри и как удобнее приехать.",
+            "Пользователь видит карточку, но часть практических вопросов остаётся до поездки.",
+        )
+        return variants[_summary_variant_index(audit)]
     variants = (
         f"{actor[:1].upper() + actor[1:]} открывает карточку, но не получает достаточно причин для звонка или записи.",
         "Часть тёплого спроса уходит к конкурентам, где быстрее понятно, что выбрать.",
@@ -512,6 +527,12 @@ def _profile_action_words(audit_profile: str) -> dict[str, str]:
             "action": "уточнить наличие или выбрать товар",
             "choice": "выбора ассортимента",
             "next": "уточнения наличия",
+        }
+    if audit_profile == "shopping_center":
+        return {
+            "action": "построить маршрут и приехать",
+            "choice": "выбора центра для поездки",
+            "next": "построения маршрута",
         }
     if audit_profile == "hospitality":
         return {
@@ -645,6 +666,17 @@ def _editorial_next_action(audit: dict[str, Any], issue_fix: str) -> str:
     audit_profile = str(audit.get("audit_profile") or "").strip().lower()
     words = _profile_action_words(audit_profile)
     normalized_fix = normalize_audit_text(issue_fix, audit_profile=str(audit.get("audit_profile") or ""))
+    if audit_profile == "shopping_center":
+        shopping_center_variants = (
+            "добавить описание центра, категории арендаторов, входы, парковку и ссылку на актуальную схему",
+            "проверить категории, часы, контакты, атрибуты доступности и маршрут от парковки или остановки",
+            "собрать магазины, кафе, развлечения и бытовые сервисы в понятный список для подготовки визита",
+            "обновить описание и навигацию, чтобы посетитель мог заранее спланировать поездку",
+            "показать, что находится внутри центра, как войти и где оставить автомобиль",
+            "разделить информацию по задачам посетителя: покупки, еда, развлечения, сервисы и семейный досуг",
+            "добавить короткий практический блок: часы, входы, парковка, доступность и актуальные события",
+        )
+        return shopping_center_variants[variant]
     if focus:
         variants = (
             f"показать в описании {focus}: что выбрать, кому подходит и как {words['action']}",
