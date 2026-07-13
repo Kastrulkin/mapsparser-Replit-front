@@ -168,6 +168,12 @@ def partnership_list_leads():
                        prospectingleads.last_contact_channel, prospectingleads.last_contact_comment,
                        prospectingleads.parse_business_id, prospectingleads.updated_at,
                        prospectingleads.created_at,
+                       (
+                           SELECT client_business.name
+                           FROM businesses client_business
+                           WHERE client_business.id = prospectingleads.business_id
+                           LIMIT 1
+                       ) AS client_business_name,
                        pq_last.id AS parse_task_id,
                        pq_last.status AS parse_status,
                        COALESCE(pq_last.updated_at, pq_last.created_at) AS parse_updated_at,

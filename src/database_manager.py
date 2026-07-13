@@ -1146,6 +1146,50 @@ class DatabaseManager:
             return False
         except Exception:
             return False
+
+    def _prospectingleads_support_parser_scope(self) -> bool:
+        """Return whether leads can identify parser-only business records."""
+        cursor = self.conn.cursor()
+        try:
+            if self.db_type == 'postgresql':
+                cursor.execute(
+                    """
+                    SELECT lower(column_name) AS column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND lower(table_name) = 'prospectingleads'
+                      AND lower(column_name) IN ('business_id', 'parse_business_id')
+                    """
+                )
+                rows = cursor.fetchall() or []
+                columns = {
+                    str(row['column_name'] if hasattr(row, 'keys') else row[0]).lower()
+                    for row in rows
+                }
+                return {'business_id', 'parse_business_id'}.issubset(columns)
+
+            cursor.execute("PRAGMA table_info(prospectingleads)")
+            rows = cursor.fetchall() or []
+            columns = {str(row[1]).lower() for row in rows}
+            return {'business_id', 'parse_business_id'}.issubset(columns)
+        except Exception:
+            return False
+
+    def _lead_parser_business_filter(self, business_ref: str) -> str:
+        """Exclude parser snapshots that belong to another business's lead."""
+        if not self._prospectingleads_support_parser_scope():
+            return ""
+        return f"""
+            AND NOT EXISTS (
+                SELECT 1
+                FROM prospectingleads parser_lead
+                WHERE parser_lead.parse_business_id = {business_ref}
+                  AND (
+                      parser_lead.business_id IS NULL
+                      OR parser_lead.business_id <> {business_ref}
+                  )
+            )
+        """
     
     def create_business(self, name: str, description: str = None, industry: str = None, owner_id: str = None, 
                        business_type: str = None, address: str = None, working_hours: str = None,
@@ -1244,12 +1288,14 @@ class DatabaseManager:
         moderation_filter = ""
         if self._businesses_has_column("moderation_status"):
             moderation_filter = " AND COALESCE(b.moderation_status, '') <> 'lead_outreach'"
+        lead_parser_filter = self._lead_parser_business_filter("b.id")
         cursor.execute(f"""
             SELECT b.*, u.email as owner_email, u.name as owner_name
             FROM businesses b
             LEFT JOIN users u ON b.owner_id = u.id
             WHERE (b.is_active = TRUE OR b.is_active IS NULL)
             {moderation_filter}
+            {lead_parser_filter}
             ORDER BY b.created_at DESC
         """)
         rows = cursor.fetchall()
@@ -1270,13 +1316,15 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         moderation_filter = ""
         if self._businesses_has_column("moderation_status"):
-            moderation_filter = " AND COALESCE(moderation_status, '') <> 'lead_outreach'"
+            moderation_filter = " AND COALESCE(b.moderation_status, '') <> 'lead_outreach'"
+        lead_parser_filter = self._lead_parser_business_filter("b.id")
         cursor.execute(f"""
-            SELECT * FROM businesses
-            WHERE owner_id = %s
-              AND is_active = TRUE
+            SELECT b.* FROM businesses b
+            WHERE b.owner_id = %s
+              AND b.is_active = TRUE
               {moderation_filter}
-            ORDER BY created_at DESC
+              {lead_parser_filter}
+            ORDER BY b.created_at DESC
         """, (owner_id,))
         return [self._sanitize_business_payload(dict(row)) for row in cursor.fetchall()]
     
@@ -1286,16 +1334,18 @@ class DatabaseManager:
         moderation_filter_direct = ""
         moderation_filter_network = ""
         if self._businesses_has_column("moderation_status"):
-            moderation_filter_direct = " AND COALESCE(moderation_status, '') <> 'lead_outreach'"
+            moderation_filter_direct = " AND COALESCE(b.moderation_status, '') <> 'lead_outreach'"
             moderation_filter_network = " AND COALESCE(b.moderation_status, '') <> 'lead_outreach'"
+        lead_parser_filter = self._lead_parser_business_filter("b.id")
         
         # Получаем бизнесы, которые напрямую принадлежат пользователю
         cursor.execute(f"""
-            SELECT * FROM businesses
-            WHERE owner_id = %s
-              AND (is_active = TRUE OR is_active IS NULL)
+            SELECT b.* FROM businesses b
+            WHERE b.owner_id = %s
+              AND (b.is_active = TRUE OR b.is_active IS NULL)
               {moderation_filter_direct}
-            ORDER BY created_at DESC
+              {lead_parser_filter}
+            ORDER BY b.created_at DESC
         """, (owner_id,))
         direct_businesses = [self._sanitize_business_payload(dict(row)) for row in cursor.fetchall()]
         
@@ -1307,6 +1357,7 @@ class DatabaseManager:
             WHERE n.owner_id = %s
               AND (b.is_active = TRUE OR b.is_active IS NULL)
               {moderation_filter_network}
+              {lead_parser_filter}
             ORDER BY b.created_at DESC
         """, (owner_id,))
         network_businesses = [self._sanitize_business_payload(dict(row)) for row in cursor.fetchall()]

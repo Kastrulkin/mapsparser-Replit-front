@@ -83,6 +83,7 @@ type PartnershipLead = {
   source?: string;
   source_kind?: string;
   source_provider?: string;
+  client_business_name?: string;
   external_place_id?: string;
   external_source_id?: string;
   dedupe_key?: string;
