@@ -725,6 +725,7 @@ const buildDiyChecklist = (page: OfferPagePayload, lang: PageLang, selfHelp: Ret
 };
 
 const buildLocalOsOfferTasks = (page: OfferPagePayload, lang: PageLang): string[] => {
+  const profile = String(page.audit?.audit_profile || '').trim().toLowerCase();
   if (lang === 'ru' && isChildrenEducationNetworkAudit(page)) {
     return [
       'Приведём все 5 карточек к одному стандарту.',
@@ -739,6 +740,20 @@ const buildLocalOsOfferTasks = (page: OfferPagePayload, lang: PageLang): string[
       'Соберём правки по категориям, описанию, часам, входам и парковке.',
       'Подготовим навигационные материалы, публикации о событиях и ответы на отзывы.',
       'После обновления снова проверим карточку и покажем, какие данные ещё требуют внимания.',
+    ];
+  }
+  if (lang === 'ru' && (profile === 'fashion' || profile === 'retail')) {
+    return [
+      'Соберём товарные группы, описание и первые правки в понятный план.',
+      'Подготовим тексты про ассортимент, публикации и ответы на отзывы без неподтверждённых обещаний.',
+      'После обновления снова проверим карточку и покажем, что изменилось.',
+    ];
+  }
+  if (lang === 'ru' && profile === 'education_children') {
+    return [
+      'Соберём программу, возраст групп, расписание и первые правки в понятный план.',
+      'Подготовим тексты направлений, публикации и ответы на отзывы без неподтверждённых обещаний.',
+      'После обновления снова проверим карточку и покажем, что изменилось.',
     ];
   }
   return lang === 'ru'
@@ -3364,7 +3379,13 @@ const PublicPartnershipOfferPage: React.FC = () => {
     {
       label: isShoppingCenter && lang === 'ru'
         ? 'Категория и формат'
-        : isNetworkAudit && lang === 'ru' ? 'Меню/товары в точках' : text.stateServices,
+        : isNetworkAudit && lang === 'ru'
+          ? 'Меню/товары в точках'
+          : lang === 'ru' && (auditProfileForWhy === 'fashion' || auditProfileForWhy === 'retail')
+            ? 'Товары в карточке'
+            : lang === 'ru' && auditProfileForWhy === 'education_children'
+              ? 'Направления в карточке'
+              : text.stateServices,
       ok: isShoppingCenter ? Boolean(String(page.category || '').trim()) : Number(state.services_count || 0) > 0,
       hint: isShoppingCenter && lang === 'ru'
         ? String(page.category || 'Категория не распознана')
@@ -3795,7 +3816,13 @@ const PublicPartnershipOfferPage: React.FC = () => {
         {!isShoppingCenter ? (
         <section className="rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">
-            {isNetworkAudit && lang === 'ru' ? 'Меню и товары в карточках' : text.servicesTitle}
+            {isNetworkAudit && lang === 'ru'
+              ? 'Меню и товары в карточках'
+              : lang === 'ru' && (auditProfileForWhy === 'fashion' || auditProfileForWhy === 'retail')
+                ? 'Товары в карточке'
+                : lang === 'ru' && auditProfileForWhy === 'education_children'
+                  ? 'Направления в карточке'
+                  : text.servicesTitle}
           </h2>
           {hasServicesPreviewOnly ? (
             <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
