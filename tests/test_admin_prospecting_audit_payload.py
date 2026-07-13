@@ -196,6 +196,7 @@ def test_shopping_center_audit_uses_map_listing_rules_instead_of_service_fallbac
     assert "запис" not in combined
     assert "консультац" not in combined
     assert "ценов" not in combined
+    assert "ориентир для услуг" not in combined
 
 
 def test_build_admin_lead_offer_payload_exposes_current_state_top_level_facts() -> None:

@@ -470,6 +470,10 @@ def _pattern_hint(audit: dict[str, Any]) -> str:
     patterns = audit.get("industry_patterns") if isinstance(audit.get("industry_patterns"), dict) else {}
     examples = patterns.get("examples") if isinstance(patterns.get("examples"), list) else []
     service_patterns = patterns.get("service_patterns") if isinstance(patterns.get("service_patterns"), list) else []
+    if str(audit.get("audit_profile") or "").strip().lower() == "shopping_center":
+        if examples:
+            return f"Для карточки важны: {', '.join(str(item) for item in examples[:2])}."
+        return "Для карточки важны точные категории, часы, входы, парковка, навигация и актуальные события."
     if examples:
         return f"Ориентир для услуг: {', '.join(str(item) for item in examples[:2])}."
     if service_patterns:
