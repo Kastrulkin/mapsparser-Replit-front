@@ -3294,12 +3294,12 @@ const PublicPartnershipOfferPage: React.FC = () => {
     }
     if (auditProfileForWhy === 'fashion' || auditProfileForWhy === 'retail') {
       const priceHint = hasKnownPricedServicesCountForWhy && pricedServicesCountForWhy === 0
-        ? 'без ценовых ориентиров'
-        : 'с ценами';
-      return `В карточке найдено ${formatValue(servicesCountForWhy)} товаров ${priceHint}, но покупателю всё равно нужно быстро понять ассортимент и условия выбора.`;
+        ? 'Ценовые ориентиры не указаны.'
+        : 'Цены указаны.';
+      return `Товарных позиций в карточке: ${formatValue(servicesCountForWhy)}. ${priceHint} Покупателю всё равно нужно быстро понять ассортимент и условия выбора.`;
     }
     if (auditProfileForWhy === 'education_children') {
-      return `В карточке найдено ${formatValue(servicesCountForWhy)} направлений, но родителю всё равно нужно быстро понять возраст групп, формат и расписание.`;
+      return `Направлений в карточке: ${formatValue(servicesCountForWhy)}. Родителю всё равно нужно быстро понять возраст групп, формат и расписание.`;
     }
     if (hasKnownPricedServicesCountForWhy && pricedServicesCountForWhy === 0) {
       return `В карточке найдено ${formatValue(servicesCountForWhy)} услуг, но без ценовых ориентиров сложнее сравнить варианты и решиться на следующий шаг.`;
