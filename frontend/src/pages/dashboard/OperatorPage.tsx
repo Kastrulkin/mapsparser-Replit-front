@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import {
   Bot,
@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { BetaFeedbackBanner } from '@/components/dashboard/BetaFeedbackBanner';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
 
@@ -231,6 +232,7 @@ export const OperatorPage = () => {
   const [chatMessage, setChatMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const chatSendInFlightRef = useRef(false);
   const [refreshCheckingQueueId, setRefreshCheckingQueueId] = useState<string | null>(null);
   const [bulkGeneratingKey, setBulkGeneratingKey] = useState<string | null>(null);
   const [applyingServiceJobId, setApplyingServiceJobId] = useState<string | null>(null);
@@ -301,7 +303,8 @@ export const OperatorPage = () => {
 
   const sendOperatorChatMessage = async (overrideText?: string) => {
     const text = (overrideText || chatMessage).trim();
-    if (!currentBusinessId || !text) return;
+    if (!currentBusinessId || !text || chatSendInFlightRef.current) return;
+    chatSendInFlightRef.current = true;
     setChatLoading(true);
     try {
       const response = await api.post('/operator/chat', {
@@ -329,6 +332,7 @@ export const OperatorPage = () => {
         blocked_reasons: ['operator_chat_request_failed'],
       });
     } finally {
+      chatSendInFlightRef.current = false;
       setChatLoading(false);
     }
   };
@@ -610,20 +614,33 @@ export const OperatorPage = () => {
               onChange={(event) => setChatMessage(event.target.value)}
               placeholder="Напишите задачу: измени цену услуги, создай новость, сделай контент-план…"
               onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
                   void sendOperatorChatMessage();
                 }
               }}
             />
-            <Button
-              type="button"
-              className="h-12 lg:self-end"
-              onClick={() => void sendOperatorChatMessage()}
-              disabled={chatLoading || !currentBusinessId || !chatMessage.trim()}
-            >
-              {chatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              Отправить
-            </Button>
+            <TooltipProvider delayDuration={180}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="block lg:self-end">
+                    <Button
+                      type="button"
+                      className="h-12 w-full transition-transform active:scale-[0.96] lg:w-auto"
+                      onClick={() => void sendOperatorChatMessage()}
+                      disabled={chatLoading || !currentBusinessId || !chatMessage.trim()}
+                    >
+                      {chatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                      Отправить
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="space-y-1 text-xs leading-5">
+                  <div><kbd className="font-semibold">Enter</kbd> — отправить</div>
+                  <div><kbd className="font-semibold">Shift + Enter</kbd> — новая строка</div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </div>
