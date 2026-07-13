@@ -1,0 +1,125 @@
+from src.api.admin_prospecting import (
+    _build_organika_partner_offer_text,
+    _candidate_is_closed,
+    _is_synthetic_partnership_lead,
+    _select_partnership_map_candidate,
+)
+from src.core.audit_quality import evaluate_audit_quality
+from src.core import card_audit
+from src.core.card_audit import (
+    _build_reasoning_fields,
+    _detect_audit_profile_details,
+    build_lead_card_preview_snapshot,
+)
+
+
+def test_new_partner_profiles_are_detected_from_real_business_categories() -> None:
+    cases = (
+        ("Робототехника для детей", "education_children"),
+        ("Семейный развлекательный центр", "family_entertainment"),
+        ("Туристическое агентство", "travel"),
+        ("Страховая компания", "financial_services"),
+        ("Ремонт обуви и изготовление ключей", "repair_service"),
+        ("Многофункциональный бизнес-центр", "commercial_center"),
+    )
+    for category, expected_profile in cases:
+        details = _detect_audit_profile_details(category, category, {"category": category})
+        assert details["profile"] == expected_profile
+        assert details["confidence"] >= 0.7
+
+
+def test_specialized_profile_reasoning_uses_its_own_visitor_language() -> None:
+    reasoning = _build_reasoning_fields(
+        audit_profile="education_children",
+        business_name="Роботрек",
+        city="Санкт-Петербург",
+        address="проспект Испытателей, 35",
+        overview_text="Робототехника для детей",
+        services_count=0,
+        has_description=False,
+        photos_count=2,
+        reviews_count=10,
+        unanswered_reviews_count=1,
+    )
+    text = " ".join(
+        reasoning["best_fit_customer_profile"]
+        + reasoning["search_intents_to_target"]
+        + reasoning["positioning_focus"]
+    ).lower()
+    assert "родител" in text
+    assert "возраст" in text
+    assert "пациент" not in text
+    assert "косметолог" not in text
+
+
+def test_specialized_audit_does_not_invent_demo_services_or_revenue(monkeypatch) -> None:
+    monkeypatch.setattr(card_audit, "_resolve_lead_business_snapshot", lambda _lead: {})
+    audit = build_lead_card_preview_snapshot(
+        {
+            "id": "lead-education",
+            "name": "Роботрек",
+            "city": "Санкт-Петербург",
+            "address": "проспект Испытателей, 35",
+            "category": "Робототехника для детей",
+            "source_url": "https://yandex.ru/maps/org/robotrek/123",
+            "rating": 4.8,
+            "reviews_count": 12,
+            "search_payload_json": {},
+        }
+    )
+    assert audit["audit_profile"] == "education_children"
+    assert audit["services_preview"] == []
+    assert audit["revenue_potential"]["label"] == "Без денежной оценки"
+
+
+def test_partner_map_match_requires_confidence_and_margin() -> None:
+    ambiguous, status = _select_partnership_map_candidate(
+        [
+            {"confidence": 0.91, "raw": {}},
+            {"confidence": 0.86, "raw": {}},
+        ]
+    )
+    assert ambiguous is None
+    assert status == "ambiguous"
+
+    confirmed, status = _select_partnership_map_candidate(
+        [
+            {"confidence": 0.93, "raw": {}},
+            {"confidence": 0.82, "raw": {}},
+        ]
+    )
+    assert confirmed is not None
+    assert status == "confirmed"
+
+
+def test_closed_candidate_and_synthetic_group_are_not_processed() -> None:
+    assert _candidate_is_closed({"raw": {"businessStatus": "permanently_closed"}}) is True
+    assert _is_synthetic_partnership_lead({"name": "Медицинские арендаторы", "category": "группа"}) is True
+
+
+def test_audit_quality_blocks_technical_and_foreign_industry_copy() -> None:
+    quality = evaluate_audit_quality(
+        {
+            "audit_profile": "education_children",
+            "business": {"name": "Роботрек"},
+            "summary_text": "Fallback payload предлагает консультацию косметолога.",
+            "issue_blocks": [{"title": "Нужно лечение"}],
+        },
+        expected_name="Роботрек",
+    )
+    assert quality["passed"] is False
+    codes = {flag["code"] for flag in quality["flags"]}
+    assert "technical_copy" in codes
+    assert "industry_drift" in codes
+
+
+def test_organika_offer_has_one_safe_test_and_no_automatic_action() -> None:
+    text = _build_organika_partner_offer_text(
+        business_name="Органика",
+        lead_name="Роботрек",
+        audit_json={"audit_profile": "education_children"},
+    ).lower()
+    assert "родител" in text
+    assert "20-минутн" in text
+    assert "автоматической рассылки" in text
+    assert "заранее не обещаются" in text

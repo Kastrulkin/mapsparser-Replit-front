@@ -24,6 +24,7 @@ from psycopg2.extras import Json, RealDictCursor
 from auth_system import CONSENT_VERSION, normalize_email, verify_session
 from core.channel_delivery import normalize_phone, send_maton_bridge_message
 from core.card_audit import build_lead_card_preview_snapshot
+from core.audit_quality import evaluate_audit_quality
 from core.telegram_userbot import load_userbot_account, send_message as userbot_send_message
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
 from core.audit_editorial import (
@@ -101,6 +102,12 @@ from services.sales_room_audit_offer_service import (
 
 
 admin_prospecting_bp = Blueprint("admin_prospecting", __name__)
+
+
+class AuditQualityError(ValueError):
+    def __init__(self, quality: dict[str, Any]):
+        super().__init__("Audit quality gate failed")
+        self.quality = quality
 
 SHORTLIST_APPROVED = "shortlist_approved"
 SHORTLIST_REJECTED = "shortlist_rejected"
@@ -1089,6 +1096,131 @@ def _find_yandex_candidates_for_partner_card(card: dict[str, Any], limit: int = 
     return candidates[:limit], None
 
 
+PARTNER_MAP_MATCH_MIN_CONFIDENCE = 0.83
+PARTNER_MAP_MATCH_MIN_MARGIN = 0.08
+PARTNERSHIP_SYNTHETIC_MARKERS = (
+    "детский этаж",
+    "медицинские арендаторы",
+    "кинотеатр / развлечения",
+    "развлекательный автомат",
+    "группа арендаторов",
+)
+
+
+def _partnership_lead_as_partner_card(lead: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "partner_name": str(lead.get("name") or "").strip(),
+        "partner_city": str(lead.get("city") or "").strip(),
+        "partner_address": str(lead.get("address") or "").strip(),
+    }
+
+
+def _is_synthetic_partnership_lead(lead: dict[str, Any]) -> bool:
+    identity = " ".join(
+        str(lead.get(key) or "").strip().lower()
+        for key in ("name", "category", "address")
+    )
+    return any(marker in identity for marker in PARTNERSHIP_SYNTHETIC_MARKERS)
+
+
+def _candidate_is_closed(candidate: dict[str, Any]) -> bool:
+    raw = candidate.get("raw") if isinstance(candidate.get("raw"), dict) else {}
+    status = str(
+        raw.get("businessStatus")
+        or raw.get("business_status")
+        or raw.get("status")
+        or ""
+    ).strip().lower()
+    closed_statuses = {"closed", "permanently_closed", "temporarily_closed", "inactive"}
+    return bool(
+        raw.get("permanentlyClosed")
+        or raw.get("temporarilyClosed")
+        or raw.get("isClosed")
+        or status in closed_statuses
+    )
+
+
+def _find_yandex_candidates_for_partnership_lead(
+    lead: dict[str, Any],
+    limit: int = 5,
+) -> tuple[list[dict[str, Any]], str | None]:
+    return _find_yandex_candidates_for_partner_card(_partnership_lead_as_partner_card(lead), limit=limit)
+
+
+def _select_partnership_map_candidate(candidates: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, str]:
+    active_candidates = [candidate for candidate in candidates if not _candidate_is_closed(candidate)]
+    if not active_candidates:
+        return None, "closed_or_not_found"
+    best = active_candidates[0]
+    best_confidence = float(best.get("confidence") or 0)
+    runner_up_confidence = float(active_candidates[1].get("confidence") or 0) if len(active_candidates) > 1 else 0.0
+    if best_confidence < PARTNER_MAP_MATCH_MIN_CONFIDENCE:
+        return None, "low_confidence"
+    if len(active_candidates) > 1 and best_confidence - runner_up_confidence < PARTNER_MAP_MATCH_MIN_MARGIN:
+        return None, "ambiguous"
+    return best, "confirmed"
+
+
+def _store_partnership_map_match(
+    cur,
+    *,
+    lead: dict[str, Any],
+    candidate: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> None:
+    original_source_url = str(lead.get("source_url") or "").strip()
+    existing_sources = lead.get("matched_sources_json")
+    if not isinstance(existing_sources, list):
+        existing_sources = []
+    source_history = list(existing_sources)
+    if original_source_url and not any(
+        str(item.get("url") or "").strip() == original_source_url
+        for item in source_history
+        if isinstance(item, dict)
+    ):
+        source_history.append({"type": "source_document", "url": original_source_url})
+    source_history.append(
+        {
+            "type": "yandex_map_match",
+            "url": candidate.get("yandex_maps_url"),
+            "confidence": candidate.get("confidence"),
+            "reason": candidate.get("reason"),
+            "matched_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    cur.execute(
+        """
+        UPDATE prospectingleads
+        SET source_url = %s,
+            source = 'apify_yandex',
+            source_kind = 'maps',
+            source_provider = 'apify_yandex',
+            external_place_id = COALESCE(NULLIF(%s, ''), external_place_id),
+            external_source_id = COALESCE(NULLIF(%s, ''), external_source_id),
+            address = COALESCE(NULLIF(%s, ''), address),
+            category = COALESCE(NULLIF(%s, ''), category),
+            rating = COALESCE(%s, rating),
+            reviews_count = COALESCE(%s, reviews_count),
+            search_payload_json = %s,
+            matched_sources_json = %s,
+            updated_at = NOW()
+        WHERE id = %s
+        """,
+        (
+            str(candidate.get("yandex_maps_url") or "").strip(),
+            str(candidate.get("external_source_id") or "").strip(),
+            str(candidate.get("external_source_id") or "").strip(),
+            str(candidate.get("address") or "").strip(),
+            str(candidate.get("category") or "").strip(),
+            candidate.get("rating"),
+            candidate.get("reviews_count"),
+            Json({"map_match_candidates": candidates}),
+            Json(source_history),
+            str(lead.get("id") or ""),
+        ),
+    )
+
+
 def _load_partner_card(cur, *, partner_id: str, business_id: str) -> dict[str, Any] | None:
     cur.execute(
         """
@@ -1239,6 +1371,13 @@ def _create_admin_public_audit_for_lead(
     primary_language: str = "ru",
 ) -> tuple[str, str, dict[str, Any]]:
     preview = build_lead_card_preview_snapshot(lead)
+    quality = evaluate_audit_quality(
+        preview,
+        expected_name=str(lead.get("name") or ""),
+        expected_address=str(lead.get("address") or ""),
+    )
+    if not quality.get("passed"):
+        raise AuditQualityError(quality)
     page_json = _to_json_compatible(
         _build_admin_lead_offer_payload(
             lead=lead,
@@ -1248,6 +1387,7 @@ def _create_admin_public_audit_for_lead(
         )
     )
     page_json["source"] = source_type
+    page_json["quality"] = quality
     page_json["signup_context"] = {
         "source": "partnership_partner",
         "lead_id": str(lead.get("id") or ""),
@@ -9173,6 +9313,7 @@ def partnership_parse_lead(lead_id):
         data = request.get_json(silent=True) or {}
         requested_business_id = str(data.get("business_id") or "").strip() or None
 
+        map_match: dict[str, Any] | None = None
         conn = get_db_connection()
         try:
             _ensure_partnership_columns(conn)
@@ -9183,17 +9324,48 @@ def partnership_parse_lead(lead_id):
             lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
             if not lead:
                 return jsonify({"error": "Lead not found"}), 404
+            if _is_internal_partnership_source_url(lead.get("source_url")):
+                if _is_synthetic_partnership_lead(lead):
+                    return jsonify(
+                        {
+                            "error": "Запись обозначает группу или тип бизнеса, а не одну компанию.",
+                            "code": "PARTNER_MAP_MATCH_SYNTHETIC",
+                        }
+                    ), 422
+                candidates, provider_error = _find_yandex_candidates_for_partnership_lead(lead)
+                if provider_error:
+                    return jsonify(
+                        {
+                            "error": "Не удалось выполнить поиск на Яндекс Картах.",
+                            "code": "PARTNER_MAP_MATCH_PROVIDER_ERROR",
+                            "detail": provider_error,
+                        }
+                    ), 503
+                candidate, match_status = _select_partnership_map_candidate(candidates)
+                if not candidate:
+                    status_code = 404 if match_status == "closed_or_not_found" else 409
+                    return jsonify(
+                        {
+                            "error": "Нельзя однозначно подтвердить карточку компании.",
+                            "code": "PARTNER_MAP_MATCH_AMBIGUOUS",
+                            "reason": match_status,
+                            "candidates": candidates,
+                        }
+                    ), status_code
+                _store_partnership_map_match(cur, lead=lead, candidate=candidate, candidates=candidates)
+                conn.commit()
+                lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
+                map_match = {
+                    "status": "confirmed",
+                    "candidate": candidate,
+                    "confidence": candidate.get("confidence"),
+                }
         finally:
             conn.close()
 
         display_lead = _normalize_lead_for_display(dict(lead))
         if not display_lead:
             return jsonify({"error": "Lead is not available for parsing"}), 400
-        if _is_internal_partnership_source_url(display_lead.get("source_url")):
-            return jsonify({
-                "error": "Для импортированных из Google Docs партнёров парсинг карты недоступен: добавьте ссылку на Яндекс Карты в поле источника или откройте карточку вручную.",
-            }), 400
-
         business, business_created = _ensure_parse_business_for_partnership_lead(display_lead, str(user_data["user_id"]))
         parse_business_id = str(business.get("id") or "").strip()
         if not parse_business_id:
@@ -9239,6 +9411,7 @@ def partnership_parse_lead(lead_id):
                     "retry_after": task.get("retry_after"),
                     "existing": bool(task.get("existing")),
                 },
+                "map_match": map_match,
             }
         )
     except Exception as e:
@@ -10611,6 +10784,71 @@ def _fallback_sales_room_offer_text(*, mode: str, business_name: str, lead_name:
     )
 
 
+def _build_organika_partner_offer_text(
+    *,
+    business_name: str,
+    lead_name: str,
+    audit_json: dict[str, Any],
+) -> str:
+    profile = str(audit_json.get("audit_profile") or "default_local_business").strip().lower()
+    profile_angles = {
+        "shopping_center": (
+            "посетители центра, которым важно совместить несколько дел за один визит",
+            "одну совместную памятку или локальную публикацию с полезным сценарием визита",
+        ),
+        "commercial_center": (
+            "сотрудники и посетители комплекса, которые пользуются сервисами рядом с работой",
+            "один полезный материал для арендаторов или посетителей с понятными локальными сценариями",
+        ),
+        "medical": (
+            "жители района, которые заботятся о здоровье и внешнем виде, но принимают решения раздельно",
+            "один совместный просветительский материал без медицинских рекомендаций и передачи данных клиентов",
+        ),
+        "fitness": (
+            "люди, которые совмещают тренировки и уход за собой",
+            "один совместный материал о комфортном сценарии до или после тренировки",
+        ),
+        "beauty": (
+            "локальная аудитория, которая регулярно выбирает услуги ухода",
+            "одну небольшую совместную публикацию о разных сценариях ухода без обещания скидок",
+        ),
+        "education_children": (
+            "родители, которые планируют занятия ребёнка и свои дела в одном районе",
+            "одну полезную локальную памятку для родителей без обещания скидок или передачи контактов",
+        ),
+        "family_entertainment": (
+            "семьи, которые планируют досуг и другие дела в одном районе",
+            "один совместный гид по комфортному семейному сценарию на выходной",
+        ),
+        "travel": (
+            "жители района, которые готовятся к поездке и заранее планируют время",
+            "один чек-лист подготовки к поездке без выдуманных цен и гарантий",
+        ),
+        "financial_services": (
+            "жители района, которые ценят понятные локальные сервисы",
+            "один совместный информационный материал без обещаний одобрения или финансовой выгоды",
+        ),
+        "repair_service": (
+            "жители района, которым нужны регулярные бытовые услуги рядом",
+            "один полезный материал о том, как подготовить вещь к ремонту и дальнейшему уходу",
+        ),
+    }
+    audience, test_format = profile_angles.get(
+        profile,
+        (
+            "жители и посетители района, которым важны понятные локальные сервисы",
+            "один небольшой совместный материал для локальной аудитории",
+        ),
+    )
+    return (
+        f"У {business_name} и {lead_name} есть пересечение по локальной аудитории: {audience}.\n\n"
+        "Предлагаем начать без интеграции и автоматической рассылки: "
+        f"подготовить {test_format}.\n\n"
+        "Следующий шаг — 20-минутный разговор: сверить интерес и выбрать один безопасный тест. "
+        "Скидки, передача клиентов и любые рекомендации обсуждаются отдельно и заранее не обещаются."
+    )
+
+
 def _build_sales_room_proposal(
     *,
     mode: str,
@@ -11504,6 +11742,119 @@ def _ensure_partnership_artifacts_table_from_cursor(cur) -> None:
     )
 
 
+def _refresh_existing_partnership_sales_room(
+    cur,
+    *,
+    business_id: str,
+    user_id: str,
+    lead: dict[str, Any],
+    business_profile: dict[str, Any],
+    audit_json: dict[str, Any],
+    match_json: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    lead_id = str(lead.get("id") or "").strip()
+    cur.execute(
+        """
+        SELECT *
+        FROM sales_rooms
+        WHERE business_id = NULLIF(%s, '')::uuid
+          AND lead_id = %s
+          AND mode = %s
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE
+        """,
+        (business_id, lead_id, SALES_ROOM_MODE_PARTNER),
+    )
+    room = _row_to_dict(cur.fetchone())
+    if not room:
+        return None
+
+    business_name = _pick_business_display_name(business_profile)
+    lead_name = str(lead.get("name") or "компания").strip() or "компания"
+    body_text = _build_organika_partner_offer_text(
+        business_name=business_name,
+        lead_name=lead_name,
+        audit_json=audit_json,
+    )
+    proposal_json = {
+        "title": f"Предложение от {business_name}",
+        "summary": "Один безопасный тест сотрудничества без автоматических рассылок.",
+        "body_text": body_text,
+        "bullets": [],
+        "next_step": "Сверить интерес на 20-минутном разговоре и выбрать один тест.",
+        "data_mode": SALES_ROOM_DATA_TEMPLATE,
+    }
+    generated_room_json = _build_sales_room_payload(
+        mode=SALES_ROOM_MODE_PARTNER,
+        data_mode=SALES_ROOM_DATA_TEMPLATE,
+        lead=lead,
+        business_profile=business_profile,
+        audit_public_url="",
+        audit_json={},
+        match_json={},
+        proposal_json=proposal_json,
+        slug=str(room.get("slug") or ""),
+    )
+    existing_room_json = room.get("room_json") if isinstance(room.get("room_json"), dict) else {}
+    room_json = dict(existing_room_json)
+    room_json.update(generated_room_json)
+    latest_version = _load_sales_room_latest_version(cur, str(room.get("id") or ""))
+    if not latest_version:
+        latest_version = _ensure_sales_room_proposal_version(
+            cur,
+            room_id=str(room.get("id") or ""),
+            body_text=str((existing_room_json.get("proposal") or {}).get("body_text") or ""),
+            author_name=business_name,
+            metadata={"source": "existing_room_proposal"},
+        )
+    if str(latest_version.get("body_text") or "").strip() != body_text:
+        latest_version = _create_sales_room_proposal_version(
+            cur,
+            room_id=str(room.get("id") or ""),
+            body_text=body_text,
+            author_name=business_name,
+            author_contact="",
+            metadata={
+                "source": "partner_audit_rollout",
+                "lead_id": lead_id,
+                "audit_profile": audit_json.get("audit_profile"),
+            },
+        )
+    cur.execute(
+        """
+        UPDATE sales_rooms
+        SET data_mode = %s,
+            audit_public_url = NULL,
+            proposal_json = %s,
+            room_json = %s,
+            updated_at = NOW()
+        WHERE id = %s
+        RETURNING *
+        """,
+        (
+            SALES_ROOM_DATA_TEMPLATE,
+            Json(proposal_json),
+            Json(room_json),
+            str(room.get("id") or ""),
+        ),
+    )
+    room = _row_to_dict(cur.fetchone())
+    room["public_url"] = _make_sales_room_url(str(room.get("slug") or ""))
+    room["room_json"] = room_json
+    _record_sales_room_event_by_id(
+        cur,
+        room_id=str(room.get("id") or ""),
+        event_type="partner_audit_room_updated",
+        metadata={
+            "lead_id": lead_id,
+            "proposal_version": latest_version.get("version_no"),
+            "audit_profile": audit_json.get("audit_profile"),
+        },
+    )
+    return room, {}
+
+
 def _create_or_update_sales_room(
     cur,
     *,
@@ -11608,6 +11959,7 @@ def _prepare_partnership_sales_room(
     data_mode: str,
     channel: str,
     audit_offer: dict[str, Any] | None = None,
+    reuse_existing: bool = False,
 ) -> dict[str, Any]:
     conn = get_db_connection()
     try:
@@ -11637,7 +11989,7 @@ def _prepare_partnership_sales_room(
             draft_text = _load_sales_room_offer_text_from_drafts(cur, lead_id)
             if draft_text:
                 offer_draft_json = {"text": draft_text}
-        if data_mode == SALES_ROOM_DATA_AUDITED and not audit_json:
+        if (data_mode == SALES_ROOM_DATA_AUDITED or reuse_existing) and not audit_json:
             audit_json = _to_json_compatible(build_lead_card_preview_snapshot(lead))
         match_json = artifact.get("match_json") if isinstance(artifact.get("match_json"), dict) else {}
         if data_mode == SALES_ROOM_DATA_AUDITED and not match_json:
@@ -11659,20 +12011,34 @@ def _prepare_partnership_sales_room(
                 """,
                 (lead_id, Json(audit_json), Json(match_json)),
             )
-        room, draft = _create_or_update_sales_room(
-            cur,
-            business_id=business_id,
-            user_id=user_id,
-            mode=SALES_ROOM_MODE_PARTNER,
-            data_mode=data_mode,
-            lead=lead,
-            business_profile=business_profile,
-            audit_public_url=str(lead.get("public_audit_url") or ""),
-            audit_json=audit_json,
-            match_json=match_json,
-            offer_draft_json=offer_draft_json,
-            channel=channel,
-        )
+        existing_room_result = None
+        if reuse_existing:
+            existing_room_result = _refresh_existing_partnership_sales_room(
+                cur,
+                business_id=business_id,
+                user_id=user_id,
+                lead=lead,
+                business_profile=business_profile,
+                audit_json=audit_json,
+                match_json=match_json,
+            )
+        if existing_room_result:
+            room, draft = existing_room_result
+        else:
+            room, draft = _create_or_update_sales_room(
+                cur,
+                business_id=business_id,
+                user_id=user_id,
+                mode=SALES_ROOM_MODE_PARTNER,
+                data_mode=data_mode,
+                lead=lead,
+                business_profile=business_profile,
+                audit_public_url=str(lead.get("public_audit_url") or ""),
+                audit_json=audit_json,
+                match_json=match_json,
+                offer_draft_json=offer_draft_json,
+                channel=channel,
+            )
         if isinstance(audit_offer, dict) and audit_offer:
             _upsert_sales_room_audit_offer(cur, room=room, data=audit_offer)
         billing = {"status": "not_required", "credit_charged": False, "charged_credits": 0}
@@ -11684,19 +12050,26 @@ def _prepare_partnership_sales_room(
                 user_id=user_id,
                 room_id=str(room.get("id") or ""),
             )
-        cur.execute(
-            """
-            UPDATE prospectingleads
-            SET partnership_stage = %s,
-                status = %s,
-                selected_channel = %s,
-                updated_at = NOW()
-            WHERE id = %s
-            """,
-            ("proposal_draft_ready", "proposal_draft_ready", channel, lead_id),
-        )
+        if not existing_room_result:
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET partnership_stage = %s,
+                    status = %s,
+                    selected_channel = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                ("proposal_draft_ready", "proposal_draft_ready", channel, lead_id),
+            )
         conn.commit()
-        return {"success": True, "room": room, "draft": _serialize_draft(draft), "billing": billing}
+        return {
+            "success": True,
+            "room": room,
+            "draft": _serialize_draft(draft) if draft else None,
+            "billing": billing,
+            "reused": bool(existing_room_result),
+        }
     finally:
         conn.close()
 
@@ -12533,28 +12906,30 @@ def partnership_audit_lead(lead_id):
             lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
             if not lead:
                 return jsonify({"error": "Lead not found"}), 404
-
-            snapshot: dict[str, Any] | None = None
-            if _is_partnership_openclaw_enabled():
-                openclaw_result = _call_partnership_openclaw_capability(
-                    "partners.audit_card",
-                    tenant_id=business_id,
-                    payload={
-                        "business_id": business_id,
-                        "lead_id": lead_id,
-                        "lead": lead,
-                        "intent": "partnership_outreach",
-                    },
-                    timeout_sec=40,
-                )
-                if openclaw_result.get("success"):
-                    result_blob = _extract_openclaw_result_blob(openclaw_result)
-                    candidate_snapshot = result_blob.get("snapshot")
-                    if isinstance(candidate_snapshot, dict) and candidate_snapshot:
-                        snapshot = candidate_snapshot
-            if not snapshot:
-                snapshot = build_lead_card_preview_snapshot(lead)
+            lead = _sync_partnership_lead_from_parsed_data(lead)
+            snapshot = build_lead_card_preview_snapshot(lead)
             snapshot = _to_json_compatible(snapshot)
+            quality = evaluate_audit_quality(
+                snapshot,
+                expected_name=str(lead.get("name") or ""),
+                expected_address=str(lead.get("address") or ""),
+            )
+            if not quality.get("passed"):
+                conn.rollback()
+                return jsonify(
+                    {
+                        "error": "Аудит не прошёл проверку качества.",
+                        "code": "AUDIT_QUALITY_BLOCKED",
+                        "quality": quality,
+                    }
+                ), 422
+            _ensure_admin_prospecting_public_offers_table(conn)
+            audit_slug, audit_url, page_json = _create_admin_public_audit_for_lead(
+                cur,
+                lead=lead,
+                user_id=str(user_data.get("user_id") or ""),
+                source_type="partnership_partner",
+            )
             cur.execute(
                 """
                 INSERT INTO partnershipleadartifacts (lead_id, audit_json, updated_at)
@@ -12578,7 +12953,25 @@ def partnership_audit_lead(lead_id):
             conn.commit()
         finally:
             conn.close()
-        return jsonify({"success": True, "snapshot": snapshot})
+        return jsonify(
+            {
+                "success": True,
+                "snapshot": snapshot,
+                "audit_slug": audit_slug,
+                "audit_url": audit_url,
+                "audit_profile": snapshot.get("audit_profile"),
+                "quality": quality,
+                "page": page_json,
+            }
+        )
+    except AuditQualityError as quality_error:
+        return jsonify(
+            {
+                "error": "Аудит не прошёл проверку качества.",
+                "code": "AUDIT_QUALITY_BLOCKED",
+                "quality": quality_error.quality,
+            }
+        ), 422
     except Exception as e:
         print(f"Error partnership audit lead: {e}")
         return jsonify({"error": str(e)}), 500

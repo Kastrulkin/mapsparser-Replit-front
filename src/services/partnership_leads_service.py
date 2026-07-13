@@ -787,6 +787,7 @@ def partnership_prepare_sales_room(lead_id):
             data_mode=data_mode,
             channel=channel,
             audit_offer=data.get("audit_offer") if isinstance(data.get("audit_offer"), dict) else None,
+            reuse_existing=bool(data.get("reuse_existing")),
         )
         if result.get("error"):
             return jsonify(result), int(result.get("status_code") or 400)

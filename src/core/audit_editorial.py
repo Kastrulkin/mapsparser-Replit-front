@@ -58,12 +58,24 @@ PROFILE_ACTOR = {
     "medical": "пациент",
     "hospitality": "гость",
     "shopping_center": "посетитель",
+    "education_children": "родитель",
+    "family_entertainment": "гость",
+    "travel": "путешественник",
+    "financial_services": "клиент",
+    "repair_service": "заказчик",
+    "commercial_center": "посетитель",
 }
 
 PROFILE_ACTOR_DATIVE = {
     "medical": "пациенту",
     "hospitality": "гостю",
     "shopping_center": "посетителю",
+    "education_children": "родителю",
+    "family_entertainment": "гостю",
+    "travel": "путешественнику",
+    "financial_services": "клиенту",
+    "repair_service": "заказчику",
+    "commercial_center": "посетителю",
 }
 
 
@@ -470,7 +482,17 @@ def _pattern_hint(audit: dict[str, Any]) -> str:
     patterns = audit.get("industry_patterns") if isinstance(audit.get("industry_patterns"), dict) else {}
     examples = patterns.get("examples") if isinstance(patterns.get("examples"), list) else []
     service_patterns = patterns.get("service_patterns") if isinstance(patterns.get("service_patterns"), list) else []
-    if str(audit.get("audit_profile") or "").strip().lower() == "shopping_center":
+    profile = str(audit.get("audit_profile") or "").strip().lower()
+    place_profiles = {
+        "shopping_center",
+        "education_children",
+        "family_entertainment",
+        "travel",
+        "financial_services",
+        "repair_service",
+        "commercial_center",
+    }
+    if profile in place_profiles:
         if examples:
             return f"Для карточки важны: {', '.join(str(item) for item in examples[:2])}."
         return "Для карточки важны точные категории, часы, входы, парковка, навигация и актуальные события."

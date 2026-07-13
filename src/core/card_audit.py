@@ -300,6 +300,18 @@ AUDIT_PROFILE_HINTS = {
         "кебаб", "шаверм", "шаурм", "шашлык", "плов", "манты", "бургер", "суши", "ролл", "завтрак", "обед",
     ),
     "fitness": ("fitness", "gym", "pilates", "yoga", "crossfit", "фитнес", "спорт", "пилат", "йога", "тренаж"),
+    "education_children": (
+        "детский центр", "детская школа", "робототех", "подготовка к школе", "развитие способностей",
+        "языковая школа", "образовательный центр", "академия для детей",
+    ),
+    "family_entertainment": (
+        "игротека", "развлекательный центр", "детский театр", "аквацентр", "игровая зона", "семейный досуг",
+        "кинотеатр", "парк развлечений",
+    ),
+    "travel": ("турагент", "туристическое агентство", "туры", "путешествия", "визовый центр"),
+    "financial_services": ("банк", "страховая компания", "страхование", "осаго", "каско", "отделение банка"),
+    "repair_service": ("ремонт обуви", "ремонт часов", "мастерская", "изготовление ключей", "бытовой ремонт"),
+    "commercial_center": ("бизнес-центр", "бизнес центр", "деловой центр", "многофункциональный комплекс", "офисный центр"),
 }
 
 AUDIT_PROFILE_LABELS = {
@@ -312,6 +324,60 @@ AUDIT_PROFILE_LABELS = {
     "food": "HoReCa / еда и напитки",
     "fitness": "Фитнес / студия",
     "hospitality": "Гостеприимство / размещение",
+    "education_children": "Детское образование и занятия",
+    "family_entertainment": "Семейные развлечения и досуг",
+    "travel": "Туристические услуги",
+    "financial_services": "Банк / страхование / финансы",
+    "repair_service": "Ремонт и бытовой сервис",
+    "commercial_center": "Бизнес-центр / деловой комплекс",
+}
+
+SPECIALIZED_LOCAL_PROFILES = {
+    "education_children",
+    "family_entertainment",
+    "travel",
+    "financial_services",
+    "repair_service",
+    "commercial_center",
+}
+
+SPECIALIZED_PROFILE_COPY = {
+    "education_children": {
+        "audience": "родители, которые выбирают занятия по возрасту, расписанию и навыку",
+        "intents": ("детский центр", "занятия для детей", "расписание и возраст групп"),
+        "photos": ("Вход и навигация до центра", "Классы, материалы и рабочая атмосфера", "Преподаватели и формат занятий без постановочных обещаний"),
+        "focus": "возраст, расписание, формат занятий и подтверждённые навыки",
+    },
+    "family_entertainment": {
+        "audience": "семьи, которые заранее сравнивают программу, возрастные ограничения и часы",
+        "intents": ("семейные развлечения", "куда сходить с детьми", "афиша и часы работы"),
+        "photos": ("Вход и зона встречи", "Реальные игровые зоны или зал", "Правила посещения, гардероб и зона ожидания"),
+        "focus": "формат досуга, возраст, длительность, правила и актуальную афишу",
+    },
+    "travel": {
+        "audience": "путешественники, которым нужны понятные направления, документы и сценарий обращения",
+        "intents": ("турагентство", "подбор тура", "документы для поездки"),
+        "photos": ("Вход и офис", "Менеджеры и зона консультации", "Подтверждённые направления без выдуманных цен"),
+        "focus": "направления, формат подбора, документы и честные условия",
+    },
+    "financial_services": {
+        "audience": "клиенты, которые ищут конкретный продукт, отделение или страховую услугу рядом",
+        "intents": ("банк или страховая компания", "часы и адрес отделения", "документы и условия продукта"),
+        "photos": ("Вход, вывеска и навигация", "Зона обслуживания и ожидания", "Актуальные часы и способы связи"),
+        "focus": "продукты, условия, документы, часы и маршрут без обещаний одобрения",
+    },
+    "repair_service": {
+        "audience": "заказчики, которые сравнивают вид ремонта, срок и примеры работ",
+        "intents": ("ремонт рядом", "мастерская", "срок и виды ремонта"),
+        "photos": ("Вход и мастерская", "Примеры реальных работ", "Материалы и процесс без неподтверждённых гарантий"),
+        "focus": "виды ремонта, ограничения, сроки и фактические примеры работ",
+    },
+    "commercial_center": {
+        "audience": "посетители и арендаторы, которым важны входы, доступ, парковка и навигация",
+        "intents": ("бизнес-центр", "офисы и арендаторы", "вход и парковка"),
+        "photos": ("Фасад и каждый основной вход", "Навигация, стойка информации и общие зоны", "Подъезд, парковка и режим доступа"),
+        "focus": "входы, доступ, парковку, навигацию и подтверждённую инфраструктуру",
+    },
 }
 
 STRONG_MEDICAL_SERVICE_HINTS = (
@@ -1222,6 +1288,15 @@ def _detect_audit_profile_details(business_type: Any, business_name: Any, overvi
             "conflicts": [],
             "scores": {},
         }
+    commercial_center_hints = AUDIT_PROFILE_HINTS.get("commercial_center") or ()
+    if any(token in combined for token in commercial_center_hints):
+        return {
+            "profile": "commercial_center",
+            "confidence": 0.94,
+            "reasons": ["commercial center category marker"],
+            "conflicts": [],
+            "scores": {"commercial_center": 10},
+        }
     shopping_center_hints = AUDIT_PROFILE_HINTS.get("shopping_center") or ()
     if any(token in combined for token in shopping_center_hints):
         return {
@@ -1248,7 +1323,22 @@ def _detect_audit_profile_details(business_type: Any, business_name: Any, overvi
             strong_beauty_service_hits += 1
     medical_identity_present = any(token in combined for token in MEDICAL_IDENTITY_HINTS)
     profile_scores: Dict[str, int] = {}
-    for profile_name in ("shopping_center", "medical", "beauty", "fashion", "wellness", "food", "fitness"):
+    profile_names = (
+        "shopping_center",
+        "commercial_center",
+        "education_children",
+        "family_entertainment",
+        "travel",
+        "financial_services",
+        "repair_service",
+        "medical",
+        "beauty",
+        "fashion",
+        "wellness",
+        "food",
+        "fitness",
+    )
+    for profile_name in profile_names:
         hints = AUDIT_PROFILE_HINTS.get(profile_name) or ()
         score = 0
         for token in hints:
@@ -1635,6 +1725,25 @@ def _build_reasoning_fields(
             "Показывать формат тренировок, уровень и оборудование как главные отличия",
             "Разделить персональный и групповой входящий спрос",
             "Усилить карточку через фото, абонементы и понятные сценарии записи",
+        ]
+    elif audit_profile in SPECIALIZED_LOCAL_PROFILES:
+        profile_copy = SPECIALIZED_PROFILE_COPY[audit_profile]
+        audience = str(profile_copy["audience"])
+        focus = str(profile_copy["focus"])
+        best_fit = [
+            f"В {location_in} — {audience}",
+            "Люди, которые до визита сравнивают карточки по фактам, фото, часам и отзывам",
+        ]
+        weak_fit = [
+            f"Посетители, которым по карточке неясны: {focus}",
+            "Новый трафик, если в карточке нет свежих фактов и понятного сценария обращения",
+        ]
+        intents = [f"{item} {location}" for item in profile_copy["intents"]]
+        photo_shots = list(profile_copy["photos"])
+        positioning_focus = [
+            f"Объяснить через проверяемые факты: {focus}",
+            "Связать описание, фото, часы и ответы на отзывы в один понятный сценарий",
+            "Не добавлять услуги, цены или обещания, которых нет в данных карточки",
         ]
     else:
         best_fit = [
@@ -2992,6 +3101,37 @@ def _build_shopping_center_action_plan(
     return {"next_24h": next_24h[:4], "next_7d": next_7d[:4], "ongoing": ongoing}
 
 
+def _build_specialized_local_action_plan(
+    *,
+    audit_profile: str,
+    has_description: bool,
+    photos_count: int,
+    unanswered_reviews_count: int,
+    has_recent_activity: bool,
+) -> Dict[str, List[str]]:
+    profile_copy = SPECIALIZED_PROFILE_COPY[audit_profile]
+    focus = str(profile_copy["focus"])
+    next_24h = [
+        f"Сверить категорию, часы, адрес, телефон и ссылки. Затем проверить, понятны ли из карточки: {focus}."
+    ]
+    if not has_description:
+        next_24h.append(f"Добавить фактическое описание: {focus}. Не добавлять неподтверждённые цены или обещания.")
+    if unanswered_reviews_count > 0:
+        next_24h.append("Ответить на отзывы без реакции и зафиксировать повторяющиеся темы без споров и обещаний.")
+    next_7d: List[str] = []
+    if photos_count < 8:
+        next_7d.append("Снять и добавить: " + "; ".join(profile_copy["photos"]) + ".")
+    if not has_recent_activity:
+        next_7d.append("Опубликовать одно актуальное обновление о фактическом изменении: часах, программе, направлении или условиях.")
+    next_7d.append("Сопоставить описание, фото и отзывы: каждое утверждение должно подтверждаться данными карточки.")
+    ongoing = [
+        "Ежемесячно проверять часы, контакты, категории и ссылки.",
+        "Добавлять только реальные услуги, события и условия.",
+        "Отвечать на отзывы и обновлять фото без длинных пауз.",
+    ]
+    return {"next_24h": next_24h[:4], "next_7d": next_7d[:4], "ongoing": ongoing}
+
+
 def _build_food_action_plan(
     *,
     has_description: bool,
@@ -3848,6 +3988,74 @@ def _build_shopping_center_issue_blocks(
     return issue_blocks
 
 
+def _build_specialized_local_issue_blocks(
+    *,
+    audit_profile: str,
+    business_name: str,
+    has_description: bool,
+    photos_count: int,
+    unanswered_reviews_count: int,
+    has_recent_activity: bool,
+) -> List[Dict[str, Any]]:
+    profile_copy = SPECIALIZED_PROFILE_COPY[audit_profile]
+    focus = str(profile_copy["focus"])
+    issue_blocks: List[Dict[str, Any]] = []
+    if not has_description:
+        issue_blocks.append(
+            {
+                "id": f"{audit_profile}_description_gap",
+                "section": "positioning",
+                "priority": "high",
+                "title": "Из карточки неясно, чего ожидать",
+                "problem": f"Описание не объясняет: {focus}.",
+                "evidence": f"В срезе {business_name} нет содержательного описания.",
+                "impact": "Посетитель хуже понимает, подходит ли ему это место и что делать дальше.",
+                "fix": f"Добавить краткое фактическое описание: {focus}.",
+            }
+        )
+    if photos_count < 8:
+        issue_blocks.append(
+            {
+                "id": f"{audit_profile}_photo_gap",
+                "section": "visual",
+                "priority": "medium",
+                "title": "Фото не показывают реальный сценарий визита",
+                "problem": "До обращения не видны вход, пространство и важные детали выбора.",
+                "evidence": f"Фото в карточке: {photos_count}.",
+                "impact": "Новому посетителю сложнее проверить ожидания и спланировать визит.",
+                "fix": "Добавить: " + "; ".join(profile_copy["photos"]) + ".",
+            }
+        )
+    if unanswered_reviews_count > 0:
+        issue_blocks.append(
+            {
+                "id": f"{audit_profile}_reviews_unanswered",
+                "section": "reviews",
+                "priority": "medium",
+                "title": "Есть отзывы без ответа",
+                "problem": "Часть обратной связи остаётся без публичной реакции.",
+                "evidence": f"Без ответа: {unanswered_reviews_count}.",
+                "impact": "Карточка выглядит менее живой, а повторяющиеся вопросы не получают ответа.",
+                "fix": "Ответить по существу, не публикуя непроверенные обещания.",
+            }
+        )
+    if not has_recent_activity:
+        issue_blocks.append(
+            {
+                "id": f"{audit_profile}_activity_gap",
+                "section": "activity",
+                "priority": "low",
+                "title": "Не видно свежих обновлений",
+                "problem": "Карточка не показывает, что информация регулярно проверяется.",
+                "evidence": "В срезе нет свежей активности.",
+                "impact": "Посетитель может сомневаться в актуальности часов и условий.",
+                "fix": "Публиковать только реальные изменения: часы, программу, направления или новые фото.",
+            }
+        )
+    issue_blocks.sort(key=lambda item: _issue_priority_rank(str(item.get("priority") or "")))
+    return issue_blocks
+
+
 def _build_food_issue_blocks(
     *,
     business_name: str,
@@ -4424,7 +4632,10 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             continue
         review_signal_rows.append({"review_text": item.get("review") or item.get("text") or ""})
     hospitality_signals = _extract_hospitality_review_signals(review_signal_rows) if hospitality_mode else {}
-    baseline_profiles = {"default_local_business", "medical", "beauty", "food", "fitness", "wellness", "fashion", "shopping_center", "hospitality"}
+    baseline_profiles = {
+        "default_local_business", "medical", "beauty", "food", "fitness", "wellness", "fashion",
+        "shopping_center", "hospitality", *SPECIALIZED_LOCAL_PROFILES,
+    }
     baseline_is_default = audit_profile == "default_local_business"
     baseline_is_fashion = audit_profile == "fashion"
     baseline_is_hospitality = hospitality_mode
@@ -4502,6 +4713,16 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             reviews_count=reviews_count,
             unanswered_reviews_count=unanswered_reviews_count,
             news_count=news_count,
+            has_recent_activity=has_recent_activity,
+        )
+        issue_blocks = _merge_issue_blocks(issue_blocks, baseline_issue_blocks)
+    elif audit_profile in SPECIALIZED_LOCAL_PROFILES:
+        issue_blocks = _build_specialized_local_issue_blocks(
+            audit_profile=audit_profile,
+            business_name=lead_name,
+            has_description=has_description,
+            photos_count=photos_count,
+            unanswered_reviews_count=unanswered_reviews_count,
             has_recent_activity=has_recent_activity,
         )
         issue_blocks = _merge_issue_blocks(issue_blocks, baseline_issue_blocks)
@@ -4673,14 +4894,14 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     top_driver = "заполнении карточки"
-    if audit_profile == "shopping_center":
+    if audit_profile == "shopping_center" or audit_profile in SPECIALIZED_LOCAL_PROFILES:
         top_driver = "актуальности информации, навигации и событиях"
         revenue_potential = {
             "total_min": 0,
             "total_max": 0,
             "dominant_driver": "profile_completeness",
             "label": "Без денежной оценки",
-            "description": "Для торгового центра аудит оценивает полноту и актуальность карточки, а не выдумывает стоимость потерянной записи.",
+            "description": "Аудит оценивает полноту и актуальность карточки и не выдумывает стоимость потерянной записи.",
         }
     elif revenue_potential["rating_gap"]["max"] >= max(
         revenue_potential["content_gap"]["max"],
@@ -4745,6 +4966,12 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         summary_text = (
             f"{health_label}. Карточка уже может привлекать интерес к тренировкам, но пока недостаточно ясно объясняет, с чего начать, какой формат выбрать и как проходит первый визит. "
             f"Главные зоны роста сейчас — понятные направления, пробный вход, абонементы, оборудование и фото пространства."
+        )
+    elif audit_profile in SPECIALIZED_LOCAL_PROFILES:
+        profile_copy = SPECIALIZED_PROFILE_COPY[audit_profile]
+        summary_text = (
+            f"{health_label}. Карточка {lead_name} должна быстро объяснять: {profile_copy['focus']}. "
+            "Главные зоны роста — точное описание, реальные фото, актуальные часы и ответы на отзывы."
         )
     else:
         summary_text = (
@@ -4827,6 +5054,14 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             has_recent_activity=has_recent_activity,
             unanswered_reviews_count=unanswered_reviews_count,
         )
+    elif audit_profile in SPECIALIZED_LOCAL_PROFILES:
+        action_plan = _build_specialized_local_action_plan(
+            audit_profile=audit_profile,
+            has_description=has_description,
+            photos_count=photos_count,
+            unanswered_reviews_count=unanswered_reviews_count,
+            has_recent_activity=has_recent_activity,
+        )
     elif audit_profile == "fashion":
         action_plan = _build_fashion_action_plan(
             has_description=has_description,
@@ -4880,7 +5115,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         services_preview = snapshot_services_preview
     elif imported_services_preview and not hospitality_mode:
         services_preview = imported_services_preview
-    elif not services_preview and audit_profile != "shopping_center":
+    elif not services_preview and audit_profile not in {"shopping_center", *SPECIALIZED_LOCAL_PROFILES}:
         services_preview = _lead_demo_services_preview(business_type)
     news_preview = (
         snapshot.get("news_preview")
@@ -4981,7 +5216,10 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "photos_per_month_min": cadence_photos_min,
             "reviews_response_hours_max": cadence_response_hours_max,
         },
-        "services_preview": services_preview or ([] if audit_profile == "shopping_center" else _lead_demo_services_preview(business_type)),
+        "services_preview": services_preview or (
+            [] if audit_profile in {"shopping_center", *SPECIALIZED_LOCAL_PROFILES}
+            else _lead_demo_services_preview(business_type)
+        ),
         "reviews_preview": reviews_preview,
         "news_preview": news_preview,
         "preview_meta": {
