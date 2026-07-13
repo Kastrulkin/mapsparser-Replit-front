@@ -55,7 +55,7 @@ LocalOS помогает владельцам и управляющим лока
 - Operator доступен через web dashboard и Telegram owner-bot как разные поверхности одного governed core.
 - Поддерживаются cached briefs, генерация черновиков, map refresh requests, retry/recovery visibility, manual publication helpers и Telegram follow-ups.
 - Telegram owner-bot работает в guest/client mode: аудит карточки по ссылке, статусы, партнёрства, feature requests, approvals и уведомления.
-- Telegram proxy через `sing-box` используется для Telegram-only outbound на текущем production runtime.
+- Telegram и внешние social API используют единый Grimbird proxy на OpenClaw после успешной сетевой проверки.
 
 ### AI-агенты и OpenClaw
 - Agent product cockpit: создание, версии, preview run, run journal, approvals, datahub sources, connectors, provider routes и observability.
@@ -85,8 +85,9 @@ LocalOS помогает владельцам и управляющим лока
   - В уведомлениях владельцу (support-запросы, бронирования) поле `telegram_bot_token` опционально: если заполнено — уведомление может уйти через бот салона, если нет — через глобальный BeautyBot.
 - **Текущий production runtime**
   - Основной owner-bot запускается как `openclaw-localos-telegram-bot.service`.
-  - Для Telegram outbound на текущем VPS используется `localos-telegram-proxy.service` на базе `sing-box` (`VLESS + REALITY`).
-  - Через VPN идёт только Telegram-трафик; остальной внешний трафик `app`, `worker` и сервера остаётся прямым.
+  - Telegram Bot API и внешние social HTTP API направляются через Grimbird HTTP proxy на OpenClaw.
+  - Telethon/userbot использует Grimbird SOCKS5 proxy.
+  - На LocalOS используются private endpoints `192.168.0.177:10809` и `192.168.0.177:10808`; loopback endpoints допустимы только на OpenClaw.
 - **Простой сценарий**
   - Для большинства случаев достаточно одного глобального бота BeautyBot; `telegram_bot_token` заполняется только там, где действительно нужен свой брендированный вход для клиентов/ИИ-агента.
 
@@ -127,7 +128,8 @@ LocalOS помогает владельцам и управляющим лока
 | Бэкенд API | `8000` | Flask API сервер |
 | Бот управления | - | `openclaw-localos-telegram-bot.service` (host runtime polling) |
 | Бот обмена отзывами | - | Systemd сервис (polling) |
-| Telegram proxy | `127.0.0.1:2081` | `localos-telegram-proxy.service` (`sing-box`, Telegram-only outbound) |
+| Grimbird HTTP proxy | `192.168.0.177:10809` | Telegram Bot API и внешние social HTTP API с LocalOS host |
+| Grimbird SOCKS5 proxy | `192.168.0.177:10808` | Telethon/MTProto с LocalOS host |
 
 ## Документация
 
@@ -138,7 +140,7 @@ LocalOS помогает владельцам и управляющим лока
 - 🤖 [Agents Product UI Audit](./docs/AGENTS_PRODUCT_UI_AUDIT.md) — рабочий аудит `/dashboard/agents` как product cockpit
 - 🎨 [Брендбук личного кабинета LocalOS](./docs/DASHBOARD_DESIGN_BRANDBOOK.md) — дизайн-паттерны, UX-принципы и каноничные dashboard-примитивы
 - 🤖 [Настройка Telegram-ботов](./TELEGRAM_BOTS_SETUP.md) — установка и запуск ботов
-- 🌐 [Telegram Proxy Runbook](./docs/TELEGRAM_PROXY_RUNBOOK.md) — production-маршрут Telegram через `sing-box` / `VLESS + REALITY`
+- 🌐 [Grimbird Proxy Runbook](./docs/TELEGRAM_PROXY_RUNBOOK.md) — маршруты Telegram и внешних API через OpenClaw
 - 🏗️ [Архитектура БД](./database_schema_design.md) — структура базы данных
 - 📊 [Полная структура БД](./database_schema.md) — детальная документация (PostgreSQL)
 - 🔧 [План оптимизации БД](./DB_OPTIMIZATION_PLAN.md) — исторический план оптимизации схемы
@@ -470,6 +472,11 @@ python scripts/smoke_client_info_gate.py
 TELEGRAM_BOT_TOKEN=токен_для_Beautybotpor_bot
 TELEGRAM_REVIEWS_BOT_TOKEN=токен_для_beautyreviewexchange_bot
 
+# Grimbird на OpenClaw; включать после проверки firewall/private route
+TELEGRAM_HTTP_PROXY=http://192.168.0.177:10809
+OUTBOUND_HTTP_PROXY=http://192.168.0.177:10809
+TELEGRAM_USERBOT_PROXY=socks5://192.168.0.177:10808
+
 # API
 API_BASE_URL=http://localhost:8000
 
@@ -499,8 +506,6 @@ systemctl enable seo-worker
 systemctl start seo-worker
 systemctl enable openclaw-localos-telegram-bot
 systemctl start openclaw-localos-telegram-bot
-systemctl enable localos-telegram-proxy
-systemctl start localos-telegram-proxy
 systemctl enable telegram-reviews-bot
 systemctl start telegram-reviews-bot
 ```
@@ -510,7 +515,6 @@ systemctl start telegram-reviews-bot
 # Проверить все сервисы
 systemctl status seo-worker
 systemctl status openclaw-localos-telegram-bot
-systemctl status localos-telegram-proxy
 systemctl status telegram-reviews-bot
 systemctl status nginx
 

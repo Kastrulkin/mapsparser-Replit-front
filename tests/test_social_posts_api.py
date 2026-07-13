@@ -126,7 +126,7 @@ def test_social_post_runtime_status_reports_ready_telegram_transport(monkeypatch
         def close(self):
             return None
 
-    monkeypatch.setenv("TELEGRAM_HTTP_PROXY", "http://host.docker.internal:2081")
+    monkeypatch.setenv("TELEGRAM_HTTP_PROXY", "http://192.168.0.177:10809")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
     monkeypatch.setenv("SOCIAL_POST_TELEGRAM_TRANSPORT_PROBE_ENABLED", "1")
     monkeypatch.setattr(social_posts_api, "telegram_urlopen", lambda req, timeout=3: Response())
@@ -146,7 +146,7 @@ def test_social_post_runtime_status_reports_broken_telegram_transport(monkeypatc
     def fail_probe(req, timeout=3):
         raise ConnectionResetError("connection reset")
 
-    monkeypatch.setenv("TELEGRAM_HTTP_PROXY", "http://host.docker.internal:2081")
+    monkeypatch.setenv("TELEGRAM_HTTP_PROXY", "http://192.168.0.177:10809")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
     monkeypatch.setenv("SOCIAL_POST_TELEGRAM_TRANSPORT_PROBE_ENABLED", "1")
     monkeypatch.setattr(social_posts_api, "telegram_urlopen", fail_probe)
@@ -159,7 +159,7 @@ def test_social_post_runtime_status_reports_broken_telegram_transport(monkeypatc
     assert transport["read_only_probe_performed"] is True
     assert transport["ready"] is False
     assert transport["status"] == "ConnectionResetError"
-    assert "localos-telegram-proxy.service" in transport["next_action_ru"]
+    assert "Grimbird" in transport["next_action_ru"]
 
 
 def test_social_post_runtime_status_allows_explicit_unscoped_dispatch(monkeypatch):

@@ -13,6 +13,7 @@ from typing import Any
 
 from auth_encryption import decrypt_auth_data
 from database_manager import DatabaseManager
+from core.outbound_network import outbound_urlopen
 from core.telegram_network import telegram_urlopen
 from core.telegram_token_store import decode_telegram_bot_token
 from core.helpers import get_business_owner_id
@@ -7547,7 +7548,7 @@ def _media_asset_file(asset: dict[str, Any]) -> dict[str, Any]:
     public_url = str(asset.get("public_url") or "").strip()
     if content is None and (public_url.startswith("https://") or public_url.startswith("http://")):
         try:
-            response = urllib.request.urlopen(public_url, timeout=20)
+            response = outbound_urlopen(public_url, timeout=20)
             try:
                 content = response.read()
             finally:
@@ -7740,7 +7741,7 @@ def _vk_api_request(url: str, data: dict[str, Any] | None = None, files: list[di
     headers = {"Content-Type": content_type} if content_type else {}
     request = urllib.request.Request(url, data=body, headers=headers, method="POST" if body is not None else "GET")
     try:
-        response = urllib.request.urlopen(request, timeout=20)
+        response = outbound_urlopen(request, timeout=20)
         try:
             return _json_dict(response.read().decode("utf-8", errors="ignore"))
         finally:
@@ -7991,7 +7992,7 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
         method="POST",
     )
     try:
-        resp = urllib.request.urlopen(req, timeout=15)
+        resp = outbound_urlopen(req, timeout=15)
         try:
             body = resp.read().decode("utf-8", errors="ignore")
             parsed = _json_dict(body)
@@ -8133,7 +8134,7 @@ def _meta_graph_post(path: str, access_token: str, params: dict[str, Any]) -> di
         method="POST",
     )
     try:
-        response = urllib.request.urlopen(request, timeout=20)
+        response = outbound_urlopen(request, timeout=20)
         try:
             body = response.read().decode("utf-8", errors="ignore")
             status_code = int(getattr(response, "status", 500))
@@ -8492,7 +8493,7 @@ def _vk_safe_wall_read_probe(token: str, owner_id: str, api_version: str) -> dic
     )
     req = urllib.request.Request(f"https://api.vk.com/method/wall.get?{query}", method="GET")
     try:
-        resp = urllib.request.urlopen(req, timeout=10)
+        resp = outbound_urlopen(req, timeout=10)
         try:
             body = resp.read().decode("utf-8", errors="ignore")
             parsed = _json_dict(body)
@@ -9065,7 +9066,7 @@ def _collect_vk_post_metrics(cursor: Any, post: dict[str, Any]) -> dict[str, Any
     )
     req = urllib.request.Request(f"https://api.vk.com/method/wall.getById?{query}", method="GET")
     try:
-        resp = urllib.request.urlopen(req, timeout=15)
+        resp = outbound_urlopen(req, timeout=15)
         try:
             body = resp.read().decode("utf-8", errors="ignore")
             parsed = _json_dict(body)

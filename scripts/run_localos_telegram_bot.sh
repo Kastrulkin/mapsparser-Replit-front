@@ -19,6 +19,10 @@ fi
 
 export DATABASE_URL="${database_url/@postgres:5432/@${postgres_ip}:5432}"
 export PYTHONPATH="/opt/seo-app/src"
-export TELEGRAM_HTTP_PROXY="http://127.0.0.1:2081"
+
+if [[ -z "${TELEGRAM_HTTP_PROXY:-}" ]]; then
+  echo "TELEGRAM_HTTP_PROXY is required. On the LocalOS host use http://192.168.0.177:10809." >&2
+  exit 1
+fi
 
 exec /opt/seo-app/runtime_bot/.venv/bin/python /opt/seo-app/src/telegram_bot.py

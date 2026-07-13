@@ -183,8 +183,8 @@ def _telegram_transport_status_payload() -> dict[str, object]:
                 "error": str(error)[:240],
                 "summary_ru": "Telegram transport не прошёл read-only проверку.",
                 "summary_en": "Telegram transport did not pass the read-only probe.",
-                "next_action_ru": "Проверьте localos-telegram-proxy.service и config.json, затем повторите preflight.",
-                "next_action_en": "Check localos-telegram-proxy.service and config.json, then rerun preflight.",
+                "next_action_ru": "Проверьте доступ LocalOS к Grimbird и повторите проверку канала.",
+                "next_action_en": "Check LocalOS access to Grimbird and rerun the channel check.",
             }
         )
         return payload

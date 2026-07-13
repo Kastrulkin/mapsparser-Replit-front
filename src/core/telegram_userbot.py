@@ -97,11 +97,15 @@ def _parse_proxy_url(raw: str | None):
 
 
 def _resolve_proxy():
-    raw_proxy = os.getenv("TELEGRAM_USERBOT_PROXY", "").strip()
+    raw_proxy = ""
+    for key in ("TELEGRAM_USERBOT_PROXY", "TELEGRAM_PROXY_URL"):
+        raw_proxy = os.getenv(key, "").strip()
+        if raw_proxy:
+            break
     if not raw_proxy:
         return None
     if socks is None:
-        raise RuntimeError("PySocks not installed; set TELEGRAM_USERBOT_PROXY requires pysocks.")
+        raise RuntimeError("PySocks is required when a Telegram userbot proxy is configured.")
     return _parse_proxy_url(raw_proxy)
 
 
@@ -246,7 +250,8 @@ async def _connect_client(auth_data: dict[str, Any]) -> TelegramClient:
     attempts: list[dict[str, Any]] = _build_mtproxy_attempts(mtproxy)
     if proxy:
         attempts.append({"proxy": proxy})
-    attempts.append({})
+    if not attempts:
+        attempts.append({})
 
     last_error: Exception | None = None
     for config in attempts:
