@@ -704,7 +704,9 @@ const OperatorResultActions = ({
   const approval = 'approval' in result ? result.approval : undefined;
   const capabilityCatalog = 'capability_catalog' in result ? result.capability_catalog || [] : [];
   const capabilityExamples = 'capabilities' in result ? result.capabilities || [] : [];
-  const isOperatorHelp = result.capability === 'operator.help' || result.intent === 'operator_help';
+  const isOperatorHelp =
+    result.intent === 'operator_help' || capabilityCatalog.length > 0 || capabilityExamples.length > 0;
+  const hasUsefulResultRef = Boolean(resultRef?.href && resultRef.href !== '/dashboard/operator');
   const aiRouter = result.ai_router;
   const queueId = result.queue_id;
   const status = result.status || '';
@@ -896,7 +898,7 @@ const OperatorResultActions = ({
               )}
             />
           </Button>
-        ) : resultRef?.href ? (
+        ) : hasUsefulResultRef && resultRef?.href ? (
           <Button type="button" size="sm" asChild>
             <Link to={resultRef.href}>
               {resultRef.label || 'Открыть результат'}
