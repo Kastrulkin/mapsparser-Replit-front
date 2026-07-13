@@ -3292,6 +3292,15 @@ const PublicPartnershipOfferPage: React.FC = () => {
     if (isShansikAudit) {
       return `Во всех 5 карточках сети найдены услуги, родитель ориентируется только на их описание чтобы сравнить варианты и решиться на следующий шаг.`;
     }
+    if (auditProfileForWhy === 'fashion' || auditProfileForWhy === 'retail') {
+      const priceHint = hasKnownPricedServicesCountForWhy && pricedServicesCountForWhy === 0
+        ? 'без ценовых ориентиров'
+        : 'с ценами';
+      return `В карточке найдено ${formatValue(servicesCountForWhy)} товаров ${priceHint}, но покупателю всё равно нужно быстро понять ассортимент и условия выбора.`;
+    }
+    if (auditProfileForWhy === 'education_children') {
+      return `В карточке найдено ${formatValue(servicesCountForWhy)} направлений, но родителю всё равно нужно быстро понять возраст групп, формат и расписание.`;
+    }
     if (hasKnownPricedServicesCountForWhy && pricedServicesCountForWhy === 0) {
       return `В карточке найдено ${formatValue(servicesCountForWhy)} услуг, но без ценовых ориентиров сложнее сравнить варианты и решиться на следующий шаг.`;
     }
