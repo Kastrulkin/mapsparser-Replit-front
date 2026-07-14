@@ -855,77 +855,91 @@ export const ru = {
       }
     },
     aiChatPromotion: {
-      title: "Продвижение через ИИ чаты",
-      subtitle: "Пошаговая инструкция по попаданию вашего бизнеса в ChatGPT и другие ИИ-ассистенты",
+      title: "Видимость бизнеса в ИИ-поиске",
+      subtitle: "Практический чеклист для ChatGPT, Copilot, Google и других поисковых сервисов с ИИ",
       whyImportant: {
-        title: "Почему это важно?",
-        description: "ChatGPT и другие ИИ-ассистенты становятся основным способом поиска информации. Чтобы ваш бизнес появлялся в ответах ChatGPT, нужно правильно оптимизировать сайт. Четыре ключевых шага помогут вашему бизнесу быть найденным через ИИ-чаты."
+        title: "Как это работает",
+        description: "У ИИ-поиска нет одной кнопки «добавить компанию». Сервисы находят и сопоставляют открытые данные сайта, карт и других надёжных источников. Задача — сделать сведения о бизнесе доступными, точными и подтверждаемыми. Это повышает шансы на появление в ответах, но не гарантирует конкретную позицию."
       },
       steps: [
         {
           id: 1,
-          title: "Добавить сайт в Bing Webmaster",
-          description: "Bing Webmaster помогает ChatGPT находить ваш сайт в интернете",
+          title: "Сверить факты о бизнесе",
+          description: "ИИ должен находить одинаковые и актуальные сведения на сайте и в карточках компании",
           details: [
-            "Зарегистрируйтесь на bing.com/webmasters",
-            'Добавьте ваш сайт через "Добавить сайт"',
-            "Подтвердите владение сайтом (через HTML-тег, файл или DNS)",
-            "Отправьте карту сайта (sitemap.xml)",
-            "Дождитесь индексации (обычно 1-2 недели)"
-          ],
-          links: [
-            { text: "Bing Webmaster Tools", url: "https://www.bing.com/webmasters" },
-            { text: "Инструкция по добавлению сайта", url: "https://www.bing.com/webmasters/help/how-to-add-and-verify-your-site-9e8f4b8a" }
+            "Проверьте название, адрес, телефон, часы работы и ссылку для записи",
+            "Сделайте отдельную понятную страницу для каждой точки бизнеса",
+            "Опишите реальные услуги, цены или диапазоны цен и условия записи",
+            "Сверьте эти сведения с Яндекс Картами, 2ГИС и Google Business Profile",
+            "Исправляйте расхождения в источниках, а не маскируйте их ключевыми словами"
           ]
         },
         {
           id: 2,
-          title: "Сделать разметку Schema.org",
-          description: "Структурированные данные помогают ChatGPT лучше понимать ваш контент",
+          title: "Открыть сайт для поиска",
+          description: "Страницы должны загружаться без входа, ошибок и блокировок поисковых роботов",
           details: [
-            "Добавьте JSON-LD разметку на страницы сайта",
-            "Используйте типы: LocalBusiness, Service, FAQPage, Article",
-            "Укажите название, адрес, телефон, услуги, цены",
-            "Добавьте разметку для отзывов и рейтингов",
-            "Проверьте разметку через Google Rich Results Test"
+            "Проверьте, что важные страницы отвечают кодом 200 и не закрыты тегом noindex",
+            "Добавьте sitemap.xml в Google Search Console и Bing Webmaster Tools",
+            "Используйте IndexNow для быстрой передачи Bing обновлённых страниц",
+            "Не блокируйте OAI-SearchBot в robots.txt и настройках CDN или защиты сайта",
+            "Проверяйте отчёты об индексации после крупных изменений сайта"
           ],
           links: [
-            { text: "Schema.org для бизнеса", url: "https://schema.org/LocalBusiness" },
-            { text: "Google Rich Results Test", url: "https://search.google.com/test/rich-results" },
-            { text: "Генератор Schema.org", url: "https://schema.org/docs/gs.html" }
+            { text: "Как сайт попадает в поиск ChatGPT", url: "https://help.openai.com/en/articles/9237897-chatgpt-search" },
+            { text: "Google Search Console", url: "https://search.google.com/search-console" },
+            { text: "Bing Webmaster Tools", url: "https://www.bing.com/webmasters" },
+            { text: "IndexNow", url: "https://www.bing.com/webmasters/help/indexnow-0z209wby" }
           ],
-          codeExample: `{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "Название вашего салона",\n  "address": {\n    "@type": "PostalAddress",\n    "streetAddress": "Улица, дом",\n    "addressLocality": "Город",\n    "postalCode": "123456"\n  },\n  "telephone": "+7-XXX-XXX-XX-XX",\n  "priceRange": "$$",\n  "servesCuisine": "Косметология, Парикмахерские услуги"\n}`
+          codeExample: `User-agent: OAI-SearchBot\nAllow: /\n\nSitemap: https://example.ru/sitemap.xml`
         },
         {
           id: 3,
-          title: "Добавить блок FAQ",
-          description: "ChatGPT любит сайты с ответами на частые вопросы",
+          title: "Разметить данные компании",
+          description: "Schema.org помогает поисковым системам однозначно прочитать факты со страницы",
           details: [
-            'Создайте страницу "Часто задаваемые вопросы"',
-            "Добавьте минимум 10-15 вопросов и ответов",
-            "Используйте разметку FAQPage (Schema.org)",
-            "Включите вопросы о: услугах, ценах, записи, мастерах, акциях",
-            "Регулярно обновляйте FAQ новыми вопросами"
+            "Используйте наиболее точный тип LocalBusiness для вашей ниши",
+            "Для каждой точки укажите её название, адрес, телефон, часы работы, URL и фотографии",
+            "Размечайте Service, Event или Article только на страницах, где эти данные действительно видны",
+            "Не добавляйте вымышленные отзывы, рейтинг, цены или услуги",
+            "Проверьте JSON-LD валидатором перед публикацией"
           ],
           links: [
-            { text: "Schema.org FAQPage", url: "https://schema.org/FAQPage" },
-            { text: "Примеры FAQ для салонов", url: "https://schema.org/docs/gs.html" }
+            { text: "LocalBusiness в Google", url: "https://developers.google.com/search/docs/appearance/structured-data/local-business" },
+            { text: "Schema Markup Validator", url: "https://validator.schema.org/" },
+            { text: "Google Rich Results Test", url: "https://search.google.com/test/rich-results" }
           ],
-          codeExample: `{\n  "@context": "https://schema.org",\n  "@type": "FAQPage",\n  "mainEntity": [{\n    "@type": "Question",\n    "name": "Какие услуги вы предоставляете?",\n    "acceptedAnswer": {\n      "@type": "Answer",\n      "text": "Мы предоставляем услуги косметологии, парикмахерские услуги..."\n    }\n  }]\n}`
+          codeExample: `{\n  "@context": "https://schema.org",\n  "@type": "LocalBusiness",\n  "name": "Название компании",\n  "url": "https://example.ru",\n  "telephone": "+7-900-000-00-00",\n  "image": "https://example.ru/photo.jpg",\n  "address": {\n    "@type": "PostalAddress",\n    "streetAddress": "Улица, дом",\n    "addressLocality": "Город",\n    "addressCountry": "RU"\n  },\n  "openingHoursSpecification": [{\n    "@type": "OpeningHoursSpecification",\n    "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],\n    "opens": "10:00",\n    "closes": "20:00"\n  }]\n}`
         },
         {
           id: 4,
-          title: "Ссылаться на исследования",
-          description: "ChatGPT предпочитает сайты, которые выглядят как энциклопедии с источниками",
+          title: "Отвечать на реальные вопросы клиентов",
+          description: "Полезные и конкретные страницы дают ИИ материал для точного ответа и ссылки на источник",
           details: [
-            'Добавьте раздел "Исследования" или "Статьи" на сайте',
-            "Пишите статьи о ваших услугах с ссылками на источники",
-            "Ссылайтесь на научные исследования, медицинские источники",
-            'Добавьте раздел "О нас" с историей, достижениями, сертификатами',
-            "Публикуйте кейсы, отзывы клиентов, фото до/после"
+            "На странице услуги ответьте: кому она подходит, что входит, сколько стоит и как записаться",
+            "Показывайте автора или специалиста, реальные фотографии, опыт и ограничения",
+            "Добавляйте FAQ только из вопросов, которые действительно задают клиенты",
+            "Используйте кейсы, события и отзывы с согласия клиентов и без вымышленных фактов",
+            "Ссылайтесь на первичные источники там, где они подтверждают важное утверждение"
           ],
           links: [
-            { text: "Как писать контент для AI", url: "https://developers.google.com/search/docs/fundamentals/creating-helpful-content" }
+            { text: "Полезный и надёжный контент", url: "https://developers.google.com/search/docs/fundamentals/creating-helpful-content" },
+            { text: "Сайты в AI-функциях Google", url: "https://developers.google.com/search/docs/appearance/ai-features" }
+          ]
+        },
+        {
+          id: 5,
+          title: "Проверять ответы и исправлять пробелы",
+          description: "Видимость оценивают по реальным запросам, упоминаниям источника и переходам на сайт",
+          details: [
+            "Раз в месяц проверяйте несколько клиентских запросов с услугой и городом",
+            "Смотрите, упомянут ли бизнес, верны ли факты и на какие источники ссылается ответ",
+            "Если ответ неточный, исправьте исходную страницу и карточки компании",
+            "Отслеживайте переходы из ChatGPT по метке utm_source=chatgpt.com",
+            "Повторяйте проверку после изменения услуг, адреса, графика или цен"
+          ],
+          links: [
+            { text: "Как отслеживать переходы из ChatGPT", url: "https://help.openai.com/en/articles/12627856-publishers-and-developers-faq" }
           ]
         }
       ],
@@ -941,10 +955,10 @@ export const ru = {
         code: "Пример кода:"
       },
       progress: {
-        title: "Прогресс выполнения",
+        title: "Готовность к проверке",
         completed: "Выполнено шагов:",
         from: "из",
-        success: "Отлично! Вы выполнили все шаги. Теперь ваш сайт оптимизирован для поиска через ИИ-чаты."
+        success: "Базовая подготовка завершена. Теперь регулярно проверяйте реальные ответы и обновляйте источники при изменениях в бизнесе."
       }
     },
     finance: {
