@@ -32,6 +32,7 @@ def test_admin_compact_api_returns_workstream_registry_fields():
     assert 'filters.get("client_business_id")' in runtime
     assert 'filters.get("action_state")' in runtime
     assert '"client_options": client_options' in runtime
+    assert "duplicate_client_names" in runtime
     assert "source_provider" in database
     assert "intent" in database
 

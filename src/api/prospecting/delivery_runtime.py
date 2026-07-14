@@ -1074,7 +1074,28 @@ def get_leads():
                 option_id = str(workstream.get("client_business_id") or "").strip()
                 option_name = str(workstream.get("client_business_name") or "").strip()
                 if option_id and option_name:
-                    client_options_by_id[option_id] = {"id": option_id, "name": option_name}
+                    client_options_by_id[option_id] = {
+                        "id": option_id,
+                        "name": option_name,
+                        "address": str(workstream.get("client_business_address") or "").strip(),
+                    }
+        duplicate_client_names = {
+            name
+            for name in (
+                str(item.get("name") or "").strip()
+                for item in client_options_by_id.values()
+            )
+            if sum(
+                1
+                for item in client_options_by_id.values()
+                if str(item.get("name") or "").strip() == name
+            ) > 1
+        }
+        for item in client_options_by_id.values():
+            name = str(item.get("name") or "").strip()
+            address = str(item.pop("address", "") or "").strip()
+            if name in duplicate_client_names and address:
+                item["name"] = f"{name} · {address}"
         client_options = sorted(
             client_options_by_id.values(),
             key=lambda item: str(item.get("name") or "").casefold(),

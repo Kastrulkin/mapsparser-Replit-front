@@ -160,6 +160,7 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                 SELECT
                     ws.id, ws.lead_id, ws.workstream_type, ws.client_business_id,
                     client_business.name AS client_business_name,
+                    client_business.address AS client_business_address,
                     ws.status, ws.selected_channel, ws.next_action_at,
                     ws.last_contact_at, ws.last_contact_channel, ws.last_contact_comment,
                     ws.created_at, ws.updated_at,
