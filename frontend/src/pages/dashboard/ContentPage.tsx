@@ -1523,23 +1523,23 @@ export function ContentPage() {
         key={item.id}
         type="button"
         onClick={() => openItem(item)}
-        className="w-full rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left shadow-sm transition hover:border-slate-300 hover:shadow-md"
+        className="w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left shadow-sm transition-[border-color,box-shadow] hover:border-slate-300 hover:shadow-md"
       >
-        <div className="line-clamp-2 text-xs font-semibold leading-4 text-slate-950">
+        <div className="line-clamp-2 break-words text-xs font-semibold leading-4 text-slate-950 [overflow-wrap:anywhere]">
           {item.theme || item.goal || 'Публикация'}
         </div>
-        <div className="mt-1 flex flex-wrap gap-1">
+        <div className="mt-1 flex min-w-0 flex-wrap gap-1">
           {(channels.length ? channels : ['Контент']).map((channel) => (
-            <span key={channel} className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+            <span key={channel} className="inline-flex max-w-full min-w-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium leading-4 text-slate-600 [overflow-wrap:anywhere]">
               {channel}
             </span>
           ))}
         </div>
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1', getStatusClassName(calendarState.status))}>
+        <div className="mt-1.5 flex min-w-0 flex-wrap gap-1">
+          <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.status))}>
             {calendarState.status}
           </span>
-          <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1', getStatusClassName(calendarState.action))}>
+          <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-4 ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.action))}>
             {calendarState.action}
           </span>
         </div>
@@ -1551,7 +1551,7 @@ export function ContentPage() {
     <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200">
         {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => (
-          <div key={day} className="bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <div key={day} className="min-w-0 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
             {day}
           </div>
         ))}
@@ -1563,7 +1563,7 @@ export function ContentPage() {
             <div
               key={key}
               className={cn(
-                'min-h-[150px] bg-white p-2',
+                'min-w-0 overflow-hidden min-h-[150px] bg-white p-2',
                 !isCurrentMonth && view === 'month' ? 'bg-slate-50/70 text-slate-400' : '',
               )}
             >
@@ -1596,17 +1596,17 @@ export function ContentPage() {
               key={item.id}
               type="button"
               onClick={() => openItem(item)}
-              className="flex w-full flex-col gap-3 px-3 py-4 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
+              className="flex w-full min-w-0 flex-col gap-3 overflow-hidden px-3 py-4 text-left transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-slate-950">{item.theme || item.goal || 'Публикация'}</div>
+                <div className="break-words text-sm font-semibold text-slate-950 [overflow-wrap:anywhere]">{item.theme || item.goal || 'Публикация'}</div>
                 <div className="mt-1 text-sm text-slate-500">{formatDate(item.scheduled_for)} · {(posts.length || getSelectedCount(createDraft.channels))} каналов</div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <span className={cn('inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1', getStatusClassName(calendarState.status))}>
+              <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:justify-end">
+                <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-3 py-1 text-center text-xs font-semibold ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.status))}>
                   {calendarState.status}
                 </span>
-                <span className={cn('inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1', getStatusClassName(calendarState.action))}>
+                <span className={cn('inline-flex max-w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-full px-3 py-1 text-center text-xs font-semibold ring-1 [overflow-wrap:anywhere]', getStatusClassName(calendarState.action))}>
                   {calendarState.action}
                 </span>
               </div>
