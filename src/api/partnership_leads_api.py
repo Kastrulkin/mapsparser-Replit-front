@@ -74,3 +74,7 @@ def update_lead_language(lead_id):
 @partnership_leads_bp.route('/api/admin/prospecting/lead/<string:lead_id>', methods=['DELETE'])
 def delete_lead(lead_id):
     return service.delete_lead(lead_id)
+
+@partnership_leads_bp.route('/api/admin/prospecting/lead/<string:lead_id>/workstreams', methods=['POST'])
+def create_lead_workstream(lead_id):
+    return service.create_lead_workstream(lead_id)

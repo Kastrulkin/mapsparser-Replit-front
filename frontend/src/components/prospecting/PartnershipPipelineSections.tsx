@@ -293,7 +293,7 @@ export const PartnershipLeadCard = ({
             {lead.address || 'Адрес не указан'}
           </div>
           {lead.client_business_name ? (
-            <Badge variant="outline" className="mt-2 max-w-full truncate">Лид: {lead.client_business_name}</Badge>
+            <Badge variant="outline" className="mt-2 max-w-full truncate">Лид-партнёр · {lead.client_business_name}</Badge>
           ) : null}
         </div>
         <div className="flex max-w-[45%] shrink-0 flex-wrap justify-end gap-1">
@@ -750,7 +750,7 @@ export const PartnershipPipelineList = ({
                       <span className={mutedPillClass}><span className="truncate">Воронка: {shortStatusLabel(lead.pipeline_status || 'unprocessed')}</span></span>
                       <span className={mutedPillClass}><span className="truncate">Этап: {shortStatusLabel(lead.partnership_stage || 'новый')}</span></span>
                       <span className={mutedPillClass}><span className="truncate">Когорта: {lead.pilot_cohort || 'резерв'}</span></span>
-                      {lead.client_business_name ? <span className={mutedPillClass}><span className="max-w-[220px] truncate">Лид: {lead.client_business_name}</span></span> : null}
+                      {lead.client_business_name ? <span className={mutedPillClass}><span className="max-w-[220px] truncate">Лид-партнёр · {lead.client_business_name}</span></span> : null}
                       {lead.source_provider ? <span className={mutedPillClass}><span className="max-w-[180px] truncate">{sourceProviderLabel(lead.source_provider)}</span></span> : null}
                       {lead.rating ? <span className={mutedPillClass}>★ {lead.rating}{lead.reviews_count ? ` · ${lead.reviews_count}` : ''}</span> : null}
                     </div>

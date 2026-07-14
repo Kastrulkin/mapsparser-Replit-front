@@ -7,7 +7,7 @@ import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
 import { AdminExternalCabinetSettings } from '../../components/AdminExternalCabinetSettings';
-import { ProspectingManagement } from '../../components/ProspectingManagement';
+import { AdminLeadRegistry } from '../../components/prospecting/AdminLeadRegistry';
 import { TelegramOpportunityRadar } from '../../components/TelegramOpportunityRadar';
 import {
   DashboardCompactMetricsRow,
@@ -231,7 +231,7 @@ const adminTabs: AdminTabConfig[] = [
   { id: 'subscriptions', label: 'Подписки', icon: CreditCard },
   { id: 'agents', label: 'Агенты пользователей', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
-  { id: 'prospecting', label: 'Поиск клиентов', icon: Search },
+  { id: 'prospecting', label: 'Лиды', icon: Search },
   { id: 'telegramRadar', label: 'Telegram-радар', icon: Radar },
   { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
   { id: 'growth', label: 'Схема роста', icon: TrendingUp },
@@ -246,7 +246,7 @@ const primaryAdminTabs: AdminTabConfig[] = [
   { id: 'subscriptions', label: 'Подписки', icon: CreditCard },
   { id: 'agents', label: 'Агенты', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
-  { id: 'prospecting', label: 'Поиск клиентов', icon: Search },
+  { id: 'prospecting', label: 'Лиды', icon: Search },
   { id: 'telegramRadar', label: 'Telegram-радар', icon: Radar },
 ];
 
@@ -1482,10 +1482,10 @@ export const AdminPage: React.FC = () => {
         ) : activeTab === 'prospecting' ? (
           <DashboardSection
             title={activeTabConfig.label}
-            description="Лиды, воронка, аутрич и аналитика поиска клиентов."
+            description="Один список компаний: продажи LocalOS и партнёры клиентов с раздельными сообщениями, комнатами и результатами."
             contentClassName="p-0"
           >
-            <ProspectingManagement />
+            <AdminLeadRegistry businessOptions={radarBusinessOptions} />
           </DashboardSection>
         ) : activeTab === 'telegramRadar' ? (
           <DashboardSection

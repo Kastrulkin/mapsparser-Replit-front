@@ -15,6 +15,15 @@ from psycopg2.extras import RealDictCursor
 from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
+from services.lead_workstream_service import (
+    CLIENT_PARTNERSHIP,
+    LOCALOS_SALES,
+    attach_workstreams,
+    create_workstream,
+    normalize_workstream_type,
+    resolve_workstream,
+    update_workstream,
+)
 from api import admin_prospecting as _legacy
 
 ALLOWED_OUTREACH_CHANNELS = _legacy.ALLOWED_OUTREACH_CHANNELS
@@ -73,6 +82,7 @@ __all__ = [
     "update_lead_contacts",
     "update_lead_language",
     "delete_lead",
+    "create_lead_workstream",
 ]
 
 def partnership_list_leads():
@@ -100,8 +110,8 @@ def partnership_list_leads():
                 return jsonify({"error": "Business not found or access denied"}), 403
 
             where_sql = [
-                "business_id = %s",
-                "COALESCE(intent, 'client_outreach') = 'partnership_outreach'",
+                "active_ws.client_business_id = %s",
+                "active_ws.workstream_type = 'client_partnership'",
             ]
             params: list[Any] = [business_id]
             if stage_filter:
@@ -111,9 +121,9 @@ def partnership_list_leads():
                 if pipeline_status_filter == "in_progress":
                     where_sql.append(
                         """(
-                            COALESCE(pipeline_status, 'unprocessed') IN ('in_progress', 'qualified')
+                            COALESCE(active_ws.status, 'unprocessed') IN ('in_progress', 'qualified')
                             OR (
-                                COALESCE(pipeline_status, '') = ''
+                                COALESCE(active_ws.status, '') = ''
                                 AND COALESCE(partnership_stage, 'imported') IN (
                                     'audited', 'matched', 'proposal_draft_ready', 'selected_for_outreach',
                                     'channel_selected', 'proposal_approved', 'queued_for_send'
@@ -123,23 +133,23 @@ def partnership_list_leads():
                     )
                 elif pipeline_status_filter == "postponed":
                     where_sql.append(
-                        "(COALESCE(pipeline_status, 'unprocessed') IN ('postponed', 'deferred') OR COALESCE(partnership_stage, 'imported') = 'deferred')"
+                        "(COALESCE(active_ws.status, 'unprocessed') IN ('postponed', 'deferred') OR COALESCE(partnership_stage, 'imported') = 'deferred')"
                     )
                 elif pipeline_status_filter == "not_relevant":
                     where_sql.append(
-                        "(COALESCE(pipeline_status, 'unprocessed') IN ('not_relevant', 'disqualified') OR COALESCE(partnership_stage, 'imported') IN ('rejected', 'shortlist_rejected'))"
+                        "(COALESCE(active_ws.status, 'unprocessed') IN ('not_relevant', 'disqualified') OR COALESCE(partnership_stage, 'imported') IN ('rejected', 'shortlist_rejected'))"
                     )
                 elif pipeline_status_filter == "contacted":
                     where_sql.append(
                         """(
-                            COALESCE(pipeline_status, 'unprocessed') IN ('contacted', 'waiting_reply', 'sent', 'delivered')
+                            COALESCE(active_ws.status, 'unprocessed') IN ('contacted', 'waiting_reply', 'sent', 'delivered')
                             OR COALESCE(partnership_stage, 'imported') IN ('approved_for_send', 'sent')
                         )"""
                     )
                 elif pipeline_status_filter == "replied":
-                    where_sql.append("COALESCE(pipeline_status, 'unprocessed') IN ('replied', 'responded')")
+                    where_sql.append("COALESCE(active_ws.status, 'unprocessed') IN ('replied', 'responded')")
                 else:
-                    where_sql.append("COALESCE(pipeline_status, 'unprocessed') = %s")
+                    where_sql.append("COALESCE(active_ws.status, 'unprocessed') = %s")
                     params.append(pipeline_status_filter)
             if pilot_cohort:
                 where_sql.append("COALESCE(pilot_cohort, 'backlog') = %s")
@@ -160,14 +170,19 @@ def partnership_list_leads():
                        prospectingleads.deferred_reason, prospectingleads.deferred_until,
                        prospectingleads.phone, prospectingleads.email, prospectingleads.telegram_url,
                        prospectingleads.whatsapp_url, prospectingleads.website, prospectingleads.rating,
-                       prospectingleads.reviews_count, prospectingleads.status, prospectingleads.selected_channel,
+                       prospectingleads.reviews_count, prospectingleads.status,
+                       COALESCE(active_ws.selected_channel, prospectingleads.selected_channel) AS selected_channel,
                        prospectingleads.intent, prospectingleads.partnership_stage, prospectingleads.pilot_cohort,
-                       prospectingleads.pipeline_status, prospectingleads.disqualification_reason,
+                       COALESCE(active_ws.status, prospectingleads.pipeline_status, 'unprocessed') AS pipeline_status,
+                       prospectingleads.disqualification_reason,
                        prospectingleads.disqualification_comment, prospectingleads.postponed_comment,
-                       prospectingleads.next_action_at, prospectingleads.last_contact_at,
-                       prospectingleads.last_contact_channel, prospectingleads.last_contact_comment,
+                       COALESCE(active_ws.next_action_at, prospectingleads.next_action_at) AS next_action_at,
+                       COALESCE(active_ws.last_contact_at, prospectingleads.last_contact_at) AS last_contact_at,
+                       COALESCE(active_ws.last_contact_channel, prospectingleads.last_contact_channel) AS last_contact_channel,
+                       COALESCE(active_ws.last_contact_comment, prospectingleads.last_contact_comment) AS last_contact_comment,
                        prospectingleads.parse_business_id, prospectingleads.updated_at,
                        prospectingleads.created_at,
+                       active_ws.id AS active_workstream_id,
                        (
                            SELECT client_business.name
                            FROM businesses client_business
@@ -184,6 +199,7 @@ def partnership_list_leads():
                        sr_last.slug AS sales_room_slug,
                        sr_last.updated_at AS sales_room_updated_at
                 FROM prospectingleads
+                JOIN lead_workstreams active_ws ON active_ws.lead_id = prospectingleads.id
                 LEFT JOIN LATERAL (
                     SELECT
                         pq.id, pq.status, pq.updated_at, pq.created_at, pq.retry_after, pq.error_message
@@ -205,11 +221,12 @@ def partnership_list_leads():
                     SELECT status, data_mode, slug, updated_at
                     FROM sales_rooms sr
                     WHERE sr.lead_id = prospectingleads.id
+                      AND (sr.workstream_id = active_ws.id OR sr.workstream_id IS NULL)
                     ORDER BY sr.updated_at DESC
                     LIMIT 1
                 ) sr_last ON TRUE
                 WHERE {' AND '.join(where_sql)}
-                ORDER BY prospectingleads.updated_at DESC NULLS LAST, prospectingleads.created_at DESC
+                ORDER BY active_ws.updated_at DESC NULLS LAST, prospectingleads.created_at DESC
                 LIMIT %s OFFSET %s
                 """,
                 (*params, limit, offset),
@@ -229,10 +246,49 @@ def partnership_list_leads():
                 payload["sales_room_url"] = _make_sales_room_url(sales_room_slug)
             payload["next_best_action"] = _partnership_next_best_action(payload)
             items.append(payload)
+        attach_conn = get_db_connection()
+        try:
+            items = attach_workstreams(attach_conn, items)
+        finally:
+            attach_conn.close()
         return jsonify({"success": True, "count": len(items), "items": items})
     except Exception as e:
         print(f"Error listing partnership leads: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+def create_lead_workstream(lead_id):
+    """Attach an independent LocalOS sales or client partnership context."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    data = request.get_json(silent=True) or {}
+    workstream_type = normalize_workstream_type(data.get("workstream_type"))
+    if workstream_type not in {LOCALOS_SALES, CLIENT_PARTNERSHIP}:
+        return jsonify({"error": "Unsupported workstream_type"}), 400
+    client_business_id = str(data.get("client_business_id") or "").strip() or None
+    try:
+        conn = get_db_connection()
+        try:
+            workstream = create_workstream(
+                conn,
+                lead_id=lead_id,
+                workstream_type=workstream_type,
+                client_business_id=client_business_id,
+                actor_id=str(user_data.get("user_id") or "") or None,
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({"success": True, "workstream": _to_json_compatible(workstream)})
+    except LookupError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        print(f"Error creating lead workstream: {exc}")
+        return jsonify({"error": str(exc)}), 500
 
 
 def partnership_update_lead(lead_id):
@@ -292,11 +348,12 @@ def partnership_update_lead(lead_id):
                 return jsonify({"error": "Business not found or access denied"}), 403
             cur.execute(
                 """
-                SELECT id, name, telegram_url, whatsapp_url, email
-                FROM prospectingleads
-                WHERE id = %s
-                  AND business_id = %s
-                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                SELECT l.id, l.name, l.telegram_url, l.whatsapp_url, l.email, ws.id AS workstream_id
+                FROM prospectingleads l
+                JOIN lead_workstreams ws ON ws.lead_id = l.id
+                WHERE l.id = %s
+                  AND ws.client_business_id = %s
+                  AND ws.workstream_type = 'client_partnership'
                 """,
                 (lead_id, business_id),
             )
@@ -329,15 +386,6 @@ def partnership_update_lead(lead_id):
                         pipeline_status = PIPELINE_CONTACTED
                     elif stage not in {"imported"}:
                         pipeline_status = PIPELINE_IN_PROGRESS
-            if status:
-                assignments.append("status = %s")
-                params.append(status)
-            if pipeline_status:
-                assignments.append("pipeline_status = %s")
-                params.append(pipeline_status)
-            if selected_channel is not None:
-                assignments.append("selected_channel = %s")
-                params.append(selected_channel)
             if pilot_cohort is not None:
                 assignments.append("pilot_cohort = %s")
                 params.append(pilot_cohort)
@@ -375,14 +423,12 @@ def partnership_update_lead(lead_id):
                 assignments.append("whatsapp_url = %s")
                 params.append(whatsapp_url)
 
-            params.extend([lead_id, business_id])
+            params.append(lead_id)
             cur.execute(
                 f"""
                 UPDATE prospectingleads
                 SET {', '.join(assignments)}
                 WHERE id = %s
-                  AND business_id = %s
-                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
                 RETURNING id, name, source_url, status, selected_channel, partnership_stage, pipeline_status, pilot_cohort,
                           deferred_reason, deferred_until, phone, email, website, telegram_url, whatsapp_url, city, category, address, updated_at
                 """,
@@ -391,6 +437,14 @@ def partnership_update_lead(lead_id):
             updated = cur.fetchone()
             if not updated:
                 return jsonify({"error": "Lead not found"}), 404
+            workstream_status = pipeline_status or status or str(existing_lead.get("status") or PIPELINE_UNPROCESSED)
+            updated_workstream = update_workstream(
+                conn,
+                workstream_id=str(existing_lead.get("workstream_id") or ""),
+                status=workstream_status,
+                selected_channel=selected_channel,
+                next_action_at=deferred_until if deferred_until_present else None,
+            )
             if pipeline_status == PIPELINE_CONVERTED:
                 ensure_ai_learning_events_table(conn)
                 cur.execute(
@@ -398,10 +452,11 @@ def partnership_update_lead(lead_id):
                     SELECT id, learning_note_json, generated_text, approved_text, edited_text
                     FROM outreachmessagedrafts
                     WHERE lead_id = %s
+                      AND (workstream_id = %s OR workstream_id IS NULL)
                     ORDER BY updated_at DESC, created_at DESC
                     LIMIT 1
                     """,
-                    (lead_id,),
+                    (lead_id, str(existing_lead.get("workstream_id") or "")),
                 )
                 draft_row = cur.fetchone()
                 draft_context = dict(draft_row) if draft_row and hasattr(draft_row, "keys") else {}
@@ -444,7 +499,12 @@ def partnership_update_lead(lead_id):
         finally:
             conn.close()
 
-        return jsonify({"success": True, "item": dict(updated) if hasattr(updated, "keys") else updated})
+        item = dict(updated) if hasattr(updated, "keys") else updated
+        if isinstance(item, dict):
+            item["active_workstream_id"] = updated_workstream.get("id")
+            item["pipeline_status"] = updated_workstream.get("status")
+            item["selected_channel"] = updated_workstream.get("selected_channel")
+        return jsonify({"success": True, "item": item, "workstream": _to_json_compatible(updated_workstream)})
     except Exception as e:
         print(f"Error updating partnership lead: {e}")
         return jsonify({"error": str(e)}), 500
@@ -474,11 +534,12 @@ def partnership_mark_lead_manual_contact(lead_id):
                 return jsonify({"error": "Business not found or access denied"}), 403
             cur.execute(
                 """
-                SELECT *
-                FROM prospectingleads
-                WHERE id = %s
-                  AND business_id = %s
-                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                SELECT l.*, ws.id AS workstream_id
+                FROM prospectingleads l
+                JOIN lead_workstreams ws ON ws.lead_id = l.id
+                WHERE l.id = %s
+                  AND ws.client_business_id = %s
+                  AND ws.workstream_type = 'client_partnership'
                 LIMIT 1
                 """,
                 (lead_id, business_id),
@@ -490,30 +551,35 @@ def partnership_mark_lead_manual_contact(lead_id):
             if channel != "manual" and not _lead_has_channel_contact(lead_payload, channel):
                 return jsonify({"error": _outreach_channel_contact_error(channel)}), 400
 
-            updated = _apply_pipeline_transition(
-                cur,
-                lead_id=lead_id,
-                pipeline_status=PIPELINE_CONTACTED,
-                actor_id=str(user_data.get("user_id") or "") or None,
-                comment=comment,
-                last_contact_channel=channel,
+            updated_workstream = update_workstream(
+                conn,
+                workstream_id=str(lead_payload.get("workstream_id") or ""),
+                status=PIPELINE_CONTACTED,
+                selected_channel=channel,
+                last_contact=True,
                 last_contact_comment=comment,
-                set_last_contact_at=True,
             )
             _record_lead_timeline_event(
                 cur,
                 lead_id=lead_id,
+                workstream_id=str(lead_payload.get("workstream_id") or ""),
                 event_type="manual_contact_marked",
                 actor_id=str(user_data.get("user_id") or "") or None,
                 comment=comment,
                 payload={"channel": channel, "source": "partnership_room"},
             )
             conn.commit()
-            updated = _normalize_lead_for_display(updated or lead_payload) or updated or lead_payload
+            updated = _normalize_lead_for_display(lead_payload) or lead_payload
+            updated["pipeline_status"] = updated_workstream.get("status")
+            updated["selected_channel"] = updated_workstream.get("selected_channel")
         finally:
             conn.close()
 
-        return jsonify({"success": True, "lead": _to_json_compatible(updated)})
+        return jsonify({
+            "success": True,
+            "lead": _to_json_compatible(updated),
+            "workstream": _to_json_compatible(updated_workstream),
+        })
     except Exception as e:
         print(f"Error marking partnership manual contact: {e}")
         return jsonify({"error": str(e)}), 500
@@ -561,11 +627,12 @@ def partnership_bulk_update_leads():
             if selected_channel is not None and selected_channel != "manual":
                 cur.execute(
                     """
-                    SELECT id, name, telegram_url, whatsapp_url, email
-                    FROM prospectingleads
-                    WHERE id = ANY(%s)
-                      AND business_id = %s
-                      AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                    SELECT l.id, l.name, l.telegram_url, l.whatsapp_url, l.email
+                    FROM prospectingleads l
+                    JOIN lead_workstreams ws ON ws.lead_id = l.id
+                    WHERE l.id = ANY(%s)
+                      AND ws.client_business_id = %s
+                      AND ws.workstream_type = 'client_partnership'
                     """,
                     (lead_ids, business_id),
                 )
@@ -592,15 +659,6 @@ def partnership_bulk_update_leads():
                         pipeline_status = PIPELINE_CONTACTED
                     elif stage not in {"imported"}:
                         pipeline_status = PIPELINE_IN_PROGRESS
-            if status:
-                assignments.append("status = %s")
-                params.append(status)
-            if pipeline_status:
-                assignments.append("pipeline_status = %s")
-                params.append(pipeline_status)
-            if selected_channel is not None:
-                assignments.append("selected_channel = %s")
-                params.append(selected_channel)
             if pilot_cohort is not None:
                 assignments.append("pilot_cohort = %s")
                 params.append(pilot_cohort)
@@ -617,14 +675,42 @@ def partnership_bulk_update_leads():
                 UPDATE prospectingleads
                 SET {', '.join(assignments)}
                 WHERE id = ANY(%s)
-                  AND business_id = %s
-                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                  AND EXISTS (
+                      SELECT 1
+                      FROM lead_workstreams ws
+                      WHERE ws.lead_id = prospectingleads.id
+                        AND ws.client_business_id = %s
+                        AND ws.workstream_type = 'client_partnership'
+                  )
                 RETURNING id
                 """,
                 tuple(params),
             )
             rows = cur.fetchall() or []
             updated_ids = [row["id"] if hasattr(row, "get") else row[0] for row in rows]
+            workstream_status = pipeline_status or status
+            if updated_ids and (workstream_status or selected_channel is not None or deferred_until_present):
+                cur.execute(
+                    """
+                    UPDATE lead_workstreams
+                    SET status = COALESCE(%s, status),
+                        selected_channel = CASE WHEN %s THEN %s ELSE selected_channel END,
+                        next_action_at = CASE WHEN %s THEN %s ELSE next_action_at END,
+                        updated_at = NOW()
+                    WHERE lead_id = ANY(%s)
+                      AND client_business_id = %s
+                      AND workstream_type = 'client_partnership'
+                    """,
+                    (
+                        workstream_status,
+                        selected_channel is not None,
+                        selected_channel,
+                        deferred_until_present,
+                        deferred_until,
+                        updated_ids,
+                        business_id,
+                    ),
+                )
             if pipeline_status == PIPELINE_CONVERTED and updated_ids:
                 ensure_ai_learning_events_table(conn)
                 cur.execute(
@@ -703,17 +789,20 @@ def partnership_delete_lead(lead_id):
                 return jsonify({"error": "Business not found or access denied"}), 403
             cur.execute(
                 """
-                DELETE FROM prospectingleads
-                WHERE id = %s
-                  AND business_id = %s
-                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
-                RETURNING id
+                DELETE FROM lead_workstreams
+                WHERE lead_id = %s
+                  AND client_business_id = %s
+                  AND workstream_type = 'client_partnership'
+                RETURNING lead_id
                 """,
                 (lead_id, business_id),
             )
             deleted = cur.fetchone()
             if not deleted:
                 return jsonify({"error": "Lead not found"}), 404
+            cur.execute("SELECT 1 FROM lead_workstreams WHERE lead_id = %s LIMIT 1", (lead_id,))
+            if not cur.fetchone():
+                cur.execute("DELETE FROM prospectingleads WHERE id = %s", (lead_id,))
             conn.commit()
         finally:
             conn.close()
@@ -747,20 +836,32 @@ def partnership_bulk_delete_leads():
                 return jsonify({"error": "Business not found or access denied"}), 403
             cur.execute(
                 """
-                DELETE FROM prospectingleads
-                WHERE id = ANY(%s)
-                  AND business_id = %s
-                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
-                RETURNING id
+                DELETE FROM lead_workstreams
+                WHERE lead_id = ANY(%s)
+                  AND client_business_id = %s
+                  AND workstream_type = 'client_partnership'
+                RETURNING lead_id
                 """,
                 (lead_ids, business_id),
             )
             rows = cur.fetchall() or []
+            deleted_lead_ids = [row["lead_id"] if hasattr(row, "get") else row[0] for row in rows]
+            if deleted_lead_ids:
+                cur.execute(
+                    """
+                    DELETE FROM prospectingleads l
+                    WHERE l.id = ANY(%s)
+                      AND NOT EXISTS (
+                          SELECT 1 FROM lead_workstreams ws WHERE ws.lead_id = l.id
+                      )
+                    """,
+                    (deleted_lead_ids,),
+                )
             conn.commit()
         finally:
             conn.close()
 
-        deleted_ids = [row["id"] if hasattr(row, "get") else row[0] for row in rows]
+        deleted_ids = [row["lead_id"] if hasattr(row, "get") else row[0] for row in rows]
         return jsonify({"success": True, "deleted_count": len(deleted_ids), "deleted_ids": deleted_ids})
     except Exception as e:
         print(f"Error bulk deleting partnership leads: {e}")
@@ -794,6 +895,7 @@ def partnership_prepare_sales_room(lead_id):
             channel=channel,
             audit_offer=data.get("audit_offer") if isinstance(data.get("audit_offer"), dict) else None,
             reuse_existing=bool(data.get("reuse_existing")),
+            workstream_id=str(data.get("workstream_id") or "").strip() or None,
         )
         if result.get("error"):
             return jsonify(result), int(result.get("status_code") or 400)
@@ -836,6 +938,7 @@ def update_lead_status(lead_id):
         disqualification_comment = str(data.get("disqualification_comment") or "").strip() or None
         postponed_comment = str(data.get("postponed_comment") or data.get("comment") or "").strip() or None
         next_action_at = str(data.get("next_action_at") or "").strip() or None
+        workstream_id = str(data.get("workstream_id") or "").strip() or None
 
         if pipeline_status not in ALLOWED_PIPELINE_STATUSES:
             return jsonify({"error": f"pipeline_status must be one of: {', '.join(sorted(ALLOWED_PIPELINE_STATUSES))}"}), 400
@@ -851,6 +954,36 @@ def update_lead_status(lead_id):
         try:
             _ensure_manual_crm_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
+            if workstream_id:
+                workstream = resolve_workstream(
+                    conn,
+                    lead_id=lead_id,
+                    workstream_id=workstream_id,
+                )
+                updated_workstream = update_workstream(
+                    conn,
+                    workstream_id=str(workstream.get("id") or ""),
+                    status=pipeline_status,
+                    next_action_at=next_action_at if pipeline_status == PIPELINE_POSTPONED else None,
+                )
+                _record_lead_timeline_event(
+                    cur,
+                    lead_id=lead_id,
+                    workstream_id=workstream_id,
+                    event_type="workstream_status_changed",
+                    actor_id=str(user_data.get("user_id") or "") or None,
+                    comment=comment,
+                    payload={"pipeline_status": pipeline_status},
+                )
+                cur.execute("SELECT * FROM prospectingleads WHERE id = %s", (lead_id,))
+                lead_row = cur.fetchone()
+                conn.commit()
+                lead_payload = dict(lead_row) if lead_row else {"id": lead_id}
+                return jsonify({
+                    "success": True,
+                    "lead": _to_json_compatible(lead_payload),
+                    "workstream": _to_json_compatible(updated_workstream),
+                })
             updated = _apply_pipeline_transition(
                 cur,
                 lead_id=lead_id,
@@ -885,6 +1018,7 @@ def mark_lead_manual_contact(lead_id):
         data = request.get_json(silent=True) or {}
         channel = str(data.get("channel") or "manual").strip().lower() or "manual"
         comment = str(data.get("comment") or "").strip() or None
+        workstream_id = str(data.get("workstream_id") or "").strip() or None
         if channel not in ALLOWED_OUTREACH_CHANNELS:
             return jsonify({"error": "Unsupported channel"}), 400
 
@@ -899,6 +1033,35 @@ def mark_lead_manual_contact(lead_id):
             lead_payload = dict(lead)
             if channel != "manual" and not _lead_has_channel_contact(lead_payload, channel):
                 return jsonify({"error": _outreach_channel_contact_error(channel)}), 400
+            if workstream_id:
+                workstream = resolve_workstream(
+                    conn,
+                    lead_id=lead_id,
+                    workstream_id=workstream_id,
+                )
+                updated_workstream = update_workstream(
+                    conn,
+                    workstream_id=str(workstream.get("id") or ""),
+                    status=PIPELINE_CONTACTED,
+                    selected_channel=channel,
+                    last_contact=True,
+                    last_contact_comment=comment,
+                )
+                _record_lead_timeline_event(
+                    cur,
+                    lead_id=lead_id,
+                    workstream_id=workstream_id,
+                    event_type="manual_contact_marked",
+                    actor_id=str(user_data.get("user_id") or "") or None,
+                    comment=comment,
+                    payload={"channel": channel},
+                )
+                conn.commit()
+                return jsonify({
+                    "success": True,
+                    "lead": _to_json_compatible(lead_payload),
+                    "workstream": _to_json_compatible(updated_workstream),
+                })
             updated = _apply_pipeline_transition(
                 cur,
                 lead_id=lead_id,
@@ -937,6 +1100,7 @@ def add_lead_comment(lead_id):
     try:
         data = request.get_json(silent=True) or {}
         comment = str(data.get("comment") or "").strip()
+        workstream_id = str(data.get("workstream_id") or "").strip() or None
         if not comment:
             return jsonify({"error": "comment is required"}), 400
 
@@ -958,9 +1122,12 @@ def add_lead_comment(lead_id):
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "Lead not found"}), 404
+            if workstream_id:
+                resolve_workstream(conn, lead_id=lead_id, workstream_id=workstream_id)
             _record_lead_timeline_event(
                 cur,
                 lead_id=lead_id,
+                workstream_id=workstream_id,
                 event_type="comment_added",
                 actor_id=str(user_data.get("user_id") or "") or None,
                 comment=comment,
@@ -989,15 +1156,17 @@ def get_lead_timeline(lead_id):
             cur.execute("SELECT 1 FROM prospectingleads WHERE id = %s", (lead_id,))
             if not cur.fetchone():
                 return jsonify({"error": "Lead not found"}), 404
+            workstream_id = str(request.args.get("workstream_id") or "").strip() or None
             cur.execute(
                 """
-                SELECT id, lead_id, event_type, actor_id, comment, payload_json, created_at
+                SELECT id, lead_id, workstream_id, event_type, actor_id, comment, payload_json, created_at
                 FROM lead_timeline_events
                 WHERE lead_id = %s
+                  AND (%s IS NULL OR workstream_id = %s)
                 ORDER BY created_at DESC
                 LIMIT 200
                 """,
-                (lead_id,),
+                (lead_id, workstream_id, workstream_id),
             )
             events = [dict(row) for row in cur.fetchall() or []]
         finally:
@@ -1066,8 +1235,48 @@ def select_outreach_channel(lead_id):
     try:
         data = request.get_json(silent=True) or {}
         channel = (data.get("channel") or "").strip().lower()
+        workstream_id = str(data.get("workstream_id") or "").strip() or None
         if channel not in ALLOWED_OUTREACH_CHANNELS:
             return jsonify({"error": "Channel must be one of: telegram, whatsapp, max, email, manual"}), 400
+
+        if workstream_id:
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor(cursor_factory=RealDictCursor)
+                cur.execute("SELECT * FROM prospectingleads WHERE id = %s", (lead_id,))
+                lead = cur.fetchone()
+                if not lead:
+                    return jsonify({"error": "Lead not found"}), 404
+                lead_payload = dict(lead)
+                if not _lead_has_channel_contact(lead_payload, channel):
+                    return jsonify({"error": _outreach_channel_contact_error(channel)}), 400
+                workstream = resolve_workstream(
+                    conn,
+                    lead_id=lead_id,
+                    workstream_id=workstream_id,
+                )
+                updated_workstream = update_workstream(
+                    conn,
+                    workstream_id=str(workstream.get("id") or ""),
+                    status=PIPELINE_IN_PROGRESS,
+                    selected_channel=channel,
+                )
+                _record_lead_timeline_event(
+                    cur,
+                    lead_id=lead_id,
+                    workstream_id=workstream_id,
+                    event_type="workstream_channel_selected",
+                    payload={"channel": channel},
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            return jsonify({
+                "success": True,
+                "lead": _to_json_compatible(lead_payload),
+                "workstream": _to_json_compatible(updated_workstream),
+                "selected_channel": channel,
+            })
 
         with DatabaseManager() as db:
             lead = db.get_lead_by_id(lead_id)
