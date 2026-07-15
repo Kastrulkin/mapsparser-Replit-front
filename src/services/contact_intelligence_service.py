@@ -64,7 +64,7 @@ def normalize_phone(value: Any) -> str:
     if phonenumbers is not None:
         try:
             parsed = phonenumbers.parse(raw, "RU")
-            if phonenumbers.is_possible_number(parsed):
+            if phonenumbers.is_valid_number(parsed):
                 return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
         except phonenumbers.NumberParseException:
             pass
@@ -73,7 +73,7 @@ def normalize_phone(value: Any) -> str:
         digits = "7" + digits[1:]
     if len(digits) == 10:
         digits = "7" + digits
-    if len(digits) < 10 or len(digits) > 15:
+    if len(digits) not in {10, 11} and not (raw.startswith("+") and 10 <= len(digits) <= 15):
         return ""
     return "+" + digits
 

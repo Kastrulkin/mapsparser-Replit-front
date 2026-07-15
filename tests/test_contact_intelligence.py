@@ -41,6 +41,8 @@ def test_phone_normalization_produces_e164_and_rejects_short_values():
     assert normalize_phone("8 (921) 555-12-34") == "+79215551234"
     assert normalize_phone("921 555 12 34") == "+79215551234"
     assert normalize_phone("12345") == ""
+    assert normalize_phone("780102095932") == ""
+    assert normalize_phone("324784700384560") == ""
 
 
 def test_enrichment_enqueue_reuses_terminal_job_until_explicit_retry():
