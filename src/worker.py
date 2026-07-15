@@ -13,7 +13,7 @@ import random
 from typing import Dict, List, Any, Optional
 from urllib import request as urllib_request, error as urllib_error
 from dotenv import load_dotenv
-from psycopg2.extras import Json, RealDictCursor
+from psycopg2.extras import Json
 
 from browser_session import BrowserSession, BrowserSessionManager
 from parser_config_cookies import get_yandex_cookies
@@ -1563,7 +1563,7 @@ def _process_contact_intelligence_if_due() -> None:
     job = None
     try:
         db = DatabaseManager()
-        cursor = db.conn.cursor(cursor_factory=RealDictCursor)
+        cursor = db.conn.cursor()
         job = claim_next_enrichment_job(cursor)
         db.conn.commit()
         if not job:
@@ -1572,13 +1572,13 @@ def _process_contact_intelligence_if_due() -> None:
             result = process_enrichment_job(cursor, job)
         except Exception as error:
             db.conn.rollback()
-            cursor = db.conn.cursor(cursor_factory=RealDictCursor)
+            cursor = db.conn.cursor()
             result = fail_enrichment_job(cursor, job, error)
         db.conn.commit()
         if result.get("status") == "ready":
             details = result.get("result_json") if isinstance(result.get("result_json"), dict) else {}
             room_state = _prepare_contact_intelligence_room(details)
-            cursor = db.conn.cursor(cursor_factory=RealDictCursor)
+            cursor = db.conn.cursor()
             cursor.execute(
                 """
                 UPDATE lead_enrichment_jobs

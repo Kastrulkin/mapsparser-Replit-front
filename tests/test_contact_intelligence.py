@@ -292,6 +292,16 @@ def test_contact_intelligence_runtime_has_no_message_send_capability():
     assert "outreachsendqueue" not in source
 
 
+def test_worker_uses_database_wrapper_cursor_contract():
+    source = (ROOT / "src" / "worker.py").read_text(encoding="utf-8")
+    start = source.index("def _process_contact_intelligence_if_due()")
+    end = source.index("\ndef _prepare_contact_intelligence_room", start)
+    worker_block = source[start:end]
+
+    assert "db.conn.cursor(cursor_factory=" not in worker_block
+    assert "db.conn.cursor()" in worker_block
+
+
 def test_contact_routes_are_registered():
     import main
 
