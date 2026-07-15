@@ -1,10 +1,12 @@
 from pathlib import Path
 
 import requests
+from urllib3.exceptions import ReadTimeoutError
 
 from services.contact_intelligence_service import (
     build_first_message,
     build_message_brief,
+    collect_public_website_contacts,
     enqueue_enrichment_job,
     evaluate_first_message,
     extract_contacts_from_html,
@@ -83,6 +85,47 @@ def test_official_page_collects_multiple_channels_without_collapsing_them():
     assert ("telegram", "https://t.me/example_team") in typed_values
     assert ("whatsapp", "https://wa.me/79215551234") in typed_values
     assert ("website_form", "https://example.ru/request") in typed_values
+
+
+def test_messenger_contact_drops_prefilled_message_query():
+    assert normalize_contact_value(
+        "whatsapp",
+        "https://wa.me/79215551234?text=Чужой%20текст",
+    ) == "https://wa.me/79215551234"
+    assert normalize_contact_value(
+        "telegram",
+        "https://t.me/example_team?start=tracking",
+    ) == "https://t.me/example_team"
+
+
+def test_website_stream_timeout_becomes_warning(monkeypatch):
+    class TimedOutBody:
+        def read(self, *_args, **_kwargs):
+            raise ReadTimeoutError(None, "https://example.ru", "timed out")
+
+    class Response:
+        is_redirect = False
+        headers = {"content-type": "text/html"}
+        raw = TimedOutBody()
+        encoding = "utf-8"
+        url = "https://example.ru"
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(
+        "services.contact_intelligence_service._public_http_url",
+        lambda value: str(value),
+    )
+    monkeypatch.setattr(
+        "services.contact_intelligence_service.requests.get",
+        lambda *_args, **_kwargs: Response(),
+    )
+
+    contacts, warnings = collect_public_website_contacts("https://example.ru")
+
+    assert contacts == []
+    assert warnings == ["Не удалось проверить https://example.ru"]
 
 
 def test_official_structured_data_keeps_person_name_and_role():

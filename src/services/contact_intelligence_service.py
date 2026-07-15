@@ -17,6 +17,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 from psycopg2.extras import Json, RealDictCursor
+from urllib3.exceptions import HTTPError as Urllib3HTTPError
 
 try:
     import dns.resolver
@@ -97,7 +98,9 @@ def normalize_contact_value(contact_type: str, value: Any) -> str:
         parsed = urlparse(raw)
         host = parsed.netloc.lower().removeprefix("www.")
         path = re.sub(r"/+", "/", parsed.path or "/").rstrip("/")
-        return f"https://{host}{path}" + (f"?{parsed.query}" if parsed.query else "")
+        keep_query = normalized_type in {"website_form", "website"}
+        query = f"?{parsed.query}" if keep_query and parsed.query else ""
+        return f"https://{host}{path}{query}"
     return raw.lower()
 
 
@@ -270,7 +273,7 @@ def collect_public_website_contacts(website: Any) -> tuple[list[dict[str, Any]],
             contacts.extend(extract_contacts_from_html(html, response.url))
             if len(visited) == 1:
                 queue.extend(_contact_pages(html, response.url))
-        except requests.RequestException:
+        except (requests.RequestException, Urllib3HTTPError):
             warnings.append(f"Не удалось проверить {page_url}")
     unique: dict[tuple[str, str], dict[str, Any]] = {}
     for contact in contacts:

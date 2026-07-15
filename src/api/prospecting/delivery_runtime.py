@@ -947,12 +947,6 @@ def get_leads():
         return error
 
     try:
-        conn = get_db_connection()
-        try:
-            _ensure_partnership_columns(conn)
-            _ensure_manual_crm_tables(conn)
-        finally:
-            conn.close()
         filters = {
             "category": (request.args.get("category") or "").strip() or None,
             "city": (request.args.get("city") or "").strip() or None,
@@ -981,9 +975,6 @@ def get_leads():
         timeline_preview_by_lead_id: dict[str, dict[str, Any]] = {}
         conn = get_db_connection()
         try:
-            _ensure_admin_prospecting_public_offers_table(conn)
-            _ensure_manual_crm_tables(conn)
-            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             cur.execute(
                 """
