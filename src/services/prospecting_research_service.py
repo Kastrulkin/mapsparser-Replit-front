@@ -27,6 +27,10 @@ SCORE_WEIGHTS = {
 }
 SIGNAL_KINDS = {"demand", "pain", "workaround", "switching", "timing"}
 STAGES = {"high_intent", "problem_aware", "trigger_present", "potential_fit"}
+MESSAGE_BRIEF_FIELDS = {
+    "segment", "buyer_persona", "kpi", "pain", "pain_strength", "awareness",
+    "signal", "result", "proof", "angle", "cta",
+}
 
 
 def _clean_text(value, limit=2000):
@@ -150,6 +154,19 @@ def _normalize_signals(candidate, source_urls):
     return signals
 
 
+def _normalize_message_brief(candidate, has_evidence):
+    raw = candidate.get("message_brief") if isinstance(candidate.get("message_brief"), dict) else {}
+    brief = {
+        key: _clean_text(raw.get(key), 1200)
+        for key in MESSAGE_BRIEF_FIELDS
+        if _clean_text(raw.get(key), 1200)
+    }
+    if not has_evidence:
+        for key in ("pain", "signal", "proof"):
+            brief.pop(key, None)
+    return brief
+
+
 def _normalize_contacts(candidate, source_urls):
     raw_contacts = candidate.get("contacts") if isinstance(candidate.get("contacts"), dict) else {}
     values = {}
@@ -208,9 +225,9 @@ def normalize_candidate(candidate):
     if opener_source_url not in source_urls:
         opener_source_url = signals[0]["source_url"] if signals else ""
     if not has_evidence:
-        opener = f"Здравствуйте! Обратили внимание на {name} и хотели предложить коротко сверить, может ли вам быть полезен наш подход."
+        opener = ""
         opener_source_url = ""
-        limitations.append("Персональный публичный сигнал не подтверждён; используется нейтральное вступление.")
+        limitations.append("Публичный сигнал не подтверждён; первое письмо не будет подготовлено без дополнительных фактов.")
     if any(item["source_url"] == "" for item in contact_evidence):
         limitations.append("Для части контактов не указан публичный источник; проверьте их вручную.")
     normalized = {
@@ -236,6 +253,7 @@ def normalize_candidate(candidate):
         "sources": sources,
         "suggested_opener": opener,
         "opener_source_url": opener_source_url,
+        "message_brief": _normalize_message_brief(candidate, has_evidence),
         "limitations": list(dict.fromkeys(limitations)),
     }
     normalized["qualification_stage"] = _stage(candidate, score, signals)
@@ -500,10 +518,12 @@ def _insert_research(cursor, workstream_id, candidate, agent_client_id):
         INSERT INTO lead_workstream_research (
             id, workstream_id, score, qualification_stage, signal_label,
             score_breakdown, why_now, signals_json, sources_json, contact_evidence_json,
-            suggested_opener, opener_source_url, limitations_json, report_hash,
-            created_by_agent_client_id, researched_at, created_at
+            suggested_opener, opener_source_url, limitations_json, message_brief_json,
+            message_readiness_json, report_hash, created_by_agent_client_id,
+            researched_at, created_at
         ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            '{}'::jsonb, %s, %s, NOW(), NOW()
         )
         ON CONFLICT (workstream_id, report_hash) DO UPDATE
         SET researched_at = EXCLUDED.researched_at
@@ -523,6 +543,7 @@ def _insert_research(cursor, workstream_id, candidate, agent_client_id):
             candidate["suggested_opener"] or None,
             candidate["opener_source_url"] or None,
             Json(candidate["limitations"]),
+            Json(candidate["message_brief"]),
             candidate["report_hash"],
             agent_client_id,
         ),

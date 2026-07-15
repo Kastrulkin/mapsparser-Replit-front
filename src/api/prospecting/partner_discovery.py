@@ -1711,42 +1711,42 @@ def _generate_audit_first_message_draft(
     else:
         if channel == "telegram":
             message_lines = [
-                "Здравствуйте! Вы сейчас недополучаете клиентов с карт.",
-                f"Посмотрели карточку {company_name} и видим: {key_issue.lower()}.",
+                "Здравствуйте! Посмотрел вашу карточку на картах.",
+                f"В открытых данных заметил один конкретный момент: {key_issue.lower()}.",
             ]
             if public_audit_url:
                 message_lines.append(f"Сделал короткий разбор: {public_audit_url}")
-            message_lines.append("Можем внедрить это под ключ и привести больше клиентов с карт.")
-            message_lines.append("Вам может быть это интересно?")
+            message_lines.append("Могу прислать короткий разбор с первым приоритетом.")
+            message_lines.append("Посмотреть его будет полезно?")
         elif channel == "whatsapp":
             message_lines = [
-                "Здравствуйте! Вы сейчас недополучаете клиентов с карт.",
-                f"Посмотрели карточку {company_name} и видим: {key_issue.lower()}.",
+                "Здравствуйте! Посмотрел вашу карточку на картах.",
+                f"В открытых данных заметил один конкретный момент: {key_issue.lower()}.",
             ]
             if public_audit_url:
                 message_lines.append(f"Короткий разбор здесь: {public_audit_url}")
-            message_lines.append("Можем внедрить это под ключ и привести больше клиентов с карт.")
-            message_lines.append("Это может быть актуально?")
+            message_lines.append("Могу прислать короткий разбор с первым приоритетом.")
+            message_lines.append("Посмотреть его будет полезно?")
         elif channel == "email":
             message_lines = [
-                "Здравствуйте! Вы сейчас недополучаете клиентов с карт.",
-                f"Посмотрели карточку {company_name} и видим: {key_issue.lower()}.",
+                "Здравствуйте! Посмотрел вашу карточку на картах.",
+                f"В открытых данных заметил один конкретный момент: {key_issue.lower()}.",
             ]
             if public_audit_url:
                 message_lines.append(f"Сделал короткий разбор, как это исправить: {public_audit_url}")
             else:
                 message_lines.append("Сделал короткий разбор, как это исправить.")
-            message_lines.append("Можем внедрить это под ключ и привести больше клиентов с карт.")
-            message_lines.append("Вам может быть это интересно?")
+            message_lines.append("Могу прислать короткий разбор с первым приоритетом.")
+            message_lines.append("Посмотреть его будет полезно?")
         else:
             message_lines = [
-                "Здравствуйте! Вы сейчас недополучаете клиентов с карт.",
-                f"Посмотрели карточку {company_name} и видим: {key_issue.lower()}.",
+                "Здравствуйте! Посмотрел вашу карточку на картах.",
+                f"В открытых данных заметил один конкретный момент: {key_issue.lower()}.",
             ]
             if public_audit_url:
                 message_lines.append(f"Короткий разбор: {public_audit_url}")
-            message_lines.append("Можем внедрить это под ключ и привести больше клиентов с карт.")
-            message_lines.append("Вам может быть это интересно?")
+            message_lines.append("Могу прислать короткий разбор с первым приоритетом.")
+            message_lines.append("Посмотреть его будет полезно?")
 
     return _generate_outreach_message_ai(
         lead=lead,

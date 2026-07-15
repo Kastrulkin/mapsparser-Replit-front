@@ -247,20 +247,16 @@ def _generate_superadmin_deterministic_first_message(
     lead: dict[str, Any],
     preview: dict[str, Any],
 ) -> dict[str, str]:
-    public_audit_url = str(lead.get("public_audit_url") or "").strip()
     company_name = str(lead.get("name") or "ваш бизнес").strip() or "ваш бизнес"
     issue_hint = _deterministic_issue_hint_from_preview(preview)
     message_lines = [
         "Здравствуйте!",
         "",
-        f"Нашёл {company_name} на картах - вижу, что у вас часть клиентов теряется.",
-        f"Например, {issue_hint}",
+        f"Посмотрел карточку {company_name} на картах.",
+        f"В открытых данных заметил конкретный момент: {issue_hint}",
         "",
-        "Разобрал вашу карточку и показал конкретные причины и шаги, как исправить самостоятельно:",
-        public_audit_url or "https://localos.pro",
-        "Это обычно даёт +30-80% к обращениям без рекламы.",
-        "",
-        "Или, хотите, настрою всё, до результата?",
+        "Подготовил короткий разбор с фактами и первым приоритетом.",
+        "Отправить его вам для проверки?",
     ]
     return {
         "angle_type": "audit_preview",
@@ -612,6 +608,9 @@ def _sync_lead_business_link_from_parse_history(lead: dict[str, Any]) -> dict[st
         )
         updated = cur.fetchone()
         if updated:
+            from services.contact_intelligence_service import sync_parsed_lead_contacts
+
+            sync_parsed_lead_contacts(cur, dict(updated))
             conn.commit()
             return dict(updated)
         return lead
@@ -1050,6 +1049,9 @@ def _sync_partnership_lead_from_parsed_data(lead: dict[str, Any]) -> dict[str, A
         )
         updated = cur.fetchone()
         if updated:
+            from services.contact_intelligence_service import sync_parsed_lead_contacts
+
+            sync_parsed_lead_contacts(cur, dict(updated))
             conn.commit()
             return dict(updated)
         return lead
@@ -1177,6 +1179,9 @@ def _sync_lead_contacts_from_parsed_data(lead: dict[str, Any]) -> dict[str, Any]
         )
         updated = cur.fetchone()
         if updated:
+            from services.contact_intelligence_service import sync_parsed_lead_contacts
+
+            sync_parsed_lead_contacts(cur, dict(updated))
             conn.commit()
             return dict(updated)
         return lead

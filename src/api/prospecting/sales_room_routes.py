@@ -1311,6 +1311,25 @@ def generate_outreach_draft(lead_id):
                 lead_id=lead_id,
                 workstream_id=workstream_id,
             ) if workstream_id else None
+            if workstream:
+                from services.contact_intelligence_service import enqueue_enrichment_job
+
+                job = enqueue_enrichment_job(cur, str(workstream.get("id")), force=bool(data.get("force")))
+                conn.commit()
+                return jsonify(
+                    {
+                        "success": True,
+                        "accepted": True,
+                        "job": {
+                            "id": str(job.get("id")),
+                            "workstream_id": str(job.get("workstream_id")),
+                            "status": job.get("status"),
+                            "phase": job.get("current_phase"),
+                        },
+                        "reused": bool(job.get("reused")),
+                        "message": "Контакты и основания письма проверяются перед созданием черновика",
+                    }
+                ), 202
             selected_status = str((workstream or {}).get("status") or lead_dict.get("status") or "")
             if selected_status not in {CHANNEL_SELECTED, PIPELINE_IN_PROGRESS}:
                 return jsonify({"error": "Choose a channel before preparing a message"}), 400

@@ -39,6 +39,15 @@ def test_confirmed_demand_signal_gets_evidence_backed_priority():
             ],
             "suggested_opener": "Saw your public request for a simpler review workflow.",
             "opener_source_url": "https://example.com/company-post",
+            "message_brief": {
+                "segment": "clinics",
+                "buyer_persona": "operations lead",
+                "pain": "review work is fragmented",
+                "signal": "the company asked for a review-management recommendation",
+                "result": "a review workflow gap analysis",
+                "proof": "the public company post",
+                "cta": "Would a short gap analysis be useful?",
+            },
             "contacts": {
                 "email": {
                     "value": "hello@example.com",
@@ -56,6 +65,7 @@ def test_confirmed_demand_signal_gets_evidence_backed_priority():
     assert candidate["sources"][0]["published_at"] == "2026-07-10"
     assert candidate["suggested_opener"].startswith("Saw your public request")
     assert candidate["opener_source_url"] == "https://example.com/company-post"
+    assert candidate["message_brief"]["result"] == "a review workflow gap analysis"
     assert candidate["email"] == "hello@example.com"
     assert candidate["contact_evidence"] == [
         {
@@ -67,12 +77,17 @@ def test_confirmed_demand_signal_gets_evidence_backed_priority():
     ]
 
 
-def test_missing_evidence_uses_neutral_opener_and_does_not_invent_pain():
+def test_missing_evidence_blocks_opener_and_does_not_invent_pain():
     candidate = normalize_candidate(
         {
             "name": "No Evidence Company",
             "why_now": "",
             "suggested_opener": "We know your sales are falling.",
+            "message_brief": {
+                "pain": "sales are falling",
+                "signal": "unverified decline",
+                "result": "a short review",
+            },
             "score_breakdown": {
                 "pain_strength": 5,
                 "product_fit": 5,
@@ -93,7 +108,9 @@ def test_missing_evidence_uses_neutral_opener_and_does_not_invent_pain():
 
     assert candidate["sources"] == []
     assert candidate["signals"] == []
-    assert "sales are falling" not in candidate["suggested_opener"]
+    assert candidate["suggested_opener"] == ""
+    assert "pain" not in candidate["message_brief"]
+    assert "signal" not in candidate["message_brief"]
     assert candidate["signal_label"] == "fit_only"
     assert candidate["opener_source_url"] == ""
     assert any("not confirmed" in item.lower() or "не подтверждён" in item.lower() for item in candidate["limitations"])

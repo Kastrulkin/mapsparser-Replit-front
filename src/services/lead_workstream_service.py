@@ -118,12 +118,28 @@ def build_room_state(workstream: dict[str, Any]) -> dict[str, Any]:
 
 def build_next_action(lead: dict[str, Any], workstream: dict[str, Any]) -> dict[str, Any]:
     status = str(workstream.get("status") or "unprocessed").strip().lower()
+    enrichment = workstream.get("enrichment_state")
+    enrichment_status = ""
+    if isinstance(enrichment, dict):
+        enrichment_status = str(enrichment.get("status") or "").strip().lower()
+    readiness = workstream.get("message_readiness")
+    readiness_code = ""
+    if isinstance(readiness, dict):
+        readiness_code = str(readiness.get("code") or "").strip().lower()
     channel_state = build_channel_state(lead, workstream)
     room_state = build_room_state(workstream)
     if status in {"replied", "responded"}:
         return {"code": "record_result", "label": "Зафиксировать результат"}
     if status in {"contacted", "waiting_reply", "second_message_sent", "sent", "delivered"}:
         return {"code": "wait_or_follow_up", "label": "Проверить ответ"}
+    if enrichment_status in {"queued", "collecting", "verifying", "researching", "drafting"}:
+        return {"code": "prepare_message", "label": "Проверяем контакты"}
+    if readiness_code == "needs_facts":
+        return {"code": "complete_facts", "label": "Добавить факты"}
+    if readiness_code == "needs_contact":
+        return {"code": "find_contact", "label": "Найти контакт"}
+    if readiness_code in {"ready", "review_required"}:
+        return {"code": "review_message", "label": "Проверить письмо"}
     if channel_state["code"] in {"choose_channel", "missing_recipient"}:
         return {"code": "find_contact", "label": "Найти контакт"}
     if room_state["code"] == "missing":
@@ -163,6 +179,7 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                     client_business.name AS client_business_name,
                     client_business.address AS client_business_address,
                     ws.status, ws.selected_channel, ws.next_action_at,
+                    ws.selected_contact_point_id,
                     ws.last_contact_at, ws.last_contact_channel, ws.last_contact_comment,
                     ws.created_at, ws.updated_at,
                     room.id AS room_id, room.status AS room_status, room.slug AS room_slug,
@@ -179,7 +196,19 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                     research.suggested_opener AS research_suggested_opener,
                     research.opener_source_url AS research_opener_source_url,
                     research.limitations_json AS research_limitations,
+                    research.message_brief_json AS research_message_brief,
+                    research.message_readiness_json AS research_message_readiness,
                     research.researched_at AS research_researched_at
+                    , contacts.contact_points AS contact_points
+                    , contacts.contacts_count AS contacts_count
+                    , contacts.verified_contacts_count AS verified_contacts_count
+                    , selected_contact.contact_point AS selected_contact
+                    , enrichment.id AS enrichment_id
+                    , enrichment.status AS enrichment_status
+                    , enrichment.current_phase AS enrichment_phase
+                    , enrichment.readiness_json AS enrichment_readiness
+                    , enrichment.error_message AS enrichment_error
+                    , enrichment.updated_at AS enrichment_updated_at
                 FROM lead_workstreams ws
                 LEFT JOIN businesses client_business ON client_business.id = ws.client_business_id
                 LEFT JOIN LATERAL (
@@ -211,6 +240,72 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                     ORDER BY r.researched_at DESC, r.created_at DESC
                     LIMIT 1
                 ) research ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT
+                        COALESCE(
+                            JSONB_AGG(
+                                JSONB_BUILD_OBJECT(
+                                    'id', cp.id,
+                                    'type', cp.contact_type,
+                                    'value', cp.value,
+                                    'owner_type', cp.owner_type,
+                                    'person_name', cp.person_name,
+                                    'role_title', cp.role_title,
+                                    'source_url', cp.source_url,
+                                    'source_type', cp.source_type,
+                                    'provider', cp.provider,
+                                    'confidence', cp.confidence,
+                                    'verification_status', cp.verification_status,
+                                    'observed_at', cp.observed_at,
+                                    'verified_at', cp.verified_at,
+                                    'stale_after', cp.stale_after
+                                )
+                                ORDER BY
+                                    CASE cp.verification_status
+                                        WHEN 'verified' THEN 0 WHEN 'confirmed_source' THEN 1 ELSE 2
+                                    END,
+                                    cp.confidence DESC,
+                                    cp.updated_at DESC
+                            ),
+                            '[]'::jsonb
+                        ) AS contact_points,
+                        COUNT(*) FILTER (WHERE cp.contact_type <> 'website')::INT AS contacts_count,
+                        COUNT(*) FILTER (
+                            WHERE cp.contact_type <> 'website'
+                              AND cp.verification_status IN ('verified', 'confirmed_source')
+                              AND (cp.stale_after IS NULL OR cp.stale_after > NOW())
+                        )::INT AS verified_contacts_count
+                    FROM lead_contact_points cp
+                    WHERE cp.lead_id = ws.lead_id
+                ) contacts ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT JSONB_BUILD_OBJECT(
+                        'id', cp.id,
+                        'type', cp.contact_type,
+                        'value', cp.value,
+                        'owner_type', cp.owner_type,
+                        'person_name', cp.person_name,
+                        'role_title', cp.role_title,
+                        'source_url', cp.source_url,
+                        'source_type', cp.source_type,
+                        'provider', cp.provider,
+                        'confidence', cp.confidence,
+                        'verification_status', cp.verification_status,
+                        'observed_at', cp.observed_at,
+                        'verified_at', cp.verified_at,
+                        'stale_after', cp.stale_after
+                    ) AS contact_point
+                    FROM lead_contact_points cp
+                    WHERE cp.id = ws.selected_contact_point_id
+                    LIMIT 1
+                ) selected_contact ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT job.*
+                    FROM lead_enrichment_jobs job
+                    WHERE job.workstream_id = ws.id
+                    ORDER BY job.created_at DESC
+                    LIMIT 1
+                ) enrichment ON TRUE
                 WHERE ws.lead_id = ANY(%s)
                 ORDER BY ws.created_at ASC
                 """,
@@ -252,6 +347,8 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                         "suggested_opener": payload.pop("research_suggested_opener"),
                         "opener_source_url": payload.pop("research_opener_source_url"),
                         "limitations": payload.pop("research_limitations") or [],
+                        "message_brief": payload.pop("research_message_brief") or {},
+                        "message_readiness": payload.pop("research_message_readiness") or {},
                         "researched_at": researched_at,
                         "stale": stale,
                     }
@@ -260,11 +357,40 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                         "research_id", "research_score", "research_stage", "research_signal_label",
                         "research_score_breakdown", "research_why_now", "research_signals",
                         "research_sources", "research_contact_evidence", "research_suggested_opener",
-                        "research_opener_source_url", "research_limitations",
+                        "research_opener_source_url", "research_limitations", "research_message_brief",
+                        "research_message_readiness",
                         "research_researched_at",
                     ):
                         payload.pop(key, None)
                     payload["research"] = None
+                payload["contact_points"] = payload.get("contact_points") or []
+                payload["contact_summary"] = {
+                    "found": int(payload.pop("contacts_count") or 0),
+                    "verified": int(payload.pop("verified_contacts_count") or 0),
+                }
+                payload["selected_recipient"] = payload.pop("selected_contact", None)
+                if payload.get("enrichment_id"):
+                    payload["enrichment_state"] = {
+                        "id": str(payload.pop("enrichment_id")),
+                        "status": payload.pop("enrichment_status"),
+                        "phase": payload.pop("enrichment_phase"),
+                        "error": payload.pop("enrichment_error"),
+                        "updated_at": payload.pop("enrichment_updated_at"),
+                    }
+                    payload["message_readiness"] = payload.pop("enrichment_readiness") or {}
+                else:
+                    for key in (
+                        "enrichment_id", "enrichment_status", "enrichment_phase",
+                        "enrichment_error", "enrichment_updated_at",
+                    ):
+                        payload.pop(key, None)
+                    payload.pop("enrichment_readiness", None)
+                    payload["enrichment_state"] = None
+                    payload["message_readiness"] = {
+                        "code": "needs_contact",
+                        "label": "Нужен контакт",
+                        "missing": ["Запустите проверку контактов"],
+                    }
                 grouped[str(payload.get("lead_id") or "")].append(payload)
         except Exception:
             conn.rollback()
@@ -384,6 +510,10 @@ def create_workstream(
         (workstream_id, lead_id, normalized_type, client_business_id or "", actor_id or ""),
     )
     payload = dict(cur.fetchone())
+    from services.contact_intelligence_service import enqueue_enrichment_job
+
+    enrichment_job = enqueue_enrichment_job(cur, workstream_id)
+    payload["enrichment_job_id"] = str(enrichment_job.get("id"))
     payload["reused"] = False
     return payload
 

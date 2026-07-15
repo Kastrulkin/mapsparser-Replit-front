@@ -664,7 +664,7 @@ def test_find_existing_business_for_lead_ignores_mismatched_explicit_business(mo
     assert business is None
 
 
-def test_generate_audit_first_message_draft_uses_public_audit_link_for_email() -> None:
+def test_generate_audit_first_message_draft_uses_grounded_fact_for_email() -> None:
     payload = _generate_audit_first_message_draft(
         lead={
             "name": "Апельсин",
@@ -681,8 +681,10 @@ def test_generate_audit_first_message_draft_uses_public_audit_link_for_email() -
 
     text = payload["generated_text"]
     assert "https://localos.pro/apelsin-kremenchugskaya-ulitsa?lang=ru" in text
-    assert "недополучаете клиентов с карт" in text
-    assert "Можем внедрить это под ключ" in text
+    assert "карточка выглядит незавершённой" in text.lower()
+    assert "недополучаете клиентов" not in text.lower()
+    assert "под ключ" not in text.lower()
+    assert sum(1 for line in text.splitlines() if line.strip().endswith("?")) == 1
     assert "₽" not in text
     assert "По нашей модели" not in text
 
@@ -709,7 +711,7 @@ def test_generate_audit_first_message_draft_does_not_include_money_hint() -> Non
     assert "По нашей модели" not in text
 
 
-def test_generate_superadmin_deterministic_first_message_uses_requested_template_shape() -> None:
+def test_generate_superadmin_deterministic_first_message_uses_grounded_shape() -> None:
     payload = _generate_superadmin_deterministic_first_message(
         {
             "name": "Апельсин",
@@ -722,11 +724,11 @@ def test_generate_superadmin_deterministic_first_message_uses_requested_template
 
     text = payload["generated_text"]
     assert "Здравствуйте!" in text
-    assert "Нашёл Апельсин на картах - вижу, что у вас часть клиентов теряется." in text
-    assert "Например, описание не всех услуг попадает в поиск." in text
-    assert "https://localos.pro/apelsin-kremenchugskaya-ulitsa" in text
-    assert "+30-80% к обращениям без рекламы." in text
-    assert "Или, хотите, настрою всё, до результата?" in text
+    assert "Посмотрел карточку Апельсин на картах." in text
+    assert "описание не всех услуг попадает в поиск" in text.lower()
+    assert "часть клиентов теряется" not in text
+    assert "+30-80%" not in text
+    assert text.count("?") == 1
     assert payload["prompt_source"] == "deterministic"
 
 

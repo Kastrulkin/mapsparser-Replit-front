@@ -261,6 +261,7 @@ from api.prospecting import audit_routes as _chunk_audit_routes
 from api.prospecting import outreach_routes as _chunk_outreach_routes
 from api.prospecting import sales_room_routes as _chunk_sales_room_routes
 from api.prospecting import admin_routes as _chunk_admin_routes
+from api.prospecting import contact_intelligence_routes as _chunk_contact_intelligence_routes
 
 _CHUNK_MODULES = (
     _chunk_access_schema,
@@ -274,6 +275,7 @@ _CHUNK_MODULES = (
     _chunk_outreach_routes,
     _chunk_sales_room_routes,
     _chunk_admin_routes,
+    _chunk_contact_intelligence_routes,
 )
 _IMPLEMENTATIONS = {
     name: value

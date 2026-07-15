@@ -10,6 +10,8 @@ python-dateutil
 requests
 stripe
 beautifulsoup4
+dnspython
+phonenumbers
 playwright
 openai
 anthropic

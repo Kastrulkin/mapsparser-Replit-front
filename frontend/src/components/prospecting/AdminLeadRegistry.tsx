@@ -7,15 +7,15 @@ import {
   CircleAlert,
   ExternalLink,
   Filter,
-  Mail,
   MapPin,
   MessageCircle,
-  Phone,
   Plus,
   RefreshCw,
   Search,
   Send,
+  ShieldCheck,
   Sparkles,
+  UserRound,
   Users,
 } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
@@ -83,6 +83,68 @@ interface WorkstreamResearch {
   stale?: boolean;
 }
 
+interface ContactPoint {
+  id: string;
+  type?: string;
+  value?: string;
+  owner_type?: 'company' | 'person';
+  person_name?: string | null;
+  role_title?: string | null;
+  source_url?: string | null;
+  source_type?: string;
+  confidence?: number;
+  verification_status?: string;
+  observed_at?: string;
+  verified_at?: string | null;
+}
+
+interface MessageReadiness {
+  code?: 'ready' | 'needs_contact' | 'needs_facts';
+  label?: string;
+  missing?: string[];
+}
+
+interface EnrichmentState {
+  id?: string;
+  status?: string;
+  phase?: string;
+  error?: string | null;
+  updated_at?: string;
+}
+
+interface ContactIntelligence {
+  contacts?: ContactPoint[];
+  contact_summary?: { found?: number; verified?: number };
+  selected_recipient?: ContactPoint | null;
+  job?: {
+    id?: string;
+    status?: string;
+    phase?: string;
+    message_brief?: Record<string, unknown>;
+    message_readiness?: MessageReadiness;
+    result?: { draft_id?: string | null };
+    error?: string | null;
+  } | null;
+  sender_profile?: {
+    id?: string;
+    display_name?: string;
+    role_title?: string;
+    company_name?: string;
+    competence_story?: string | null;
+    confirmed_at?: string | null;
+  } | null;
+  first_message?: {
+    id?: string;
+    channel?: string;
+    status?: string;
+    generated_text?: string;
+    edited_text?: string | null;
+    approved_text?: string | null;
+    message_brief_json?: Record<string, unknown>;
+    quality_gate_json?: { passed?: boolean; failures?: string[]; word_count?: number };
+  } | null;
+}
+
 interface LeadWorkstream {
   id?: string | null;
   workstream_type: WorkstreamType;
@@ -95,6 +157,11 @@ interface LeadWorkstream {
   room_state?: WorkstreamState;
   next_action?: WorkstreamAction;
   research?: WorkstreamResearch | null;
+  contact_points?: ContactPoint[];
+  contact_summary?: { found?: number; verified?: number };
+  selected_recipient?: ContactPoint | null;
+  enrichment_state?: EnrichmentState | null;
+  message_readiness?: MessageReadiness;
   service_compatibility_score?: number | null;
   legacy?: boolean;
 }
@@ -115,6 +182,8 @@ interface LeadItem {
   source_provider?: string;
   rating?: number;
   reviews_count?: number;
+  status?: string;
+  pipeline_status?: string;
   lead_kind?: 'localos' | 'partner' | 'both';
   client_business_name?: string;
   workstreams?: LeadWorkstream[];
@@ -187,6 +256,42 @@ const availableContacts = (lead: LeadItem) => [
   lead.phone ? 'Телефон' : '',
 ].filter(Boolean);
 
+const contactTypeLabels: Record<string, string> = {
+  phone: 'Телефон',
+  email: 'Email',
+  telegram: 'Telegram',
+  whatsapp: 'WhatsApp',
+  vk: 'VK',
+  instagram: 'Instagram',
+  max: 'MAX',
+  website_form: 'Форма на сайте',
+  website: 'Сайт',
+  other: 'Другой канал',
+};
+
+const verificationLabel = (status?: string) => {
+  if (status === 'verified') return 'Проверен';
+  if (status === 'confirmed_source') return 'Подтверждён источником';
+  if (status === 'valid_format') return 'Формат проверен';
+  if (status === 'accept_all') return 'Домен принимает все адреса';
+  if (status === 'invalid') return 'Не работает';
+  if (status === 'stale') return 'Нужно обновить';
+  return 'Нужна проверка';
+};
+
+const enrichmentLabel = (state?: EnrichmentState | null) => {
+  if (!state) return 'Проверка не запускалась';
+  if (state.status === 'ready') return 'Готово к проверке';
+  if (state.status === 'needs_input') return 'Нужны данные';
+  if (state.status === 'failed') return 'Не удалось подготовить';
+  if (state.status === 'retry_wait') return 'Повторяем проверку';
+  if (state.phase === 'collecting') return 'Собираем контакты';
+  if (state.phase === 'verifying') return 'Проверяем контакты';
+  if (state.phase === 'researching') return 'Ищем основание для обращения';
+  if (state.phase === 'drafting') return 'Готовим первое письмо';
+  return 'Подготовка запущена';
+};
+
 const actionTone = (code?: string) => {
   if (code === 'find_contact') return 'text-amber-700';
   if (code === 'prepare_room') return 'text-orange-700';
@@ -245,6 +350,12 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [localosTelegramReady, setLocalosTelegramReady] = useState(false);
+  const [contactIntelligence, setContactIntelligence] = useState<ContactIntelligence | null>(null);
+  const [contactIntelligenceLoading, setContactIntelligenceLoading] = useState(false);
+  const [senderName, setSenderName] = useState('');
+  const [senderRole, setSenderRole] = useState('');
+  const [senderCompany, setSenderCompany] = useState('');
+  const [senderStory, setSenderStory] = useState('');
 
   const loadLeads = useCallback(async () => {
     setLoading(true);
@@ -310,12 +421,66 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
   const selectedWorkstream = selectedLead?.workstreams?.find((item) => item.id === selectedWorkstreamId)
     || selectedLead?.workstreams?.[0]
     || null;
+  const drawerContacts = (contactIntelligence?.contacts || selectedWorkstream?.contact_points || [])
+    .filter((item) => item.type !== 'website');
+  const drawerRecipient = contactIntelligence?.selected_recipient || selectedWorkstream?.selected_recipient || null;
+  const drawerReadiness = contactIntelligence?.job?.message_readiness || selectedWorkstream?.message_readiness || {};
+  const drawerFirstMessage = contactIntelligence?.first_message || null;
 
   useEffect(() => {
     if (!selectedLead) return;
     if (selectedWorkstreamId && selectedLead.workstreams?.some((item) => item.id === selectedWorkstreamId)) return;
     setSelectedWorkstreamId(selectedLead.workstreams?.[0]?.id || null);
   }, [selectedLead, selectedWorkstreamId]);
+
+  useEffect(() => {
+    if (!selectedLead?.id || !selectedWorkstream?.id) {
+      setContactIntelligence(null);
+      return undefined;
+    }
+    let active = true;
+    let timer = 0;
+    const load = async (showLoading: boolean) => {
+      if (showLoading) setContactIntelligenceLoading(true);
+      try {
+        const payload = await newAuth.makeRequest(
+          `/admin/prospecting/leads/${selectedLead.id}/contact-intelligence?workstream_id=${encodeURIComponent(selectedWorkstream.id || '')}`,
+        );
+        if (!active) return;
+        setContactIntelligence(payload);
+        const status = String(payload?.job?.status || '');
+        if (['queued', 'collecting', 'verifying', 'researching', 'drafting', 'retry_wait'].includes(status)) {
+          timer = window.setTimeout(() => load(false), 2500);
+        }
+      } catch (requestError) {
+        if (active) setNotice(requestError instanceof Error ? requestError.message : 'Не удалось загрузить контакты');
+      } finally {
+        if (active && showLoading) setContactIntelligenceLoading(false);
+      }
+    };
+    load(true);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [selectedLead?.id, selectedWorkstream?.id, contactIntelligence?.job?.id]);
+
+  useEffect(() => {
+    const profile = contactIntelligence?.sender_profile;
+    if (profile) {
+      setSenderName(String(profile.display_name || ''));
+      setSenderRole(String(profile.role_title || ''));
+      setSenderCompany(String(profile.company_name || ''));
+      setSenderStory(String(profile.competence_story || ''));
+      return;
+    }
+    setSenderName('');
+    setSenderRole('');
+    setSenderCompany(selectedWorkstream?.workstream_type === 'localos_sales'
+      ? 'LocalOS'
+      : String(selectedWorkstream?.client_business_name || ''));
+    setSenderStory('');
+  }, [contactIntelligence?.sender_profile?.id, selectedWorkstream?.id]);
 
   const runAction = async (key: string, requestFactory: () => Promise<unknown>, successMessage: string) => {
     setBusyAction(key);
@@ -343,16 +508,83 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
     );
   };
 
-  const chooseChannel = (channel: string) => {
+  const startContactIntelligence = async () => {
     if (!selectedLead || !selectedWorkstream?.id) return;
-    runAction(
-      `channel-${channel}`,
-      () => newAuth.makeRequest(`/admin/prospecting/lead/${selectedLead.id}/channel`, {
+    setBusyAction('contact-intelligence');
+    setNotice('');
+    try {
+      const payload = await newAuth.makeRequest(`/admin/prospecting/leads/${selectedLead.id}/contact-intelligence`, {
+        method: 'POST',
+        body: JSON.stringify({
+          workstream_id: selectedWorkstream.id,
+          force: true,
+          allow_paid_enrichment: ['qualified', 'converted', 'selected_for_outreach'].includes(
+            String(selectedWorkstream.status || selectedLead.status || selectedLead.pipeline_status || ''),
+          ),
+        }),
+      });
+      setContactIntelligence((current) => ({ ...current, job: payload?.job || current?.job || null }));
+      setNotice('Проверка запущена. Можно закрыть карточку: работа продолжится в фоне.');
+      await loadLeads();
+    } catch (requestError) {
+      setNotice(requestError instanceof Error ? requestError.message : 'Не удалось запустить проверку');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const selectRecipient = async (contact: ContactPoint) => {
+    if (!selectedLead || !selectedWorkstream?.id) return;
+    setBusyAction(`recipient-${contact.id}`);
+    setNotice('');
+    try {
+      await newAuth.makeRequest(`/admin/prospecting/leads/${selectedLead.id}/recipient`, {
+        method: 'POST',
+        body: JSON.stringify({
+          workstream_id: selectedWorkstream.id,
+          contact_point_id: contact.id,
+        }),
+      });
+      const channel = ['email', 'telegram', 'whatsapp'].includes(String(contact.type || ''))
+        ? String(contact.type)
+        : 'manual';
+      await newAuth.makeRequest(`/admin/prospecting/lead/${selectedLead.id}/channel`, {
         method: 'POST',
         body: JSON.stringify({ channel, workstream_id: selectedWorkstream.id }),
-      }),
-      `Канал ${channel === 'manual' ? 'ручной отправки' : channel} выбран.`,
-    );
+      });
+      setNotice('Получатель выбран. Письмо будет заново проверено для этого контакта.');
+      await loadLeads();
+    } catch (requestError) {
+      setNotice(requestError instanceof Error ? requestError.message : 'Не удалось выбрать получателя');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const saveSenderProfile = async () => {
+    if (!selectedWorkstream?.id) return;
+    setBusyAction('sender-profile');
+    setNotice('');
+    try {
+      await newAuth.makeRequest('/admin/prospecting/sender-profiles', {
+        method: 'POST',
+        body: JSON.stringify({
+          workstream_type: selectedWorkstream.workstream_type,
+          client_business_id: selectedWorkstream.client_business_id,
+          display_name: senderName,
+          role_title: senderRole,
+          company_name: senderCompany,
+          competence_story: senderStory,
+          confirmed: true,
+        }),
+      });
+      setNotice('Профиль отправителя подтверждён. Перезапускаем проверку письма.');
+      await startContactIntelligence();
+    } catch (requestError) {
+      setNotice(requestError instanceof Error ? requestError.message : 'Не удалось сохранить отправителя');
+    } finally {
+      setBusyAction('');
+    }
   };
 
   const prepareRoom = () => {
@@ -606,6 +838,8 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
               const workstreams = lead.workstreams || [];
               const primary = workstreams[0];
               const contacts = availableContacts(lead);
+              const contactSummary = primary?.contact_summary;
+              const recipient = primary?.selected_recipient;
               const research = strongestResearch(workstreams);
               return (
                 <button
@@ -644,8 +878,16 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
                     )}
                   </div>
                   <div className="min-w-0 text-sm">
-                    <div className="font-medium text-slate-800">{contacts.length ? contacts.join(' · ') : 'Контакта пока нет'}</div>
-                    <div className="mt-1 truncate text-xs text-slate-500">{sourceLabel(lead)}</div>
+                    <div className="font-medium text-slate-800 tabular-nums">
+                      {Number(contactSummary?.found || 0) > 0
+                        ? `${Number(contactSummary?.found || 0)} каналов найдено · ${Number(contactSummary?.verified || 0)} проверено`
+                        : contacts.length ? `${contacts.length} каналов найдено · нужна проверка` : 'Контакта пока нет'}
+                    </div>
+                    <div className="mt-1 truncate text-xs text-slate-500">
+                      {recipient
+                        ? `${recipient.person_name || 'Компания'}${recipient.role_title ? ` · ${recipient.role_title}` : ''}`
+                        : enrichmentLabel(primary?.enrichment_state)}
+                    </div>
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Следующий шаг</div>
@@ -725,6 +967,94 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
                 )}
               </div>
 
+              <div className="grid grid-cols-5 gap-1" aria-label="Этапы подготовки первого обращения">
+                {['Контакты', 'Получатель', 'Почему сейчас', 'Письмо', 'Проверка'].map((label, index) => {
+                  const completedSteps = [
+                    drawerContacts.length > 0,
+                    Boolean(drawerRecipient),
+                    Boolean(selectedWorkstream.research?.why_now) || selectedWorkstream.workstream_type === 'client_partnership',
+                    Boolean(drawerFirstMessage?.generated_text),
+                    Boolean(drawerFirstMessage?.quality_gate_json?.passed),
+                  ];
+                  const done = completedSteps[index];
+                  return (
+                    <div key={label} className="min-w-0 text-center">
+                      <div className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {done ? <Check className="h-3.5 w-3.5" /> : index + 1}
+                      </div>
+                      <div className="mt-1 truncate text-[11px] font-medium text-slate-500">{label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <section className="rounded-md bg-slate-50 p-4" aria-labelledby="lead-contacts-title">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 id="lead-contacts-title" className="text-sm font-semibold text-slate-950">Контакты и получатель</h3>
+                    <p className="mt-1 text-sm text-slate-600 tabular-nums">
+                      {drawerContacts.length} найдено · {drawerContacts.filter((item) => ['verified', 'confirmed_source'].includes(String(item.verification_status || ''))).length} проверено
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={startContactIntelligence}
+                    disabled={busyAction === 'contact-intelligence' || ['queued', 'collecting', 'verifying', 'researching', 'drafting'].includes(String(contactIntelligence?.job?.status || selectedWorkstream.enrichment_state?.status || ''))}
+                    className="min-h-10 bg-white"
+                  >
+                    {busyAction === 'contact-intelligence' || ['queued', 'collecting', 'verifying', 'researching', 'drafting'].includes(String(contactIntelligence?.job?.status || selectedWorkstream.enrichment_state?.status || ''))
+                      ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      : <Search className="mr-2 h-4 w-4" />}
+                    {drawerContacts.length ? 'Проверить ещё раз' : 'Найти контакты'}
+                  </Button>
+                </div>
+                <p className="mt-3 text-xs font-medium text-slate-500">
+                  {contactIntelligenceLoading ? 'Загружаем контакты…' : enrichmentLabel(selectedWorkstream.enrichment_state || (contactIntelligence?.job ? {
+                    id: contactIntelligence.job.id,
+                    status: contactIntelligence.job.status,
+                    phase: contactIntelligence.job.phase,
+                    error: contactIntelligence.job.error,
+                  } : null))}
+                </p>
+                <div className="mt-3 space-y-2">
+                  {drawerContacts.map((contact) => {
+                    const selected = drawerRecipient?.id === contact.id;
+                    const invalid = contact.verification_status === 'invalid';
+                    return (
+                      <button
+                        key={contact.id}
+                        type="button"
+                        onClick={() => selectRecipient(contact)}
+                        disabled={invalid || busyAction === `recipient-${contact.id}`}
+                        className={`flex min-h-14 w-full items-center gap-3 rounded-md px-3 text-left transition-colors active:scale-[0.96] ${selected ? 'bg-white shadow-sm ring-2 ring-emerald-200' : 'bg-white hover:bg-slate-100'} disabled:cursor-not-allowed disabled:opacity-50`}
+                      >
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${selected ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                          {contact.owner_type === 'person' ? <UserRound className="h-4 w-4" /> : <MessageCircle className="h-4 w-4" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="truncate text-sm font-semibold text-slate-950">{contact.person_name || contact.value || contactTypeLabels[String(contact.type || '')] || 'Контакт'}</span>
+                            {selected && <span className="shrink-0 text-xs font-semibold text-emerald-700">Выбран</span>}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs text-slate-500">
+                            {[contact.role_title, contactTypeLabels[String(contact.type || '')], contact.person_name ? contact.value : ''].filter(Boolean).join(' · ')}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs text-slate-500">
+                            {verificationLabel(contact.verification_status)} · источник {contact.source_type === 'official_website' ? 'официальный сайт' : contact.source_type === 'hunter_public_sources' ? 'публичные источники Hunter' : 'карточка компании'}
+                          </span>
+                        </span>
+                        {['verified', 'confirmed_source'].includes(String(contact.verification_status || '')) && <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />}
+                      </button>
+                    );
+                  })}
+                  {!contactIntelligenceLoading && !drawerContacts.length && (
+                    <div className="rounded-md bg-white px-3 py-4 text-sm text-amber-700">
+                      Контакты ещё не проверены. Запустите поиск: система просмотрит карточку, официальный сайт и публичные каналы.
+                    </div>
+                  )}
+                </div>
+              </section>
+
               {selectedWorkstream.research && (
                 <section className="rounded-md bg-slate-50 p-4" aria-labelledby="lead-research-title">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -786,33 +1116,56 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
                 </section>
               )}
 
-              <div className="space-y-2">
-                {[
-                  ['Найти контакт', availableContacts(selectedLead).length > 0],
-                  ['Подготовить предложение', Boolean(selectedWorkstream.room_state?.url)],
-                  ['Проверить сообщение', Boolean(selectedWorkstream.room_state?.url)],
-                  ['Отправить вручную', Boolean(selectedWorkstream.last_contact_at)],
-                  ['Зафиксировать ответ', ['replied', 'responded', 'converted', 'qualified'].includes(String(selectedWorkstream.status || ''))],
-                ].map(([label, done], index) => (
-                  <div key={String(label)} className="flex min-h-11 items-center gap-3 rounded-md bg-slate-50 px-3">
-                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${done ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-500'}`}>
-                      {done ? <Check className="h-3.5 w-3.5" /> : index + 1}
-                    </span>
-                    <span className={`text-sm ${done ? 'text-slate-500 line-through' : 'font-medium text-slate-800'}`}>{String(label)}</span>
+              <section className="rounded-md bg-slate-50 p-4" aria-labelledby="first-message-title">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 id="first-message-title" className="text-sm font-semibold text-slate-950">Первое письмо</h3>
+                    <p className="mt-1 text-sm text-slate-600">{drawerReadiness.label || 'Сначала проверим контакты и основания'}</p>
                   </div>
-                ))}
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-slate-950">Контакт получателя</h3>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  {selectedLead.telegram_url && <button type="button" onClick={() => chooseChannel('telegram')} className="flex min-h-11 items-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-medium hover:bg-slate-200"><MessageCircle className="h-4 w-4" />Telegram</button>}
-                  {selectedLead.whatsapp_url && <button type="button" onClick={() => chooseChannel('whatsapp')} className="flex min-h-11 items-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-medium hover:bg-slate-200"><MessageCircle className="h-4 w-4" />WhatsApp</button>}
-                  {selectedLead.email && <button type="button" onClick={() => chooseChannel('email')} className="flex min-h-11 items-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-medium hover:bg-slate-200"><Mail className="h-4 w-4" />{selectedLead.email}</button>}
-                  {selectedLead.phone && <button type="button" onClick={() => chooseChannel('manual')} className="flex min-h-11 items-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-medium hover:bg-slate-200"><Phone className="h-4 w-4" />{selectedLead.phone}</button>}
+                  <Badge variant="outline" className={drawerReadiness.code === 'ready'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-amber-200 bg-amber-50 text-amber-800'}>
+                    {drawerReadiness.code === 'ready' ? 'Готово к проверке' : drawerReadiness.label || 'Не готово'}
+                  </Badge>
                 </div>
-                {!availableContacts(selectedLead).length && <p className="mt-2 text-sm text-amber-700">Сначала добавьте телефон, email, Telegram или WhatsApp получателя.</p>}
-              </div>
+                {drawerFirstMessage?.generated_text ? (
+                  <>
+                    <div className="mt-3 whitespace-pre-wrap rounded-md bg-white p-4 text-sm leading-6 text-slate-800">
+                      {drawerFirstMessage.edited_text || drawerFirstMessage.generated_text}
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-md bg-white p-3">
+                        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">От чьего лица</div>
+                        <div className="mt-1 text-sm font-medium text-slate-800">
+                          {contactIntelligence?.sender_profile
+                            ? `${contactIntelligence.sender_profile.display_name} · ${contactIntelligence.sender_profile.role_title}`
+                            : selectedWorkstream.workstream_type === 'localos_sales' ? 'LocalOS' : selectedWorkstream.client_business_name}
+                        </div>
+                      </div>
+                      <div className="rounded-md bg-white p-3">
+                        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Почему такой вопрос</div>
+                        <div className="mt-1 text-sm font-medium text-slate-800">
+                          {String(drawerFirstMessage.message_brief_json?.cta || 'Один простой следующий шаг без обязательств')}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-xs text-slate-500 tabular-nums">
+                      {Number(drawerFirstMessage.quality_gate_json?.word_count || 0)} слов · ссылка на цифровую комнату не добавлена
+                    </p>
+                  </>
+                ) : (
+                  <div className="mt-3 rounded-md bg-white p-4">
+                    <div className="font-medium text-slate-800">Письмо не будет заменено общим шаблоном.</div>
+                    {(drawerReadiness.missing || []).length > 0 ? (
+                      <ul className="mt-2 space-y-1 text-sm text-amber-700">
+                        {(drawerReadiness.missing || []).map((item) => <li key={item}>• {item}</li>)}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-600">Запустите проверку, чтобы подготовить письмо на фактах компании.</p>
+                    )}
+                  </div>
+                )}
+              </section>
 
               <div className="rounded-md bg-slate-50 p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -836,6 +1189,33 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
                     Подключить канал <ArrowRight className="h-4 w-4" />
                   </a>
                 )}
+                <details className="mt-3 border-t border-slate-200 pt-2">
+                  <summary className="flex min-h-10 cursor-pointer items-center text-sm font-semibold text-slate-700">
+                    {contactIntelligence?.sender_profile?.confirmed_at ? 'Обновить профиль отправителя' : 'Настроить отправителя'}
+                  </summary>
+                  <div className="space-y-3 pt-2">
+                    <Input value={senderName} onChange={(event) => setSenderName(event.target.value)} placeholder="Имя отправителя" className="h-10 bg-white" />
+                    <Input value={senderRole} onChange={(event) => setSenderRole(event.target.value)} placeholder="Роль, например: основатель" className="h-10 bg-white" />
+                    <Input value={senderCompany} onChange={(event) => setSenderCompany(event.target.value)} placeholder="Компания" className="h-10 bg-white" />
+                    <textarea
+                      value={senderStory}
+                      onChange={(event) => setSenderStory(event.target.value)}
+                      placeholder="Коротко: почему этому человеку уместно писать по этой теме"
+                      rows={3}
+                      className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={saveSenderProfile}
+                      disabled={busyAction === 'sender-profile' || !senderName.trim() || !senderRole.trim() || !senderCompany.trim()}
+                      className="min-h-10 w-full bg-white"
+                    >
+                      {busyAction === 'sender-profile' && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+                      Подтвердить профиль
+                    </Button>
+                    <p className="text-xs leading-5 text-slate-500">В письмо попадут только отдельно подтверждённые факты и кейсы. Отправка останется ручной.</p>
+                  </div>
+                </details>
               </div>
 
               <div className="space-y-2">

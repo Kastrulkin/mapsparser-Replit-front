@@ -13,6 +13,7 @@ import random
 from typing import Dict, List, Any, Optional
 from urllib import request as urllib_request, error as urllib_error
 from dotenv import load_dotenv
+from psycopg2.extras import Json, RealDictCursor
 
 from browser_session import BrowserSession, BrowserSessionManager
 from parser_config_cookies import get_yandex_cookies
@@ -59,6 +60,11 @@ from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprin
 from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent_run
 from services.social_post_service import collect_due_social_post_metrics, dispatch_due_social_posts
 from services.telegram_opportunity_monitor import run_telegram_opportunity_monitor
+from services.contact_intelligence_service import (
+    claim_next_enrichment_job,
+    fail_enrichment_job,
+    process_enrichment_job,
+)
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -78,6 +84,7 @@ _LAST_AGENT_RUN_QUEUE_AT = 0.0
 _LAST_SOCIAL_POST_DISPATCH_AT = 0.0
 _LAST_SOCIAL_POST_METRICS_AT = 0.0
 _LAST_TELEGRAM_OPPORTUNITY_MONITOR_AT = 0.0
+_LAST_CONTACT_INTELLIGENCE_AT = 0.0
 
 _EDITORIAL_SERVICE_PATTERNS = (
     "хорошее место",
@@ -1540,6 +1547,118 @@ def _process_agent_run_queue_if_due() -> None:
                 db.close()
         except Exception:
             pass
+
+
+def _process_contact_intelligence_if_due() -> None:
+    global _LAST_CONTACT_INTELLIGENCE_AT
+    if not _env_bool("PROSPECTING_CONTACT_INTELLIGENCE_ENABLED", False):
+        return
+    now = time.time()
+    interval_sec = max(2, int(os.getenv("PROSPECTING_CONTACT_INTELLIGENCE_INTERVAL_SEC", "10")))
+    if now - _LAST_CONTACT_INTELLIGENCE_AT < interval_sec:
+        return
+    _LAST_CONTACT_INTELLIGENCE_AT = now
+
+    db = None
+    job = None
+    try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor(cursor_factory=RealDictCursor)
+        job = claim_next_enrichment_job(cursor)
+        db.conn.commit()
+        if not job:
+            return
+        try:
+            result = process_enrichment_job(cursor, job)
+        except Exception as error:
+            db.conn.rollback()
+            cursor = db.conn.cursor(cursor_factory=RealDictCursor)
+            result = fail_enrichment_job(cursor, job, error)
+        db.conn.commit()
+        if result.get("status") == "ready":
+            details = result.get("result_json") if isinstance(result.get("result_json"), dict) else {}
+            room_state = _prepare_contact_intelligence_room(details)
+            cursor = db.conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute(
+                """
+                UPDATE lead_enrichment_jobs
+                SET result_json = result_json || %s, updated_at = NOW()
+                WHERE id = %s
+                """,
+                (Json({"room": room_state}), result.get("id")),
+            )
+            db.conn.commit()
+        print(
+            "[CONTACT_INTELLIGENCE] "
+            f"job_id={job.get('id')} status={result.get('status')} "
+            f"workstream_id={job.get('workstream_id')}",
+            flush=True,
+        )
+    except Exception:
+        try:
+            if db:
+                db.conn.rollback()
+        except Exception:
+            pass
+        print("[CONTACT_INTELLIGENCE] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+    finally:
+        try:
+            if db:
+                db.close()
+        except Exception:
+            pass
+
+
+def _prepare_contact_intelligence_room(details: dict[str, Any]) -> dict[str, Any]:
+    if not details.get("draft_id"):
+        return {"status": "not_prepared", "reason": "message_not_ready"}
+    lead_id = str(details.get("lead_id") or "").strip()
+    workstream_id = str(details.get("workstream_id") or "").strip()
+    actor_id = str(details.get("actor_id") or "").strip()
+    channel = str(details.get("selected_channel") or "manual").strip().lower()
+    if channel not in {"telegram", "whatsapp", "max", "email", "manual"}:
+        channel = "manual"
+    if not lead_id or not workstream_id or not actor_id:
+        return {"status": "not_prepared", "reason": "sender_profile_required"}
+    try:
+        from api.admin_prospecting import _prepare_client_sales_room, _prepare_partnership_sales_room
+
+        if details.get("workstream_type") == "client_partnership":
+            business_id = str(details.get("client_business_id") or "").strip()
+            if not business_id:
+                return {"status": "not_prepared", "reason": "client_business_required"}
+            prepared = _prepare_partnership_sales_room(
+                lead_id=lead_id,
+                business_id=business_id,
+                user_id=actor_id,
+                data_mode="template",
+                channel=channel,
+                reuse_existing=True,
+                workstream_id=workstream_id,
+            )
+        else:
+            prepared = _prepare_client_sales_room(
+                lead_id=lead_id,
+                user_id=actor_id,
+                data_mode="template",
+                channel=channel,
+                reuse_existing=True,
+                workstream_id=workstream_id,
+            )
+        if prepared.get("error"):
+            return {"status": "failed", "reason": str(prepared.get("error"))[:300]}
+        room = prepared.get("room") if isinstance(prepared.get("room"), dict) else {}
+        return {
+            "status": "ready",
+            "id": str(room.get("id") or ""),
+            "url": str(room.get("public_url") or ""),
+            "reused": bool(prepared.get("reused")),
+        }
+    except Exception as error:
+        print(f"[CONTACT_INTELLIGENCE] room preparation failed: {error}", flush=True)
+        return {"status": "failed", "reason": str(error)[:300]}
 
 
 def _dispatch_social_posts_if_due() -> None:
@@ -6163,6 +6282,7 @@ if __name__ == "__main__":
             _run_card_automation_if_due()
             _dispatch_agent_schedules_if_due()
             _process_agent_run_queue_if_due()
+            _process_contact_intelligence_if_due()
             _dispatch_social_posts_if_due()
             _collect_social_post_metrics_if_due()
             _run_telegram_opportunity_monitor_if_due()

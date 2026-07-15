@@ -1039,73 +1039,35 @@ def partnership_enrich_lead_contacts(lead_id):
             if not lead:
                 return jsonify({"error": "Lead not found"}), 404
 
-            lead_payload = {
-                "lead_id": lead_id,
-                "name": lead.get("name"),
-                "source_url": lead.get("source_url"),
-                "phone": lead.get("phone"),
-                "email": lead.get("email"),
-                "website": lead.get("website"),
-                "telegram_url": lead.get("telegram_url"),
-                "whatsapp_url": lead.get("whatsapp_url"),
-            }
+            from services.contact_intelligence_service import enqueue_enrichment_job
+            from services.lead_workstream_service import resolve_workstream
 
-            enriched_source: dict[str, Any] = {}
-            if _is_partnership_openclaw_enabled():
-                openclaw_result = _call_partnership_openclaw_capability(
-                    "partners.enrich_contacts",
-                    tenant_id=business_id,
-                    payload={"lead": lead_payload, "intent": "partnership_outreach", "business_id": business_id},
-                    timeout_sec=60,
-                )
-                if not openclaw_result.get("success"):
-                    return jsonify({"error": str(openclaw_result.get("error") or "OpenClaw contact enrich failed")}), 502
-                enriched_source = _extract_openclaw_result_blob(openclaw_result) or {}
-            else:
-                enriched_source = lead_payload
-
-            normalized = _normalize_enriched_contact_fields(enriched_source)
-            enrich_payload = _normalize_enrich_payload(enriched_source)
-            cur.execute(
-                """
-                UPDATE prospectingleads
-                SET
-                    phone = COALESCE(%s, phone),
-                    email = COALESCE(%s, email),
-                    website = COALESCE(%s, website),
-                    telegram_url = COALESCE(%s, telegram_url),
-                    whatsapp_url = COALESCE(%s, whatsapp_url),
-                    enrich_payload_json = %s,
-                    updated_at = NOW()
-                WHERE id = %s
-                  AND business_id = %s
-                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
-                RETURNING id, name, phone, email, website, telegram_url, whatsapp_url, enrich_payload_json, updated_at
-                """,
-                (
-                    normalized.get("phone"),
-                    normalized.get("email"),
-                    normalized.get("website"),
-                    normalized.get("telegram_url"),
-                    normalized.get("whatsapp_url"),
-                    Json(enrich_payload),
-                    lead_id,
-                    business_id,
-                ),
+            workstream_id = str(data.get("workstream_id") or "").strip() or None
+            workstream = resolve_workstream(
+                conn,
+                lead_id=lead_id,
+                workstream_id=workstream_id,
+                expected_type="client_partnership",
+                client_business_id=business_id,
             )
-            updated = cur.fetchone()
+            job = enqueue_enrichment_job(cur, str(workstream.get("id")), force=bool(data.get("force")))
             conn.commit()
+            return jsonify(
+                {
+                    "success": True,
+                    "accepted": True,
+                    "job": {
+                        "id": str(job.get("id")),
+                        "workstream_id": str(job.get("workstream_id")),
+                        "status": job.get("status"),
+                        "phase": job.get("current_phase"),
+                    },
+                    "reused": bool(job.get("reused")),
+                }
+            ), 202
+
         finally:
             conn.close()
-
-        return jsonify(
-            {
-                "success": True,
-                "lead": dict(updated) if updated and hasattr(updated, "keys") else {},
-                "enriched": normalized,
-                "enrich_payload": enrich_payload,
-            }
-        )
     except Exception as e:
         print(f"Error partnership enrich contacts: {e}")
         return jsonify({"error": str(e)}), 500
@@ -1148,72 +1110,34 @@ def partnership_bulk_enrich_contacts():
             if not rows:
                 return jsonify({"error": "Leads not found"}), 404
 
-            updated_ids: list[str] = []
-            skipped_ids: list[str] = []
-            errors: list[dict[str, Any]] = []
+            from services.contact_intelligence_service import enqueue_enrichment_job
 
-            for lead in rows:
-                lead_id = str(lead.get("id") or "").strip()
-                lead_payload = {
-                    "lead_id": lead_id,
-                    "name": lead.get("name"),
-                    "source_url": lead.get("source_url"),
-                    "phone": lead.get("phone"),
-                    "email": lead.get("email"),
-                    "website": lead.get("website"),
-                    "telegram_url": lead.get("telegram_url"),
-                    "whatsapp_url": lead.get("whatsapp_url"),
-                }
-                try:
-                    if _is_partnership_openclaw_enabled():
-                        openclaw_result = _call_partnership_openclaw_capability(
-                            "partners.enrich_contacts",
-                            tenant_id=business_id,
-                            payload={"lead": lead_payload, "intent": "partnership_outreach", "business_id": business_id},
-                            timeout_sec=60,
-                        )
-                        if not openclaw_result.get("success"):
-                            raise RuntimeError(str(openclaw_result.get("error") or "OpenClaw contact enrich failed"))
-                        enriched_source = _extract_openclaw_result_blob(openclaw_result) or {}
-                    else:
-                        enriched_source = lead_payload
-
-                    normalized = _normalize_enriched_contact_fields(enriched_source)
-                    enrich_payload = _normalize_enrich_payload(enriched_source)
-                    if not any(normalized.values()):
-                        skipped_ids.append(lead_id)
-                        continue
-
-                    cur.execute(
-                        """
-                        UPDATE prospectingleads
-                        SET
-                            phone = COALESCE(%s, phone),
-                            email = COALESCE(%s, email),
-                            website = COALESCE(%s, website),
-                            telegram_url = COALESCE(%s, telegram_url),
-                            whatsapp_url = COALESCE(%s, whatsapp_url),
-                            enrich_payload_json = %s,
-                            updated_at = NOW()
-                        WHERE id = %s
-                          AND business_id = %s
-                          AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
-                        """,
-                        (
-                            normalized.get("phone"),
-                            normalized.get("email"),
-                            normalized.get("website"),
-                            normalized.get("telegram_url"),
-                            normalized.get("whatsapp_url"),
-                            Json(enrich_payload),
-                            lead_id,
-                            business_id,
-                        ),
-                    )
-                    updated_ids.append(lead_id)
-                except Exception as exc:
-                    errors.append({"lead_id": lead_id, "error": str(exc)})
-
+            cur.execute(
+                """
+                SELECT id, lead_id
+                FROM lead_workstreams
+                WHERE lead_id = ANY(%s)
+                  AND workstream_type = 'client_partnership'
+                  AND client_business_id = %s
+                """,
+                (normalized_ids, business_id),
+            )
+            workstreams = [dict(row) for row in cur.fetchall() or []]
+            jobs = []
+            for workstream in workstreams:
+                job = enqueue_enrichment_job(
+                    cur,
+                    str(workstream.get("id")),
+                    allow_paid_enrichment=bool(data.get("allow_paid_enrichment")),
+                )
+                jobs.append(
+                    {
+                        "id": str(job.get("id")),
+                        "lead_id": str(workstream.get("lead_id")),
+                        "status": job.get("status"),
+                        "reused": bool(job.get("reused")),
+                    }
+                )
             conn.commit()
         finally:
             conn.close()
@@ -1221,13 +1145,12 @@ def partnership_bulk_enrich_contacts():
         return jsonify(
             {
                 "success": True,
-                "updated_count": len(updated_ids),
-                "skipped_count": len(skipped_ids),
-                "updated_ids": updated_ids,
-                "skipped_ids": skipped_ids,
-                "errors": errors[:50],
+                "accepted": True,
+                "queued_count": sum(1 for job in jobs if not job.get("reused")),
+                "reused_count": sum(1 for job in jobs if job.get("reused")),
+                "jobs": jobs,
             }
-        )
+        ), 202
     except Exception as e:
         print(f"Error partnership bulk enrich contacts: {e}")
         return jsonify({"error": str(e)}), 500
@@ -1256,6 +1179,35 @@ def partnership_draft_offer(lead_id):
             lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
             if not lead:
                 return jsonify({"error": "Lead not found"}), 404
+            if letter_type == "first_note":
+                from services.contact_intelligence_service import enqueue_enrichment_job
+                from services.lead_workstream_service import resolve_workstream
+
+                workstream = resolve_workstream(
+                    conn,
+                    lead_id=lead_id,
+                    workstream_id=str(data.get("workstream_id") or "").strip() or None,
+                    expected_type="client_partnership",
+                    client_business_id=business_id,
+                )
+                job = enqueue_enrichment_job(
+                    cur,
+                    str(workstream.get("id")),
+                    allow_paid_enrichment=bool(data.get("allow_paid_enrichment")),
+                )
+                conn.commit()
+                return jsonify(
+                    {
+                        "success": True,
+                        "accepted": True,
+                        "job": {
+                            "id": str(job.get("id")),
+                            "status": job.get("status"),
+                            "phase": job.get("current_phase"),
+                        },
+                        "message": "Первое письмо будет создано после проверки контакта и оснований",
+                    }
+                ), 202
 
             cur.execute("SELECT match_json FROM partnershipleadartifacts WHERE lead_id = %s", (lead_id,))
             row = cur.fetchone()
