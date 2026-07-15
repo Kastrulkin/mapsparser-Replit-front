@@ -509,8 +509,8 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
           </Button>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(240px,1fr)_auto_minmax(170px,220px)_minmax(180px,240px)_minmax(180px,240px)]">
-          <div className="relative">
+        <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(240px,1fr)_auto_minmax(170px,220px)_minmax(180px,240px)_minmax(180px,240px)]">
+          <div className="relative min-w-0">
             <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
             <Input
               value={query}
@@ -536,7 +536,7 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
           <select
             value={clientBusinessId}
             onChange={(event) => setClientBusinessId(event.target.value)}
-            className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+            className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
             aria-label="Фильтр по клиенту"
           >
             <option value="">Все клиенты</option>
@@ -545,7 +545,7 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
           <select
             value={signalStrength}
             onChange={(event) => setSignalStrength(event.target.value)}
-            className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+            className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
             aria-label="Фильтр по силе сигнала"
           >
             <option value="">Любой сигнал</option>
@@ -556,7 +556,7 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
           <select
             value={actionState}
             onChange={(event) => setActionState(event.target.value)}
-            className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+            className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
             aria-label="Фильтр по следующему действию"
           >
             <option value="">Любое действие</option>
