@@ -293,20 +293,20 @@ def _normalize_learning_intent(raw_intent: str | None) -> str:
     return value if value in allowed else "client_outreach"
 
 def _to_json_compatible(value: Any) -> Any:
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if isinstance(value, date):
-        return value.isoformat()
-    if isinstance(value, dict):
-        normalized: dict[str, Any] = {}
-        for key, inner in value.items():
-            normalized[str(key)] = _to_json_compatible(inner)
-        return normalized
-    if isinstance(value, list):
-        return [_to_json_compatible(item) for item in value]
-    if isinstance(value, tuple):
-        return [_to_json_compatible(item) for item in value]
-    return value
+    def convert(item: Any) -> Any:
+        if isinstance(item, datetime):
+            return item.isoformat()
+        if isinstance(item, date):
+            return item.isoformat()
+        if isinstance(item, dict):
+            return {str(key): convert(inner) for key, inner in item.items()}
+        if isinstance(item, list):
+            return [convert(inner) for inner in item]
+        if isinstance(item, tuple):
+            return [convert(inner) for inner in item]
+        return item
+
+    return convert(value)
 
 def _normalize_public_audit_languages(primary_language: str | None, enabled_languages: Any) -> tuple[str, list[str]]:
     requested_primary = str(primary_language or "").strip().lower()
