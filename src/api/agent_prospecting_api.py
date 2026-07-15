@@ -71,6 +71,9 @@ def _authorized_context(required_scope, risk_level, action_type, workstream_type
             "code": "PROSPECTING_GRANT_REQUIRED",
             "reason": "This agent client has no grant for the requested prospecting context",
         }
+    # The legacy security bootstrap runs idempotent DDL during key lookup.
+    # Release those relation locks before request-specific reads and ledger writes.
+    conn.commit()
     return conn, cursor, client, access
 
 
