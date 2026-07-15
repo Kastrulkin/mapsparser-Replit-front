@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import gzip
 import json
 import os
 import csv
@@ -18,7 +19,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import requests
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, Response, jsonify, request, send_file
 from psycopg2.extras import Json, RealDictCursor
 
 from auth_system import CONSENT_VERSION, normalize_email, verify_session
@@ -1057,6 +1058,11 @@ def get_leads():
             normalized = attach_workstreams(workstream_conn, normalized)
         finally:
             workstream_conn.close()
+        if compact_mode:
+            for lead in normalized:
+                lead.pop("messenger_links_json", None)
+                for workstream in lead.get("workstreams") or []:
+                    workstream.pop("contact_points", None)
         client_options_by_id = {}
         for lead in normalized:
             for workstream in lead.get("workstreams") or []:
@@ -1125,15 +1131,24 @@ def get_leads():
                 lead for lead in filtered
                 if any(str(group.get("id") or "") == group_id for group in (lead.get("groups") or []))
             ]
-        return jsonify(
-            _to_json_compatible(
-                {
-                    "leads": filtered,
-                    "count": len(filtered),
-                    "client_options": client_options,
-                }
-            )
+        response_payload = _to_json_compatible(
+            {
+                "leads": filtered,
+                "count": len(filtered),
+                "client_options": client_options,
+            }
         )
+        if compact_mode and "gzip" in str(request.headers.get("Accept-Encoding") or "").lower():
+            raw_payload = json.dumps(
+                response_payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            response = Response(gzip.compress(raw_payload, compresslevel=5), mimetype="application/json")
+            response.headers["Content-Encoding"] = "gzip"
+            response.headers["Vary"] = "Accept-Encoding"
+            return response
+        return jsonify(response_payload)
     except Exception as e:
         print(f"Error getting leads: {e}")
         return jsonify({"error": str(e)}), 500

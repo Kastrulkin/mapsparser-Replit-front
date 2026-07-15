@@ -14,6 +14,7 @@ from services.contact_intelligence_service import (
     normalize_contact_value,
     normalize_phone,
     provider_error_is_retryable,
+    upsert_contact_points,
 )
 
 
@@ -96,6 +97,28 @@ def test_messenger_contact_drops_prefilled_message_query():
         "telegram",
         "https://t.me/example_team?start=tracking",
     ) == "https://t.me/example_team"
+
+
+def test_messenger_contact_is_stored_with_canonical_display_value():
+    class Cursor:
+        params = None
+
+        def execute(self, _query, params=None):
+            self.params = params
+
+    cursor = Cursor()
+    upsert_contact_points(
+        cursor,
+        "lead-1",
+        [{
+            "contact_type": "whatsapp",
+            "value": "https://wa.me/79215551234?text=Чужой%20текст",
+            "source_type": "map_card",
+        }],
+    )
+
+    assert cursor.params[3] == "https://wa.me/79215551234"
+    assert cursor.params[4] == "https://wa.me/79215551234"
 
 
 def test_website_stream_timeout_becomes_warning(monkeypatch):

@@ -322,6 +322,11 @@ def upsert_contact_points(cursor, lead_id: str, contacts: list[dict[str, Any]]) 
         normalized = normalize_contact_value(contact_type, contact.get("normalized_value") or contact.get("value"))
         if contact_type not in CONTACT_TYPES or not normalized:
             continue
+        display_value = (
+            normalized
+            if contact_type in {"telegram", "whatsapp", "vk", "instagram", "max"}
+            else str(contact.get("value") or normalized)
+        )
         cursor.execute(
             """
             INSERT INTO lead_contact_points (
@@ -367,7 +372,7 @@ def upsert_contact_points(cursor, lead_id: str, contacts: list[dict[str, Any]]) 
                 updated_at = NOW()
             """,
             (
-                str(uuid.uuid4()), lead_id, contact_type, str(contact.get("value") or normalized), normalized,
+                str(uuid.uuid4()), lead_id, contact_type, display_value, normalized,
                 str(contact.get("owner_type") or "company"), str(contact.get("person_name") or ""),
                 str(contact.get("role_title") or ""), str(contact.get("source_url") or ""),
                 str(contact.get("source_type") or "public"), str(contact.get("provider") or "public"),
