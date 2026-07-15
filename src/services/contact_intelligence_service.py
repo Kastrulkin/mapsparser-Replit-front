@@ -61,6 +61,9 @@ UNSUPPORTED_PROMISE_PATTERNS = (
 
 def normalize_phone(value: Any) -> str:
     raw = str(value or "").strip()
+    digits = re.sub(r"\D", "", raw)
+    if not raw.startswith("+") and len(digits) not in {10, 11}:
+        return ""
     if phonenumbers is not None:
         try:
             parsed = phonenumbers.parse(raw, "RU")
@@ -68,7 +71,6 @@ def normalize_phone(value: Any) -> str:
                 return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
         except phonenumbers.NumberParseException:
             pass
-    digits = re.sub(r"\D", "", raw)
     if len(digits) == 11 and digits.startswith("8"):
         digits = "7" + digits[1:]
     if len(digits) == 10:
