@@ -289,6 +289,14 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml exec app python 
 
 Перед первым запуском установите тестовые зависимости в контейнере: `docker compose exec app pip install -r requirements.test.txt`.
 
+Каноничный воспроизводимый запуск Agent и prospecting тестов, не зависящий от архитектуры локального Python:
+
+```bash
+scripts/test_agents_docker.sh
+```
+
+Скрипт монтирует текущий checkout в `/app`, поэтому пересборка image для каждой правки не нужна.
+
 ```bash
 # Smoke DatabaseManager
 docker compose run --rm app python scripts/smoke_db_manager.py

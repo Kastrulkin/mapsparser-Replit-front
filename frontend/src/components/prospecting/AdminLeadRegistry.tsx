@@ -62,6 +62,27 @@ interface WorkstreamAction {
   label?: string;
 }
 
+interface ResearchSource {
+  title?: string;
+  url?: string;
+  source_type?: string;
+  published_at?: string;
+}
+
+interface WorkstreamResearch {
+  id?: string;
+  score?: number;
+  qualification_stage?: string;
+  signal_label?: 'strong_signal' | 'reason_to_check' | 'fit_only';
+  why_now?: string;
+  sources?: ResearchSource[];
+  suggested_opener?: string;
+  opener_source_url?: string;
+  limitations?: string[];
+  researched_at?: string;
+  stale?: boolean;
+}
+
 interface LeadWorkstream {
   id?: string | null;
   workstream_type: WorkstreamType;
@@ -73,6 +94,8 @@ interface LeadWorkstream {
   channel_state?: WorkstreamState;
   room_state?: WorkstreamState;
   next_action?: WorkstreamAction;
+  research?: WorkstreamResearch | null;
+  service_compatibility_score?: number | null;
   legacy?: boolean;
 }
 
@@ -171,6 +194,26 @@ const actionTone = (code?: string) => {
   return 'text-slate-700';
 };
 
+const signalLabel = (research?: WorkstreamResearch | null) => {
+  if (research?.stale) return 'Нужно обновить';
+  if (research?.signal_label === 'strong_signal') return 'Сильный сигнал';
+  if (research?.signal_label === 'reason_to_check') return 'Есть повод';
+  if (research) return 'Только соответствие';
+  return '';
+};
+
+const signalTone = (research?: WorkstreamResearch | null) => {
+  if (research?.stale) return 'border-amber-200 bg-amber-50 text-amber-800';
+  if (research?.signal_label === 'strong_signal') return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+  if (research?.signal_label === 'reason_to_check') return 'border-sky-200 bg-sky-50 text-sky-800';
+  return 'border-slate-200 bg-slate-50 text-slate-700';
+};
+
+const strongestResearch = (workstreams: LeadWorkstream[]) => workstreams
+  .map((item) => item.research)
+  .filter((item): item is WorkstreamResearch => Boolean(item))
+  .sort((left, right) => Number(right.score || 0) - Number(left.score || 0))[0] || null;
+
 const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
 export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
@@ -178,6 +221,7 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
   const [scope, setScope] = useState<ScopeFilter>('all');
   const [clientBusinessId, setClientBusinessId] = useState('');
   const [actionState, setActionState] = useState('');
+  const [signalStrength, setSignalStrength] = useState('');
   const [query, setQuery] = useState('');
   const [leads, setLeads] = useState<LeadItem[]>([]);
   const [clientFilterOptions, setClientFilterOptions] = useState<ClientFilterOption[]>([]);
@@ -251,6 +295,7 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
         if (!haystack.includes(normalized)) return false;
       }
       const workstreams = lead.workstreams || [];
+      if (signalStrength && !workstreams.some((item) => item.research?.signal_label === signalStrength)) return false;
       if (view === 'messages') {
         return workstreams.some((item) => item.channel_state?.code !== 'choose_channel' || item.room_state?.code !== 'missing');
       }
@@ -259,7 +304,7 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
       }
       return true;
     });
-  }, [leads, query, view]);
+  }, [leads, query, signalStrength, view]);
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) || null;
   const selectedWorkstream = selectedLead?.workstreams?.find((item) => item.id === selectedWorkstreamId)
@@ -464,7 +509,7 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
           </Button>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(240px,1fr)_auto_minmax(180px,260px)_minmax(180px,240px)]">
+        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(240px,1fr)_auto_minmax(170px,220px)_minmax(180px,240px)_minmax(180px,240px)]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
             <Input
@@ -496,6 +541,17 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
           >
             <option value="">Все клиенты</option>
             {clientFilterOptions.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}
+          </select>
+          <select
+            value={signalStrength}
+            onChange={(event) => setSignalStrength(event.target.value)}
+            className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+            aria-label="Фильтр по силе сигнала"
+          >
+            <option value="">Любой сигнал</option>
+            <option value="strong_signal">Сильный сигнал</option>
+            <option value="reason_to_check">Есть повод</option>
+            <option value="fit_only">Только соответствие</option>
           </select>
           <select
             value={actionState}
@@ -550,6 +606,7 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
               const workstreams = lead.workstreams || [];
               const primary = workstreams[0];
               const contacts = availableContacts(lead);
+              const research = strongestResearch(workstreams);
               return (
                 <button
                   key={lead.id}
@@ -580,6 +637,11 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
                         {workstreamLabel(workstream)}
                       </Badge>
                     ))}
+                    {research && (
+                      <Badge variant="outline" className={signalTone(research)}>
+                        {signalLabel(research)} · {Number(research.score || 0)}
+                      </Badge>
+                    )}
                   </div>
                   <div className="min-w-0 text-sm">
                     <div className="font-medium text-slate-800">{contacts.length ? contacts.join(' · ') : 'Контакта пока нет'}</div>
@@ -651,7 +713,78 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="bg-slate-50">{workstreamLabel(selectedWorkstream)}</Badge>
                 <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-800">{statusLabel(selectedWorkstream)}</Badge>
+                {selectedWorkstream.research && (
+                  <Badge variant="outline" className={signalTone(selectedWorkstream.research)}>
+                    {signalLabel(selectedWorkstream.research)} · {Number(selectedWorkstream.research.score || 0)}
+                  </Badge>
+                )}
+                {selectedWorkstream.workstream_type === 'client_partnership' && selectedWorkstream.service_compatibility_score != null && (
+                  <Badge variant="outline" className="border-violet-200 bg-violet-50 text-violet-800">
+                    Совместимость услуг · {Number(selectedWorkstream.service_compatibility_score)}
+                  </Badge>
+                )}
               </div>
+
+              {selectedWorkstream.research && (
+                <section className="rounded-md bg-slate-50 p-4" aria-labelledby="lead-research-title">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 id="lead-research-title" className="text-sm font-semibold text-slate-950">Почему сейчас</h3>
+                      <p className="mt-1 text-sm leading-6 text-slate-700">
+                        {selectedWorkstream.research.why_now || 'Публичный повод не подтверждён. Компания подходит только по общим признакам.'}
+                      </p>
+                    </div>
+                    <span className="text-xs text-slate-500 tabular-nums">
+                      {selectedWorkstream.research.researched_at
+                        ? new Date(selectedWorkstream.research.researched_at).toLocaleDateString('ru-RU')
+                        : 'дата не указана'}
+                    </span>
+                  </div>
+                  {(selectedWorkstream.research.sources || []).length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {(selectedWorkstream.research.sources || []).slice(0, 3).map((source) => (
+                        <a
+                          key={`${source.url}-${source.title}`}
+                          href={source.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex min-h-10 items-center justify-between gap-3 rounded-md bg-white px-3 text-sm font-medium text-slate-800 hover:text-orange-700"
+                        >
+                          <span className="min-w-0 truncate">{source.title || 'Открыть источник'}</span>
+                          <ExternalLink className="h-4 w-4 shrink-0" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {selectedWorkstream.research.suggested_opener && (
+                    <div className="mt-3 rounded-md bg-white p-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Первый абзац письма</div>
+                      <p className="mt-1 text-sm leading-6 text-slate-700">{selectedWorkstream.research.suggested_opener}</p>
+                      {selectedWorkstream.research.opener_source_url ? (
+                        <a
+                          href={selectedWorkstream.research.opener_source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex min-h-9 items-center gap-2 text-xs font-semibold text-sky-700 hover:text-sky-900"
+                        >
+                          Источник вступления
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      ) : (
+                        <p className="mt-2 text-xs text-slate-500">Нейтральное вступление без персонального публичного сигнала.</p>
+                      )}
+                    </div>
+                  )}
+                  {(selectedWorkstream.research.limitations || []).length > 0 && (
+                    <details className="mt-2">
+                      <summary className="min-h-10 cursor-pointer py-2 text-sm font-semibold text-slate-600">Ограничения исследования</summary>
+                      <ul className="space-y-1 text-sm text-slate-600">
+                        {(selectedWorkstream.research.limitations || []).map((item) => <li key={item}>{item}</li>)}
+                      </ul>
+                    </details>
+                  )}
+                </section>
+              )}
 
               <div className="space-y-2">
                 {[

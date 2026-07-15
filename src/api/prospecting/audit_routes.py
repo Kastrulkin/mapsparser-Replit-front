@@ -66,6 +66,7 @@ from services.lead_workstream_service import (
     resolve_workstream,
     update_workstream,
 )
+from services.prospecting_research_service import load_latest_research
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -1028,6 +1029,7 @@ def _refresh_existing_partnership_sales_room(
     audit_json: dict[str, Any],
     match_json: dict[str, Any],
     workstream_id: str,
+    channel: str,
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
     lead_id = str(lead.get("id") or "").strip()
     cur.execute(
@@ -1055,6 +1057,10 @@ def _refresh_existing_partnership_sales_room(
         lead_name=lead_name,
         audit_json=audit_json,
     )
+    research = lead.get("research") if isinstance(lead.get("research"), dict) else {}
+    opener = str(research.get("suggested_opener") or "").strip()
+    if opener and opener not in body_text:
+        body_text = f"{opener}\n\n{body_text}"
     proposal_json = {
         "title": f"Предложение от {business_name}",
         "summary": "Один безопасный тест сотрудничества без автоматических рассылок.",
@@ -1122,6 +1128,26 @@ def _refresh_existing_partnership_sales_room(
     room = _row_to_dict(cur.fetchone())
     room["public_url"] = _make_sales_room_url(str(room.get("slug") or ""))
     room["room_json"] = room_json
+    invitation_text = _build_sales_room_invitation_text(
+        mode=SALES_ROOM_MODE_PARTNER,
+        data_mode=SALES_ROOM_DATA_TEMPLATE,
+        business_name=business_name,
+        lead_name=lead_name,
+        room_url=room["public_url"],
+    )
+    if opener and opener not in invitation_text:
+        invitation_text = f"{opener}\n\n{invitation_text}"
+    draft = _create_sales_room_invitation_draft(
+        cur,
+        lead_id=lead_id,
+        room_id=str(room.get("id") or ""),
+        mode=SALES_ROOM_MODE_PARTNER,
+        data_mode=SALES_ROOM_DATA_TEMPLATE,
+        channel=channel,
+        text=invitation_text,
+        user_id=user_id,
+        workstream_id=workstream_id,
+    )
     _record_sales_room_event_by_id(
         cur,
         room_id=str(room.get("id") or ""),
@@ -1132,7 +1158,117 @@ def _refresh_existing_partnership_sales_room(
             "audit_profile": audit_json.get("audit_profile"),
         },
     )
-    return room, {}
+    return room, draft
+
+def _refresh_existing_client_sales_room(
+    cur,
+    *,
+    user_id: str,
+    lead: dict[str, Any],
+    business_profile: dict[str, Any],
+    channel: str,
+    workstream_id: str,
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    lead_id = str(lead.get("id") or "").strip()
+    cur.execute(
+        """
+        SELECT *
+        FROM sales_rooms
+        WHERE lead_id = %s
+          AND mode = %s
+          AND (workstream_id = NULLIF(%s, '')::uuid OR workstream_id IS NULL)
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE
+        """,
+        (lead_id, SALES_ROOM_MODE_CLIENT, workstream_id),
+    )
+    room = _row_to_dict(cur.fetchone())
+    if not room:
+        return None
+
+    business_name = _pick_business_display_name(business_profile)
+    lead_name = str(lead.get("name") or "компания").strip() or "компания"
+    proposal_json = _build_sales_room_proposal(
+        mode=SALES_ROOM_MODE_CLIENT,
+        data_mode=SALES_ROOM_DATA_TEMPLATE,
+        lead=lead,
+        business_name=business_name,
+    )
+    body_text = str(proposal_json.get("body_text") or "").strip()
+    generated_room_json = _build_sales_room_payload(
+        mode=SALES_ROOM_MODE_CLIENT,
+        data_mode=SALES_ROOM_DATA_TEMPLATE,
+        lead=lead,
+        business_profile=business_profile,
+        audit_public_url=str(room.get("audit_public_url") or ""),
+        audit_json={},
+        match_json={},
+        proposal_json=proposal_json,
+        slug=str(room.get("slug") or ""),
+    )
+    room_json = room.get("room_json") if isinstance(room.get("room_json"), dict) else {}
+    room_json = {**room_json, **generated_room_json}
+    latest_version = _ensure_sales_room_proposal_version(
+        cur,
+        room_id=str(room.get("id") or ""),
+        body_text=str((room.get("proposal_json") or {}).get("body_text") or ""),
+        author_name=business_name,
+        metadata={"source": "existing_room_proposal"},
+    )
+    if str(latest_version.get("body_text") or "").strip() != body_text:
+        latest_version = _create_sales_room_proposal_version(
+            cur,
+            room_id=str(room.get("id") or ""),
+            body_text=body_text,
+            author_name=business_name,
+            author_contact="",
+            metadata={"source": "codex_public_research", "lead_id": lead_id},
+        )
+    cur.execute(
+        """
+        UPDATE sales_rooms
+        SET workstream_id = NULLIF(%s, '')::uuid,
+            proposal_json = %s,
+            room_json = %s,
+            updated_at = NOW()
+        WHERE id = %s
+        RETURNING *
+        """,
+        (workstream_id, Json(proposal_json), Json(room_json), str(room.get("id") or "")),
+    )
+    room = _row_to_dict(cur.fetchone())
+    room["public_url"] = _make_sales_room_url(str(room.get("slug") or ""))
+    room["room_json"] = room_json
+    invitation_text = _build_sales_room_invitation_text(
+        mode=SALES_ROOM_MODE_CLIENT,
+        data_mode=SALES_ROOM_DATA_TEMPLATE,
+        business_name=business_name,
+        lead_name=lead_name,
+        room_url=room["public_url"],
+    )
+    research = lead.get("research") if isinstance(lead.get("research"), dict) else {}
+    opener = str(research.get("suggested_opener") or "").strip()
+    if opener and opener not in invitation_text:
+        invitation_text = f"{opener}\n\n{invitation_text}"
+    draft = _create_sales_room_invitation_draft(
+        cur,
+        lead_id=lead_id,
+        room_id=str(room.get("id") or ""),
+        mode=SALES_ROOM_MODE_CLIENT,
+        data_mode=SALES_ROOM_DATA_TEMPLATE,
+        channel=channel,
+        text=invitation_text,
+        user_id=user_id,
+        workstream_id=workstream_id,
+    )
+    _record_sales_room_event_by_id(
+        cur,
+        room_id=str(room.get("id") or ""),
+        event_type="lead_research_room_updated",
+        metadata={"lead_id": lead_id, "proposal_version": latest_version.get("version_no")},
+    )
+    return room, draft
 
 def _create_or_update_sales_room(
     cur,
@@ -1216,6 +1352,10 @@ def _create_or_update_sales_room(
         lead_name=lead_name,
         room_url=_make_sales_room_url(slug),
     )
+    research = lead.get("research") if isinstance(lead.get("research"), dict) else {}
+    opener = str(research.get("suggested_opener") or "").strip()
+    if opener and opener not in invitation_text:
+        invitation_text = f"{opener}\n\n{invitation_text}"
     draft = _create_sales_room_invitation_draft(
         cur,
         lead_id=lead_id,
@@ -1260,6 +1400,9 @@ def _prepare_partnership_sales_room(
             client_business_id=business_id,
         )
         resolved_workstream_id = str(workstream.get("id") or "")
+        research = load_latest_research(conn, resolved_workstream_id)
+        if research:
+            lead["research"] = research
         business_profile = _load_business_profile(cur, business_id)
         reservation: dict[str, Any] = {}
         if data_mode == SALES_ROOM_DATA_AUDITED:
@@ -1312,6 +1455,7 @@ def _prepare_partnership_sales_room(
                 audit_json=audit_json,
                 match_json=match_json,
                 workstream_id=resolved_workstream_id,
+                channel=channel,
             )
         if existing_room_result:
             room, draft = existing_room_result
@@ -1377,6 +1521,7 @@ def _prepare_client_sales_room(
     channel: str,
     audit_offer: dict[str, Any] | None = None,
     workstream_id: str | None = None,
+    reuse_existing: bool = False,
 ) -> dict[str, Any]:
     conn = get_db_connection()
     try:
@@ -1397,6 +1542,9 @@ def _prepare_client_sales_room(
         display_lead = _normalize_lead_for_display(dict(lead))
         if not display_lead:
             return {"error": "Lead is not available for room", "status_code": 400}
+        research = load_latest_research(conn, resolved_workstream_id)
+        if research:
+            display_lead["research"] = research
         business_id = str(display_lead.get("business_id") or "").strip()
         if not business_id:
             business, _business_created = _ensure_parse_business_for_lead(display_lead, user_id)
@@ -1419,20 +1567,33 @@ def _prepare_client_sales_room(
         display_lead = _attach_admin_prospecting_public_offer_metadata(conn, display_lead)
         preview = build_lead_card_preview_snapshot(display_lead) if data_mode == SALES_ROOM_DATA_AUDITED else {}
         audit_public_url = str(display_lead.get("public_audit_url") or "")
-        room, draft = _create_or_update_sales_room(
-            cur,
-            business_id=business_id,
-            user_id=user_id,
-            mode=SALES_ROOM_MODE_CLIENT,
-            data_mode=data_mode,
-            lead=display_lead,
-            business_profile=business_profile,
-            audit_public_url=audit_public_url,
-            audit_json=preview,
-            match_json={},
-            channel=channel,
-            workstream_id=resolved_workstream_id,
-        )
+        existing_room_result = None
+        if reuse_existing:
+            existing_room_result = _refresh_existing_client_sales_room(
+                cur,
+                user_id=user_id,
+                lead=display_lead,
+                business_profile=business_profile,
+                channel=channel,
+                workstream_id=resolved_workstream_id,
+            )
+        if existing_room_result:
+            room, draft = existing_room_result
+        else:
+            room, draft = _create_or_update_sales_room(
+                cur,
+                business_id=business_id,
+                user_id=user_id,
+                mode=SALES_ROOM_MODE_CLIENT,
+                data_mode=data_mode,
+                lead=display_lead,
+                business_profile=business_profile,
+                audit_public_url=audit_public_url,
+                audit_json=preview,
+                match_json={},
+                channel=channel,
+                workstream_id=resolved_workstream_id,
+            )
         if isinstance(audit_offer, dict) and audit_offer:
             _upsert_sales_room_audit_offer(cur, room=room, data=audit_offer)
         billing = {"status": "not_required", "credit_charged": False, "charged_credits": 0}
@@ -1451,7 +1612,13 @@ def _prepare_client_sales_room(
             selected_channel=channel,
         )
         conn.commit()
-        return {"success": True, "room": room, "draft": _serialize_draft(draft), "billing": billing}
+        return {
+            "success": True,
+            "room": room,
+            "draft": _serialize_draft(draft),
+            "billing": billing,
+            "reused": bool(existing_room_result),
+        }
     finally:
         conn.close()
 

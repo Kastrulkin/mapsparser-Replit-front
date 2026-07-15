@@ -19,6 +19,12 @@ DEFAULT_SCOPES = [
     "publish:request",
 ]
 
+PROSPECTING_SCOPES = [
+    "prospecting:context:read",
+    "prospecting:import",
+    "prospecting:outreach:draft",
+]
+
 BLOCKED_DIRECT_ACTIONS = {
     "publish_posts",
     "publish_review_replies",
@@ -781,10 +787,21 @@ def build_agent_self_test_summary(client: dict[str, Any], access: dict[str, Any]
             scopes.append(normalized)
     scope_set = set(scopes)
     draft_scopes = [
-        scope for scope in ["services:draft", "reviews:draft", "content:draft", "approvals:create"] if scope in scope_set
+        scope
+        for scope in [
+            "services:draft",
+            "reviews:draft",
+            "content:draft",
+            "approvals:create",
+            "prospecting:import",
+            "prospecting:outreach:draft",
+        ]
+        if scope in scope_set
     ]
     read_scopes = [
-        scope for scope in ["audit:read", "finance:read", "partners:read"] if scope in scope_set
+        scope
+        for scope in ["audit:read", "finance:read", "partners:read", "prospecting:context:read"]
+        if scope in scope_set
     ]
     blocked_actions = sorted(BLOCKED_DIRECT_ACTIONS)
     return {
@@ -879,7 +896,7 @@ def public_agent_policy() -> dict[str, Any]:
         "product": "LocalOS",
         "status": "implemented_foundation",
         "principle": "Do not guess intent. Limit damage with identity, scopes, sandbox, human approval, rate limits, abuse detection, and audit trails.",
-        "scopes": list(DEFAULT_SCOPES),
+        "scopes": list(DEFAULT_SCOPES) + list(PROSPECTING_SCOPES),
         "blocked_direct_actions": sorted(BLOCKED_DIRECT_ACTIONS),
         "risk_levels": sorted(RISK_LEVELS),
         "new_client_default_status": "sandbox",

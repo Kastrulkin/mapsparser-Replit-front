@@ -23,6 +23,7 @@ from core.agent_api_security import (
     normalize_telegram_bot_username,
 )
 from core.agent_api_alerts import notify_superadmins_agent_alert
+from services.prospecting_research_service import load_grants, replace_grants
 
 
 agent_security_bp = Blueprint("agent_security_api", __name__)
@@ -155,6 +156,9 @@ def create_agent_client_endpoint():
     allowed_scopes = payload.get("allowed_scopes")
     if not isinstance(allowed_scopes, list):
         allowed_scopes = None
+    prospecting_grants = payload.get("prospecting_grants")
+    if prospecting_grants is not None and not isinstance(prospecting_grants, list):
+        return _json_error("prospecting_grants must be an array", 400, "VALIDATION_ERROR")
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -171,6 +175,7 @@ def create_agent_client_endpoint():
                 **_agent_client_metadata_from_payload(payload),
             },
         )
+        grants = replace_grants(cursor, result["client_id"], prospecting_grants or [])
         db.conn.commit()
         return jsonify(
             {
@@ -179,11 +184,15 @@ def create_agent_client_endpoint():
                     "client_id": result["client_id"],
                     "status": result["status"],
                     "allowed_scopes": result["allowed_scopes"],
+                    "prospecting_grants": grants,
                     "agent_key": result["agent_key"],
                     "agent_key_warning": "Store this key now. It is returned only once.",
                 },
             }
         )
+    except ValueError as error:
+        db.conn.rollback()
+        return _json_error(str(error), 400, "VALIDATION_ERROR")
     finally:
         db.close()
 
@@ -217,6 +226,7 @@ def list_agent_clients_endpoint():
                         item[key] = json.loads(value)
                     except Exception:
                         item[key] = [] if key == "allowed_scopes" else {}
+            item["prospecting_grants"] = load_grants(cursor, str(item.get("id") or ""))
             clients.append(item)
         return jsonify({"success": True, "clients": clients})
     finally:
@@ -237,6 +247,9 @@ def update_agent_client_endpoint(client_id: str):
     rate_limits = payload.get("rate_limits")
     if rate_limits is not None and not isinstance(rate_limits, dict):
         return _json_error("rate_limits must be an object", 400, "VALIDATION_ERROR")
+    prospecting_grants = payload.get("prospecting_grants")
+    if prospecting_grants is not None and not isinstance(prospecting_grants, list):
+        return _json_error("prospecting_grants must be an array", 400, "VALIDATION_ERROR")
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -255,6 +268,7 @@ def update_agent_client_endpoint(client_id: str):
         )
         if not result:
             return _json_error("Agent client not found", 404, "NOT_FOUND")
+        grants = replace_grants(cursor, client_id, prospecting_grants) if prospecting_grants is not None else load_grants(cursor, client_id)
         log_agent_action(
             cursor,
             agent_client_id=client_id,
@@ -267,6 +281,7 @@ def update_agent_client_endpoint(client_id: str):
                 "status": payload.get("status"),
                 "allowed_scopes": allowed_scopes,
                 "rate_limits": rate_limits,
+                "prospecting_grants": grants,
             },
             status="completed",
             reason_code="SUPERADMIN_UPDATE",
@@ -283,7 +298,11 @@ def update_agent_client_endpoint(client_id: str):
             },
         )
         db.conn.commit()
+        result["prospecting_grants"] = grants
         return jsonify({"success": True, "client": result})
+    except ValueError as error:
+        db.conn.rollback()
+        return _json_error(str(error), 400, "VALIDATION_ERROR")
     finally:
         db.close()
 

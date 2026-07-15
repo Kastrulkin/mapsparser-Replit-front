@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LocalOS Agent API Security Contract",
-    "version": "2026-05-25",
-    "summary": "Minimal beta/internal OpenAPI contract for the implemented LocalOS Agent API security endpoints.",
-    "description": "This contract describes only the Agent API security endpoints that exist in LocalOS today: policy, client registry, promotion requests, approval requests, ledger, discovery and Telegram binding lookup. It is not an MCP server contract and does not imply autonomous publish, payment, destructive or external-system execution."
+    "version": "2026-07-15",
+    "summary": "Beta/internal contract for scoped LocalOS Agent API security and prospecting endpoints.",
+    "description": "This contract describes implemented LocalOS Agent API security and evidence-backed prospecting endpoints. Prospecting can read an explicitly granted context, preview and import selected companies, and prepare drafts or digital rooms. It cannot send messages. This is not an MCP server contract and does not imply autonomous publish, payment, destructive or external-system execution."
   },
   "servers": [
     {
@@ -36,6 +36,10 @@
     {
       "name": "Telegram Binding",
       "description": "Superadmin lookup for Telegram bot to agent client binding."
+    },
+    {
+      "name": "Prospecting",
+      "description": "Evidence-backed lead research with explicit LocalOS or client grants. Import and draft preparation never send messages."
     }
   ],
   "paths": {
@@ -640,6 +644,126 @@
           "403": {
             "$ref": "#/components/responses/SuperadminRequired"
           }
+        }
+      }
+    },
+    "/api/agent-api/prospecting/context": {
+      "get": {
+        "tags": ["Prospecting"],
+        "operationId": "getProspectingContext",
+        "summary": "Read an explicitly granted prospecting context",
+        "description": "Returns LocalOS sales context or one selected client context. A client business ID alone is never sufficient authorization.",
+        "security": [{"AgentApiKey": []}],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "read_only",
+          "required_scope": "prospecting:context:read",
+          "explicit_grant_required": true,
+          "external_send": false
+        },
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": true,
+            "schema": {"type": "string", "enum": ["localos-sales", "client-partners"]}
+          },
+          {
+            "name": "business_id",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "string", "format": "uuid"},
+            "description": "Required for client-partners mode and checked against the agent client's grants."
+          }
+        ],
+        "responses": {
+          "200": {"description": "Prospecting context returned."},
+          "401": {"$ref": "#/components/responses/AuthRequired"},
+          "403": {"description": "Required scope or prospecting grant is missing."},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/api/agent-api/prospecting/import-preview": {
+      "post": {
+        "tags": ["Prospecting"],
+        "operationId": "previewProspectingImport",
+        "summary": "Preview selected report candidates before import",
+        "description": "Checks grants and deduplication, then returns create_lead, add_workstream, update_research or ambiguous for every candidate. No data is changed.",
+        "security": [{"AgentApiKey": []}],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "internal_write_preview",
+          "required_scope": "prospecting:import",
+          "explicit_grant_required": true,
+          "external_send": false
+        },
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"type": "object", "additionalProperties": true}}}
+        },
+        "responses": {
+          "200": {"description": "Import preview returned."},
+          "400": {"description": "Report is invalid."},
+          "401": {"$ref": "#/components/responses/AuthRequired"},
+          "403": {"description": "Required scope or prospecting grant is missing."}
+        }
+      }
+    },
+    "/api/agent-api/prospecting/import": {
+      "post": {
+        "tags": ["Prospecting"],
+        "operationId": "importProspectingCandidates",
+        "summary": "Import only explicitly selected candidates",
+        "description": "Idempotently creates or updates lead workstreams and research. If draft scope is present, LocalOS also prepares a draft and reuses the workstream's digital room URL. Nothing is sent.",
+        "security": [{"AgentApiKey": []}],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "internal_write",
+          "required_scope": "prospecting:import",
+          "optional_scope": "prospecting:outreach:draft",
+          "explicit_grant_required": true,
+          "external_send": false
+        },
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"type": "object", "required": ["candidate_ids", "idempotency_key"], "additionalProperties": true}}}
+        },
+        "responses": {
+          "200": {"description": "Selected candidates imported or prior idempotent result returned."},
+          "400": {"description": "Selection or idempotency key is invalid."},
+          "401": {"$ref": "#/components/responses/AuthRequired"},
+          "403": {"description": "Required scope or prospecting grant is missing."}
+        }
+      }
+    },
+    "/api/agent-api/prospecting/workstreams/{workstream_id}/prepare": {
+      "post": {
+        "tags": ["Prospecting"],
+        "operationId": "prepareProspectingWorkstream",
+        "summary": "Prepare a message draft and digital room",
+        "description": "Uses verified research facts and existing LocalOS handlers. Reuses an existing room URL and does not send the draft.",
+        "security": [{"AgentApiKey": []}],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "internal_draft",
+          "required_scope": "prospecting:outreach:draft",
+          "explicit_grant_required": true,
+          "external_send": false
+        },
+        "parameters": [
+          {
+            "name": "workstream_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "responses": {
+          "200": {"description": "Draft and room prepared."},
+          "401": {"$ref": "#/components/responses/AuthRequired"},
+          "403": {"description": "Required scope or tenant grant is missing."},
+          "404": {"$ref": "#/components/responses/NotFound"}
         }
       }
     }

@@ -15,6 +15,10 @@ interface AgentClient {
   contact_email: string;
   status: string;
   allowed_scopes: string[];
+  prospecting_grants?: Array<{
+    workstream_type?: string;
+    client_business_id?: string | null;
+  }>;
   rate_limits?: Record<string, unknown>;
   metadata_json?: {
     telegram_bot_username?: string;
@@ -115,6 +119,26 @@ const formatDateTime = (value?: string | null) => {
 
 const normalizeScopesText = (scopes: string[]) => scopes.join('\n');
 
+const normalizeProspectingGrantsText = (grants: AgentClient['prospecting_grants']) => (grants || [])
+  .map((grant) => grant.workstream_type === 'client_partnership'
+    ? `client_partnership:${grant.client_business_id || ''}`
+    : 'localos_sales')
+  .join('\n');
+
+const parseProspectingGrants = (value: string) => value
+  .split(/\n|,/)
+  .map((item) => item.trim())
+  .filter(Boolean)
+  .map((item) => {
+    if (item === 'localos_sales') return { workstream_type: 'localos_sales', client_business_id: null };
+    const [workstreamType, clientBusinessId] = item.split(':', 2);
+    if (workstreamType === 'client_partnership' && clientBusinessId?.trim()) {
+      return { workstream_type: 'client_partnership', client_business_id: clientBusinessId.trim() };
+    }
+    return null;
+  })
+  .filter((item) => item !== null);
+
 const extractTelegramSender = (item: LedgerItem): TelegramSender => {
   const metadataSender = item.metadata_json?.sender;
   if (metadataSender) return metadataSender;
@@ -145,9 +169,10 @@ export const AgentApiManagement = () => {
     contact_email: '',
     telegram_bot_username: '',
     telegram_bot_id: '',
-    allowed_scopes: 'audit:read\nservices:draft\nreviews:draft\ncontent:draft\nfinance:read\npartners:read\napprovals:create\npublish:request',
+    allowed_scopes: 'audit:read\nservices:draft\nreviews:draft\ncontent:draft\nfinance:read\npartners:read\napprovals:create\npublish:request\nprospecting:context:read\nprospecting:import\nprospecting:outreach:draft',
   });
   const [editingScopes, setEditingScopes] = useState<Record<string, string>>({});
+  const [editingProspectingGrants, setEditingProspectingGrants] = useState<Record<string, string>>({});
   const [telegramBindings, setTelegramBindings] = useState<Record<string, { username: string; botId: string }>>({});
   const [promotionNotes, setPromotionNotes] = useState<Record<string, string>>({});
   const [selfTestKey, setSelfTestKey] = useState('');
@@ -221,6 +246,13 @@ export const AgentApiManagement = () => {
         const next: Record<string, string> = {};
         for (const client of clientsData.clients || []) {
           next[client.id] = previous[client.id] || normalizeScopesText(client.allowed_scopes || []);
+        }
+        return next;
+      });
+      setEditingProspectingGrants((previous) => {
+        const next: Record<string, string> = {};
+        for (const client of clientsData.clients || []) {
+          next[client.id] = previous[client.id] || normalizeProspectingGrantsText(client.prospecting_grants || []);
         }
         return next;
       });
@@ -359,6 +391,7 @@ curl -s -X POST "https://localos.pro/api/agent-api/clients/promotion/request" \\
         body: JSON.stringify({
           status: status || client.status,
           allowed_scopes: parseScopes(editingScopes[client.id] || ''),
+          prospecting_grants: parseProspectingGrants(editingProspectingGrants[client.id] || ''),
           telegram_bot_username: telegramBindings[client.id]?.username || '',
           telegram_bot_id: telegramBindings[client.id]?.botId || '',
         }),
@@ -752,6 +785,21 @@ curl -s -X POST "https://localos.pro/api/agent-api/clients/promotion/request" \\
                     />
                     <Button size="sm" variant="secondary" onClick={() => updateClient(client)}>
                       Сохранить scopes
+                    </Button>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    <Label>Доступ к проспектингу</Label>
+                    <Textarea
+                      value={editingProspectingGrants[client.id] || ''}
+                      onChange={(event) => setEditingProspectingGrants((previous) => ({ ...previous, [client.id]: event.target.value }))}
+                      placeholder={'localos_sales\nclient_partnership:business-id'}
+                      className="min-h-[76px] font-mono text-xs"
+                    />
+                    <div className="text-xs text-slate-500">
+                      Scope разрешает действие, а эта привязка ограничивает его продажами LocalOS или конкретным клиентом.
+                    </div>
+                    <Button size="sm" variant="secondary" onClick={() => updateClient(client)}>
+                      Сохранить доступ
                     </Button>
                   </div>
                   <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 LOCALOS_SALES = "localos_sales"
@@ -166,7 +167,19 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                     ws.created_at, ws.updated_at,
                     room.id AS room_id, room.status AS room_status, room.slug AS room_slug,
                     room.mode AS room_mode, room.updated_at AS room_updated_at,
-                    COALESCE(draft_stats.drafts_count, 0)::INT AS drafts_count
+                    COALESCE(draft_stats.drafts_count, 0)::INT AS drafts_count,
+                    research.id AS research_id, research.score AS research_score,
+                    research.qualification_stage AS research_stage,
+                    research.signal_label AS research_signal_label,
+                    research.score_breakdown AS research_score_breakdown,
+                    research.why_now AS research_why_now,
+                    research.signals_json AS research_signals,
+                    research.sources_json AS research_sources,
+                    research.contact_evidence_json AS research_contact_evidence,
+                    research.suggested_opener AS research_suggested_opener,
+                    research.opener_source_url AS research_opener_source_url,
+                    research.limitations_json AS research_limitations,
+                    research.researched_at AS research_researched_at
                 FROM lead_workstreams ws
                 LEFT JOIN businesses client_business ON client_business.id = ws.client_business_id
                 LEFT JOIN LATERAL (
@@ -191,6 +204,13 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                     WHERE d.workstream_id = ws.id
                        OR (d.workstream_id IS NULL AND d.lead_id = ws.lead_id)
                 ) draft_stats ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT r.*
+                    FROM lead_workstream_research r
+                    WHERE r.workstream_id = ws.id
+                    ORDER BY r.researched_at DESC, r.created_at DESC
+                    LIMIT 1
+                ) research ON TRUE
                 WHERE ws.lead_id = ANY(%s)
                 ORDER BY ws.created_at ASC
                 """,
@@ -211,7 +231,59 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
                         payload.pop(key, None)
                     payload["room"] = None
                 payload["legacy"] = False
+                if payload.get("research_id"):
+                    researched_at = payload.pop("research_researched_at")
+                    stale = False
+                    if researched_at and hasattr(researched_at, "tzinfo"):
+                        aware_researched_at = researched_at
+                        if aware_researched_at.tzinfo is None:
+                            aware_researched_at = aware_researched_at.replace(tzinfo=timezone.utc)
+                        stale = aware_researched_at < datetime.now(timezone.utc) - timedelta(days=90)
+                    payload["research"] = {
+                        "id": payload.pop("research_id"),
+                        "score": payload.pop("research_score"),
+                        "qualification_stage": payload.pop("research_stage"),
+                        "signal_label": payload.pop("research_signal_label"),
+                        "score_breakdown": payload.pop("research_score_breakdown") or {},
+                        "why_now": payload.pop("research_why_now"),
+                        "signals": payload.pop("research_signals") or [],
+                        "sources": payload.pop("research_sources") or [],
+                        "contact_evidence": payload.pop("research_contact_evidence") or [],
+                        "suggested_opener": payload.pop("research_suggested_opener"),
+                        "opener_source_url": payload.pop("research_opener_source_url"),
+                        "limitations": payload.pop("research_limitations") or [],
+                        "researched_at": researched_at,
+                        "stale": stale,
+                    }
+                else:
+                    for key in (
+                        "research_id", "research_score", "research_stage", "research_signal_label",
+                        "research_score_breakdown", "research_why_now", "research_signals",
+                        "research_sources", "research_contact_evidence", "research_suggested_opener",
+                        "research_opener_source_url", "research_limitations",
+                        "research_researched_at",
+                    ):
+                        payload.pop(key, None)
+                    payload["research"] = None
                 grouped[str(payload.get("lead_id") or "")].append(payload)
+        except Exception:
+            conn.rollback()
+
+        try:
+            cur.execute(
+                """
+                SELECT lead_id, match_json
+                FROM partnershipleadartifacts
+                WHERE lead_id = ANY(%s)
+                """,
+                (lead_ids,),
+            )
+            for row in cur.fetchall() or []:
+                match_json = row.get("match_json") if isinstance(row.get("match_json"), dict) else {}
+                score = match_json.get("match_score")
+                for workstream in grouped.get(str(row.get("lead_id") or ""), []):
+                    if workstream.get("workstream_type") == CLIENT_PARTNERSHIP:
+                        workstream["service_compatibility_score"] = score
         except Exception:
             conn.rollback()
 

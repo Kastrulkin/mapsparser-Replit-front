@@ -1653,6 +1653,10 @@ def _build_sales_room_proposal(
     body_text = _extract_sales_room_offer_text(offer_draft_json)
     if not body_text:
         body_text = _fallback_sales_room_offer_text(mode=mode, business_name=business_name, lead_name=lead_name)
+    research = lead.get("research") if isinstance(lead.get("research"), dict) else {}
+    opener = str(research.get("suggested_opener") or "").strip()
+    if opener and opener not in body_text:
+        body_text = f"{opener}\n\n{body_text}"
     if mode == SALES_ROOM_MODE_PARTNER:
         return {
             "title": "Предложение",
