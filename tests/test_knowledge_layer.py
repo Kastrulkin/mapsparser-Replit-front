@@ -236,6 +236,8 @@ def test_domain_imports_exclude_orphaned_business_rows():
 
     assert "JOIN businesses b ON b.id = u.business_id" in ingestion
     assert "JOIN businesses b ON b.id = c.business_id" in ingestion
+    assert "adminprospectingleadpublicoffers" in ingestion
+    assert "not_prevalence_evidence" in ingestion
 
 
 class _FakeCursor:

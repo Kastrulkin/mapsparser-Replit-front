@@ -579,6 +579,17 @@ def import_card_audits(conn, *, limit: int | None = None) -> dict[str, Any]:
         allowed_uses=["industry_recommendations"],
         status="active",
     )
+    public_audit_source = upsert_source(
+        conn,
+        source_type="domain_table",
+        external_key="adminprospectingleadpublicoffers",
+        title="Публичные аудиты карточек",
+        source_role="service",
+        visibility="public",
+        sensitivity_class="public",
+        allowed_uses=["market", "industry_recommendations"],
+        status="active",
+    )
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     params: list[Any] = []
     limit_sql = ""
@@ -592,17 +603,15 @@ def import_card_audits(conn, *, limit: int | None = None) -> dict[str, Any]:
                c.version, c.is_latest, c.created_at, c.updated_at
         FROM cards c
         JOIN businesses b ON b.id = c.business_id
-        WHERE c.recommendations IS NOT NULL
-          AND c.recommendations::text NOT IN ('null', '{{}}', '[]', '""')
         ORDER BY c.updated_at DESC NULLS LAST, c.created_at DESC
         {limit_sql}
         """,
         params,
     )
     rows = [dict(row) for row in cursor.fetchall()]
-    cursor.close()
     imported_facts = 0
     imported_recommendations = 0
+    card_recommendations = 0
     for row in rows:
         facts = {
             "title": row.get("title"),
@@ -627,6 +636,10 @@ def import_card_audits(conn, *, limit: int | None = None) -> dict[str, Any]:
             metadata={"card_id": row.get("id"), "version": row.get("version"), "fact_source": True},
         )
         recommendations = row.get("recommendations")
+        if recommendations in (None, "", {}, []):
+            imported_facts += 1 if fact_inserted else 0
+            continue
+        card_recommendations += 1
         recommendation_text = json.dumps(recommendations, ensure_ascii=False, sort_keys=True, default=str)
         recommendation_document, recommendation_inserted = upsert_document(
             conn,
@@ -685,9 +698,112 @@ def import_card_audits(conn, *, limit: int | None = None) -> dict[str, Any]:
         )
         imported_facts += 1 if fact_inserted else 0
         imported_recommendations += 1 if recommendation_inserted else 0
+
+    cursor.execute("SELECT to_regclass('public.adminprospectingleadpublicoffers')")
+    public_audit_rows: list[dict[str, Any]] = []
+    if cursor.fetchone()[0]:
+        cursor.execute(
+            f"""
+            SELECT lead_id, slug, page_json, published_json, is_active, created_at, updated_at
+            FROM adminprospectingleadpublicoffers
+            WHERE page_json IS NOT NULL
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC
+            {limit_sql}
+            """,
+            params,
+        )
+        public_audit_rows = [dict(row) for row in cursor.fetchall()]
+    cursor.close()
+
+    for row in public_audit_rows:
+        page = dict(row.get("published_json") or row.get("page_json") or {})
+        audit = dict(page.get("audit") or {})
+        facts = {
+            "name": page.get("name"),
+            "category": page.get("category"),
+            "city": page.get("city"),
+            "address": page.get("address"),
+            "rating": page.get("rating"),
+            "reviews_count": page.get("reviews_count"),
+            "has_website": page.get("has_website"),
+            "has_recent_activity": page.get("has_recent_activity"),
+            "photos_state": page.get("photos_state"),
+            "services_count": page.get("services_count"),
+        }
+        _, fact_inserted = upsert_document(
+            conn,
+            source_id=str(public_audit_source["id"]),
+            external_id=f"public-audit:{row.get('slug')}:facts",
+            document_type="lead_audit_public_facts",
+            title=str(page.get("name") or "Публичный аудит карточки"),
+            content_text=json.dumps(facts, ensure_ascii=False, sort_keys=True, default=str),
+            permalink=f"/{row.get('slug')}",
+            published_at=row.get("updated_at") or row.get("created_at"),
+            sensitivity_class="public",
+            allowed_uses=["market", "industry_recommendations"],
+            metadata={"lead_id": row.get("lead_id"), "slug": row.get("slug"), "fact_source": True},
+        )
+        recommendation_text = json.dumps(audit, ensure_ascii=False, sort_keys=True, default=str)
+        recommendation_document, recommendation_inserted = upsert_document(
+            conn,
+            source_id=str(public_audit_source["id"]),
+            external_id=f"public-audit:{row.get('slug')}:recommendations",
+            document_type="localos_public_audit",
+            title=f"Аудит LocalOS для {page.get('name') or 'карточки'}",
+            content_text=recommendation_text,
+            permalink=f"/{row.get('slug')}",
+            published_at=row.get("updated_at") or row.get("created_at"),
+            sensitivity_class="public",
+            allowed_uses=["industry_recommendations"],
+            metadata={
+                "lead_id": row.get("lead_id"),
+                "slug": row.get("slug"),
+                "assertion_type": "LOCALOS_RECOMMENDS",
+                "not_prevalence_evidence": True,
+            },
+        )
+        recommendation_concept = upsert_concept(
+            conn,
+            concept_type="intervention",
+            label="Оптимизировать карточку по публичному аудиту LocalOS",
+            industry="beauty",
+            sensitivity_class="public",
+            allowed_uses=["industry_recommendations"],
+        )
+        assertion = upsert_assertion(
+            conn,
+            assertion_type="LOCALOS_RECOMMENDS",
+            subject_type="lead",
+            subject_id=str(row.get("lead_id") or row.get("slug") or ""),
+            predicate="LOCALOS_RECOMMENDS",
+            object_type="concept",
+            object_id=str(recommendation_concept["id"]),
+            confidence=0.7,
+            industry="beauty",
+            allowed_uses=["industry_recommendations"],
+            sensitivity_class="public",
+            analysis_version=AUDIT_ANALYSIS_VERSION,
+            metadata={"not_prevalence_evidence": True, "public_audit_slug": row.get("slug")},
+        )
+        add_evidence(
+            conn,
+            assertion_id=str(assertion["id"]),
+            document_id=str(recommendation_document["id"]),
+            source_id=str(public_audit_source["id"]),
+            excerpt=_excerpt(recommendation_text),
+            observed_at=row.get("updated_at") or row.get("created_at"),
+            confidence=0.7,
+            analysis_version=AUDIT_ANALYSIS_VERSION,
+            allowed_uses=["industry_recommendations"],
+            sensitivity_class="public",
+        )
+        imported_facts += 1 if fact_inserted else 0
+        imported_recommendations += 1 if recommendation_inserted else 0
     return {
         "status": "completed",
-        "audits": len(rows),
+        "audits": len(public_audit_rows),
+        "card_snapshots": len(rows),
+        "card_recommendations": card_recommendations,
         "fact_documents": imported_facts,
         "recommendation_documents": imported_recommendations,
         "circularity_guard": "recommendations_not_used_for_prevalence",
