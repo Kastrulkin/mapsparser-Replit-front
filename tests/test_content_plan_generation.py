@@ -713,6 +713,15 @@ def test_content_plan_draft_filter_rejects_service_gap_meta_copy():
     assert _content_plan_draft_needs_fallback(text, {"categories": "груминг, зоосалон"}) is True
 
 
+def test_generated_brand_name_repairs_one_character_mixed_alphabet_typo():
+    text = "Трансфер уже ждёт? Рiderra поможет согласовать ожидание."
+
+    repaired = content_plan_service._repair_generated_brand_name(text, "Riderra (Tallinn)")
+
+    assert repaired == "Трансфер уже ждёт? Riderra поможет согласовать ожидание."
+    assert content_plan_service._repair_generated_brand_name("Встреча в аэропорту", "Riderra (Tallinn)") == "Встреча в аэропорту"
+
+
 def test_generate_draft_does_not_save_fallback_as_ready_text(monkeypatch):
     fake_db = _FakeDraftDatabase()
 

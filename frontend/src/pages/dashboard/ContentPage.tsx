@@ -952,6 +952,7 @@ export function ContentPage() {
     if (!selectedItem) return;
     setBusyAction('save');
     setError('');
+    setActionMessage('');
     try {
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
         method: 'PUT',
@@ -964,6 +965,7 @@ export function ContentPage() {
       const plan = response.plan || null;
       setCurrentPlan(plan);
       if (plan?.id) await loadSocialPosts(plan.id);
+      setActionMessage('Изменения сохранены.');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Не удалось сохранить публикацию');
     } finally {
@@ -1150,19 +1152,78 @@ export function ContentPage() {
     if (!selectedItem || !currentPlan?.id) return;
     setBusyAction('approve');
     setError('');
+    setActionMessage('');
     try {
+      const currentDraftText = String(draftEdits[selectedItem.id] ?? selectedItem.draft_text ?? '');
+      const currentTheme = String(themeEdits[selectedItem.id] ?? selectedItem.theme ?? '');
+      const currentDate = String(dateEdits[selectedItem.id] ?? selectedItem.scheduled_for ?? '');
+      const draftChanged = currentDraftText !== String(selectedItem.draft_text ?? '');
+      const itemChanged = draftChanged
+        || currentTheme !== String(selectedItem.theme ?? '')
+        || normalizeIsoDate(currentDate) !== normalizeIsoDate(selectedItem.scheduled_for);
+
+      if (itemChanged) {
+        const saveResponse = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            theme: currentTheme,
+            scheduled_for: currentDate,
+            draft_text: currentDraftText,
+          }),
+        });
+        if (saveResponse.plan) setCurrentPlan(saveResponse.plan);
+      }
+
       let posts = postsByItem[selectedItem.id] || [];
       if (posts.length === 0) {
-        const preparedPosts = await prepareSelectedItem();
-        posts = preparedPosts.filter((post) => post.content_plan_item_id === selectedItem.id);
+        const selectedPlatforms = CHANNELS
+          .filter((channel) => publicationChannels[channel.key])
+          .map((channel) => channel.key);
+        if (selectedPlatforms.length === 0) {
+          setError('Выберите хотя бы один канал публикации.');
+          return;
+        }
+        const prepareResponse = await newAuth.makeRequest('/content-plans/social-posts/bulk-prepare', {
+          method: 'POST',
+          body: JSON.stringify({
+            item_ids: [selectedItem.id],
+            platforms: selectedPlatforms,
+            replace_platforms: true,
+          }),
+        });
+        posts = Array.isArray(prepareResponse.posts)
+          ? prepareResponse.posts.filter((post: SocialPost) => post.content_plan_item_id === selectedItem.id)
+          : [];
+      } else if (draftChanged) {
+        const editablePosts = posts.filter((post) => !['queued', 'publishing', 'published'].includes(String(post.status || '').toLowerCase()));
+        await Promise.all(editablePosts.map((post) => {
+          const editedPlatformText = platformTextEdits[post.id];
+          const platformTextChanged = typeof editedPlatformText === 'string'
+            && editedPlatformText !== String(post.platform_text ?? '');
+          return newAuth.makeRequest(`/social-posts/${encodeURIComponent(post.id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              platform_text: platformTextChanged ? editedPlatformText : currentDraftText,
+              base_text: currentDraftText,
+            }),
+          });
+        }));
       }
-      const postIds = posts.map((post) => post.id).filter(Boolean);
+      const postIds = posts
+        .filter((post) => !['queued', 'publishing', 'published'].includes(String(post.status || '').toLowerCase()))
+        .map((post) => post.id)
+        .filter(Boolean);
       if (postIds.length === 0) return;
-      await newAuth.makeRequest('/social-posts/bulk-approve', {
+      const approveResponse = await newAuth.makeRequest('/social-posts/bulk-approve', {
         method: 'POST',
         body: JSON.stringify({ post_ids: postIds }),
       });
+      const failedApprovals = Array.isArray(approveResponse.failed) ? approveResponse.failed : [];
+      if (failedApprovals.length > 0) {
+        throw new Error(String(failedApprovals[0]?.error || 'Не удалось утвердить публикации'));
+      }
       await loadSocialPosts(currentPlan.id);
+      setActionMessage(itemChanged ? 'Изменения сохранены, публикации утверждены.' : 'Публикации утверждены.');
     } catch (approveError) {
       setError(approveError instanceof Error ? approveError.message : 'Не удалось утвердить публикации');
     } finally {
@@ -1927,6 +1988,8 @@ export function ContentPage() {
     const hasPosts = selectedPosts.length > 0;
     const failedPost = selectedPosts.find((post) => String(post.status || '') === 'failed');
     const currentDraftText = String(draftEdits[item?.id || ''] ?? item?.draft_text ?? '').trim();
+    const hasUnsavedDraftChanges = Boolean(item)
+      && String(draftEdits[item.id] ?? item.draft_text ?? '') !== String(item.draft_text ?? '');
     const hasFallbackDraft = itemGenerationSource(item) === 'fallback';
     const hasDraftText = Boolean(currentDraftText) && itemGenerationSource(item) !== 'fallback';
     const selectedChannelCount = getSelectedCount(publicationChannels);
@@ -1939,9 +2002,13 @@ export function ContentPage() {
     const scheduleAlreadyHandled = scheduledPostCount > 0 && approvedPostCount === 0 && needsReviewChannelCount === 0;
     const canQueueSelectedItem = approvedPostCount > 0 && needsReviewChannelCount === 0;
     const queueNeedsAttention = hasPosts && !canQueueSelectedItem && !scheduleAlreadyHandled;
-    const canApproveSelectedItem = hasDraftText && (!hasPosts || needsReviewChannelCount > 0);
+    const hasEditableChannelPosts = selectedPosts.some((post) => !['queued', 'publishing', 'published'].includes(String(post.status || '').toLowerCase()));
+    const canApproveSelectedItem = hasDraftText
+      && (!hasPosts || needsReviewChannelCount > 0 || (hasUnsavedDraftChanges && hasEditableChannelPosts));
     const approveButtonLabel = busyAction === 'approve'
       ? 'Утверждаем...'
+      : hasUnsavedDraftChanges && canApproveSelectedItem
+        ? 'Сохранить и утвердить'
       : canApproveSelectedItem
         ? 'Утвердить'
         : 'Текст утверждён';

@@ -3929,6 +3929,40 @@ def _sanitize_generated_news_text(raw_text: str) -> str:
     return text
 
 
+def _public_business_name(business_name: str) -> str:
+    name = str(business_name or "").strip()
+    return re.sub(r"\s*\([^()]*\)\s*$", "", name).strip() or name
+
+
+def _repair_generated_brand_name(text: str, business_name: str) -> str:
+    canonical_name = _public_business_name(business_name)
+    canonical_tokens = [
+        token
+        for token in re.findall(r"[^\W\d_]+", canonical_name, flags=re.UNICODE)
+        if len(token) >= 6
+    ]
+    if not canonical_tokens:
+        return str(text or "")
+
+    def replace_near_match(match: re.Match[str]) -> str:
+        candidate = match.group(0)
+        for canonical in canonical_tokens:
+            if candidate.casefold() == canonical.casefold() or len(candidate) != len(canonical):
+                continue
+            if candidate[0].isupper() != canonical[0].isupper():
+                continue
+            mismatches = sum(
+                1
+                for candidate_char, canonical_char in zip(candidate.casefold(), canonical.casefold())
+                if candidate_char != canonical_char
+            )
+            if mismatches == 1:
+                return canonical
+        return candidate
+
+    return re.sub(r"[^\W\d_]+", replace_near_match, str(text or ""), flags=re.UNICODE)
+
+
 def _content_plan_knowledge_context(cursor: Any, item: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     metadata_value = item.get("metadata_json")
     if isinstance(metadata_value, str):
@@ -4021,6 +4055,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             limit=12,
         )
         business_name = str(business_facts.get("name") or "Бизнес").strip() or "Бизнес"
+        public_business_name = _public_business_name(business_name)
         business_type = str(business_facts.get("business_type") or "").strip()
         industry_key = detect_industry_key(
             business_name=business_name,
@@ -4053,6 +4088,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             "- не выдумывай цены, скидки, акции, режим работы, бесплатные консультации, адрес, район, центр города;\n"
             "- не выдумывай пол, возраст или тип аудитории, если этого нет в фактах;\n"
             "- не трактуй название/бренд как услугу или категорию, если это не подтверждено типом бизнеса, категориями или темой;\n"
+            f"- если упоминаешь бизнес, пиши его название посимвольно точно: «{public_business_name}»; не меняй алфавит и написание;\n"
             "- не добавляй лекции, концерты, мастерские, события, команду, специалистов, атмосферу или оборудование, если этого нет в фактах;\n"
             "- не начинай публикацию с описания компании или карточки;\n"
             "- одна публикация должна раскрывать только одну мысль;\n"
@@ -4091,6 +4127,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
                 user_id=user_id,
             )
             generated_text = _sanitize_generated_news_text(str(result or ""))
+            generated_text = _repair_generated_brand_name(generated_text, business_name)
             if not generated_text:
                 generation_source = "fallback"
                 generation_error_reason = "empty_ai_response"
