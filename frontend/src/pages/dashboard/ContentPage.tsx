@@ -12,6 +12,7 @@ import {
   FileText,
   Lightbulb,
   Loader2,
+  MessageCircleQuestion,
   Plus,
   Sparkles,
   Star,
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { AudienceInsights } from '@/components/AudienceInsights';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -180,7 +182,7 @@ type MediaRecommendation = {
 };
 
 type CalendarView = 'month' | 'week' | 'list';
-type ContentSection = 'calendar' | 'media';
+type ContentSection = 'calendar' | 'media' | 'audience';
 type MediaFilter = 'all' | 'maps' | 'posts' | 'weak';
 type ModalStep = 'setup' | 'preview';
 
@@ -576,7 +578,7 @@ export function ContentPage() {
   const [section, setSection] = useState<ContentSection>(() => {
     if (typeof window === 'undefined') return 'calendar';
     const saved = window.localStorage.getItem(CONTENT_SECTION_STORAGE_KEY);
-    return saved === 'media' ? 'media' : 'calendar';
+    return saved === 'media' || saved === 'audience' ? saved : 'calendar';
   });
   const [selectedItemId, setSelectedItemId] = useState('');
   const [channelDetailsOpen, setChannelDetailsOpen] = useState(false);
@@ -2407,11 +2409,12 @@ export function ContentPage() {
         {[
           ['calendar', 'Календарь', CalendarDays],
           ['media', 'Медиатека', ImageIcon],
+          ['audience', 'Что волнует аудиторию', MessageCircleQuestion],
         ].map(([key, label, Icon]) => (
           <button
             key={String(key)}
             type="button"
-            onClick={() => setSection(key === 'media' ? 'media' : 'calendar')}
+            onClick={() => setSection(key === 'media' || key === 'audience' ? key : 'calendar')}
             className={cn(
               'inline-flex min-h-10 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors',
               section === key ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-950',
@@ -2439,6 +2442,8 @@ export function ContentPage() {
       ) : null}
 
       {section === 'media' ? renderMediaLibrary() : null}
+
+      {section === 'audience' ? <AudienceInsights businessId={currentBusinessId} /> : null}
 
       {section === 'calendar' && generating ? renderGenerating() : null}
 

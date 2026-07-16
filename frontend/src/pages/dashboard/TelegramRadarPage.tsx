@@ -2,6 +2,7 @@ import { Link, useOutletContext } from 'react-router-dom';
 import { Radar } from 'lucide-react';
 
 import { TelegramOpportunityRadar } from '@/components/TelegramOpportunityRadar';
+import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
 import { Button } from '@/components/ui/button';
 import { DashboardActionPanel, DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 
@@ -28,6 +29,7 @@ export const TelegramRadarPage = () => {
         tone="sky"
       />
 
+      <TelegramResearchSetup businessId={currentBusinessId || null} mode="sources" />
       <TelegramOpportunityRadar businessId={currentBusinessId || null} mode="work" />
     </div>
   );

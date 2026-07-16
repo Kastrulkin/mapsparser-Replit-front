@@ -61,6 +61,7 @@ from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent
 from services.social_post_service import collect_due_social_post_metrics, dispatch_due_social_posts
 from services.telegram_opportunity_monitor import run_telegram_opportunity_monitor
 from services.knowledge_public_telegram import run_public_telegram_monitor
+from services.telegram_research_service import purge_expired_private_telegram_content, run_userbot_market_sync
 from services.knowledge_graph_service import knowledge_layer_enabled, record_external_card_change
 from services.contact_intelligence_service import (
     claim_next_enrichment_job,
@@ -1843,23 +1844,38 @@ def _run_knowledge_telegram_monitor_if_due() -> None:
     if not _env_bool("KNOWLEDGE_TELEGRAM_MONITOR_ENABLED", False):
         return
     now = time.time()
-    check_interval = max(60, int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_CHECK_INTERVAL_SEC", "3600")))
+    check_interval = max(60, int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_CHECK_INTERVAL_SEC", "60")))
     if now - _LAST_KNOWLEDGE_TELEGRAM_MONITOR_AT < check_interval:
         return
     _LAST_KNOWLEDGE_TELEGRAM_MONITOR_AT = now
     db = None
     try:
         db = DatabaseManager()
-        result = run_public_telegram_monitor(
+        public_result = run_public_telegram_monitor(
             db.conn,
             limit_sources=max(1, int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_BATCH_SIZE", "10"))),
         )
+        userbot_result = run_userbot_market_sync(
+            db.conn,
+            limit_sources=max(1, int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_BATCH_SIZE", "10"))),
+            max_pages_per_source=max(1, int(os.getenv("KNOWLEDGE_TELEGRAM_BACKFILL_PAGES_PER_RUN", "5"))),
+        )
+        private_messages_purged = purge_expired_private_telegram_content(db.conn, retention_days=180)
         db.conn.commit()
-        if int(result.get("sources_checked") or 0) > 0 or result.get("errors"):
+        if (
+            int(public_result.get("sources_checked") or 0) > 0
+            or int(userbot_result.get("sources_checked") or 0) > 0
+            or public_result.get("errors")
+            or userbot_result.get("errors")
+        ):
             print(
                 "[KNOWLEDGE_TELEGRAM_MONITOR] "
-                f"status={result.get('status')} sources={int(result.get('sources_checked') or 0)} "
-                f"documents={int(result.get('documents_seen') or 0)} errors={len(result.get('errors') or [])}",
+                f"public_sources={int(public_result.get('sources_checked') or 0)} "
+                f"account_sources={int(userbot_result.get('sources_checked') or 0)} "
+                f"documents={int(public_result.get('documents_seen') or 0) + int(userbot_result.get('documents_seen') or 0)} "
+                f"signals={int(userbot_result.get('signals') or 0)} "
+                f"private_messages_purged={private_messages_purged} "
+                f"errors={len(public_result.get('errors') or []) + len(userbot_result.get('errors') or [])}",
                 flush=True,
             )
     except Exception:

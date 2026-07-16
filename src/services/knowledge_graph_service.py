@@ -51,6 +51,11 @@ def upsert_source(
     allowed_uses: list[str] | None = None,
     status: str = "candidate",
     metadata: dict[str, Any] | None = None,
+    business_id: str | None = None,
+    account_id: str | None = None,
+    sync_mode: str = "public_preview",
+    sync_status: str = "idle",
+    backfill_days: int = 90,
 ) -> dict[str, Any]:
     source_id = str(uuid.uuid4())
     safe_class = normalize_sensitivity_class(sensitivity_class)
@@ -61,12 +66,28 @@ def upsert_source(
             """
             INSERT INTO knowledge_sources (
                 id, source_type, external_key, title, canonical_url, source_role,
-                visibility, sensitivity_class, pii_flags, allowed_uses, status, metadata_json
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                visibility, sensitivity_class, pii_flags, allowed_uses, status, metadata_json,
+                business_id, account_id, sync_mode, sync_status, backfill_days, next_sync_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                      %s, %s, %s, %s, %s, NOW())
             ON CONFLICT (source_type, external_key) DO UPDATE SET
                 title = EXCLUDED.title,
                 canonical_url = COALESCE(EXCLUDED.canonical_url, knowledge_sources.canonical_url),
+                source_role = CASE WHEN EXCLUDED.business_id IS NOT NULL THEN EXCLUDED.source_role ELSE knowledge_sources.source_role END,
+                visibility = CASE WHEN EXCLUDED.business_id IS NOT NULL THEN EXCLUDED.visibility ELSE knowledge_sources.visibility END,
+                sensitivity_class = CASE WHEN EXCLUDED.business_id IS NOT NULL THEN EXCLUDED.sensitivity_class ELSE knowledge_sources.sensitivity_class END,
+                allowed_uses = CASE WHEN EXCLUDED.business_id IS NOT NULL THEN EXCLUDED.allowed_uses ELSE knowledge_sources.allowed_uses END,
+                status = CASE WHEN EXCLUDED.business_id IS NOT NULL THEN EXCLUDED.status ELSE knowledge_sources.status END,
                 metadata_json = knowledge_sources.metadata_json || EXCLUDED.metadata_json,
+                business_id = COALESCE(EXCLUDED.business_id, knowledge_sources.business_id),
+                account_id = COALESCE(EXCLUDED.account_id, knowledge_sources.account_id),
+                sync_mode = CASE WHEN EXCLUDED.business_id IS NOT NULL THEN EXCLUDED.sync_mode ELSE knowledge_sources.sync_mode END,
+                sync_status = CASE WHEN EXCLUDED.business_id IS NOT NULL THEN EXCLUDED.sync_status ELSE knowledge_sources.sync_status END,
+                backfill_days = CASE WHEN EXCLUDED.business_id IS NOT NULL THEN EXCLUDED.backfill_days ELSE knowledge_sources.backfill_days END,
+                next_sync_at = CASE
+                    WHEN EXCLUDED.business_id IS NOT NULL THEN LEAST(COALESCE(knowledge_sources.next_sync_at, NOW()), NOW())
+                    ELSE knowledge_sources.next_sync_at
+                END,
                 updated_at = NOW()
             RETURNING *
             """,
@@ -83,6 +104,11 @@ def upsert_source(
                 Json(safe_uses),
                 status,
                 Json(metadata or {}),
+                business_id,
+                account_id,
+                sync_mode,
+                sync_status,
+                max(1, min(int(backfill_days or 90), 365)),
             ),
         )
         return _row_dict(cursor.fetchone())

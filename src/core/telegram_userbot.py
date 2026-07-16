@@ -6,9 +6,11 @@ from typing import Any
 
 try:
     from telethon import TelegramClient
+    from telethon.errors import SessionPasswordNeededError
     from telethon.sessions import StringSession
 except Exception:
     TelegramClient = None
+    SessionPasswordNeededError = None
     StringSession = None
 try:
     from telethon.network.connection.tcpmtproxy import (
@@ -306,19 +308,38 @@ async def _send_code_async(auth_data: dict[str, Any]) -> dict[str, Any]:
         await client.disconnect()
 
 
-async def _confirm_code_async(auth_data: dict[str, Any], code: str) -> dict[str, Any]:
+async def _confirm_code_async(auth_data: dict[str, Any], code: str, password: str = "") -> dict[str, Any]:
     phone = _normalize_phone(str(auth_data.get("phone") or ""))
     phone_code_hash = str(auth_data.get("phone_code_hash") or "").strip()
     client = await _connect_client(auth_data)
     try:
         if not await client.is_user_authorized():
+            if password and str(auth_data.get("authorization_status") or "") == "password_required":
+                await client.sign_in(password=password)
+                return {
+                    "status": "authorized",
+                    "session_string": client.session.save(),
+                    "phone": phone,
+                }
             sign_in_kwargs: dict[str, Any] = {
                 "phone": phone,
                 "code": code,
             }
             if phone_code_hash:
                 sign_in_kwargs["phone_code_hash"] = phone_code_hash
-            await client.sign_in(**sign_in_kwargs)
+            try:
+                await client.sign_in(**sign_in_kwargs)
+            except Exception as error:
+                if SessionPasswordNeededError is None or not isinstance(error, SessionPasswordNeededError):
+                    raise
+                if not password:
+                    return {
+                        "status": "password_required",
+                        "pending_session_string": client.session.save(),
+                        "phone": phone,
+                        "authorization_status": "password_required",
+                    }
+                await client.sign_in(password=password)
         session_string = client.session.save()
         return {
             "status": "authorized",
@@ -475,32 +496,147 @@ async def _fetch_recent_messages_async(
             except Exception:
                 pass
             message_date = _normalize_datetime_utc(getattr(message, "date", None))
-            text = str(
-                getattr(message, "message", None)
-                or getattr(message, "text", None)
-                or ""
-            ).strip()
-            result_messages.append(
-                {
-                    "id": message_id,
-                    "text": text,
-                    "date": message_date.isoformat() if message_date else None,
-                    "sender_id": getattr(getattr(message, "from_id", None), "user_id", None)
-                    or getattr(getattr(message, "from_id", None), "channel_id", None),
-                    "out": bool(getattr(message, "out", False)),
-                }
-            )
+            result_messages.append(_message_payload(message, message_date))
         return {"status": "ok", "peer": raw_peer, "messages": result_messages, **route_info}
     finally:
         await client.disconnect()
+
+
+def _reaction_key(reaction: Any) -> str:
+    value = getattr(reaction, "emoticon", None)
+    if value:
+        return str(value)
+    document_id = getattr(reaction, "document_id", None)
+    if document_id:
+        return f"custom:{document_id}"
+    return "other"
+
+
+def _message_payload(message: Any, message_date: datetime | None = None) -> dict[str, Any]:
+    reactions: dict[str, int] = {}
+    reactions_total = 0
+    reaction_results = getattr(getattr(message, "reactions", None), "results", None) or []
+    for item in reaction_results:
+        count = int(getattr(item, "count", 0) or 0)
+        reactions[_reaction_key(getattr(item, "reaction", None))] = count
+        reactions_total += count
+    replies_count = int(getattr(getattr(message, "replies", None), "replies", 0) or 0)
+    media = getattr(message, "media", None)
+    media_type = None
+    if media is not None:
+        media_type = type(media).__name__.replace("MessageMedia", "").lower() or "media"
+    normalized_date = message_date or _normalize_datetime_utc(getattr(message, "date", None))
+    edited_at = _normalize_datetime_utc(getattr(message, "edit_date", None))
+    return {
+        "id": getattr(message, "id", None),
+        "text": str(getattr(message, "message", None) or getattr(message, "text", None) or "").strip(),
+        "date": normalized_date.isoformat() if normalized_date else None,
+        "sender_id": getattr(getattr(message, "from_id", None), "user_id", None)
+        or getattr(getattr(message, "from_id", None), "channel_id", None),
+        "out": bool(getattr(message, "out", False)),
+        "views": int(getattr(message, "views", 0) or 0),
+        "forwards": int(getattr(message, "forwards", 0) or 0),
+        "replies_count": replies_count,
+        "reactions_total": reactions_total,
+        "reactions": reactions,
+        "media_type": media_type,
+        "edited_at": edited_at.isoformat() if edited_at else None,
+    }
+
+
+async def _list_dialogs_async(auth_data: dict[str, Any], limit: int = 300) -> dict[str, Any]:
+    client = await _connect_client(auth_data)
+    try:
+        if not await client.is_user_authorized():
+            return {"status": "not_authorized", "dialogs": []}
+        dialogs = await asyncio.wait_for(
+            client.get_dialogs(limit=max(1, min(int(limit or 300), 500))),
+            timeout=max(REQUEST_TIMEOUT_SEC, 30),
+        )
+        result: list[dict[str, Any]] = []
+        for dialog in dialogs:
+            entity = getattr(dialog, "entity", None)
+            if entity is None or bool(getattr(dialog, "is_user", False)):
+                continue
+            username = str(getattr(entity, "username", None) or "").strip()
+            result.append(
+                {
+                    "telegram_chat_id": str(getattr(entity, "id", None) or getattr(dialog, "id", "")),
+                    "title": str(getattr(dialog, "title", None) or getattr(entity, "title", None) or "Telegram"),
+                    "telegram_username": username or None,
+                    "visibility": "public" if username else "private",
+                    "source_type": "channel" if bool(getattr(dialog, "is_channel", False)) else "chat",
+                    "unread_count": int(getattr(dialog, "unread_count", 0) or 0),
+                }
+            )
+        return {"status": "ok", "dialogs": result}
+    finally:
+        await client.disconnect()
+
+
+async def _fetch_message_page_async(
+    auth_data: dict[str, Any],
+    peer: str,
+    *,
+    before_message_id: Any = None,
+    before_date: Any = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    raw_peer = str(peer or "").strip()
+    normalized = _normalize_telegram_peer(raw_peer)
+    try:
+        offset_id = int(str(before_message_id or "").strip()) if str(before_message_id or "").strip() else 0
+    except Exception:
+        offset_id = 0
+    offset_date = _normalize_datetime_utc(before_date)
+    client = await _connect_client(auth_data)
+    try:
+        if not await client.is_user_authorized():
+            return {"status": "not_authorized", "peer": raw_peer, "messages": []}
+        messages = await asyncio.wait_for(
+            client.get_messages(
+                normalized,
+                limit=max(1, min(int(limit or 100), 100)),
+                offset_id=max(0, offset_id),
+                offset_date=offset_date,
+            ),
+            timeout=max(REQUEST_TIMEOUT_SEC, 30),
+        )
+        payloads = [_message_payload(message) for message in messages]
+        return {"status": "ok", "peer": raw_peer, "messages": payloads}
+    finally:
+        await client.disconnect()
+
+
+def list_dialogs(auth_data: dict[str, Any], limit: int = 300) -> dict[str, Any]:
+    return asyncio.run(_list_dialogs_async(auth_data, limit=limit))
+
+
+def fetch_message_page(
+    auth_data: dict[str, Any],
+    peer: str,
+    *,
+    before_message_id: Any = None,
+    before_date: Any = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    return asyncio.run(
+        _fetch_message_page_async(
+            auth_data,
+            peer,
+            before_message_id=before_message_id,
+            before_date=before_date,
+            limit=limit,
+        )
+    )
 
 
 def send_code(auth_data: dict[str, Any]) -> dict[str, Any]:
     return asyncio.run(_send_code_async(auth_data))
 
 
-def confirm_code(auth_data: dict[str, Any], code: str) -> dict[str, Any]:
-    return asyncio.run(_confirm_code_async(auth_data, code))
+def confirm_code(auth_data: dict[str, Any], code: str, password: str = "") -> dict[str, Any]:
+    return asyncio.run(_confirm_code_async(auth_data, code, password=password))
 
 
 def send_message(auth_data: dict[str, Any], recipient: str, message: str) -> dict[str, Any]:

@@ -78,7 +78,7 @@ def collect_public_channel(canonical_url: str, *, timeout: int = 20) -> list[dic
 def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, Any]:
     if not _monitor_enabled():
         return {"status": "disabled", "sources_checked": 0, "documents_seen": 0}
-    interval_seconds = max(3600, int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_INTERVAL_SEC", "604800")))
+    interval_seconds = max(86400, int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_INTERVAL_SEC", "86400")))
     run_id = str(uuid.uuid4())
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute(
@@ -86,6 +86,7 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
         SELECT * FROM knowledge_sources
         WHERE source_type = 'telegram'
           AND status = 'active'
+          AND sync_mode = 'public_preview'
           AND visibility = 'public'
           AND canonical_url LIKE 'https://t.me/%'
           AND (last_collected_at IS NULL OR last_collected_at < NOW() - (%s * INTERVAL '1 second'))
@@ -138,14 +139,32 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
                 UPDATE knowledge_sources
                 SET last_collected_at = NOW(),
                     cursor_json = cursor_json || %s,
+                    sync_status = 'ready',
+                    next_sync_at = NOW() + (%s * INTERVAL '1 second'),
+                    last_sync_error = NULL,
                     updated_at = NOW()
                 WHERE id = %s
                 """,
-                (Json({"last_message_id": max_external_id, "checked_at": datetime.now(timezone.utc).isoformat()}), source["id"]),
+                (
+                    Json({"last_message_id": max_external_id, "checked_at": datetime.now(timezone.utc).isoformat()}),
+                    interval_seconds,
+                    source["id"],
+                ),
             )
             cursor.close()
         except Exception as error:
             errors.append({"source_id": str(source.get("id") or ""), "message": str(error)[:300]})
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE knowledge_sources
+                SET sync_status = 'failed', last_sync_error = %s,
+                    next_sync_at = NOW() + (%s * INTERVAL '1 second'), updated_at = NOW()
+                WHERE id = %s
+                """,
+                (str(error)[:300], interval_seconds, source.get("id")),
+            )
+            cursor.close()
 
     status = "completed" if not errors else "partial"
     cursor = conn.cursor()

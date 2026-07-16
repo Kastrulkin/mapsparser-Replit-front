@@ -3929,6 +3929,52 @@ def _sanitize_generated_news_text(raw_text: str) -> str:
     return text
 
 
+def _content_plan_knowledge_context(cursor: Any, item: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    metadata_value = item.get("metadata_json")
+    if isinstance(metadata_value, str):
+        try:
+            metadata_value = json.loads(metadata_value)
+        except Exception:
+            metadata_value = {}
+    metadata = metadata_value if isinstance(metadata_value, dict) else {}
+    concept_id = str(metadata.get("knowledge_concept_id") or "").strip()
+    if not concept_id:
+        return "", {}
+    cursor.execute(
+        """
+        SELECT c.id, c.label, c.concept_type, c.industry,
+               COUNT(DISTINCT e.source_id)::INTEGER AS sources_count,
+               COUNT(DISTINCT e.document_id)::INTEGER AS messages_count
+        FROM knowledge_concepts c
+        LEFT JOIN knowledge_assertions a
+          ON a.object_type = 'concept' AND a.object_id = c.id::text AND a.invalidated_at IS NULL
+        LEFT JOIN knowledge_evidence e ON e.assertion_id = a.id AND e.invalidated_at IS NULL
+        WHERE c.id = %s AND (c.business_id IS NULL OR c.business_id = %s)
+        GROUP BY c.id
+        """,
+        (concept_id, item.get("business_id")),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return "", {}
+    concept = _row_to_dict(cursor, row)
+    label = str(concept.get("label") or "").strip()
+    sources_count = int(concept.get("sources_count") or 0)
+    messages_count = int(concept.get("messages_count") or 0)
+    context = (
+        "Обезличенный вывод из знаний рынка:\n"
+        f"- Наблюдение: {label}\n"
+        f"- Подтверждение: {messages_count} сообщений из {sources_count} источников.\n"
+        "Не цитируй исходные сообщения и не выдумывай детали, авторов или названия закрытых чатов."
+    )
+    return context, {
+        "knowledge_concept_id": concept_id,
+        "knowledge_industry": str(concept.get("industry") or ""),
+        "knowledge_sources_count": sources_count,
+        "knowledge_messages_count": messages_count,
+    }
+
+
 def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | None = None) -> dict[str, Any]:
     normalized_language = _normalize_content_plan_language(language)
     db = DatabaseManager()
@@ -3992,6 +4038,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             _load_publication_matrix_override(cursor, industry_key, publication_objective_key)
             or _publication_objective_prompt_block(industry_key, item)
         )
+        knowledge_context, knowledge_metadata = _content_plan_knowledge_context(cursor, item)
+        knowledge_prompt_block = f"{knowledge_context}\n\n" if knowledge_context else ""
         prompt = (
             "Ты — маркетолог локального бизнеса. Напиши короткую новость для публикации на картах. "
             "До 700 символов.\n\n"
@@ -4024,6 +4072,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             f"SEO-запрос: {str(item.get('seo_keyword') or '').strip()}\n"
             f"Частотность SEO-запроса: {int(item.get('seo_views') or 0)}\n"
             f"Дата генерации: {datetime.utcnow().date().isoformat()}\n\n"
+            f"{knowledge_prompt_block}"
             "Рабочие паттерны индустрии:\n"
             f"{industry_pattern_context}\n\n"
             "Верни только готовый текст новости."
@@ -4106,6 +4155,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             "last_generation_failed_at": datetime.utcnow().isoformat() if generation_source != "ai" else "",
             "fallback_preview": fallback_preview if generation_source != "ai" else "",
             "language": normalized_language,
+            **knowledge_metadata,
         }
         if generation_source == "ai":
             cursor.execute(

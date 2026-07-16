@@ -5,7 +5,7 @@ import TelegramConnection from '@/components/TelegramConnection';
 import WhatsAppConnection from '@/components/WhatsAppConnection';
 import { WABACredentials } from '@/components/WABACredentials';
 import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
-import { TelegramOpportunityRadar } from '@/components/TelegramOpportunityRadar';
+import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
 import { NetworkManagement } from '@/components/NetworkManagement';
 import { ExternalIntegrations } from '@/components/ExternalIntegrations';
 import FinanceCrmPanel from '@/components/FinanceCrmPanel';
@@ -162,7 +162,7 @@ const LegacySettingsPage = () => {
           </div>
         </div>
         <div className="mt-5 border-t border-slate-100 pt-5">
-          <TelegramOpportunityRadar businessId={currentBusinessId} />
+          <TelegramResearchSetup businessId={currentBusinessId || null} mode="connection" />
         </div>
       </DashboardSection>
 

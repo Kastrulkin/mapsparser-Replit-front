@@ -6,7 +6,7 @@ import FinanceCrmPanel from '@/components/FinanceCrmPanel';
 import { ExternalIntegrations } from '@/components/ExternalIntegrations';
 import TelegramConnection from '@/components/TelegramConnection';
 import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
-import { TelegramOpportunityRadar } from '@/components/TelegramOpportunityRadar';
+import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
 import WhatsAppConnection from '@/components/WhatsAppConnection';
 import { WABACredentials } from '@/components/WABACredentials';
 import { Button } from '@/components/ui/button';
@@ -233,7 +233,7 @@ export const SettingsHubPage = () => {
           <>
             <TelegramConnection currentBusinessId={currentBusinessId} />
             <TelegramBotCredentials businessId={currentBusinessId || null} business={currentBusiness} onSaved={handleSaved} />
-            <TelegramOpportunityRadar businessId={currentBusinessId || null} />
+            <TelegramResearchSetup businessId={currentBusinessId || null} mode="connection" />
           </>
         ) : activeDetail === 'whatsapp' ? (
           <>

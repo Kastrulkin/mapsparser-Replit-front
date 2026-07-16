@@ -54,6 +54,11 @@ interface KnowledgeSource {
   canonical_url?: string;
   allowed_uses?: string[];
   last_collected_at?: string;
+  sync_mode?: string;
+  sync_status?: string;
+  backfill_completed_at?: string;
+  next_sync_at?: string;
+  last_sync_error?: string;
 }
 
 interface KnowledgeRun {
@@ -92,6 +97,16 @@ const signalFilters = [
   { value: 'format', label: 'Контент' },
   { value: 'sales_angle', label: 'Продажи' },
   { value: 'service', label: 'Услуги' },
+];
+
+const industryFilters = [
+  { value: '', label: 'Все отрасли' },
+  { value: 'beauty', label: 'Красота' },
+  { value: 'travel', label: 'Туризм' },
+  { value: 'school', label: 'Школы' },
+  { value: 'education_children', label: 'Детское образование' },
+  { value: 'culture', label: 'Культура' },
+  { value: 'local_business', label: 'Другой локальный бизнес' },
 ];
 
 const useLabels: Record<string, string> = {
@@ -144,6 +159,7 @@ export const KnowledgeMarketOverview: React.FC = () => {
   const [runs, setRuns] = useState<KnowledgeRun[]>([]);
   const [privacy, setPrivacy] = useState<PrivacyCandidate[]>([]);
   const [signalFilter, setSignalFilter] = useState('');
+  const [industryFilter, setIndustryFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingId, setSavingId] = useState('');
@@ -155,7 +171,8 @@ export const KnowledgeMarketOverview: React.FC = () => {
 
   const loadActiveView = useCallback(async () => {
     if (activeView === 'signals') {
-      const query = new URLSearchParams({ industry: 'beauty', limit: '80' });
+      const query = new URLSearchParams({ limit: '80' });
+      if (industryFilter) query.set('industry', industryFilter);
       if (signalFilter) query.set('concept_type', signalFilter);
       const response = await authGet(`/admin/knowledge/signals?${query.toString()}`);
       setSignals(Array.isArray(response.items) ? response.items : []);
@@ -173,7 +190,7 @@ export const KnowledgeMarketOverview: React.FC = () => {
     }
     const response = await authGet('/admin/knowledge/privacy-candidates');
     setPrivacy(Array.isArray(response.items) ? response.items : []);
-  }, [activeView, signalFilter]);
+  }, [activeView, industryFilter, signalFilter]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -301,14 +318,24 @@ export const KnowledgeMarketOverview: React.FC = () => {
                 <h3 id="knowledge-signals-title" className="text-lg font-semibold text-slate-950">Что сейчас видно на рынке</h3>
                 <p className="mt-1 text-sm text-slate-600">Только выводы, у которых сохранены источник, дата и разрешённое применение.</p>
               </div>
-              <select
-                value={signalFilter}
-                onChange={(event) => setSignalFilter(event.target.value)}
-                className="h-11 rounded-md bg-white px-3 text-sm font-medium text-slate-800 shadow-[0_0_0_1px_rgba(148,163,184,0.35)] outline-none focus:shadow-[0_0_0_3px_rgba(14,165,233,0.16)]"
-                aria-label="Тип сигнала"
-              >
-                {signalFilters.map((filter) => <option key={filter.value} value={filter.value}>{filter.label}</option>)}
-              </select>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <select
+                  value={industryFilter}
+                  onChange={(event) => setIndustryFilter(event.target.value)}
+                  className="h-11 rounded-md bg-white px-3 text-sm font-medium text-slate-800 shadow-[0_0_0_1px_rgba(148,163,184,0.35)] outline-none focus:shadow-[0_0_0_3px_rgba(14,165,233,0.16)]"
+                  aria-label="Отрасль"
+                >
+                  {industryFilters.map((filter) => <option key={filter.value} value={filter.value}>{filter.label}</option>)}
+                </select>
+                <select
+                  value={signalFilter}
+                  onChange={(event) => setSignalFilter(event.target.value)}
+                  className="h-11 rounded-md bg-white px-3 text-sm font-medium text-slate-800 shadow-[0_0_0_1px_rgba(148,163,184,0.35)] outline-none focus:shadow-[0_0_0_3px_rgba(14,165,233,0.16)]"
+                  aria-label="Тип сигнала"
+                >
+                  {signalFilters.map((filter) => <option key={filter.value} value={filter.value}>{filter.label}</option>)}
+                </select>
+              </div>
             </div>
             <div className="divide-y divide-slate-200 rounded-lg bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06),0_0_0_1px_rgba(148,163,184,0.18)]">
               {!loading && signals.length === 0 ? (
@@ -364,6 +391,13 @@ export const KnowledgeMarketOverview: React.FC = () => {
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-slate-600">{roleLabels[source.source_role] || source.source_role} · {formatNumber(source.documents_count)} документов · {source.visibility === 'public' ? 'публичный' : 'только внутренний'}</p>
+                    {source.source_role === 'community' ? (
+                      <p className={`mt-1 text-xs ${source.sync_status === 'failed' ? 'text-rose-700' : 'text-slate-500'}`}>
+                        {source.last_sync_error || (source.sync_mode === 'telegram_userbot'
+                          ? source.backfill_completed_at ? 'История загружена · новые сообщения раз в день' : 'Загружаем последние 90 дней'
+                          : 'Публичные сообщения обновляются раз в день')}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="space-y-2 text-sm text-slate-600">
                     <label className="block text-xs font-semibold uppercase text-slate-500" htmlFor={`source-role-${source.id}`}>Роль источника</label>
