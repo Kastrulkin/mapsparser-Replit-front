@@ -230,6 +230,14 @@ def test_migration_contains_graph_projection_and_privacy_tables():
         assert required_name in migration
 
 
+def test_domain_imports_exclude_orphaned_business_rows():
+    ingestion_path = Path(__file__).resolve().parents[1] / "src" / "services" / "knowledge_ingestion.py"
+    ingestion = ingestion_path.read_text(encoding="utf-8")
+
+    assert "JOIN businesses b ON b.id = u.business_id" in ingestion
+    assert "JOIN businesses b ON b.id = c.business_id" in ingestion
+
+
 class _FakeCursor:
     def execute(self, *_args, **_kwargs):
         return None

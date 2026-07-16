@@ -453,13 +453,14 @@ def import_services(conn, *, limit: int | None = None) -> dict[str, Any]:
         params.append(max(1, limit))
     cursor.execute(
         f"""
-        SELECT DISTINCT ON (business_id, LOWER(REGEXP_REPLACE(TRIM(name), '\\s+', ' ', 'g')))
-               id, business_id, name, description, category, price,
-               COALESCE(source, 'manual') AS source, external_id, updated_at, created_at
-        FROM userservices
-        WHERE COALESCE(is_active, TRUE) AND NULLIF(TRIM(name), '') IS NOT NULL
-        ORDER BY business_id, LOWER(REGEXP_REPLACE(TRIM(name), '\\s+', ' ', 'g')),
-                 updated_at DESC NULLS LAST, created_at DESC
+        SELECT DISTINCT ON (u.business_id, LOWER(REGEXP_REPLACE(TRIM(u.name), '\\s+', ' ', 'g')))
+               u.id, u.business_id, u.name, u.description, u.category, u.price,
+               COALESCE(u.source, 'manual') AS source, u.external_id, u.updated_at, u.created_at
+        FROM userservices u
+        JOIN businesses b ON b.id = u.business_id
+        WHERE COALESCE(u.is_active, TRUE) AND NULLIF(TRIM(u.name), '') IS NOT NULL
+        ORDER BY u.business_id, LOWER(REGEXP_REPLACE(TRIM(u.name), '\\s+', ' ', 'g')),
+                 u.updated_at DESC NULLS LAST, u.created_at DESC
         {limit_sql}
         """,
         params,
@@ -586,13 +587,14 @@ def import_card_audits(conn, *, limit: int | None = None) -> dict[str, Any]:
         params.append(max(1, limit))
     cursor.execute(
         f"""
-        SELECT id, business_id, url, title, address, rating, reviews_count,
-               categories, seo_score, recommendations, ai_analysis,
-               version, is_latest, created_at, updated_at
-        FROM cards
-        WHERE recommendations IS NOT NULL
-          AND recommendations::text NOT IN ('null', '{{}}', '[]', '""')
-        ORDER BY updated_at DESC NULLS LAST, created_at DESC
+        SELECT c.id, c.business_id, c.url, c.title, c.address, c.rating, c.reviews_count,
+               c.categories, c.seo_score, c.recommendations, c.ai_analysis,
+               c.version, c.is_latest, c.created_at, c.updated_at
+        FROM cards c
+        JOIN businesses b ON b.id = c.business_id
+        WHERE c.recommendations IS NOT NULL
+          AND c.recommendations::text NOT IN ('null', '{{}}', '[]', '""')
+        ORDER BY c.updated_at DESC NULLS LAST, c.created_at DESC
         {limit_sql}
         """,
         params,
