@@ -1,6 +1,8 @@
 import json
 from datetime import date, datetime
 
+import pytest
+
 import src.services.content_plan_service as content_plan_service
 from src.core.content_plan_generator import build_content_plan_skeleton
 from src.core.content_plan_templates import detect_content_plan_template_key
@@ -38,6 +40,7 @@ class _FakeDraftCursor:
         self.description = []
         self.row = None
         self.executed = []
+        self.plan_status = "generated"
 
     def execute(self, query, params=None):
         self.executed.append((query, params))
@@ -62,6 +65,7 @@ class _FakeDraftCursor:
                 ("status",),
                 ("metadata_json",),
                 ("root_business_id",),
+                ("plan_status",),
             ]
             self.row = (
                 "item-1",
@@ -82,6 +86,7 @@ class _FakeDraftCursor:
                 "planned",
                 {},
                 "business-1",
+                self.plan_status,
             )
         elif compact_query.startswith("select name, city, business_type"):
             self.description = [
@@ -752,6 +757,17 @@ def test_generate_draft_does_not_save_fallback_as_ready_text(monkeypatch):
     assert metadata["generation_error_reason"] == "empty_ai_response"
     assert "Дата, время и запись" in metadata["fallback_preview"]
     assert fake_db.conn.committed is True
+
+
+def test_generate_draft_rejects_archived_plan(monkeypatch):
+    fake_db = _FakeDraftDatabase()
+    fake_db.conn.cursor_instance.plan_status = "archived"
+    monkeypatch.setattr(content_plan_service, "DatabaseManager", lambda: fake_db)
+
+    with pytest.raises(PermissionError, match="план в архиве"):
+        content_plan_service.generate_draft_for_plan_item("user-1", "item-1", "ru")
+
+    assert fake_db.conn.rolled_back is True
 
 
 def test_beauty_fallback_draft_stays_on_marketing_objective():

@@ -3986,7 +3986,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             SELECT i.id, i.plan_id, i.business_id, i.theme, i.goal, i.content_type, i.source_kind, i.source_ref,
                    i.seo_keyword, i.seo_views, i.service_id, i.transaction_id, i.location_scope,
                    i.usernews_id, i.draft_text, i.status, i.metadata_json,
-                   p.business_id AS root_business_id
+                   p.business_id AS root_business_id, p.plan_status
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
             WHERE i.id = %s
@@ -3998,6 +3998,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         if not row:
             raise ValueError("Элемент плана не найден")
         item = _row_to_dict(cursor, row)
+        if str(item.get("plan_status") or "").strip() == "archived":
+            raise PermissionError("Этот контент-план в архиве. Откройте актуальный план.")
         owner_id = get_business_owner_id(cursor, str(item.get("root_business_id") or ""))
         if str(owner_id or "").strip() != str(user_id or "").strip():
             cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))

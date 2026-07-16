@@ -465,6 +465,10 @@ const getStatusClassName = (label: string) => {
 
 const getSelectedCount = (values: Record<string, boolean>) => Object.values(values).filter(Boolean).length;
 
+const workingContentPlans = (values: PlanPayload[]) => values.filter(
+  (plan) => String(plan.plan_status || '').toLowerCase() !== 'archived',
+);
+
 const PLATFORM_LABELS: Record<string, string> = {
   facebook: 'Facebook',
   google_business: 'Google',
@@ -706,7 +710,7 @@ export function ContentPage() {
       const contextResponse = await newAuth.makeRequest(`/content-plans/context?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
       setContext(contextResponse.context || null);
       const plansResponse = await newAuth.makeRequest(`/content-plans?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
-      const nextPlans = Array.isArray(plansResponse.plans) ? plansResponse.plans : [];
+      const nextPlans = workingContentPlans(Array.isArray(plansResponse.plans) ? plansResponse.plans : []);
       setPlans(nextPlans);
       if (nextPlans.length > 0) {
         await loadCurrentPlan(nextPlans[0].id);
@@ -1267,7 +1271,7 @@ export function ContentPage() {
         await loadSocialPosts(plan.id);
       }
       const plansResponse = await newAuth.makeRequest(`/content-plans?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
-      setPlans(Array.isArray(plansResponse.plans) ? plansResponse.plans : []);
+      setPlans(workingContentPlans(Array.isArray(plansResponse.plans) ? plansResponse.plans : []));
       const elapsed = Date.now() - generationStartedAt;
       const remainingDelay = Math.max(750, PLAN_GENERATION_MIN_DURATION_MS - elapsed);
       window.setTimeout(() => {
@@ -1289,7 +1293,7 @@ export function ContentPage() {
     try {
       await newAuth.makeRequest(`/content-plans/${encodeURIComponent(currentPlan.id)}`, { method: 'DELETE' });
       const plansResponse = await newAuth.makeRequest(`/content-plans?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
-      const nextPlans = Array.isArray(plansResponse.plans) ? plansResponse.plans : [];
+      const nextPlans = workingContentPlans(Array.isArray(plansResponse.plans) ? plansResponse.plans : []);
       setPlans(nextPlans);
       setSelectedItemId('');
       setSocialPosts([]);
