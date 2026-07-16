@@ -112,6 +112,8 @@ def test_public_preview_and_userbot_collection_do_not_overlap():
     source = Path("src/services/knowledge_public_telegram.py").read_text(encoding="utf-8")
 
     assert "sync_mode = 'public_preview'" in source
+    assert "canonical_url LIKE %s" in source
+    assert '("https://t.me/%", interval_seconds' in source
 
 
 def test_migration_adds_generic_market_source_lifecycle():

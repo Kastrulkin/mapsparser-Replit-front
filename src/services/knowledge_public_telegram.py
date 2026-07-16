@@ -88,12 +88,12 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
           AND status = 'active'
           AND sync_mode = 'public_preview'
           AND visibility = 'public'
-          AND canonical_url LIKE 'https://t.me/%'
+          AND canonical_url LIKE %s
           AND (last_collected_at IS NULL OR last_collected_at < NOW() - (%s * INTERVAL '1 second'))
         ORDER BY last_collected_at ASC NULLS FIRST, updated_at ASC
         LIMIT %s
         """,
-        (interval_seconds, max(1, min(limit_sources, 50))),
+        ("https://t.me/%", interval_seconds, max(1, min(limit_sources, 50))),
     )
     sources = [dict(row) for row in cursor.fetchall()]
     cursor.execute(
