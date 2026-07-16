@@ -1369,7 +1369,51 @@ def _vk_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, Any]:
         )
     token = str(binding.get("token") or "").strip()
     owner_id = str(binding.get("owner_id") or "").strip()
-    read_probe = _vk_safe_wall_read_probe(token, owner_id, str(auth_data.get("api_version") or "5.199"))
+    api_version = str(auth_data.get("api_version") or "5.199")
+    group_id = owner_id.lstrip("-")
+    permissions_probe = _vk_safe_group_token_permissions_probe(token, api_version)
+    if permissions_probe.get("ok"):
+        permission_names = {
+            str(item.get("name") or "").strip()
+            for item in permissions_probe.get("permissions") or []
+            if isinstance(item, dict)
+        }
+        has_wall_permission = "wall" in permission_names
+        group_probe = _vk_safe_group_identity_probe(token, group_id, api_version)
+        checks = checks + [
+            _connection_check(
+                "vk_group_token_live",
+                has_wall_permission,
+                "Ключ сообщества",
+                "Community token",
+                "VK подтвердил право публикации на стене" if has_wall_permission else "VK не подтвердил право публикации на стене",
+                "VK confirmed wall publishing permission" if has_wall_permission else "VK did not confirm wall publishing permission",
+                "ok" if has_wall_permission else "missing_permissions",
+            ),
+            _connection_check(
+                "vk_group_identity_live",
+                bool(group_probe.get("ok")),
+                "Сообщество VK",
+                "VK community",
+                str(group_probe.get("detail_ru") or "сообщество найдено"),
+                str(group_probe.get("detail_en") or "community found"),
+                "ok" if group_probe.get("ok") else str(group_probe.get("status") or "failed"),
+            ),
+        ]
+        ready = has_wall_permission and bool(group_probe.get("ok"))
+        status = "ready" if ready else ("missing_permissions" if not has_wall_permission else "live_probe_failed")
+        return _api_channel_preflight_result(
+            "vk",
+            ready,
+            status,
+            checks,
+            "VK готов к API-публикации текста после подтверждения." if ready else "VK не подтвердил готовность к публикации.",
+            "VK is ready for API text publishing after approval." if ready else "VK did not confirm publishing readiness.",
+        )
+
+    # Legacy user tokens do not support groups.getTokenPermissions. Keep the
+    # previous read-only wall probe for those connections.
+    read_probe = _vk_safe_wall_read_probe(token, owner_id, api_version)
     checks = checks + [
         _connection_check(
             "vk_wall_read_probe",
@@ -1390,6 +1434,99 @@ def _vk_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, Any]:
         "VK готов к API-публикации после подтверждения." if ready else "VK binding найден, но live-проверка API не прошла.",
         "VK is ready for API publishing after approval." if ready else "VK binding exists, but live API preflight failed.",
     )
+
+def _vk_safe_group_token_permissions_probe(token: str, api_version: str) -> dict[str, Any]:
+    query = urllib.parse.urlencode(
+        {
+            "access_token": token,
+            "v": api_version or "5.199",
+        }
+    )
+    req = urllib.request.Request(f"https://api.vk.com/method/groups.getTokenPermissions?{query}", method="GET")
+    try:
+        resp = outbound_urlopen(req, timeout=10)
+        try:
+            body = resp.read().decode("utf-8", errors="ignore")
+            parsed = _json_dict(body)
+            status_code = int(getattr(resp, "status", 500))
+        finally:
+            resp.close()
+    except urllib.error.HTTPError:
+        error = sys.exc_info()[1]
+        body = ""
+        try:
+            body = error.read().decode("utf-8", errors="ignore")
+        except Exception:
+            body = str(error)
+        return _api_probe_error("vk", int(getattr(error, "code", 0) or 0), body or str(error))
+    except (urllib.error.URLError, TimeoutError):
+        return _api_probe_error("vk", 0, str(sys.exc_info()[1]), "network_error")
+    except Exception:
+        return _api_probe_error("vk", 0, str(sys.exc_info()[1]), "unexpected_error")
+    if not (200 <= status_code < 300):
+        return _api_probe_error("vk", status_code, body or f"VK HTTP {status_code}")
+    if isinstance(parsed.get("error"), dict):
+        error = parsed.get("error") or {}
+        return _api_probe_error("vk", int(error.get("error_code") or 0), str(error.get("error_msg") or "VK API error"))
+    response = parsed.get("response") if isinstance(parsed.get("response"), dict) else {}
+    return {
+        "ok": True,
+        "status": "ok",
+        "permissions": response.get("permissions") if isinstance(response.get("permissions"), list) else [],
+    }
+
+def _vk_safe_group_identity_probe(token: str, group_id: str, api_version: str) -> dict[str, Any]:
+    query = urllib.parse.urlencode(
+        {
+            "access_token": token,
+            "group_id": group_id,
+            "v": api_version or "5.199",
+        }
+    )
+    req = urllib.request.Request(f"https://api.vk.com/method/groups.getById?{query}", method="GET")
+    try:
+        resp = outbound_urlopen(req, timeout=10)
+        try:
+            body = resp.read().decode("utf-8", errors="ignore")
+            parsed = _json_dict(body)
+            status_code = int(getattr(resp, "status", 500))
+        finally:
+            resp.close()
+    except urllib.error.HTTPError:
+        error = sys.exc_info()[1]
+        body = ""
+        try:
+            body = error.read().decode("utf-8", errors="ignore")
+        except Exception:
+            body = str(error)
+        return _api_probe_error("vk", int(getattr(error, "code", 0) or 0), body or str(error))
+    except (urllib.error.URLError, TimeoutError):
+        return _api_probe_error("vk", 0, str(sys.exc_info()[1]), "network_error")
+    except Exception:
+        return _api_probe_error("vk", 0, str(sys.exc_info()[1]), "unexpected_error")
+    if not (200 <= status_code < 300):
+        return _api_probe_error("vk", status_code, body or f"VK HTTP {status_code}")
+    if isinstance(parsed.get("error"), dict):
+        error = parsed.get("error") or {}
+        return _api_probe_error("vk", int(error.get("error_code") or 0), str(error.get("error_msg") or "VK API error"))
+    response = parsed.get("response")
+    groups = response.get("groups") if isinstance(response, dict) else response
+    group = groups[0] if isinstance(groups, list) and groups and isinstance(groups[0], dict) else {}
+    actual_group_id = str(group.get("id") or "").strip()
+    if not actual_group_id or actual_group_id != str(group_id or "").strip():
+        return {
+            "ok": False,
+            "status": "missing_binding",
+            "detail_ru": "VK не подтвердил выбранное сообщество",
+            "detail_en": "VK did not confirm the selected community",
+        }
+    group_name = str(group.get("name") or "").strip()
+    return {
+        "ok": True,
+        "status": "ok",
+        "detail_ru": f"сообщество найдено: {group_name}" if group_name else "сообщество найдено",
+        "detail_en": f"community found: {group_name}" if group_name else "community found",
+    }
 
 def _vk_safe_wall_read_probe(token: str, owner_id: str, api_version: str) -> dict[str, Any]:
     query = urllib.parse.urlencode(

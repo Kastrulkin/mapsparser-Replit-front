@@ -2455,12 +2455,15 @@ def test_telegram_api_channel_preflight_blocks_channel_without_post_permission(m
     assert "не имеет права" in result["message_ru"]
 
 
-def test_vk_api_channel_preflight_uses_read_only_wall_get(monkeypatch):
+def test_vk_api_channel_preflight_uses_group_token_permissions_without_publish(monkeypatch):
     class FakeResponse:
         status = 200
 
+        def __init__(self, payload):
+            self.payload = payload
+
         def read(self):
-            return json.dumps({"response": {"count": 0, "items": []}}).encode("utf-8")
+            return json.dumps(self.payload).encode("utf-8")
 
         def close(self):
             pass
@@ -2476,21 +2479,24 @@ def test_vk_api_channel_preflight_uses_read_only_wall_get(monkeypatch):
         "_external_account_auth_data",
         lambda account: {"access_token": "vk-token", "owner_id": "-12345", "scope": "wall", "api_version": "5.199"},
     )
-    monkeypatch.setattr(
-        social_post_service.urllib.request,
-        "urlopen",
-        lambda req, timeout=10: (requested_urls.append(req.full_url) or FakeResponse()),
-    )
+    def fake_urlopen(req, timeout=10):
+        requested_urls.append(req.full_url)
+        if "groups.getTokenPermissions" in req.full_url:
+            return FakeResponse({"response": {"permissions": [{"name": "wall", "setting": 8192}]}})
+        return FakeResponse({"response": {"groups": [{"id": 12345, "name": "Riderra"}]}})
+
+    monkeypatch.setattr(social_post_service.urllib.request, "urlopen", fake_urlopen)
 
     result = social_post_service._vk_api_channel_preflight(object(), "biz-1")
 
     assert result["ready"] is True
     assert result["read_only"] is True
     assert result["external_publish_performed"] is False
-    assert requested_urls
-    assert "wall.get" in requested_urls[0]
-    assert "wall.post" not in requested_urls[0]
-    assert result["connection_checks"][-1]["key"] == "vk_wall_read_probe"
+    assert any("groups.getTokenPermissions" in url for url in requested_urls)
+    assert any("groups.getById" in url for url in requested_urls)
+    assert all("wall.post" not in url for url in requested_urls)
+    assert result["connection_checks"][-2]["key"] == "vk_group_token_live"
+    assert result["connection_checks"][-1]["key"] == "vk_group_identity_live"
 
 
 def test_api_channel_preflight_covers_all_api_channels_without_publish(monkeypatch):
