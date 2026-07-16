@@ -135,3 +135,9 @@ def test_migration_adds_generic_market_source_lifecycle():
         assert column in migration
     assert "DEFAULT 90" in migration
     assert "telegram_userbot" in migration
+
+
+def test_private_message_retention_qualifies_document_metadata_column():
+    source = Path("src/services/telegram_research_service.py").read_text(encoding="utf-8")
+
+    assert "metadata_json = d.metadata_json - 'reactions'" in source

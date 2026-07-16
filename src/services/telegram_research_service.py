@@ -644,7 +644,7 @@ def purge_expired_private_telegram_content(conn, *, retention_days: int = 180) -
             UPDATE knowledge_documents d
             SET content_text = '[Содержимое удалено по сроку хранения]',
                 permalink = NULL,
-                metadata_json = metadata_json - 'reactions',
+                metadata_json = d.metadata_json - 'reactions',
                 updated_at = NOW()
             FROM knowledge_sources s
             WHERE s.id = d.source_id
