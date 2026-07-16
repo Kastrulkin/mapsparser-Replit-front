@@ -917,7 +917,8 @@ def get_external_accounts(business_id):
             cursor.execute(
                 """
                 SELECT id, source, external_id, display_name, is_active,
-                       last_sync_at, last_error, created_at, updated_at
+                       last_sync_at, last_error, created_at, updated_at,
+                       auth_data_encrypted
                 FROM externalbusinessaccounts
                 WHERE business_id = %s
                 ORDER BY source, created_at DESC
@@ -943,6 +944,15 @@ def get_external_accounts(business_id):
             row_dict = _row_to_dict(cursor, r)
             if not row_dict:
                 continue
+            connection_mode = None
+            if str(row_dict.get("source") or "") in {"vk", "vk_group", "vk_business"}:
+                try:
+                    raw_auth_data = decrypt_auth_data(row_dict.get("auth_data_encrypted")) or ""
+                    parsed_auth_data = json.loads(raw_auth_data) if raw_auth_data else {}
+                    if isinstance(parsed_auth_data, dict):
+                        connection_mode = str(parsed_auth_data.get("auth_mode") or "legacy_token")
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    connection_mode = "legacy_token"
             accounts.append({
                 "id": row_dict.get("id"),
                 "source": row_dict.get("source"),
@@ -953,6 +963,7 @@ def get_external_accounts(business_id):
                 "last_error": row_dict.get("last_error"),
                 "created_at": row_dict.get("created_at"),
                 "updated_at": row_dict.get("updated_at"),
+                "connection_mode": connection_mode,
             })
         db.close()
         resp = {"success": True, "accounts": accounts}

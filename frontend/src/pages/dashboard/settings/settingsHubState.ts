@@ -65,6 +65,7 @@ export type SettingsHubExternalAccount = {
   external_id?: string | null;
   display_name?: string | null;
   is_active?: boolean | number | null;
+  connection_mode?: string | null;
 };
 
 export type SettingsHubSocialReadiness = {

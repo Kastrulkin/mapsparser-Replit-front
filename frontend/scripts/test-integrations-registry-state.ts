@@ -87,6 +87,7 @@ runCase('vk legacy account still requires oauth when live readiness is blocked',
         external_id: '182541984',
         display_name: 'Riderra',
         is_active: true,
+        connection_mode: 'legacy_token',
       },
     ],
     socialReadiness: [
@@ -101,6 +102,32 @@ runCase('vk legacy account still requires oauth when live readiness is blocked',
   strictEqual(vk.status, 'action_required');
   strictEqual(vk.nextAction, 'Обновите доступ через VK.');
   strictEqual(vk.primaryAction.label, 'Обновить доступ');
+});
+
+runCase('vk oauth account becomes connected after live readiness succeeds', () => {
+  const vk = service({
+    ...baseState,
+    externalAccounts: [
+      {
+        source: 'vk',
+        external_id: '182541984',
+        display_name: 'Riderra',
+        is_active: true,
+        connection_mode: 'vk_id_oauth',
+      },
+    ],
+    socialReadiness: [
+      {
+        platform: 'vk',
+        ready: true,
+        status: 'ready',
+        publish_mode: 'api',
+      },
+    ],
+  }, 'vk');
+  strictEqual(vk.status, 'connected');
+  strictEqual(vk.nextAction, 'Сообщество готово к согласованным публикациям.');
+  strictEqual(vk.primaryAction.label, 'Проверить');
 });
 
 runCase('manual map services stay manual by default', () => {

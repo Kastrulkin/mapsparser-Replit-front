@@ -104,6 +104,7 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
   const googleSheetsConnected = Boolean(googleAccount);
   const googleBusinessConnected = Boolean(googleAccount && hasText(googleAccount.external_id));
   const vkAccount = findAccount(accounts, ['vk', 'vk_group', 'vk_business']);
+  const vkOauthConnected = vkAccount?.connection_mode === 'vk_id_oauth';
   const metaAccount = findAccount(accounts, ['meta', 'instagram', 'facebook']);
   const matonAccount = findAccount(accounts, ['maton']);
 
@@ -170,13 +171,15 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
       tag: 'Публикации',
       description: 'Посты в сообщество после подтверждения.',
       connectionType: 'oauth',
-      status: socialConnectionStatus(vkReadiness, vkAccount ? 'action_required' : 'not_connected'),
-      nextAction: vkReadiness?.ready
+      status: vkOauthConnected
+        ? socialConnectionStatus(vkReadiness, 'action_required')
+        : vkAccount ? 'action_required' : 'not_connected',
+      nextAction: vkOauthConnected && vkReadiness?.ready
         ? 'Сообщество готово к согласованным публикациям.'
         : vkAccount
           ? 'Обновите доступ через VK.'
           : 'Укажите ID сообщества и подтвердите доступ через VK.',
-      primaryAction: { label: vkReadiness?.ready ? 'Проверить' : vkAccount ? 'Обновить доступ' : 'Подключить', type: 'drawer', target: 'vk' },
+      primaryAction: { label: vkOauthConnected && vkReadiness?.ready ? 'Проверить' : vkAccount ? 'Обновить доступ' : 'Подключить', type: 'drawer', target: 'vk' },
       hasLogs: true,
       hasHelp: true,
     },

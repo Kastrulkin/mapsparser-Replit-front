@@ -163,4 +163,5 @@ def test_external_accounts_get_uses_current_app_debug_without_name_error(monkeyp
     payload = response.get_json()
     assert payload["success"] is True
     assert payload["accounts"][0]["source"] == "vk"
+    assert payload["accounts"][0]["connection_mode"] == "legacy_token"
     assert payload["_debug"]["tableName"] == "externalbusinessaccounts"
