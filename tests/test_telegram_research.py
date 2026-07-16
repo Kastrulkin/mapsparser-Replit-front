@@ -99,6 +99,53 @@ def test_market_sync_backfills_90_days_then_schedules_daily_refresh(monkeypatch)
     assert finished[-1][1]["minutes"] == 24 * 60
 
 
+def test_market_sync_rolls_back_only_failed_source(monkeypatch):
+    from services import telegram_research_service as service
+
+    source = {
+        "id": "source-failed",
+        "business_id": "business-1",
+        "account_id": "account-1",
+        "metadata_json": {"telegram_chat_id": "-1001", "industry_key": "travel"},
+        "cursor_json": {},
+        "backfill_days": 90,
+        "backfill_completed_at": None,
+    }
+    statements = []
+
+    class Cursor:
+        def execute(self, query, _params=None):
+            statements.append(" ".join(str(query).split()))
+
+        def close(self):
+            return None
+
+    class Connection:
+        def cursor(self, *args, **kwargs):
+            return Cursor()
+
+    finished = []
+    monkeypatch.setattr(service, "_load_due_userbot_sources", lambda _conn, _limit: [source])
+    monkeypatch.setattr(service, "load_userbot_account", lambda _cursor, **_kwargs: {"session_string": "ready"})
+    monkeypatch.setattr(service, "_ingest_message", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("broken source")))
+    monkeypatch.setattr(service, "_finish_source", lambda *args, **kwargs: finished.append((args, kwargs)))
+
+    result = service.run_userbot_market_sync(
+        Connection(),
+        fetch_page_func=lambda *_args, **_kwargs: {
+            "status": "ok",
+            "messages": [{"id": 20, "text": "Fresh question", "date": datetime.now(timezone.utc).isoformat()}],
+        },
+        fetch_recent_func=lambda *_args, **_kwargs: {"status": "ok", "messages": []},
+    )
+
+    assert result["errors"][0]["message"] == "RuntimeError: broken source"
+    assert "SAVEPOINT telegram_source_sync" in statements
+    assert "ROLLBACK TO SAVEPOINT telegram_source_sync" in statements
+    assert "RELEASE SAVEPOINT telegram_source_sync" in statements
+    assert finished[-1][1]["minutes"] == service.RETRY_INTERVAL_MINUTES
+
+
 def test_market_sync_queries_all_due_sources_without_business_filter():
     source = Path("src/services/telegram_research_service.py").read_text(encoding="utf-8")
 
@@ -135,6 +182,13 @@ def test_migration_adds_generic_market_source_lifecycle():
         assert column in migration
     assert "DEFAULT 90" in migration
     assert "telegram_userbot" in migration
+
+
+def test_migration_allows_question_market_concepts():
+    migration = Path("alembic_migrations/versions/20260716_allow_question_knowledge_concepts.py").read_text(encoding="utf-8")
+
+    assert "'question'" in migration
+    assert "DROP CONSTRAINT IF EXISTS ck_knowledge_concepts_type" in migration
 
 
 def test_shared_audience_decision_does_not_leak_between_businesses(run_migrations, postgres_container):

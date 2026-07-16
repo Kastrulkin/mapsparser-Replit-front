@@ -456,6 +456,20 @@ def _load_due_userbot_sources(conn, limit_sources: int) -> list[dict[str, Any]]:
 
 FetchPage = Callable[..., dict[str, Any]]
 FetchRecent = Callable[..., dict[str, Any]]
+SOURCE_SYNC_SAVEPOINT = "telegram_source_sync"
+
+
+def _source_savepoint(conn, action: str) -> None:
+    statements = {
+        "begin": f"SAVEPOINT {SOURCE_SYNC_SAVEPOINT}",
+        "rollback": f"ROLLBACK TO SAVEPOINT {SOURCE_SYNC_SAVEPOINT}",
+        "release": f"RELEASE SAVEPOINT {SOURCE_SYNC_SAVEPOINT}",
+    }
+    cursor = conn.cursor()
+    try:
+        cursor.execute(statements[action])
+    finally:
+        cursor.close()
 
 
 def run_userbot_market_sync(
@@ -492,6 +506,7 @@ def run_userbot_market_sync(
     finally:
         run_cursor.close()
     for source in sources:
+        _source_savepoint(conn, "begin")
         cursor = conn.cursor()
         try:
             cursor.execute(
@@ -510,6 +525,7 @@ def run_userbot_market_sync(
                 account_cursor.close()
             if not account:
                 _finish_source(conn, source["id"], "needs_account", "Telegram-аккаунт не подключён", minutes=RETRY_INTERVAL_MINUTES)
+                _source_savepoint(conn, "release")
                 continue
             peer = _source_peer(source)
             if not peer:
@@ -570,10 +586,13 @@ def run_userbot_market_sync(
                 backfill_completed=source_completed,
             )
             result["sources_checked"] += 1
+            _source_savepoint(conn, "release")
         except Exception as error:
             message = f"{type(error).__name__}: {str(error)[:240]}"
             result["errors"].append({"source_id": str(source.get("id") or ""), "message": message})
+            _source_savepoint(conn, "rollback")
             _finish_source(conn, source["id"], "failed", message, minutes=RETRY_INTERVAL_MINUTES)
+            _source_savepoint(conn, "release")
     run_cursor = conn.cursor()
     try:
         run_cursor.execute(
