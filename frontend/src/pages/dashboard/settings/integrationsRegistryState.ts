@@ -169,10 +169,14 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
       name: 'VK',
       tag: 'Публикации',
       description: 'Посты в сообщество после подтверждения.',
-      connectionType: 'api_key',
-      status: vkAccount ? 'connected' : socialConnectionStatus(vkReadiness, 'not_connected'),
-      nextAction: vkAccount ? 'Токен сообщества сохранён.' : 'Добавьте токен и ID сообщества.',
-      primaryAction: { label: vkAccount ? 'Проверить' : 'Подключить', type: 'drawer', target: 'vk' },
+      connectionType: 'oauth',
+      status: socialConnectionStatus(vkReadiness, vkAccount ? 'action_required' : 'not_connected'),
+      nextAction: vkReadiness?.ready
+        ? 'Сообщество готово к согласованным публикациям.'
+        : vkAccount
+          ? 'Обновите доступ через VK.'
+          : 'Укажите ID сообщества и подтвердите доступ через VK.',
+      primaryAction: { label: vkReadiness?.ready ? 'Проверить' : vkAccount ? 'Обновить доступ' : 'Подключить', type: 'drawer', target: 'vk' },
       hasLogs: true,
       hasHelp: true,
     },

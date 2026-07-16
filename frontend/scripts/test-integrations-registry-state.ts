@@ -74,7 +74,33 @@ runCase('google sheets connected is separate from business location', () => {
 runCase('vk missing is not connected and short', () => {
   const vk = service(baseState, 'vk');
   strictEqual(vk.status, 'not_connected');
-  strictEqual(vk.nextAction, 'Добавьте токен и ID сообщества.');
+  strictEqual(vk.connectionType, 'oauth');
+  strictEqual(vk.nextAction, 'Укажите ID сообщества и подтвердите доступ через VK.');
+});
+
+runCase('vk legacy account still requires oauth when live readiness is blocked', () => {
+  const vk = service({
+    ...baseState,
+    externalAccounts: [
+      {
+        source: 'vk',
+        external_id: '182541984',
+        display_name: 'Riderra',
+        is_active: true,
+      },
+    ],
+    socialReadiness: [
+      {
+        platform: 'vk',
+        ready: false,
+        status: 'missing_permissions',
+        publish_mode: 'api',
+      },
+    ],
+  }, 'vk');
+  strictEqual(vk.status, 'action_required');
+  strictEqual(vk.nextAction, 'Обновите доступ через VK.');
+  strictEqual(vk.primaryAction.label, 'Обновить доступ');
 });
 
 runCase('manual map services stay manual by default', () => {
