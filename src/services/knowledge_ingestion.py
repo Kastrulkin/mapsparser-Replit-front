@@ -20,7 +20,7 @@ from services.knowledge_graph_service import (
 
 
 TELEGRAM_ANALYSIS_VERSION = "telegram-facets-v1"
-SERVICE_ANALYSIS_VERSION = "services-v1"
+SERVICE_ANALYSIS_VERSION = "services-v2"
 AUDIT_ANALYSIS_VERSION = "audits-v1"
 
 MESSAGE_RE = re.compile(
@@ -110,6 +110,38 @@ def _source_role(folder_name: str) -> str:
         if hint in lowered:
             return role
     return "unknown"
+
+
+def normalize_service_industry(
+    industry: Any,
+    business_type: Any = None,
+    categories: Any = None,
+) -> str:
+    raw = " ".join(
+        part for part in (
+            str(industry or ""),
+            str(business_type or ""),
+            json.dumps(categories or [], ensure_ascii=False, default=str),
+        )
+        if part
+    ).lower()
+    rules = (
+        ("beauty", ("beauty", "салон красоты", "косметолог", "ногт", "парикмах", "барбер", "эпиляц", "spa", "спа")),
+        ("food", ("food", "ресторан", "кафе", "шаверм", "пекар", "общественное питание", "быстрое питание")),
+        ("medical", ("стомат", "клиник", "медцентр", "медицин")),
+        ("fitness", ("fitness", "фитнес", "спортив", "бассейн")),
+        ("retail", ("retail", "магазин", "торгов")),
+        ("pet_services", ("ветеринар", "зоомагазин", "pet_services")),
+        ("children_education", ("детск", "школ", "образован", "танцев")),
+        ("fuel", ("fuel", "азс", "топлив")),
+        ("travel", ("travel", "турист", "путешеств")),
+        ("transport", ("такси", "трансфер", "transport")),
+        ("commercial_center", ("бизнес-центр", "деловой центр")),
+    )
+    for normalized, markers in rules:
+        if any(marker in raw for marker in markers):
+            return normalized
+    return canonical_key(industry or business_type or "other")
 
 
 def _public_channel_url(value: str | None) -> str | None:
@@ -455,7 +487,8 @@ def import_services(conn, *, limit: int | None = None) -> dict[str, Any]:
         f"""
         SELECT DISTINCT ON (u.business_id, LOWER(REGEXP_REPLACE(TRIM(u.name), '\\s+', ' ', 'g')))
                u.id, u.business_id, u.name, u.description, u.category, u.price,
-               COALESCE(u.source, 'manual') AS source, u.external_id, u.updated_at, u.created_at
+               COALESCE(u.source, 'manual') AS source, u.external_id, u.updated_at, u.created_at,
+               b.industry AS business_industry, b.business_type, b.categories AS business_categories
         FROM userservices u
         JOIN businesses b ON b.id = u.business_id
         WHERE COALESCE(u.is_active, TRUE) AND NULLIF(TRIM(u.name), '') IS NOT NULL
@@ -472,6 +505,11 @@ def import_services(conn, *, limit: int | None = None) -> dict[str, Any]:
     internal_count = 0
     for row in rows:
         payload = dict(row)
+        service_industry = normalize_service_industry(
+            payload.get("business_industry"),
+            payload.get("business_type"),
+            payload.get("business_categories"),
+        )
         service_source = str(payload.get("source") or "manual").lower()
         is_public = service_source in {"yandex", "google", "2gis", "maps", "yandex_maps"}
         allowed_uses = ["market", "industry_recommendations"] if is_public else ["industry_recommendations"]
@@ -503,6 +541,7 @@ def import_services(conn, *, limit: int | None = None) -> dict[str, Any]:
                 "normalized_name": canonical_key(payload.get("name")),
                 "category": payload.get("category"),
                 "price": payload.get("price"),
+                "industry": service_industry,
                 "one_vote_per_business": True,
             },
         )
@@ -510,7 +549,7 @@ def import_services(conn, *, limit: int | None = None) -> dict[str, Any]:
             conn,
             concept_type="service",
             label=str(payload.get("name") or "Услуга"),
-            industry="beauty",
+            industry=service_industry,
             business_id=None if is_public else str(payload.get("business_id") or "") or None,
             sensitivity_class=sensitivity,
             allowed_uses=allowed_uses,
@@ -526,7 +565,7 @@ def import_services(conn, *, limit: int | None = None) -> dict[str, Any]:
             object_id=str(concept["id"]),
             confidence=0.96,
             business_id=None if is_public else str(payload.get("business_id") or "") or None,
-            industry="beauty",
+            industry=service_industry,
             allowed_uses=allowed_uses,
             sensitivity_class=sensitivity,
             analysis_version=SERVICE_ANALYSIS_VERSION,

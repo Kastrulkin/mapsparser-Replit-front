@@ -17,6 +17,7 @@ from services.knowledge_ingestion import (
     BELESHKO_PRIMARY_TOPIC,
     analyze_facets,
     iter_telegram_archive,
+    normalize_service_industry,
     telegram_archive_dry_run,
 )
 from services.knowledge_graph_service import diff_external_card_snapshot
@@ -168,6 +169,19 @@ def test_card_snapshot_change_is_observation_and_ignores_sparse_deletions():
         "before": {"site": "https://old.example"},
         "after": {"site": "https://new.example"},
     }
+
+
+@pytest.mark.parametrize(
+    ("industry", "categories", "expected"),
+    [
+        ("Салон красоты", [], "beauty"),
+        ("food", ["Шаверма"], "food"),
+        (None, ["Стоматологическая клиника"], "medical"),
+        ("retail", ["Магазин одежды"], "retail"),
+    ],
+)
+def test_service_industry_uses_business_taxonomy(industry, categories, expected):
+    assert normalize_service_industry(industry, categories=categories) == expected
 
 
 def test_public_telegram_html_parser_reads_messages_without_browser_automation():
