@@ -440,6 +440,13 @@ def attach_workstreams(conn, leads: list[dict[str, Any]]) -> list[dict[str, Any]
         lead["channel_state"] = primary.get("channel_state")
         lead["room_state"] = primary.get("room_state")
         result.append(lead)
+    try:
+        from services.knowledge_graph_service import attach_lead_knowledge_signals, knowledge_layer_enabled
+
+        if knowledge_layer_enabled():
+            return attach_lead_knowledge_signals(conn, result)
+    except Exception:
+        conn.rollback()
     return result
 
 

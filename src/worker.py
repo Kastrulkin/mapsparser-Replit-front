@@ -60,6 +60,8 @@ from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprin
 from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent_run
 from services.social_post_service import collect_due_social_post_metrics, dispatch_due_social_posts
 from services.telegram_opportunity_monitor import run_telegram_opportunity_monitor
+from services.knowledge_public_telegram import run_public_telegram_monitor
+from services.knowledge_graph_service import knowledge_layer_enabled, record_external_card_change
 from services.contact_intelligence_service import (
     claim_next_enrichment_job,
     fail_enrichment_job,
@@ -77,6 +79,31 @@ _LAST_BILLING_ALERT_BY_TENANT: Dict[str, float] = {}
 _LAST_CALLBACK_ALERT_BY_TENANT: Dict[str, float] = {}
 _LAST_CALLBACK_ALERT_SCAN_AT = 0.0
 _LAST_YOOKASSA_RENEWALS_AT = 0.0
+
+
+def _record_external_card_change_if_enabled(
+    db_manager: DatabaseManager,
+    *,
+    business_id: str,
+    card_id: str,
+    before: Dict[str, Any] | None,
+) -> None:
+    if not knowledge_layer_enabled() or not before:
+        return
+    try:
+        after = db_manager.get_latest_card_by_business(business_id)
+        event = record_external_card_change(
+            db_manager.conn,
+            business_id=business_id,
+            card_id=card_id,
+            before=before,
+            after=after,
+        )
+        if event:
+            db_manager.conn.commit()
+    except Exception as exc:
+        db_manager.conn.rollback()
+        print(f"[KNOWLEDGE] Failed to record external card change for {business_id}: {exc}")
 _LAST_OUTREACH_DISPATCH_AT = 0.0
 _LAST_CARD_AUTOMATION_AT = 0.0
 _LAST_AGENT_SCHEDULE_DISPATCH_AT = 0.0
@@ -84,6 +111,7 @@ _LAST_AGENT_RUN_QUEUE_AT = 0.0
 _LAST_SOCIAL_POST_DISPATCH_AT = 0.0
 _LAST_SOCIAL_POST_METRICS_AT = 0.0
 _LAST_TELEGRAM_OPPORTUNITY_MONITOR_AT = 0.0
+_LAST_KNOWLEDGE_TELEGRAM_MONITOR_AT = 0.0
 _LAST_CONTACT_INTELLIGENCE_AT = 0.0
 
 _EDITORIAL_SERVICE_PATTERNS = (
@@ -1798,6 +1826,49 @@ def _run_telegram_opportunity_monitor_if_due() -> None:
         except Exception:
             pass
         print("[TELEGRAM_OPPORTUNITY_MONITOR] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+    finally:
+        try:
+            if db:
+                db.close()
+        except Exception:
+            pass
+
+
+def _run_knowledge_telegram_monitor_if_due() -> None:
+    global _LAST_KNOWLEDGE_TELEGRAM_MONITOR_AT
+    if not _env_bool("KNOWLEDGE_LAYER_ENABLED", False):
+        return
+    if not _env_bool("KNOWLEDGE_TELEGRAM_MONITOR_ENABLED", False):
+        return
+    now = time.time()
+    check_interval = max(60, int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_CHECK_INTERVAL_SEC", "3600")))
+    if now - _LAST_KNOWLEDGE_TELEGRAM_MONITOR_AT < check_interval:
+        return
+    _LAST_KNOWLEDGE_TELEGRAM_MONITOR_AT = now
+    db = None
+    try:
+        db = DatabaseManager()
+        result = run_public_telegram_monitor(
+            db.conn,
+            limit_sources=max(1, int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_BATCH_SIZE", "10"))),
+        )
+        db.conn.commit()
+        if int(result.get("sources_checked") or 0) > 0 or result.get("errors"):
+            print(
+                "[KNOWLEDGE_TELEGRAM_MONITOR] "
+                f"status={result.get('status')} sources={int(result.get('sources_checked') or 0)} "
+                f"documents={int(result.get('documents_seen') or 0)} errors={len(result.get('errors') or [])}",
+                flush=True,
+            )
+    except Exception:
+        try:
+            if db:
+                db.conn.rollback()
+        except Exception:
+            pass
+        print("[KNOWLEDGE_TELEGRAM_MONITOR] error", flush=True)
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
     finally:
@@ -4721,7 +4792,8 @@ def process_queue():
                     db_manager = DatabaseManager()
                     services_saved_count = 0
                     try:
-                        db_manager.save_new_card_version(
+                        previous_card = db_manager.get_latest_card_by_business(business_id)
+                        saved_card_id = db_manager.save_new_card_version(
                             business_id,
                             url=queue_dict["url"],
                             title=(card_data.get('name') or card_data.get('title') or ''),
@@ -4742,6 +4814,12 @@ def process_queue():
                             # Сохраняем пустой список как [] (а не NULL), чтобы отличать
                             # "нет рекомендаций" от "поле отсутствует"
                             recommendations=analysis_data.get('recommendations', []),
+                        )
+                        _record_external_card_change_if_enabled(
+                            db_manager,
+                            business_id=business_id,
+                            card_id=saved_card_id,
+                            before=previous_card,
                         )
 
                         # Синхронизируем агрегированные поля в businesses (rich model)
@@ -5971,13 +6049,19 @@ def _process_sync_yandex_business_task(queue_dict):
                 )
 
                 if has_rich or has_metrics:
-                    db.save_new_card_version(
+                    saved_card_id = db.save_new_card_version(
                         business_id,
                         url=url,
                         rating=float(rating) if rating is not None else None,
                         reviews_count=int(reviews_count or 0),
                         overview=overview_payload,
                         **inherit_fields,
+                    )
+                    _record_external_card_change_if_enabled(
+                        db,
+                        business_id=business_id,
+                        card_id=saved_card_id,
+                        before=existing_card,
                     )
                 else:
                     # Не прерываем выполнение worker, но явно логируем ситуацию деградации.
@@ -6222,7 +6306,8 @@ def _process_sync_2gis_task(queue_dict):
             # Сохраняем в cards (Postgres)
             db_2gis = DatabaseManager()
             try:
-                db_2gis.save_new_card_version(
+                previous_card = db_2gis.get_latest_card_by_business(business_id)
+                saved_card_id = db_2gis.save_new_card_version(
                     business_id,
                     url=target_url or "",
                     title=name or "",
@@ -6232,6 +6317,12 @@ def _process_sync_2gis_task(queue_dict):
                     rating=float(rating) if rating is not None else None,
                     reviews_count=int(reviews_count or 0),
                     hours=schedule_json,
+                )
+                _record_external_card_change_if_enabled(
+                    db_2gis,
+                    business_id=business_id,
+                    card_id=saved_card_id,
+                    before=previous_card,
                 )
             finally:
                 db_2gis.close()
@@ -6286,6 +6377,7 @@ if __name__ == "__main__":
             _dispatch_social_posts_if_due()
             _collect_social_post_metrics_if_due()
             _run_telegram_opportunity_monitor_if_due()
+            _run_knowledge_telegram_monitor_if_due()
             _dispatch_outreach_queue_if_due()
             _dispatch_openclaw_callback_outbox_if_due()
             _check_openclaw_callback_alerts_if_due()

@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, TrendingUp, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar, BookOpen } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
@@ -22,9 +22,6 @@ const AgentApiManagement = lazy(() =>
 const TokenUsageStats = lazy(() =>
   import('../../components/TokenUsageStats').then((module) => ({ default: module.TokenUsageStats })),
 );
-const GrowthPlanEditor = lazy(() =>
-  import('../../components/GrowthPlanEditor').then((module) => ({ default: module.GrowthPlanEditor })),
-);
 const PromptsManagement = lazy(() =>
   import('../../components/PromptsManagement').then((module) => ({ default: module.PromptsManagement })),
 );
@@ -37,8 +34,11 @@ const ParsingManagement = lazy(() =>
 const IndustryPatternsManagement = lazy(() =>
   import('../../components/IndustryPatternsManagement').then((module) => ({ default: module.IndustryPatternsManagement })),
 );
+const KnowledgeMarketOverview = lazy(() =>
+  import('../../components/KnowledgeMarketOverview').then((module) => ({ default: module.KnowledgeMarketOverview })),
+);
 
-type AdminTabId = 'businesses' | 'subscriptions' | 'agents' | 'agentApi' | 'tokens' | 'growth' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting' | 'telegramRadar';
+type AdminTabId = 'businesses' | 'subscriptions' | 'agents' | 'agentApi' | 'tokens' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting' | 'telegramRadar' | 'knowledge';
 interface Business {
   id: string;
   name: string;
@@ -232,9 +232,9 @@ const adminTabs: AdminTabConfig[] = [
   { id: 'agents', label: 'Агенты пользователей', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
   { id: 'prospecting', label: 'Лиды', icon: Search },
+  { id: 'knowledge', label: 'Знания рынка', icon: BookOpen },
   { id: 'telegramRadar', label: 'Telegram-радар', icon: Radar },
   { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
-  { id: 'growth', label: 'Схема роста', icon: TrendingUp },
   { id: 'prompts', label: 'Промпты анализа', icon: FileText },
   { id: 'patterns', label: 'Паттерны', icon: ShieldCheck },
   { id: 'proxies', label: 'Прокси', icon: Network },
@@ -247,6 +247,7 @@ const primaryAdminTabs: AdminTabConfig[] = [
   { id: 'agents', label: 'Агенты', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
   { id: 'prospecting', label: 'Лиды', icon: Search },
+  { id: 'knowledge', label: 'Знания рынка', icon: BookOpen },
   { id: 'telegramRadar', label: 'Telegram-радар', icon: Radar },
 ];
 
@@ -256,7 +257,6 @@ const toolsAdminTabs: AdminTabConfig[] = [
   { id: 'prompts', label: 'Промпты анализа', icon: FileText },
   { id: 'patterns', label: 'Паттерны', icon: ShieldCheck },
   { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
-  { id: 'growth', label: 'Схема роста', icon: TrendingUp },
 ];
 
 const LEAD_OUTREACH_STATUS = 'lead_outreach';
@@ -1096,7 +1096,7 @@ export const AdminPage: React.FC = () => {
 
         <div className="rounded-[2rem] border border-slate-200/80 bg-white/95 p-2.5 shadow-sm">
           <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
               {primaryAdminTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -1439,14 +1439,6 @@ export const AdminPage: React.FC = () => {
           >
             <TokenUsageStats />
           </DashboardSection>
-        ) : activeTab === 'growth' ? (
-          <DashboardSection
-            title={activeTabConfig.label}
-            description="Редактор схемы роста для клиентских сценариев и рекомендаций."
-            contentClassName="p-0"
-          >
-            <GrowthPlanEditor />
-          </DashboardSection>
         ) : activeTab === 'prompts' ? (
           <DashboardSection
             title={activeTabConfig.label}
@@ -1486,6 +1478,14 @@ export const AdminPage: React.FC = () => {
             contentClassName="p-0"
           >
             <AdminLeadRegistry businessOptions={radarBusinessOptions} />
+          </DashboardSection>
+        ) : activeTab === 'knowledge' ? (
+          <DashboardSection
+            title={activeTabConfig.label}
+            description="Проверенные рыночные сигналы, источники и ограничения их использования."
+            contentClassName="p-0"
+          >
+            <KnowledgeMarketOverview />
           </DashboardSection>
         ) : activeTab === 'telegramRadar' ? (
           <DashboardSection

@@ -297,6 +297,12 @@ scripts/test_agents_docker.sh
 
 Скрипт монтирует текущий checkout в `/app`, поэтому пересборка image для каждой правки не нужна.
 
+Проверка Knowledge Layer, включая применение Alembic-миграции в временном PostgreSQL:
+
+```bash
+scripts/test_knowledge_docker.sh
+```
+
 ```bash
 # Smoke DatabaseManager
 docker compose run --rm app python scripts/smoke_db_manager.py

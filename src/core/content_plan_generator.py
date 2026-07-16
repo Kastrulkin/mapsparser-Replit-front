@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 from typing import Any
 
@@ -13,6 +14,28 @@ _CONTENT_TYPE_TITLES = {
     "audit": "Улучшение карточки",
     "seasonal": "Сезонный повод",
 }
+
+_RU_MONTHS = {
+    "января": 1,
+    "февраля": 2,
+    "марта": 3,
+    "апреля": 4,
+    "мая": 5,
+    "июня": 6,
+    "июля": 7,
+    "августа": 8,
+    "сентября": 9,
+    "октября": 10,
+    "ноября": 11,
+    "декабря": 12,
+}
+
+_EVENT_DATE_RE = re.compile(
+    r"\b(?P<day>\d{1,2})\s+"
+    r"(?P<month>января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
+    r"(?:\s+(?P<year>20\d{2}))?",
+    re.IGNORECASE,
+)
 
 
 def _safe_text(value: Any) -> str:
@@ -57,6 +80,58 @@ def _service_cta(service_name: str) -> str:
     return (
         f"Покажите, для кого подходит {_quoted(service_name)}, что входит в услугу "
         "и как записаться через карточку."
+    )
+
+
+def _is_event_service(service: dict[str, Any]) -> bool:
+    blob = " ".join(
+        _safe_text(service.get(key)).lower()
+        for key in ("name", "category", "source", "description")
+    )
+    return bool(
+        _EVENT_DATE_RE.search(blob)
+        or "афиша" in blob
+        or "мероприяти" in blob
+        or "katok_events" in blob
+    )
+
+
+def _parse_event_date(value: Any, today: date | None = None) -> date | None:
+    match = _EVENT_DATE_RE.search(_safe_text(value).lower())
+    if not match:
+        return None
+    today = today or date.today()
+    day = int(match.group("day"))
+    month = _RU_MONTHS.get(match.group("month"))
+    if not month:
+        return None
+    year = int(match.group("year") or today.year)
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
+def _event_announcement_date(event_date: date, period_start: date, period_end: date) -> date:
+    preferred = event_date - timedelta(days=3)
+    if preferred < period_start:
+        preferred = period_start
+    if preferred > period_end:
+        preferred = period_end
+    return preferred
+
+
+def _event_goal(service_name: str, event_date: date) -> str:
+    return (
+        f"Дать понятный анонс события {_quoted(service_name)}: дата {event_date.isoformat()}, "
+        "время и формат должны быть взяты из афиши без переноса на другие дни."
+    )
+
+
+def _event_cta(service_name: str) -> str:
+    return (
+        f"Подтвердите название, дату, время и цену события {_quoted(service_name)}. "
+        "Не используйте прошедшие события как будущую афишу."
     )
 
 
@@ -364,6 +439,14 @@ def _candidate_sort_key(candidate: dict[str, Any]) -> tuple[int, str]:
     return (int(candidate.get("strength_score") or 0), _safe_text(candidate.get("theme")))
 
 
+def _candidate_identity(candidate: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        _safe_text(candidate.get("content_type")),
+        _safe_text(candidate.get("source_kind")),
+        _safe_text(candidate.get("source_ref")),
+    )
+
+
 def _learning_adjustment(context: dict[str, Any], candidate: dict[str, Any]) -> int:
     feedback = context.get("learning_feedback") if isinstance(context.get("learning_feedback"), dict) else {}
     source_feedback = feedback.get("source_kind") if isinstance(feedback.get("source_kind"), dict) else {}
@@ -478,9 +561,25 @@ def _pick_candidates(candidates: list[dict[str, Any]], items_target: int) -> lis
     if len(selected) < items_target:
         refill_pool = sorted(candidates, key=_candidate_sort_key, reverse=True)
         refill_index = 0
+        skipped_in_cycle = 0
+        seen_event_refs = {
+            _candidate_identity(item)
+            for item in selected
+            if _safe_text(item.get("content_type")) == "event"
+        }
         while len(selected) < items_target and refill_pool:
-            selected.append(refill_pool[refill_index % len(refill_pool)])
+            candidate = refill_pool[refill_index % len(refill_pool)]
             refill_index += 1
+            if _safe_text(candidate.get("content_type")) == "event":
+                candidate_key = _candidate_identity(candidate)
+                if candidate_key in seen_event_refs:
+                    skipped_in_cycle += 1
+                    if skipped_in_cycle >= len(refill_pool):
+                        break
+                    continue
+                seen_event_refs.add(candidate_key)
+            skipped_in_cycle = 0
+            selected.append(candidate)
     return selected
 
 
@@ -513,9 +612,37 @@ def build_content_plan_skeleton(
         candidates.extend(build_template_candidates(context, recent_blob))
 
     if _content_mix_value(content_mix, "services"):
+        today = period_start
         for service in services[:10]:
             service_name = _safe_text(service.get("name"))
             if not service_name:
+                continue
+            if _is_event_service(service):
+                event_date = _parse_event_date(service_name, today)
+                if not event_date or event_date < today or event_date > period_end:
+                    continue
+                publish_date = _event_announcement_date(event_date, period_start, period_end)
+                base_score = _service_strength(service) + 55
+                coverage_score = _undercovered_bonus(service_name, recent_blob)
+                candidates.append(
+                    {
+                        "content_type": "event",
+                        "theme": f"Анонс события: {service_name}",
+                        "goal": _event_goal(service_name, event_date),
+                        "source_kind": "event_service",
+                        "source_ref": f"{event_date.isoformat()} | {service_name}",
+                        "service_id": _safe_text(service.get("id")),
+                        "cta_hint": _event_cta(service_name),
+                        "preferred_scheduled_for": publish_date.isoformat(),
+                        "event_date": event_date.isoformat(),
+                        "strength_score": base_score + coverage_score,
+                        "ranking_reasons": [
+                            _ranking_reason("event_date_is_future", 55),
+                            _ranking_reason("service_signal_strength", base_score - 55),
+                            _ranking_reason("undercovered_topic", coverage_score),
+                        ],
+                    }
+                )
                 continue
             base_score = _service_strength(service)
             coverage_score = _undercovered_bonus(service_name, recent_blob)
@@ -656,7 +783,15 @@ def build_content_plan_skeleton(
     current_date = period_start
     while len(selected_items) < items_target:
         candidate = selected_candidates[len(selected_items) % len(selected_candidates)]
+        preferred_scheduled_for = _safe_text(candidate.get("preferred_scheduled_for"))
         scheduled_for = current_date.isoformat()
+        if preferred_scheduled_for:
+            try:
+                preferred_date = date.fromisoformat(preferred_scheduled_for)
+                if period_start <= preferred_date <= period_end:
+                    scheduled_for = preferred_date.isoformat()
+            except ValueError:
+                scheduled_for = current_date.isoformat()
         selected_items.append(
             {
                 "scheduled_for": scheduled_for,
@@ -677,6 +812,7 @@ def build_content_plan_skeleton(
                 "learning_adjustment": int(candidate.get("learning_adjustment") or 0),
                 "base_strength_score": int(candidate.get("base_strength_score") or candidate.get("strength_score") or 0),
                 "quality_hint": candidate.get("quality_hint") or "",
+                "event_date": candidate.get("event_date") or "",
                 "ranking_reasons": candidate.get("ranking_reasons") if isinstance(candidate.get("ranking_reasons"), list) else [],
             }
         )

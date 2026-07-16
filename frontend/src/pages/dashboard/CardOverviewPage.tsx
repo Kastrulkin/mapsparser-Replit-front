@@ -1012,7 +1012,7 @@ export const CardOverviewPage = () => {
                     </span>
                   </div>
                   <a
-                    href="/dashboard/progress"
+                    href="/dashboard/progress?section=maps&audit=open"
                     title={isRu ? 'Открывает аудит карточки, метрики и историю изменений.' : 'Opens the listing audit, metrics, and change history.'}
                     className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
                   >
@@ -1130,7 +1130,7 @@ export const CardOverviewPage = () => {
                       </Button>
                     ) : (
                       <a
-                        href="/dashboard/progress"
+                        href="/dashboard/progress?section=maps&audit=open"
                         title={isRu ? 'Открывает аудит карточки, бизнес-метрики и историю изменений после сбора данных.' : 'Opens the listing audit, business metrics, and change history after data collection.'}
                         className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
                       >

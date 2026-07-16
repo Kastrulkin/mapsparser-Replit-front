@@ -119,6 +119,19 @@ def upgrade():
     )
     op.execute(
         """
+        CREATE TABLE IF NOT EXISTS usernews (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            service_id TEXT,
+            source_text TEXT,
+            generated_text TEXT NOT NULL,
+            approved INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    op.execute(
+        """
         ALTER TABLE usernews
         ADD COLUMN IF NOT EXISTS business_id TEXT
         """

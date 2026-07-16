@@ -94,8 +94,8 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       icon: TrendingUp,
       path: '/dashboard/progress',
       tooltip: language === 'ru'
-        ? 'Здесь появляется аудит карточки, статистика и история изменений после сбора данных.'
-        : 'This is where the listing audit, metrics, and change history appear after data collection.',
+        ? 'Показывает, что уже сделано, что требует внимания и какой шаг важнее всего сейчас.'
+        : 'Shows what is done, what needs attention, and the most important next step.',
     },
     {
       id: 'bookings',

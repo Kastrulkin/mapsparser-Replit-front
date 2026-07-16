@@ -2332,6 +2332,31 @@ def apply_service_compression_draft(request_id):
                 request_id,
             ),
         )
+        knowledge_savepoint_created = False
+        try:
+            from services.knowledge_graph_service import knowledge_layer_enabled, record_action_event
+
+            if knowledge_layer_enabled():
+                cursor.execute("SAVEPOINT knowledge_compression_action")
+                knowledge_savepoint_created = True
+                record_action_event(
+                    db.conn,
+                    business_id=str(draft["business_id"]),
+                    action_type="service_optimization_applied",
+                    source_type="service_catalog_compression_request",
+                    source_id=request_id,
+                    status="confirmed",
+                    approval_id=f"explicit:{user_data['user_id']}:{request_id}",
+                    before={"services_count": before_count, "service_ids": sorted(set(archived_service_ids))},
+                    after={"services_count": after_count, "service_ids": created_service_ids},
+                    limitations=["Изменения сохранены в LocalOS и не опубликованы во внешних картах"],
+                    metadata={"created_count": len(created_service_ids), "archived_count": len(set(archived_service_ids))},
+                )
+                cursor.execute("RELEASE SAVEPOINT knowledge_compression_action")
+        except Exception:
+            if knowledge_savepoint_created:
+                cursor.execute("ROLLBACK TO SAVEPOINT knowledge_compression_action")
+                cursor.execute("RELEASE SAVEPOINT knowledge_compression_action")
         db.conn.commit()
         updated = _load_compression_request(cursor, request_id)
         db.close()

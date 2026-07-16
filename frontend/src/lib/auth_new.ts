@@ -41,6 +41,7 @@ export class NewAuth {
 
   public async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
     const url = `${this.apiBaseUrl}${endpoint}`;
+    let responseReceived = false;
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -62,6 +63,7 @@ export class NewAuth {
         ...options,
         headers,
       });
+      responseReceived = true;
 
       // Проверяем Content-Type перед парсингом JSON
       const contentType = response.headers.get('content-type');
@@ -94,13 +96,13 @@ export class NewAuth {
           localStorage.removeItem('auth_token');
           throw new Error('Сессия истекла. Войдите снова.');
         }
-        throw new Error(data.error || `Ошибка запроса (${response.status})`);
+        throw new Error(data.message || data.error || `Ошибка запроса (${response.status})`);
       }
 
       return data;
     } catch (error) {
-      // Если это уже наша ошибка, пробрасываем дальше
-      if (error instanceof Error && error.message.includes('Ошибка')) {
+      // Если сервер ответил, показываем его прикладную ошибку без маскировки под сетевой сбой.
+      if (responseReceived || (error instanceof Error && error.message.includes('Ошибка'))) {
         throw error;
       }
       // Иначе это сетевая ошибка или другая проблема

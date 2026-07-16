@@ -907,7 +907,7 @@ export const ProfilePage = () => {
       return {
         label: isRu ? 'Открыть прогресс' : 'Open progress',
         title: isRu ? 'Откроет аудит, показатели и историю изменений.' : 'Opens audit, metrics, and change history.',
-        onClick: () => navigate('/dashboard/progress'),
+        onClick: () => navigate('/dashboard/progress?section=maps&audit=open'),
         disabled: false,
         icon: FileSearch,
       };

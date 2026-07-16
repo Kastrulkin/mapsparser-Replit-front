@@ -652,7 +652,7 @@ def _fetch_network_scope_options(cursor: Any, business_row: dict[str, Any]) -> l
 def _fetch_services(cursor: Any, business_id: str) -> list[dict[str, Any]]:
     cursor.execute(
         """
-        SELECT id, name, description, category, price
+        SELECT id, name, description, category, price, source
         FROM userservices
         WHERE business_id = %s
           AND (is_active IS TRUE OR is_active IS NULL)
@@ -669,6 +669,7 @@ def _fetch_services(cursor: Any, business_id: str) -> list[dict[str, Any]]:
             "description": str(_row_get(row, "description", 2, "") or "").strip(),
             "category": str(_row_get(row, "category", 3, "") or "").strip(),
             "price": str(_row_get(row, "price", 4, "") or "").strip(),
+            "source": str(_row_get(row, "source", 5, "") or "").strip(),
         }
         for row in rows
         if str(_row_get(row, "name", 1, "") or "").strip()
@@ -1213,7 +1214,7 @@ def _fetch_services_for_businesses(cursor: Any, business_ids: list[str]) -> list
     try:
         cursor.execute(
             """
-            SELECT id, name, description, category, price
+            SELECT id, name, description, category, price, source
             FROM userservices
             WHERE business_id = ANY(%s)
               AND (is_active IS TRUE OR is_active IS NULL)
@@ -1232,6 +1233,7 @@ def _fetch_services_for_businesses(cursor: Any, business_ids: list[str]) -> list
             "description": str(_row_get(row, "description", 2, "") or "").strip(),
             "category": str(_row_get(row, "category", 3, "") or "").strip(),
             "price": str(_row_get(row, "price", 4, "") or "").strip(),
+            "source": str(_row_get(row, "source", 5, "") or "").strip(),
         }
         for row in rows
         if str(_row_get(row, "name", 1, "") or "").strip()
@@ -1796,6 +1798,24 @@ def create_generated_content_plan(
         context = load_plan_context_for_business(user_id, business_id, scope_type, scope_target_id)
         if not bool(context.get("subscription", {}).get("automation_access")):
             raise PermissionError(context.get("subscription", {}).get("reason") or "Автоматизация недоступна")
+        knowledge_metadata: dict[str, Any] = {}
+        raw_knowledge_foundation = (
+            content_mix.get("knowledge_foundation")
+            if isinstance(content_mix, dict) and isinstance(content_mix.get("knowledge_foundation"), dict)
+            else {}
+        )
+        if raw_knowledge_foundation:
+            from services.knowledge_graph_service import knowledge_layer_enabled, validate_content_foundation
+
+            if not knowledge_layer_enabled():
+                raise ValueError("Основания из знаний рынка пока недоступны")
+            raw_assertion_ids = raw_knowledge_foundation.get("assertion_ids")
+            knowledge_metadata = validate_content_foundation(
+                db.conn,
+                business_id=business_id,
+                assertion_ids=raw_assertion_ids if isinstance(raw_assertion_ids, list) else [],
+            )
+            knowledge_metadata["foundation_type"] = str(raw_knowledge_foundation.get("type") or "market_signal")
         skeleton = build_content_plan_skeleton(
             context,
             period_days=normalized_period,
@@ -1812,6 +1832,10 @@ def create_generated_content_plan(
             skeleton["selected_channels"] = selected_channels
             skeleton_meta = skeleton.get("meta") if isinstance(skeleton.get("meta"), dict) else {}
             skeleton_meta["selected_channels"] = selected_channels
+            skeleton["meta"] = skeleton_meta
+        if knowledge_metadata:
+            skeleton_meta = skeleton.get("meta") if isinstance(skeleton.get("meta"), dict) else {}
+            skeleton_meta["knowledge_foundation"] = knowledge_metadata
             skeleton["meta"] = skeleton_meta
         plan_id = str(uuid.uuid4())
         normalized_scope = _normalize_scope_type(scope_type)
@@ -1864,9 +1888,9 @@ def create_generated_content_plan(
                 INSERT INTO contentplanitems (
                     id, plan_id, business_id, scheduled_for, content_type, theme, goal,
                     source_kind, source_ref, seo_keyword, service_id, transaction_id,
-                    seo_views, location_scope, status
+                    seo_views, location_scope, status, metadata_json
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'planned')
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'planned', %s::jsonb)
                 """,
                 (
                     item_id,
@@ -1883,6 +1907,7 @@ def create_generated_content_plan(
                     item.get("transaction_id") or None,
                     int(item.get("seo_views") or 0),
                     item_location_scope,
+                    json.dumps(knowledge_metadata, ensure_ascii=False),
                 ),
             )
         _record_content_plan_event(

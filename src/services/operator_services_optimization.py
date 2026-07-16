@@ -693,6 +693,31 @@ def apply_service_optimization_suggestions(
         ),
     )
     updated_job = _row_to_dict(cursor, cursor.fetchone()) or {**job, "status": next_status}
+    knowledge_savepoint_created = False
+    try:
+        from services.knowledge_graph_service import knowledge_layer_enabled, record_action_event
+
+        if knowledge_layer_enabled():
+            cursor.execute("SAVEPOINT knowledge_service_action")
+            knowledge_savepoint_created = True
+            record_action_event(
+                cursor.connection,
+                business_id=business_id,
+                action_type="service_optimization_applied",
+                source_type="serviceregenerationjob",
+                source_id=clean_job_id,
+                status="confirmed",
+                approval_id=f"explicit:{user_id}:{clean_job_id}",
+                before={"items": [item.get("before_name") for item in applied_items]},
+                after={"items": [item.get("optimized_name") for item in applied_items]},
+                limitations=["Изменения сохранены в LocalOS и не опубликованы во внешних картах"],
+                metadata={"applied_count": len(applied_items), "channel": channel},
+            )
+            cursor.execute("RELEASE SAVEPOINT knowledge_service_action")
+    except Exception:
+        if knowledge_savepoint_created:
+            cursor.execute("ROLLBACK TO SAVEPOINT knowledge_service_action")
+            cursor.execute("RELEASE SAVEPOINT knowledge_service_action")
     return {
         "status": "completed",
         "intent": "services_optimize_apply",

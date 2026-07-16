@@ -603,6 +603,65 @@ def test_content_plan_skeleton_uses_event_center_template_for_katok():
     assert any("афиша" in item["goal"].lower() or "событ" in item["goal"].lower() for item in plan["items"])
 
 
+def test_content_plan_skeleton_uses_future_katok_events_and_skips_past_event_services():
+    plan = build_content_plan_skeleton(
+        {
+            "business": {
+                "name": "Каток",
+                "city": "Краснодар",
+                "categories": '["Культурный центр", "художественная галерея"]',
+            },
+            "services": [
+                {
+                    "id": "past-1",
+                    "name": "16 июня, 19:00 — Век вранья",
+                    "category": "Афиша / мероприятия",
+                    "price": "от 1 000 ₽",
+                    "source": "katok_events_site",
+                },
+                {
+                    "id": "past-2",
+                    "name": "4 июля, 19:00 — Комик против ИИ",
+                    "category": "Афиша / мероприятия",
+                    "price": "от 1 500 ₽",
+                    "source": "katok_events_site",
+                },
+                {
+                    "id": "future-1",
+                    "name": "24 июля, 19:00 — Моцарт против Горшка",
+                    "category": "Афиша / мероприятия",
+                    "price": "от 1 000 ₽",
+                    "source": "katok_events_site",
+                },
+                {
+                    "id": "future-2",
+                    "name": "1 августа, 19:00 — Музыкальное казино",
+                    "category": "Афиша / мероприятия",
+                    "price": "от 1 500 ₽",
+                    "source": "katok_events_site",
+                },
+            ],
+            "seo_keywords": [],
+            "sales_signals": [],
+            "audit_signals": [],
+        },
+        period_days=30,
+        density="active",
+        content_mix={"services": True, "templates": False, "seo": False, "audit": False, "sales": False, "seasonal": False},
+    )
+
+    event_items = [item for item in plan["items"] if item["source_kind"] == "event_service"]
+    event_refs = [item["source_ref"] for item in event_items]
+
+    assert not any("16 июня, 19:00 — Век вранья" in item for item in event_refs)
+    assert not any("4 июля, 19:00 — Комик против ИИ" in item for item in event_refs)
+    assert any("24 июля, 19:00 — Моцарт против Горшка" in item for item in event_refs)
+    assert any("1 августа, 19:00 — Музыкальное казино" in item for item in event_refs)
+    assert all(item["content_type"] == "event" for item in event_items)
+    assert any(item["scheduled_for"] == "2026-07-21" for item in event_items)
+    assert any(item["scheduled_for"] == "2026-07-29" for item in event_items)
+
+
 def test_content_plan_katok_site_description_prevents_school_fallback(monkeypatch):
     monkeypatch.setattr(
         content_plan_service,

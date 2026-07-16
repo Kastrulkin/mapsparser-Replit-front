@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, ArrowUpRight, Camera, Globe, MessageSquare, ReceiptText, Star, TrendingUp } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Camera, Globe, MessageSquare, ReceiptText, RefreshCw, Star, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   AuditCtaPanel,
@@ -24,6 +24,7 @@ import { useLanguage } from '@/i18n/LanguageContext';
 interface CardAuditPanelProps {
   businessId?: string | null;
   refreshKey?: number;
+  onRetry?: () => void;
 }
 
 interface CardAuditResponse {
@@ -196,11 +197,15 @@ const photosStateLabel = (value: string) => {
   }
 };
 
-const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey = 0 }) => {
+const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey = 0, onRetry }) => {
   const { language } = useLanguage();
   const isRu = language === 'ru';
-  const { data, loading, error } = useApiData<CardAuditResponse>(
-    businessId ? `${window.location.origin}/api/business/${businessId}/card-audit?refresh=${refreshKey}` : null
+  const { data, loading, refreshing, error } = useApiData<CardAuditResponse>(
+    businessId ? `${window.location.origin}/api/business/${businessId}/card-audit?refresh=${refreshKey}` : null,
+    {
+      keepPreviousData: true,
+      dataScopeKey: businessId,
+    },
   );
 
   const audit = data?.audit;
@@ -227,7 +232,14 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {loading && (
+        {refreshing && audit ? (
+          <div className="flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800" role="status">
+            <RefreshCw className="h-4 w-4 motion-safe:animate-spin" />
+            {isRu ? 'Обновляем данные… Текущий аудит остаётся на экране.' : 'Refreshing data… The current audit remains available.'}
+          </div>
+        ) : null}
+
+        {loading && !audit && (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, idx) => (
               <div key={idx} className="h-28 rounded-xl bg-gray-100 animate-pulse" />
@@ -235,11 +247,27 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
           </div>
         )}
 
-        {!loading && error && (
+        {!audit && !loading && error && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {isRu ? 'Не удалось загрузить аудит карточки:' : 'Could not load the card audit:'} {error}
+            {onRetry ? (
+              <button type="button" onClick={onRetry} className="ml-2 min-h-10 font-semibold underline underline-offset-2">
+                {isRu ? 'Повторить' : 'Try again'}
+              </button>
+            ) : null}
           </div>
         )}
+
+        {audit && error ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <span>{isRu ? 'Новые данные пока не загрузились. Показываем предыдущий аудит.' : 'New data is not available yet. Showing the previous audit.'}</span>
+            {onRetry ? (
+              <button type="button" onClick={onRetry} className="min-h-10 font-semibold underline underline-offset-2">
+                {isRu ? 'Повторить' : 'Try again'}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {showPreParsePlaceholder && (
           <div className="rounded-xl border border-sky-200 bg-sky-50 p-5 text-sm text-sky-900">
@@ -254,7 +282,7 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
           </div>
         )}
 
-        {!loading && !error && audit && hasSuccessfulParse && (
+        {audit && hasSuccessfulParse && (
           <>
             <AuditHero
               eyebrow="Аудит локального присутствия"
@@ -283,13 +311,6 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
                 <a href="/dashboard/card">
                   <button className="rounded-full bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800">
                     Открыть работу с картами
-                  </button>
-                </a>
-              }
-              secondaryAction={
-                <a href="/dashboard/progress">
-                  <button className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
-                    Посмотреть прогресс
                   </button>
                 </a>
               }
@@ -692,11 +713,9 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
                 'Контроль изменений после каждого сбора данных',
               ]}
               primaryLabel="Открыть работу с картами"
-              secondaryLabel="Посмотреть прогресс"
               onPrimary={() => {
                 window.location.href = '/dashboard/card';
               }}
-              secondaryHref="/dashboard/progress"
             />
           </>
         )}

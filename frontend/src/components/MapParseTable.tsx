@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { useApiData } from '../hooks/useApiData';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { YandexBusinessReport } from './YandexBusinessReport';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, RefreshCw } from 'lucide-react';
 
 interface MapParseItem {
   id: string;
@@ -29,17 +29,21 @@ interface MapParseItem {
 interface MapParseTableProps {
   businessId?: string | null;
   refreshKey?: number;
+  onRetry?: () => void;
+  embedded?: boolean;
 }
 
-const MapParseTable: React.FC<MapParseTableProps> = ({ businessId, refreshKey = 0 }) => {
+const MapParseTable: React.FC<MapParseTableProps> = ({ businessId, refreshKey = 0, onRetry, embedded = false }) => {
   const { t } = useLanguage();
   const [viewHtml, setViewHtml] = useState<string | null>(null);
   const [viewData, setViewData] = useState<MapParseItem | null>(null);
 
-  const { data, loading, error } = useApiData<MapParseItem[]>(
+  const { data, loading, refreshing, error } = useApiData<MapParseItem[]>(
     businessId ? `${window.location.origin}/api/business/${businessId}/map-parses?refresh=${refreshKey}` : null,
     {
-      transform: (data) => data.items || []
+      transform: (data) => data.items || [],
+      keepPreviousData: true,
+      dataScopeKey: businessId,
     }
   );
   const items = data || [];
@@ -50,20 +54,35 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId, refreshKey = 
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4">
+    <div className={embedded ? 'bg-white' : 'rounded-lg bg-white p-4 shadow-md'}>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-semibold text-gray-900">{t.dashboard.parsing.history.title}</h3>
         <div className="text-sm text-gray-500">{t.dashboard.parsing.history.subtitle}</div>
       </div>
 
-      {loading && <div className="text-gray-500 text-sm">{t.common.loading}</div>}
-      {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
+      {refreshing && items.length > 0 ? (
+        <div className="mb-3 flex items-center gap-2 text-sm text-sky-700" role="status">
+          <RefreshCw className="h-4 w-4 motion-safe:animate-spin" />
+          Обновляем историю…
+        </div>
+      ) : null}
+      {loading && items.length === 0 ? <div className="text-gray-500 text-sm">{t.common.loading}</div> : null}
+      {error ? (
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-red-600">
+          <span>{items.length > 0 ? 'Новые данные не загрузились. Показываем предыдущую историю.' : error}</span>
+          {onRetry ? (
+            <button type="button" onClick={onRetry} className="min-h-10 font-semibold underline underline-offset-2">
+              Повторить
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {!loading && !error && items.length === 0 && (
         <div className="text-sm text-gray-500">{t.dashboard.parsing.history.noData}</div>
       )}
 
-      {!loading && !error && items.length > 0 && (
+      {items.length > 0 && (
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm border border-gray-200">
             <thead className="bg-gray-50 text-gray-700">

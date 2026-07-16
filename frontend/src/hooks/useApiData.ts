@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface UseApiDataOptions<T> {
   transform?: (data: any) => T;
   onSuccess?: (data: T) => void;
   onError?: (error: string) => void;
+  keepPreviousData?: boolean;
+  dataScopeKey?: string | null;
 }
 
 export function useApiData<T>(
@@ -12,23 +14,48 @@ export function useApiData<T>(
 ) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dataRef = useRef<T | null>(null);
+  const scopeRef = useRef<string | null | undefined>(options?.dataScopeKey);
 
   useEffect(() => {
+    const keepPreviousData = Boolean(options?.keepPreviousData);
+    const scopeChanged = scopeRef.current !== options?.dataScopeKey;
+    if (scopeChanged) {
+      scopeRef.current = options?.dataScopeKey;
+      dataRef.current = null;
+      setData(null);
+    }
+
     if (!endpoint) {
+      dataRef.current = null;
       setData(null);
       setLoading(false);
+      setRefreshing(false);
       setError(null);
       return;
     }
 
-    setLoading(true);
+    const hasPreviousData = keepPreviousData && !scopeChanged && dataRef.current !== null;
+    setLoading(!hasPreviousData);
+    setRefreshing(hasPreviousData);
     setError(null);
+    const controller = new AbortController();
+    const {
+      transform,
+      onSuccess,
+      onError,
+      keepPreviousData: _keepPreviousData,
+      dataScopeKey: _dataScopeKey,
+      ...requestOptions
+    } = options || {};
 
     const token = localStorage.getItem('auth_token');
     fetch(endpoint, {
       headers: { Authorization: `Bearer ${token || ''}` },
-      ...options
+      ...requestOptions,
+      signal: controller.signal,
     })
       .then(async (res) => {
         if (!res.ok) {
@@ -39,25 +66,32 @@ export function useApiData<T>(
       })
       .then((responseData) => {
         if (responseData.success !== false) {
-          const transformedData = options?.transform
-            ? options.transform(responseData.data || responseData)
-            : (responseData.data || responseData) as T;
+          const transformedData: T = transform
+            ? transform(responseData.data || responseData)
+            : responseData.data || responseData;
+          dataRef.current = transformedData;
           setData(transformedData);
-          options?.onSuccess?.(transformedData);
+          onSuccess?.(transformedData);
         } else {
           const errorMsg = responseData.error || 'Ошибка загрузки';
           setError(errorMsg);
-          options?.onError?.(errorMsg);
+          onError?.(errorMsg);
         }
       })
       .catch((e) => {
+        if (controller.signal.aborted) return;
         const errorMsg = e.message || 'Ошибка соединения с сервером';
         setError(errorMsg);
-        options?.onError?.(errorMsg);
+        onError?.(errorMsg);
       })
-      .finally(() => setLoading(false));
-  }, [endpoint]);
+      .finally(() => {
+        if (controller.signal.aborted) return;
+        setLoading(false);
+        setRefreshing(false);
+      });
 
-  return { data, loading, error };
+    return () => controller.abort();
+  }, [endpoint, options?.dataScopeKey]);
+
+  return { data, loading, refreshing, error };
 }
-
