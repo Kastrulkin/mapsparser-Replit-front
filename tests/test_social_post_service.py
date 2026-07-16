@@ -2489,14 +2489,58 @@ def test_vk_api_channel_preflight_uses_group_token_permissions_without_publish(m
 
     result = social_post_service._vk_api_channel_preflight(object(), "biz-1")
 
-    assert result["ready"] is True
+    assert result["ready"] is False
+    assert result["status"] == "missing_permissions"
     assert result["read_only"] is True
     assert result["external_publish_performed"] is False
     assert any("groups.getTokenPermissions" in url for url in requested_urls)
     assert any("groups.getById" in url for url in requested_urls)
     assert all("wall.post" not in url for url in requested_urls)
-    assert result["connection_checks"][-2]["key"] == "vk_group_token_live"
-    assert result["connection_checks"][-1]["key"] == "vk_group_identity_live"
+    assert result["connection_checks"][-3]["key"] == "vk_group_token_live"
+    assert result["connection_checks"][-2]["key"] == "vk_group_identity_live"
+    assert result["connection_checks"][-1]["key"] == "vk_wall_publish_token_type"
+    assert "OAuth" in result["message_ru"]
+
+
+def test_vk_api_channel_preflight_keeps_user_token_read_only_probe(monkeypatch):
+    class FakeResponse:
+        status = 200
+
+        def __init__(self, payload):
+            self.payload = payload
+
+        def read(self):
+            return json.dumps(self.payload).encode("utf-8")
+
+        def close(self):
+            pass
+
+    requested_urls = []
+    monkeypatch.setattr(
+        social_post_service,
+        "_find_active_external_account",
+        lambda cursor, business_id, sources: {"id": "vk-1", "external_id": "12345", "auth_data_encrypted": "x"},
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_external_account_auth_data",
+        lambda account: {"access_token": "user-token", "owner_id": "-12345", "scope": "wall", "api_version": "5.199"},
+    )
+
+    def fake_urlopen(req, timeout=10):
+        requested_urls.append(req.full_url)
+        if "groups.getTokenPermissions" in req.full_url:
+            return FakeResponse({"error": {"error_code": 27, "error_msg": "method is unavailable with user auth"}})
+        return FakeResponse({"response": {"count": 0, "items": []}})
+
+    monkeypatch.setattr(social_post_service.urllib.request, "urlopen", fake_urlopen)
+
+    result = social_post_service._vk_api_channel_preflight(object(), "biz-1")
+
+    assert result["ready"] is True
+    assert any("wall.get" in url for url in requested_urls)
+    assert all("wall.post" not in url for url in requested_urls)
+    assert result["connection_checks"][-1]["key"] == "vk_wall_read_probe"
 
 
 def test_api_channel_preflight_covers_all_api_channels_without_publish(monkeypatch):

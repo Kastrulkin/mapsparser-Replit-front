@@ -1400,15 +1400,24 @@ def _vk_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, Any]:
                 "ok" if group_probe.get("ok") else str(group_probe.get("status") or "failed"),
             ),
         ]
-        ready = has_wall_permission and bool(group_probe.get("ok"))
-        status = "ready" if ready else ("missing_permissions" if not has_wall_permission else "live_probe_failed")
+        checks.append(
+            _connection_check(
+                "vk_wall_publish_token_type",
+                False,
+                "Токен для публикации",
+                "Publishing token",
+                "ключ сообщества не поддерживает wall.post; нужен пользовательский OAuth-токен администратора",
+                "community token does not support wall.post; an administrator user OAuth token is required",
+                "unsupported_token_type",
+            )
+        )
         return _api_channel_preflight_result(
             "vk",
-            ready,
-            status,
+            False,
+            "missing_permissions",
             checks,
-            "VK готов к API-публикации текста после подтверждения." if ready else "VK не подтвердил готовность к публикации.",
-            "VK is ready for API text publishing after approval." if ready else "VK did not confirm publishing readiness.",
+            "VK подключён, но для автопубликации нужен пользовательский OAuth-токен администратора сообщества.",
+            "VK is connected, but automatic publishing requires a community administrator user OAuth token.",
         )
 
     # Legacy user tokens do not support groups.getTokenPermissions. Keep the

@@ -635,9 +635,9 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
 
     if (service.id === 'vk') {
       return (
-        <SetupPanel title="VK" description="Сохраните токен сообщества с правом публикации на стене.">
+        <SetupPanel title="VK" description="Сохраните пользовательский OAuth-токен администратора сообщества с правом wall. Ключ сообщества из раздела «Работа с API» не поддерживает wall.post.">
           <div className="grid gap-3 lg:grid-cols-[1fr_220px_160px]">
-            <Input type="password" placeholder="VK access_token" value={vkAccessToken} onChange={(event) => setVkAccessToken(event.target.value)} disabled={vkBusy || !currentBusinessId} />
+            <Input type="password" placeholder="VK user OAuth access_token" value={vkAccessToken} onChange={(event) => setVkAccessToken(event.target.value)} disabled={vkBusy || !currentBusinessId} />
             <Input placeholder="group_id или owner_id" value={vkOwnerId} onChange={(event) => setVkOwnerId(event.target.value)} disabled={vkBusy || !currentBusinessId} />
             <Input placeholder="scope" value={vkScope} onChange={(event) => setVkScope(event.target.value)} disabled={vkBusy || !currentBusinessId} />
           </div>

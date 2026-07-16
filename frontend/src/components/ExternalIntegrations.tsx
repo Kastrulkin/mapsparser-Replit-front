@@ -710,7 +710,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     if (!tokenValue || !ownerValue) {
       toast({
         title: t.error,
-        description: "Для VK нужны access_token и group_id/owner_id.",
+        description: "Для VK нужны пользовательский OAuth access_token администратора и group_id/owner_id.",
         variant: "destructive",
       });
       return;
@@ -1264,7 +1264,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
             <div>
               <h3 className="text-base font-semibold text-slate-950">VK публикации</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-                Подключите токен сообщества с правом wall.post, чтобы утверждённые посты выходили во VK по расписанию.
+                Подключите пользовательский OAuth-токен администратора с правом wall. Ключ сообщества из «Работа с API» не поддерживает wall.post.
               </p>
               {isVkFocused ? (
                 <p className="mt-2 rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs leading-5 text-sky-900">
@@ -1280,7 +1280,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
           <div className="grid gap-3 lg:grid-cols-[1fr_220px_160px]">
             <Input
               type="password"
-              placeholder="VK access_token с правом wall.post"
+              placeholder="VK user OAuth access_token с правом wall"
               value={vkAccessToken}
               onChange={(event) => setVkAccessToken(event.target.value)}
               disabled={vkBusy || !currentBusinessId}
