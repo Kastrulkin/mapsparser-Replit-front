@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar, BookOpen } from 'lucide-react';
@@ -259,6 +259,10 @@ const toolsAdminTabs: AdminTabConfig[] = [
   { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
 ];
 
+const isAdminTabId = (value: string | null): value is AdminTabId => (
+  value !== null && adminTabs.some((tab) => tab.id === value)
+);
+
 const LEAD_OUTREACH_STATUS = 'lead_outreach';
 const PAID_TIERS = new Set(['starter', 'professional', 'concierge', 'elite', 'promo', 'basic', 'pro', 'enterprise']);
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing']);
@@ -511,7 +515,11 @@ const AdminTabFallback = () => (
 );
 
 export const AdminPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<AdminTabId>('businesses');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<AdminTabId>(() => (
+    isAdminTabId(requestedTab) ? requestedTab : 'businesses'
+  ));
   const [users, setUsers] = useState<UserWithBusinesses[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -541,6 +549,19 @@ export const AdminPage: React.FC = () => {
     totalCount: 0,
     endsAt: addMonthsForInput(1),
   });
+
+  useEffect(() => {
+    if (isAdminTabId(requestedTab) && requestedTab !== activeTab) {
+      setActiveTab(requestedTab);
+    }
+  }, [activeTab, requestedTab]);
+
+  const selectAdminTab = useCallback((tabId: AdminTabId) => {
+    setActiveTab(tabId);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('tab', tabId);
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -1105,7 +1126,7 @@ export const AdminPage: React.FC = () => {
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => selectAdminTab(tab.id)}
                     className={`flex items-center justify-center gap-2 rounded-[1.4rem] px-4 py-3 text-sm font-semibold transition ${
                       isActive
                         ? isProspecting
@@ -1134,7 +1155,7 @@ export const AdminPage: React.FC = () => {
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => selectAdminTab(tab.id)}
                     className={`flex items-center justify-center gap-2 rounded-[1.2rem] px-3 py-2.5 text-xs font-semibold transition ${
                       isActive
                         ? 'bg-slate-900 text-white shadow-sm'
