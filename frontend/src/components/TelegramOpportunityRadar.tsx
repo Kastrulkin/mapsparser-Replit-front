@@ -273,7 +273,7 @@ export const TelegramOpportunityRadar = ({ businessId, mode = 'settings', source
           </Button>
           <span className="text-xs text-slate-500">
             {isWorkMode
-              ? 'Источники можно добавить здесь или в настройках Telegram.'
+              ? 'Источники и слова для поиска настраиваются здесь.'
               : 'LocalOS только читает выбранные источники; ответы остаются ручными.'}
           </span>
         </div>

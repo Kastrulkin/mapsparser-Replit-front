@@ -70,7 +70,9 @@ def collect_public_channel(canonical_url: str, *, timeout: int = 20) -> list[dic
         preview_url,
         headers={"User-Agent": "LocalOS-Knowledge-Collector/1.0 (+https://localos.pro)"},
     )
-    with request.urlopen(http_request, timeout=timeout) as response:
+    proxy_url = str(os.getenv("TELEGRAM_HTTP_PROXY") or os.getenv("OUTBOUND_HTTP_PROXY") or "").strip()
+    opener = request.build_opener(request.ProxyHandler({"http": proxy_url, "https": proxy_url})) if proxy_url else request.build_opener()
+    with opener.open(http_request, timeout=timeout) as response:
         html = response.read().decode("utf-8", errors="replace")
     return parse_public_channel_html(html)
 

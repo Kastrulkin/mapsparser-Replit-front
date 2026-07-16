@@ -22,7 +22,7 @@ from services.knowledge_ingestion import (
 )
 from services.knowledge_graph_service import diff_external_card_snapshot
 from services.knowledge_learning_service import create_aggregate_claim_candidate
-from services.knowledge_public_telegram import parse_public_channel_html
+from services.knowledge_public_telegram import collect_public_channel, parse_public_channel_html
 
 
 def test_public_source_and_pii_are_independent_characteristics():
@@ -205,6 +205,45 @@ def test_public_telegram_html_parser_reads_messages_without_browser_automation()
         }
     ]
     assert messages[0]["published_at"].isoformat() == "2026-07-15T10:00:00+00:00"
+
+
+def test_public_telegram_collector_uses_configured_http_proxy(monkeypatch):
+    from services import knowledge_public_telegram
+
+    captured = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self):
+            return b'<div class="tgme_widget_message" data-post="market/1"><div class="tgme_widget_message_text">Signal text</div></div>'
+
+    class Opener:
+        def open(self, http_request, *, timeout):
+            captured["url"] = http_request.full_url
+            captured["timeout"] = timeout
+            return Response()
+
+    def build_opener(handler=None):
+        captured["proxies"] = getattr(handler, "proxies", {})
+        return Opener()
+
+    monkeypatch.setenv("TELEGRAM_HTTP_PROXY", "http://192.168.0.177:10809")
+    monkeypatch.setattr(knowledge_public_telegram.request, "build_opener", build_opener)
+
+    messages = collect_public_channel("https://t.me/market")
+
+    assert captured["url"] == "https://t.me/s/market"
+    assert captured["timeout"] == 20
+    assert captured["proxies"] == {
+        "http": "http://192.168.0.177:10809",
+        "https": "http://192.168.0.177:10809",
+    }
+    assert messages[0]["content_text"] == "Signal text"
 
 
 def test_small_sample_blocks_shared_claim_before_database_write():

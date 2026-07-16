@@ -18,7 +18,7 @@ export const TelegramRadarPage = () => {
         icon={Radar}
         actions={(
           <Button type="button" variant="outline" asChild>
-            <Link to="/dashboard/settings?focus=telegram">Настроить источники</Link>
+            <Link to="/dashboard/settings?focus=telegram">Подключить Telegram</Link>
           </Button>
         )}
       />
