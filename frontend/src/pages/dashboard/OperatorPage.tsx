@@ -521,7 +521,7 @@ export const OperatorPage = () => {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-tour-target="operator-overview">
       <DashboardPageHeader
         eyebrow="LocalOS Operator"
         title="Оператор"

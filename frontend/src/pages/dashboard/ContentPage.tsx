@@ -856,7 +856,7 @@ export function ContentPage() {
     const formData = new FormData();
     formData.append('business_id', currentBusinessId);
     formData.append('file', file);
-    const token = window.localStorage.getItem('auth_token') || '';
+    const token = newAuth.getToken() || '';
     const response = await fetch(`${API_URL}/api/media-intelligence/photos/upload`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -2521,7 +2521,7 @@ export function ContentPage() {
       {section === 'calendar' && !generating && !loading && items.length === 0 ? renderEmptyState() : null}
 
       {section === 'calendar' && !generating && (loading || items.length > 0) ? (
-        <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
+        <div className="grid gap-5 lg:grid-cols-[1fr_340px]" data-tour-target="content-calendar">
           <main className="space-y-5">
             <div className="rounded-[32px] border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
               <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -2645,7 +2645,7 @@ function AuthenticatedImage({ src, alt, className }: { src: string; alt: string;
     let cancelled = false;
     let objectUrl = '';
     const loadImage = async () => {
-      const token = window.localStorage.getItem('auth_token') || '';
+      const token = newAuth.getToken() || '';
       const response = await fetch(`${API_URL}${src}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });

@@ -118,6 +118,7 @@ const Header = lazy(() => import("./components/Header"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicPartnershipOfferPage = lazy(() => import("./pages/PublicPartnershipOfferPage"));
 const PublicSalesRoomPage = lazy(() => import("./pages/PublicSalesRoomPage"));
+const DemoEntryPage = lazy(() => import("./pages/DemoEntryPage"));
 const CheckoutReturn = lazy(() => import("./pages/CheckoutReturn"));
 const IndustryPatternsE2EPage = import.meta.env.DEV
   ? lazy(() => import("./pages/dev/IndustryPatternsE2EPage"))
@@ -143,6 +144,10 @@ const shouldRenderHeader = (pathname: string) => {
   }
 
   if (pathname === "/bazich") {
+    return false;
+  }
+
+  if (pathname === "/demo") {
     return false;
   }
 
@@ -173,6 +178,7 @@ const AppShell = () => {
           <Route path="/docs/:section" element={<DocsPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/articles" element={<ArticlesPage />} />
+          <Route path="/demo" element={<DemoEntryPage />} />
           <Route path="/articles/:slug" element={<ArticleDetailPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/documents/:slug" element={<DocumentDetailPage />} />

@@ -473,7 +473,7 @@ export const ProgressPage = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-target="progress-overview">
       <DashboardPageHeader
         eyebrow="Картина бизнеса"
         title="Прогресс бизнеса"

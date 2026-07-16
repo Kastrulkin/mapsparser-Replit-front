@@ -236,22 +236,51 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
     finally:
         conn.close()
 
-def create_session(user_id: str, ip_address: str = None, user_agent: str = None) -> str:
+def create_session(
+    user_id: str,
+    ip_address: str = None,
+    user_agent: str = None,
+    *,
+    session_kind: str = "standard",
+    scope_business_id: str = None,
+    expires_days: int = 30,
+) -> str:
     """Создать сессию пользователя"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
         session_id = str(uuid.uuid4())
-        token = secrets.token_urlsafe(64)
-        expires_at = datetime.now() + timedelta(days=30)
+        normalized_kind = str(session_kind or "standard").strip().lower()
+        if normalized_kind not in {"standard", "demo"}:
+            return None
+        token_value = secrets.token_urlsafe(64)
+        token = f"demo_{token_value}" if normalized_kind == "demo" else token_value
+        safe_expires_days = max(1, min(int(expires_days or 30), 90))
+        expires_at = datetime.now() + timedelta(days=safe_expires_days)
         
         cursor.execute(
             f"""
-            INSERT INTO UserSessions (id, user_id, token, expires_at, ip_address, user_agent, created_at)
-            VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})
+            INSERT INTO UserSessions (
+                id, user_id, token, expires_at, ip_address, user_agent, created_at,
+                session_kind, scope_business_id
+            )
+            VALUES (
+                {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER},
+                {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}
+            )
         """,
-            (session_id, user_id, token, expires_at.isoformat(), ip_address, user_agent, datetime.now().isoformat()),
+            (
+                session_id,
+                user_id,
+                token,
+                expires_at.isoformat(),
+                ip_address,
+                user_agent,
+                datetime.now().isoformat(),
+                normalized_kind,
+                scope_business_id,
+            ),
         )
         
         conn.commit()
@@ -425,15 +454,33 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
     cursor = conn.cursor()
     
     try:
-        cursor.execute(
-            f"""
-            SELECT s.user_id, s.expires_at, u.email, u.name, u.phone, u.is_active, u.is_superadmin
-            FROM UserSessions s
-            JOIN Users u ON s.user_id = u.id
-            WHERE s.token = {PLACEHOLDER} AND s.expires_at > {PLACEHOLDER}
-        """,
-            (token, datetime.now().isoformat()),
-        )
+        params = (token, datetime.now().isoformat())
+        try:
+            cursor.execute(
+                f"""
+                SELECT s.user_id, s.expires_at, u.email, u.name, u.phone, u.is_active, u.is_superadmin,
+                       s.id AS session_id, s.session_kind, s.scope_business_id
+                FROM UserSessions s
+                JOIN Users u ON s.user_id = u.id
+                WHERE s.token = {PLACEHOLDER} AND s.expires_at > {PLACEHOLDER}
+            """,
+                params,
+            )
+        except Exception as query_error:
+            error_text = str(query_error).lower()
+            if "session_kind" not in error_text and "scope_business_id" not in error_text:
+                raise
+            conn.rollback()
+            cursor = conn.cursor()
+            cursor.execute(
+                f"""
+                SELECT s.user_id, s.expires_at, u.email, u.name, u.phone, u.is_active, u.is_superadmin
+                FROM UserSessions s
+                JOIN Users u ON s.user_id = u.id
+                WHERE s.token = {PLACEHOLDER} AND s.expires_at > {PLACEHOLDER}
+            """,
+                params,
+            )
         
         session = cursor.fetchone()
         if not session:
@@ -449,6 +496,9 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
                 phone = session['phone'] if 'phone' in session.keys() else None
                 is_active_val = session['is_active'] if 'is_active' in session.keys() else True
                 is_superadmin_val = session['is_superadmin'] if 'is_superadmin' in session.keys() else None
+                session_id = session['session_id'] if 'session_id' in session.keys() else None
+                session_kind = session['session_kind'] if 'session_kind' in session.keys() else 'standard'
+                scope_business_id = session['scope_business_id'] if 'scope_business_id' in session.keys() else None
             else:
                 # Если это tuple или другой тип (user_id, expires_at, email, name, phone, is_active, is_superadmin)
                 user_id = session[0] if len(session) > 0 else None
@@ -457,6 +507,9 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
                 phone = session[4] if len(session) > 4 else None
                 is_active_val = session[5] if len(session) > 5 else True
                 is_superadmin_val = session[6] if len(session) > 6 else None
+                session_id = session[7] if len(session) > 7 else None
+                session_kind = session[8] if len(session) > 8 else 'standard'
+                scope_business_id = session[9] if len(session) > 9 else None
             
             return {
                 "user_id": user_id,
@@ -464,7 +517,10 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
                 "name": name,
                 "phone": phone,
                 "is_active": bool(is_active_val) if is_active_val is not None else True,
-                "is_superadmin": bool(is_superadmin_val) if is_superadmin_val is not None else False
+                "is_superadmin": bool(is_superadmin_val) if is_superadmin_val is not None else False,
+                "session_id": session_id,
+                "session_kind": str(session_kind or "standard"),
+                "scope_business_id": scope_business_id,
             }
         except Exception as e:
             logger.warning("Session row extraction error: %s", type(e).__name__)

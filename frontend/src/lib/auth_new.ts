@@ -5,6 +5,10 @@ export interface User {
   phone?: string;
   is_superadmin?: boolean;
   businesses?: any[];
+  session_kind?: 'standard' | 'demo';
+  demo_mode?: boolean;
+  demo_scope_business_id?: string | null;
+  demo_room_slug?: string;
 }
 
 export interface AuthResponse {
@@ -23,6 +27,9 @@ export class NewAuth {
   private currentUser: User | null = null;
   private token: string | null = null;
   private apiBaseUrl = `${API_URL}/api`;
+  private readonly standardTokenKey = 'auth_token';
+  private readonly demoTokenKey = 'demo_auth_token';
+  private readonly demoModeKey = 'localos_demo_mode';
 
   static getInstance(): NewAuth {
     if (!NewAuth.instance) {
@@ -32,11 +39,50 @@ export class NewAuth {
   }
 
   constructor() {
-    // Загружаем токен из localStorage при инициализации
-    this.token = localStorage.getItem('auth_token');
+    this.token = this.getStoredActiveToken();
     if (this.token) {
       this.getCurrentUser();
     }
+  }
+
+  private getStoredActiveToken(): string | null {
+    if (this.isDemoModeActive()) {
+      return localStorage.getItem(this.demoTokenKey);
+    }
+    return localStorage.getItem(this.standardTokenKey);
+  }
+
+  private clearActiveToken(): void {
+    if (this.isDemoModeActive()) {
+      localStorage.removeItem(this.demoTokenKey);
+      sessionStorage.removeItem(this.demoModeKey);
+    } else {
+      localStorage.removeItem(this.standardTokenKey);
+    }
+    this.token = null;
+    this.currentUser = null;
+  }
+
+  public isDemoModeActive(): boolean {
+    return typeof window !== 'undefined' && sessionStorage.getItem(this.demoModeKey) === '1';
+  }
+
+  public activateDemoSession(token?: string): void {
+    if (token) {
+      localStorage.setItem(this.demoTokenKey, token);
+    }
+    sessionStorage.setItem(this.demoModeKey, '1');
+    this.token = token || localStorage.getItem(this.demoTokenKey);
+    this.currentUser = null;
+  }
+
+  public deactivateDemoSession(clearToken = false): void {
+    sessionStorage.removeItem(this.demoModeKey);
+    if (clearToken) {
+      localStorage.removeItem(this.demoTokenKey);
+    }
+    this.token = localStorage.getItem(this.standardTokenKey);
+    this.currentUser = null;
   }
 
   public async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
@@ -47,14 +93,13 @@ export class NewAuth {
       ...options.headers,
     };
 
-    // Всегда синхронизируем токен с localStorage перед запросом,
-    // чтобы singleton не жил со stale-токеном после повторного логина/refresh в другой вкладке.
-    const liveToken = localStorage.getItem('auth_token');
-    if (liveToken && liveToken !== this.token) {
+    const liveToken = this.getStoredActiveToken();
+    if (liveToken !== this.token) {
       this.token = liveToken;
     }
 
-    if (this.token) {
+    const isPublicSalesRoomRequest = endpoint.startsWith('/sales-rooms/public/');
+    if (this.token && !(this.isDemoModeActive() && isPublicSalesRoomRequest)) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
@@ -91,9 +136,7 @@ export class NewAuth {
       if (!response.ok) {
         const backendError = String(data.error || '');
         if (response.status === 401 && backendError.toLowerCase().includes('invalid token')) {
-          this.currentUser = null;
-          this.token = null;
-          localStorage.removeItem('auth_token');
+          this.clearActiveToken();
           throw new Error('Сессия истекла. Войдите снова.');
         }
         throw new Error(data.message || data.error || `Ошибка запроса (${response.status})`);
@@ -112,6 +155,7 @@ export class NewAuth {
   }
 
   async signUp(email: string, password: string, name?: string, phone?: string, yandexUrl?: string, personalDataConsent?: boolean): Promise<{ user: User | null; error: any }> {
+    this.deactivateDemoSession();
     try {
       const response = await this.makeRequest('/auth/register', {
         method: 'POST',
@@ -140,7 +184,7 @@ export class NewAuth {
 
       if (response.token) {
         this.token = response.token;
-        localStorage.setItem('auth_token', this.token);
+        localStorage.setItem(this.standardTokenKey, this.token);
       }
 
       return { user: this.currentUser, error: null };
@@ -160,6 +204,7 @@ export class NewAuth {
     business_country?: string,
     personalDataConsent?: boolean
   ): Promise<{ user: User | null; business: any | null; error: any }> {
+    this.deactivateDemoSession();
     try {
       const response = await this.makeRequest('/auth/register-with-business', {
         method: 'POST',
@@ -191,7 +236,7 @@ export class NewAuth {
 
       if (response.token) {
         this.token = response.token;
-        localStorage.setItem('auth_token', this.token);
+        localStorage.setItem(this.standardTokenKey, this.token);
       }
 
       return {
@@ -205,6 +250,7 @@ export class NewAuth {
   }
 
   async signIn(email: string, password: string): Promise<{ user: User | null; error: any }> {
+    this.deactivateDemoSession();
     try {
       const response = await this.makeRequest('/auth/login', {
         method: 'POST',
@@ -225,7 +271,7 @@ export class NewAuth {
 
       if (response.token) {
         this.token = response.token;
-        localStorage.setItem('auth_token', this.token);
+        localStorage.setItem(this.standardTokenKey, this.token);
       }
 
       return { user: this.currentUser, error: null };
@@ -235,6 +281,7 @@ export class NewAuth {
   }
 
   async signOut(): Promise<void> {
+    const signingOutDemo = this.isDemoModeActive();
     try {
       if (this.token) {
         await this.makeRequest('/auth/logout', {
@@ -244,13 +291,18 @@ export class NewAuth {
     } catch (error) {
       console.error('Ошибка при выходе:', error);
     } finally {
-      this.currentUser = null;
-      this.token = null;
-      localStorage.removeItem('auth_token');
+      if (signingOutDemo) {
+        this.deactivateDemoSession(true);
+      } else {
+        this.currentUser = null;
+        this.token = null;
+        localStorage.removeItem(this.standardTokenKey);
+      }
     }
   }
 
   async getCurrentUser(): Promise<User | null> {
+    this.token = this.getStoredActiveToken();
     if (!this.token) {
       return null;
     }
@@ -265,13 +317,16 @@ export class NewAuth {
         phone: u.phone,
         is_superadmin: u.is_superadmin,
         businesses: response.businesses || [],
+        session_kind: u.session_kind || 'standard',
+        demo_mode: Boolean(u.demo_mode),
+        demo_scope_business_id: u.demo_scope_business_id || null,
+        demo_room_slug: u.demo_room_slug || '',
       };
 
       return this.currentUser;
     } catch (error) {
       console.error('Ошибка при получении пользователя:', error);
-      this.token = null;
-      localStorage.removeItem('auth_token');
+      this.clearActiveToken();
       return null;
     }
   }
@@ -401,7 +456,7 @@ export class NewAuth {
 
       if (response.token) {
         this.token = response.token;
-        localStorage.setItem('auth_token', this.token);
+        localStorage.setItem(this.standardTokenKey, this.token);
       }
 
       return { user: this.currentUser, error: null };
@@ -442,7 +497,7 @@ export class NewAuth {
 
       if (response.token) {
         this.token = response.token;
-        localStorage.setItem('auth_token', this.token);
+        localStorage.setItem(this.standardTokenKey, this.token);
       }
 
       return { user: this.currentUser, error: null };
@@ -456,6 +511,7 @@ export class NewAuth {
   }
 
   getToken(): string | null {
+    this.token = this.getStoredActiveToken();
     return this.token;
   }
 }

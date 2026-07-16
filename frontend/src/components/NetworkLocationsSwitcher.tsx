@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, useEffect } from 'react';
 import { Building2, ChevronDown, MapPin } from 'lucide-react';
 import { pickNetworkRepresentative } from '@/lib/networkRepresentative';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { newAuth } from '@/lib/auth_new';
 
 interface NetworkLocation {
     id: string;
@@ -68,7 +69,7 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
 
         try {
             setLoading(true);
-            const token = localStorage.getItem('auth_token');
+            const token = newAuth.getToken();
             const response = await fetch(`/api/business/${currentBusinessId}/network-locations`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,

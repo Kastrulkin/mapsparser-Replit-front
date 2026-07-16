@@ -145,11 +145,12 @@ type DashboardSectionProps = {
   children: React.ReactNode;
   className?: string;
   contentClassName?: string;
+  dataTourTarget?: string;
 };
 
 export const DashboardSection = React.forwardRef<HTMLElement, DashboardSectionProps>(
-  ({ title, description, actions, children, className, contentClassName }, ref) => (
-    <section ref={ref} className={cn("rounded-3xl border border-slate-200/80 bg-white/92 shadow-sm", className)}>
+  ({ title, description, actions, children, className, contentClassName, dataTourTarget }, ref) => (
+    <section ref={ref} className={cn("rounded-3xl border border-slate-200/80 bg-white/92 shadow-sm", className)} data-tour-target={dataTourTarget}>
       {(title || description || actions) ? (
         <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">

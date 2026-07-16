@@ -194,3 +194,81 @@ def test_build_password_setup_link_encodes_email_and_token(monkeypatch):
     link = build_password_setup_link("User+test@example.com", "token/value")
 
     assert link == "https://localos.pro/set-password?email=User%2Btest%40example.com&token=token%2Fvalue"
+
+
+def test_create_session_stores_demo_kind_scope_and_ttl(monkeypatch):
+    cursor = FakeCursor([])
+    connection = FakeConnection(cursor)
+    monkeypatch.setattr(auth_system, "get_db_connection", lambda: connection)
+    monkeypatch.setattr(auth_system.secrets, "token_urlsafe", lambda length: "demo-token")
+
+    token = auth_system.create_session(
+        "user-1",
+        session_kind="demo",
+        scope_business_id="business-1",
+        expires_days=14,
+    )
+
+    insert_query, insert_params = cursor.queries[0]
+    assert token == "demo_demo-token"
+    assert "session_kind" in insert_query
+    assert "scope_business_id" in insert_query
+    assert insert_params[-2:] == ("demo", "business-1")
+
+
+def test_verify_session_returns_kind_and_scope(monkeypatch):
+    cursor = FakeCursor(
+        [
+            (
+                "user-1",
+                "2099-01-01T00:00:00",
+                "demo@example.com",
+                "Demo",
+                None,
+                True,
+                False,
+                "session-1",
+                "demo",
+                "business-1",
+            )
+        ]
+    )
+    connection = FakeConnection(cursor)
+    monkeypatch.setattr(auth_system, "get_db_connection", lambda: connection)
+
+    session = auth_system.verify_session("demo-token")
+
+    assert session["session_id"] == "session-1"
+    assert session["session_kind"] == "demo"
+    assert session["scope_business_id"] == "business-1"
+
+
+def test_verify_session_falls_back_for_legacy_session_schema(monkeypatch):
+    class MissingColumnCursor(FakeCursor):
+        def execute(self, query, params=None):
+            raise RuntimeError('column s.session_kind does not exist')
+
+    legacy_cursor = FakeCursor(
+        [("user-1", "2099-01-01T00:00:00", "user@example.com", "User", None, True, False)]
+    )
+
+    class LegacyConnection(FakeConnection):
+        def __init__(self):
+            super().__init__(MissingColumnCursor([]))
+            self.cursor_calls = 0
+
+        def cursor(self):
+            self.cursor_calls += 1
+            return self.cursor_value if self.cursor_calls == 1 else legacy_cursor
+
+        def rollback(self):
+            pass
+
+    connection = LegacyConnection()
+    monkeypatch.setattr(auth_system, "get_db_connection", lambda: connection)
+
+    session = auth_system.verify_session("standard-token")
+
+    assert session["user_id"] == "user-1"
+    assert session["session_kind"] == "standard"
+    assert session["scope_business_id"] is None

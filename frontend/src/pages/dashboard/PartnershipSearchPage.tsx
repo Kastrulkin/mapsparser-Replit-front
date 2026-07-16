@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { newAuth } from '@/lib/auth_new';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -753,7 +753,9 @@ const toPilotCohort = (value: string): PilotCohort => {
 };
 
 export const PartnershipSearchPage: React.FC = () => {
-  const { currentBusinessId } = useOutletContext<any>();
+  const { currentBusinessId, user } = useOutletContext<any>();
+  const [searchParams] = useSearchParams();
+  const showDemoPartner = searchParams.get('demo') === 'romashka';
   const [loading, setLoading] = useState(false);
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
   const [dropColumnId, setDropColumnId] = useState<PartnershipBoardColumnId | null>(null);
@@ -770,8 +772,8 @@ export const PartnershipSearchPage: React.FC = () => {
   const [geoLimit, setGeoLimit] = useState('25');
   const [stage, setStage] = useState('all');
   const [pilotCohort, setPilotCohort] = useState<PilotCohort>('all');
-  const [query, setQuery] = useState('');
-  const [workspaceView, setWorkspaceView] = useState<PartnershipWorkspaceView>('overview');
+  const [query, setQuery] = useState(showDemoPartner ? 'Ромашка' : '');
+  const [workspaceView, setWorkspaceView] = useState<PartnershipWorkspaceView>(showDemoPartner ? 'pipeline' : 'overview');
   const [items, setItems] = useState<PartnershipLead[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
@@ -909,6 +911,29 @@ export const PartnershipSearchPage: React.FC = () => {
     }));
   }, [pipelineLeads]);
 
+  const demoPartner = useMemo(
+    () => showDemoPartner
+      ? items.find((item) => String(item.name || '').trim().toLowerCase() === 'ромашка') || null
+      : null,
+    [items, showDemoPartner],
+  );
+  const demoPartnerDraft = useMemo(
+    () => showDemoPartner
+      ? drafts.find((draft) => (
+          draft.lead_id === demoPartner?.id
+          || String(draft.lead_name || '').trim().toLowerCase() === 'ромашка'
+        )) || null
+      : null,
+    [demoPartner?.id, drafts, showDemoPartner],
+  );
+  const demoProposalText = String(
+    demoPartnerDraft?.approved_text
+      || demoPartnerDraft?.edited_text
+      || demoPartnerDraft?.generated_text
+      || 'Предложение о совместном клиентском дне подготовлено и утверждено.',
+  ).trim();
+  const demoRoomSlug = String(user?.demo_room_slug || '').trim();
+
   useEffect(() => {
     const visibleDraftIds = new Set(visibleDrafts.map((draft) => draft.id));
     setSelectedDraftIds((prev) => prev.filter((id) => visibleDraftIds.has(id)));
@@ -942,12 +967,17 @@ export const PartnershipSearchPage: React.FC = () => {
     });
   }, [selectedLeadId, selectedLead, items]);
 
-  const loadLeads = async () => {
+  const loadLeads = async (queryOverride?: string) => {
     if (!currentBusinessId) return;
     try {
       setLoading(true);
       setError(null);
-      const data = await loadPartnershipLeads({ businessId: currentBusinessId, stage, pilotCohort, query });
+      const data = await loadPartnershipLeads({
+        businessId: currentBusinessId,
+        stage,
+        pilotCohort,
+        query: queryOverride ?? query,
+      });
       setItems(Array.isArray(data.items) ? data.items : []);
       setSelectedLeadIds((prev) => prev.filter((id) => (data.items || []).some((x: any) => x.id === id)));
       if (selectedLeadId && !(data.items || []).some((x: any) => x.id === selectedLeadId)) {
@@ -959,6 +989,14 @@ export const PartnershipSearchPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!showDemoPartner) return;
+    setQuery('Ромашка');
+    setWorkspaceView('pipeline');
+    void loadLeads('Ромашка');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showDemoPartner, currentBusinessId]);
 
   const loadRalphLoop = async () => {
     if (!currentBusinessId) return;
@@ -2197,7 +2235,7 @@ export const PartnershipSearchPage: React.FC = () => {
 
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-24" data-tour-target="partnership-workspace">
       <PartnershipWorkspaceOverview
         workspaceView={workspaceView}
         currentBusinessId={currentBusinessId}
@@ -2215,6 +2253,37 @@ export const PartnershipSearchPage: React.FC = () => {
         </div>
       ) : (
         <>
+          {showDemoPartner ? (
+            <section
+              className="grid gap-5 rounded-lg border border-emerald-200 bg-white p-5 shadow-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+              data-tour-target="partnership-candidates"
+              aria-labelledby="demo-partner-title"
+            >
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 id="demo-partner-title" className="text-xl font-semibold text-slate-950">
+                    {demoPartner?.name || 'Ромашка'}
+                  </h2>
+                  <Badge variant="secondary">Партнёр</Badge>
+                  <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                    Предложение утверждено
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm font-medium text-slate-700">Совместный клиентский день</p>
+                <p className="mt-2 line-clamp-3 max-w-3xl text-sm leading-6 text-slate-600">
+                  {demoProposalText}
+                </p>
+              </div>
+              {demoRoomSlug ? (
+                <Button asChild className="min-h-10 active:scale-[0.96]">
+                  <a href={`/room/${demoRoomSlug}`} target="_blank" rel="noreferrer">
+                    Открыть цифровую комнату
+                  </a>
+                </Button>
+              ) : null}
+            </section>
+          ) : null}
+
           {workspaceView === 'overview' ? (
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
               <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">

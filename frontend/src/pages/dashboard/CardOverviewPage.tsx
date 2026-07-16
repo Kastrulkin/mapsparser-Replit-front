@@ -937,7 +937,7 @@ export const CardOverviewPage = () => {
 
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-10">
+    <div className="space-y-6 max-w-7xl mx-auto pb-10" data-tour-target="card-overview">
       {/* Blur Overlay for Network Master Accounts */}
       {isNetworkMaster && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-md">
@@ -1317,7 +1317,7 @@ export const CardOverviewPage = () => {
             </DashboardSection>
 
             {/* Services Section */}
-            <DashboardSection contentClassName="space-y-5">
+            <DashboardSection contentClassName="space-y-5" dataTourTarget="card-services">
               <DashboardActionPanel
                 title="Услуги"
                 description="Проверьте, как услуги будут выглядеть в карточках и поиске. Главный сценарий: закрыть слабые описания и принять готовые SEO-варианты."

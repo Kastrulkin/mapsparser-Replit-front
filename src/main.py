@@ -134,6 +134,7 @@ from api.average_ticket_api import average_ticket_bp
 from api.reports_api import reports_bp
 from api.operator_api import operator_bp
 from api.auth_user_api import auth_user_bp
+from api.guided_tour_api import guided_tour_bp
 from api.superadmin_business_api import superadmin_business_bp
 from api.telegram_opportunity_radar_api import telegram_opportunity_radar_bp
 from api.telegram_research_api import telegram_research_bp
@@ -311,6 +312,7 @@ app.register_blueprint(average_ticket_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(operator_bp)
 app.register_blueprint(auth_user_bp)
+app.register_blueprint(guided_tour_bp)
 app.register_blueprint(superadmin_business_bp)
 app.register_blueprint(telegram_opportunity_radar_bp)
 app.register_blueprint(telegram_research_bp)

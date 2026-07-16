@@ -268,6 +268,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
                 <Link
                   to={item.path}
                   onClick={handleLinkClick}
+                  data-tour-target={`nav-${item.id}`}
                   className={cn(
                     "group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-300",
                     collapsed && !isMobile ? "justify-center px-2 py-3 hover:translate-x-0" : "px-4 py-3",

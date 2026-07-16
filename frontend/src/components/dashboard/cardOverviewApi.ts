@@ -1,3 +1,5 @@
+import { newAuth } from '@/lib/auth_new';
+
 type ParseRefreshPolicy = {
   can_refresh: boolean;
   reason: string | null;
@@ -16,7 +18,7 @@ type MapSourcesResult = {
 };
 
 const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+  Authorization: `Bearer ${newAuth.getToken() || ''}`,
 });
 
 const jsonRequest = async (path: string, init?: RequestInit) => {

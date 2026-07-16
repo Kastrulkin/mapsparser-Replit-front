@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 
 from flask import Blueprint, current_app, jsonify, request
@@ -37,6 +38,18 @@ def _user_id_from_session(user_data):
     return None
 
 
+def _filter_demo_businesses(businesses, scope_business_id):
+    normalized_scope = str(scope_business_id or "").strip()
+    if not normalized_scope:
+        return []
+    return [
+        business
+        for business in businesses
+        if str(_safe_get(business, "id") or "") == normalized_scope
+        or str(_safe_get(business, "network_id") or "") == normalized_scope
+    ]
+
+
 @auth_user_bp.route("/api/auth/me", methods=["GET"])
 def get_user_info():
     """Получить информацию о текущем пользователе."""
@@ -68,6 +81,11 @@ def get_user_info():
         else:
             businesses = db.get_businesses_by_owner(user_id)
 
+        session_kind = str(_safe_get(user_data, "session_kind", "standard") or "standard")
+        scope_business_id = _safe_get(user_data, "scope_business_id")
+        if session_kind == "demo":
+            businesses = _filter_demo_businesses(businesses, scope_business_id)
+
         if not is_superadmin and len(businesses) == 0:
             db.close()
             return jsonify({"error": "Все ваши бизнесы заблокированы. Обратитесь к администратору."}), 403
@@ -82,6 +100,13 @@ def get_user_info():
                     "name": _safe_get(user_data, "name"),
                     "phone": _safe_get(user_data, "phone"),
                     "is_superadmin": is_superadmin,
+                    "session_kind": session_kind,
+                    "demo_mode": session_kind == "demo",
+                    "demo_scope_business_id": scope_business_id,
+                    "demo_room_slug": (
+                        current_app.config.get("PUBLIC_DEMO_ROOM_SLUG")
+                        or os.getenv("PUBLIC_DEMO_ROOM_SLUG", "")
+                    ) if session_kind == "demo" else "",
                 },
                 "businesses": businesses,
             }

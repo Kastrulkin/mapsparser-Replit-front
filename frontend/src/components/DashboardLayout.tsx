@@ -4,6 +4,7 @@ import { DashboardHeader } from './DashboardHeader';
 import { useState, useEffect, useCallback } from 'react';
 import { newAuth, type User } from '../lib/auth_new';
 import { getAutomationAccessForBusiness } from '../lib/subscriptionAccess';
+import { DemoModeBanner, GuidedTourProvider } from './guided-tour/GuidedTourProvider';
 
 type DashboardBusiness = {
   id: string;
@@ -71,7 +72,9 @@ export const DashboardLayout = () => {
         setUser(currentUser);
 
         // Проверяем, есть ли бизнес, выбранный из админской страницы
-        const adminSelectedBusinessId = localStorage.getItem('admin_selected_business_id');
+        const adminSelectedBusinessId = currentUser.demo_mode
+          ? null
+          : localStorage.getItem('admin_selected_business_id');
         if (adminSelectedBusinessId) {
           localStorage.removeItem('admin_selected_business_id');
         }
@@ -89,7 +92,8 @@ export const DashboardLayout = () => {
           }
 
           if (!businessToSelect) {
-            const savedBusinessId = localStorage.getItem('selectedBusinessId');
+            const businessStorageKey = currentUser.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId';
+            const savedBusinessId = localStorage.getItem(businessStorageKey);
             businessToSelect = savedBusinessId
               ? businessesData.find((business) => business.id === savedBusinessId) || businessesData[0]
               : businessesData[0];
@@ -97,7 +101,7 @@ export const DashboardLayout = () => {
 
           setCurrentBusinessId(businessToSelect.id);
           setCurrentBusiness(businessToSelect);
-          localStorage.setItem('selectedBusinessId', businessToSelect.id);
+          localStorage.setItem(currentUser.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId', businessToSelect.id);
         } else {
           setBusinesses([]);
         }
@@ -123,7 +127,7 @@ export const DashboardLayout = () => {
     if (business) {
       setCurrentBusinessId(businessId);
       setCurrentBusiness(business);
-      localStorage.setItem('selectedBusinessId', businessId);
+      localStorage.setItem(user?.demo_mode ? 'demo_selectedBusinessId' : 'selectedBusinessId', businessId);
     }
   };
 
@@ -183,10 +187,11 @@ export const DashboardLayout = () => {
   const lockedPaidSection = paidDashboardSections.find((section) => (
     location.pathname === section.path || location.pathname.startsWith(`${section.path}/`)
   ));
-  const shouldBlurPaidSection = Boolean(lockedPaidSection && !user.is_superadmin && !automationAccess.automationAllowed);
+  const shouldBlurPaidSection = Boolean(lockedPaidSection && !user.demo_mode && !user.is_superadmin && !automationAccess.automationAllowed);
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.06),_transparent_30%),linear-gradient(180deg,_#f8fafc_0%,_#f6f8fc_100%)] text-slate-900">
+    <GuidedTourProvider user={user}>
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.06),_transparent_30%),linear-gradient(180deg,_#f8fafc_0%,_#f6f8fc_100%)] text-slate-900">
       <DashboardSidebar isMobile={false} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)} />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:pl-24' : 'md:pl-72'}`}>
         <DashboardHeader
@@ -197,11 +202,12 @@ export const DashboardLayout = () => {
           isSuperadmin={user.is_superadmin}
           user={user}
         />
+        {user.demo_mode ? <DemoModeBanner /> : null}
         <main className="flex-1 p-3 sm:p-4 lg:p-6">
           <div className="mx-auto w-full max-w-[1600px]">
             <div className="relative min-h-[60vh]">
               <div className={shouldBlurPaidSection ? 'pointer-events-none select-none blur-sm' : undefined} aria-hidden={shouldBlurPaidSection || undefined}>
-                <Outlet context={{ user, currentBusinessId, currentBusiness, businesses, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
+                <Outlet context={{ user, demoMode: Boolean(user.demo_mode), currentBusinessId, currentBusiness, businesses, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
               </div>
               {shouldBlurPaidSection && lockedPaidSection ? (
                 <div className="absolute inset-0 z-20 flex items-start justify-center rounded-2xl bg-slate-50/55 px-4 py-16 backdrop-blur-[2px]">
@@ -240,6 +246,7 @@ export const DashboardLayout = () => {
         isMobile={true}
         onClose={() => setSidebarOpen(false)}
       />
-    </div>
+      </div>
+    </GuidedTourProvider>
   );
 };

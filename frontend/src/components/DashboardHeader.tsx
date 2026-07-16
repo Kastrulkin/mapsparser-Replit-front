@@ -65,9 +65,9 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
   const handleLogout = async () => {
     try {
+      const demoMode = Boolean(currentUser?.demo_mode);
       await newAuth.signOut();
-      localStorage.clear();
-      window.location.href = '/login';
+      window.location.href = demoMode ? '/' : '/login';
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -105,10 +105,12 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           )}
 
           {currentBusiness?.network_id && onBusinessChange && (
-            <NetworkLocationsSwitcher
-              currentBusinessId={currentBusinessId || undefined}
-              onLocationChange={onBusinessChange}
-            />
+            <div data-tour-target="network-switcher">
+              <NetworkLocationsSwitcher
+                currentBusinessId={currentBusinessId || undefined}
+                onLocationChange={onBusinessChange}
+              />
+            </div>
           )}
 
           {/* Fallback Title if no switchers active */}
