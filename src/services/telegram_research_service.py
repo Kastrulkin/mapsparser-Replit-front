@@ -724,21 +724,23 @@ def list_audience_insights(conn, *, business_id: str, industry: str, limit: int 
                    ROUND(AVG(COALESCE((d.metadata_json->>'priority_score')::INTEGER, a.confidence * 100)))::INTEGER AS priority_score,
                    MAX(e.observed_at) AS last_seen_at,
                    BOOL_OR(s.visibility <> 'public') AS has_private_sources,
-                   COALESCE(c.metadata_json->>'decision', '') AS decision
+                   COALESCE(bd.decision, '') AS decision
             FROM knowledge_concepts c
             JOIN knowledge_assertions a ON a.object_type = 'concept' AND a.object_id = c.id::text AND a.invalidated_at IS NULL
             JOIN knowledge_evidence e ON e.assertion_id = a.id AND e.invalidated_at IS NULL
             JOIN knowledge_sources s ON s.id = e.source_id
             JOIN knowledge_documents d ON d.id = e.document_id
+            LEFT JOIN business_audience_insight_decisions bd
+              ON bd.concept_id = c.id AND bd.business_id = %s
             WHERE c.industry = %s
               AND (c.business_id IS NULL OR c.business_id = %s)
               AND (s.business_id IS NULL OR s.business_id = %s OR s.visibility = 'public')
               AND c.concept_type IN ('pain', 'question', 'objection', 'practice', 'market_signal')
-            GROUP BY c.id
+            GROUP BY c.id, bd.decision
             ORDER BY priority_score DESC, messages_count DESC, last_seen_at DESC NULLS LAST
             LIMIT %s
             """,
-            (industry, business_id, business_id, max(1, min(int(limit or 50), 100))),
+            (business_id, industry, business_id, business_id, max(1, min(int(limit or 50), 100))),
         )
         return [dict(row) for row in cursor.fetchall()]
     finally:
@@ -770,14 +772,21 @@ def decide_audience_insight(
             raise LookupError("Сигнал не найден")
         cursor.execute(
             """
-            UPDATE knowledge_concepts
-            SET metadata_json = metadata_json || %s, updated_at = NOW()
-            WHERE id = %s
-            RETURNING *
+            INSERT INTO business_audience_insight_decisions (
+                business_id, concept_id, decision, decided_by, decided_at, created_at, updated_at
+            ) VALUES (%s, %s, %s, %s, NOW(), NOW(), NOW())
+            ON CONFLICT (business_id, concept_id) DO UPDATE SET
+                decision = EXCLUDED.decision,
+                decided_by = EXCLUDED.decided_by,
+                decided_at = NOW(),
+                updated_at = NOW()
+            RETURNING decision, decided_by, decided_at
             """,
-            (Json({"decision": decision, "decided_by": user_id, "decided_at": datetime.now(timezone.utc).isoformat()}), insight_id),
+            (business_id, insight_id, decision, user_id),
         )
-        updated = dict(cursor.fetchone())
+        decision_row = dict(cursor.fetchone())
+        updated = dict(concept)
+        updated.update(decision_row)
         if decision == "use_in_plan":
             updated["content_plan_item"] = _add_insight_to_latest_plan(cursor, business_id, updated)
         elif decision == "save_as_rule":

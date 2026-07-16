@@ -248,8 +248,9 @@ def save_research_sources(business_id: str):
             if not chat_id:
                 continue
             selected_chat_ids.append(chat_id)
-            visibility = "public" if str(source.get("visibility") or "") == "public" else "private"
             username = str(source.get("telegram_username") or "").strip().lstrip("@")
+            requested_visibility = str(source.get("visibility") or "").strip().lower()
+            visibility = "public" if requested_visibility == "public" and username else "private"
             allowed_uses = (
                 ["market", "localos_content", "client_content", "industry_recommendations"]
                 if visibility == "public"

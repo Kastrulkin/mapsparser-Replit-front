@@ -137,6 +137,181 @@ def test_migration_adds_generic_market_source_lifecycle():
     assert "telegram_userbot" in migration
 
 
+def test_shared_audience_decision_does_not_leak_between_businesses(run_migrations, postgres_container):
+    import uuid
+
+    import psycopg2
+
+    from services.telegram_research_service import decide_audience_insight, list_audience_insights
+
+    raw_url = postgres_container.get_connection_url()
+    dsn = raw_url.replace("postgresql+psycopg2://", "postgresql://", 1)
+    conn = psycopg2.connect(dsn)
+    source_id = str(uuid.uuid4())
+    document_id = str(uuid.uuid4())
+    concept_id = str(uuid.uuid4())
+    assertion_id = str(uuid.uuid4())
+    evidence_id = str(uuid.uuid4())
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO businesses (id, owner_id, name)
+            VALUES ('business-a', 'owner-a', 'Business A'),
+                   ('business-b', 'owner-b', 'Business B')
+            ON CONFLICT (id) DO NOTHING
+            """
+        )
+        cursor.execute(
+            """
+            INSERT INTO knowledge_sources (
+                id, source_type, external_key, title, source_role, visibility,
+                sensitivity_class, allowed_uses, status
+            ) VALUES (%s, 'telegram', %s, 'Public market source', 'community',
+                      'public', 'public', '["client_content"]'::jsonb, 'active')
+            """,
+            (source_id, f"test-shared-decision:{source_id}"),
+        )
+        cursor.execute(
+            """
+            INSERT INTO knowledge_documents (
+                id, source_id, external_id, document_type, content_text,
+                content_hash, sensitivity_class, allowed_uses
+            ) VALUES (%s, %s, 'message-1', 'telegram_message', 'Shared market signal',
+                      'hash-1', 'public', '["client_content"]'::jsonb)
+            """,
+            (document_id, source_id),
+        )
+        cursor.execute(
+            """
+            INSERT INTO knowledge_concepts (
+                id, concept_type, canonical_key, label, industry, business_id,
+                sensitivity_class, allowed_uses
+            ) VALUES (%s, 'pain', %s, 'Shared audience pain', 'beauty', NULL,
+                      'public', '["client_content"]'::jsonb)
+            """,
+            (concept_id, f"shared-audience-pain-{concept_id}"),
+        )
+        cursor.execute(
+            """
+            INSERT INTO knowledge_assertions (
+                id, assertion_type, subject_type, subject_id, predicate,
+                object_type, object_id, business_id, industry, confidence,
+                allowed_uses, sensitivity_class, analysis_version
+            ) VALUES (%s, 'audience_signal', 'document', %s, 'expresses',
+                      'concept', %s, NULL, 'beauty', 0.9,
+                      '["client_content"]'::jsonb, 'public', 'test-v1')
+            """,
+            (assertion_id, document_id, concept_id),
+        )
+        cursor.execute(
+            """
+            INSERT INTO knowledge_evidence (
+                id, assertion_id, document_id, source_id, excerpt, confidence,
+                analysis_version, allowed_uses, sensitivity_class
+            ) VALUES (%s, %s, %s, %s, 'Shared market signal', 0.9,
+                      'test-v1', '["client_content"]'::jsonb, 'public')
+            """,
+            (evidence_id, assertion_id, document_id, source_id),
+        )
+
+        before = list_audience_insights(conn, business_id="business-a", industry="beauty")
+        assert before[0]["decision"] == ""
+
+        decide_audience_insight(
+            conn,
+            business_id="business-a",
+            insight_id=concept_id,
+            decision="ignored",
+            user_id="user-a",
+        )
+
+        business_b_items = list_audience_insights(conn, business_id="business-b", industry="beauty")
+        assert business_b_items[0]["decision"] == ""
+    finally:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+
+
+def test_private_dialog_cannot_be_promoted_to_public_by_payload(monkeypatch):
+    from flask import Flask
+
+    from api import telegram_research_api
+
+    captured = {}
+
+    class FakeConnection:
+        def commit(self):
+            return None
+
+        def rollback(self):
+            return None
+
+    class FakeCursor:
+        def execute(self, _query, _params=None):
+            return None
+
+    class FakeDatabase:
+        def __init__(self):
+            self.conn = FakeConnection()
+
+        def close(self):
+            return None
+
+    database = FakeDatabase()
+    cursor = FakeCursor()
+
+    monkeypatch.setattr(
+        telegram_research_api,
+        "_require_business",
+        lambda _business_id: (database, cursor, {"user_id": "user-a"}, None),
+    )
+    monkeypatch.setattr(
+        telegram_research_api,
+        "_account_for_business",
+        lambda _cursor, _business_id: {"account_id": "account-a", "session_string": "ready"},
+    )
+    monkeypatch.setattr(
+        telegram_research_api,
+        "_business_knowledge_context",
+        lambda _cursor, _business_id: {"industry_key": "beauty", "audience": "customers"},
+    )
+
+    def capture_knowledge_source(_conn, **payload):
+        captured.update(payload)
+        return {"id": "knowledge-source-a", "title": payload["title"]}
+
+    monkeypatch.setattr(telegram_research_api, "upsert_knowledge_source", capture_knowledge_source)
+    monkeypatch.setattr(
+        telegram_research_api,
+        "upsert_radar_source",
+        lambda _cursor, _payload: {"id": "radar-source-a"},
+    )
+
+    app = Flask(__name__)
+    app.register_blueprint(telegram_research_api.telegram_research_bp)
+    response = app.test_client().put(
+        "/api/business/business-a/telegram-research/sources",
+        json={
+            "sources": [
+                {
+                    "telegram_chat_id": "-100-private",
+                    "telegram_username": None,
+                    "title": "Private customer chat",
+                    "visibility": "public",
+                    "source_type": "chat",
+                }
+            ]
+        },
+    )
+
+    if response.status_code < 400:
+        assert captured["visibility"] == "private"
+        assert captured["sensitivity_class"] == "tenant_confidential"
+        assert captured["allowed_uses"] == ["localos_content"]
+
+
 def test_private_message_retention_qualifies_document_metadata_column():
     source = Path("src/services/telegram_research_service.py").read_text(encoding="utf-8")
 
