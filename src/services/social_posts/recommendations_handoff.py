@@ -856,6 +856,16 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
             "metadata_json": {"provider_status": "vk_connection_missing"},
         }
     auth_data = _external_account_auth_data(account)
+    auth_data = _vk_auth_data_with_fresh_token(cursor, account, auth_data)
+    if auth_data.get("_oauth_refresh_error"):
+        return {
+            "status": "needs_manual_publish",
+            "last_error": "Доступ VK устарел. Подключите сообщество заново.",
+            "metadata_json": {
+                "provider_status": "vk_token_expired",
+                "external_account_id": account.get("id"),
+            },
+        }
     vk_binding = _vk_publish_binding(account, auth_data)
     if not vk_binding.get("ready"):
         return {
@@ -1356,6 +1366,16 @@ def _telegram_publish_permission_probe(
 def _vk_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, Any]:
     account = _find_active_external_account(cursor, business_id, ("vk", "vk_group", "vk_business"))
     auth_data = _external_account_auth_data(account)
+    auth_data = _vk_auth_data_with_fresh_token(cursor, account, auth_data)
+    if auth_data.get("_oauth_refresh_error"):
+        return _api_channel_preflight_result(
+            "vk",
+            False,
+            "token_expired",
+            _vk_connection_checks(account, auth_data, {"ready": False, "status": "token_expired"}),
+            "Доступ VK устарел. Подключите сообщество заново.",
+            "VK access expired. Reconnect the community.",
+        )
     binding = _vk_publish_binding(account, auth_data)
     checks = _vk_connection_checks(account, auth_data, binding)
     if not binding.get("ready"):
@@ -1875,6 +1895,61 @@ def _external_account_auth_data(account: dict[str, Any]) -> dict[str, Any]:
         return parsed if isinstance(parsed, dict) else {"raw": str(decrypted or "").strip()}
     except Exception:
         return {}
+
+def _vk_auth_data_with_fresh_token(
+    cursor: Any,
+    account: dict[str, Any],
+    auth_data: dict[str, Any],
+) -> dict[str, Any]:
+    if str(auth_data.get("auth_mode") or "") != "vk_id_oauth":
+        return auth_data
+    expires_at_raw = str(auth_data.get("expires_at") or "").strip()
+    if not expires_at_raw:
+        return auth_data
+    try:
+        expires_at = datetime.fromisoformat(expires_at_raw.replace("Z", "+00:00"))
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at.timestamp() > datetime.now(timezone.utc).timestamp() + 120:
+            return auth_data
+    except (TypeError, ValueError):
+        pass
+    try:
+        refreshed = refresh_vk_oauth_tokens(
+            refresh_token=str(auth_data.get("refresh_token") or ""),
+            device_id=str(auth_data.get("device_id") or ""),
+        )
+        next_auth_data = dict(auth_data)
+        next_auth_data["access_token"] = str(refreshed.get("access_token") or "").strip()
+        next_auth_data["refresh_token"] = str(
+            refreshed.get("refresh_token") or auth_data.get("refresh_token") or ""
+        ).strip()
+        next_auth_data["token_type"] = str(
+            refreshed.get("token_type") or auth_data.get("token_type") or "Bearer"
+        ).strip()
+        next_auth_data["expires_at"] = oauth_token_expiry(refreshed.get("expires_in"))
+        next_auth_data["refreshed_at"] = datetime.now(timezone.utc).isoformat()
+        if not next_auth_data["access_token"]:
+            raise RuntimeError("VK did not return access_token")
+        account_id = str(account.get("id") or "").strip()
+        if account_id:
+            cursor.execute(
+                """
+                UPDATE externalbusinessaccounts
+                SET auth_data_encrypted = %s, last_error = NULL,
+                    last_sync_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (encrypt_auth_data(json.dumps(next_auth_data, ensure_ascii=False)), account_id),
+            )
+            connection = getattr(cursor, "connection", None)
+            if connection is not None:
+                connection.commit()
+        return next_auth_data
+    except Exception:
+        failed_auth_data = dict(auth_data)
+        failed_auth_data["_oauth_refresh_error"] = str(sys.exc_info()[1] or "refresh_failed")
+        return failed_auth_data
 
 def _vk_publish_binding(account: dict[str, Any], auth_data: dict[str, Any]) -> dict[str, Any]:
     if not account:

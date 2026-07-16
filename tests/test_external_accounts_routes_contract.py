@@ -63,6 +63,21 @@ def test_external_accounts_routes_stay_registered_after_blueprint_split():
             frozenset({"POST"}),
             "external_accounts_api.yclients_marketplace_import_services",
         ),
+        (
+            "/api/business/<business_id>/vk/oauth/start",
+            frozenset({"POST"}),
+            "external_accounts_api.start_vk_oauth",
+        ),
+        (
+            "/api/vk/oauth/callback",
+            frozenset({"GET"}),
+            "external_accounts_api.vk_oauth_callback",
+        ),
+        (
+            "/api/business/<business_id>/vk/oauth/complete",
+            frozenset({"POST"}),
+            "external_accounts_api.complete_vk_oauth",
+        ),
     }
 
     assert expected.issubset(routes)

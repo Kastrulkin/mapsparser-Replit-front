@@ -10,12 +10,15 @@ import hmac
 import json
 import logging
 import os
+import re
+import sys
+import urllib.parse
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import requests
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, redirect, request
 
 from auth_encryption import decrypt_auth_data, encrypt_auth_data
 from auth_system import verify_session
@@ -25,10 +28,25 @@ from core.parsing_runtime_config import resolve_map_source_for_queue
 from core.telegram_network import build_requests_proxy_kwargs
 from database_manager import DatabaseManager
 from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR
+from services.vk_oauth_service import (
+    VkOAuthError,
+    build_vk_authorization_url,
+    decode_vk_oauth_state,
+    encode_vk_oauth_state,
+    exchange_vk_authorization_code,
+    normalize_vk_group_id,
+    oauth_token_expiry,
+    validate_vk_pkce_value,
+    verify_vk_oauth_access,
+    vk_api_version,
+    vk_pkce_challenge,
+)
 
 
 logger = logging.getLogger(__name__)
 external_accounts_bp = Blueprint("external_accounts_api", __name__)
+
+DEFAULT_VK_RETURN_PATH = "/dashboard/settings/integrations?focus=vk"
 
 
 try:
@@ -66,6 +84,127 @@ def _table_columns(cursor, table_name: str) -> set:
         if name:
             cols.add(str(name).lower())
     return cols
+
+
+def _safe_vk_return_path(value: Any) -> str:
+    clean = str(value or "").strip()
+    if not clean or clean.startswith("//") or "\r" in clean or "\n" in clean:
+        return DEFAULT_VK_RETURN_PATH
+    if not clean.startswith("/dashboard/"):
+        return DEFAULT_VK_RETURN_PATH
+    return clean[:500]
+
+
+def _append_vk_auth_params(path: str, params: dict[str, Any]) -> str:
+    safe_path = _safe_vk_return_path(path)
+    parsed = urllib.parse.urlsplit(safe_path)
+    query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    for key, value in params.items():
+        query.append((str(key), str(value or "")))
+    return urllib.parse.urlunsplit(("", "", parsed.path, urllib.parse.urlencode(query), ""))
+
+
+def _require_vk_business_access(business_id: str):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None, None, (jsonify({"error": "Требуется авторизация"}), 401)
+    token = auth_header.split(" ", 1)[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return None, None, (jsonify({"error": "Недействительный токен"}), 401)
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    owner_id = get_business_owner_id(cursor, business_id)
+    if not owner_id:
+        db.close()
+        return None, None, (jsonify({"error": "Бизнес не найден"}), 404)
+    if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        db.close()
+        return None, None, (jsonify({"error": "Нет доступа к этому бизнесу"}), 403)
+    return user_data, db, None
+
+
+def _vk_oauth_error_response(default_status: int = 400):
+    error = sys.exc_info()[1]
+    if isinstance(error, VkOAuthError):
+        status = 503 if error.code == "oauth_not_configured" else default_status
+        return jsonify({"success": False, "status": error.code, "error": str(error)}), status
+    logger.exception("VK OAuth request failed")
+    return jsonify({"success": False, "status": "oauth_failed", "error": "Не удалось подключить VK. Повторите позже."}), 502
+
+
+def _upsert_vk_oauth_account(
+    cursor: Any,
+    *,
+    business_id: str,
+    verification: dict[str, Any],
+    token_payload: dict[str, Any],
+    device_id: str,
+) -> str:
+    group_id = str(verification.get("group_id") or "").strip()
+    account_id = ""
+    cursor.execute(
+        """
+        SELECT id
+        FROM externalbusinessaccounts
+        WHERE business_id = %s
+          AND source IN ('vk', 'vk_group', 'vk_business')
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+        LIMIT 1
+        FOR UPDATE
+        """,
+        (business_id,),
+    )
+    existing = cursor.fetchone()
+    if existing:
+        existing_dict = _row_to_dict(cursor, existing) or {}
+        account_id = str(existing_dict.get("id") or "")
+    if not account_id:
+        account_id = str(uuid.uuid4())
+
+    auth_data = {
+        "access_token": str(token_payload.get("access_token") or "").strip(),
+        "refresh_token": str(token_payload.get("refresh_token") or "").strip(),
+        "token_type": str(token_payload.get("token_type") or "Bearer").strip(),
+        "expires_at": oauth_token_expiry(token_payload.get("expires_in")),
+        "device_id": str(device_id or "").strip(),
+        "user_id": str(verification.get("user_id") or "").strip(),
+        "group_id": group_id,
+        "owner_id": f"-{group_id}",
+        "scope": verification.get("scope") or [],
+        "permissions": int(verification.get("permissions") or 0),
+        "api_version": vk_api_version(),
+        "auth_mode": "vk_id_oauth",
+        "verified_at": verification.get("verified_at"),
+    }
+    encrypted = encrypt_auth_data(json.dumps(auth_data, ensure_ascii=False))
+    display_name = str(verification.get("group_name") or f"VK {group_id}").strip()
+    if existing:
+        cursor.execute(
+            """
+            UPDATE externalbusinessaccounts
+            SET source = 'vk', external_id = %s, display_name = %s,
+                auth_data_encrypted = %s, is_active = TRUE,
+                last_error = NULL, last_sync_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """,
+            (group_id, display_name, encrypted, account_id),
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO externalbusinessaccounts (
+                id, business_id, source, external_id, display_name,
+                auth_data_encrypted, is_active, last_sync_at, created_at, updated_at
+            ) VALUES (
+                %s, %s, 'vk', %s, %s, %s, TRUE,
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            """,
+            (account_id, business_id, group_id, display_name, encrypted),
+        )
+    return account_id
 
 
 def _resolve_network_scope_for_business(cursor, business_id, requested_scope):
@@ -611,6 +750,139 @@ def yclients_marketplace_import_services():
         db.close()
         logger.exception("YCLIENTS services import failed")
         return jsonify({"success": False, "error": str(e)}), 500
+
+@external_accounts_bp.route("/api/business/<business_id>/vk/oauth/start", methods=["POST"])
+def start_vk_oauth(business_id):
+    user_data, db, access_error = _require_vk_business_access(business_id)
+    if access_error:
+        return access_error
+    try:
+        payload = request.get_json(silent=True) or {}
+        group_id = normalize_vk_group_id(payload.get("group_id"))
+        code_challenge = validate_vk_pkce_value(payload.get("code_challenge"), "code_challenge")
+        client_state = str(payload.get("client_state") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{20,160}", client_state):
+            return jsonify({"success": False, "error": "Не удалось начать безопасное подключение VK."}), 400
+        state = encode_vk_oauth_state(
+            {
+                "user_id": str(user_data.get("user_id") or ""),
+                "business_id": str(business_id),
+                "group_id": group_id,
+                "code_challenge": code_challenge,
+                "client_state": client_state,
+                "return_to": _safe_vk_return_path(payload.get("return_to")),
+            }
+        )
+        auth_url = build_vk_authorization_url(state=state, code_challenge=code_challenge)
+        return jsonify(
+            {
+                "success": True,
+                "auth_url": auth_url,
+                "external_publish_performed": False,
+            }
+        )
+    except VkOAuthError:
+        return _vk_oauth_error_response()
+    except Exception:
+        return _vk_oauth_error_response(502)
+    finally:
+        db.close()
+
+
+@external_accounts_bp.route("/api/vk/oauth/callback", methods=["GET"])
+def vk_oauth_callback():
+    frontend_url = str(os.getenv("FRONTEND_URL") or "http://localhost:3000").rstrip("/")
+    state = str(request.args.get("state") or "").strip()
+    try:
+        state_payload = decode_vk_oauth_state(state)
+        return_to = _safe_vk_return_path(state_payload.get("return_to"))
+        if request.args.get("error"):
+            return redirect(
+                f"{frontend_url}{_append_vk_auth_params(return_to, {'vk_auth': 'cancelled'})}"
+            )
+        code = str(request.args.get("code") or "").strip()
+        device_id = str(request.args.get("device_id") or "").strip()
+        if not code or not device_id:
+            return redirect(
+                f"{frontend_url}{_append_vk_auth_params(return_to, {'vk_auth': 'error'})}"
+            )
+        callback_params = {
+            "vk_auth": "pending",
+            "vk_code": code,
+            "vk_device_id": device_id,
+            "vk_state": state,
+            "vk_client_state": str(state_payload.get("client_state") or ""),
+        }
+        return redirect(f"{frontend_url}{_append_vk_auth_params(return_to, callback_params)}")
+    except Exception:
+        logger.info("VK OAuth callback state validation failed")
+        return redirect(
+            f"{frontend_url}{_append_vk_auth_params(DEFAULT_VK_RETURN_PATH, {'vk_auth': 'expired'})}"
+        )
+
+
+@external_accounts_bp.route("/api/business/<business_id>/vk/oauth/complete", methods=["POST"])
+def complete_vk_oauth(business_id):
+    user_data, db, access_error = _require_vk_business_access(business_id)
+    if access_error:
+        return access_error
+    try:
+        payload = request.get_json(silent=True) or {}
+        state = str(payload.get("state") or "").strip()
+        state_payload = decode_vk_oauth_state(state)
+        state_user_id = str(state_payload.get("user_id") or "")
+        state_business_id = str(state_payload.get("business_id") or "")
+        if state_user_id != str(user_data.get("user_id") or "") or state_business_id != str(business_id):
+            return jsonify({"success": False, "status": "state_mismatch", "error": "Это подключение VK относится к другому аккаунту."}), 403
+
+        code_verifier = validate_vk_pkce_value(payload.get("code_verifier"), "code_verifier")
+        expected_challenge = str(state_payload.get("code_challenge") or "")
+        if not hmac.compare_digest(vk_pkce_challenge(code_verifier), expected_challenge):
+            return jsonify({"success": False, "status": "pkce_mismatch", "error": "Не удалось проверить подключение VK. Начните ещё раз."}), 400
+
+        token_payload = exchange_vk_authorization_code(
+            code=str(payload.get("code") or ""),
+            device_id=str(payload.get("device_id") or ""),
+            code_verifier=code_verifier,
+        )
+        access_token = str(token_payload.get("access_token") or "").strip()
+        verification = verify_vk_oauth_access(
+            access_token,
+            str(state_payload.get("group_id") or ""),
+        )
+        cursor = db.conn.cursor()
+        account_id = _upsert_vk_oauth_account(
+            cursor,
+            business_id=str(business_id),
+            verification=verification,
+            token_payload=token_payload,
+            device_id=str(payload.get("device_id") or ""),
+        )
+        db.conn.commit()
+        return jsonify(
+            {
+                "success": True,
+                "status": "connected",
+                "account": {
+                    "id": account_id,
+                    "source": "vk",
+                    "external_id": verification.get("group_id"),
+                    "display_name": verification.get("group_name"),
+                    "is_active": True,
+                },
+                "message": "VK подключён. LocalOS подтвердил сообщество и права публикации.",
+                "external_publish_performed": False,
+            }
+        )
+    except VkOAuthError:
+        db.conn.rollback()
+        return _vk_oauth_error_response()
+    except Exception:
+        db.conn.rollback()
+        return _vk_oauth_error_response(502)
+    finally:
+        db.close()
+
 
 @external_accounts_bp.route("/api/business/<business_id>/external-accounts", methods=["GET"])
 def get_external_accounts(business_id):

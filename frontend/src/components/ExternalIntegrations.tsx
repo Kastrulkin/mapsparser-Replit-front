@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { newAuth } from "@/lib/auth_new";
+import { completeVkOAuthFromLocation, startVkOAuthConnection } from "@/lib/vkOAuth";
 import { useToast } from "@/components/ui/use-toast";
 import { useLanguage } from "@/i18n/LanguageContext";
 import OpenClawOutboxMetrics from "@/components/OpenClawOutboxMetrics";
@@ -182,10 +183,9 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const [googleLocationsMessage, setGoogleLocationsMessage] = useState<string | null>(null);
   const [googleLocationsActionUrl, setGoogleLocationsActionUrl] = useState<string | null>(null);
   const [googleBusy, setGoogleBusy] = useState(false);
-  const [vkAccessToken, setVkAccessToken] = useState('');
   const [vkOwnerId, setVkOwnerId] = useState('');
-  const [vkScope, setVkScope] = useState('wall');
   const [vkBusy, setVkBusy] = useState(false);
+  const vkCallbackHandledRef = useRef(false);
   const [photoIntelligenceEnabled, setPhotoIntelligenceEnabled] = useState(false);
   const [photoIntelligenceLoading, setPhotoIntelligenceLoading] = useState(false);
   const [photoIntelligenceSaving, setPhotoIntelligenceSaving] = useState(false);
@@ -203,6 +203,8 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const matonAccount = accounts.find((acc) => acc.source === 'maton');
   const googleAccount = accounts.find((acc) => acc.source === 'google_business');
   const vkAccount = accounts.find((acc) => acc.source === 'vk' || acc.source === 'vk_group' || acc.source === 'vk_business');
+  const vkReadiness = socialReadiness.find((channel) => channel.platform === 'vk') || null;
+  const vkConnectionReady = Boolean(vkReadiness?.ready);
   const normalizedFocusedPlatform = String(focusedPlatform || '').trim();
   const isGoogleSheetsFocused = normalizedFocusedPlatform === 'google_sheets';
   const isGoogleFocused = normalizedFocusedPlatform === 'google_business';
@@ -600,6 +602,43 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBusinessId, readinessRefreshKey]);
 
+  useEffect(() => {
+    if (vkOwnerId || !vkAccount?.external_id) return;
+    setVkOwnerId(String(vkAccount.external_id).replace(/^-/, ''));
+  }, [vkAccount?.external_id, vkOwnerId]);
+
+  useEffect(() => {
+    if (!currentBusinessId || vkCallbackHandledRef.current) return;
+    const authStatus = new URLSearchParams(window.location.search).get('vk_auth');
+    if (!authStatus) return;
+    const token = newAuth.getToken();
+    if (!token) return;
+    vkCallbackHandledRef.current = true;
+    setVkBusy(true);
+    completeVkOAuthFromLocation(currentBusinessId, token)
+      .then(async (result) => {
+        if (!result.handled) return;
+        toast({
+          title: result.success ? t.success : 'Подключение не завершено',
+          description: result.message,
+          variant: result.success ? 'default' : 'destructive',
+        });
+        if (result.success) {
+          await loadAccounts();
+          await loadSocialReadiness();
+        }
+      })
+      .catch((error) => {
+        toast({
+          title: 'Не удалось подключить VK',
+          description: error instanceof Error ? error.message : 'Повторите подключение.',
+          variant: 'destructive',
+        });
+      })
+      .finally(() => setVkBusy(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentBusinessId]);
+
 
   const handleDisconnect = async (accountId: string) => {
     if (!accountId) return;
@@ -696,7 +735,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     }
   };
 
-  const handleSaveVk = async () => {
+  const handleConnectVk = async () => {
     if (!currentBusinessId) {
       toast({
         title: t.error,
@@ -705,12 +744,11 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
       });
       return;
     }
-    const tokenValue = vkAccessToken.trim();
     const ownerValue = vkOwnerId.trim();
-    if (!tokenValue || !ownerValue) {
+    if (!ownerValue) {
       toast({
         title: t.error,
-        description: "Для VK нужны пользовательский OAuth access_token администратора и group_id/owner_id.",
+        description: "Укажите числовой ID сообщества VK.",
         variant: "destructive",
       });
       return;
@@ -720,45 +758,18 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     try {
       const token = newAuth.getToken();
       if (!token) return;
-      const res = await fetch(`/api/business/${currentBusinessId}/external-accounts`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          source: "vk",
-          external_id: ownerValue,
-          display_name: "VK публикации",
-          auth_data: {
-            access_token: tokenValue,
-            owner_id: ownerValue,
-            group_id: ownerValue.replace(/^-/, ''),
-            scope: vkScope.trim() || "wall",
-          },
-          is_active: true,
-        }),
+      await startVkOAuthConnection({
+        businessId: currentBusinessId,
+        groupId: ownerValue.replace(/^-/, ''),
+        authToken: token,
+        returnTo: `${window.location.pathname}${window.location.search || ''}`,
       });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Не удалось сохранить VK подключение");
-      }
-
-      setVkAccessToken('');
-      toast({
-        title: t.success,
-        description: "VK подключение сохранено. Готовность каналов обновлена.",
-      });
-      await loadAccounts();
-      await loadSocialReadiness();
     } catch (e: any) {
       toast({
         title: t.error,
-        description: e.message || "Ошибка сохранения VK подключения",
+        description: e.message || "Не удалось подключить VK",
         variant: "destructive",
       });
-    } finally {
       setVkBusy(false);
     }
   };
@@ -921,7 +932,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
                     <span className="font-semibold text-slate-950">Telegram:</span> {telegramChecklistHint}
                   </div>
                   <div className="rounded-xl bg-white px-3 py-2 text-slate-700 ring-1 ring-slate-200">
-                    <span className="font-semibold text-slate-950">VK:</span> access_token + group_id/owner_id + wall.post
+                    <span className="font-semibold text-slate-950">VK:</span> ID сообщества + подтверждение доступа через VK
                   </div>
                   <div className="rounded-xl bg-white px-3 py-2 text-slate-700 ring-1 ring-slate-200">
                     <span className="font-semibold text-slate-950">Google:</span> Business Profile + локация
@@ -1264,7 +1275,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
             <div>
               <h3 className="text-base font-semibold text-slate-950">VK публикации</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-                Подключите пользовательский OAuth-токен администратора с правом wall. Ключ сообщества из «Работа с API» не поддерживает wall.post.
+                Укажите ID сообщества и подтвердите доступ в VK. LocalOS сам проверит права на записи и фотографии.
               </p>
               {isVkFocused ? (
                 <p className="mt-2 rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs leading-5 text-sky-900">
@@ -1272,44 +1283,34 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
                 </p>
               ) : null}
             </div>
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${vkAccount ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
-              {vkAccount ? 'Подключён' : 'Не подключён'}
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${vkConnectionReady ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
+              {vkConnectionReady ? 'Готово' : vkAccount ? 'Нужно обновить доступ' : 'Не подключён'}
             </span>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[1fr_220px_160px]">
+          <div className="max-w-md space-y-2">
+            <label htmlFor="vk-community-id-secondary" className="text-sm font-medium text-slate-800">ID сообщества</label>
             <Input
-              type="password"
-              placeholder="VK user OAuth access_token с правом wall"
-              value={vkAccessToken}
-              onChange={(event) => setVkAccessToken(event.target.value)}
-              disabled={vkBusy || !currentBusinessId}
-            />
-            <Input
-              placeholder="group_id или owner_id"
+              id="vk-community-id-secondary"
+              inputMode="numeric"
+              placeholder="Например, 182541984"
               value={vkOwnerId}
               onChange={(event) => setVkOwnerId(event.target.value)}
-              disabled={vkBusy || !currentBusinessId}
-            />
-            <Input
-              placeholder="scope"
-              value={vkScope}
-              onChange={(event) => setVkScope(event.target.value)}
               disabled={vkBusy || !currentBusinessId}
             />
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-5 text-slate-500">
-              Токен хранится зашифрованно и после сохранения не отображается. Для группы обычно нужен owner_id вида -123456 или group_id без минуса.
-              {vkAccount ? ` Сейчас подключено: ${vkAccount.display_name || vkAccount.external_id || 'VK'}.` : ''}
+              VK откроется в этой вкладке. LocalOS не публикует ничего во время подключения.
+              {vkAccount ? ` Сейчас выбрано: ${vkAccount.display_name || vkAccount.external_id || 'VK'}.` : ''}
             </p>
             <Button
               type="button"
-              onClick={handleSaveVk}
-              disabled={vkBusy || !currentBusinessId || !vkAccessToken.trim() || !vkOwnerId.trim()}
+              onClick={handleConnectVk}
+              disabled={vkBusy || !currentBusinessId || !vkOwnerId.trim()}
               className="bg-slate-900 text-white hover:bg-slate-800 sm:min-w-[180px]"
             >
-              {vkBusy ? t.dashboard.subscription.processing : "Сохранить VK"}
+              {vkBusy ? t.dashboard.subscription.processing : vkAccount ? "Обновить доступ VK" : "Подключить VK"}
             </Button>
           </div>
         </div>

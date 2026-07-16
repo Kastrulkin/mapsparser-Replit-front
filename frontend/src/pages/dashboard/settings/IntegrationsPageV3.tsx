@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Building2,
@@ -39,6 +39,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
+import { completeVkOAuthFromLocation, startVkOAuthConnection } from '@/lib/vkOAuth';
 
 import { SettingsDetailSheet } from './SettingsHubComponents';
 import {
@@ -118,7 +119,7 @@ const serviceDescriptions: Record<string, string> = {
   whatsapp: 'Сохраните номер и WABA-доступ, когда канал готов к отправке сообщений клиентам.',
   google_sheets: 'Этот доступ нужен агентам для чтения Google Таблиц. Он не публикует ничего наружу.',
   google_business: 'Выберите карточку компании для отзывов, статистики и согласованных постов Google.',
-  vk: 'Сохраните токен сообщества и ID группы. Публикации всё равно идут только после подтверждения.',
+  vk: 'Укажите ID сообщества и подтвердите доступ через VK. Публикации всё равно идут только после вашего подтверждения.',
   meta: 'Подключение Facebook и Instagram остаётся контролируемым: выберите страницу и актив в деталях.',
   yandex_maps: 'LocalOS готовит текст и задачу, финальный шаг в картах делает человек.',
   '2gis': 'LocalOS готовит материалы для карточки 2GIS, публикация остаётся ручной.',
@@ -132,7 +133,7 @@ const serviceHelp: Record<string, string[]> = {
   whatsapp: ['Добавьте номер бизнеса.', 'Заполните WABA Phone ID и access token.', 'Проверьте статус перед отправкой сообщений.'],
   google_sheets: ['Нажмите подключение Google.', 'Выберите аккаунт, где есть нужная таблица.', 'Вернитесь к агенту и запустите безопасный тест.'],
   google_business: ['Подключите Google-доступ.', 'Загрузите список карточек.', 'Выберите карточку компании и синхронизируйте данные.'],
-  vk: ['Создайте токен сообщества с правом публикации.', 'Укажите group_id или owner_id.', 'Сохраните и проверьте готовность канала.'],
+  vk: ['Укажите числовой ID сообщества.', 'Подтвердите права на записи и фотографии в VK.', 'LocalOS проверит готовность канала.'],
   meta: ['Подключите страницу Facebook.', 'Выберите Instagram Business asset.', 'Проверьте права перед публикациями.'],
   yandex_maps: ['Подготовьте текст в LocalOS.', 'Откройте карточку Яндекс.', 'Опубликуйте вручную после проверки.'],
   '2gis': ['Подготовьте текст в LocalOS.', 'Откройте карточку 2GIS.', 'Опубликуйте вручную после проверки.'],
@@ -238,10 +239,9 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
   const [googleBusy, setGoogleBusy] = useState(false);
   const [googleMessage, setGoogleMessage] = useState<string | null>(null);
   const [googleActionUrl, setGoogleActionUrl] = useState<string | null>(null);
-  const [vkAccessToken, setVkAccessToken] = useState('');
   const [vkOwnerId, setVkOwnerId] = useState('');
-  const [vkScope, setVkScope] = useState('wall');
   const [vkBusy, setVkBusy] = useState(false);
+  const vkCallbackHandledRef = useRef(false);
   const [matonApiKey, setMatonApiKey] = useState('');
   const [matonBusy, setMatonBusy] = useState(false);
 
@@ -334,6 +334,39 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
   });
 
   const refresh = () => setRefreshKey((value) => value + 1);
+
+  useEffect(() => {
+    if (vkOwnerId || !vkAccount?.external_id) return;
+    setVkOwnerId(String(vkAccount.external_id).replace(/^-/, ''));
+  }, [vkAccount?.external_id, vkOwnerId]);
+
+  useEffect(() => {
+    if (!currentBusinessId || vkCallbackHandledRef.current) return;
+    const authStatus = new URLSearchParams(window.location.search).get('vk_auth');
+    if (!authStatus) return;
+    const token = newAuth.getToken();
+    if (!token) return;
+    vkCallbackHandledRef.current = true;
+    setVkBusy(true);
+    completeVkOAuthFromLocation(currentBusinessId, token)
+      .then((result) => {
+        if (!result.handled) return;
+        toast({
+          title: result.success ? 'Готово' : 'Подключение не завершено',
+          description: result.message,
+          variant: result.success ? 'default' : 'destructive',
+        });
+        if (result.success) refresh();
+      })
+      .catch((error) => {
+        toast({
+          title: 'Не удалось подключить VK',
+          description: error instanceof Error ? error.message : 'Повторите подключение.',
+          variant: 'destructive',
+        });
+      })
+      .finally(() => setVkBusy(false));
+  }, [currentBusinessId, toast]);
 
   const handleGoogleConnect = async () => {
     if (!currentBusinessId) return;
@@ -457,45 +490,25 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     }
   };
 
-  const handleSaveVk = async () => {
-    if (!currentBusinessId || !vkAccessToken.trim() || !vkOwnerId.trim()) return;
+  const handleConnectVk = async () => {
+    if (!currentBusinessId || !vkOwnerId.trim()) return;
     setVkBusy(true);
     try {
       const token = newAuth.getToken();
       if (!token) return;
-      const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/external-accounts`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          source: 'vk',
-          external_id: vkOwnerId.trim(),
-          display_name: 'VK публикации',
-          auth_data: {
-            access_token: vkAccessToken.trim(),
-            owner_id: vkOwnerId.trim(),
-            group_id: vkOwnerId.trim().replace(/^-/, ''),
-            scope: vkScope.trim() || 'wall',
-          },
-          is_active: true,
-        }),
+      const fallbackReturnTo = '/dashboard/settings/integrations?focus=vk';
+      await startVkOAuthConnection({
+        businessId: currentBusinessId,
+        groupId: vkOwnerId.trim().replace(/^-/, ''),
+        authToken: token,
+        returnTo: safeDashboardReturnTo(returnTo) || fallbackReturnTo,
       });
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Не удалось сохранить VK');
-      }
-      setVkAccessToken('');
-      toast({ title: 'Готово', description: 'VK подключён' });
-      refresh();
     } catch (error) {
       toast({
-        title: 'Ошибка',
-        description: error instanceof Error ? error.message : 'Ошибка сохранения VK',
+        title: 'Не удалось подключить VK',
+        description: error instanceof Error ? error.message : 'Повторите подключение.',
         variant: 'destructive',
       });
-    } finally {
       setVkBusy(false);
     }
   };
@@ -635,16 +648,15 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
 
     if (service.id === 'vk') {
       return (
-        <SetupPanel title="VK" description="Сохраните пользовательский OAuth-токен администратора сообщества с правом wall. Ключ сообщества из раздела «Работа с API» не поддерживает wall.post.">
-          <div className="grid gap-3 lg:grid-cols-[1fr_220px_160px]">
-            <Input type="password" placeholder="VK user OAuth access_token" value={vkAccessToken} onChange={(event) => setVkAccessToken(event.target.value)} disabled={vkBusy || !currentBusinessId} />
-            <Input placeholder="group_id или owner_id" value={vkOwnerId} onChange={(event) => setVkOwnerId(event.target.value)} disabled={vkBusy || !currentBusinessId} />
-            <Input placeholder="scope" value={vkScope} onChange={(event) => setVkScope(event.target.value)} disabled={vkBusy || !currentBusinessId} />
+        <SetupPanel title="VK" description="Укажите ID сообщества и подтвердите доступ в VK. LocalOS сам проверит, что вы можете публиковать записи и фотографии.">
+          <div className="max-w-md space-y-2">
+            <Label htmlFor="vk-community-id">ID сообщества</Label>
+            <Input id="vk-community-id" inputMode="numeric" placeholder="Например, 182541984" value={vkOwnerId} onChange={(event) => setVkOwnerId(event.target.value)} disabled={vkBusy || !currentBusinessId} />
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm leading-6 text-slate-600">{vkAccount ? `Сейчас подключено: ${vkAccount.display_name || vkAccount.external_id || 'VK'}.` : 'Токен после сохранения не показывается.'}</p>
-            <Button onClick={handleSaveVk} disabled={vkBusy || !currentBusinessId || !vkAccessToken.trim() || !vkOwnerId.trim()} className="min-h-10 bg-slate-900 text-white hover:bg-slate-800">
-              Сохранить VK
+            <p className="text-sm leading-6 text-slate-600">{vkAccount ? `Сейчас подключено: ${vkAccount.display_name || vkAccount.external_id || 'VK'}. Повторное подключение обновит доступ.` : 'VK откроется в этой вкладке. Публикации всё равно потребуют вашего подтверждения.'}</p>
+            <Button onClick={handleConnectVk} disabled={vkBusy || !currentBusinessId || !vkOwnerId.trim()} className="min-h-10 bg-slate-900 text-white hover:bg-slate-800">
+              {vkBusy ? 'Подключаем…' : vkAccount ? 'Обновить доступ VK' : 'Подключить VK'}
             </Button>
           </div>
         </SetupPanel>

@@ -11,7 +11,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Any
 
-from auth_encryption import decrypt_auth_data
+from auth_encryption import decrypt_auth_data, encrypt_auth_data
 from database_manager import DatabaseManager
 from core.outbound_network import outbound_urlopen
 from core.telegram_network import telegram_urlopen
@@ -19,6 +19,7 @@ from core.telegram_token_store import decode_telegram_bot_token
 from core.helpers import get_business_owner_id
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
+from services.vk_oauth_service import oauth_token_expiry, refresh_vk_oauth_tokens
 
 
 SOCIAL_POST_PLATFORMS = [
