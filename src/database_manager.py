@@ -75,8 +75,8 @@ class DBConnectionWrapper:
     def __init__(self, conn):
         self.conn = conn
         
-    def cursor(self):
-        return DBCursorWrapper(self.conn.cursor())
+    def cursor(self, *args, **kwargs):
+        return DBCursorWrapper(self.conn.cursor(*args, **kwargs))
         
     def commit(self):
         return self.conn.commit()

@@ -4,6 +4,7 @@ import pytest
 from flask import Flask
 
 from api import admin_knowledge_api, knowledge_api
+from database_manager import DBConnectionWrapper
 from core.knowledge_policy import (
     KnowledgePolicyError,
     deidentify_shared_payload,
@@ -40,6 +41,27 @@ def test_public_source_and_pii_are_independent_characteristics():
     assert "owner@example.com" not in payload["text"]
     assert "+7 999 123-45-67" not in payload["text"]
     assert payload["redacted"] is True
+
+
+def test_database_connection_wrapper_forwards_psycopg_cursor_options():
+    received = {}
+
+    class RawCursor:
+        pass
+
+    class RawConnection:
+        def cursor(self, *args, **kwargs):
+            received["args"] = args
+            received["kwargs"] = kwargs
+            return RawCursor()
+
+    wrapper = DBConnectionWrapper(RawConnection())
+    wrapper.cursor("named", cursor_factory="factory")
+
+    assert received == {
+        "args": ("named",),
+        "kwargs": {"cursor_factory": "factory"},
+    }
 
 
 @pytest.mark.parametrize("visibility", ["private", "invite"])
