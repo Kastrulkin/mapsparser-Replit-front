@@ -18,7 +18,7 @@ export const GUIDED_TOUR_STEPS: GuidedTourStep[] = [
   {
     key: 'welcome',
     chapter: 'network-pulse',
-    chapterTitle: 'Пульс сети',
+    chapterTitle: 'Скрепка LocalOS',
     title: 'Я помогу освоиться',
     body: 'За 8–10 минут мы посмотрим состояние сети, карточку на картах, контент и партнёрство. Вы можете свободно исследовать кабинет и в любой момент вернуться к маршруту.',
     route: '/dashboard/operator',
@@ -26,16 +26,16 @@ export const GUIDED_TOUR_STEPS: GuidedTourStep[] = [
   {
     key: 'operator-nav',
     chapter: 'network-pulse',
-    chapterTitle: 'Пульс сети',
-    title: 'Оператор — рабочий центр',
-    body: 'Здесь LocalOS собирает важные сигналы и предлагает безопасный следующий шаг.',
+    chapterTitle: 'Скрепка LocalOS',
+    title: 'Оператор — управление через чат',
+    body: 'Здесь можно управлять LocalOS обычными сообщениями вместо переходов по разделам. Тот же способ управления доступен в Telegram-боте.',
     route: '/dashboard/operator',
     target: 'nav-operator',
   },
   {
     key: 'operator-overview',
     chapter: 'network-pulse',
-    chapterTitle: 'Пульс сети',
+    chapterTitle: 'Скрепка LocalOS',
     title: 'Сводка по текущему бизнесу',
     body: 'Оператор знает контекст выбранной точки. В демо команды не запускаются, но видно, как будет выглядеть работа.',
     route: '/dashboard/operator',
@@ -44,7 +44,7 @@ export const GUIDED_TOUR_STEPS: GuidedTourStep[] = [
   {
     key: 'network-switcher',
     chapter: 'network-pulse',
-    chapterTitle: 'Пульс сети',
+    chapterTitle: 'Скрепка LocalOS',
     title: 'Сеть из шести точек',
     body: 'Переключатель меняет контекс всего кабинета. Можно сравнивать головной бизнес и каждую локацию.',
     route: '/dashboard/operator',
@@ -53,7 +53,7 @@ export const GUIDED_TOUR_STEPS: GuidedTourStep[] = [
   {
     key: 'progress-nav',
     chapter: 'network-pulse',
-    chapterTitle: 'Пульс сети',
+    chapterTitle: 'Скрепка LocalOS',
     title: 'Прогресс собирает результаты',
     body: 'Тут видно, что уже сделано, где есть риск и какое действие даст наибольший эффект.',
     route: '/dashboard/operator',
@@ -62,7 +62,7 @@ export const GUIDED_TOUR_STEPS: GuidedTourStep[] = [
   {
     key: 'progress-overview',
     chapter: 'network-pulse',
-    chapterTitle: 'Пульс сети',
+    chapterTitle: 'Скрепка LocalOS',
     title: 'Один ясный следующий шаг',
     body: 'Сводка соединяет карты, контент, партнёрства и автоматизацию. Раскройте любой блок и изучите доказательства.',
     route: '/dashboard/progress',
