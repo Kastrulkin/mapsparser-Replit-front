@@ -100,19 +100,26 @@ def encode_vk_oauth_state(payload: dict[str, Any]) -> str:
     signature = _base64url_encode(
         hmac.new(_state_secret(), encoded.encode("ascii"), hashlib.sha256).digest()
     )
-    return f"v1.{encoded}.{signature}"
+    return f"v1{encoded}{signature}"
 
 
 def decode_vk_oauth_state(state: Any) -> dict[str, Any]:
     raw = str(state or "").strip()
-    parts = raw.split(".")
-    if len(parts) != 3 or parts[0] != "v1":
+    if raw.startswith("v1."):
+        parts = raw.split(".")
+        if len(parts) != 3:
+            raise VkOAuthError("invalid_state", "Подключение VK устарело. Начните ещё раз.")
+        encoded = parts[1]
+        signature = parts[2]
+    elif raw.startswith("v1") and len(raw) > 45:
+        encoded = raw[2:-43]
+        signature = raw[-43:]
+    else:
         raise VkOAuthError("invalid_state", "Подключение VK устарело. Начните ещё раз.")
-    encoded = parts[1]
     expected = _base64url_encode(
         hmac.new(_state_secret(), encoded.encode("ascii"), hashlib.sha256).digest()
     )
-    if not hmac.compare_digest(expected, parts[2]):
+    if not hmac.compare_digest(expected, signature):
         raise VkOAuthError("invalid_state", "Не удалось проверить подключение VK. Начните ещё раз.")
     try:
         payload = json.loads(_base64url_decode(encoded).decode("utf-8"))

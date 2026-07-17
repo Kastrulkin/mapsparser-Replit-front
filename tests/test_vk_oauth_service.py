@@ -30,6 +30,26 @@ def test_vk_oauth_state_rejects_tampering(monkeypatch):
     assert error.value.code == "invalid_state"
 
 
+def test_vk_oauth_state_accepts_compact_callback_state_returned_by_vkid(monkeypatch):
+    monkeypatch.setenv("VK_OAUTH_STATE_SECRET", "test-state-secret")
+    state = vk_oauth_service.encode_vk_oauth_state(
+        {
+            "business_id": "business-1",
+            "user_id": "user-1",
+            "group_id": "182541984",
+        }
+    )
+
+    payload = vk_oauth_service.decode_vk_oauth_state(state.replace(".", ""))
+    legacy_payload = vk_oauth_service.decode_vk_oauth_state(
+        f"v1.{state[2:-43]}.{state[-43:]}"
+    )
+
+    assert payload["business_id"] == "business-1"
+    assert payload["group_id"] == "182541984"
+    assert legacy_payload["business_id"] == "business-1"
+
+
 def test_vk_authorization_url_uses_vkid_pkce_and_publish_scopes(monkeypatch):
     monkeypatch.setenv("VK_OAUTH_CLIENT_ID", "vk-client-id")
     monkeypatch.setenv("VK_OAUTH_REDIRECT_URI", "https://localos.pro/api/vk/oauth/callback")
