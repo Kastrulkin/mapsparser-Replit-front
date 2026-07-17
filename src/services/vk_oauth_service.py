@@ -198,7 +198,7 @@ def exchange_vk_authorization_code(
         {
             "grant_type": "authorization_code",
             "client_id": vk_oauth_client_id(),
-            "code_verifier": _base64url_encode(verifier.encode("ascii")),
+            "code_verifier": verifier,
             "redirect_uri": vk_oauth_redirect_uri(),
             "code": clean_code,
             "device_id": clean_device_id,

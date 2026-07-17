@@ -95,7 +95,7 @@ def test_vk_code_exchange_sends_pkce_verifier(monkeypatch):
     assert captured["client_id"] == "vk-client-id"
     assert captured["code"] == "authorization-code"
     assert captured["device_id"] == "device-id"
-    assert captured["code_verifier"] == vk_oauth_service._base64url_encode(verifier.encode("ascii"))
+    assert captured["code_verifier"] == verifier
 
 
 def test_vk_access_check_requires_admin_of_selected_group(monkeypatch):
