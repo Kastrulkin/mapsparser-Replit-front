@@ -887,6 +887,16 @@ def _publish_vk_post(cursor: Any, post: dict[str, Any]) -> dict[str, Any]:
         }
     media_assets = _selected_media_assets(cursor, post, limit=10)
     attachments: list[str] = []
+    if media_assets and _vk_uses_community_token(auth_data):
+        return {
+            "status": "needs_manual_publish",
+            "last_error": "Для публикации фото в VK откройте контролируемое размещение.",
+            "metadata_json": {
+                "provider_status": "vk_community_media_requires_manual",
+                "external_account_id": account.get("id"),
+                "media_attachment_count": len(media_assets),
+            },
+        }
     if media_assets:
         upload_result = _upload_vk_wall_photos(
             token=token,
@@ -1420,24 +1430,15 @@ def _vk_api_channel_preflight(cursor: Any, business_id: str) -> dict[str, Any]:
                 "ok" if group_probe.get("ok") else str(group_probe.get("status") or "failed"),
             ),
         ]
-        checks.append(
-            _connection_check(
-                "vk_wall_publish_token_type",
-                False,
-                "Токен для публикации",
-                "Publishing token",
-                "ключ сообщества не поддерживает wall.post; нужен пользовательский OAuth-токен администратора",
-                "community token does not support wall.post; an administrator user OAuth token is required",
-                "unsupported_token_type",
-            )
-        )
+        ready = bool(has_wall_permission and group_probe.get("ok"))
+        status = "ready" if ready else ("missing_permissions" if not has_wall_permission else "live_probe_failed")
         return _api_channel_preflight_result(
             "vk",
-            False,
-            "missing_permissions",
+            ready,
+            status,
             checks,
-            "VK подключён, но для автопубликации нужен пользовательский OAuth-токен администратора сообщества.",
-            "VK is connected, but automatic publishing requires a community administrator user OAuth token.",
+            "VK готов к отправке текстовых публикаций после подтверждения." if ready else "Не удалось подтвердить право сообщества на публикацию.",
+            "VK is ready for text publishing after approval." if ready else "The community publishing permission could not be confirmed.",
         )
 
     # Legacy user tokens do not support groups.getTokenPermissions. Keep the
@@ -1972,6 +1973,11 @@ def _vk_publish_binding(account: dict[str, Any], auth_data: dict[str, Any]) -> d
         "token": token,
         "owner_id": owner_id,
     }
+
+def _vk_uses_community_token(auth_data: dict[str, Any]) -> bool:
+    auth_mode = str(auth_data.get("auth_mode") or "").strip().lower()
+    token_type = str(auth_data.get("token_type") or "").strip().lower()
+    return auth_mode in {"community_token", "group_token"} or token_type in {"community", "group", "group_token"}
 
 def _meta_publish_status(account: dict[str, Any], auth_data: dict[str, Any], platform: str) -> str:
     if not account:

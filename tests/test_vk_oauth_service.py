@@ -147,3 +147,20 @@ def test_vk_access_check_confirms_selected_group(monkeypatch):
     assert result["group_name"] == "Riderra"
     assert result["user_id"] == "42"
     assert ("wall.get", {"owner_id": "-182541984", "count": "1", "filter": "owner"}) in calls
+
+
+def test_vk_id_publish_token_is_rejected_before_legacy_api_call(monkeypatch):
+    calls = []
+
+    def fake_vk_api_call(method, access_token, params):
+        calls.append((method, access_token, params))
+        return 0
+
+    monkeypatch.setattr(vk_oauth_service, "_vk_api_call", fake_vk_api_call)
+
+    with pytest.raises(vk_oauth_service.VkOAuthError) as error:
+        vk_oauth_service.verify_vk_oauth_access("vk2.a.identity-token", "182541984")
+
+    assert error.value.code == "vk_id_publish_unsupported"
+    assert "публикац" in str(error.value).lower()
+    assert calls == []

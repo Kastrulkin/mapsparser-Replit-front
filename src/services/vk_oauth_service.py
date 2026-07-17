@@ -250,6 +250,11 @@ def verify_vk_oauth_access(access_token: str, group_id: str) -> dict[str, Any]:
     normalized_group_id = normalize_vk_group_id(group_id)
     if not token:
         raise VkOAuthError("missing_access_token", "VK не выдал токен доступа.")
+    if token.startswith("vk2."):
+        raise VkOAuthError(
+            "vk_id_publish_unsupported",
+            "VK ID подходит для входа, но не даёт права публикации в сообществе. Подключите ключ сообщества VK.",
+        )
 
     permissions_response = _vk_api_call("account.getAppPermissions", token, {})
     permissions = int(permissions_response or 0)

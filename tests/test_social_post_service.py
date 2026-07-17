@@ -2455,7 +2455,7 @@ def test_telegram_api_channel_preflight_blocks_channel_without_post_permission(m
     assert "не имеет права" in result["message_ru"]
 
 
-def test_vk_api_channel_preflight_uses_group_token_permissions_without_publish(monkeypatch):
+def test_vk_group_token_preflight_allows_text_publish_without_external_write(monkeypatch):
     class FakeResponse:
         status = 200
 
@@ -2477,7 +2477,13 @@ def test_vk_api_channel_preflight_uses_group_token_permissions_without_publish(m
     monkeypatch.setattr(
         social_post_service,
         "_external_account_auth_data",
-        lambda account: {"access_token": "vk-token", "owner_id": "-12345", "scope": "wall", "api_version": "5.199"},
+        lambda account: {
+            "access_token": "vk-token",
+            "owner_id": "-12345",
+            "scope": "wall",
+            "token_type": "community",
+            "api_version": "5.199",
+        },
     )
     def fake_urlopen(req, timeout=10):
         requested_urls.append(req.full_url)
@@ -2489,17 +2495,15 @@ def test_vk_api_channel_preflight_uses_group_token_permissions_without_publish(m
 
     result = social_post_service._vk_api_channel_preflight(object(), "biz-1")
 
-    assert result["ready"] is False
-    assert result["status"] == "missing_permissions"
+    assert result["ready"] is True
+    assert result["status"] == "ready"
     assert result["read_only"] is True
     assert result["external_publish_performed"] is False
     assert any("groups.getTokenPermissions" in url for url in requested_urls)
     assert any("groups.getById" in url for url in requested_urls)
     assert all("wall.post" not in url for url in requested_urls)
-    assert result["connection_checks"][-3]["key"] == "vk_group_token_live"
-    assert result["connection_checks"][-2]["key"] == "vk_group_identity_live"
-    assert result["connection_checks"][-1]["key"] == "vk_wall_publish_token_type"
-    assert "OAuth" in result["message_ru"]
+    assert result["connection_checks"][-2]["key"] == "vk_group_token_live"
+    assert result["connection_checks"][-1]["key"] == "vk_group_identity_live"
 
 
 def test_vk_api_channel_preflight_keeps_user_token_read_only_probe(monkeypatch):
@@ -3806,6 +3810,64 @@ def test_publish_vk_post_passes_uploaded_photo_attachments(monkeypatch):
     assert result["status"] == "published"
     assert result["metadata_json"]["media_attachment_count"] == 1
     assert payload["attachments"] == ["photo-12345_77"]
+
+
+def test_publish_vk_community_token_with_photo_uses_controlled_manual_handoff(monkeypatch):
+    upload_calls = []
+    publish_calls = []
+    monkeypatch.setattr(
+        social_post_service,
+        "_find_active_external_account",
+        lambda cursor, business_id, sources: {
+            "id": "vk-community-1",
+            "external_id": "12345",
+            "auth_data_encrypted": "encrypted",
+        },
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_external_account_auth_data",
+        lambda account: {
+            "access_token": "vk-community-token",
+            "owner_id": "-12345",
+            "scope": "wall",
+            "token_type": "community",
+            "api_version": "5.199",
+        },
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_selected_media_assets",
+        lambda cursor, post, limit=10: [{"id": "photo-1"}],
+    )
+    monkeypatch.setattr(
+        social_post_service,
+        "_upload_vk_wall_photos",
+        lambda **kwargs: (
+            upload_calls.append(kwargs)
+            or {"success": False, "status": "vk_media_upload_failed", "error": "photo upload unavailable"}
+        ),
+    )
+    monkeypatch.setattr(
+        social_post_service.urllib.request,
+        "urlopen",
+        lambda req, timeout=15: publish_calls.append(req),
+    )
+
+    result = social_post_service._publish_vk_post(
+        object(),
+        {
+            "id": "post-vk-community-photo",
+            "business_id": "biz-1",
+            "platform": "vk",
+            "platform_text": "VK с фото",
+        },
+    )
+
+    assert result["status"] == "needs_manual_publish"
+    assert result["metadata_json"]["provider_status"] == "vk_community_media_requires_manual"
+    assert upload_calls == []
+    assert publish_calls == []
 
 
 def test_publish_google_business_attaches_public_photo(monkeypatch):
