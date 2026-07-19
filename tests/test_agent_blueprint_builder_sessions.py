@@ -64,6 +64,39 @@ def test_agent_builder_session_does_not_repeat_review_draft_question_after_answe
     assert all(item["key"] != "output" for item in clarified["missing_questions"])
 
 
+def test_agent_builder_session_presents_internal_business_summary_from_compiled_workflow():
+    from services.agent_builder_session import build_agent_builder_state, preview_to_setup
+
+    state = build_agent_builder_state(
+        [
+            {
+                "role": "user",
+                "content": (
+                    "По кнопке прочитай профиль, услуги и последние отзывы Весёлой расчёски и подготовь "
+                    "короткую внутреннюю сводку: что уже в порядке и что требует внимания. "
+                    "Ничего не публикуй и не отправляй."
+                ),
+            }
+        ],
+        business_id="biz1",
+        user_id="user1",
+    )
+
+    preview = state["preview"]
+
+    assert preview["category"] == "business_summary"
+    assert preview["category_label"] == "Агент внутренней сводки"
+    assert "внутренняя сводка" in preview["output_format"].lower()
+    assert "сохраняется внутри localos" in preview["manual_control"].lower()
+    assert preview["approval_boundaries"] == ["external_delivery"]
+    assert preview_to_setup(preview)["approval_boundaries"] == ["external_delivery"]
+    assert all(item["key"] != "output" for item in state["missing_questions"])
+    assert not any(
+        "отдельные черновики ответов или общий план реакции" in item["question"].lower()
+        for item in state["missing_questions"]
+    )
+
+
 def test_agent_builder_session_preview_includes_feasibility_for_required_connectors():
     from services.agent_builder_session import build_agent_builder_state
 

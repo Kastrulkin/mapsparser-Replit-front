@@ -1308,7 +1308,7 @@ def _is_internal_summary_request(text: str) -> bool:
     ):
         return False
     action_text = re.sub(
-        r"(?:ничего\s+)?не\s+(?:отправлять|отправляться|публиковать|присылать)",
+        r"(?:ничего\s+)?не\s+(?:будет\s+)?(?:отправ\w*|публик\w*|присыл\w*)",
         "",
         text,
     )

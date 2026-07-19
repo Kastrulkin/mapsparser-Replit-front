@@ -157,7 +157,11 @@ def preview_to_setup(preview: Dict[str, Any]) -> Dict[str, Any]:
         "extraction_rules": _clean_text(preview.get("extraction_rules")),
         "processing_rules": _clean_text(preview.get("processing_rules")),
         "output_format": _clean_text(preview.get("output_format")),
-        "approval_boundaries": ["final_output", "external_delivery"],
+        "approval_boundaries": (
+            preview.get("approval_boundaries")
+            if isinstance(preview.get("approval_boundaries"), list)
+            else ["final_output", "external_delivery"]
+        ),
         "manual_control": _clean_text(preview.get("manual_control")) or "Итог проверяет человек перед внешним действием.",
         "setup_flow": preview.get("setup_flow") if isinstance(preview.get("setup_flow"), dict) else {},
         "compiler_questions": preview.get("compiler_questions") if isinstance(preview.get("compiler_questions"), list) else [],
@@ -195,6 +199,7 @@ def _build_preview(
     subscription: Dict[str, Any],
 ) -> Dict[str, Any]:
     summary = draft.get("summary") if isinstance(draft.get("summary"), dict) else {}
+    effective_category = _clean_text(summary.get("category")) or category
     sources = summary.get("sources") if isinstance(summary.get("sources"), list) else []
     metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
     version_payload = draft.get("version_payload") if isinstance(draft.get("version_payload"), dict) else {}
@@ -214,16 +219,20 @@ def _build_preview(
     )
     return {
         "understood_task": description or "Новый агент LocalOS",
-        "category": category,
-        "category_label": _category_label(category),
-        "agent_name": draft.get("name") or _category_label(category),
+        "category": effective_category,
+        "category_label": _category_label(effective_category),
+        "agent_name": draft.get("name") or _category_label(effective_category),
         "data_sources": sources,
         "trigger": summary.get("trigger") or "",
         "audience": summary.get("audience") or "",
-        "extraction_rules": _default_extraction_rules(category, description),
-        "processing_rules": _default_processing_rules(category),
-        "output_format": _default_output_format(category, description),
-        "manual_control": "Ручное подтверждение перед финальным использованием и любым внешним действием.",
+        "extraction_rules": _default_extraction_rules(effective_category, description),
+        "processing_rules": _default_processing_rules(effective_category),
+        "output_format": _default_output_format(effective_category, description),
+        "manual_control": (
+            "Результат сохраняется внутри LocalOS. Любое внешнее действие потребует отдельного подтверждения."
+            if summary.get("approval_required") is False
+            else "Ручное подтверждение перед финальным использованием и любым внешним действием."
+        ),
         "capability_allowlist": capability_allowlist,
         "required_integration_bindings": required_bindings,
         "feasibility": feasibility,
@@ -2154,6 +2163,7 @@ def _has_output_hint(text: str) -> bool:
             "письм",
             "таблиц",
             "summary",
+            "сводк",
             "список",
             "наход",
             "план",
@@ -2359,6 +2369,8 @@ def _default_processing_rules(category: str) -> str:
 
 def _default_output_format(category: str, description: str = "") -> str:
     lowered = description.lower()
+    if category == "business_summary":
+        return "Короткая внутренняя сводка: что в порядке, что требует внимания и следующий шаг."
     if category == "documents" and _is_uploaded_document_request(lowered):
         return "Краткий разбор документа: summary, facts, fields, risks, missing_fields, rows_to_review."
     if category == "tables" and any(marker in lowered for marker in ["дубл", "дубликат"]):
@@ -2442,6 +2454,7 @@ def _default_output_format(category: str, description: str = "") -> str:
         "booking": "Список записей, напоминания и решения для проверки человеком.",
         "services": "Проверка услуг: пустые описания, слабые названия, цены и рекомендации.",
         "custom": "Готовый результат по задаче: сообщение, список действий или черновик для проверки.",
+        "business_summary": "Короткая внутренняя сводка: что в порядке, что требует внимания и следующий шаг.",
     }
     return formats.get(category, "Готовый результат по задаче: сообщение, список действий или черновик для проверки.")
 
@@ -2458,6 +2471,7 @@ def _category_label(category: str) -> str:
         "booking": "Агент записей",
         "services": "Агент услуг",
         "custom": "Кастомный агент",
+        "business_summary": "Агент внутренней сводки",
     }
     return labels.get(category, "Кастомный агент")
 
