@@ -1589,6 +1589,7 @@ export const AgentRunParametersPanel = ({
                   step={field.type === 'integer' ? '1' : undefined}
                   value={String(value ?? '')}
                   placeholder={field.example === undefined ? undefined : String(field.example)}
+                  onInput={(event) => onChange(key, event.currentTarget.value)}
                   onChange={(event) => onChange(key, event.target.value)}
                   onBlur={(event) => onChange(key, event.currentTarget.value)}
                 />
