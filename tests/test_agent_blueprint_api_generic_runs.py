@@ -514,6 +514,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "'analysis_prompt_key'" in agents_page_source
     assert "'feedback_notes'" in agents_page_source
     assert "Array.isArray(value) && value.length === 0" in agents_page_source
+    assert "primaryItems.length || secondaryEntries.length || entries.length" in agents_page_source
     assert "Bookings" in capability_handlers_source
     assert "agent_communication_requests" in capability_handlers_source
     assert "reviewreplydrafts" in capability_handlers_source

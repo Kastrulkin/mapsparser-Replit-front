@@ -345,6 +345,58 @@ def test_agent_integration_binding_status_treats_localos_finance_as_native_ready
     assert status[0]["missing_config"] == []
 
 
+def test_agent_integration_binding_status_treats_business_profile_as_native_ready():
+    from api import agent_blueprints_api
+
+    metadata = {
+        "required_integration_bindings": [
+            {
+                "key": "business_reviews_context",
+                "provider": "business_profile",
+                "direction": "local_context",
+                "required_config": [],
+            },
+        ]
+    }
+
+    status = agent_blueprints_api._agent_integration_binding_status(metadata, [])
+
+    assert status[0]["status"] == "connected"
+    assert status[0]["integration_id"] == "native_localos"
+    assert status[0]["resolution"] == "native_localos"
+    assert status[0]["missing_config"] == []
+
+
+def test_agent_preflight_treats_business_profile_as_native_ready():
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def execute(self, query, params=None):
+            assert "from agent_integrations" in " ".join(query.split()).lower()
+
+        def fetchall(self):
+            return []
+
+    metadata = {
+        "required_integration_bindings": [
+            {
+                "key": "business_reviews_context",
+                "provider": "business_profile",
+                "direction": "local_context",
+                "required": True,
+                "required_config": [],
+            },
+        ]
+    }
+
+    preflight = build_agent_integration_preflight(Cursor(), business_id="biz1", metadata=metadata, input_payload={})
+
+    assert preflight["ready"] is True
+    assert preflight["missing_count"] == 0
+    assert preflight["items"][0]["status"] == "ready"
+    assert preflight["items"][0]["resolution"] == "native_localos"
+
+
 def test_direct_agent_draft_auto_selects_single_connection_and_requires_ambiguous_choice():
     from api import agent_blueprints_api
 

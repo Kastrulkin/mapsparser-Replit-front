@@ -44,7 +44,7 @@ from services.agent_provider_registry import (
     integration_execution_boundary,
     integration_provider_catalog,
 )
-from services.agent_integration_preflight import build_agent_integration_preflight
+from services.agent_integration_preflight import NATIVE_READY_PROVIDERS, build_agent_integration_preflight
 from services.agent_metrics import build_agent_metrics_summary
 from services.agent_capability_handlers import capability_runtime_contract
 from services.agent_run_contract import RESERVED_AGENT_INPUT_FIELDS, effective_agent_input_schema, validate_agent_run_input
@@ -1065,7 +1065,7 @@ def _agent_integration_binding_status(metadata: dict, integrations: list[dict]) 
             )
             continue
         integration = by_provider.get(provider)
-        if provider == "localos_finance" and not integration:
+        if provider in NATIVE_READY_PROVIDERS and not integration:
             result.append(
                 {
                     "key": binding_key,

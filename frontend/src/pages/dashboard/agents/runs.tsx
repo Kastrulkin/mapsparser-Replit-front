@@ -1064,7 +1064,7 @@ export const HumanResultView = ({
         </div>
       ) : null}
 
-      {primaryItems.length || entries.length || destinationStatus === 'needs_future_date' ? null : (
+      {primaryItems.length || secondaryEntries.length || entries.length || destinationStatus === 'needs_future_date' ? null : (
         <div className="rounded-xl bg-white px-4 py-3 text-sm leading-6 text-slate-600 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
           Агент завершил шаги, но не сохранил отдельный бизнес-результат. Откройте технические детали запуска для диагностики.
         </div>

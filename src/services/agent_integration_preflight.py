@@ -4,7 +4,7 @@ import json
 from typing import Any, Dict, List
 
 
-NATIVE_READY_PROVIDERS = {"localos_finance"}
+NATIVE_READY_PROVIDERS = {"localos_finance", "business_profile"}
 ROUTE_REQUIRED_PROVIDERS = {"google_sheets", "telegram", "maton"}
 GOOGLE_SHEETS_EXTERNAL_ACCOUNT_SOURCES = {"google_sheets", "google_business"}
 
