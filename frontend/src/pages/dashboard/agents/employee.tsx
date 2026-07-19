@@ -1269,7 +1269,7 @@ export const EmployeeTestResultPanel = ({
               {rerunLabel}
             </Button>
           ) : null}
-          {estimatedRunCredits ? (
+          {isWorkRun && estimatedRunCredits ? (
             <div className="w-full text-right text-xs font-medium tabular-nums text-slate-500">
               Повтор: примерно {estimatedRunCredits} {creditWord(estimatedRunCredits)}
             </div>

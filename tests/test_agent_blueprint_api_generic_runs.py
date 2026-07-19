@@ -1616,3 +1616,5 @@ def test_agent_ui_treats_only_explicit_preview_runs_as_tests():
     assert "export const isAgentWorkRun" in results_source
     assert "preview_mode !== true" in results_source
     assert "const isWorkRun = isAgentWorkRun(activeRun);" in employee_source
+    assert "{isWorkRun && estimatedRunCredits ? (" in employee_source
+    assert "Проверка выполнена бесплатно" in employee_source
