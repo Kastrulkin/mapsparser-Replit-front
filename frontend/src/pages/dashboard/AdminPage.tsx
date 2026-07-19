@@ -141,6 +141,23 @@ interface AdminAgentRuntimeIssue {
   updated_at?: string;
 }
 
+interface AdminAgentSchedulerEvent {
+  event_id: string;
+  blueprint_id: string;
+  run_id: string;
+  business_id: string;
+  agent_name: string;
+  business_name: string;
+  event_type: string;
+  status: string;
+  run_status: string;
+  reason_code: string;
+  schedule_date: string;
+  schedule_time: string;
+  timezone: string;
+  created_at?: string;
+}
+
 interface AdminAgentRuntimeOverview {
   flags: {
     async_runs_enabled: boolean;
@@ -162,7 +179,10 @@ interface AdminAgentRuntimeOverview {
   scheduler: {
     total_events: number;
     events_24h: number;
+    failed_24h: number;
+    deferred_24h: number;
     last_event_at?: string;
+    recent_events: AdminAgentSchedulerEvent[];
   };
   consistency: {
     archived_unfinished_runs: number;
@@ -1091,6 +1111,7 @@ export const AdminPage: React.FC = () => {
   const agentRuntime = agentBlueprintOverview?.runtime;
   const agentRuntimeIssues = Number(agentRuntime?.runs.stale_running || 0)
     + Number(agentRuntime?.runs.failed_24h || 0)
+    + Number(agentRuntime?.scheduler.failed_24h || 0)
     + Number(agentRuntime?.consistency.archived_unfinished_runs || 0)
     + Number(agentRuntime?.consistency.waiting_without_pending_approval || 0);
   const agentRuntimeMetrics = [
@@ -1110,9 +1131,9 @@ export const AdminPage: React.FC = () => {
       label: 'Запуски расписания',
       value: String(agentRuntime?.scheduler.total_events || 0),
       hint: agentRuntime?.scheduler.last_event_at
-        ? `Последний: ${formatAdminDateTime(agentRuntime.scheduler.last_event_at)}`
+        ? `${agentRuntime.scheduler.failed_24h || 0} ошибок · ${agentRuntime.scheduler.deferred_24h || 0} отложено`
         : 'Canary ещё не зафиксирован',
-      tone: agentRuntime?.scheduler.total_events ? 'positive' : 'warning',
+      tone: agentRuntime?.scheduler.failed_24h ? 'warning' : agentRuntime?.scheduler.total_events ? 'positive' : 'warning',
     },
     {
       label: 'Списано кредитов',
@@ -1504,6 +1525,44 @@ export const AdminPage: React.FC = () => {
                 <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
                   Несогласованные состояния: {agentRuntime.consistency.archived_unfinished_runs} незавершённых запусков архивных агентов и {agentRuntime.consistency.waiting_without_pending_approval} запусков без актуального решения.
                 </div>
+              ) : null}
+
+              {(agentRuntime?.scheduler.recent_events || []).length > 0 ? (
+                <details className="mt-4 border-t border-slate-200 pt-4">
+                  <summary className="cursor-pointer text-sm font-semibold text-slate-900">Последние запуски по расписанию</summary>
+                  <div className="mt-3 divide-y divide-slate-100">
+                    {(agentRuntime?.scheduler.recent_events || []).map((event) => (
+                      <div key={event.event_id} className="grid gap-2 py-3 text-sm md:grid-cols-[minmax(180px,0.9fr)_minmax(190px,0.9fr)_minmax(170px,0.75fr)_minmax(220px,1fr)_auto] md:items-center">
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold text-slate-900">{event.agent_name}</div>
+                          <button type="button" onClick={() => handleBusinessClick(event.business_id)} className="truncate text-xs text-slate-500 underline-offset-4 hover:underline">
+                            {event.business_name}
+                          </button>
+                        </div>
+                        <div className="text-slate-600 tabular-nums">
+                          {event.schedule_date || 'Дата не записана'} {event.schedule_time || ''}
+                          <div className="text-xs text-slate-500">{event.timezone || 'Часовой пояс не записан'}</div>
+                        </div>
+                        <div>
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${event.status === 'run_started' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : event.status === 'deferred' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                            {event.status === 'run_started' ? 'Запущен' : event.status === 'deferred' ? 'Будет повторён' : 'Ошибка'}
+                          </span>
+                          {event.run_status ? <div className="mt-1 text-xs text-slate-500">Задача: {event.run_status}</div> : null}
+                        </div>
+                        <div className="break-words text-slate-600">
+                          {event.reason_code || (event.run_status === 'completed' ? 'Результат сохранён' : 'Событие принято')}
+                          <div className="text-xs text-slate-500 tabular-nums">{formatAdminDateTime(event.created_at)}</div>
+                        </div>
+                        {event.run_id ? (
+                          <Button type="button" size="sm" variant="outline" onClick={() => downloadAgentSupportExport(event.run_id)} disabled={downloadingAgentRunId === event.run_id}>
+                            {downloadingAgentRunId === event.run_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                            Диагностика
+                          </Button>
+                        ) : <span className="text-xs text-slate-400">Запуск не создан</span>}
+                      </div>
+                    ))}
+                  </div>
+                </details>
               ) : null}
 
               {(agentRuntime?.recent_issues || []).length > 0 ? (

@@ -409,11 +409,67 @@ def _admin_agent_runtime_overview(cursor) -> dict:
                    WHERE source = 'scheduler'
                      AND created_at >= NOW() - INTERVAL '24 hours'
                ) events_24h,
+               COUNT(*) FILTER (
+                   WHERE source = 'scheduler'
+                     AND status = 'failed'
+                     AND created_at >= NOW() - INTERVAL '24 hours'
+               ) failed_24h,
+               COUNT(*) FILTER (
+                   WHERE source = 'scheduler'
+                     AND status = 'deferred'
+                     AND created_at >= NOW() - INTERVAL '24 hours'
+               ) deferred_24h,
                MAX(created_at) last_event_at
         FROM agent_trigger_events
         """
     )
     scheduler = dict(cursor.fetchone() or {})
+    cursor.execute(
+        """
+        SELECT e.id event_id,
+               e.blueprint_id,
+               e.run_id,
+               e.business_id,
+               e.event_type,
+               e.status,
+               e.reason_code,
+               e.payload_json,
+               e.created_at,
+               COALESCE(b.name, '') agent_name,
+               COALESCE(biz.name, '') business_name,
+               COALESCE(r.status, '') run_status
+        FROM agent_trigger_events e
+        LEFT JOIN agent_blueprints b ON b.id = e.blueprint_id
+        LEFT JOIN businesses biz ON biz.id = e.business_id
+        LEFT JOIN agent_runs r ON r.id = e.run_id
+        WHERE e.source = 'scheduler'
+        ORDER BY e.created_at DESC
+        LIMIT 12
+        """
+    )
+    recent_scheduler_events = []
+    for row in cursor.fetchall() or []:
+        item = dict(row)
+        payload = parse_json_field(item.get("payload_json"), {})
+        payload = payload if isinstance(payload, dict) else {}
+        recent_scheduler_events.append(
+            {
+                "event_id": str(item.get("event_id") or ""),
+                "blueprint_id": str(item.get("blueprint_id") or ""),
+                "run_id": str(item.get("run_id") or ""),
+                "business_id": str(item.get("business_id") or ""),
+                "agent_name": str(item.get("agent_name") or "Без названия"),
+                "business_name": str(item.get("business_name") or "Без бизнеса"),
+                "event_type": str(item.get("event_type") or "schedule.daily"),
+                "status": str(item.get("status") or "received"),
+                "run_status": str(item.get("run_status") or ""),
+                "reason_code": str(item.get("reason_code") or ""),
+                "schedule_date": str(payload.get("schedule_date") or ""),
+                "schedule_time": str(payload.get("schedule_time") or ""),
+                "timezone": str(payload.get("timezone") or ""),
+                "created_at": item.get("created_at").isoformat() if item.get("created_at") else None,
+            }
+        )
     cursor.execute(
         """
         SELECT COUNT(*) FILTER (WHERE status = 'active') active,
@@ -501,7 +557,10 @@ def _admin_agent_runtime_overview(cursor) -> dict:
         "scheduler": {
             "total_events": int(scheduler.get("total") or 0),
             "events_24h": int(scheduler.get("events_24h") or 0),
+            "failed_24h": int(scheduler.get("failed_24h") or 0),
+            "deferred_24h": int(scheduler.get("deferred_24h") or 0),
             "last_event_at": last_scheduler_event_at.isoformat() if last_scheduler_event_at else None,
+            "recent_events": recent_scheduler_events,
         },
         "consistency": {
             "archived_unfinished_runs": int(consistency.get("archived_unfinished_runs") or 0),

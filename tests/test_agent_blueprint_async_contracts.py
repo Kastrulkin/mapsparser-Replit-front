@@ -424,8 +424,36 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
                     "archived_pending_approvals": 0,
                     "waiting_without_pending_approval": 4,
                 }
+            elif normalized.startswith("select e.id event_id"):
+                self.result = None
+                self.results = [
+                    {
+                        "event_id": "event-1",
+                        "blueprint_id": "bp-1",
+                        "run_id": "run-1",
+                        "business_id": "biz-1",
+                        "event_type": "schedule.daily",
+                        "status": "run_started",
+                        "reason_code": None,
+                        "payload_json": {
+                            "schedule_date": "2026-07-19",
+                            "schedule_time": "17:50",
+                            "timezone": "Europe/Tallinn",
+                        },
+                        "created_at": now,
+                        "agent_name": "Проверка таблицы",
+                        "business_name": "Riderra",
+                        "run_status": "completed",
+                    }
+                ]
             elif "from agent_trigger_events" in normalized:
-                self.result = {"total": 8, "events_24h": 1, "last_event_at": now}
+                self.result = {
+                    "total": 8,
+                    "events_24h": 2,
+                    "failed_24h": 1,
+                    "deferred_24h": 1,
+                    "last_event_at": now,
+                }
             elif "from agent_integrations" in normalized:
                 self.result = {"active": 5, "inactive": 2}
             elif "from operatorcreditreservations" in normalized:
@@ -472,6 +500,9 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
     assert runtime["billing"]["charged_credits"] == 3
     assert runtime["billing"]["active_reservations"] == 1
     assert runtime["scheduler"]["total_events"] == 8
+    assert runtime["scheduler"]["failed_24h"] == 1
+    assert runtime["scheduler"]["recent_events"][0]["run_status"] == "completed"
+    assert runtime["scheduler"]["recent_events"][0]["timezone"] == "Europe/Tallinn"
     assert runtime["consistency"]["archived_unfinished_runs"] == 4
     assert runtime["recent_issues"][0]["error"] == "provider timeout"
 
@@ -518,3 +549,5 @@ def test_admin_agents_ui_exposes_runtime_health():
     assert "downloadAgentSupportExport" in source
     assert "archived_unfinished_runs" in source
     assert "schedule_dispatch_enabled" in source
+    assert "Последние запуски по расписанию" in source
+    assert "recent_events" in source
