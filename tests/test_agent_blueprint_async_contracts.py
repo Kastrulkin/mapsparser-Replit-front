@@ -292,6 +292,8 @@ def test_agent_async_runtime_contract_is_wired_end_to_end():
     assert "FOR UPDATE SKIP LOCKED" in queue_source
     assert "idempotency_key: window.crypto.randomUUID()" in frontend_source
     assert "getPreviewVersionId(targetBlueprint, blueprintDetails)" in frontend_source
+    assert "['open_result', 'view_history', 'approve'].includes(selectedEmployeeAction.kind)" in frontend_source
+    assert "selectedEmployeeAction.targetMode === 'results'" not in frontend_source
     assert "waitForAgentRun" in frontend_source
     assert "execution_contract" in frontend_source
     assert "EmployeeAgentScenarioPanel" in frontend_source

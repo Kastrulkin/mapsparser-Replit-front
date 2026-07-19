@@ -907,7 +907,7 @@ export const AgentBlueprintsView = ({ scope }) => {
                       pendingApproval={selectedPendingApproval}
                       action={selectedEmployeeAction}
                       actionLoading={actionLoading}
-                      onPrimaryAction={selectedEmployeeAction.targetMode === 'results'
+                      onPrimaryAction={['open_result', 'view_history', 'approve'].includes(selectedEmployeeAction.kind)
                         ? () => void openLatestRunResults()
                         : runEmployeePrimaryAction}
                       onCloneAgent={openSelectedAgentClone}
