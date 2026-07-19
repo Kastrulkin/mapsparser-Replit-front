@@ -1732,8 +1732,55 @@ def test_agent_review_reply_analysis_replaces_unverified_promises_with_safe_draf
     assert "внутреннее расследование" not in reply
     assert "напишите нам напрямую" in reply
     assert all("компенсац" not in item.lower() for item in result["summary"])
+    assert all("компенсац" not in reason.lower() for reason in result["manual_review_reasons"])
     assert any("неподтверждённое обещание" in reason.lower() for reason in result["manual_review_reasons"])
     assert "Неподтверждённое обещание" in result["reply_drafts"][0]["manual_review_reason"]
+    assert result["external_dispatch_performed"] is False
+
+
+def test_agent_review_reply_analysis_replaces_incomplete_reply_and_unverified_name():
+    from services.agent_review_reply_analysis import draft_review_replies_with_llm
+
+    def incomplete_generator(prompt, *, business_id="", user_id=""):
+        return json.dumps(
+            {
+                "reply_drafts": [
+                    {
+                        "review_id": "rev-anonymous",
+                        "author_name": "Анонимный пользователь",
+                        "rating": "1",
+                        "reply": "Добрый день, Богдан. Спасибо за отзыв. Нам очень жаль, что произошла такая ситуация...",
+                    }
+                ],
+                "manual_review_reasons": ["Предложить компенсацию"],
+            },
+            ensure_ascii=False,
+        )
+
+    result = draft_review_replies_with_llm(
+        {"workflow_description": "Подготовить ответ на негативный отзыв"},
+        [
+            {
+                "source_name": "Отзывы",
+                "raw": {
+                    "id": "rev-anonymous",
+                    "author_name": "Анонимный пользователь",
+                    "rating": 1,
+                    "text": "Салон закрылся раньше указанного времени",
+                },
+            }
+        ],
+        generator=incomplete_generator,
+    )
+
+    draft = result["reply_drafts"][0]
+    assert not draft["reply"].endswith(("...", "…"))
+    assert "Богдан" not in draft["reply"]
+    assert not draft["reply"].startswith("Анонимный пользователь")
+    assert "Спасибо за обратную связь" in draft["reply"]
+    assert "Незавершённый черновик" in draft["manual_review_reason"]
+    assert "Неподтверждённое имя" in draft["manual_review_reason"]
+    assert all("компенсац" not in reason.lower() for reason in result["manual_review_reasons"])
     assert result["external_dispatch_performed"] is False
 
 

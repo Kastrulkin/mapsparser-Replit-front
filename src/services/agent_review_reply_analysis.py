@@ -9,8 +9,9 @@ from services.gigachat_client import analyze_text_with_gigachat
 
 
 MAX_REVIEW_LLM_CONTEXT_CHARS = 12000
-REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v3"
+REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v4"
 REVIEW_SOURCE_NAMES = {"reviews", "external_reviews", "отзывы", "отзывы компании", "последние отзывы"}
+ANONYMOUS_AUTHOR_NAMES = {"", "клиент", "аноним", "анонимный пользователь", "пользователь"}
 UNVERIFIED_PROMISE_MARKERS = (
     "компенсац",
     "компенсир",
@@ -34,6 +35,12 @@ UNVERIFIED_PROMISE_MARKERS = (
 )
 UNVERIFIED_PROMISE_REVIEW_REASON = (
     "Неподтверждённое обещание генератора удалено. Проверьте безопасный черновик перед публикацией."
+)
+INCOMPLETE_REPLY_REVIEW_REASON = (
+    "Незавершённый черновик генератора заменён полным безопасным ответом. Проверьте его перед публикацией."
+)
+UNVERIFIED_NAME_REVIEW_REASON = (
+    "Неподтверждённое имя получателя удалено. Проверьте безопасный черновик перед публикацией."
 )
 
 
@@ -179,6 +186,8 @@ def _build_review_prompt(
     return (
         "Ты готовишь безопасные черновики ответов на отзывы для LocalOS agent blueprint. "
         "Используй только предоставленные отзывы, не обещай компенсации/скидки без данных, не публикуй ответ. "
+        "Каждый ответ должен состоять из полных предложений и не заканчиваться многоточием. "
+        "Не обращайся по имени, если author_name пустой, анонимный или обозначен как пользователь. "
         "Верни только JSON без markdown с полями: "
         "title, summary(list), reply_drafts(list), manual_review_reasons(list), checklist(list), rules_applied(list). "
         f"Подготовь не больше {reply_limit} ответов и сохрани review_id исходного отзыва. "
@@ -236,6 +245,7 @@ def _normalize_llm_review_replies(
     checklist = _clean_string_list(parsed.get("checklist")) or fallback["checklist"]
     rules_applied = _clean_string_list(parsed.get("rules_applied")) or fallback["rules_applied"]
     if safety_reasons:
+        manual_review_reasons = fallback["manual_review_reasons"]
         checklist = fallback["checklist"]
         rules_applied = fallback["rules_applied"]
     return {
@@ -262,10 +272,6 @@ def _guard_unverified_promises(
     guarded = []
     safety_reasons = []
     for draft in reply_drafts:
-        normalized_reply = _clean_text(draft.get("reply")).lower().replace("ё", "е")
-        if not any(marker in normalized_reply for marker in UNVERIFIED_PROMISE_MARKERS):
-            guarded.append(draft)
-            continue
         source = reviews_by_id.get(_clean_text(draft.get("review_id")))
         if source is None:
             source = next(
@@ -276,11 +282,33 @@ def _guard_unverified_promises(
                 ),
                 {},
             )
+        quality_reasons = _reply_quality_reasons(draft, source or draft)
+        if not quality_reasons:
+            guarded.append(draft)
+            continue
         safe_draft = _fallback_reply(source or draft, "")
-        safe_draft["manual_review_reason"] = UNVERIFIED_PROMISE_REVIEW_REASON
+        safe_draft["manual_review_reason"] = " ".join(quality_reasons)
         guarded.append(safe_draft)
-        safety_reasons.append(UNVERIFIED_PROMISE_REVIEW_REASON)
-    return guarded, safety_reasons
+        safety_reasons.extend(quality_reasons)
+    return guarded, list(dict.fromkeys(safety_reasons))
+
+
+def _reply_quality_reasons(draft: Dict[str, str], source: Dict[str, Any]) -> List[str]:
+    reply = _clean_text(draft.get("reply"))
+    normalized_reply = reply.lower().replace("ё", "е")
+    reasons = []
+    if any(marker in normalized_reply for marker in UNVERIFIED_PROMISE_MARKERS):
+        reasons.append(UNVERIFIED_PROMISE_REVIEW_REASON)
+    if reply.endswith(("...", "…")):
+        reasons.append(INCOMPLETE_REPLY_REVIEW_REASON)
+    author_name = _clean_text(source.get("author_name"))
+    if _is_anonymous_author(author_name) and re.match(
+        r"^(?:добрый\s+(?:день|вечер)|здравствуйте|доброго\s+времени\s+суток)[,!]?\s+[А-ЯЁ][а-яё]{1,30}(?:[,.!]|$)",
+        reply,
+        flags=re.IGNORECASE,
+    ):
+        reasons.append(UNVERIFIED_NAME_REVIEW_REASON)
+    return reasons
 
 
 def _review_items(extracted_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -353,18 +381,19 @@ def _anchor_reply_drafts(reply_drafts: List[Dict[str, str]], selected_reviews: L
 
 def _fallback_reply(review: Dict[str, Any], rules: str) -> Dict[str, str]:
     sentiment = _sentiment(review)
-    author = review.get("author_name") or "клиент"
+    author = _clean_text(review.get("author_name"))
+    salutation = f"{author}, " if not _is_anonymous_author(author) else ""
     if sentiment == "negative":
         reply = (
-            f"{author}, спасибо за обратную связь. Нам жаль, что опыт оказался не таким, как ожидалось. "
+            f"{salutation}Спасибо за обратную связь. Нам жаль, что опыт оказался не таким, как ожидалось. "
             "Если удобно, напишите нам напрямую дату визита и детали, чтобы мы могли проверить ситуацию."
         )
         reason = "Негативный отзыв требует ручной проверки перед публикацией."
     elif sentiment == "positive":
-        reply = f"{author}, спасибо за тёплый отзыв. Нам очень приятно, что вы остались довольны."
+        reply = f"{salutation}Спасибо за тёплый отзыв. Нам очень приятно, что вы остались довольны."
         reason = "Проверить, что ответ соответствует стилю бренда."
     else:
-        reply = f"{author}, спасибо за отзыв. Мы учтём вашу обратную связь в работе."
+        reply = f"{salutation}Спасибо за отзыв. Мы учтём вашу обратную связь в работе."
         reason = "Нейтральный отзыв: проверить контекст перед публикацией."
     if rules:
         reason = f"{reason} Правило: {rules[:120]}"
@@ -377,6 +406,10 @@ def _fallback_reply(review: Dict[str, Any], rules: str) -> Dict[str, str]:
         "reply": reply,
         "manual_review_reason": reason,
     }
+
+
+def _is_anonymous_author(author_name: str) -> bool:
+    return _clean_text(author_name).lower() in ANONYMOUS_AUTHOR_NAMES
 
 
 def _sentiment(review: Dict[str, Any]) -> str:
