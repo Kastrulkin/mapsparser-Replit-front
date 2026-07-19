@@ -25,6 +25,21 @@ def draft_review_replies_with_llm(
     selected_reviews = _selected_reviews(setup, extracted_items)
     reply_limit = _requested_reply_limit(setup)
     fallback = build_review_replies_fallback(setup, extracted_items, feedback_history or [])
+    if not selected_reviews:
+        fallback.update(
+            {
+                "analysis_source": "deterministic_no_matching_reviews",
+                "analysis_prompt_key": "agent_review_replies",
+                "analysis_prompt_version": REVIEW_LLM_PROMPT_VERSION,
+                "llm_analysis_used": False,
+                "llm_error": "",
+                "provenance": [],
+                "external_dispatch_performed": False,
+                "publish_state": "not_published",
+                "delivery_state": "not_dispatched",
+            }
+        )
+        return fallback
     prompt = _build_review_prompt(setup, selected_reviews, feedback_history or [], reply_limit)
     try:
         raw_response = (

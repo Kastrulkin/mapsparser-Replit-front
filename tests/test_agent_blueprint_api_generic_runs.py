@@ -1717,7 +1717,10 @@ def test_agent_review_reply_analysis_uses_only_one_unanswered_review_when_reques
 def test_agent_review_reply_analysis_does_not_invent_reply_without_matching_review():
     from services.agent_review_reply_analysis import draft_review_replies_with_llm
 
+    called = {"value": False}
+
     def failing_generator(prompt, *, business_id="", user_id=""):
+        called["value"] = True
         raise RuntimeError("provider unavailable")
 
     result = draft_review_replies_with_llm(
@@ -1734,6 +1737,8 @@ def test_agent_review_reply_analysis_does_not_invent_reply_without_matching_revi
     assert result["reply_drafts"] == []
     assert result["summary"][0] == "Отзывы без ответа не найдены."
     assert result["external_dispatch_performed"] is False
+    assert result["analysis_source"] == "deterministic_no_matching_reviews"
+    assert called["value"] is False
 
 
 def test_agent_review_llm_usage_is_linked_to_run(monkeypatch):
