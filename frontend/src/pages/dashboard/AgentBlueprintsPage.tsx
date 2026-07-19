@@ -577,14 +577,14 @@ export const AgentBlueprintsPage = () => {
 
   useEffect(() => {
     const latestRun = blueprintDetails?.runs?.[0];
-    if (!latestRun?.id || activeRun?.id === latestRun.id) {
+    if (!latestRun?.id || activeRun) {
       return;
     }
     if (!['completed', 'waiting_approval', 'failed'].includes(latestRun.status || '')) {
       return;
     }
     void loadRun(latestRun.id, { openResults: false, showLoading: false });
-  }, [activeRun?.id, blueprintDetails?.runs]);
+  }, [activeRun, blueprintDetails?.runs]);
 
   const loadSourceCatalog = useCallback(async (blueprintId: string) => {
     try {

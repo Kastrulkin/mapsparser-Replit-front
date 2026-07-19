@@ -1214,6 +1214,7 @@ def test_agents_page_normal_result_panel_does_not_dump_raw_artifact_payload():
     assert "initialRunParameters(schema, selectedResultRun?.input_json)" in source
     assert "Запуски агента" in source
     assert "onClick={() => void loadRun(run.id)}" in source
+    assert "if (!latestRun?.id || activeRun)" in source
     assert "Google-доступ обновлён. Запустите тест ещё раз" in source
     assert "Почему нельзя подтвердить результат" in source
 
