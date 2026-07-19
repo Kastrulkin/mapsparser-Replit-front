@@ -646,6 +646,66 @@ def test_agent_preflight_allows_google_sheets_native_read_when_auth_ref_bound():
     assert preflight["items"][0]["integration_id"] == "sheets-1"
 
 
+def test_agent_preflight_uses_config_from_selected_google_sheets_integration():
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def __init__(self):
+            self.results = []
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            if "from agent_integrations" in normalized_query:
+                self.results = [
+                    {
+                        "id": "sheets-1",
+                        "business_id": "biz1",
+                        "provider": "google_sheets",
+                        "status": "active",
+                        "display_name": "Trips",
+                        "auth_ref": "google-account-1",
+                        "config_json": {
+                            "spreadsheet_id": "spreadsheet-1",
+                            "sheet_name": "Trips",
+                        },
+                    }
+                ]
+                return None
+            if "from externalbusinessaccounts" in normalized_query:
+                self.results = []
+                return None
+            raise AssertionError(f"Unhandled SQL: {query}")
+
+        def fetchall(self):
+            return self.results
+
+    metadata = {
+        "required_integration_bindings": [
+            {
+                "key": "google_sheets_read",
+                "provider": "google_sheets",
+                "capability": "google_sheets.read_rows",
+                "required_config": ["spreadsheet_id", "sheet_name"],
+                "default_config": {"sheet_name": "Sheet1"},
+            }
+        ],
+        "agent_integration_ids": ["sheets-1"],
+        "agent_binding_integrations": {
+            "google_sheets_read": {
+                "integration_id": "sheets-1",
+                "provider": "google_sheets",
+            }
+        },
+    }
+
+    preflight = build_agent_integration_preflight(Cursor(), business_id="biz1", metadata=metadata, input_payload={})
+
+    assert preflight["ready"] is True
+    assert preflight["missing_count"] == 0
+    assert preflight["items"][0]["resolution"] == "agent_integration_native_provider"
+    assert preflight["items"][0]["integration_id"] == "sheets-1"
+
+
 def test_activation_connection_blocker_keeps_binding_route_context():
     from api import agent_blueprints_api
 

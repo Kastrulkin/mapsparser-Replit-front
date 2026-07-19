@@ -110,7 +110,11 @@ def _binding_preflight_item(
                 [],
                 "Manual fallback is selected: LocalOS will prepare draft artifacts and require a human-operated external action.",
             )
-        resolved_config = _merge_default_config(default_config, metadata_config)
+        selected_integration = _selected_active_integration(metadata_config, active_integrations)
+        selected_config = parse_json_field(selected_integration.get("config_json"), {})
+        selected_config = selected_config if isinstance(selected_config, dict) else {}
+        resolved_config = _merge_default_config(default_config, selected_config)
+        resolved_config = _merge_default_config(resolved_config, metadata_config)
         missing_metadata_config = [key for key in required_config if not str(resolved_config.get(key) or "").strip()]
         if provider in ROUTE_REQUIRED_PROVIDERS and not route_provider and not missing_metadata_config:
             if provider == "google_sheets" and _has_native_auth_ref(metadata_config, active_integrations):
@@ -231,6 +235,19 @@ def _has_native_auth_ref(metadata_config: Dict[str, Any], active_integrations: L
     if integration_id:
         return has_any_auth_ref
     return False
+
+
+def _selected_active_integration(
+    metadata_config: Dict[str, Any],
+    active_integrations: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    integration_id = str(metadata_config.get("integration_id") or "").strip()
+    if not integration_id:
+        return {}
+    for integration in active_integrations:
+        if str(integration.get("id") or "").strip() == integration_id:
+            return integration
+    return {}
 
 
 def _merge_default_config(default_config: Dict[str, Any], selected_config: Dict[str, Any]) -> Dict[str, Any]:
