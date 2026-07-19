@@ -9,7 +9,7 @@ from services.gigachat_client import analyze_text_with_gigachat
 
 
 MAX_REVIEW_LLM_CONTEXT_CHARS = 12000
-REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v4"
+REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v5"
 REVIEW_SOURCE_NAMES = {"reviews", "external_reviews", "отзывы", "отзывы компании", "последние отзывы"}
 ANONYMOUS_AUTHOR_NAMES = {"", "клиент", "аноним", "анонимный пользователь", "пользователь"}
 UNVERIFIED_PROMISE_MARKERS = (
@@ -32,6 +32,11 @@ UNVERIFIED_PROMISE_MARKERS = (
     "discount",
     "free service",
     "gift",
+)
+UNVERIFIED_INTERNAL_ACTION_PATTERNS = (
+    r"\b(?:учтем|учтём)\b.{0,120}\bобучени\w*\s+сотрудник",
+    r"\b(?:проведем|проведём)\b.{0,80}\bобучени\w*",
+    r"\b(?:обязательно\s+исправим|гарантируем|решим\s+(?:эту\s+)?проблему)\b",
 )
 UNVERIFIED_PROMISE_REVIEW_REASON = (
     "Неподтверждённое обещание генератора удалено. Проверьте безопасный черновик перед публикацией."
@@ -186,6 +191,7 @@ def _build_review_prompt(
     return (
         "Ты готовишь безопасные черновики ответов на отзывы для LocalOS agent blueprint. "
         "Используй только предоставленные отзывы, не обещай компенсации/скидки без данных, не публикуй ответ. "
+        "Не обещай внутреннее расследование, обучение сотрудников или изменения процессов, если таких фактов нет во входных данных. "
         "Каждый ответ должен состоять из полных предложений и не заканчиваться многоточием. "
         "Не обращайся по имени, если author_name пустой, анонимный или обозначен как пользователь. "
         "Верни только JSON без markdown с полями: "
@@ -298,6 +304,8 @@ def _reply_quality_reasons(draft: Dict[str, str], source: Dict[str, Any]) -> Lis
     normalized_reply = reply.lower().replace("ё", "е")
     reasons = []
     if any(marker in normalized_reply for marker in UNVERIFIED_PROMISE_MARKERS):
+        reasons.append(UNVERIFIED_PROMISE_REVIEW_REASON)
+    if any(re.search(pattern, normalized_reply) for pattern in UNVERIFIED_INTERNAL_ACTION_PATTERNS):
         reasons.append(UNVERIFIED_PROMISE_REVIEW_REASON)
     if reply.endswith(("...", "…")):
         reasons.append(INCOMPLETE_REPLY_REVIEW_REASON)

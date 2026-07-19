@@ -1784,6 +1784,61 @@ def test_agent_review_reply_analysis_replaces_incomplete_reply_and_unverified_na
     assert result["external_dispatch_performed"] is False
 
 
+def test_agent_review_reply_analysis_replaces_unverified_internal_action_promise():
+    from services.agent_review_reply_analysis import draft_review_replies_with_llm
+
+    def promise_generator(prompt, *, business_id="", user_id=""):
+        return json.dumps(
+            {
+                "reply_drafts": [
+                    {
+                        "review_id": "rev-training",
+                        "author_name": "Анна",
+                        "rating": "2",
+                        "reply": (
+                            "Анна, спасибо за подробный отзыв. Мы учтём все аспекты обращения "
+                            "при дальнейшем обучении сотрудников."
+                        ),
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    result = draft_review_replies_with_llm(
+        {"workflow_description": "Подготовить ответ на негативный отзыв"},
+        [
+            {
+                "source_name": "Отзывы",
+                "raw": {
+                    "id": "rev-training",
+                    "author_name": "Анна",
+                    "rating": 2,
+                    "text": "Результат услуги не понравился",
+                },
+            }
+        ],
+        generator=promise_generator,
+    )
+
+    reply = result["reply_drafts"][0]["reply"].lower().replace("ё", "е")
+    assert "обучении сотрудников" not in reply
+    assert "напишите нам напрямую" in reply
+    assert any("неподтверждённое обещание" in reason.lower() for reason in result["manual_review_reasons"])
+    assert result["external_dispatch_performed"] is False
+
+
+def test_agent_run_completion_refreshes_server_today_summary():
+    page_source = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
+    recovered_segment = page_source[page_source.index("if (!runAnimation?.recoveredFromReload"):page_source.index("const startRun = async")]
+    preview_segment = page_source[page_source.index("const startRun = async"):page_source.index("const executeRun = async")]
+    work_segment = page_source[page_source.index("const executeRun = async"):page_source.index("const saveSchedule = async")]
+
+    assert "await loadBlueprints();" in recovered_segment
+    assert "await loadBlueprints();" in preview_segment
+    assert "await loadBlueprints();" in work_segment
+
+
 def test_agent_review_reply_analysis_uses_only_one_unanswered_review_when_requested():
     from services.agent_review_reply_analysis import draft_review_replies_with_llm
 

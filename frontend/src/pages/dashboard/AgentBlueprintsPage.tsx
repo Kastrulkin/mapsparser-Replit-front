@@ -1054,6 +1054,7 @@ export const AgentBlueprintsPage = () => {
       setRunAnimation(null);
       setWorkspaceMode('results');
       if (selectedBlueprint?.id) await loadBlueprintDetails(selectedBlueprint.id);
+      await loadBlueprints();
     }).catch((requestError) => {
       if (!cancelled) failRunAnimation(getRequestErrorMessage(requestError, 'Не удалось продолжить отслеживание задачи.'));
     });
@@ -1137,6 +1138,7 @@ export const AgentBlueprintsPage = () => {
       setDecisionNotice(nextRun?.id ? 'Тест запущен заново. Ниже показан свежий результат проверки.' : 'Тест запущен заново.');
       await loadBlueprintDetails(targetBlueprint.id);
       await loadBlueprintReview(targetBlueprint.id);
+      await loadBlueprints();
     } catch (requestError) {
       console.error(requestError);
       const message = getRequestErrorMessage(requestError, 'Не удалось запустить агента.');
@@ -1195,6 +1197,7 @@ export const AgentBlueprintsPage = () => {
       setDecisionNotice(nextRun?.id ? 'Работа выполнена. Ниже показан свежий сохранённый результат.' : 'Работа запущена.');
       await loadBlueprintDetails(targetBlueprint.id);
       await loadBlueprintReview(targetBlueprint.id);
+      await loadBlueprints();
     } catch (requestError) {
       console.error(requestError);
       const message = getRequestErrorMessage(requestError, 'Не удалось выполнить задачу агента.');
