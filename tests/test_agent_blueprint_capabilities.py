@@ -1562,6 +1562,74 @@ def test_due_scheduled_trigger_dispatcher_runs_each_business_once_per_day(monkey
     assert len(cursor.tables["agent_runs"]) == 1
 
 
+def test_due_scheduler_retries_slot_deferred_by_parallel_run(monkeypatch):
+    from services import agent_trigger_runtime
+
+    monkeypatch.setenv("AGENT_ASYNC_RUNS_ENABLED", "true")
+    monkeypatch.setenv("AGENT_BETA_BUSINESS_IDS", "biz1")
+    attempts = []
+
+    def enqueue_with_temporary_conflict(cursor, *, blueprint, version, input_payload, user_data, idempotency_key):
+        attempts.append(idempotency_key)
+        if len(attempts) == 1:
+            return {
+                "success": False,
+                "code": "AGENT_RUN_ALREADY_IN_PROGRESS",
+                "error": "agent run already in progress",
+            }
+        return _fake_scheduled_enqueue(
+            cursor,
+            blueprint=blueprint,
+            version=version,
+            input_payload=input_payload,
+            user_data=user_data,
+            idempotency_key=idempotency_key,
+        )
+
+    monkeypatch.setattr(agent_trigger_runtime, "enqueue_agent_run", enqueue_with_temporary_conflict)
+    cursor = FakeActiveTelegramTriggerCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Ежедневная сверка",
+        "category": "custom",
+        "status": "active",
+        "created_by_user_id": "user1",
+        "metadata_json": {
+            "execution_mode": "scheduled",
+            "active_version_id": "ver1",
+            "custom_process": {
+                "trigger": "schedule.daily",
+                "schedule": {"time": "19:00", "timezone": "Europe/Moscow"},
+            },
+        },
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "version_number": 1,
+        "steps_json": [],
+        "output_schema_json": {"trigger": "schedule.daily"},
+    }
+
+    first = agent_trigger_runtime.dispatch_due_scheduled_agent_blueprints(
+        cursor,
+        now=datetime(2026, 6, 10, 19, 5, tzinfo=timezone.utc),
+    )
+    second = agent_trigger_runtime.dispatch_due_scheduled_agent_blueprints(
+        cursor,
+        now=datetime(2026, 6, 10, 19, 10, tzinfo=timezone.utc),
+    )
+
+    assert first["dispatched_count"] == 0
+    assert first["skipped"][0]["reason"] == "AGENT_RUN_ALREADY_IN_PROGRESS"
+    assert cursor.trigger_events[0]["status"] == "deferred"
+    assert second["dispatched_count"] == 1
+    assert cursor.trigger_events[1]["status"] == "run_started"
+    assert len(cursor.tables["agent_runs"]) == 1
+    assert attempts[0] == attempts[1]
+
+
 def test_due_scheduled_trigger_dispatcher_waits_until_schedule_time():
     from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
 

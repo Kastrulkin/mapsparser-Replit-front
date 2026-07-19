@@ -357,6 +357,13 @@ def _scheduled_blueprint_event_already_recorded(
           AND event_type = %s
           AND payload_json->>'schedule_date' = %s
           AND payload_json->>'schedule_time' = %s
+          AND (
+              status = 'run_started'
+              OR (
+                  status = 'failed'
+                  AND COALESCE(reason_code, '') <> 'AGENT_RUN_ALREADY_IN_PROGRESS'
+              )
+          )
         LIMIT 1
         """,
         (
@@ -421,6 +428,14 @@ def _dispatch_scheduled_blueprint(
     )
     run = result.get("run") if isinstance(result.get("run"), dict) else {}
     run_id = str(run.get("id") or "")
+    failure_reason = None if result.get("success") else str(result.get("code") or result.get("error") or "run_start_failed")
+    event_status = (
+        "run_started"
+        if result.get("success")
+        else "deferred"
+        if failure_reason == "AGENT_RUN_ALREADY_IN_PROGRESS"
+        else "failed"
+    )
     cursor.execute(
         """
         UPDATE agent_trigger_events
@@ -432,8 +447,8 @@ def _dispatch_scheduled_blueprint(
         """,
         (
             run_id or None,
-            "run_started" if result.get("success") else "failed",
-            None if result.get("success") else str(result.get("code") or result.get("error") or "run_start_failed"),
+            event_status,
+            failure_reason,
             trigger_event_id,
         ),
     )
@@ -442,7 +457,8 @@ def _dispatch_scheduled_blueprint(
         "trigger_event_id": trigger_event_id,
         "run_id": run_id,
         "run_status": str(run.get("status") or ""),
-        "reason": None if result.get("success") else str(result.get("code") or result.get("error") or "run_start_failed"),
+        "reason": failure_reason,
+        "retryable": event_status == "deferred",
     }
 
 

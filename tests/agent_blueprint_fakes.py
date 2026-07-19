@@ -1240,6 +1240,13 @@ class FakeActiveTelegramTriggerCursor(FakeCursor):
                     and item.get("event_type") == event_type
                     and item.get("payload_json", {}).get("schedule_date") == params[2]
                     and item.get("payload_json", {}).get("schedule_time") == params[3]
+                    and (
+                        item.get("status") == "run_started"
+                        or (
+                            item.get("status") == "failed"
+                            and item.get("reason_code") != "AGENT_RUN_ALREADY_IN_PROGRESS"
+                        )
+                    )
                 ),
                 None,
             )
