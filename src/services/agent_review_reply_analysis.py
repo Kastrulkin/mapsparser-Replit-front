@@ -9,8 +9,32 @@ from services.gigachat_client import analyze_text_with_gigachat
 
 
 MAX_REVIEW_LLM_CONTEXT_CHARS = 12000
-REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v2"
+REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v3"
 REVIEW_SOURCE_NAMES = {"reviews", "external_reviews", "отзывы", "отзывы компании", "последние отзывы"}
+UNVERIFIED_PROMISE_MARKERS = (
+    "компенсац",
+    "компенсир",
+    "возмест",
+    "вернем деньги",
+    "вернуть деньги",
+    "возврат средств",
+    "скидк",
+    "бесплатн",
+    "подар",
+    "предпримем меры",
+    "примем меры",
+    "соответствующие меры",
+    "проведем внутреннее расследование",
+    "немедленно проведем",
+    "refund",
+    "reimburse",
+    "discount",
+    "free service",
+    "gift",
+)
+UNVERIFIED_PROMISE_REVIEW_REASON = (
+    "Неподтверждённое обещание генератора удалено. Проверьте безопасный черновик перед публикацией."
+)
 
 
 def draft_review_replies_with_llm(
@@ -203,18 +227,60 @@ def _normalize_llm_review_replies(
     reply_drafts = _anchor_reply_drafts(_clean_reply_drafts(parsed.get("reply_drafts")), selected_reviews)[:reply_limit]
     if not reply_drafts:
         reply_drafts = fallback["reply_drafts"][:reply_limit]
+    reply_drafts, safety_reasons = _guard_unverified_promises(reply_drafts, selected_reviews)
     summary = _clean_string_list(parsed.get("summary")) or fallback["summary"]
+    if safety_reasons:
+        summary = fallback["summary"]
     summary = [item for item in summary if not item.lower().startswith("подготовлено")]
+    manual_review_reasons = _clean_string_list(parsed.get("manual_review_reasons")) or fallback["manual_review_reasons"]
+    checklist = _clean_string_list(parsed.get("checklist")) or fallback["checklist"]
+    rules_applied = _clean_string_list(parsed.get("rules_applied")) or fallback["rules_applied"]
+    if safety_reasons:
+        checklist = fallback["checklist"]
+        rules_applied = fallback["rules_applied"]
     return {
         "title": _clean_text(parsed.get("title")) or fallback["title"],
         "summary": [f"Подготовлено черновиков: {len(reply_drafts)}", *summary],
         "reply_drafts": reply_drafts,
-        "manual_review_reasons": _clean_string_list(parsed.get("manual_review_reasons")) or fallback["manual_review_reasons"],
-        "checklist": _clean_string_list(parsed.get("checklist")) or fallback["checklist"],
-        "rules_applied": _clean_string_list(parsed.get("rules_applied")) or fallback["rules_applied"],
+        "manual_review_reasons": list(dict.fromkeys([*manual_review_reasons, *safety_reasons]))[:12],
+        "checklist": checklist,
+        "rules_applied": rules_applied,
         "feedback_notes": fallback.get("feedback_notes") or [],
         "format": fallback.get("format") or "Черновики ответов на отзывы",
     }
+
+
+def _guard_unverified_promises(
+    reply_drafts: List[Dict[str, str]],
+    selected_reviews: List[Dict[str, Any]],
+) -> tuple[List[Dict[str, str]], List[str]]:
+    reviews_by_id = {
+        _clean_text(review.get("review_id")): review
+        for review in selected_reviews
+        if _clean_text(review.get("review_id"))
+    }
+    guarded = []
+    safety_reasons = []
+    for draft in reply_drafts:
+        normalized_reply = _clean_text(draft.get("reply")).lower().replace("ё", "е")
+        if not any(marker in normalized_reply for marker in UNVERIFIED_PROMISE_MARKERS):
+            guarded.append(draft)
+            continue
+        source = reviews_by_id.get(_clean_text(draft.get("review_id")))
+        if source is None:
+            source = next(
+                (
+                    review
+                    for review in selected_reviews
+                    if _clean_text(review.get("author_name")) == _clean_text(draft.get("author_name"))
+                ),
+                {},
+            )
+        safe_draft = _fallback_reply(source or draft, "")
+        safe_draft["manual_review_reason"] = UNVERIFIED_PROMISE_REVIEW_REASON
+        guarded.append(safe_draft)
+        safety_reasons.append(UNVERIFIED_PROMISE_REVIEW_REASON)
+    return guarded, safety_reasons
 
 
 def _review_items(extracted_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -291,7 +357,7 @@ def _fallback_reply(review: Dict[str, Any], rules: str) -> Dict[str, str]:
     if sentiment == "negative":
         reply = (
             f"{author}, спасибо за обратную связь. Нам жаль, что опыт оказался не таким, как ожидалось. "
-            "Мы внимательно разберём ситуацию и свяжемся с командой, чтобы улучшить сервис."
+            "Если удобно, напишите нам напрямую дату визита и детали, чтобы мы могли проверить ситуацию."
         )
         reason = "Негативный отзыв требует ручной проверки перед публикацией."
     elif sentiment == "positive":

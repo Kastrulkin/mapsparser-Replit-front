@@ -1683,6 +1683,60 @@ def test_agent_review_reply_analysis_falls_back_without_publish():
     assert result["provenance"] == ["Отзывы"]
 
 
+def test_agent_review_reply_analysis_replaces_unverified_promises_with_safe_draft():
+    from services.agent_review_reply_analysis import draft_review_replies_with_llm
+
+    def unsafe_generator(prompt, *, business_id="", user_id=""):
+        return json.dumps(
+            {
+                "title": "Черновики ответов",
+                "summary": ["Предложена компенсация расходов"],
+                "reply_drafts": [
+                    {
+                        "review_id": "rev-risky",
+                        "author_name": "Мария",
+                        "rating": "1",
+                        "sentiment": "negative",
+                        "reply": (
+                            "Мария, мы немедленно проведём внутреннее расследование, предпримем меры "
+                            "и рассматриваем возможность компенсировать расходы."
+                        ),
+                        "manual_review_reason": "Проверить компенсацию.",
+                    }
+                ],
+                "manual_review_reasons": ["Проверить ответ"],
+            },
+            ensure_ascii=False,
+        )
+
+    result = draft_review_replies_with_llm(
+        {"workflow_description": "Подготовить ответ на негативный отзыв"},
+        [
+            {
+                "source_name": "Отзывы",
+                "raw": {
+                    "id": "rev-risky",
+                    "author_name": "Мария",
+                    "rating": 1,
+                    "text": "Салон закрылся раньше, стрижка не понравилась",
+                },
+            }
+        ],
+        generator=unsafe_generator,
+    )
+
+    reply = result["reply_drafts"][0]["reply"].lower().replace("ё", "е")
+    assert result["llm_analysis_used"] is True
+    assert "компенс" not in reply
+    assert "предпримем меры" not in reply
+    assert "внутреннее расследование" not in reply
+    assert "напишите нам напрямую" in reply
+    assert all("компенсац" not in item.lower() for item in result["summary"])
+    assert any("неподтверждённое обещание" in reason.lower() for reason in result["manual_review_reasons"])
+    assert "Неподтверждённое обещание" in result["reply_drafts"][0]["manual_review_reason"]
+    assert result["external_dispatch_performed"] is False
+
+
 def test_agent_review_reply_analysis_uses_only_one_unanswered_review_when_requested():
     from services.agent_review_reply_analysis import draft_review_replies_with_llm
 
