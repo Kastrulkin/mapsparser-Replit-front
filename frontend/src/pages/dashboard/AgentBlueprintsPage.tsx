@@ -1268,6 +1268,32 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
+  const rebuildScenario = async () => {
+    if (!selectedBlueprint) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    setDecisionNotice(null);
+    try {
+      await api.post(`/agent-blueprints/${selectedBlueprint.id}/versions`, {
+        rebuild_from_description: true,
+        description: selectedBlueprint.description || selectedBlueprint.latest_goal || selectedBlueprint.name || '',
+        category: selectedBlueprint.category || 'custom',
+        reason: 'Updated from the saved agent goal in the scenario tab.',
+      });
+      await loadBlueprintDetails(selectedBlueprint.id);
+      await loadBlueprintReview(selectedBlueprint.id);
+      setDecisionNotice('Сценарий обновлён по цели. Проверьте шаги и запустите тест на примере.');
+      setWorkspaceMode('scenario');
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось обновить сценарий агента.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const activateVersion = async (versionId: string, action: 'activate' | 'rollback') => {
     if (!selectedBlueprint || !versionId) {
       return;
@@ -2075,7 +2101,7 @@ export const AgentBlueprintsPage = () => {
       setSelectedExecutionMode, feedbackText, setFeedbackText, feedbackTrigger, setFeedbackTrigger, feedbackVersionNotice, legacyMigrationPlan, legacyMigrationNotice, recentCreatedAgentName, setRecentCreatedAgentName,
       recentPostCreateHandoff, setRecentPostCreateHandoff, showAdvancedAgentTools, deleteCandidate, setDeleteCandidate, decisionNotice, setDecisionNotice, googleAccessJustConnected, selectedBlueprint, pendingApproval,
       pendingApprovals, selectedPendingApproval, queuedButNotDispatched, selectedScenario, systemAgents, migrationStats, applyBuilderScenario, loadBlueprints, loadRun, startDialogBuilderSession,
-      sendDialogBuilderReply, createAgentFromDialogSession, createAgentFromPrompt, startRun, executeRun, saveSchedule, saveExecutionMode, rebuildScenarioAndRun, activateVersion, deleteAgent,
+      sendDialogBuilderReply, createAgentFromDialogSession, createAgentFromPrompt, startRun, executeRun, saveSchedule, saveExecutionMode, rebuildScenarioAndRun, rebuildScenario, activateVersion, deleteAgent,
       requestDeleteAgent, deleteSelectedAgent, decideApproval, saveAgentSetup, addTextSource, addInternalSource, addInternalSourceByKey, addFileSource, saveSheetIntegration, saveBrowserUseIntegration,
       saveTelegramIntegration, saveWhatsappIntegration, saveMatonIntegration, chooseProviderRoute, attachExistingAgentIntegration, saveCustomProcess, runCustomProcessPreview, applyLegacyMigration, sendRunFeedback, postCreateReadyForRun,
       showPostCreateConnectionDetails, todaySummary, employeeListDetailsById, filteredBlueprints, selectedEmployeeAction, selectedResultRun, resultNeedsScenarioRebuild, resultNeedsGoogleSheetsSetup, resultNeedsGoogleAccessReconnect, resultGoogleAccessReconnected,

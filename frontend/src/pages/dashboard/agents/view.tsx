@@ -474,7 +474,7 @@ export const AgentBlueprintsView = ({ scope }) => {
     setDecisionNotice, googleAccessJustConnected, selectedBlueprint, pendingApproval, pendingApprovals, selectedPendingApproval,
     queuedButNotDispatched, selectedScenario, systemAgents, migrationStats, applyBuilderScenario, loadBlueprints,
     loadRun, startDialogBuilderSession, sendDialogBuilderReply, createAgentFromDialogSession, createAgentFromPrompt, startRun,
-    executeRun, saveSchedule, saveExecutionMode, rebuildScenarioAndRun, activateVersion, deleteAgent,
+    executeRun, saveSchedule, saveExecutionMode, rebuildScenarioAndRun, rebuildScenario, activateVersion, deleteAgent,
     requestDeleteAgent, deleteSelectedAgent, decideApproval, saveAgentSetup, addTextSource, addInternalSource,
     addInternalSourceByKey, addFileSource, saveSheetIntegration, saveBrowserUseIntegration, saveTelegramIntegration, saveWhatsappIntegration,
     saveMatonIntegration, chooseProviderRoute, attachExistingAgentIntegration, saveCustomProcess, runCustomProcessPreview, applyLegacyMigration,
@@ -939,7 +939,12 @@ export const AgentBlueprintsView = ({ scope }) => {
                     ) : null}
                   </div>
                 ) : workspaceMode === 'scenario' ? (
-                  <EmployeeAgentScenarioPanel blueprint={selectedBlueprint} details={blueprintDetails} />
+                  <EmployeeAgentScenarioPanel
+                    blueprint={selectedBlueprint}
+                    details={blueprintDetails}
+                    actionLoading={actionLoading}
+                    onRebuildScenario={rebuildScenario}
+                  />
                 ) : workspaceMode === 'results' ? (
                   selectedResultRun || selectedPendingApproval ? (
                     <EmployeeTestResultPanel

@@ -178,7 +178,7 @@ export const getActiveVersionNumber = (blueprint: AgentBlueprint, details?: Agen
   if (typeof activeNumber === 'number') {
     return activeNumber;
   }
-  return getLatestVersionNumber(blueprint, details);
+  return null;
 };
 
 export const getActiveVersionId = (blueprint: AgentBlueprint, details?: AgentBlueprintDetails | null) => {

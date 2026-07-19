@@ -1768,9 +1768,13 @@ export const EmployeeAgentOverviewPanel = ({
 export const EmployeeAgentScenarioPanel = ({
   blueprint,
   details,
+  actionLoading,
+  onRebuildScenario,
 }: {
   blueprint: AgentBlueprint;
   details: AgentBlueprintDetails | null;
+  actionLoading: boolean;
+  onRebuildScenario: () => void;
 }) => {
   const contract = details?.execution_contract;
   const working = contract?.active || contract?.candidate;
@@ -1789,9 +1793,15 @@ export const EmployeeAgentScenarioPanel = ({
   return (
     <div className="space-y-4 max-w-5xl">
       {contract?.has_unpublished_changes ? (
-        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950 ring-1 ring-amber-200">
-          <div className="font-semibold">Есть изменения на проверке</div>
-          <div>Тест использует новую версию. Рабочие запуски продолжат использовать прежнюю, пока вы явно не включите изменения.</div>
+        <div className="flex flex-col gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950 ring-1 ring-amber-200 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="font-semibold">Есть сценарий для проверки</div>
+            <div>{contract.active ? 'Рабочие запуски продолжат использовать прежнюю версию, пока вы явно не включите изменения.' : 'Сначала проверьте сценарий на примере, затем явно включите его в работу.'}</div>
+          </div>
+          <Button type="button" variant="outline" className="min-h-10 shrink-0 bg-white" onClick={onRebuildScenario} disabled={actionLoading}>
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            Обновить по цели
+          </Button>
         </div>
       ) : null}
       <EmployeeWorkspaceSection title="Исходное поручение">

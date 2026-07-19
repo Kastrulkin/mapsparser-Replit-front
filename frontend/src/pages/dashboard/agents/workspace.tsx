@@ -509,7 +509,7 @@ export const AgentWorkspacePanel = ({
     title="Настройка агента"
     description="Данные, правила, результат и ручной контроль. Технический JSON спрятан в расширенном режиме."
   >
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+    <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
       <div className="grid gap-3">
         <VersionSummary
           versions={versions}
@@ -1412,12 +1412,14 @@ export const VersionSummary = ({
   onRollbackVersion: (versionId: string) => void;
 }) => {
   const newestVersions = versions.slice(0, 5);
+  const activeVersion = versions.find((version) => version.is_active === true || (activeVersionId && version.id === activeVersionId));
+  const activeVersionNumber = getVersionNumber(activeVersion);
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-700">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="font-semibold text-slate-950">Версии агента</div>
         <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
-          {latestVersionNumber ? `Рабочая версия v${latestVersionNumber}` : 'Рабочая версия не включена'}
+          {activeVersionNumber ? `Рабочая версия v${activeVersionNumber}` : 'Рабочая версия не включена'}
         </span>
       </div>
       <div className="mt-1 text-xs text-slate-500">
