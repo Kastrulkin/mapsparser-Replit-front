@@ -780,6 +780,44 @@ def test_generic_reviews_runner_prepares_reply_drafts_and_never_publishes():
     assert run["approvals"] == []
 
 
+def test_internal_business_summary_does_not_create_review_replies():
+    from services.agent_blueprint_workspace import _render_output
+
+    result = _render_output(
+        "business_summary",
+        {
+            "workflow_description": "Подготовить короткую внутреннюю сводку",
+            "output_format": "Короткая внутренняя сводка",
+        },
+        [
+            {
+                "source_name": "business_profile",
+                "summary": "Riderra",
+                "raw": {"id": "biz-1", "name": "Riderra", "business_type": "Трансферная компания", "city": "Tallinn"},
+            },
+            {
+                "source_name": "services",
+                "summary": "Airport transfer",
+                "raw": {"id": "service-1", "name": "Airport transfer"},
+            },
+            {
+                "source_name": "reviews",
+                "summary": "Отличный трансфер",
+                "raw": {"id": "review-1", "rating": 5, "text": "Отличный трансфер"},
+            },
+        ],
+        [],
+        {},
+    )
+
+    assert result["title"] == "Сводка бизнеса"
+    assert "Riderra" in result["text"]
+    assert "Airport transfer" in result["text"]
+    assert "Средняя оценка" in result["text"]
+    assert "reply_drafts" not in result
+    assert result["external_dispatch_performed"] is False
+
+
 def test_message_result_needs_source_data_without_sheet_rows():
     from services.agent_blueprint_workspace import _render_output
 

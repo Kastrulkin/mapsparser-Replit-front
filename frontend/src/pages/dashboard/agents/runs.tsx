@@ -947,6 +947,10 @@ export const HumanResultView = ({
   ]);
   const hasBusinessValue = (key: string, value: unknown) => {
     if (key === 'sentiment' && String(value || '').toLowerCase() === 'unknown') return false;
+    if (
+      (key === 'delivery_state' || key === 'publish_state')
+      && ['not_dispatched', 'not_published', 'not_sent'].includes(String(value || '').toLowerCase())
+    ) return false;
     if (technicalKeys.has(key) || key.endsWith('_json') || key.endsWith('_id')) return false;
     return value !== '' && value !== null && value !== undefined;
   };

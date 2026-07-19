@@ -299,6 +299,57 @@ def test_compiled_workflow_validation_rejects_write_without_approval():
     assert "steps[0].required_approval_type" in fields
 
 
+def test_agent_compiler_builds_internal_summary_instead_of_review_replies():
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+
+    draft = compile_agent_blueprint(
+        "Каждый день прочитать профиль бизнеса, услуги и последние отзывы, "
+        "затем сохранить короткую внутреннюю сводку. Ничего не публиковать и не отправлять."
+    )
+    payload = draft["version_payload"]
+    output_step = next(step for step in payload["steps"] if step["key"] == "prepare_output")
+
+    assert draft["category"] == "custom"
+    assert draft["metadata"]["draft_category"] == "business_summary"
+    assert draft["metadata"]["data_sources"] == ["business_profile", "services", "external_reviews"]
+    assert output_step["payload"]["category"] == "business_summary"
+    assert output_step["payload"]["format"] == "internal_business_summary"
+    assert draft["metadata"]["compiled_validation"]["valid"] is True
+
+
+def test_compiled_workflow_validation_rejects_review_renderer_for_internal_summary():
+    from services.agent_compiled_artifact import validate_compiled_artifact_candidate
+
+    version_payload = {
+        "goal": "Прочитать профиль и отзывы, затем сохранить короткую внутреннюю сводку.",
+        "trigger": "schedule.daily",
+        "mode": "draft",
+        "inputs_schema": {"type": "object"},
+        "steps": [
+            {
+                "key": "prepare_output",
+                "type": "artifact",
+                "artifact_type": "agent_output_draft",
+                "payload": {"category": "reviews", "format": "reply_drafts"},
+            }
+        ],
+        "capability_allowlist": [],
+        "approval_policy": {},
+        "required_integration_bindings": [],
+        "limits": {},
+        "output_schema": {"type": "object"},
+    }
+
+    result = validate_compiled_artifact_candidate(
+        version_payload,
+        {"compiled_process": {"schema": "compiled_custom_workflow_v1"}},
+    )
+
+    assert result["ready"] is False
+    assert result["validation"]["status"] == "invalid"
+    assert result["validation"]["errors"][0]["field"] == "steps[0].payload.format"
+
+
 def test_compiled_workflow_validation_rejects_openclaw_action_capability_mismatch():
     from services.agent_compiled_artifact import validate_compiled_artifact_candidate
 

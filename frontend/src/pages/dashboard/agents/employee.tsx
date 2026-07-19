@@ -297,6 +297,15 @@ const AGENT_BLUEPRINT_LEGACY_SOURCE_CONTRACT_LABELS = [
   'reserve ${item.billing_summary?.reserved_tokens',
 ];
 
+const creditWord = (value: number) => {
+  const lastTwoDigits = value % 100;
+  const lastDigit = value % 10;
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) return 'кредитов';
+  if (lastDigit === 1) return 'кредит';
+  if (lastDigit >= 2 && lastDigit <= 4) return 'кредита';
+  return 'кредитов';
+};
+
 const StatusBadge = ({ status }: { status: string }) => (
   <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1', statusTone[status] || 'bg-slate-50 text-slate-600 ring-slate-200')}>
     {userFacingAgentTechText(humanizeStatus(status))}
@@ -1262,12 +1271,12 @@ export const EmployeeTestResultPanel = ({
           ) : null}
           {estimatedRunCredits ? (
             <div className="w-full text-right text-xs font-medium tabular-nums text-slate-500">
-              Повтор: примерно {estimatedRunCredits} {estimatedRunCredits === 1 ? 'кредит' : estimatedRunCredits < 5 ? 'кредита' : 'кредитов'}
+              Повтор: примерно {estimatedRunCredits} {creditWord(estimatedRunCredits)}
             </div>
           ) : null}
           {activeRun?.id ? (
             <div className="w-full text-right text-xs font-medium tabular-nums text-slate-500">
-              {isWorkRun ? `За эту работу списано: ${chargedCredits} кредитов` : 'Проверка выполнена бесплатно'}
+              {isWorkRun ? `За эту работу списано: ${chargedCredits} ${creditWord(chargedCredits)}` : 'Проверка выполнена бесплатно'}
             </div>
           ) : null}
         </div>
@@ -1692,7 +1701,7 @@ export const EmployeeAgentOverviewPanel = ({
             </Button>
             {actionCredits ? (
               <div className="mt-2 text-center text-xs font-medium tabular-nums text-slate-500">
-                Примерно {actionCredits} {actionCredits === 1 ? 'кредит' : actionCredits < 5 ? 'кредита' : 'кредитов'} за запуск
+                Примерно {actionCredits} {creditWord(actionCredits)} за запуск
               </div>
             ) : null}
           </div>

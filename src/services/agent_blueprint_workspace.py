@@ -447,6 +447,8 @@ def _render_output(
             user_id=_clean_text((workspace or {}).get("user_id")),
             run_id=_clean_text((workspace or {}).get("run_id")),
         )
+    if category == "business_summary":
+        return _render_business_summary(setup, extracted, feedback_notes)
     if category == "documents":
         return analyze_document_sources_with_llm(
             setup,
@@ -473,6 +475,89 @@ def _render_output(
         "rules_applied": rules,
         "format": output_format,
         "feedback_notes": feedback_notes,
+    }
+
+
+def _render_business_summary(
+    setup: Dict[str, Any],
+    extracted: List[Dict[str, Any]],
+    feedback_notes: List[str],
+) -> Dict[str, Any]:
+    unique_items = []
+    seen = set()
+    for item in extracted:
+        if not isinstance(item, dict):
+            continue
+        raw = item.get("raw") if isinstance(item.get("raw"), dict) else {}
+        source_name = _clean_text(item.get("source_name")).lower()
+        summary = _clean_text(item.get("summary"))
+        identity = (source_name, _clean_text(raw.get("id")) or summary)
+        if identity in seen or (not raw and summary.lower() in {"ready", "готово"}):
+            continue
+        seen.add(identity)
+        unique_items.append(item)
+
+    profile_items = [item for item in unique_items if _clean_text(item.get("source_name")).lower() == "business_profile"]
+    service_items = [item for item in unique_items if _clean_text(item.get("source_name")).lower() == "services"]
+    review_items = [item for item in unique_items if _clean_text(item.get("source_name")).lower() in {"reviews", "external_reviews"}]
+    profile = profile_items[0].get("raw") if profile_items and isinstance(profile_items[0].get("raw"), dict) else {}
+
+    company_name = _clean_text(profile.get("name")) or "Бизнес"
+    profile_parts = [
+        _clean_text(profile.get("business_type")),
+        _clean_text(profile.get("city")),
+        _clean_text(profile.get("address")),
+    ]
+    profile_parts = [item for item in profile_parts if item]
+    lines = [f"{company_name}: {' · '.join(profile_parts)}" if profile_parts else company_name]
+
+    service_names = []
+    for item in service_items:
+        raw = item.get("raw") if isinstance(item.get("raw"), dict) else {}
+        name = _clean_text(raw.get("name"))
+        if name and name not in service_names:
+            service_names.append(name)
+    if service_names:
+        lines.append(f"Услуги в доступной выборке: {len(service_names)}. {', '.join(service_names[:5])}.")
+    else:
+        lines.append("Услуги: в доступных данных записи не найдены.")
+
+    ratings = []
+    for item in review_items:
+        raw = item.get("raw") if isinstance(item.get("raw"), dict) else {}
+        rating = raw.get("rating")
+        if isinstance(rating, (int, float)):
+            ratings.append(rating)
+    if review_items:
+        rating_text = f" Средняя оценка в выборке: {sum(ratings) / len(ratings):.1f}." if ratings else ""
+        lines.append(f"Отзывы в доступной выборке: {len(review_items)}.{rating_text}")
+    else:
+        lines.append("Отзывы: свежие записи в доступных данных не найдены.")
+
+    attention = []
+    low_ratings = len([rating for rating in ratings if rating <= 3])
+    if low_ratings:
+        attention.append(f"Проверить {low_ratings} отзывов с оценкой 3 или ниже.")
+    if not service_names:
+        attention.append("Проверить, подключён ли источник услуг.")
+    if not review_items:
+        attention.append("Проверить, подключён ли источник отзывов.")
+
+    provenance = []
+    for item in unique_items:
+        source_name = _clean_text(item.get("source_name"))
+        if source_name and source_name not in provenance:
+            provenance.append(source_name)
+    return {
+        "title": "Сводка бизнеса",
+        "text": "\n".join(lines),
+        "summary": lines,
+        "checklist": attention or ["Срочных проблем в доступной выборке не обнаружено."],
+        "provenance": provenance,
+        "format": _clean_text(setup.get("output_format")) or "Короткая внутренняя сводка",
+        "feedback_notes": feedback_notes,
+        "preparation_method": "Сводка собрана по данным текущего бизнеса. Наружу ничего не отправлялось.",
+        "external_dispatch_performed": False,
     }
 
 

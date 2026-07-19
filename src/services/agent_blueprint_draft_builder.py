@@ -110,6 +110,8 @@ def infer_blueprint_category(description: str) -> str:
         return "custom"
     if _is_problem_digest_request(text):
         return "custom"
+    if _is_internal_summary_request(text):
+        return "custom"
     if _is_client_reactivation_request(text):
         return "communications"
     if _is_customer_data_quality_request(text):
@@ -280,6 +282,9 @@ def compile_agent_blueprint(
             if str(binding.get("capability") or "").strip()
         ]
     metadata = _metadata(request_text, category, sources)
+    if _is_internal_summary_request(request_text.lower()):
+        metadata["draft_category"] = "business_summary"
+        metadata["outputs"] = [_output_format_for_category("business_summary")]
     if required_bindings:
         metadata["required_integration_bindings"] = required_bindings
     _attach_compiled_metadata(metadata, version_payload, f"compiled_{category}_workflow_v1", "final_output")
@@ -407,6 +412,13 @@ def _sources_for_request(category: str, request_text: str) -> List[str]:
         result = ["localos_digest", "business_profile"]
         if _contains_any(lowered, ["telegram", "телеграм", "присыла", "отправ", "шл", "уведом"]):
             result.append("telegram")
+        return result
+    if category == "custom" and _is_internal_summary_request(lowered):
+        result = ["business_profile"]
+        if _contains_any(lowered, ["услуг", "сервис", "прайс", "цен"]):
+            result.append("services")
+        if _contains_any(lowered, ["отзыв", "рейтинг", "репутац"]):
+            result.append("external_reviews")
         return result
     if _is_cancellation_risk_request(lowered):
         return ["appointments", "clients", "business_profile"]
@@ -1259,6 +1271,22 @@ def _is_problem_digest_request(text: str) -> bool:
     return sum(1 for marker in markers if marker in text) >= 2
 
 
+def _is_internal_summary_request(text: str) -> bool:
+    if not _contains_any(
+        text,
+        ["внутренняя сводка", "внутреннюю сводку", "краткая сводка", "краткую сводку", "сводка бизнеса", "сводка профиля"],
+    ):
+        return False
+    action_text = re.sub(
+        r"(?:ничего\s+)?не\s+(?:отправлять|отправляться|публиковать|присылать)",
+        "",
+        text,
+    )
+    if _contains_any(action_text, ["отправ", "пришл", "telegram", "телеграм", "whatsapp", "опублику", "публикац"]):
+        return False
+    return _contains_any(text, ["прочит", "собер", "собир", "подготов", "сохран", "профил", "услуг", "отзыв"])
+
+
 def _is_rich_localos_workflow_request(text: str) -> bool:
     lowered = text.lower()
     return any(
@@ -1777,6 +1805,7 @@ def _custom_integration_compilation(description: str) -> Dict[str, Any]:
 
 
 def _generic_steps(category: str, description: str, sources: List[str]) -> List[Dict[str, Any]]:
+    output_category = "business_summary" if _is_internal_summary_request(description.lower()) else category
     return [
         {
             "key": "collect_inputs",
@@ -1787,7 +1816,7 @@ def _generic_steps(category: str, description: str, sources: List[str]) -> List[
                 "status": "draft",
                 "request": description,
                 "sources": sources,
-                "category": category,
+                "category": output_category,
             },
         },
         {
@@ -1808,7 +1837,8 @@ def _generic_steps(category: str, description: str, sources: List[str]) -> List[
             "artifact_type": "agent_output_draft",
             "payload": {
                 "status": "draft",
-                "format": _output_format_for_category(category),
+                "category": output_category,
+                "format": _output_format_for_category(output_category),
                 "external_dispatch_performed": False,
             },
         },
@@ -1842,6 +1872,7 @@ def _output_format_for_category(category: str) -> str:
         "partnerships": "proposal_draft",
         "booking": "booking_rules_summary",
         "services": "service_optimization_plan",
+        "business_summary": "internal_business_summary",
     }
     return formats.get(category, "custom_artifact")
 

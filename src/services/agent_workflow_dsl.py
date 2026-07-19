@@ -140,6 +140,21 @@ def validate_workflow_dsl_document(document: Dict[str, Any]) -> Dict[str, Any]:
                 elif required_approval_type not in approval_types and required_approval_type not in approval_policy:
                     errors.append(_issue(f"steps[{index}].required_approval_type", "Approval gate is not declared in workflow."))
 
+    if _goal_requires_internal_summary(str(document.get("goal") or "")):
+        for index, step in enumerate(steps):
+            if not isinstance(step, dict) or str(step.get("artifact_type") or "").strip() != "agent_output_draft":
+                continue
+            payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
+            category = str(payload.get("category") or "").strip().lower()
+            output_format = str(payload.get("format") or "").strip().lower()
+            if category == "reviews" or "reply_draft" in output_format:
+                errors.append(
+                    _issue(
+                        f"steps[{index}].payload.format",
+                        "Internal business summary cannot use the review-reply output renderer.",
+                    )
+                )
+
     for capability in capability_allowlist:
         if capability and capability not in capabilities_in_steps:
             warnings.append(_issue("capability_allowlist", f"Capability {capability} is allowed but not used by a step."))
@@ -206,6 +221,20 @@ def _contains_write_capability(capabilities: set[str]) -> bool:
         _looks_like_write_capability(capability) and capability not in SAFE_INTERNAL_DRAFT_CAPABILITIES
         for capability in capabilities
     )
+
+
+def _goal_requires_internal_summary(goal: str) -> bool:
+    lowered = goal.lower()
+    summary_markers = [
+        "внутренняя сводка",
+        "внутреннюю сводку",
+        "краткая сводка",
+        "краткую сводку",
+        "сводка бизнеса",
+        "сводка профиля",
+    ]
+    reply_markers = ["ответ на отзыв", "ответы на отзывы", "черновик ответа", "черновики ответов"]
+    return any(marker in lowered for marker in summary_markers) and not any(marker in lowered for marker in reply_markers)
 
 
 def _issue(field: str, message: str) -> Dict[str, str]:
