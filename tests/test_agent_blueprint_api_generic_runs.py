@@ -915,12 +915,17 @@ def test_internal_business_summary_uses_public_parameters_of_current_run():
                 "request": "Подготовить сводку на 21 июля 2026 года.",
                 "business_id": "must-not-be-rendered",
                 "preview_mode": False,
+                "trigger_event_id": "preview-must-not-be-rendered",
+                "capability_allowlist": ["business.profile.read"],
+                "google_sheets": {"spreadsheet_id": "internal-provider-context"},
             },
         },
     )
 
     assert "Параметры этого запуска: Подготовить сводку на 21 июля 2026 года." in result["text"]
     assert "must-not-be-rendered" not in result["text"]
+    assert "business.profile.read" not in result["text"]
+    assert "internal-provider-context" not in result["text"]
 
 
 def test_message_row_selection_prefers_date_from_current_run_request():
