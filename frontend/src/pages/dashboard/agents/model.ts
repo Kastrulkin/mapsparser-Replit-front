@@ -1250,7 +1250,15 @@ export const buildEmployeePrimaryAction = ({
       targetMode: 'results',
     };
   }
-  if (state === 'draft' || state === 'ready_for_test') {
+  if (state === 'ready_for_test') {
+    return {
+      kind: 'run_test',
+      label: 'Запустить тест',
+      description: 'Запустите безопасную проверку новой версии без публикаций и внешних отправок.',
+      targetMode: 'results',
+    };
+  }
+  if (state === 'draft') {
     if (latestResult || blueprint.last_run_status === 'completed' || details?.runs?.[0]?.status === 'completed') {
       return {
         kind: 'open_result',
