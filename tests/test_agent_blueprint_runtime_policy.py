@@ -195,6 +195,46 @@ def test_blocking_business_result_stops_before_downstream_write(monkeypatch):
     assert orchestrator.calls == 0
 
 
+def test_successful_retry_clears_previous_transient_error():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Recovery canary",
+        "category": "custom",
+        "metadata_json": {},
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": [],
+        "capability_allowlist_json": [],
+    }
+    cursor.tables["agent_runs"]["run1"] = {
+        "id": "run1",
+        "blueprint_id": "bp1",
+        "blueprint_version_id": "ver1",
+        "business_id": "biz1",
+        "status": "retry_wait",
+        "input_json": {"preview_mode": True},
+        "output_json": {},
+        "created_by_user_id": "user1",
+        "error_text": "worker heartbeat expired; retry scheduled",
+        "next_attempt_at": "2026-07-19T14:00:00Z",
+    }
+
+    result = AgentBlueprintRunner(cursor).execute_queued_run(
+        "run1",
+        {"user_id": "user1"},
+    )
+
+    assert result["run"]["status"] == "completed"
+    assert result["run"]["error_text"] is None
+    assert result["run"]["next_attempt_at"] is None
+
+
 def test_agent_integration_preflight_allows_inline_rows_and_native_finance():
     from services.agent_blueprint_draft_builder import compile_agent_blueprint
     from services.agent_integration_preflight import build_agent_integration_preflight

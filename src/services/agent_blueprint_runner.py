@@ -320,6 +320,8 @@ class AgentBlueprintRunner:
                 UPDATE agent_runs
                 SET status = 'completed',
                     output_json = %s::jsonb,
+                    error_text = NULL,
+                    next_attempt_at = NULL,
                     completed_at = NOW(),
                     updated_at = NOW()
                 WHERE id = %s

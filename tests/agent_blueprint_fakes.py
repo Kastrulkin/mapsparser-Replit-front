@@ -524,6 +524,8 @@ class FakeCursor:
         if normalized_query.startswith("update agent_runs set status = 'completed'"):
             self.tables["agent_runs"][params[1]]["status"] = "completed"
             self.tables["agent_runs"][params[1]]["output_json"] = json.loads(params[0])
+            self.tables["agent_runs"][params[1]]["error_text"] = None
+            self.tables["agent_runs"][params[1]]["next_attempt_at"] = None
             return None
         if normalized_query.startswith("update agent_blueprints") and "set metadata_json" in normalized_query:
             blueprint = self.tables["agent_blueprints"].get(params[1])
