@@ -1618,3 +1618,13 @@ def test_agent_ui_treats_only_explicit_preview_runs_as_tests():
     assert "const isWorkRun = isAgentWorkRun(activeRun);" in employee_source
     assert "{isWorkRun && estimatedRunCredits ? (" in employee_source
     assert "Проверка выполнена бесплатно" in employee_source
+
+
+def test_agent_selection_clears_stale_run_and_details_before_loading_new_agent():
+    source = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
+
+    selection_effect = source.split("if (selectedBlueprint?.id) {", 1)[1].split("} else {", 1)[0]
+    assert "setBlueprintDetails(null);" in selection_effect
+    assert "setActiveRun(null);" in selection_effect
+    assert selection_effect.index("setBlueprintDetails(null);") < selection_effect.index("loadBlueprintDetails(selectedBlueprint.id)")
+    assert selection_effect.index("setActiveRun(null);") < selection_effect.index("loadBlueprintDetails(selectedBlueprint.id)")

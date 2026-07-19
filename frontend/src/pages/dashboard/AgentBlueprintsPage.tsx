@@ -424,6 +424,8 @@ export const AgentBlueprintsPage = () => {
 
   useEffect(() => {
     if (selectedBlueprint?.id) {
+      setBlueprintDetails(null);
+      setActiveRun(null);
       void loadBlueprintDetails(selectedBlueprint.id);
     } else {
       setBlueprintDetails(null);
