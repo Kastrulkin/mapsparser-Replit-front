@@ -1815,7 +1815,14 @@ export const EmployeeAgentScenarioPanel = ({
             Обновить по цели
           </Button>
         </div>
-      ) : null}
+      ) : (
+        <div className="flex justify-end">
+          <Button type="button" variant="outline" className="min-h-10" onClick={onRebuildScenario} disabled={actionLoading}>
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            Обновить сценарий по цели
+          </Button>
+        </div>
+      )}
       <EmployeeWorkspaceSection title="Исходное поручение">
         <p className="whitespace-pre-wrap text-base leading-7 text-slate-800 [text-wrap:pretty]">{contract?.original_request || blueprint.description || 'Полное поручение не сохранилось у этого старого агента.'}</p>
         {!contract?.description_complete ? <p className="mt-2 text-sm text-amber-800">Описание собрано из старой версии и может быть неполным.</p> : null}
