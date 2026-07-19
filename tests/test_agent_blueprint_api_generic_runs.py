@@ -1795,10 +1795,7 @@ def test_agent_review_reply_analysis_replaces_unverified_internal_action_promise
                         "review_id": "rev-training",
                         "author_name": "Анна",
                         "rating": "2",
-                        "reply": (
-                            "Анна, спасибо за подробный отзыв. Мы учтём все аспекты обращения "
-                            "при дальнейшем обучении сотрудников."
-                        ),
+                        "reply": "Анна, спасибо за подробный отзыв. Мы немедленно разберём ситуацию.",
                     }
                 ]
             },
@@ -1822,7 +1819,7 @@ def test_agent_review_reply_analysis_replaces_unverified_internal_action_promise
     )
 
     reply = result["reply_drafts"][0]["reply"].lower().replace("ё", "е")
-    assert "обучении сотрудников" not in reply
+    assert "разберем ситуацию" not in reply
     assert "напишите нам напрямую" in reply
     assert any("неподтверждённое обещание" in reason.lower() for reason in result["manual_review_reasons"])
     assert result["external_dispatch_performed"] is False

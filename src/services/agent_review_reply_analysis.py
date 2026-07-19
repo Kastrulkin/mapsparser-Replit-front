@@ -9,7 +9,7 @@ from services.gigachat_client import analyze_text_with_gigachat
 
 
 MAX_REVIEW_LLM_CONTEXT_CHARS = 12000
-REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v5"
+REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v6"
 REVIEW_SOURCE_NAMES = {"reviews", "external_reviews", "отзывы", "отзывы компании", "последние отзывы"}
 ANONYMOUS_AUTHOR_NAMES = {"", "клиент", "аноним", "анонимный пользователь", "пользователь"}
 UNVERIFIED_PROMISE_MARKERS = (
@@ -37,6 +37,12 @@ UNVERIFIED_INTERNAL_ACTION_PATTERNS = (
     r"\b(?:учтем|учтём)\b.{0,120}\bобучени\w*\s+сотрудник",
     r"\b(?:проведем|проведём)\b.{0,80}\bобучени\w*",
     r"\b(?:обязательно\s+исправим|гарантируем|решим\s+(?:эту\s+)?проблему)\b",
+    (
+        r"\bмы\s+(?:немедленно\s+|обязательно\s+)?"
+        r"(?:разберем|разберём|проверим|предотвратим|учтем|учтём|примем|исправим|проведем|проведём|"
+        r"свяжемся|компенсируем|вернем|вернём|обучим|улучшим|сделаем|гарантируем|позаботимся|"
+        r"выясним|решим|передадим|предпримем)\b"
+    ),
 )
 UNVERIFIED_PROMISE_REVIEW_REASON = (
     "Неподтверждённое обещание генератора удалено. Проверьте безопасный черновик перед публикацией."
