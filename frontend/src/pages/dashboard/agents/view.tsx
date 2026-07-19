@@ -964,38 +964,78 @@ export const AgentBlueprintsView = ({ scope }) => {
                     onRebuildScenario={rebuildScenario}
                   />
                 ) : workspaceMode === 'results' ? (
-                  selectedResultRun || selectedPendingApproval ? (
-                    <EmployeeTestResultPanel
-                      activeRun={selectedResultRun}
-                      pendingApproval={selectedPendingApproval}
-                      actionLoading={actionLoading}
-                      needsScenarioRebuild={resultNeedsScenarioRebuild}
-                      needsGoogleSheetsSetup={resultNeedsGoogleSheetsSetup}
-                      needsGoogleAccessReconnect={resultNeedsGoogleAccessReconnect}
-                      googleAccessJustConnected={resultGoogleAccessReconnected}
-                      estimatedRunCredits={estimatedAgentRunCredits(blueprintDetails, selectedEmployeeAction.kind === 'run_test')}
-                      onApprove={() => decideApproval('approve')}
-                      onReject={() => decideApproval('reject')}
-                      onRunAgain={() => {
-                        const workRun = isAgentWorkRun(selectedResultRun);
-                        const schema = workRun
-                          ? blueprintDetails?.active_run_input_schema || blueprintDetails?.run_input_schema
-                          : blueprintDetails?.candidate_run_input_schema || blueprintDetails?.run_input_schema;
-                        const parameters = initialRunParameters(schema, selectedResultRun?.input_json);
-                        return workRun
-                          ? executeRun(selectedBlueprint, selectedResultRun?.blueprint_version_id || '', parameters)
-                          : startRun(selectedBlueprint, selectedResultRun?.blueprint_version_id || '', parameters);
-                      }}
-                      onRebuildScenario={rebuildScenarioAndRun}
-                      onOpenGoogleSheetsSetup={openGoogleSheetsSourceSetup}
-                      onOpenGoogleAccessReconnect={openGoogleAccessReconnect}
-                    />
-                  ) : (
-                    <EmployeeHistoryPanel
-                      details={blueprintDetails}
-                      activeRun={activeRun}
-                    />
-                  )
+                  <div className="space-y-4">
+                    <section className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">История</div>
+                          <h2 className="mt-1 text-lg font-semibold leading-7 text-slate-950">Запуски агента</h2>
+                        </div>
+                        <span className="text-xs font-medium tabular-nums text-slate-500">
+                          {(blueprintDetails?.runs || []).length} всего
+                        </span>
+                      </div>
+                      <div className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-xl ring-1 ring-slate-200">
+                        {(blueprintDetails?.runs || []).length ? (blueprintDetails?.runs || []).map((run) => {
+                          const selected = selectedResultRun?.id === run.id;
+                          const runDate = run.completed_at || run.started_at || run.queued_at || '';
+                          return (
+                            <button
+                              key={run.id}
+                              type="button"
+                              aria-current={selected ? 'true' : undefined}
+                              onClick={() => void loadRun(run.id)}
+                              className={cn(
+                                'flex min-h-12 w-full items-center justify-between gap-3 px-3 py-2 text-left transition-[background-color,color] active:scale-[0.99]',
+                                selected ? 'bg-slate-950 text-white' : 'bg-white text-slate-800 hover:bg-slate-50',
+                              )}
+                            >
+                              <span className="min-w-0">
+                                <span className="block text-sm font-semibold">{isAgentWorkRun(run) ? 'Рабочий запуск' : 'Проверка'}</span>
+                                <span className={cn('block truncate text-xs', selected ? 'text-slate-300' : 'text-slate-500')}>
+                                  {runDate ? formatShortDate(runDate) : 'Дата не сохранена'}
+                                </span>
+                              </span>
+                              <span className={cn('shrink-0 text-xs font-medium', selected ? 'text-slate-200' : 'text-slate-500')}>
+                                {humanizeStatus(run.status)}
+                              </span>
+                            </button>
+                          );
+                        }) : (
+                          <div className="px-3 py-4 text-sm text-slate-600">История появится после первого запуска.</div>
+                        )}
+                      </div>
+                    </section>
+                    {selectedResultRun || selectedPendingApproval ? (
+                      <EmployeeTestResultPanel
+                        activeRun={selectedResultRun}
+                        pendingApproval={selectedPendingApproval}
+                        actionLoading={actionLoading}
+                        needsScenarioRebuild={resultNeedsScenarioRebuild}
+                        needsGoogleSheetsSetup={resultNeedsGoogleSheetsSetup}
+                        needsGoogleAccessReconnect={resultNeedsGoogleAccessReconnect}
+                        googleAccessJustConnected={resultGoogleAccessReconnected}
+                        estimatedRunCredits={estimatedAgentRunCredits(blueprintDetails, selectedEmployeeAction.kind === 'run_test')}
+                        onApprove={() => decideApproval('approve')}
+                        onReject={() => decideApproval('reject')}
+                        onRunAgain={() => {
+                          const workRun = isAgentWorkRun(selectedResultRun);
+                          const schema = workRun
+                            ? blueprintDetails?.active_run_input_schema || blueprintDetails?.run_input_schema
+                            : blueprintDetails?.candidate_run_input_schema || blueprintDetails?.run_input_schema;
+                          const parameters = initialRunParameters(schema, selectedResultRun?.input_json);
+                          return workRun
+                            ? executeRun(selectedBlueprint, selectedResultRun?.blueprint_version_id || '', parameters)
+                            : startRun(selectedBlueprint, selectedResultRun?.blueprint_version_id || '', parameters);
+                        }}
+                        onRebuildScenario={rebuildScenarioAndRun}
+                        onOpenGoogleSheetsSetup={openGoogleSheetsSourceSetup}
+                        onOpenGoogleAccessReconnect={openGoogleAccessReconnect}
+                      />
+                    ) : (
+                      <EmployeeHistoryPanel details={blueprintDetails} activeRun={activeRun} />
+                    )}
+                  </div>
                 ) : workspaceMode === 'settings' ? (
                   <div className="space-y-4">
                     <AgentExecutionModePanel
