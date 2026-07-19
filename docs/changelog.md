@@ -1,5 +1,11 @@
 # Documentation Changelog
 
+## 2026-07-19
+
+- Documented the new Google Cloud project `localos-gbp` and kept it separate from the current production OAuth client while review is pending.
+- Recorded the LocalOS GBP agency organization, the verified managed profile «Веселая расческа» at Проспект Энгельса, 154, and the no-ownership-transfer manager access model.
+- Recorded Basic API Access case `7-6688000041542`, submitted 18 July 2026, and added the post-approval production checklist.
+
 ## 2026-06-17
 
 - Updated the main project description after reviewing the last three months of changes.

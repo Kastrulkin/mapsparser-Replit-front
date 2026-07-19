@@ -73,7 +73,7 @@ The last three months of development shifted LocalOS from a card-audit tool towa
 
 - agent workflows now use a compiled plan model with explicit capabilities, provider routes, connection preflight, versioning, preview runs, run journals, and approval queues;
 - OpenClaw is treated as the execution boundary, while LocalOS owns policy, human approval, billing, audit, support export, and recovery flows;
-- Google Business Profile support now covers OAuth, status, location selection, sync, review-reply publishing, and post publishing; the integration remains `beta / Google approval pending`;
+- Google Business Profile support now covers OAuth, status, location selection, sync, review-reply publishing, and post publishing. A repeat Basic API Access application for project `localos-gbp` was submitted on 18 July 2026 using the verified managed client profile «Веселая расческа»; the integration remains `beta / Google review pending` until approval and a live publish proof;
 - outreach now includes lead sourcing/import, shortlist decisions, message drafts, approval, capped send batches, delivery tracking, and reaction/outcome classification;
 - content planning gained network modes, weekly/location filters, bulk actions, learning metrics, and quality signal prioritization;
 - finance gained onboarding analytics, KPI history, partial-data handling, CRM adapter scaffolding, average-ticket/upsell views, and approved apply flows for agents;

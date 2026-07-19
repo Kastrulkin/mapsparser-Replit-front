@@ -68,6 +68,8 @@ LocalOS помогает владельцам и управляющим лока
 
 ### Интеграции и внешние write-действия
 - Google Business Profile подключается через OAuth; production-доступ зависит от статуса Google API approval и конкретного включённого capability.
+- Для повторной заявки создан отдельный Google Cloud project `localos-gbp` (`649313441761`) и агентская организация `LocalOS`. В группу `Клиенты LocalOS` добавлена подтверждённая карточка клиента «Веселая расческа», проспект Энгельса, 154, с ролью менеджера без передачи основного владения.
+- Заявка на Basic API Access отправлена 18 июля 2026 года, Google case `7-6688000041542`; заявленный срок проверки — 7–10 рабочих дней. До одобрения новый OAuth-клиент не заменяет текущий production-клиент.
 - AI-agent webhooks для Telegram и WhatsApp Business API используют business-level настройки и не обходят policy/approval.
 - Любой publish/send/payment/delete/bulk mutation/provider write требует явного review/approval и должен быть описан как поддержанный только после реализации, тестов и deployment checks.
 
@@ -145,6 +147,7 @@ LocalOS помогает владельцам и управляющим лока
 - 📊 [Полная структура БД](./database_schema.md) — детальная документация (PostgreSQL)
 - 🔧 [План оптимизации БД](./DB_OPTIMIZATION_PLAN.md) — исторический план оптимизации схемы
 - 🔗 [Настройка внешних интеграций](./INTEGRATIONS_SETUP.md) — Яндекс.Бизнес, Google Business, 2ГИС
+- 🗺️ [Google Business Profile: production и повторная заявка](./docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md) — OAuth-клиенты, агентская организация, case Google и checklist после одобрения
 - 🤝 [Roadmap поиска партнёрств](./docs/PARTNERSHIP_ROADMAP_BACKLOG.md) — P0–P10, включая fallback-режим импорта партнёров файлом
 - 🧩 [Архитектура агентов LocalOS v1](./docs/LOCALOS_AGENT_ARCHITECTURE_V1.md) — канон Agent/Persona/Blueprint/Compiled Workflow/OpenClaw и инвентаризация существующих блоков
 - 🧑‍💼 [Модель интерфейса агентов Compiled AI](./docs/AGENTS_INTERFACE_MODEL_COMPILED_AI.md) — агенты как ИИ-сотрудники, IA раздела и путь create → test → approve → enable → running

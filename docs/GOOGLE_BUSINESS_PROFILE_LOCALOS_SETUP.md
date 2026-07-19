@@ -1,6 +1,20 @@
 # Google Business Profile For LocalOS
 
-Status: beta / Google review pending.
+Status: `beta / Google Basic API Access review pending`.
+
+Last verified: 19 July 2026.
+
+## Current Decision
+
+LocalOS has two Google Cloud/OAuth contexts during the review period:
+
+1. the current production OAuth client, which must remain unchanged while the
+   new application is under review;
+2. the new `localos-gbp` project submitted for Google Business Profile Basic
+   API Access.
+
+Do not replace production credentials with the new client until Google approves
+the new project and the post-approval smoke checklist below passes.
 
 ## Production Source Of Truth
 
@@ -29,6 +43,41 @@ client identifier, not as a separate LocalOS integration.
 
 Do not commit the OAuth client secret. Store it only in production environment variables.
 
+## New GBP Allowlist Project
+
+The repeat application uses a separate project and an agency account that
+manages a real, verified client profile.
+
+- Google Cloud project name: `LocalOS GBP`
+- Project ID: `localos-gbp`
+- Project number: `649313441761`
+- OAuth app name: `LocalOS`
+- OAuth client name: `LocalOS Production`
+- OAuth client ID: `649313441761-bht1r6b8r1qt8viqa3k06kcnlgkj5ltq.apps.googleusercontent.com`
+- User support email: `demyanovap@gmail.com`
+- Agency/contact account: `info@localos.pro`
+- Authorized domain: `localos.pro`
+- Authorized redirect URI: `https://localos.pro/api/google/oauth/callback`
+
+The OAuth client secret is intentionally not documented or committed.
+
+### Agency Organization And First Managed Profile
+
+- GBP organization: `LocalOS`
+- Organization ID: `110155982680425683163`
+- Location group: `Клиенты LocalOS`
+- Location group ID: `113125848042085196875`
+- Managed client: `Веселая расческа`
+- Address: `Проспект Энгельса, 154, ТРК "Гранд Каньон", Санкт-Петербург`
+- Store code: `13577141863377705865`
+- Status in the agency group: `Verified`
+- LocalOS access level: manager
+- Primary ownership: unchanged
+
+The profile is the evidence that LocalOS operates as an agency managing an
+authorized client's established Business Profile. LocalOS itself is an online
+SaaS product and is not represented as a local storefront for this application.
+
 ## Required Environment Variables
 
 Set these on the server/app runtime:
@@ -51,21 +100,28 @@ Submit the access request from Google Business Profile Help:
 
 `https://support.google.com/business/workflow/16726127?hl=en`
 
-Use:
+The active repeat application was submitted with:
 
-- request type: `Application for Basic API Access`;
-- Google Cloud project: `totemic-union-440908-s8`;
-- project selector / project number shown in Console: `510204060`;
-- production OAuth client ID: `304042072643-cpvhm8toat1aag3lc2enudfclfouhhod.apps.googleusercontent.com`;
-- contact email: `demyanovap@gmail.com`;
-- app/product: `LocalOS`;
-- domain: `localos.pro`;
-- use case: LocalOS helps authorized business owners and managers synchronize Google Business Profile reviews, prepare review-reply drafts, publish approved replies and posts, and manage service or price-list data only after explicit user approval.
+- request type: `Application For Basic API Access`;
+- account: `info@localos.pro`;
+- Google Cloud project number: `649313441761`;
+- company website: `https://localos.pro`;
+- verified client profile: `Веселая расческа`, Проспект Энгельса, 154;
+- use case: authorized owners and agencies connect their own Business Profiles
+  to LocalOS to manage business information, services, approved posts, reviews,
+  and performance data. External writes remain subject to explicit approval.
 
-Submitted on 2026-06-17.
+Submitted on 2026-07-18.
 
-- Google support case ID: `7-7493000041066`
+- Google support case ID: `7-6688000041542`
 - Google-stated review time: approximately 7-10 business days.
+
+Historical application (not the current allowlist request):
+
+- submitted on 2026-06-17;
+- project `totemic-union-440908-s8`;
+- case `7-7493000041066`;
+- result: rejected by Google's internal quality checks.
 
 ## LocalOS Flow
 
@@ -106,6 +162,22 @@ curl -I http://localhost:8000
 
 ## Current Limitations
 
-- OAuth app remains in Testing until Google verification / publishing is complete.
-- GBP API calls may still fail until Google approves Basic API Access for the LocalOS Google Cloud project / OAuth client above.
+- The new `localos-gbp` client is not installed in production while review is pending.
+- GBP API calls for the new project may fail until Google approves Basic API Access.
 - Service and price-list writes depend on GBP category support. LocalOS must keep preview and manual approval before any external write.
+
+## Post-Approval Checklist
+
+1. Confirm that the relevant GBP API quota for project `localos-gbp` is no
+   longer `0 QPM` and matches the approved allowance.
+2. Back up the current production environment values.
+3. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to the new OAuth client;
+   keep `GOOGLE_REDIRECT_URI=https://localos.pro/api/google/oauth/callback`.
+4. Restart only `app` and `worker`.
+5. Complete OAuth for one LocalOS business and verify account/location listing.
+6. Bind the LocalOS business to the correct GBP location.
+7. Run a read-only sync and verify reviews/profile data.
+8. Prepare one post, require explicit approval, publish it, and store the Google
+   provider result/ID.
+9. Keep the previous OAuth credentials available for rollback until the live
+   proof succeeds.
