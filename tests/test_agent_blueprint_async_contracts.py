@@ -278,6 +278,7 @@ def test_agent_async_runtime_contract_is_wired_end_to_end():
     assert "waitForAgentRun" in frontend_source
     assert "execution_contract" in frontend_source
     assert "EmployeeAgentScenarioPanel" in frontend_source
+    assert "const working = contract?.candidate || contract?.active;" in frontend_source
     assert "Обновить по цели" in frontend_source
     assert "Рабочая версия не включена" in frontend_source
     assert "2xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]" in frontend_source
