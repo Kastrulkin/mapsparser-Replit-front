@@ -699,6 +699,65 @@ def test_runner_build_capability_payload_hydrates_google_sheets_binding_from_met
     assert payload["sheet_name"] == "Trips"
 
 
+def test_runner_build_capability_payload_hydrates_selected_integration_config():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "metadata_json": {
+            "required_integration_bindings": [
+                {
+                    "key": "google_sheets_read",
+                    "provider": "google_sheets",
+                    "capability": "google_sheets.read_rows",
+                    "required_config": ["spreadsheet_id", "sheet_name"],
+                }
+            ],
+            "agent_binding_integrations": {
+                "google_sheets_read": {
+                    "integration_id": "integration-1",
+                    "provider": "google_sheets",
+                }
+            },
+        },
+    }
+    cursor.tables["agent_integrations"]["integration-1"] = {
+        "id": "integration-1",
+        "business_id": "biz1",
+        "provider": "google_sheets",
+        "status": "active",
+        "auth_ref": "google-account-1",
+        "config_json": {
+            "spreadsheet_id": "spreadsheet-1",
+            "sheet_name": "Trips",
+        },
+    }
+    run = {
+        "id": "run1",
+        "blueprint_id": "bp1",
+        "business_id": "biz1",
+        "input_json": {},
+    }
+    step = {
+        "key": "read_google_sheets",
+        "type": "capability",
+        "capability": "google_sheets.read_rows",
+        "payload": {
+            "integration_binding": "google_sheets_read",
+            "limit": 100,
+        },
+    }
+
+    payload = AgentBlueprintRunner(cursor)._build_capability_payload(run, step)
+
+    assert payload["integration_id"] == "integration-1"
+    assert payload["auth_ref"] == "google-account-1"
+    assert payload["spreadsheet_id"] == "spreadsheet-1"
+    assert payload["sheet_name"] == "Trips"
+
+
 def test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai():
     from services.agent_blueprint_runner import AgentBlueprintRunner
 

@@ -1474,12 +1474,51 @@ class AgentBlueprintRunner:
         # We hydrate the actual runtime config here so source-step runs and preflight
         # evaluate the same connection state.
         binding_config = resolve_agent_binding_runtime_config(metadata, provider, binding_key)
-        for key, value in binding_config.items():
+        integration_id = str(binding_config.get("integration_id") or "").strip()
+        integration_config = self._load_binding_integration_runtime_config(
+            str(run.get("business_id") or (blueprint or {}).get("business_id") or ""),
+            provider,
+            integration_id,
+        )
+        runtime_config = {**integration_config, **binding_config}
+        for key, value in runtime_config.items():
             if key in {"route_provider", "status", "attached_at", "provider"}:
                 continue
             current = payload.get(key)
             if current in ("", None, [], {}):
                 payload[key] = value
+
+    def _load_binding_integration_runtime_config(
+        self,
+        business_id: str,
+        provider: str,
+        integration_id: str,
+    ) -> Dict[str, Any]:
+        if not business_id or not provider or not integration_id:
+            return {}
+        self.cursor.execute(
+            """
+            SELECT id, auth_ref, config_json
+            FROM agent_integrations
+            WHERE business_id = %s
+              AND id = ANY(%s)
+              AND provider = %s
+              AND status = 'active'
+            LIMIT 1
+            """,
+            (business_id, [integration_id], provider),
+        )
+        rows = self.cursor.fetchall() or []
+        if not rows:
+            return {}
+        row = dict(rows[0])
+        config = parse_json_field(row.get("config_json"), {})
+        result = dict(config) if isinstance(config, dict) else {}
+        result["integration_id"] = str(row.get("id") or integration_id)
+        auth_ref = str(row.get("auth_ref") or "").strip()
+        if auth_ref:
+            result["auth_ref"] = auth_ref
+        return result
 
     def _binding_provider(self, metadata: Dict[str, Any], binding_key: str, capability: str) -> str:
         required = (
