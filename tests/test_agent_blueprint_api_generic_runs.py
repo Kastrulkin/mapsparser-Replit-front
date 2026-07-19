@@ -509,6 +509,11 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Использовано в последнем запуске" in agents_page_source
     assert "used_sources" in workspace_source
     assert "resultFieldLabels" in agents_page_source
+    assert "'technical_reason'" in agents_page_source
+    assert "'provider_error_message'" in agents_page_source
+    assert "'analysis_prompt_key'" in agents_page_source
+    assert "'feedback_notes'" in agents_page_source
+    assert "Array.isArray(value) && value.length === 0" in agents_page_source
     assert "Bookings" in capability_handlers_source
     assert "agent_communication_requests" in capability_handlers_source
     assert "reviewreplydrafts" in capability_handlers_source

@@ -943,6 +943,9 @@ export const HumanResultView = ({
     'status', 'schema', 'provider', 'capability', 'trace_id', 'run_id', 'step_id', 'source_run_id',
     'external_dispatch_performed', 'dispatch_state', 'raw', 'payload', 'metadata', 'sentiment',
     'localos_write_performed', 'provider_write_performed', 'destination_status',
+    'technical_reason', 'error_code', 'provider_error', 'provider_error_message', 'llm_error',
+    'analysis_source', 'analysis_prompt_key', 'analysis_prompt_version', 'llm_analysis_used',
+    'feedback_notes', 'format',
     'content_plan_url', 'localos_url', 'result_url', 'item_url', 'message_url', 'telegram_url', 'url',
   ]);
   const hasBusinessValue = (key: string, value: unknown) => {
@@ -952,6 +955,8 @@ export const HumanResultView = ({
       && ['not_dispatched', 'not_published', 'not_sent'].includes(String(value || '').toLowerCase())
     ) return false;
     if (technicalKeys.has(key) || key.endsWith('_json') || key.endsWith('_id')) return false;
+    if (Array.isArray(value) && value.length === 0) return false;
+    if (value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0) return false;
     return value !== '' && value !== null && value !== undefined;
   };
   const consumedKeys = new Set([
