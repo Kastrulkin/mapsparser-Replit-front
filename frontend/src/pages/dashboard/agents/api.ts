@@ -137,9 +137,7 @@ export const fetchLatestAgentRunId = async (blueprintId: string, fallbackRunId =
   if (!blueprintId) {
     return fallbackRunId;
   }
-  const response = await api.get(`/agent-blueprints/${blueprintId}`, {
-    params: { run_status: 'all' },
-  });
+  const response = await api.get(`/agent-blueprints/${blueprintId}`);
   const latestRun = Array.isArray(response.data?.runs) ? response.data.runs[0] : null;
   return String(latestRun?.id || fallbackRunId || '');
 };

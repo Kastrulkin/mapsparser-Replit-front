@@ -1562,7 +1562,8 @@ def test_agent_history_refreshes_latest_run_before_opening_result():
     api_source = Path("frontend/src/pages/dashboard/agents/api.ts").read_text(encoding="utf-8")
 
     assert "export const fetchLatestAgentRunId = async" in api_source
-    assert "params: { run_status: 'all' }," in api_source
+    assert "api.get(`/agent-blueprints/${blueprintId}`)" in api_source
+    assert "run_status: 'all'" not in api_source
     assert "const latestRun = Array.isArray(response.data?.runs) ? response.data.runs[0] : null;" in api_source
     assert "await fetchLatestAgentRunId" in view_source
     assert "await loadRun(latestRunId);" in view_source
