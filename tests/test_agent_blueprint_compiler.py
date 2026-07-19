@@ -327,6 +327,25 @@ def test_agent_compiler_builds_internal_summary_instead_of_review_replies():
     assert draft["metadata"]["compiled_validation"]["valid"] is True
 
 
+def test_agent_compiler_keeps_internal_review_draft_without_result_approval():
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+
+    draft = compile_agent_blueprint(
+        "По кнопке прочитай отзывы, выбери один отзыв без ответа и подготовь внутренний черновик ответа. "
+        "Ничего не публикуй и не отправляй."
+    )
+    payload = draft["version_payload"]
+
+    assert draft["category"] == "reviews"
+    assert payload["approval_policy"]["required_for"] == []
+    assert payload["approval_policy"]["mode"] == "external_actions_only"
+    assert not any(step["type"] == "approval" for step in payload["steps"])
+    assert payload["steps"][-1]["payload"]["status"] == "saved"
+    assert payload["steps"][-1]["payload"]["delivery_state"] == "internal_only"
+    assert draft["summary"]["category"] == "reviews"
+    assert draft["summary"]["approval_required"] is False
+
+
 def test_compiled_workflow_validation_rejects_review_renderer_for_internal_summary():
     from services.agent_compiled_artifact import validate_compiled_artifact_candidate
 

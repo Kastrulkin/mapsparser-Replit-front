@@ -1069,7 +1069,16 @@ def _hydrate_internal_sources(cursor: Any, business_id: str, sources: List[Dict[
     if "services" in requested:
         result.extend(_safe_select(cursor, "services", "SELECT id, name, price, description FROM userservices WHERE business_id = %s LIMIT 20", (business_id,)))
     if "reviews" in requested or "external_reviews" in requested:
-        result.extend(_safe_select(cursor, "reviews", "SELECT id, author_name, rating, text FROM externalbusinessreviews WHERE business_id = %s ORDER BY created_at DESC LIMIT 20", (business_id,)))
+        result.extend(
+            _safe_select(
+                cursor,
+                "reviews",
+                "SELECT id, author_name, rating, text, response_text, published_at "
+                "FROM externalbusinessreviews WHERE business_id = %s "
+                "ORDER BY published_at DESC NULLS LAST, created_at DESC LIMIT 20",
+                (business_id,),
+            )
+        )
     if "prospectingleads" in requested:
         result.extend(_safe_select(cursor, "prospectingleads", "SELECT id, name, city, category, status FROM prospectingleads WHERE business_id = %s ORDER BY updated_at DESC NULLS LAST LIMIT 20", (business_id,)))
     if "outreach_drafts" in requested:

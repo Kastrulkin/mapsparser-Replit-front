@@ -1672,6 +1672,70 @@ def test_agent_review_reply_analysis_falls_back_without_publish():
     assert result["provenance"] == ["Отзывы"]
 
 
+def test_agent_review_reply_analysis_uses_only_one_unanswered_review_when_requested():
+    from services.agent_review_reply_analysis import draft_review_replies_with_llm
+
+    captured = {}
+
+    def fake_generator(prompt, *, business_id="", user_id=""):
+        captured["prompt"] = prompt
+        return json.dumps(
+            {
+                "reply_drafts": [
+                    {"review_id": "answered", "reply": "Не использовать"},
+                    {"review_id": "unanswered", "reply": "Спасибо за обратную связь. Мы разберём ситуацию."},
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    result = draft_review_replies_with_llm(
+        {"workflow_description": "Выбери один отзыв без ответа и подготовь внутренний черновик ответа"},
+        [
+            {"source_name": "business_profile", "raw": {"id": "biz", "name": "Салон"}},
+            {"source_name": "services", "raw": {"id": "svc", "name": "Стрижка"}},
+            {
+                "source_name": "reviews",
+                "raw": {"id": "answered", "author_name": "Иван", "rating": 5, "text": "Хорошо", "response_text": "Спасибо"},
+            },
+            {
+                "source_name": "reviews",
+                "raw": {"id": "unanswered", "author_name": "Ольга", "rating": 2, "text": "Долго ждали", "response_text": ""},
+            },
+        ],
+        generator=fake_generator,
+    )
+
+    assert len(result["reply_drafts"]) == 1
+    assert result["reply_drafts"][0]["review_id"] == "unanswered"
+    assert result["reply_drafts"][0]["author_name"] == "Ольга"
+    assert result["summary"][0] == "Подготовлено черновиков: 1"
+    assert "Иван" not in captured["prompt"]
+    assert "Стрижка" not in captured["prompt"]
+
+
+def test_agent_review_reply_analysis_does_not_invent_reply_without_matching_review():
+    from services.agent_review_reply_analysis import draft_review_replies_with_llm
+
+    def failing_generator(prompt, *, business_id="", user_id=""):
+        raise RuntimeError("provider unavailable")
+
+    result = draft_review_replies_with_llm(
+        {"workflow_description": "Выбери один отзыв без ответа"},
+        [
+            {
+                "source_name": "reviews",
+                "raw": {"id": "answered", "author_name": "Иван", "rating": 5, "text": "Хорошо", "response_text": "Спасибо"},
+            }
+        ],
+        generator=failing_generator,
+    )
+
+    assert result["reply_drafts"] == []
+    assert result["summary"][0] == "Отзывы без ответа не найдены."
+    assert result["external_dispatch_performed"] is False
+
+
 def test_agent_review_llm_usage_is_linked_to_run(monkeypatch):
     from services import agent_review_reply_analysis
 

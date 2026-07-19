@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from typing import Any, Callable, Dict, List
 
@@ -8,7 +9,8 @@ from services.gigachat_client import analyze_text_with_gigachat
 
 
 MAX_REVIEW_LLM_CONTEXT_CHARS = 12000
-REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v1"
+REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v2"
+REVIEW_SOURCE_NAMES = {"reviews", "external_reviews", "отзывы", "отзывы компании", "последние отзывы"}
 
 
 def draft_review_replies_with_llm(
@@ -20,8 +22,10 @@ def draft_review_replies_with_llm(
     run_id: str = "",
     generator: Callable[..., str] | None = None,
 ) -> Dict[str, Any]:
+    selected_reviews = _selected_reviews(setup, extracted_items)
+    reply_limit = _requested_reply_limit(setup)
     fallback = build_review_replies_fallback(setup, extracted_items, feedback_history or [])
-    prompt = _build_review_prompt(setup, extracted_items, feedback_history or [])
+    prompt = _build_review_prompt(setup, selected_reviews, feedback_history or [], reply_limit)
     try:
         raw_response = (
             generator(prompt, business_id=business_id, user_id=user_id)
@@ -29,7 +33,7 @@ def draft_review_replies_with_llm(
             else _default_review_generator(prompt, business_id=business_id, user_id=user_id, run_id=run_id)
         )
         parsed = _parse_llm_json(raw_response)
-        normalized = _normalize_llm_review_replies(parsed, fallback)
+        normalized = _normalize_llm_review_replies(parsed, fallback, selected_reviews, reply_limit)
         normalized.update(
             {
                 "analysis_source": "gigachat",
@@ -37,7 +41,7 @@ def draft_review_replies_with_llm(
                 "analysis_prompt_version": REVIEW_LLM_PROMPT_VERSION,
                 "llm_analysis_used": True,
                 "llm_error": "",
-                "provenance": _provenance(extracted_items),
+                "provenance": _provenance(selected_reviews),
                 "external_dispatch_performed": False,
                 "publish_state": "not_published",
                 "delivery_state": "not_dispatched",
@@ -53,7 +57,7 @@ def draft_review_replies_with_llm(
                 "analysis_prompt_version": REVIEW_LLM_PROMPT_VERSION,
                 "llm_analysis_used": False,
                 "llm_error": str(exc)[:240],
-                "provenance": _provenance(extracted_items),
+                "provenance": _provenance(selected_reviews),
                 "external_dispatch_performed": False,
                 "publish_state": "not_published",
                 "delivery_state": "not_dispatched",
@@ -67,26 +71,26 @@ def build_review_replies_fallback(
     extracted_items: List[Dict[str, Any]],
     feedback_history: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
-    reviews = _review_items(extracted_items)
+    reviews = _selected_reviews(setup, extracted_items)
     rules = _clean_text(setup.get("processing_rules"))
     feedback_notes = [
         _clean_text(item.get("feedback"))
         for item in (feedback_history or [])
         if isinstance(item, dict) and _clean_text(item.get("feedback"))
     ][-3:]
-    replies = [_fallback_reply(review, rules) for review in reviews[:12]]
+    replies = [_fallback_reply(review, rules) for review in reviews[:_requested_reply_limit(setup)]]
     if not replies:
-        replies = [
-            {
-                "source_name": "manual_context",
-                "review_id": "",
-                "rating": "",
-                "author_name": "",
-                "sentiment": "unknown",
-                "reply": "Спасибо за отзыв. Мы учтём обратную связь и улучшим сервис.",
-                "manual_review_reason": "Нет текста отзыва для точного ответа.",
-            }
-        ]
+        missing_text = "Отзывы без ответа не найдены." if _requests_unanswered(setup) else "Отзывы для подготовки ответа не найдены."
+        return {
+            "title": "Нет отзывов для ответа",
+            "summary": [missing_text, "Публикация не выполнялась."],
+            "reply_drafts": [],
+            "manual_review_reasons": ["Обновите источник отзывов или измените параметры запуска."],
+            "checklist": [],
+            "rules_applied": [rules] if rules else [],
+            "feedback_notes": feedback_notes,
+            "format": _clean_text(setup.get("output_format")) or "Черновики ответов на отзывы",
+        }
     return {
         "title": "Черновики ответов на отзывы",
         "summary": [
@@ -114,8 +118,9 @@ def _default_review_generator(prompt: str, *, business_id: str = "", user_id: st
 
 def _build_review_prompt(
     setup: Dict[str, Any],
-    extracted_items: List[Dict[str, Any]],
+    selected_reviews: List[Dict[str, Any]],
     feedback_history: List[Dict[str, Any]],
+    reply_limit: int,
 ) -> str:
     feedback_notes = [
         _clean_text(item.get("feedback"))
@@ -129,23 +134,24 @@ def _build_review_prompt(
         "output_format": _clean_text(setup.get("output_format")),
         "manual_control": _clean_text(setup.get("manual_control")),
         "feedback_notes": feedback_notes,
-        "reviews": _review_context(extracted_items),
+        "reply_limit": reply_limit,
+        "reviews": _review_context(selected_reviews),
     }
     return (
         "Ты готовишь безопасные черновики ответов на отзывы для LocalOS agent blueprint. "
         "Используй только предоставленные отзывы, не обещай компенсации/скидки без данных, не публикуй ответ. "
         "Верни только JSON без markdown с полями: "
         "title, summary(list), reply_drafts(list), manual_review_reasons(list), checklist(list), rules_applied(list). "
+        f"Подготовь не больше {reply_limit} ответов и сохрани review_id исходного отзыва. "
         "reply_drafts должны быть объектами: review_id, author_name, rating, sentiment, reply, manual_review_reason.\n\n"
         f"INPUT_JSON:\n{json.dumps(payload, ensure_ascii=False)}"
     )
 
 
-def _review_context(extracted_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _review_context(selected_reviews: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     context = []
     used = 0
-    for item in extracted_items[:30]:
-        review = _review_from_item(item)
+    for review in selected_reviews[:30]:
         text = json.dumps(review, ensure_ascii=False)
         remaining = MAX_REVIEW_LLM_CONTEXT_CHARS - used
         if remaining <= 0:
@@ -173,11 +179,21 @@ def _parse_llm_json(raw_response: str) -> Dict[str, Any]:
     return parsed
 
 
-def _normalize_llm_review_replies(parsed: Dict[str, Any], fallback: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_llm_review_replies(
+    parsed: Dict[str, Any],
+    fallback: Dict[str, Any],
+    selected_reviews: List[Dict[str, Any]],
+    reply_limit: int,
+) -> Dict[str, Any]:
+    reply_drafts = _anchor_reply_drafts(_clean_reply_drafts(parsed.get("reply_drafts")), selected_reviews)[:reply_limit]
+    if not reply_drafts:
+        reply_drafts = fallback["reply_drafts"][:reply_limit]
+    summary = _clean_string_list(parsed.get("summary")) or fallback["summary"]
+    summary = [item for item in summary if not item.lower().startswith("подготовлено")]
     return {
         "title": _clean_text(parsed.get("title")) or fallback["title"],
-        "summary": _clean_string_list(parsed.get("summary")) or fallback["summary"],
-        "reply_drafts": _clean_reply_drafts(parsed.get("reply_drafts")) or fallback["reply_drafts"],
+        "summary": [f"Подготовлено черновиков: {len(reply_drafts)}", *summary],
+        "reply_drafts": reply_drafts,
         "manual_review_reasons": _clean_string_list(parsed.get("manual_review_reasons")) or fallback["manual_review_reasons"],
         "checklist": _clean_string_list(parsed.get("checklist")) or fallback["checklist"],
         "rules_applied": _clean_string_list(parsed.get("rules_applied")) or fallback["rules_applied"],
@@ -187,7 +203,14 @@ def _normalize_llm_review_replies(parsed: Dict[str, Any], fallback: Dict[str, An
 
 
 def _review_items(extracted_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    return [_review_from_item(item) for item in extracted_items if _review_from_item(item)["text"]]
+    reviews = []
+    for item in extracted_items:
+        if _clean_text(item.get("source_name")).lower() not in REVIEW_SOURCE_NAMES:
+            continue
+        review = _review_from_item(item)
+        if review["text"]:
+            reviews.append(review)
+    return reviews
 
 
 def _review_from_item(item: Dict[str, Any]) -> Dict[str, Any]:
@@ -199,7 +222,52 @@ def _review_from_item(item: Dict[str, Any]) -> Dict[str, Any]:
         "author_name": _clean_text(raw.get("author_name")),
         "rating": _clean_text(raw.get("rating")),
         "text": text,
+        "response_text": _clean_text(raw.get("response_text")),
     }
+
+
+def _selected_reviews(setup: Dict[str, Any], extracted_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    reviews = _review_items(extracted_items)
+    if _requests_unanswered(setup):
+        reviews = [review for review in reviews if not review.get("response_text")]
+    return reviews[:_requested_reply_limit(setup)]
+
+
+def _requests_unanswered(setup: Dict[str, Any]) -> bool:
+    task = _clean_text(setup.get("run_request") or setup.get("workflow_description")).lower()
+    return any(marker in task for marker in ("без ответа", "неотвеч", "нет ответа"))
+
+
+def _requested_reply_limit(setup: Dict[str, Any]) -> int:
+    task = _clean_text(setup.get("run_request") or setup.get("workflow_description")).lower()
+    match = re.search(r"(?:выбер\w*|подготов\w*|ответ\w*)[^\d]{0,24}(\d{1,2})\s+отзыв", task)
+    if match:
+        return max(1, min(int(match.group(1)), 12))
+    if re.search(r"\b(?:один|одну|одно)\s+отзыв", task) or "последний отзыв" in task:
+        return 1
+    return 12
+
+
+def _anchor_reply_drafts(reply_drafts: List[Dict[str, str]], selected_reviews: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    by_id = {_clean_text(review.get("review_id")): review for review in selected_reviews if _clean_text(review.get("review_id"))}
+    result = []
+    for draft in reply_drafts:
+        review_id = _clean_text(draft.get("review_id"))
+        source = by_id.get(review_id)
+        if source is None and len(selected_reviews) == 1 and not result:
+            source = selected_reviews[0]
+        if source is None:
+            continue
+        result.append(
+            {
+                **draft,
+                "source_name": _clean_text(source.get("source_name")),
+                "review_id": _clean_text(source.get("review_id")),
+                "rating": _clean_text(source.get("rating")),
+                "author_name": _clean_text(source.get("author_name")),
+            }
+        )
+    return result
 
 
 def _fallback_reply(review: Dict[str, Any], rules: str) -> Dict[str, str]:

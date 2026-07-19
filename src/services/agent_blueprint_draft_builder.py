@@ -244,6 +244,7 @@ def compile_agent_blueprint(
         }
 
     internal_summary = _is_internal_summary_request(request_text.lower())
+    internal_result = internal_summary or _is_internal_only_result_request(request_text.lower())
     sources = _sources_for_request(category, request_text)
     required_bindings = _generic_required_integration_bindings(sources)
     trigger = (
@@ -274,7 +275,7 @@ def compile_agent_blueprint(
                 "external_delivery": "manual_approval_required",
                 "mode": "external_actions_only",
             }
-            if internal_summary
+            if internal_result
             else {
                 "required_for": ["final_output", "external_delivery"],
                 "external_delivery": "manual_approval_required",
@@ -297,24 +298,26 @@ def compile_agent_blueprint(
             if str(binding.get("capability") or "").strip()
         ]
     metadata = _metadata(request_text, category, sources)
+    if internal_result:
+        metadata["approval_boundaries"] = ["external_delivery"]
     if internal_summary:
         metadata["draft_category"] = "business_summary"
         metadata["outputs"] = [_output_format_for_category("business_summary")]
-        metadata["approval_boundaries"] = ["external_delivery"]
     if required_bindings:
         metadata["required_integration_bindings"] = required_bindings
     _attach_compiled_metadata(
         metadata,
         version_payload,
         f"compiled_{category}_workflow_v1",
-        "external_actions_only" if internal_summary else "final_output",
+        "external_actions_only" if internal_result else "final_output",
     )
     summary = _summary(category, sources, version_payload["steps"])
+    if internal_result:
+        summary["approval_boundaries"] = ["external_delivery"]
+        summary["approval_required"] = False
     if internal_summary:
         summary["category"] = "business_summary"
         summary["outputs"] = [_output_format_for_category("business_summary")]
-        summary["approval_boundaries"] = ["external_delivery"]
-        summary["approval_required"] = False
     return {
         "name": _draft_name(request_text, _default_name_for_category(category)),
         "category": category,
@@ -1314,6 +1317,14 @@ def _is_internal_summary_request(text: str) -> bool:
     return _contains_any(text, ["прочит", "собер", "собир", "подготов", "сохран", "профил", "услуг", "отзыв"])
 
 
+def _is_internal_only_result_request(text: str) -> bool:
+    if _contains_any(text, ["без подтвержден", "без подтверждён"]):
+        return False
+    if _contains_any(text, ["внутренний черновик", "внутренний результат", "внутри localos"]):
+        return True
+    return _contains_any(text, ["не публи", "без публикац"]) and _contains_any(text, ["не отправ", "без отправ"])
+
+
 def _is_rich_localos_workflow_request(text: str) -> bool:
     lowered = text.lower()
     return any(
@@ -1833,6 +1844,7 @@ def _custom_integration_compilation(description: str) -> Dict[str, Any]:
 
 def _generic_steps(category: str, description: str, sources: List[str]) -> List[Dict[str, Any]]:
     internal_summary = _is_internal_summary_request(description.lower())
+    internal_result = internal_summary or _is_internal_only_result_request(description.lower())
     output_category = "business_summary" if internal_summary else category
     steps = [
         {
@@ -1876,13 +1888,13 @@ def _generic_steps(category: str, description: str, sources: List[str]) -> List[
             "title": "Сохранить итог",
             "artifact_type": "agent_final_result",
             "payload": {
-                "status": "saved" if internal_summary else "pending_approval",
+                "status": "saved" if internal_result else "pending_approval",
                 "external_dispatch_performed": False,
-                "delivery_state": "internal_only" if internal_summary else "not_dispatched",
+                "delivery_state": "internal_only" if internal_result else "not_dispatched",
             },
         },
     ]
-    if not internal_summary:
+    if not internal_result:
         steps.insert(
             -1,
             {
