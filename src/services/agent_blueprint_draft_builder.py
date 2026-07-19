@@ -243,10 +243,17 @@ def compile_agent_blueprint(
             "summary": _summary(category, ["prospectingleads", "business_profile"], version_payload["steps"]),
         }
 
+    internal_summary = _is_internal_summary_request(request_text.lower())
     sources = _sources_for_request(category, request_text)
     required_bindings = _generic_required_integration_bindings(sources)
+    trigger = (
+        "schedule.daily"
+        if _contains_any(request_text.lower(), ["каждый", "каждое", "каждую", "ежеднев", "schedule", "daily"])
+        else "manual.run"
+    )
     version_payload = {
         "goal": request_text,
+        "trigger": trigger,
         "inputs_schema": {
             "type": "object",
             "properties": {
@@ -261,10 +268,18 @@ def compile_agent_blueprint(
         },
         "steps": _generic_steps(category, request_text, sources),
         "capability_allowlist": [],
-        "approval_policy": {
-            "required_for": ["final_output", "external_delivery"],
-            "external_delivery": "manual_approval_required",
-        },
+        "approval_policy": (
+            {
+                "required_for": [],
+                "external_delivery": "manual_approval_required",
+                "mode": "external_actions_only",
+            }
+            if internal_summary
+            else {
+                "required_for": ["final_output", "external_delivery"],
+                "external_delivery": "manual_approval_required",
+            }
+        ),
         "output_schema": {
             "type": "object",
             "properties": {
@@ -282,19 +297,31 @@ def compile_agent_blueprint(
             if str(binding.get("capability") or "").strip()
         ]
     metadata = _metadata(request_text, category, sources)
-    if _is_internal_summary_request(request_text.lower()):
+    if internal_summary:
         metadata["draft_category"] = "business_summary"
         metadata["outputs"] = [_output_format_for_category("business_summary")]
+        metadata["approval_boundaries"] = ["external_delivery"]
     if required_bindings:
         metadata["required_integration_bindings"] = required_bindings
-    _attach_compiled_metadata(metadata, version_payload, f"compiled_{category}_workflow_v1", "final_output")
+    _attach_compiled_metadata(
+        metadata,
+        version_payload,
+        f"compiled_{category}_workflow_v1",
+        "external_actions_only" if internal_summary else "final_output",
+    )
+    summary = _summary(category, sources, version_payload["steps"])
+    if internal_summary:
+        summary["category"] = "business_summary"
+        summary["outputs"] = [_output_format_for_category("business_summary")]
+        summary["approval_boundaries"] = ["external_delivery"]
+        summary["approval_required"] = False
     return {
         "name": _draft_name(request_text, _default_name_for_category(category)),
         "category": category,
         "description": request_text,
         "metadata": metadata,
         "version_payload": version_payload,
-        "summary": _summary(category, sources, version_payload["steps"]),
+        "summary": summary,
     }
 
 
@@ -1805,8 +1832,9 @@ def _custom_integration_compilation(description: str) -> Dict[str, Any]:
 
 
 def _generic_steps(category: str, description: str, sources: List[str]) -> List[Dict[str, Any]]:
-    output_category = "business_summary" if _is_internal_summary_request(description.lower()) else category
-    return [
+    internal_summary = _is_internal_summary_request(description.lower())
+    output_category = "business_summary" if internal_summary else category
+    steps = [
         {
             "key": "collect_inputs",
             "type": "artifact",
@@ -1843,23 +1871,28 @@ def _generic_steps(category: str, description: str, sources: List[str]) -> List[
             },
         },
         {
-            "key": "approve_output",
-            "type": "approval",
-            "title": "Подтвердить результат",
-            "approval_type": "final_output",
-        },
-        {
             "key": "save_result",
             "type": "artifact",
             "title": "Сохранить итог",
             "artifact_type": "agent_final_result",
             "payload": {
-                "status": "pending_approval",
+                "status": "saved" if internal_summary else "pending_approval",
                 "external_dispatch_performed": False,
-                "delivery_state": "not_dispatched",
+                "delivery_state": "internal_only" if internal_summary else "not_dispatched",
             },
         },
     ]
+    if not internal_summary:
+        steps.insert(
+            -1,
+            {
+                "key": "approve_output",
+                "type": "approval",
+                "title": "Подтвердить результат",
+                "approval_type": "final_output",
+            },
+        )
+    return steps
 
 
 def _output_format_for_category(category: str) -> str:

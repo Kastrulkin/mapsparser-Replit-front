@@ -314,6 +314,16 @@ def test_agent_compiler_builds_internal_summary_instead_of_review_replies():
     assert draft["metadata"]["data_sources"] == ["business_profile", "services", "external_reviews"]
     assert output_step["payload"]["category"] == "business_summary"
     assert output_step["payload"]["format"] == "internal_business_summary"
+    assert payload["trigger"] == "schedule.daily"
+    assert payload["approval_policy"]["required_for"] == []
+    assert payload["approval_policy"]["mode"] == "external_actions_only"
+    assert not any(step["type"] == "approval" for step in payload["steps"])
+    assert payload["steps"][-1]["payload"]["status"] == "saved"
+    assert payload["steps"][-1]["payload"]["delivery_state"] == "internal_only"
+    assert draft["summary"]["category"] == "business_summary"
+    assert draft["summary"]["outputs"] == ["internal_business_summary"]
+    assert draft["summary"]["approval_required"] is False
+    assert draft["metadata"]["compiled_process"]["approval_boundary"] == "external_actions_only"
     assert draft["metadata"]["compiled_validation"]["valid"] is True
 
 
@@ -348,6 +358,45 @@ def test_compiled_workflow_validation_rejects_review_renderer_for_internal_summa
     assert result["ready"] is False
     assert result["validation"]["status"] == "invalid"
     assert result["validation"]["errors"][0]["field"] == "steps[0].payload.format"
+
+
+def test_compiled_workflow_validation_rejects_manual_approval_contract_for_daily_internal_summary():
+    from services.agent_compiled_artifact import validate_compiled_artifact_candidate
+
+    version_payload = {
+        "goal": "Каждый день сохранять короткую внутреннюю сводку.",
+        "trigger": "manual.run",
+        "mode": "draft",
+        "inputs_schema": {"type": "object"},
+        "steps": [
+            {
+                "key": "prepare_output",
+                "type": "artifact",
+                "artifact_type": "agent_output_draft",
+                "payload": {"category": "business_summary", "format": "internal_business_summary"},
+            },
+            {
+                "key": "approve_output",
+                "type": "approval",
+                "approval_type": "final_output",
+            },
+        ],
+        "capability_allowlist": [],
+        "approval_policy": {"required_for": ["final_output"]},
+        "required_integration_bindings": [],
+        "limits": {},
+        "output_schema": {"type": "object"},
+    }
+
+    result = validate_compiled_artifact_candidate(
+        version_payload,
+        {"compiled_process": {"schema": "compiled_custom_workflow_v1"}},
+    )
+
+    assert result["ready"] is False
+    assert result["validation"]["status"] == "invalid"
+    fields = {item["field"] for item in result["validation"]["errors"]}
+    assert fields == {"approval_policy.required_for", "steps", "trigger"}
 
 
 def test_compiled_workflow_validation_rejects_openclaw_action_capability_mismatch():

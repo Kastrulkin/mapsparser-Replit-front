@@ -140,7 +140,30 @@ def validate_workflow_dsl_document(document: Dict[str, Any]) -> Dict[str, Any]:
                 elif required_approval_type not in approval_types and required_approval_type not in approval_policy:
                     errors.append(_issue(f"steps[{index}].required_approval_type", "Approval gate is not declared in workflow."))
 
-    if _goal_requires_internal_summary(str(document.get("goal") or "")):
+    goal = str(document.get("goal") or "")
+    if _goal_requires_internal_summary(goal):
+        required_approvals = _clean_string_list(approval_policy.get("required_for"))
+        if "final_output" in required_approvals:
+            errors.append(
+                _issue(
+                    "approval_policy.required_for",
+                    "Read-only internal result must not require final-output approval.",
+                )
+            )
+        if "final_output" in approval_types:
+            errors.append(
+                _issue(
+                    "steps",
+                    "Read-only internal result must finish without a final-output approval step.",
+                )
+            )
+        if _goal_requires_daily_schedule(goal) and str(document.get("trigger") or "").strip() != "schedule.daily":
+            errors.append(
+                _issue(
+                    "trigger",
+                    "Daily internal summary must keep the schedule.daily trigger.",
+                )
+            )
         for index, step in enumerate(steps):
             if not isinstance(step, dict) or str(step.get("artifact_type") or "").strip() != "agent_output_draft":
                 continue
@@ -235,6 +258,11 @@ def _goal_requires_internal_summary(goal: str) -> bool:
     ]
     reply_markers = ["ответ на отзыв", "ответы на отзывы", "черновик ответа", "черновики ответов"]
     return any(marker in lowered for marker in summary_markers) and not any(marker in lowered for marker in reply_markers)
+
+
+def _goal_requires_daily_schedule(goal: str) -> bool:
+    lowered = goal.lower()
+    return any(marker in lowered for marker in ["каждый день", "каждое утро", "каждый вечер", "ежедневн"])
 
 
 def _issue(field: str, message: str) -> Dict[str, str]:
