@@ -1646,11 +1646,7 @@ export const EmployeeAgentOverviewPanel = ({
   const problem = story.state === 'error' || story.state === 'waiting_for_review' || story.state === 'blocked_result' || story.state === 'needs_connection' || story.state === 'needs_attention';
   const actionDisabled = actionLoading || story.state === 'running_test';
   const userMode = buildAgentUserMode(blueprint, details);
-  const actionCredits = action.kind === 'run_test'
-    ? estimatedAgentRunCredits(details, true)
-    : action.kind === 'run_work'
-      ? estimatedAgentRunCredits(details)
-      : 0;
+  const actionCredits = action.kind === 'run_work' ? estimatedAgentRunCredits(details) : 0;
   const goal = String(
     details?.execution_contract?.original_request
     || details?.execution_contract?.active?.goal
@@ -1702,6 +1698,10 @@ export const EmployeeAgentOverviewPanel = ({
             {actionCredits ? (
               <div className="mt-2 text-center text-xs font-medium tabular-nums text-slate-500">
                 Примерно {actionCredits} {creditWord(actionCredits)} за запуск
+              </div>
+            ) : action.kind === 'run_test' ? (
+              <div className="mt-2 text-center text-xs font-medium text-slate-500">
+                Проверка выполняется бесплатно
               </div>
             ) : null}
           </div>

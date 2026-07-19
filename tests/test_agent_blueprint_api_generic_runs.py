@@ -818,6 +818,81 @@ def test_internal_business_summary_does_not_create_review_replies():
     assert result["external_dispatch_performed"] is False
 
 
+def test_generic_workspace_uses_allowlisted_internal_sources_from_compiled_version(monkeypatch):
+    from services import agent_blueprint_workspace as workspace
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "metadata_json": {
+            "agent_setup": {
+                "workflow_description": "Подготовить внутреннюю сводку",
+                "output_format": "Короткая внутренняя сводка",
+            },
+        },
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": [
+            {
+                "key": "collect_inputs",
+                "type": "artifact",
+                "payload": {
+                    "sources": ["business_profile", "services", "external_reviews", "unknown_table"],
+                },
+            }
+        ],
+    }
+    run = {
+        "id": "run1",
+        "blueprint_id": "bp1",
+        "blueprint_version_id": "ver1",
+        "business_id": "biz1",
+        "input_json": {},
+        "created_by_user_id": "user1",
+    }
+
+    def fake_hydrate(_cursor, business_id, sources):
+        assert business_id == "biz1"
+        requested = [item["internal_source"] for item in sources if item.get("source_type") == "internal"]
+        assert requested == ["business_profile", "services", "external_reviews"]
+        return [
+            {
+                "source_name": "business_profile",
+                "summary": "HighSpeed and Go",
+                "raw": {"id": "biz1", "name": "HighSpeed and Go"},
+            }
+        ]
+
+    monkeypatch.setattr(workspace, "_hydrate_internal_sources", fake_hydrate)
+
+    input_plan = workspace.build_generic_artifact_payload(
+        cursor,
+        run,
+        {"artifact_type": "agent_input_plan"},
+        {"format": "Короткая внутренняя сводка"},
+    )
+    extracted = workspace.build_generic_artifact_payload(
+        cursor,
+        run,
+        {"artifact_type": "agent_extracted_context"},
+        {},
+    )
+
+    assert input_plan["status"] == "ready"
+    assert [item["name"] for item in input_plan["data_sources"]] == [
+        "Профиль бизнеса",
+        "Услуги",
+        "Последние отзывы",
+    ]
+    assert input_plan["missing_information"] == []
+    assert extracted["status"] == "extracted"
+    assert extracted["internal_source_count"] == 1
+    assert extracted["items"][0]["raw"]["name"] == "HighSpeed and Go"
+
+
 def test_internal_business_summary_uses_public_parameters_of_current_run():
     from services.agent_blueprint_workspace import _render_output
 
@@ -1133,6 +1208,8 @@ def test_agents_page_normal_result_panel_does_not_dump_raw_artifact_payload():
     assert "Этот результат был получен до переподключения" in source
     assert "blocked_result" in source
     assert "hasFreshGoogleSheetsAccessAfterResult" in source
+    assert "action.kind === 'run_work' ? estimatedAgentRunCredits(details) : 0" in source
+    assert "Проверка выполняется бесплатно" in source
     assert "Google-доступ обновлён. Запустите тест ещё раз" in source
     assert "Почему нельзя подтвердить результат" in source
 

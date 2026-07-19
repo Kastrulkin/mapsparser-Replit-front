@@ -19,6 +19,14 @@ from services.gigachat_client import analyze_text_with_gigachat
 MAX_SOURCE_TEXT_CHARS = 30000
 MAX_REVIEW_ITEMS = 12
 SUPPORTED_FILE_EXTENSIONS = {".txt", ".csv", ".tsv", ".md", ".pdf", ".docx", ".xlsx"}
+COMPILED_INTERNAL_SOURCE_LABELS = {
+    "business_profile": "Профиль бизнеса",
+    "services": "Услуги",
+    "reviews": "Последние отзывы",
+    "external_reviews": "Последние отзывы",
+    "prospectingleads": "Лиды",
+    "outreach_drafts": "Черновики обращений",
+}
 
 
 def parse_json_field(value: Any, fallback: Any) -> Any:
@@ -267,7 +275,10 @@ def _load_workspace(cursor: Any, run: Dict[str, Any]) -> Dict[str, Any]:
     blueprint = _load_blueprint(cursor, _clean_text(run.get("blueprint_id")))
     metadata = _metadata_from_blueprint(blueprint)
     setup = metadata.get("agent_setup") if isinstance(metadata.get("agent_setup"), dict) else {}
-    sources = metadata.get("agent_sources") if isinstance(metadata.get("agent_sources"), list) else []
+    legacy_sources = metadata.get("agent_sources") if isinstance(metadata.get("agent_sources"), list) else []
+    sources = [dict(item) for item in legacy_sources if isinstance(item, dict)]
+    if not sources:
+        sources = _compiled_internal_sources(cursor, run, metadata)
     internal_sources = _hydrate_internal_sources(cursor, _clean_text(run.get("business_id")), sources)
     return {
         "blueprint": blueprint,
@@ -281,6 +292,50 @@ def _load_workspace(cursor: Any, run: Dict[str, Any]) -> Dict[str, Any]:
         "business_id": _clean_text(run.get("business_id")),
         "user_id": _clean_text(run.get("created_by_user_id")),
     }
+
+
+def _compiled_internal_sources(cursor: Any, run: Dict[str, Any], metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
+    source_names = []
+    metadata_sources = metadata.get("data_sources") if isinstance(metadata.get("data_sources"), list) else []
+    source_names.extend(_clean_text(item) for item in metadata_sources)
+
+    version_id = _clean_text(run.get("blueprint_version_id"))
+    if version_id:
+        cursor.execute(
+            "SELECT steps_json FROM agent_blueprint_versions WHERE id = %s LIMIT 1",
+            (version_id,),
+        )
+        version_row = cursor.fetchone() or {}
+        steps = parse_json_field(version_row.get("steps_json"), []) if isinstance(version_row, dict) else []
+        for step in steps if isinstance(steps, list) else []:
+            if not isinstance(step, dict):
+                continue
+            payload = parse_json_field(step.get("payload"), {})
+            step_sources = payload.get("sources") if isinstance(payload, dict) and isinstance(payload.get("sources"), list) else []
+            for item in step_sources:
+                if isinstance(item, str):
+                    source_names.append(_clean_text(item))
+                elif isinstance(item, dict):
+                    source_names.append(_clean_text(item.get("internal_source")))
+
+    result = []
+    seen = set()
+    for source_name in source_names:
+        if source_name not in COMPILED_INTERNAL_SOURCE_LABELS or source_name in seen:
+            continue
+        seen.add(source_name)
+        result.append(
+            {
+                "id": f"compiled:{source_name}",
+                "source_type": "internal",
+                "name": COMPILED_INTERNAL_SOURCE_LABELS[source_name],
+                "internal_source": source_name,
+                "content_text": "",
+                "content_length": 0,
+                "extraction_state": "ready",
+            }
+        )
+    return result
 
 
 def _run_llm_usage(cursor: Any, run_id: str) -> Dict[str, int]:
@@ -1035,6 +1090,8 @@ def _extract_source_items(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     items = []
     for source in sources:
         if not isinstance(source, dict):
+            continue
+        if source.get("source_type") == "internal":
             continue
         name = _clean_text(source.get("name") or source.get("file_name") or source.get("internal_source") or "Источник")
         text = _clean_text(source.get("content_text"))
