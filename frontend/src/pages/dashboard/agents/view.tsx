@@ -976,9 +976,16 @@ export const AgentBlueprintsView = ({ scope }) => {
                       estimatedRunCredits={estimatedAgentRunCredits(blueprintDetails, selectedEmployeeAction.kind === 'run_test')}
                       onApprove={() => decideApproval('approve')}
                       onReject={() => decideApproval('reject')}
-                      onRunAgain={() => isAgentWorkRun(selectedResultRun)
-                        ? executeRun(selectedBlueprint, selectedResultRun.blueprint_version_id || '')
-                        : startRun(selectedBlueprint)}
+                      onRunAgain={() => {
+                        const workRun = isAgentWorkRun(selectedResultRun);
+                        const schema = workRun
+                          ? blueprintDetails?.active_run_input_schema || blueprintDetails?.run_input_schema
+                          : blueprintDetails?.candidate_run_input_schema || blueprintDetails?.run_input_schema;
+                        const parameters = initialRunParameters(schema, selectedResultRun?.input_json);
+                        return workRun
+                          ? executeRun(selectedBlueprint, selectedResultRun?.blueprint_version_id || '', parameters)
+                          : startRun(selectedBlueprint, selectedResultRun?.blueprint_version_id || '', parameters);
+                      }}
                       onRebuildScenario={rebuildScenarioAndRun}
                       onOpenGoogleSheetsSetup={openGoogleSheetsSourceSetup}
                       onOpenGoogleAccessReconnect={openGoogleAccessReconnect}

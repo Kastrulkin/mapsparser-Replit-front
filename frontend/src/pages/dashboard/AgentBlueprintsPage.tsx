@@ -1007,18 +1007,19 @@ export const AgentBlueprintsPage = () => {
     });
   };
 
-  const validatedRunParameters = (preview: boolean) => {
+  const validatedRunParameters = (preview: boolean, parameterOverrides?: Record<string, unknown>) => {
     const schema = preview
       ? blueprintDetails?.candidate_run_input_schema || blueprintDetails?.run_input_schema
       : blueprintDetails?.active_run_input_schema || blueprintDetails?.candidate_run_input_schema || blueprintDetails?.run_input_schema;
-    const errors = validateRunParameters(schema, runParameters);
+    const parameters = parameterOverrides || runParameters;
+    const errors = validateRunParameters(schema, parameters);
     setRunParameterErrors(errors);
     if (Object.keys(errors).length > 0) {
       setWorkspaceMode('overview');
       setError('Заполните параметры задачи перед запуском.');
       return null;
     }
-    return runParameters;
+    return parameters;
   };
 
   const waitForAgentRun = async (runId: string) => {
@@ -1059,12 +1060,16 @@ export const AgentBlueprintsPage = () => {
     return () => { cancelled = true; };
   }, [runAnimation?.recoveredFromReload, runAnimation?.runId]);
 
-  const startRun = async (blueprintToRun?: AgentBlueprint | null, blueprintVersionId = '') => {
+  const startRun = async (
+    blueprintToRun?: AgentBlueprint | null,
+    blueprintVersionId = '',
+    parameterOverrides?: Record<string, unknown>,
+  ) => {
     const targetBlueprint = blueprintToRun || selectedBlueprint;
     if (!targetBlueprint) {
       return;
     }
-    const parameters = validatedRunParameters(true);
+    const parameters = validatedRunParameters(true, parameterOverrides);
     if (!parameters) {
       return;
     }
@@ -1142,12 +1147,16 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
-  const executeRun = async (blueprintToRun?: AgentBlueprint | null, blueprintVersionId = '') => {
+  const executeRun = async (
+    blueprintToRun?: AgentBlueprint | null,
+    blueprintVersionId = '',
+    parameterOverrides?: Record<string, unknown>,
+  ) => {
     const targetBlueprint = blueprintToRun || selectedBlueprint;
     if (!targetBlueprint) {
       return;
     }
-    const parameters = validatedRunParameters(false);
+    const parameters = validatedRunParameters(false, parameterOverrides);
     if (!parameters) {
       return;
     }

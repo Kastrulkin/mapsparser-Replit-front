@@ -1210,6 +1210,8 @@ def test_agents_page_normal_result_panel_does_not_dump_raw_artifact_payload():
     assert "hasFreshGoogleSheetsAccessAfterResult" in source
     assert "action.kind === 'run_work' ? estimatedAgentRunCredits(details) : 0" in source
     assert "Проверка выполняется бесплатно" in source
+    assert "parameterOverrides?: Record<string, unknown>" in source
+    assert "initialRunParameters(schema, selectedResultRun?.input_json)" in source
     assert "Google-доступ обновлён. Запустите тест ещё раз" in source
     assert "Почему нельзя подтвердить результат" in source
 
