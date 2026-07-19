@@ -18,7 +18,7 @@ import {
   getAgentListStatus, buildTodaySummary, initialRunParameters, validateRunParameters, buildEmployeeDescription, buildEmployeeWorkspaceState,
   buildEmployeeNextAction
 } from './agents/model';
-import { isBusinessBlockerApproval, needsScenarioRebuildForSourceResult, needsGoogleSheetsSourceSetup, needsGoogleAccessReconnect, hasFreshGoogleSheetsAccessAfterResult } from './agents/results';
+import { isAgentWorkRun, isBusinessBlockerApproval, needsScenarioRebuildForSourceResult, needsGoogleSheetsSourceSetup, needsGoogleAccessReconnect, hasFreshGoogleSheetsAccessAfterResult } from './agents/results';
 import { parseAgentConfig, uploadAgentSource } from './agents/api';
 import { AgentBlueprintsView } from './agents/view';
 
@@ -432,7 +432,7 @@ export const AgentBlueprintsPage = () => {
   }, [loadBlueprintDetails, selectedBlueprint?.id]);
 
   useEffect(() => {
-    const previousWorkRun = (blueprintDetails?.runs || []).find((run) => run.input_json?.preview_mode === false);
+    const previousWorkRun = (blueprintDetails?.runs || []).find((run) => isAgentWorkRun(run));
     const schema = blueprintDetails?.active_version_id
       ? blueprintDetails.active_run_input_schema
       : blueprintDetails?.candidate_run_input_schema || blueprintDetails?.run_input_schema;
@@ -540,7 +540,7 @@ export const AgentBlueprintsPage = () => {
       if (cancelled) return;
       const run: AgentRun | null = response.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
       if (!run) return;
-      const kind: AgentRunAnimation['kind'] = run.input_json?.preview_mode === false ? 'work' : 'test';
+      const kind: AgentRunAnimation['kind'] = isAgentWorkRun(run) ? 'work' : 'test';
       const steps = workflowStepsForAnimation(blueprintDetails, kind);
       const total = Math.max(steps.length, Number(run.progress?.total_steps || 0), 1);
       const completed = Math.min(total, Math.max(0, Number(run.progress?.completed_steps || 0)));

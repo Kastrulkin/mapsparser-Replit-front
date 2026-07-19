@@ -1569,3 +1569,12 @@ def test_agent_history_refreshes_latest_run_before_opening_result():
     assert "await loadRun(latestRunId);" in view_source
     assert "onOpenResults={() => void openLatestRunResults()}" in view_source
     assert "? void openLatestRunResults()" in view_source
+
+
+def test_agent_ui_treats_only_explicit_preview_runs_as_tests():
+    results_source = Path("frontend/src/pages/dashboard/agents/results.ts").read_text(encoding="utf-8")
+    employee_source = Path("frontend/src/pages/dashboard/agents/employee.tsx").read_text(encoding="utf-8")
+
+    assert "export const isAgentWorkRun" in results_source
+    assert "preview_mode !== true" in results_source
+    assert "const isWorkRun = isAgentWorkRun(activeRun);" in employee_source

@@ -229,6 +229,7 @@ import {
   resultPayloadStatus,
   isBusinessBlockerPayload,
   isBusinessBlockerApproval,
+  isAgentWorkRun,
   buildEmployeeTestResult,
   versionHasGoogleSheetsReadStep,
   detailsHaveGoogleSheetsReadStep,
@@ -1191,7 +1192,7 @@ export const EmployeeTestResultPanel = ({
   onOpenGoogleAccessReconnect?: () => void;
 }) => {
   const result = buildEmployeeTestResult(activeRun, pendingApproval);
-  const isWorkRun = activeRun?.input_json?.preview_mode === false;
+  const isWorkRun = isAgentWorkRun(activeRun);
   const chargedCredits = Number(activeRun?.run_billing?.actual_credits || activeRun?.run_billing?.charge_credits || 0);
   const labels = approvalActionLabels(pendingApproval);
   const isBlocked = result.state === 'blocker';
@@ -1649,7 +1650,7 @@ export const EmployeeAgentOverviewPanel = ({
   );
   const tested = Boolean(details?.execution_contract?.candidate?.validation?.tested);
   const enabled = Boolean(details?.execution_contract?.active?.version_id && blueprint.status === 'active');
-  const hasWorkRun = Boolean((details?.runs || []).some((run) => run.input_json?.preview_mode === false && run.status === 'completed'));
+  const hasWorkRun = Boolean((details?.runs || []).some((run) => isAgentWorkRun(run) && run.status === 'completed'));
   const lifecycle = [
     { label: 'Описан', done: true },
     { label: 'Проверен', done: tested },

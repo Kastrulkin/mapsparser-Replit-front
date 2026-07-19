@@ -1464,6 +1464,7 @@ def test_scheduled_trigger_runtime_starts_active_safe_agent_outside_legacy_categ
     assert cursor.trigger_events[0]["status"] == "run_started"
     assert cursor.trigger_events[0]["run_id"] == run["id"]
     assert run["status"] == "queued"
+    assert run["input_json"]["preview_mode"] is False
     assert run["input_json"]["trigger"] == "schedule.daily"
     assert run["input_json"]["source_event"]["source"] == "scheduler"
 
@@ -1555,6 +1556,7 @@ def test_due_scheduled_trigger_dispatcher_runs_each_business_once_per_day(monkey
     assert first["dispatched_count"] == 1
     assert first["dispatched"][0]["blueprint_id"] == "bp1"
     assert first["dispatched"][0]["run_id"]
+    assert next(iter(cursor.tables["agent_runs"].values()))["input_json"]["preview_mode"] is False
     assert second["dispatched_count"] == 0
     assert second["skipped"][0]["reason"] == "already_recorded_for_schedule"
     assert len(cursor.tables["agent_runs"]) == 1

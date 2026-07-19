@@ -43,6 +43,7 @@ def dispatch_telegram_message_to_agent_blueprints(cursor: Any, business_id: str,
         }
         run_input = {
             **event_payload,
+            "preview_mode": False,
             "trigger_event_id": trigger_event_id,
             "source_event": {
                 "id": trigger_event_id,
@@ -152,6 +153,7 @@ def dispatch_scheduled_agent_blueprints(
         run_input = {
             "trigger": trigger,
             "scheduled_at": now_text,
+            "preview_mode": False,
             "trigger_event_id": trigger_event_id,
             "source_event": {
                 "id": trigger_event_id,
@@ -402,6 +404,7 @@ def _dispatch_scheduled_blueprint(
     }
     run_input = {
         **event_payload,
+        "preview_mode": False,
         "trigger_event_id": trigger_event_id,
         "source_event": {"id": trigger_event_id, "source": "scheduler", "event_type": trigger},
     }

@@ -335,6 +335,10 @@ export const isBusinessBlockerApproval = (approval?: AgentApproval | null): bool
   isBusinessBlockerPayload(extractBusinessResultPayload(approval?.payload_json || null))
 );
 
+export const isAgentWorkRun = (run?: AgentRun | null): boolean => (
+  Boolean(run) && run?.input_json?.preview_mode !== true
+);
+
 export const buildEmployeeTestResult = (
   activeRun: AgentRun | null,
   pendingApproval?: AgentApproval | null,
@@ -351,7 +355,7 @@ export const buildEmployeeTestResult = (
         ? 'Проверка остановилась до сохранения результата. Посмотрите причину в настройках и запустите тест ещё раз.'
         : '';
   const status = activeRun?.status || pendingApproval?.run_status || '';
-  const isWorkRun = activeRun?.input_json?.preview_mode === false;
+  const isWorkRun = isAgentWorkRun(activeRun);
   const summary = blocker
     ? 'Нужен следующий шаг перед результатом'
     : pendingApproval

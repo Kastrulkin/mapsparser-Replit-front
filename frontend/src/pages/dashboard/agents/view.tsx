@@ -231,6 +231,7 @@ import {
   resultPayloadStatus,
   isBusinessBlockerPayload,
   isBusinessBlockerApproval,
+  isAgentWorkRun,
   buildEmployeeTestResult,
   versionHasGoogleSheetsReadStep,
   detailsHaveGoogleSheetsReadStep,
@@ -975,7 +976,7 @@ export const AgentBlueprintsView = ({ scope }) => {
                       estimatedRunCredits={estimatedAgentRunCredits(blueprintDetails, selectedEmployeeAction.kind === 'run_test')}
                       onApprove={() => decideApproval('approve')}
                       onReject={() => decideApproval('reject')}
-                      onRunAgain={() => selectedResultRun?.input_json?.preview_mode === false
+                      onRunAgain={() => isAgentWorkRun(selectedResultRun)
                         ? executeRun(selectedBlueprint, selectedResultRun.blueprint_version_id || '')
                         : startRun(selectedBlueprint)}
                       onRebuildScenario={rebuildScenarioAndRun}
