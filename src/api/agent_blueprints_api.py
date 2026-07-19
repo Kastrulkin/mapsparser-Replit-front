@@ -265,47 +265,91 @@ def _admin_review_text(value) -> str:
 
 def _build_admin_agent_review(row: dict) -> dict:
     metadata = row.get("metadata_json") if isinstance(row.get("metadata_json"), dict) else {}
-    fragments = [
-        row.get("name"),
-        row.get("description"),
-        row.get("latest_goal"),
-        row.get("steps_json"),
-        row.get("approval_policy_json"),
-        row.get("capability_allowlist_json"),
-        metadata,
-        row.get("integration_providers"),
-    ]
-    text = " ".join(_admin_review_text(item).lower() for item in fragments)
-    reasons = []
+    steps = parse_json_field(row.get("steps_json"), [])
+    steps = steps if isinstance(steps, list) else []
+    capabilities = parse_json_field(row.get("capability_allowlist_json"), [])
+    capabilities = capabilities if isinstance(capabilities, list) else []
+    required_bindings = metadata.get("required_integration_bindings")
+    required_bindings = required_bindings if isinstance(required_bindings, list) else []
+    structured_fragments = [steps, capabilities, required_bindings]
+    structured_text = " ".join(_admin_review_text(item).lower() for item in structured_fragments)
+    reasons: list[str] = []
     level = "low"
 
-    high_keywords = [
-        ("оплата или деньги", ["payment", "платеж", "оплат", "списан", "финанс", "finance"]),
-        ("удаление или разрушительное действие", ["delete", "удал", "destroy", "wipe"]),
-        ("внешняя отправка", ["telegram", "whatsapp", "email", "почт", "сообщен", "send", "отправ"]),
-        ("публикация", ["publish", "публи", "пост", "post"]),
-        ("секреты или токены", ["api key", "token", "webhook", "secret", "ключ api"]),
+    high_structured_keywords = [
+        ("оплата или деньги", ["payment.", "billing.", "charge", "refund", "finance.apply"]),
+        ("удаление или разрушительное действие", [".delete", ".destroy", ".wipe", "destructive"]),
+        ("внешняя отправка", ["external_write", "external_send", "external_publish", "communications.send", ".send_"]),
+        ("публикация", [".publish", "publish_request", "social.post.publish"]),
     ]
-    medium_keywords = [
-        ("подключены внешние данные", ["google sheets", "spreadsheet", "таблиц", "google", "интеграц"]),
-        ("есть ручное согласование", ["approval", "approve", "согласован", "подтвержд"]),
-        ("кастомный процесс", ["custom_process", "custom process", "кастом"]),
+    medium_structured_keywords = [
+        ("подключены внешние данные", ["external_read", "google_sheets.", "browser_use."]),
+        ("есть ручное согласование", ["\"type\": \"approval\"", "approval_type", "requires_approval"]),
     ]
 
-    for reason, keywords in high_keywords:
-        if any(keyword in text for keyword in keywords):
+    for reason, keywords in high_structured_keywords:
+        if any(keyword in structured_text for keyword in keywords):
             reasons.append(reason)
             level = "high"
     if level != "high":
-        for reason, keywords in medium_keywords:
-            if any(keyword in text for keyword in keywords):
+        for reason, keywords in medium_structured_keywords:
+            if any(keyword in structured_text for keyword in keywords):
                 reasons.append(reason)
                 level = "medium"
+
+    if not steps and not capabilities and not required_bindings:
+        legacy_text = " ".join(
+            _admin_review_text(item).lower()
+            for item in [row.get("name"), row.get("description"), row.get("latest_goal")]
+        )
+        legacy_keywords = [
+            ("оплата или деньги", ["платеж", "списание", "payment"]),
+            ("удаление или разрушительное действие", ["удалить", "delete", "destroy"]),
+            ("внешняя отправка", ["отправить", "send to", "publish to"]),
+        ]
+        for reason, keywords in legacy_keywords:
+            if any(keyword in legacy_text for keyword in keywords):
+                reasons.append(reason)
+                level = "high"
 
     if not reasons:
         reasons.append("явных внешних или опасных действий не найдено")
 
-    return {"risk_level": level, "risk_reasons": reasons[:4]}
+    return {"risk_level": level, "risk_reasons": list(dict.fromkeys(reasons))[:4]}
+
+
+def _admin_agent_connection_summary(row: dict, active_integrations: dict[str, str]) -> dict:
+    metadata = row.get("metadata_json") if isinstance(row.get("metadata_json"), dict) else {}
+    connections: dict[str, str] = {}
+    integration_ids = metadata.get("agent_integration_ids")
+    if isinstance(integration_ids, list):
+        for integration_id in integration_ids:
+            clean_id = str(integration_id or "").strip()
+            provider = str(active_integrations.get(clean_id) or "").strip()
+            if clean_id and provider:
+                connections[clean_id] = provider
+
+    for metadata_key in ("agent_binding_integrations", "agent_integration_bindings"):
+        bindings = metadata.get(metadata_key)
+        if not isinstance(bindings, dict):
+            continue
+        for binding_key, binding in bindings.items():
+            if not isinstance(binding, dict):
+                continue
+            status = str(binding.get("status") or "active").strip().lower()
+            if status not in {"active", "ready", "connected"}:
+                continue
+            integration_id = str(binding.get("integration_id") or "").strip()
+            if integration_id and integration_id != "openclaw_boundary" and integration_id not in active_integrations:
+                continue
+            provider = str(active_integrations.get(integration_id) or binding.get("provider") or "").strip()
+            if not provider:
+                continue
+            identity = integration_id if integration_id and integration_id != "openclaw_boundary" else f"{metadata_key}:{binding_key}:{provider}"
+            connections[identity] = provider
+
+    providers = sorted(set(connections.values()))
+    return {"integration_count": len(connections), "integration_providers": ", ".join(providers)}
 
 
 def _admin_agent_runtime_overview(cursor) -> dict:
@@ -2353,9 +2397,7 @@ def admin_agent_blueprints_overview():
                    v.capability_allowlist_json,
                    COALESCE(rs.runs_count, 0) runs_count,
                    COALESCE(ap.pending_approvals_count, 0) pending_approvals_count,
-                   COALESCE(src.sources_count, 0) sources_count,
-                   COALESCE(integ.integration_count, 0) integration_count,
-                   COALESCE(integ.providers, '') integration_providers
+                   COALESCE(src.sources_count, 0) sources_count
             FROM agent_blueprints b
             LEFT JOIN businesses biz ON biz.id = b.business_id
             LEFT JOIN users owner ON owner.id = biz.owner_id
@@ -2382,18 +2424,17 @@ def admin_agent_blueprints_overview():
             LEFT JOIN LATERAL (
                 SELECT COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(b.metadata_json->'agent_sources') = 'array' THEN b.metadata_json->'agent_sources' ELSE '[]'::jsonb END), 0) sources_count
             ) src ON TRUE
-            LEFT JOIN LATERAL (
-                SELECT COUNT(*) integration_count,
-                       string_agg(DISTINCT provider, ', ' ORDER BY provider) providers
-                FROM agent_integrations
-                WHERE business_id = b.business_id
-                  AND status = 'active'
-            ) integ ON TRUE
             ORDER BY b.created_at DESC
             LIMIT 200
             """
         )
         rows = [_normalize_json_row(dict(row)) for row in (cursor.fetchall() or [])]
+        cursor.execute("SELECT id, provider FROM agent_integrations WHERE status = 'active'")
+        active_integrations = {
+            str(row.get("id") or ""): str(row.get("provider") or "")
+            for row in (cursor.fetchall() or [])
+            if str(row.get("id") or "").strip()
+        }
         agents = []
         summary = {
             "total": len(rows),
@@ -2405,6 +2446,7 @@ def admin_agent_blueprints_overview():
             "low_risk": 0,
         }
         for row in rows:
+            row.update(_admin_agent_connection_summary(row, active_integrations))
             review = _build_admin_agent_review(row)
             status = str(row.get("status") or "draft")
             risk_level = str(review.get("risk_level") or "low")

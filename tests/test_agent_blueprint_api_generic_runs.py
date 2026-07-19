@@ -1555,3 +1555,16 @@ def test_agent_date_parameter_commits_native_picker_value_on_blur():
     assert 'type={field.format === \'date\' ? \'date\'' in employee_source
     assert 'onInput={(event) => onChange(key, event.currentTarget.value)}' in employee_source
     assert 'onBlur={(event) => onChange(key, event.currentTarget.value)}' in employee_source
+
+
+def test_agent_history_refreshes_latest_run_before_opening_result():
+    view_source = Path("frontend/src/pages/dashboard/agents/view.tsx").read_text(encoding="utf-8")
+    api_source = Path("frontend/src/pages/dashboard/agents/api.ts").read_text(encoding="utf-8")
+
+    assert "export const fetchLatestAgentRunId = async" in api_source
+    assert "params: { run_status: 'all' }," in api_source
+    assert "const latestRun = Array.isArray(response.data?.runs) ? response.data.runs[0] : null;" in api_source
+    assert "await fetchLatestAgentRunId" in view_source
+    assert "await loadRun(latestRunId);" in view_source
+    assert "onOpenResults={() => void openLatestRunResults()}" in view_source
+    assert "? void openLatestRunResults()" in view_source

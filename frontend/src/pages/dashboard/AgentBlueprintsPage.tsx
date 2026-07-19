@@ -18,7 +18,7 @@ import {
   getAgentListStatus, buildTodaySummary, initialRunParameters, validateRunParameters, buildEmployeeDescription, buildEmployeeWorkspaceState,
   buildEmployeeNextAction
 } from './agents/model';
-import { isBusinessBlockerApproval, needsScenarioRebuildForSourceResult, needsGoogleSheetsSourceSetup, needsGoogleAccessReconnect, hasFreshGoogleSheetsAccessAfterResult, buildAttentionInbox } from './agents/results';
+import { isBusinessBlockerApproval, needsScenarioRebuildForSourceResult, needsGoogleSheetsSourceSetup, needsGoogleAccessReconnect, hasFreshGoogleSheetsAccessAfterResult } from './agents/results';
 import { parseAgentConfig, uploadAgentSource } from './agents/api';
 import { AgentBlueprintsView } from './agents/view';
 
@@ -1969,29 +1969,6 @@ export const AgentBlueprintsPage = () => {
       return true;
     });
   }, [agentRegistryFilter, agentSearch, blueprints, employeeListDetailsById]);
-  const openBlueprintMode = (blueprint: AgentBlueprint, mode: AgentWorkspaceMode) => {
-    setSelectedBlueprintId(blueprint.id);
-    setActiveRun(null);
-    setDecisionNotice(null);
-    setWorkspaceMode(mode);
-  };
-  const attentionItems = useMemo(
-    () => buildAttentionInbox({
-      blueprints,
-      selectedBlueprint,
-      selectedDetails: blueprintDetails,
-      selectedPendingApproval,
-      onOpenResults: () => setWorkspaceMode('results'),
-      onOpenConnections: () => setWorkspaceMode('connections'),
-      onStartRun: () => {
-        if (selectedBlueprint) {
-          void startRun(selectedBlueprint);
-        }
-      },
-      onSelectBlueprint: openBlueprintMode,
-    }),
-    [blueprintDetails, blueprints, selectedBlueprint, selectedPendingApproval],
-  );
   const selectedEmployeeAction = useMemo(
     () => selectedBlueprint
       ? buildEmployeeNextAction({
@@ -2070,13 +2047,6 @@ export const AgentBlueprintsPage = () => {
     if (selectedEmployeeAction.kind === 'configure_schedule') {
       setWorkspaceMode('overview');
       return;
-    }
-    if (selectedEmployeeAction.targetMode === 'results') {
-      const latestRunId = blueprintDetails?.runs?.[0]?.id || selectedBlueprint.last_run_id || '';
-      if (latestRunId && activeRun?.id !== latestRunId) {
-        void loadRun(latestRunId);
-        return;
-      }
     }
     setWorkspaceMode(selectedEmployeeAction.targetMode);
   };

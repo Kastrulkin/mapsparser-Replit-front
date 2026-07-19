@@ -249,6 +249,7 @@ import {
   formatSourceSize
 } from './results';
 import {
+  fetchLatestAgentRunId,
   parseAgentConfig,
   uploadAgentSource
 } from './api';
@@ -489,6 +490,18 @@ export const AgentBlueprintsView = ({ scope }) => {
     { value: 'created_by_mistake', label: 'Создан по ошибке' },
     { value: 'replaced_by_another_agent', label: 'Заменён другим агентом' },
   ];
+  const openLatestRunResults = async () => {
+    try {
+      const latestRunId = await fetchLatestAgentRunId(selectedBlueprint?.id || '', selectedBlueprint?.last_run_id || '');
+      if (latestRunId && activeRun?.id !== latestRunId) {
+        await loadRun(latestRunId);
+        return;
+      }
+    } catch (requestError) {
+      console.error(requestError);
+    }
+    setWorkspaceMode('results');
+  };
   return (
     <div className="space-y-5">
       <DashboardPageHeader
@@ -866,7 +879,9 @@ export const AgentBlueprintsView = ({ scope }) => {
                     <button
                       key={value}
                       type="button"
-                      onClick={() => setWorkspaceMode(value === 'results' || value === 'scenario' || value === 'settings' ? value : 'overview')}
+                      onClick={() => value === 'results'
+                        ? void openLatestRunResults()
+                        : setWorkspaceMode(value === 'scenario' || value === 'settings' ? value : 'overview')}
                       className={cn('min-h-10 shrink-0 rounded-lg px-4 text-sm font-semibold transition-[background-color,color,box-shadow] active:scale-[0.96]', workspaceMode === value || (value === 'overview' && workspaceMode === 'run') ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950')}
                     >
                       {label}
@@ -891,10 +906,12 @@ export const AgentBlueprintsView = ({ scope }) => {
                       pendingApproval={selectedPendingApproval}
                       action={selectedEmployeeAction}
                       actionLoading={actionLoading}
-                      onPrimaryAction={runEmployeePrimaryAction}
+                      onPrimaryAction={selectedEmployeeAction.targetMode === 'results'
+                        ? () => void openLatestRunResults()
+                        : runEmployeePrimaryAction}
                       onCloneAgent={openSelectedAgentClone}
                       onOpenAdvanced={() => setWorkspaceMode('settings')}
-                      onOpenResults={() => setWorkspaceMode('results')}
+                      onOpenResults={() => void openLatestRunResults()}
                     />
                     <AgentRunParametersPanel
                       schema={selectedEmployeeAction.kind === 'run_test'

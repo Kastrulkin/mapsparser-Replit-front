@@ -132,3 +132,14 @@ export const uploadAgentSource = async (blueprintId: string, file: File, name: s
   }
   return data;
 };
+
+export const fetchLatestAgentRunId = async (blueprintId: string, fallbackRunId = '') => {
+  if (!blueprintId) {
+    return fallbackRunId;
+  }
+  const response = await api.get(`/agent-blueprints/${blueprintId}`, {
+    params: { run_status: 'all' },
+  });
+  const latestRun = Array.isArray(response.data?.runs) ? response.data.runs[0] : null;
+  return String(latestRun?.id || fallbackRunId || '');
+};
