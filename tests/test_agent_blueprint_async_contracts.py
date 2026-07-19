@@ -14,12 +14,18 @@ def test_agent_run_contract_hides_service_fields_and_requires_content_plan_date(
         "properties": {
             "request": {"type": "string"},
             "business_id": {"type": "string"},
+            "integration_id": {"type": "string"},
+            "spreadsheet_id": {"type": "string"},
+            "sheet_name": {"type": "string"},
         },
     }
     steps = [{"type": "capability", "capability": "content_plan.item.create_draft"}]
     public_schema = effective_agent_input_schema(schema, steps)
 
     assert "business_id" not in public_schema["properties"]
+    assert "integration_id" not in public_schema["properties"]
+    assert "spreadsheet_id" not in public_schema["properties"]
+    assert "sheet_name" not in public_schema["properties"]
     assert public_schema["properties"]["scheduled_for"]["format"] == "date"
     assert "scheduled_for" in public_schema["required"]
 

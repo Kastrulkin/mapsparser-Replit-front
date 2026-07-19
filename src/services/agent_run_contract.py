@@ -14,6 +14,7 @@ RESERVED_AGENT_INPUT_FIELDS = {
     "dashboard_source",
     "external_side_effects_allowed",
     "goal",
+    "integration_id",
     "intent",
     "limit",
     "openclaw_action_plan",
@@ -22,10 +23,12 @@ RESERVED_AGENT_INPUT_FIELDS = {
     "preview_mode",
     "provider_bindings",
     "schema",
+    "sheet_name",
     "source",
     "source_event",
     "tenant_id",
     "trace_id",
+    "spreadsheet_id",
 }
 
 

@@ -248,7 +248,11 @@ def compile_agent_blueprint(
         "inputs_schema": {
             "type": "object",
             "properties": {
-                "request": {"type": "string"},
+                "request": {
+                    "type": "string",
+                    "title": "Уточнение для этого запуска",
+                    "description": "Необязательно: уточните, какую строку или поездку использовать в этот раз.",
+                },
                 "files": {"type": "array"},
                 "source_ids": {"type": "array"},
             },
