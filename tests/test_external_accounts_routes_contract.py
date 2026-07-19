@@ -78,6 +78,31 @@ def test_external_accounts_routes_stay_registered_after_blueprint_split():
             frozenset({"POST"}),
             "external_accounts_api.complete_vk_oauth",
         ),
+        (
+            "/api/business/<business_id>/meta/oauth/start",
+            frozenset({"POST"}),
+            "external_accounts_api.start_meta_oauth",
+        ),
+        (
+            "/api/meta/oauth/callback",
+            frozenset({"GET"}),
+            "external_accounts_api.meta_oauth_callback",
+        ),
+        (
+            "/api/meta/data-deletion",
+            frozenset({"POST"}),
+            "external_accounts_api.meta_data_deletion_callback",
+        ),
+        (
+            "/api/business/<business_id>/meta/assets",
+            frozenset({"GET"}),
+            "external_accounts_api.get_meta_assets",
+        ),
+        (
+            "/api/business/<business_id>/meta/bind",
+            frozenset({"POST"}),
+            "external_accounts_api.bind_meta_asset",
+        ),
     }
 
     assert expected.issubset(routes)

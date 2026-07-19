@@ -1,7 +1,52 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Footer from "@/components/Footer";
+import { useLocation } from "react-router-dom";
 
 const Policy = () => {
+  const location = useLocation();
+  const isDataDeletionPage = location.pathname === "/data-deletion";
+  const confirmationCode = new URLSearchParams(location.search).get("confirmation_code");
+
+  if (isDataDeletionPage) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-3xl font-bold">
+                {confirmationCode ? "Данные подключения удалены" : "Удаление данных Facebook и Instagram"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-foreground">
+              {confirmationCode ? (
+                <>
+                  <p>
+                    LocalOS отключил доступ к Facebook и Instagram и удалил сохранённые данные авторизации.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Код подтверждения: <span className="font-mono text-foreground">{confirmationCode}</span>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    Отключите Meta в настройках подключений LocalOS, чтобы прекратить доступ к Facebook Pages и
+                    связанным профессиональным аккаунтам Instagram.
+                  </p>
+                  <p>
+                    Для полного удаления сохранённых токенов и идентификаторов также можно написать на
+                    info@localos.pro с адреса владельца аккаунта.
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -36,7 +81,7 @@ const Policy = () => {
                   <li>Название бизнеса</li>
                   <li>Ссылка на бизнес на картах</li>
                   <li>Telegram ID и username</li>
-                  <li>Идентификаторы филиалов, аккаунтов и интеграций во внешних сервисах, включая YCLIENTS, Google Business Profile, Яндекс.Бизнес и 2ГИС</li>
+                  <li>Идентификаторы филиалов, аккаунтов и интеграций во внешних сервисах, включая YCLIENTS, Google Business Profile, Facebook, Instagram, Яндекс.Бизнес и 2ГИС</li>
                   <li>Данные о филиале, услугах, ценах, сотрудниках, отзывах, новостях и иных настройках бизнеса, если вы подключили соответствующую интеграцию</li>
                 </ul>
               </section>
@@ -47,7 +92,7 @@ const Policy = () => {
                 <ul className="list-disc pl-6 space-y-2">
                   <li>Организация обмена отзывами между участниками сервиса</li>
                   <li>Предоставление доступа к функционалу Сервиса</li>
-                  <li>Подключение внешних интеграций по вашему запросу, включая YCLIENTS, Google Business Profile, Яндекс.Бизнес и 2ГИС</li>
+                  <li>Подключение внешних интеграций по вашему запросу, включая YCLIENTS, Google Business Profile, Facebook, Instagram, Яндекс.Бизнес и 2ГИС</li>
                   <li>Импорт и синхронизация данных филиала, услуг, цен и отзывов для аудита карточек, подготовки рекомендаций, ответов на отзывы, новостей, контент-планов и партнёрских предложений</li>
                   <li>Связь с пользователями по вопросам использования Сервиса</li>
                   <li>Улучшение качества предоставляемых услуг</li>
@@ -63,6 +108,7 @@ const Policy = () => {
                 <ul className="list-disc pl-6 space-y-2">
                   <li>При подключении YCLIENTS мы можем получать и обрабатывать идентификатор филиала, данные пользователя, данные филиала, услуг и цен в пределах прав, которые вы подтвердили в YCLIENTS.</li>
                   <li>При подключении картографических сервисов мы можем получать и обрабатывать данные карточки, отзывы, ответы, новости, адреса, рейтинги и служебные идентификаторы аккаунтов.</li>
+                  <li>При подключении Meta мы получаем только подтверждённый вами доступ к Facebook Pages и связанным профессиональным аккаунтам Instagram. LocalOS использует его для подготовки, публикации и анализа контента от имени выбранного бизнеса.</li>
                   <li>Публикация во внешние системы, массовые отправки, платежи и изменения от имени бизнеса выполняются только после вашего явного подтверждения.</li>
                 </ul>
               </section>
@@ -77,6 +123,12 @@ const Policy = () => {
                   <li>Отозвать согласие на обработку персональных данных</li>
                   <li>Отключить внешнюю интеграцию в LocalOS или на стороне соответствующего сервиса</li>
                 </ul>
+                <p className="mt-4">
+                  Чтобы прекратить доступ LocalOS к Facebook или Instagram, отключите Meta в настройках
+                  подключений. Для полного удаления сохранённых токенов, идентификаторов страниц и связанных
+                  данных подключения отправьте запрос на info@localos.pro. Мы выполним его после проверки
+                  владельца аккаунта.
+                </p>
               </section>
 
               <section>

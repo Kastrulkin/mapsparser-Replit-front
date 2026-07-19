@@ -153,10 +153,15 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
   const vkReady = Boolean(vkAccount);
   const matonReady = Boolean(matonAccount);
 
-  const metaReadiness = findReadiness(socialReadiness, ['meta', 'instagram', 'facebook']);
+  const metaFacebookReadiness = findReadiness(socialReadiness, ['facebook']);
+  const metaInstagramReadiness = findReadiness(socialReadiness, ['instagram']);
   const vkReadiness = findReadiness(socialReadiness, ['vk']);
   const googleReadiness = findReadiness(socialReadiness, ['google_business']);
-  const metaStatus = metaAccount ? 'ready' : socialStatus(metaReadiness, 'manual');
+  const metaStatus: HubStatus = metaFacebookReadiness?.ready && metaInstagramReadiness?.ready
+    ? 'ready'
+    : metaAccount
+      ? 'attention'
+      : 'not_configured';
   const vkStatus = vkReady ? 'ready' : socialStatus(vkReadiness, 'attention');
   const googleStatus = googleReady ? 'ready' : socialStatus(googleReadiness, 'not_configured');
 
@@ -240,7 +245,7 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
       key: 'meta',
       status: metaStatus,
       label: 'Meta',
-      description: 'Instagram и Facebook в контролируемом режиме.',
+      description: 'Facebook Page и Instagram Professional для подтверждённых публикаций.',
       primaryAction: {
         label: metaStatus === 'ready' ? 'Check connection' : 'Configure Meta',
         type: 'drawer',

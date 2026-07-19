@@ -248,6 +248,7 @@ const AppShell = () => {
           <Route path="/contact" element={<Contact />} />
           <Route path="/policy" element={<Policy />} />
           <Route path="/privacy" element={<Policy />} />
+          <Route path="/data-deletion" element={<Policy />} />
           <Route path="/requisites" element={<Requisites />} />
           <Route path="/yclients/connect" element={<YclientsConnect />} />
           <Route path="/docs" element={<DocsPage />} />

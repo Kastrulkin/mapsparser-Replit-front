@@ -130,7 +130,10 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
   );
 
   const vkReadiness = findReadiness(readiness, ['vk']);
-  const metaReadiness = findReadiness(readiness, ['meta', 'instagram', 'facebook']);
+  const metaFacebookReadiness = findReadiness(readiness, ['facebook']);
+  const metaInstagramReadiness = findReadiness(readiness, ['instagram']);
+  const metaBound = Boolean(metaAccount && hasText(metaAccount.external_id));
+  const metaReady = Boolean(metaFacebookReadiness?.ready && metaInstagramReadiness?.ready);
   const yandexReadiness = findReadiness(readiness, ['yandex_maps', 'yandex_business', 'yandex']);
   const twoGisReadiness = findReadiness(readiness, ['2gis', 'dgis']);
 
@@ -224,11 +227,17 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
       id: 'meta',
       name: 'Meta',
       tag: 'Публикации',
-      description: 'Facebook и Instagram в контролируемом режиме.',
+      description: 'Посты в Facebook Page и Instagram Professional после подтверждения.',
       connectionType: 'oauth',
-      status: metaAccount ? 'connected' : socialConnectionStatus(metaReadiness, 'manual'),
-      nextAction: metaAccount ? 'Аккаунт подключён.' : 'Выберите страницу и Instagram-актив в настройке.',
-      primaryAction: { label: metaAccount ? 'Проверить' : 'Настроить', type: 'drawer', target: 'meta' },
+      status: metaReady ? 'connected' : metaAccount ? 'action_required' : 'not_connected',
+      nextAction: metaReady
+        ? 'Facebook и Instagram готовы к согласованным публикациям.'
+        : metaBound
+          ? 'Проверьте связанный Instagram-аккаунт.'
+          : metaAccount
+            ? 'Выберите Facebook Page.'
+            : 'Войдите через Meta и выберите страницу.',
+      primaryAction: { label: metaReady ? 'Проверить' : metaAccount ? 'Завершить' : 'Подключить', type: 'drawer', target: 'meta' },
       hasLogs: true,
       hasHelp: true,
     },

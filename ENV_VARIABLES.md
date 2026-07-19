@@ -50,6 +50,19 @@ SALES_ROOM_UPLOAD_MAX_BYTES=10485760
 
 Если `SALES_ROOM_STORAGE_BACKEND` не задан или равен `local`, файлы продолжают сохраняться в `SALES_ROOM_UPLOAD_DIR` / `DEBUG_DIR/sales_room_uploads`.
 
+### Meta OAuth: Facebook и Instagram
+```bash
+META_OAUTH_APP_ID=your-meta-app-id
+META_OAUTH_APP_SECRET=your-meta-app-secret
+META_OAUTH_CONFIG_ID=your-facebook-login-for-business-configuration-id
+META_OAUTH_REDIRECT_URI=https://localos.pro/api/meta/oauth/callback
+META_OAUTH_STATE_SECRET=long-random-secret
+META_GRAPH_API_VERSION=v25.0
+```
+**Назначение:** единое приложение LocalOS для подключения Facebook Pages и связанных Instagram Professional accounts. `APP_ID` и `APP_SECRET` задаются один раз для платформы; токены конкретных клиентов сохраняются зашифрованно в `externalbusinessaccounts` и разделены по `business_id`.
+
+В Meta Developer Dashboard добавьте точный Valid OAuth Redirect URI: `https://localos.pro/api/meta/oauth/callback`. `META_OAUTH_CONFIG_ID` берётся из конфигурации Facebook Login for Business с объектами `Pages` и `Instagram accounts`. Для production нужны разрешения `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`, `instagram_basic` и `instagram_content_publish`.
+
 ### Founder-led персонализация аутрича
 ```bash
 OUTREACH_AI_PERSONALIZATION_ENABLED=false

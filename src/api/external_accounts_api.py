@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import sys
 import urllib.parse
 import uuid
@@ -41,12 +42,26 @@ from services.vk_oauth_service import (
     vk_api_version,
     vk_pkce_challenge,
 )
+from services.meta_oauth_service import (
+    META_OAUTH_SCOPES,
+    MetaOAuthError,
+    build_meta_authorization_url,
+    decode_meta_data_deletion_request,
+    decode_meta_oauth_state,
+    encode_meta_oauth_state,
+    exchange_meta_authorization_code,
+    inspect_meta_access_token,
+    list_meta_assets,
+    meta_graph_api_version,
+    public_meta_asset,
+)
 
 
 logger = logging.getLogger(__name__)
 external_accounts_bp = Blueprint("external_accounts_api", __name__)
 
 DEFAULT_VK_RETURN_PATH = "/dashboard/settings/integrations?focus=vk"
+DEFAULT_META_RETURN_PATH = "/dashboard/settings/integrations?focus=meta"
 
 
 try:
@@ -104,6 +119,24 @@ def _append_vk_auth_params(path: str, params: dict[str, Any]) -> str:
     return urllib.parse.urlunsplit(("", "", parsed.path, urllib.parse.urlencode(query), ""))
 
 
+def _safe_meta_return_path(value: Any) -> str:
+    clean = str(value or "").strip()
+    if not clean or clean.startswith("//") or "\r" in clean or "\n" in clean:
+        return DEFAULT_META_RETURN_PATH
+    if not clean.startswith("/dashboard/"):
+        return DEFAULT_META_RETURN_PATH
+    return clean[:500]
+
+
+def _append_meta_auth_params(path: str, params: dict[str, Any]) -> str:
+    safe_path = _safe_meta_return_path(path)
+    parsed = urllib.parse.urlsplit(safe_path)
+    query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    for key, value in params.items():
+        query.append((str(key), str(value or "")))
+    return urllib.parse.urlunsplit(("", "", parsed.path, urllib.parse.urlencode(query), ""))
+
+
 def _require_vk_business_access(business_id: str):
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -131,6 +164,129 @@ def _vk_oauth_error_response(default_status: int = 400):
         return jsonify({"success": False, "status": error.code, "error": str(error)}), status
     logger.exception("VK OAuth request failed")
     return jsonify({"success": False, "status": "oauth_failed", "error": "Не удалось подключить VK. Повторите позже."}), 502
+
+
+def _meta_oauth_error_response(default_status: int = 400):
+    error = sys.exc_info()[1]
+    if isinstance(error, MetaOAuthError):
+        status = 503 if error.code == "oauth_not_configured" else default_status
+        return jsonify({"success": False, "status": error.code, "error": str(error)}), status
+    logger.exception("Meta OAuth request failed")
+    return jsonify({"success": False, "status": "oauth_failed", "error": "Не удалось подключить Facebook и Instagram. Повторите позже."}), 502
+
+
+def _meta_account_auth_data(account: dict[str, Any] | None) -> dict[str, Any]:
+    if not account:
+        return {}
+    decrypted = decrypt_auth_data(str(account.get("auth_data_encrypted") or "")) or ""
+    try:
+        parsed = json.loads(decrypted) if decrypted else {}
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _load_meta_account(cursor: Any, business_id: str, *, lock: bool = False) -> dict[str, Any] | None:
+    lock_clause = " FOR UPDATE" if lock else ""
+    cursor.execute(
+        f"""
+        SELECT id, business_id, source, external_id, display_name,
+               auth_data_encrypted, is_active, last_error, created_at, updated_at
+        FROM externalbusinessaccounts
+        WHERE business_id = %s
+          AND source IN ('meta', 'facebook', 'instagram')
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+        LIMIT 1{lock_clause}
+        """,
+        (business_id,),
+    )
+    row = cursor.fetchone()
+    return _row_to_dict(cursor, row) if row else None
+
+
+def _upsert_meta_oauth_account(
+    cursor: Any,
+    *,
+    business_id: str,
+    user_token_payload: dict[str, Any],
+    token_inspection: dict[str, Any],
+    page_asset: dict[str, Any] | None = None,
+    available_page_count: int | None = None,
+) -> dict[str, Any]:
+    existing = _load_meta_account(cursor, business_id, lock=True)
+    existing_auth = _meta_account_auth_data(existing)
+    account_id = str((existing or {}).get("id") or uuid.uuid4())
+    auth_data = dict(existing_auth)
+    auth_data.update(
+        {
+            "user_access_token": str(user_token_payload.get("access_token") or "").strip(),
+            "user_token_expires_at": user_token_payload.get("expires_at"),
+            "user_id": str(token_inspection.get("user_id") or "").strip(),
+            "scope": token_inspection.get("scopes") or [],
+            "missing_scopes": token_inspection.get("missing_scopes") or [],
+            "api_version": meta_graph_api_version(),
+            "auth_mode": "meta_oauth",
+            "oauth_verified_at": token_inspection.get("verified_at"),
+        }
+    )
+    if available_page_count is not None:
+        auth_data["available_page_count"] = int(available_page_count)
+    external_id = str((existing or {}).get("external_id") or "").strip() or None
+    display_name = str((existing or {}).get("display_name") or "").strip() or "Meta: выберите страницу"
+    if page_asset:
+        page_id = str(page_asset.get("page_id") or "").strip()
+        page_name = str(page_asset.get("page_name") or f"Facebook Page {page_id}").strip()
+        ig_user_id = str(page_asset.get("ig_user_id") or "").strip()
+        ig_username = str(page_asset.get("ig_username") or "").strip()
+        auth_data.update(
+            {
+                "access_token": str(page_asset.get("page_access_token") or "").strip(),
+                "page_id": page_id,
+                "page_name": page_name,
+                "page_tasks": page_asset.get("tasks") or [],
+                "ig_user_id": ig_user_id,
+                "instagram_business_account_id": ig_user_id,
+                "ig_username": ig_username,
+                "ig_name": str(page_asset.get("ig_name") or "").strip(),
+                "ig_profile_picture_url": str(page_asset.get("ig_profile_picture_url") or "").strip(),
+                "bound_at": datetime.utcnow().isoformat(),
+            }
+        )
+        external_id = page_id
+        display_name = f"{page_name} · @{ig_username}" if ig_username else page_name
+    encrypted = encrypt_auth_data(json.dumps(auth_data, ensure_ascii=False))
+    if existing:
+        cursor.execute(
+            """
+            UPDATE externalbusinessaccounts
+            SET source = 'meta', external_id = %s, display_name = %s,
+                auth_data_encrypted = %s, is_active = TRUE,
+                last_error = NULL, last_sync_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """,
+            (external_id, display_name, encrypted, account_id),
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO externalbusinessaccounts (
+                id, business_id, source, external_id, display_name,
+                auth_data_encrypted, is_active, last_sync_at, created_at, updated_at
+            ) VALUES (
+                %s, %s, 'meta', %s, %s, %s, TRUE,
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            """,
+            (account_id, business_id, external_id, display_name, encrypted),
+        )
+    return {
+        "id": account_id,
+        "source": "meta",
+        "external_id": external_id,
+        "display_name": display_name,
+        "is_active": True,
+    }
 
 
 def _upsert_vk_oauth_account(
@@ -884,6 +1040,272 @@ def complete_vk_oauth(business_id):
         db.close()
 
 
+@external_accounts_bp.route("/api/business/<business_id>/meta/oauth/start", methods=["POST"])
+def start_meta_oauth(business_id):
+    user_data, db, access_error = _require_vk_business_access(business_id)
+    if access_error:
+        return access_error
+    try:
+        payload = request.get_json(silent=True) or {}
+        state = encode_meta_oauth_state(
+            {
+                "user_id": str(user_data.get("user_id") or ""),
+                "business_id": str(business_id),
+                "return_to": _safe_meta_return_path(payload.get("return_to")),
+            }
+        )
+        return jsonify(
+            {
+                "success": True,
+                "auth_url": build_meta_authorization_url(state=state),
+                "external_publish_performed": False,
+            }
+        )
+    except MetaOAuthError:
+        return _meta_oauth_error_response()
+    except Exception:
+        return _meta_oauth_error_response(502)
+    finally:
+        db.close()
+
+
+@external_accounts_bp.route("/api/meta/oauth/callback", methods=["GET"])
+def meta_oauth_callback():
+    frontend_url = str(os.getenv("FRONTEND_URL") or "http://localhost:3000").rstrip("/")
+    state = str(request.args.get("state") or "").strip()
+    db = None
+    try:
+        state_payload = decode_meta_oauth_state(state)
+        return_to = _safe_meta_return_path(state_payload.get("return_to"))
+        if request.args.get("error"):
+            return redirect(
+                f"{frontend_url}{_append_meta_auth_params(return_to, {'meta_auth': 'cancelled'})}"
+            )
+        business_id = str(state_payload.get("business_id") or "").strip()
+        state_user_id = str(state_payload.get("user_id") or "").strip()
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id or (owner_id != state_user_id and not db.is_superadmin(state_user_id)):
+            raise MetaOAuthError("state_mismatch", "Это подключение Meta относится к другому аккаунту.")
+        token_payload = exchange_meta_authorization_code(str(request.args.get("code") or ""))
+        token_inspection = inspect_meta_access_token(str(token_payload.get("access_token") or ""))
+        assets = list_meta_assets(str(token_payload.get("access_token") or ""))
+        _upsert_meta_oauth_account(
+            cursor,
+            business_id=business_id,
+            user_token_payload=token_payload,
+            token_inspection=token_inspection,
+            available_page_count=len(assets),
+        )
+        db.conn.commit()
+        params = {
+            "meta_auth": "connected",
+            "meta_pages": str(len(assets)),
+        }
+        return redirect(f"{frontend_url}{_append_meta_auth_params(return_to, params)}")
+    except MetaOAuthError:
+        if db:
+            db.conn.rollback()
+        error = sys.exc_info()[1]
+        logger.info("Meta OAuth callback failed: %s", error)
+        return redirect(
+            f"{frontend_url}{_append_meta_auth_params(DEFAULT_META_RETURN_PATH, {'meta_auth': getattr(error, 'code', 'error')})}"
+        )
+    except Exception:
+        if db:
+            db.conn.rollback()
+        logger.exception("Meta OAuth callback failed")
+        return redirect(
+            f"{frontend_url}{_append_meta_auth_params(DEFAULT_META_RETURN_PATH, {'meta_auth': 'error'})}"
+        )
+    finally:
+        if db:
+            db.close()
+
+
+@external_accounts_bp.route("/api/meta/data-deletion", methods=["POST"])
+def meta_data_deletion_callback():
+    db = None
+    try:
+        payload = request.get_json(silent=True) or {}
+        signed_request = str(
+            request.form.get("signed_request")
+            or payload.get("signed_request")
+            or ""
+        ).strip()
+        deletion_request = decode_meta_data_deletion_request(signed_request)
+        meta_user_id = str(deletion_request.get("user_id") or "").strip()
+        confirmation_code = secrets.token_urlsafe(18)
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, auth_data_encrypted
+            FROM externalbusinessaccounts
+            WHERE source IN ('meta', 'facebook', 'instagram')
+            FOR UPDATE
+            """
+        )
+        matching_ids = []
+        for row in cursor.fetchall() or []:
+            account = _row_to_dict(cursor, row) or {}
+            auth_data = _meta_account_auth_data(account)
+            if str(auth_data.get("user_id") or "").strip() == meta_user_id:
+                matching_ids.append(str(account.get("id") or ""))
+
+        for account_id in matching_ids:
+            cursor.execute(
+                """
+                UPDATE externalbusinessaccounts
+                SET external_id = NULL,
+                    display_name = 'Meta отключена',
+                    auth_data_encrypted = %s,
+                    is_active = FALSE,
+                    last_error = 'Доступ удалён по запросу пользователя Meta',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (encrypt_auth_data("{}"), account_id),
+            )
+        db.conn.commit()
+        frontend_url = str(os.getenv("FRONTEND_URL") or "https://localos.pro").rstrip("/")
+        status_url = (
+            f"{frontend_url}/data-deletion?"
+            f"confirmation_code={urllib.parse.quote(confirmation_code)}"
+        )
+        logger.info(
+            "Meta data deletion completed user=%s disconnected_accounts=%s",
+            meta_user_id,
+            len(matching_ids),
+        )
+        response = jsonify(
+            {
+                "url": status_url,
+                "confirmation_code": confirmation_code,
+            }
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except MetaOAuthError as error:
+        if db:
+            db.conn.rollback()
+        logger.warning("Meta data deletion request rejected: %s", error)
+        return jsonify({"error": "Не удалось подтвердить запрос Meta."}), 400
+    except Exception:
+        if db:
+            db.conn.rollback()
+        logger.exception("Meta data deletion callback failed")
+        return jsonify({"error": "Не удалось обработать удаление данных Meta."}), 500
+    finally:
+        if db:
+            db.close()
+
+
+@external_accounts_bp.route("/api/business/<business_id>/meta/assets", methods=["GET"])
+def get_meta_assets(business_id):
+    user_data, db, access_error = _require_vk_business_access(business_id)
+    if access_error:
+        return access_error
+    try:
+        cursor = db.conn.cursor()
+        account = _load_meta_account(cursor, business_id)
+        auth_data = _meta_account_auth_data(account)
+        user_access_token = str(auth_data.get("user_access_token") or "").strip()
+        if not account or not user_access_token:
+            return jsonify(
+                {
+                    "success": False,
+                    "status": "missing_connection",
+                    "error": "Сначала подключите аккаунт Facebook.",
+                }
+            ), 409
+        assets = list_meta_assets(user_access_token)
+        return jsonify(
+            {
+                "success": True,
+                "assets": [public_meta_asset(asset) for asset in assets],
+                "selected_page_id": str(account.get("external_id") or ""),
+                "external_publish_performed": False,
+            }
+        )
+    except MetaOAuthError:
+        return _meta_oauth_error_response()
+    except Exception:
+        return _meta_oauth_error_response(502)
+    finally:
+        db.close()
+
+
+@external_accounts_bp.route("/api/business/<business_id>/meta/bind", methods=["POST"])
+def bind_meta_asset(business_id):
+    user_data, db, access_error = _require_vk_business_access(business_id)
+    if access_error:
+        return access_error
+    try:
+        payload = request.get_json(silent=True) or {}
+        page_id = str(payload.get("page_id") or "").strip()
+        if not page_id:
+            return jsonify({"success": False, "status": "missing_page", "error": "Выберите страницу Facebook."}), 400
+        cursor = db.conn.cursor()
+        account = _load_meta_account(cursor, business_id, lock=True)
+        auth_data = _meta_account_auth_data(account)
+        user_access_token = str(auth_data.get("user_access_token") or "").strip()
+        if not account or not user_access_token:
+            return jsonify({"success": False, "status": "missing_connection", "error": "Сначала подключите аккаунт Facebook."}), 409
+        assets = list_meta_assets(user_access_token)
+        selected_asset = next(
+            (asset for asset in assets if str(asset.get("page_id") or "") == page_id),
+            None,
+        )
+        if not selected_asset:
+            return jsonify({"success": False, "status": "page_unavailable", "error": "Выбранная страница больше недоступна. Обновите список."}), 404
+        token_payload = {
+            "access_token": user_access_token,
+            "expires_at": auth_data.get("user_token_expires_at"),
+        }
+        token_inspection = {
+            "user_id": auth_data.get("user_id"),
+            "scopes": auth_data.get("scope") or list(META_OAUTH_SCOPES),
+            "missing_scopes": auth_data.get("missing_scopes") or [],
+            "verified_at": auth_data.get("oauth_verified_at"),
+        }
+        account_summary = _upsert_meta_oauth_account(
+            cursor,
+            business_id=business_id,
+            user_token_payload=token_payload,
+            token_inspection=token_inspection,
+            page_asset=selected_asset,
+            available_page_count=len(assets),
+        )
+        db.conn.commit()
+        ig_username = str(selected_asset.get("ig_username") or "").strip()
+        return jsonify(
+            {
+                "success": True,
+                "status": "connected",
+                "account": account_summary,
+                "facebook_ready": True,
+                "instagram_ready": bool(selected_asset.get("ig_user_id")),
+                "message": (
+                    f"Подключены Facebook Page и Instagram @{ig_username}."
+                    if ig_username
+                    else "Facebook Page подключена. Для Instagram свяжите с ней профессиональный аккаунт."
+                ),
+                "external_publish_performed": False,
+            }
+        )
+    except MetaOAuthError:
+        db.conn.rollback()
+        return _meta_oauth_error_response()
+    except Exception:
+        db.conn.rollback()
+        return _meta_oauth_error_response(502)
+    finally:
+        db.close()
+
+
 @external_accounts_bp.route("/api/business/<business_id>/external-accounts", methods=["GET"])
 def get_external_accounts(business_id):
     """
@@ -945,12 +1367,19 @@ def get_external_accounts(business_id):
             if not row_dict:
                 continue
             connection_mode = None
-            if str(row_dict.get("source") or "") in {"vk", "vk_group", "vk_business"}:
+            if str(row_dict.get("source") or "") in {
+                "vk", "vk_group", "vk_business", "meta", "facebook", "instagram"
+            }:
                 try:
                     raw_auth_data = decrypt_auth_data(row_dict.get("auth_data_encrypted")) or ""
                     parsed_auth_data = json.loads(raw_auth_data) if raw_auth_data else {}
                     if isinstance(parsed_auth_data, dict):
-                        connection_mode = str(parsed_auth_data.get("auth_mode") or "legacy_token")
+                        default_mode = (
+                            "legacy_token"
+                            if str(row_dict.get("source") or "") in {"vk", "vk_group", "vk_business"}
+                            else "manual_token"
+                        )
+                        connection_mode = str(parsed_auth_data.get("auth_mode") or default_mode)
                 except (TypeError, ValueError, json.JSONDecodeError):
                     connection_mode = "legacy_token"
             accounts.append({

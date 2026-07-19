@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 
 import FinanceCrmPanel from '@/components/FinanceCrmPanel';
-import { ExternalIntegrations } from '@/components/ExternalIntegrations';
 import TelegramConnection from '@/components/TelegramConnection';
 import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
 import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
@@ -91,6 +90,16 @@ type GoogleLocation = {
   primary_category?: string | null;
 };
 
+type MetaAsset = {
+  page_id: string;
+  page_name: string;
+  tasks?: string[];
+  ig_user_id?: string | null;
+  ig_username?: string | null;
+  ig_name?: string | null;
+  ig_profile_picture_url?: string | null;
+};
+
 type StatusFilter = ConnectionStatus | 'all' | 'needs_action';
 type TypeFilter = ConnectionType | 'all' | 'crm';
 type ServiceGroupKey = 'owner' | 'publishing' | 'data';
@@ -126,7 +135,7 @@ const serviceDescriptions: Record<string, string> = {
   google_sheets: 'Этот доступ нужен агентам для чтения Google Таблиц. Он не публикует ничего наружу.',
   google_business: 'Выберите карточку компании для отзывов, статистики и согласованных постов Google.',
   vk: 'Укажите ID и ключ сообщества. Текстовые публикации всё равно идут только после вашего подтверждения.',
-  meta: 'Подключение Facebook и Instagram остаётся контролируемым: выберите страницу и актив в деталях.',
+  meta: 'Войдите через Meta, выберите Facebook Page и связанный Instagram Professional account.',
   yandex_maps: 'LocalOS готовит текст и задачу, финальный шаг в картах делает человек.',
   '2gis': 'LocalOS готовит материалы для карточки 2GIS, публикация остаётся ручной.',
   yclients: 'Подключите филиал YCLIENTS, затем проверьте preview импорта перед записью в финансы.',
@@ -141,7 +150,7 @@ const serviceHelp: Record<string, string[]> = {
   google_sheets: ['Нажмите подключение Google.', 'Выберите аккаунт, где есть нужная таблица.', 'Вернитесь к агенту и запустите безопасный тест.'],
   google_business: ['Подключите Google-доступ.', 'Загрузите список карточек.', 'Выберите карточку компании и синхронизируйте данные.'],
   vk: ['Укажите числовой ID сообщества.', 'Добавьте ключ сообщества с доступом к стене.', 'LocalOS проверит готовность текстовых публикаций.'],
-  meta: ['Подключите страницу Facebook.', 'Выберите Instagram Business asset.', 'Проверьте права перед публикациями.'],
+  meta: ['Войдите через Meta.', 'Выберите Facebook Page.', 'Проверьте связанный Instagram Professional account.'],
   yandex_maps: ['Подготовьте текст в LocalOS.', 'Откройте карточку Яндекс.', 'Опубликуйте вручную после проверки.'],
   '2gis': ['Подготовьте текст в LocalOS.', 'Откройте карточку 2GIS.', 'Опубликуйте вручную после проверки.'],
   yclients: ['Возьмите ID филиала.', 'Заполните partner token и user token.', 'Сначала проверьте preview, потом подтверждайте импорт.'],
@@ -250,6 +259,10 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
   const [vkOwnerId, setVkOwnerId] = useState('');
   const [vkAccessToken, setVkAccessToken] = useState('');
   const [vkBusy, setVkBusy] = useState(false);
+  const [metaAssets, setMetaAssets] = useState<MetaAsset[]>([]);
+  const [selectedMetaPageId, setSelectedMetaPageId] = useState('');
+  const [metaBusy, setMetaBusy] = useState(false);
+  const [metaMessage, setMetaMessage] = useState<string | null>(null);
   const [matonApiKey, setMatonApiKey] = useState('');
   const [matonBusy, setMatonBusy] = useState(false);
 
@@ -332,7 +345,11 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
   const selectedService = services.find((service) => service.id === activeServiceId) || null;
   const googleAccount = findAccount(loadState.externalAccounts, ['google_business']);
   const vkAccount = findAccount(loadState.externalAccounts, ['vk', 'vk_group', 'vk_business']);
+  const metaAccount = findAccount(loadState.externalAccounts, ['meta', 'facebook', 'instagram']);
   const matonAccount = findAccount(loadState.externalAccounts, ['maton']);
+  const facebookReadiness = loadState.socialReadiness.find((item) => item.platform === 'facebook') || null;
+  const instagramReadiness = loadState.socialReadiness.find((item) => item.platform === 'instagram') || null;
+  const selectedMetaAsset = metaAssets.find((item) => item.page_id === selectedMetaPageId) || null;
 
   const filteredServices = services.filter((service) => {
     const matchesQuery = !query.trim()
@@ -519,6 +536,134 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       setVkBusy(false);
     }
   };
+
+  const handleMetaConnect = async () => {
+    if (!currentBusinessId) return;
+    setMetaBusy(true);
+    setMetaMessage(null);
+    try {
+      const token = newAuth.getToken();
+      if (!token) return;
+      const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/meta/oauth/start`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          return_to: '/dashboard/settings/integrations?focus=meta',
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.auth_url) {
+        throw new Error(data.error || 'Не удалось начать подключение Meta');
+      }
+      window.location.href = data.auth_url;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось начать подключение Meta';
+      setMetaMessage(message);
+      toast({ title: 'Не удалось подключить Facebook и Instagram', description: message, variant: 'destructive' });
+      setMetaBusy(false);
+    }
+  };
+
+  const handleLoadMetaAssets = async () => {
+    if (!currentBusinessId) return;
+    setMetaBusy(true);
+    setMetaMessage(null);
+    try {
+      const token = newAuth.getToken();
+      if (!token) return;
+      const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/meta/assets`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось получить страницы Meta');
+      const assets = firstArray(data.assets).filter((item): item is MetaAsset => Boolean(item && typeof item === 'object' && 'page_id' in item));
+      setMetaAssets(assets);
+      const selectedPageId = String(data.selected_page_id || '');
+      setSelectedMetaPageId(selectedPageId || (assets.length === 1 ? assets[0].page_id : ''));
+      setMetaMessage(assets.length ? `Найдено страниц: ${assets.length}` : 'У аккаунта не найдено доступных Facebook Pages.');
+    } catch (error) {
+      setMetaAssets([]);
+      setMetaMessage(error instanceof Error ? error.message : 'Не удалось получить страницы Meta');
+    } finally {
+      setMetaBusy(false);
+    }
+  };
+
+  const handleBindMetaAsset = async () => {
+    if (!currentBusinessId || !selectedMetaPageId) return;
+    setMetaBusy(true);
+    try {
+      const token = newAuth.getToken();
+      if (!token) return;
+      const response = await fetch(`/api/business/${encodeURIComponent(currentBusinessId)}/meta/bind`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ page_id: selectedMetaPageId }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось выбрать страницу Meta');
+      setMetaMessage(data.message || 'Facebook и Instagram подключены.');
+      toast({ title: 'Готово', description: data.message || 'Страница Meta подключена.' });
+      refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось выбрать страницу Meta';
+      setMetaMessage(message);
+      toast({ title: 'Не удалось завершить подключение', description: message, variant: 'destructive' });
+    } finally {
+      setMetaBusy(false);
+    }
+  };
+
+  const handleMetaDisconnect = async () => {
+    if (!metaAccount?.id || !window.confirm('Отключить Facebook и Instagram от этого бизнеса? Запланированные публикации не будут отправлены.')) return;
+    setMetaBusy(true);
+    try {
+      const token = newAuth.getToken();
+      if (!token) return;
+      const response = await fetch(`/api/external-accounts/${encodeURIComponent(metaAccount.id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Не удалось отключить Meta');
+      setMetaAssets([]);
+      setSelectedMetaPageId('');
+      setMetaMessage('Facebook и Instagram отключены.');
+      toast({ title: 'Meta отключена', description: 'Новые публикации не будут отправляться в Facebook и Instagram.' });
+      refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось отключить Meta';
+      toast({ title: 'Не удалось отключить Meta', description: message, variant: 'destructive' });
+    } finally {
+      setMetaBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const metaAuth = params.get('meta_auth');
+    if (!metaAuth) return;
+    if (metaAuth === 'connected') {
+      setActiveServiceId('meta');
+      setMetaMessage('Аккаунт Meta подключён. Теперь выберите Facebook Page.');
+      toast({ title: 'Доступ получен', description: 'Выберите страницу Facebook для публикаций.' });
+      refresh();
+    } else if (metaAuth === 'cancelled') {
+      setMetaMessage('Подключение отменено. Можно начать ещё раз.');
+    } else {
+      setMetaMessage('Не удалось завершить подключение Meta. Попробуйте ещё раз.');
+    }
+    params.delete('meta_auth');
+    params.delete('meta_pages');
+    const queryString = params.toString();
+    window.history.replaceState({}, '', `${window.location.pathname}${queryString ? `?${queryString}` : ''}${window.location.hash}`);
+  }, [toast]);
 
   const handleSaveMaton = async () => {
     if (!currentBusinessId || !matonApiKey.trim()) return;
@@ -717,8 +862,101 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
 
     if (service.id === 'meta') {
       return (
-        <SetupPanel title="Meta" description="Facebook и Instagram остаются в контролируемом режиме, пока не выбран рабочий актив.">
-          <ExternalIntegrations currentBusinessId={currentBusinessId || null} focusedPlatform="meta" readinessRefreshKey={refreshKey} />
+        <SetupPanel title="Facebook и Instagram" description="Подключите аккаунт Meta один раз, затем выберите страницу этого бизнеса.">
+          <div className="flex flex-col gap-3 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm leading-6 text-slate-600">
+              {metaAccount
+                ? `Доступ получен${metaAccount.display_name ? `: ${metaAccount.display_name}` : ''}.`
+                : 'LocalOS запросит доступ только к страницам и профессиональным Instagram-аккаунтам, которыми вы управляете.'}
+            </div>
+            <Button type="button" onClick={handleMetaConnect} disabled={metaBusy || !currentBusinessId} className="min-h-10 bg-slate-900 text-white hover:bg-slate-800 sm:min-w-[190px]">
+              {metaBusy ? 'Подождите…' : metaAccount ? 'Обновить доступ' : 'Подключить Meta'}
+            </Button>
+          </div>
+
+          {metaAccount ? (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Label htmlFor="meta-page-select">Страница Facebook</Label>
+                  <Select value={selectedMetaPageId} onValueChange={setSelectedMetaPageId} disabled={metaBusy || metaAssets.length === 0}>
+                    <SelectTrigger id="meta-page-select" className="min-h-11 bg-white">
+                      <SelectValue placeholder="Выберите страницу" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {metaAssets.map((asset) => (
+                        <SelectItem key={asset.page_id} value={asset.page_id}>
+                          {asset.page_name}{asset.ig_username ? ` · Instagram @${asset.ig_username}` : ' · без Instagram'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="button" variant="outline" onClick={handleLoadMetaAssets} disabled={metaBusy || !currentBusinessId} className="min-h-10 sm:min-w-[160px]">
+                  <RefreshCw className={cn('mr-2 h-4 w-4', metaBusy ? 'animate-spin' : '')} />
+                  Найти страницы
+                </Button>
+              </div>
+
+              {selectedMetaAsset ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" />
+                    <div>
+                      <div className="font-semibold text-slate-950">Facebook Page</div>
+                      <div className="mt-1 text-sm text-slate-600">{selectedMetaAsset.page_name}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200">
+                    {selectedMetaAsset.ig_user_id ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" /> : <AlertCircle className="mt-0.5 h-5 w-5 text-amber-600" />}
+                    <div>
+                      <div className="font-semibold text-slate-950">Instagram</div>
+                      <div className="mt-1 text-sm text-slate-600">
+                        {selectedMetaAsset.ig_username
+                          ? `@${selectedMetaAsset.ig_username}`
+                          : 'Свяжите с этой Page профессиональный Instagram-аккаунт.'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm leading-6 text-slate-600">
+                  {metaMessage || 'Найдите доступные страницы и выберите нужную для этого бизнеса.'}
+                </div>
+                <Button type="button" onClick={handleBindMetaAsset} disabled={metaBusy || !selectedMetaPageId} className="min-h-10 bg-emerald-600 text-white hover:bg-emerald-700 sm:min-w-[190px]">
+                  Сохранить страницу
+                </Button>
+              </div>
+            </div>
+          ) : metaMessage ? (
+            <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-100">{metaMessage}</div>
+          ) : null}
+
+          <div className="grid gap-3 border-t border-slate-200 pt-5 sm:grid-cols-2">
+            <SafetyRow
+              allowed={Boolean(facebookReadiness?.ready)}
+              title="Facebook"
+              description={facebookReadiness?.ready ? 'Готов к подтверждённым публикациям.' : 'Нужно подключить и выбрать Facebook Page.'}
+            />
+            <SafetyRow
+              allowed={Boolean(instagramReadiness?.ready)}
+              title="Instagram"
+              description={instagramReadiness?.ready ? 'Готов к публикациям с фото.' : 'Нужен профессиональный Instagram, связанный со страницей.'}
+            />
+          </div>
+
+          <p className="text-sm leading-6 text-slate-600">
+            LocalOS ничего не публикует во время подключения. Пост выйдет только после предпросмотра, вашего подтверждения и расписания.
+          </p>
+          {metaAccount ? (
+            <div className="border-t border-slate-200 pt-4">
+              <Button type="button" variant="ghost" onClick={handleMetaDisconnect} disabled={metaBusy} className="text-slate-600 hover:bg-red-50 hover:text-red-700">
+                Отключить Facebook и Instagram
+              </Button>
+            </div>
+          ) : null}
         </SetupPanel>
       );
     }

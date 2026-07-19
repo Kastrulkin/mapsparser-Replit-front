@@ -1060,7 +1060,7 @@ def _publish_google_business_post(cursor: Any, post: dict[str, Any]) -> dict[str
     }
 
 def _meta_graph_post(path: str, access_token: str, params: dict[str, Any]) -> dict[str, Any]:
-    api_version = str(os.getenv("META_GRAPH_API_VERSION") or "v20.0").strip().strip("/")
+    api_version = str(os.getenv("META_GRAPH_API_VERSION") or "v25.0").strip().strip("/")
     clean_path = str(path or "").strip().lstrip("/")
     payload = dict(params)
     payload["access_token"] = access_token
