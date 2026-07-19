@@ -1498,6 +1498,57 @@ def test_agent_review_reply_analysis_falls_back_without_publish():
     assert result["provenance"] == ["Отзывы"]
 
 
+def test_agent_review_llm_usage_is_linked_to_run(monkeypatch):
+    from services import agent_review_reply_analysis
+
+    captured = {}
+
+    def fake_analyze(prompt, **kwargs):
+        captured.update(kwargs)
+        return json.dumps(
+            {
+                "title": "Ответ",
+                "summary": ["Подготовлен ответ"],
+                "reply_drafts": [{"review_id": "rev1", "reply": "Спасибо!"}],
+                "manual_review_reasons": [],
+                "checklist": [],
+                "rules_applied": [],
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr(agent_review_reply_analysis, "analyze_text_with_gigachat", fake_analyze)
+
+    result = agent_review_reply_analysis.draft_review_replies_with_llm(
+        {"workflow_description": "Ответить на отзыв"},
+        [{"source_name": "Отзывы", "raw": {"id": "rev1", "text": "Хорошо", "rating": 5}}],
+        business_id="biz1",
+        user_id="user1",
+        run_id="run1",
+    )
+
+    assert result["llm_analysis_used"] is True
+    assert captured["business_id"] == "biz1"
+    assert captured["user_id"] == "user1"
+    assert captured["usage_reference"] == "agent-run:run1"
+
+
+def test_agent_workspace_reads_exact_run_token_usage():
+    from services.agent_blueprint_workspace import _run_llm_usage
+
+    class Cursor:
+        def execute(self, query, params=None):
+            assert "from tokenusage" in " ".join(query.split()).lower()
+            assert params == ("agent-run:run1",)
+
+        def fetchone(self):
+            return {"prompt_tokens": 720, "completion_tokens": 310, "total_tokens": 1030}
+
+    usage = _run_llm_usage(Cursor(), "run1")
+
+    assert usage == {"prompt_tokens": 720, "completion_tokens": 310, "total_tokens": 1030}
+
+
 def test_agent_date_parameter_commits_native_picker_value_on_blur():
     employee_source = Path("frontend/src/pages/dashboard/agents/employee.tsx").read_text(encoding="utf-8")
 

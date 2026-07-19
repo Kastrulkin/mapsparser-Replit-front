@@ -174,6 +174,44 @@ def test_agent_run_queue_reuses_existing_idempotency_key(monkeypatch):
     assert result["run"]["id"] == "run-existing"
 
 
+def test_unified_run_billing_counts_internal_artifact_tokens_once():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    ledger = AgentBlueprintRunner(cursor=None)._build_run_unified_billing_ledger(
+        {"input_json": {"preview_mode": False}},
+        {
+            "summary": {"settled_tokens": 180, "total_cost": 0.02},
+            "actions": [
+                {
+                    "settled_tokens": 180,
+                    "total_cost": 0.02,
+                }
+            ],
+        },
+        [
+            {
+                "artifact_type": "agent_output_draft",
+                "payload_json": {
+                    "llm_usage": {
+                        "prompt_tokens": 800,
+                        "completion_tokens": 450,
+                        "total_tokens": 1250,
+                    }
+                },
+            },
+            {
+                "artifact_type": "agent_final_result",
+                "payload_json": {},
+            },
+        ],
+    )
+
+    by_key = {item["key"]: item for item in ledger["items"]}
+    assert by_key["production_run"]["actual_tokens"] == 1250
+    assert by_key["external_action"]["actual_tokens"] == 180
+    assert ledger["summary"]["actual_tokens"] == 1430
+
+
 def test_superseding_waiting_run_releases_billing_reservation(monkeypatch):
     from services import agent_blueprint_runner
 

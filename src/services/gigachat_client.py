@@ -328,8 +328,9 @@ class GigaChatClient:
             print(f"🚨 DEBUG: Исключение в analyze_screenshot: {str(e)}")
             raise Exception(f"Ошибка анализа скриншота: {str(e)}")
     
-    def analyze_text(self, prompt: str, task_type: str = None, functions: List[Dict] = None, 
-                     business_id: str = None, user_id: str = None) -> Tuple[str, Dict[str, Any]]:
+    def analyze_text(self, prompt: str, task_type: str = None, functions: List[Dict] = None,
+                     business_id: str = None, user_id: str = None,
+                     usage_reference: str = None) -> Tuple[str, Dict[str, Any]]:
         """Анализ текста с поддержкой Function Calling
         
         Args:
@@ -401,7 +402,7 @@ class GigaChatClient:
                     task_type=task_type or "unknown",
                     model=model_config["model"],
                     usage_info=usage_info,
-                    endpoint="chat/completions"
+                    endpoint=usage_reference or "chat/completions"
                 )
             
             # Извлекаем содержимое ответа
@@ -628,8 +629,9 @@ def get_gigachat_client() -> GigaChatClient:
     return _gigachat_client
 
 # Функции-хелперы для обратной совместимости
-def analyze_text_with_gigachat(prompt: str, task_type: str = None, 
-                               business_id: str = None, user_id: str = None) -> str:
+def analyze_text_with_gigachat(prompt: str, task_type: str = None,
+                               business_id: str = None, user_id: str = None,
+                               usage_reference: str = None) -> str:
     """
     Упрощенная функция для анализа текста (обратная совместимость)
     Возвращает только строку, без информации об использовании токенов
@@ -645,7 +647,8 @@ def analyze_text_with_gigachat(prompt: str, task_type: str = None,
         prompt, 
         task_type=task_type,
         business_id=business_id,
-        user_id=user_id
+        user_id=user_id,
+        usage_reference=usage_reference,
     )
     return content
 

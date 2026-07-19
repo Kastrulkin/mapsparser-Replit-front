@@ -275,8 +275,33 @@ def _load_workspace(cursor: Any, run: Dict[str, Any]) -> Dict[str, Any]:
         "internal_sources": internal_sources,
         "feedback_history": metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else [],
         "run_input": parse_json_field(run.get("input_json"), {}),
+        "run_id": _clean_text(run.get("id")),
         "business_id": _clean_text(run.get("business_id")),
         "user_id": _clean_text(run.get("created_by_user_id")),
+    }
+
+
+def _run_llm_usage(cursor: Any, run_id: str) -> Dict[str, int]:
+    if not run_id:
+        return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    try:
+        cursor.execute(
+            """
+            SELECT COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+                   COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+                   COALESCE(SUM(total_tokens), 0) AS total_tokens
+            FROM tokenusage
+            WHERE endpoint = %s
+            """,
+            (f"agent-run:{run_id}",),
+        )
+        row = cursor.fetchone() or {}
+    except Exception:
+        return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    return {
+        "prompt_tokens": int(row.get("prompt_tokens") or 0),
+        "completion_tokens": int(row.get("completion_tokens") or 0),
+        "total_tokens": int(row.get("total_tokens") or 0),
     }
 
 
@@ -326,6 +351,7 @@ def _build_output_draft_payload(cursor: Any, run: Dict[str, Any], base_payload: 
         + (workspace.get("internal_sources") or [])
     )
     output = _render_output(category, setup, extracted, workspace.get("feedback_history") or [], workspace)
+    llm_usage = _run_llm_usage(cursor, _clean_text(run.get("id")))
     return {
         **base_payload,
         "status": "generated",
@@ -335,6 +361,7 @@ def _build_output_draft_payload(cursor: Any, run: Dict[str, Any], base_payload: 
         "provenance": output.get("provenance") if isinstance(output, dict) else [],
         "analysis_source": output.get("analysis_source") if isinstance(output, dict) else "",
         "llm_analysis_used": bool(output.get("llm_analysis_used")) if isinstance(output, dict) else False,
+        "llm_usage": llm_usage,
         "approval_required": False,
         "external_dispatch_performed": False,
         "dispatch_state": "not_dispatched",
@@ -400,6 +427,7 @@ def _render_output(
             feedback_history,
             business_id=_clean_text((workspace or {}).get("business_id")),
             user_id=_clean_text((workspace or {}).get("user_id")),
+            run_id=_clean_text((workspace or {}).get("run_id")),
         )
     if category == "tables":
         return analyze_table_with_llm(
@@ -408,6 +436,7 @@ def _render_output(
             feedback_history,
             business_id=_clean_text((workspace or {}).get("business_id")),
             user_id=_clean_text((workspace or {}).get("user_id")),
+            run_id=_clean_text((workspace or {}).get("run_id")),
         )
     if category == "reviews":
         return draft_review_replies_with_llm(
@@ -416,6 +445,7 @@ def _render_output(
             feedback_history,
             business_id=_clean_text((workspace or {}).get("business_id")),
             user_id=_clean_text((workspace or {}).get("user_id")),
+            run_id=_clean_text((workspace or {}).get("run_id")),
         )
     if category == "documents":
         return analyze_document_sources_with_llm(
@@ -424,9 +454,19 @@ def _render_output(
             feedback_history,
             business_id=_clean_text((workspace or {}).get("business_id")),
             user_id=_clean_text((workspace or {}).get("user_id")),
+            run_id=_clean_text((workspace or {}).get("run_id")),
         )
     if _looks_like_message_result(setup, output_format):
-        return _render_message_result(setup, extracted, rules, output_format, feedback_notes)
+        return _render_message_result(
+            setup,
+            extracted,
+            rules,
+            output_format,
+            feedback_notes,
+            business_id=_clean_text((workspace or {}).get("business_id")),
+            user_id=_clean_text((workspace or {}).get("user_id")),
+            run_id=_clean_text((workspace or {}).get("run_id")),
+        )
     return {
         "title": "Результат агента",
         "summary": facts,
@@ -453,6 +493,10 @@ def _render_message_result(
     rules: str,
     output_format: str,
     feedback_notes: List[str],
+    *,
+    business_id: str = "",
+    user_id: str = "",
+    run_id: str = "",
 ) -> Dict[str, Any]:
     workflow = _clean_text(setup.get("workflow_description"))
     google_error = _google_sheets_source_error(extracted)
@@ -517,6 +561,9 @@ def _render_message_result(
             rules,
             output_format,
             feedback_notes,
+            business_id=business_id,
+            user_id=user_id,
+            run_id=run_id,
         )
     return {
         "title": "Нужны данные таблицы",
@@ -573,11 +620,21 @@ def _generate_message_result_with_llm(
     rules: str,
     output_format: str,
     feedback_notes: List[str],
+    *,
+    business_id: str = "",
+    user_id: str = "",
+    run_id: str = "",
 ) -> Dict[str, Any]:
     fallback = _build_message_result_fallback(selected_items, selected_facts, rules, output_format, feedback_notes, _clean_text(setup.get("workflow_description")))
     prompt = _build_message_prompt(setup, selected_items, feedback_notes)
     try:
-        raw_response = analyze_text_with_gigachat(prompt, task_type="agent_custom_message_draft")
+        raw_response = analyze_text_with_gigachat(
+            prompt,
+            task_type="agent_custom_message_draft",
+            business_id=business_id or None,
+            user_id=user_id or None,
+            usage_reference=f"agent-run:{run_id}" if run_id else None,
+        )
         parsed = _parse_message_llm_json(raw_response)
         draft_text = _clean_text(parsed.get("draft_text") or parsed.get("post_text") or parsed.get("message"))
         if not draft_text:

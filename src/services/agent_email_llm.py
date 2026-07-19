@@ -17,13 +17,17 @@ def draft_email_with_llm(
     feedback_history: List[Dict[str, Any]] | None = None,
     business_id: str = "",
     user_id: str = "",
+    run_id: str = "",
     generator: Callable[..., str] | None = None,
 ) -> Dict[str, Any]:
     fallback = build_email_draft_fallback(setup, extracted_items, feedback_history or [])
     prompt = _build_email_prompt(setup, extracted_items, feedback_history or [])
-    generate = generator or _default_email_generator
     try:
-        raw_response = generate(prompt, business_id=business_id, user_id=user_id)
+        raw_response = (
+            generator(prompt, business_id=business_id, user_id=user_id)
+            if generator
+            else _default_email_generator(prompt, business_id=business_id, user_id=user_id, run_id=run_id)
+        )
         parsed = _parse_llm_json(raw_response)
         normalized = _normalize_llm_email(parsed, fallback)
         normalized.update(
@@ -84,12 +88,13 @@ def build_email_draft_fallback(
     }
 
 
-def _default_email_generator(prompt: str, *, business_id: str = "", user_id: str = "") -> str:
+def _default_email_generator(prompt: str, *, business_id: str = "", user_id: str = "", run_id: str = "") -> str:
     return analyze_text_with_gigachat(
         prompt,
         task_type="agent_email_draft",
         business_id=business_id or None,
         user_id=user_id or None,
+        usage_reference=f"agent-run:{run_id}" if run_id else None,
     )
 
 

@@ -1949,7 +1949,7 @@ class AgentBlueprintRunner:
 
         cost_tokens = self._aggregate_cost_tokens(action_observations)
         billing_ledger = self._build_billing_ledger(action_observations)
-        unified_billing_ledger = self._build_run_unified_billing_ledger(run, billing_ledger)
+        unified_billing_ledger = self._build_run_unified_billing_ledger(run, billing_ledger, artifacts)
         delivery_status = self._build_delivery_status(artifacts, action_observations)
         domain_requests = self._load_domain_request_observability(run, steps, approvals, action_ids)
         integration_preflight = self._build_run_integration_preflight(run)
@@ -2942,24 +2942,33 @@ class AgentBlueprintRunner:
             "entries": entries[:100],
         }
 
-    def _build_run_unified_billing_ledger(self, run: Dict[str, Any], billing_ledger: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_run_unified_billing_ledger(
+        self,
+        run: Dict[str, Any],
+        billing_ledger: Dict[str, Any],
+        artifacts: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
         run_input = self._run_input(run)
         preview = bool(run_input.get("preview_mode"))
         summary = billing_ledger.get("summary") if isinstance(billing_ledger.get("summary"), dict) else {}
         actions = billing_ledger.get("actions") if isinstance(billing_ledger.get("actions"), list) else []
         external_tokens = sum(int(item.get("settled_tokens") or 0) for item in actions if isinstance(item, dict))
         external_cost = round(sum(float(item.get("total_cost") or 0.0) for item in actions if isinstance(item, dict)), 6)
-        settled_tokens = max(int(summary.get("settled_tokens") or 0) - external_tokens, 0)
+        internal_tokens = 0
+        for artifact in artifacts:
+            payload = artifact.get("payload_json") if isinstance(artifact.get("payload_json"), dict) else {}
+            usage = payload.get("llm_usage") if isinstance(payload.get("llm_usage"), dict) else {}
+            internal_tokens += int(usage.get("total_tokens") or 0)
         total_cost = max(float(summary.get("total_cost") or 0.0) - external_cost, 0.0)
         run_item = {
             "key": "preview_run" if preview else "production_run",
             "label": "Preview run" if preview else "Production run",
             "phase": "preview" if preview else "run",
             "count": 1,
-            "actual_tokens": settled_tokens,
+            "actual_tokens": internal_tokens,
             "actual_cost": round(total_cost, 6),
-            "status": "settled" if settled_tokens or total_cost else "no_metered_actions",
-            "source": "agent_run_observability",
+            "status": "settled" if internal_tokens or total_cost else "no_metered_actions",
+            "source": "agent_artifact.llm_usage",
         }
         external_item = {
             "key": "external_action",
