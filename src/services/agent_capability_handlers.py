@@ -1209,6 +1209,15 @@ def _handle_google_sheets_read_rows(envelope: Dict[str, Any], user_data: Dict[st
                 }
             )
         except GoogleSheetsAdapterError as exc:
+            error_message = str(exc)[:600]
+            if _google_sheets_auth_needs_reconnect(error_message):
+                _mark_google_sheets_auth_for_reconnect(
+                    cursor,
+                    business_id=tenant_id,
+                    integration_id=integration_id,
+                    error_message=error_message,
+                )
+                db.conn.commit()
             return _result(
                 "provider_read_required",
                 source="google_sheets",
@@ -1218,7 +1227,7 @@ def _handle_google_sheets_read_rows(envelope: Dict[str, Any], user_data: Dict[st
                 sheet_name=sheet_name,
                 limit=limit,
                 provider_error="GOOGLE_SHEETS_PROVIDER_NOT_READY",
-                provider_error_message=str(exc)[:600],
+                provider_error_message=error_message,
                 next_action="connect_or_repair_google_sheets_provider",
             )
         finally:
@@ -1244,6 +1253,44 @@ def _handle_google_sheets_read_rows(envelope: Dict[str, Any], user_data: Dict[st
         sheet_name=sheet_name,
         limit=limit,
         next_action="resolve_provider_and_read_rows",
+    )
+
+
+def _google_sheets_auth_needs_reconnect(error_message: str) -> bool:
+    lowered = str(error_message or "").lower()
+    return "invalid_grant" in lowered or "expired or revoked" in lowered
+
+
+def _mark_google_sheets_auth_for_reconnect(
+    cursor: Any,
+    *,
+    business_id: str,
+    integration_id: str,
+    error_message: str,
+) -> None:
+    if not business_id or not integration_id:
+        return
+    cursor.execute(
+        """
+        UPDATE externalbusinessaccounts
+        SET is_active = FALSE,
+            last_error = %s,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = %s
+          AND source IN ('google_sheets', 'google_business')
+          AND id = COALESCE(
+              (
+                  SELECT auth_ref
+                  FROM agent_integrations
+                  WHERE id = %s
+                    AND business_id = %s
+                    AND provider = 'google_sheets'
+                  LIMIT 1
+              ),
+              %s
+          )
+        """,
+        (error_message[:600], business_id, integration_id, business_id, integration_id),
     )
 
 

@@ -348,10 +348,11 @@ class AgentBlueprintRunner:
             if completed:
                 self._advance_run(run_id, user_data)
             return
-        self._create_artifact_step(run, step, next_index)
-        self._advance_run(run_id, user_data)
+        completed = self._create_artifact_step(run, step, next_index)
+        if completed:
+            self._advance_run(run_id, user_data)
 
-    def _create_artifact_step(self, run: Dict[str, Any], step: Dict[str, Any], step_index: int) -> None:
+    def _create_artifact_step(self, run: Dict[str, Any], step: Dict[str, Any], step_index: int) -> bool:
         step_id = self._insert_step(run, step, step_index, "completed", {}, {"artifact": True})
         artifact_id = str(uuid.uuid4())
         payload = self._build_artifact_payload(run, step)
@@ -384,6 +385,13 @@ class AgentBlueprintRunner:
                 step_id,
             ),
         )
+        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+        result_status = str(result.get("status") or "").strip().lower()
+        if result_status.startswith("needs_") or result_status in {"blocked", "validation_error"}:
+            error_text = str(result.get("title") or result_status or "Агенту нужен следующий шаг").strip()
+            self._fail_run(str(run.get("id") or ""), error_text, step_id)
+            return False
+        return True
 
     def _supersede_pending_runs(self, blueprint_id: str) -> None:
         if not blueprint_id:

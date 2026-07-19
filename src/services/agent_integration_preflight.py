@@ -226,11 +226,16 @@ def _has_native_auth_ref(metadata_config: Dict[str, Any], active_integrations: L
     integration_id = str(metadata_config.get("integration_id") or "").strip()
     has_any_auth_ref = False
     for integration in active_integrations:
-        if str(integration.get("auth_ref") or "").strip():
+        auth_was_checked = "auth_account_id" in integration
+        auth_is_ready = not auth_was_checked or (
+            bool(str(integration.get("auth_account_id") or "").strip())
+            and integration.get("auth_is_active") is True
+        )
+        if str(integration.get("auth_ref") or "").strip() and auth_is_ready:
             has_any_auth_ref = True
         if integration_id and str(integration.get("id") or "").strip() != integration_id:
             continue
-        if str(integration.get("auth_ref") or "").strip():
+        if str(integration.get("auth_ref") or "").strip() and auth_is_ready:
             return True
     if integration_id:
         return has_any_auth_ref
@@ -517,11 +522,19 @@ def _load_agent_integrations(cursor: Any, business_id: str) -> List[Dict[str, An
     try:
         cursor.execute(
             """
-            SELECT id, business_id, provider, status, display_name, auth_ref,
-                   config_json, limits_json, connected_by_user_id, created_at, updated_at
-            FROM agent_integrations
-            WHERE business_id = %s
-            ORDER BY updated_at DESC, created_at DESC
+            SELECT integration.id, integration.business_id, integration.provider,
+                   integration.status, integration.display_name, integration.auth_ref,
+                   integration.config_json, integration.limits_json,
+                   integration.connected_by_user_id, integration.created_at, integration.updated_at,
+                   account.id AS auth_account_id,
+                   account.is_active AS auth_is_active,
+                   account.last_error AS auth_last_error
+            FROM agent_integrations integration
+            LEFT JOIN externalbusinessaccounts account
+              ON account.id = integration.auth_ref
+             AND account.business_id = integration.business_id
+            WHERE integration.business_id = %s
+            ORDER BY integration.updated_at DESC, integration.created_at DESC
             LIMIT 100
             """,
             (business_id,),

@@ -135,6 +135,66 @@ def test_runner_creates_openclaw_preview_observations_from_route_contract():
     assert result["run"]["observability"]["preview_summary"]["openclaw_action_count"] == 1
 
 
+def test_blocking_business_result_stops_before_downstream_write(monkeypatch):
+    from services import agent_blueprint_runner
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Blocked sheets agent",
+        "category": "custom",
+        "metadata_json": {},
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": [
+            {
+                "key": "prepare_output",
+                "type": "artifact",
+                "title": "Подготовить результат",
+                "artifact_type": "agent_output_draft",
+            },
+            {
+                "key": "save_content_plan_draft",
+                "type": "capability",
+                "title": "Сохранить черновик",
+                "capability": "content_plan.item.create_draft",
+            },
+        ],
+        "capability_allowlist_json": ["content_plan.item.create_draft"],
+    }
+    monkeypatch.setattr(
+        agent_blueprint_runner,
+        "build_generic_artifact_payload",
+        lambda *_args, **_kwargs: {
+            "status": "generated",
+            "result": {
+                "status": "needs_google_access",
+                "title": "Нужно переподключить Google-доступ",
+                "summary": ["Таблица выбрана, но сохранённый доступ больше не работает."],
+            },
+        },
+    )
+    orchestrator = CountingOrchestrator()
+
+    result = AgentBlueprintRunner(cursor, orchestrator=orchestrator).start_run(
+        "ver1",
+        {},
+        {"user_id": "user1"},
+    )
+
+    run = result["run"]
+    assert run["status"] == "failed"
+    assert run["error_text"] == "Нужно переподключить Google-доступ"
+    assert [step["step_key"] for step in run["steps"]] == ["prepare_output"]
+    assert run["business_result"]["status"] == "needs_google_access"
+    assert run["result_state"] == "blocked"
+    assert orchestrator.calls == 0
+
+
 def test_agent_integration_preflight_allows_inline_rows_and_native_finance():
     from services.agent_blueprint_draft_builder import compile_agent_blueprint
     from services.agent_integration_preflight import build_agent_integration_preflight

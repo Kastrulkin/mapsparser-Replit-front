@@ -867,6 +867,71 @@ def test_google_sheets_read_rows_capability_uses_native_provider(monkeypatch):
     assert payload["rows"][0]["amount"] == "12000"
 
 
+def test_google_sheets_invalid_grant_marks_saved_account_for_reconnect(monkeypatch):
+    from services import agent_capability_handlers
+    from services.agent_google_sheets_adapter import GoogleSheetsAdapterError
+
+    class Cursor:
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, query, params=None):
+            self.calls.append((" ".join(query.split()).lower(), params))
+
+    class Connection:
+        def __init__(self):
+            self.cursor_instance = Cursor()
+            self.committed = False
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            self.committed = True
+
+    class Database:
+        def __init__(self):
+            self.conn = Connection()
+
+        def close(self):
+            return None
+
+    class RevokedAdapter:
+        def read_rows(self, _request):
+            raise GoogleSheetsAdapterError(
+                'Google token refresh failed with HTTP 400: {"error":"invalid_grant","error_description":"Token has been expired or revoked."}'
+            )
+
+    database = Database()
+    monkeypatch.setattr(agent_capability_handlers, "DatabaseManager", lambda: database)
+    monkeypatch.setattr(
+        agent_capability_handlers,
+        "load_google_sheets_read_adapter",
+        lambda *_args, **_kwargs: RevokedAdapter(),
+    )
+
+    response = agent_capability_handlers.build_capability_handlers()["google_sheets.read_rows"](
+        {
+            "tenant_id": "biz1",
+            "capability": "google_sheets.read_rows",
+            "payload": {
+                "integration_id": "integration-1",
+                "spreadsheet_id": "spreadsheet-1",
+                "sheet_name": "Trips",
+            },
+        },
+        {"user_id": "user-1"},
+    )
+
+    payload = response["result"]
+    update_call = next(call for call in database.conn.cursor_instance.calls if call[0].startswith("update externalbusinessaccounts"))
+    assert payload["status"] == "provider_read_required"
+    assert payload["next_action"] == "connect_or_repair_google_sheets_provider"
+    assert "invalid_grant" in payload["provider_error_message"]
+    assert update_call[1][1:] == ("biz1", "integration-1", "biz1", "integration-1")
+    assert database.conn.committed is True
+
+
 def test_source_result_chain_requires_real_google_sheets_provider_read():
     from services.agent_blueprint_runner import AgentBlueprintRunner
 
