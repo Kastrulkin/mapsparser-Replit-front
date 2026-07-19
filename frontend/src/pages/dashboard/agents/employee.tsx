@@ -4,6 +4,7 @@ import { useLocation, useOutletContext } from 'react-router-dom';
 import {
   Activity,
   AlertTriangle,
+  Archive,
   ArrowDownUp,
   Bot,
   CheckCircle2,
@@ -25,7 +26,6 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
-  Trash2,
   Upload,
   Users,
   Wrench,
@@ -262,6 +262,7 @@ import {
 import {
   HumanResultView
 } from './runs';
+import { TimezoneSelect } from './timezone-select';
 
 const AGENT_BLUEPRINT_LEGACY_SOURCE_CONTRACT_LABELS = [
   'Preflight и preview run',
@@ -891,8 +892,8 @@ export const BlueprintAgentCard = ({
         onClick={onDelete}
         disabled={actionLoading}
       >
-        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-        Убрать из списка
+        <Archive className="mr-1.5 h-3.5 w-3.5" />
+        Архивировать агента
       </Button>
     </div>
   </div>
@@ -920,7 +921,13 @@ export const AgentRunProgressPanel = ({
   onRetry: () => void;
 }) => {
   const failed = animation.status === 'error';
-  const currentStep = animation.steps[animation.stepIndex] || 'Выполняю задачу';
+  const currentStep = animation.queueState === 'queued'
+    ? 'Задача поставлена в очередь'
+    : animation.queueState === 'retry_wait'
+      ? 'Повторю текущий шаг после временной ошибки'
+      : animation.queueState === 'waiting_approval'
+        ? 'Жду вашего решения перед следующим действием'
+        : animation.steps[animation.stepIndex] || 'Выполняю задачу';
   return (
     <section className="overflow-hidden rounded-2xl bg-white shadow-[0_18px_48px_rgba(15,23,42,0.08),0_0_0_1px_rgba(15,23,42,0.08)]">
       <div className="bg-slate-950 px-5 py-5 text-white sm:px-7 sm:py-7">
@@ -945,7 +952,7 @@ export const AgentRunProgressPanel = ({
       <div className="px-5 py-5 sm:px-7">
         <ol className="grid gap-2">
           {animation.steps.map((step, index) => {
-            const done = animation.status === 'finishing' || index < animation.stepIndex;
+            const done = animation.status === 'finishing' || index < (animation.serverCompletedSteps || 0);
             const current = index === animation.stepIndex;
             return (
               <li
@@ -1161,15 +1168,12 @@ export const EmployeeTestResultPanel = ({
   needsGoogleAccessReconnect = false,
   googleAccessJustConnected = false,
   estimatedRunCredits = 0,
-  nextAction,
   onApprove,
   onReject,
   onRunAgain,
   onRebuildScenario,
   onOpenGoogleSheetsSetup,
   onOpenGoogleAccessReconnect,
-  onNextAction,
-  onCloneAgent,
 }: {
   activeRun: AgentRun | null;
   pendingApproval: AgentApproval | null;
@@ -1179,15 +1183,12 @@ export const EmployeeTestResultPanel = ({
   needsGoogleAccessReconnect?: boolean;
   googleAccessJustConnected?: boolean;
   estimatedRunCredits?: number;
-  nextAction?: EmployeeNextAction | null;
   onApprove: () => void;
   onReject: () => void;
   onRunAgain: () => void;
   onRebuildScenario?: () => void;
   onOpenGoogleSheetsSetup?: () => void;
   onOpenGoogleAccessReconnect?: () => void;
-  onNextAction?: () => void;
-  onCloneAgent?: () => void;
 }) => {
   const result = buildEmployeeTestResult(activeRun, pendingApproval);
   const isWorkRun = activeRun?.input_json?.preview_mode === false;
@@ -1200,14 +1201,6 @@ export const EmployeeTestResultPanel = ({
   const canRunAfterGoogleReconnect = Boolean(!canRebuildScenario && googleAccessJustConnected && needsGoogleAccessReconnect);
   const canOpenGoogleAccessReconnect = Boolean(!canRunAfterGoogleReconnect && !canRebuildScenario && needsGoogleAccessReconnect && onOpenGoogleAccessReconnect);
   const canOpenGoogleSheetsSetup = Boolean(!canRebuildScenario && !canOpenGoogleAccessReconnect && needsGoogleSheetsSetup && onOpenGoogleSheetsSetup);
-  const canContinue = Boolean(
-    !canApprove
-    && !isBlocked
-    && nextAction
-    && ['enable', 'run_work', 'configure_schedule'].includes(nextAction.kind)
-    && onNextAction,
-  );
-  const canCloneAgent = Boolean(nextAction?.secondaryAction === 'clone_agent' && onCloneAgent);
   const rerunLabel = canRebuildScenario
     ? 'Пересобрать сценарий'
     : canRunAfterGoogleReconnect
@@ -1216,9 +1209,7 @@ export const EmployeeTestResultPanel = ({
         ? 'Переподключить Google-доступ'
         : canOpenGoogleSheetsSetup
           ? 'Указать Google-таблицу'
-          : canCloneAgent
-            ? 'Создать копию агента'
-            : isWorkRun ? 'Запустить работу ещё раз' : 'Запустить тест ещё раз';
+          : isWorkRun ? 'Повторить с этими параметрами' : 'Повторить тест с этими параметрами';
   const handleRerun = () => {
     if (canRebuildScenario && onRebuildScenario) {
       onRebuildScenario();
@@ -1232,15 +1223,11 @@ export const EmployeeTestResultPanel = ({
       onOpenGoogleSheetsSetup();
       return;
     }
-    if (canCloneAgent && onCloneAgent) {
-      onCloneAgent();
-      return;
-    }
     onRunAgain();
   };
   return (
     <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+      <div className="space-y-4">
         <div className="min-w-0 max-w-4xl">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{isWorkRun ? 'Результат работы' : 'Результат проверки'}</div>
           <h2 className="mt-2 max-w-3xl text-2xl font-semibold leading-8 text-slate-950 [text-wrap:balance]">{result.summary}</h2>
@@ -1248,13 +1235,7 @@ export const EmployeeTestResultPanel = ({
             Это только бизнес-результат. Технические подробности находятся в расширенных настройках.
           </p>
         </div>
-        <div className="flex min-w-0 flex-wrap gap-2 xl:justify-end">
-          {canContinue && nextAction && onNextAction ? (
-            <Button type="button" className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform" onClick={onNextAction} disabled={actionLoading}>
-              {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : nextAction.kind === 'configure_schedule' ? <Clock3 className="mr-2 h-4 w-4" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-              {nextAction.label}
-            </Button>
-          ) : null}
+        <div className="flex min-w-0 flex-wrap gap-2">
           {canApprove ? (
             <Button type="button" className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform" onClick={onApprove} disabled={actionLoading}>
               {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
@@ -1266,21 +1247,21 @@ export const EmployeeTestResultPanel = ({
               {labels.reject}
             </Button>
           ) : null}
-          {!canContinue || canCloneAgent || canRebuildScenario || canRunAfterGoogleReconnect || canOpenGoogleAccessReconnect || canOpenGoogleSheetsSetup ? (
+          {!pendingApproval || canRebuildScenario || canRunAfterGoogleReconnect || canOpenGoogleAccessReconnect || canOpenGoogleSheetsSetup ? (
             <Button
               type="button"
-              variant={canContinue || pendingApproval && !canRebuildScenario && !canOpenGoogleSheetsSetup ? 'outline' : 'default'}
+              variant="outline"
               className="min-h-10 whitespace-nowrap active:scale-[0.96] transition-transform"
               onClick={handleRerun}
               disabled={actionLoading}
             >
-              {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : canCloneAgent ? <Copy className="mr-2 h-4 w-4" /> : canRunAfterGoogleReconnect ? <Play className="mr-2 h-4 w-4" /> : canOpenGoogleAccessReconnect || canOpenGoogleSheetsSetup ? <Database className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : canRunAfterGoogleReconnect ? <Play className="mr-2 h-4 w-4" /> : canOpenGoogleAccessReconnect || canOpenGoogleSheetsSetup ? <Database className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               {rerunLabel}
             </Button>
           ) : null}
-          {estimatedRunCredits && nextAction && ['run_work', 'run_test'].includes(nextAction.kind) ? (
+          {estimatedRunCredits ? (
             <div className="w-full text-right text-xs font-medium tabular-nums text-slate-500">
-              Следующий запуск: примерно {estimatedRunCredits} {estimatedRunCredits === 1 ? 'кредит' : estimatedRunCredits < 5 ? 'кредита' : 'кредитов'}
+              Повтор: примерно {estimatedRunCredits} {estimatedRunCredits === 1 ? 'кредит' : estimatedRunCredits < 5 ? 'кредита' : 'кредитов'}
             </div>
           ) : null}
           {activeRun?.id ? (
@@ -1299,7 +1280,7 @@ export const EmployeeTestResultPanel = ({
           <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
             {result.state === 'blocker' ? 'Что мешает продолжить' : 'Подготовленный результат'}
           </div>
-          <HumanResultView result={result.resultPayload} />
+          <HumanResultView result={result.resultPayload} resultState={activeRun?.result_state} />
           {needsScenarioRebuild ? (
             <div className="mt-3 rounded-xl bg-white px-3 py-3 text-sm leading-6 text-amber-950 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.18)]">
               Этот агент создан старой версией сценария: в нём нет шага чтения Google Sheets. Пересоберите сценарий, и LocalOS сразу запустит тест по новой версии.
@@ -1483,15 +1464,10 @@ export const AgentExecutionModePanel = ({
           Время
           <input type="time" value={time} onChange={(event) => onTimeChange(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none" />
         </label>
-        <label className="text-sm font-medium text-slate-800">
+        <div className="text-sm font-medium text-slate-800">
           Часовой пояс
-          <select value={timezone} onChange={(event) => onTimezoneChange(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none">
-            <option value="Europe/Tallinn">Tallinn</option>
-            <option value="Europe/Moscow">Москва</option>
-            <option value="Europe/Helsinki">Helsinki</option>
-            <option value="Europe/Riga">Riga</option>
-          </select>
-        </label>
+          <TimezoneSelect value={timezone} onChange={onTimezoneChange} className="mt-1" />
+        </div>
       </div>
     ) : null}
     <Button type="button" className="mt-4 min-h-10 active:scale-[0.96] transition-transform" onClick={onSave} disabled={actionLoading || (mode === 'scheduled' && (!time || !timezone))}>
@@ -1532,19 +1508,10 @@ export const AgentScheduleSetupPanel = ({
           className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 text-sm text-slate-950 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none focus:shadow-[inset_0_0_0_2px_rgba(249,115,22,0.65)]"
         />
       </label>
-      <label className="block text-sm font-medium text-amber-950">
+      <div className="block text-sm font-medium text-amber-950">
         Часовой пояс
-        <select
-          value={timezone}
-          onChange={(event) => onTimezoneChange(event.target.value)}
-          className="mt-1 min-h-10 w-full rounded-lg bg-white px-3 text-sm text-slate-950 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none focus:shadow-[inset_0_0_0_2px_rgba(249,115,22,0.65)]"
-        >
-          <option value="Europe/Tallinn">Tallinn</option>
-          <option value="Europe/Moscow">Москва</option>
-          <option value="Europe/Helsinki">Helsinki</option>
-          <option value="Europe/Riga">Riga</option>
-        </select>
-      </label>
+        <TimezoneSelect value={timezone} onChange={onTimezoneChange} className="mt-1 focus-visible:ring-2 focus-visible:ring-orange-400" />
+      </div>
       <Button type="button" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onSave} disabled={actionLoading || !time || !timezone}>
         {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Clock3 className="mr-2 h-4 w-4" />}
         Сохранить расписание
@@ -1646,6 +1613,7 @@ export const EmployeeAgentOverviewPanel = ({
   onPrimaryAction,
   onCloneAgent,
   onOpenAdvanced,
+  onOpenResults,
 }: {
   blueprint: AgentBlueprint;
   details: AgentBlueprintDetails | null;
@@ -1656,6 +1624,7 @@ export const EmployeeAgentOverviewPanel = ({
   onPrimaryAction: () => void;
   onCloneAgent: () => void;
   onOpenAdvanced: () => void;
+  onOpenResults: () => void;
 }) => {
   const story = buildEmployeeWorkspaceStory(blueprint, details, pendingApproval);
   const latestRun = details?.runs?.[0] || null;
@@ -1670,6 +1639,21 @@ export const EmployeeAgentOverviewPanel = ({
     : action.kind === 'run_work'
       ? estimatedAgentRunCredits(details)
       : 0;
+  const goal = String(
+    details?.execution_contract?.original_request
+    || details?.execution_contract?.active?.goal
+    || details?.execution_contract?.candidate?.goal
+    || buildEmployeeDescription(blueprint, details),
+  );
+  const tested = Boolean(details?.execution_contract?.candidate?.validation?.tested);
+  const enabled = Boolean(details?.execution_contract?.active?.version_id && blueprint.status === 'active');
+  const hasWorkRun = Boolean((details?.runs || []).some((run) => run.input_json?.preview_mode === false && run.status === 'completed'));
+  const lifecycle = [
+    { label: 'Описан', done: true },
+    { label: 'Проверен', done: tested },
+    { label: 'Включён', done: enabled },
+    { label: 'Работает', done: hasWorkRun || story.state === 'working' },
+  ];
   return (
     <div className={cn('space-y-4', healthy ? 'max-w-4xl' : 'max-w-5xl')}>
       <section className={cn(
@@ -1703,12 +1687,6 @@ export const EmployeeAgentOverviewPanel = ({
               {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : action.kind === 'connect' ? <Database className="mr-2 h-4 w-4" /> : action.kind === 'approve' ? <ShieldCheck className="mr-2 h-4 w-4" /> : action.kind === 'enable' ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
               {action.label}
             </Button>
-            {action.secondaryAction === 'clone_agent' ? (
-              <Button type="button" variant="outline" className="mt-2 min-h-10 w-full active:scale-[0.96] transition-transform" onClick={onCloneAgent} disabled={actionLoading}>
-                <Copy className="mr-2 h-4 w-4" />
-                Создать копию агента
-              </Button>
-            ) : null}
             {actionCredits ? (
               <div className="mt-2 text-center text-xs font-medium tabular-nums text-slate-500">
                 Примерно {actionCredits} {actionCredits === 1 ? 'кредит' : actionCredits < 5 ? 'кредита' : 'кредитов'} за запуск
@@ -1716,18 +1694,34 @@ export const EmployeeAgentOverviewPanel = ({
             ) : null}
           </div>
         </div>
+        <details className="mt-4 border-t border-slate-100 pt-3">
+          <summary className="cursor-pointer text-sm font-medium text-slate-500 hover:text-slate-900">Другие действия</summary>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" variant="outline" className="min-h-10" onClick={onCloneAgent} disabled={actionLoading}>
+              <Copy className="mr-2 h-4 w-4" />
+              Создать копию агента
+            </Button>
+            <Button type="button" variant="outline" className="min-h-10" onClick={onOpenAdvanced}>
+              Открыть настройки
+            </Button>
+          </div>
+        </details>
       </section>
 
-      <EmployeeWorkspaceSection title="Что сотрудник делает">
-        <EmployeeResponsibilitiesList items={story.responsibilities} />
-        <div className="mt-3 rounded-xl bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-600 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
-          <span className="font-semibold text-slate-800">{userMode.flow}.</span> {userMode.description}
-        </div>
+      <EmployeeWorkspaceSection title="Цель агента">
+        <p className="whitespace-pre-wrap text-base leading-7 text-slate-800 [text-wrap:pretty]">{goal}</p>
       </EmployeeWorkspaceSection>
 
-      <EmployeeWorkspaceSection title="Как запускается" tone={story.state === 'error' ? 'error' : problem ? 'attention' : 'quiet'}>
-        <div className="text-base font-semibold leading-7 text-slate-950">{userMode.label}</div>
-        <div className="mt-1 text-sm leading-6 opacity-75">{userMode.description}</div>
+      <EmployeeWorkspaceSection title="Готовность процесса" tone={problem ? 'attention' : 'quiet'}>
+        <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {lifecycle.map((item) => (
+            <li key={item.label} className={cn('flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium ring-1', item.done ? 'bg-emerald-50 text-emerald-900 ring-emerald-200' : 'bg-slate-50 text-slate-500 ring-slate-200')}>
+              {item.done ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <span className="h-2 w-2 shrink-0 rounded-full bg-slate-300" />}
+              {item.label}
+            </li>
+          ))}
+        </ol>
+        <div className="mt-3 text-sm leading-6 text-slate-600"><span className="font-semibold text-slate-800">{userMode.label}.</span> {userMode.description}</div>
       </EmployeeWorkspaceSection>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -1741,8 +1735,9 @@ export const EmployeeAgentOverviewPanel = ({
 
       {latestResult ? (
         <EmployeeWorkspaceSection title="Последний результат" tone="default">
-          <div className="rounded-2xl bg-slate-50 px-4 py-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
-            <HumanResultView result={latestResult} />
+          <div className="rounded-xl bg-slate-50 px-4 py-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+            <p className="line-clamp-3 text-sm leading-6 text-slate-700">{businessResultPrimaryText(latestResult) || 'Результат сохранён и доступен в истории запуска.'}</p>
+            <Button type="button" variant="outline" className="mt-3 min-h-10" onClick={onOpenResults}>Открыть результат</Button>
           </div>
         </EmployeeWorkspaceSection>
       ) : details?.runs?.[0]?.status === 'completed' ? (
@@ -1766,14 +1761,78 @@ export const EmployeeAgentOverviewPanel = ({
         </EmployeeWorkspaceSection>
       ) : null}
 
-      <details className="rounded-2xl bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.08)]">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-700">Расширенные настройки</summary>
-        <div className="mt-4">
-          <Button type="button" variant="outline" className="min-h-10 active:scale-[0.96] transition-transform" onClick={onOpenAdvanced}>
-            Открыть настройки
-          </Button>
+    </div>
+  );
+};
+
+export const EmployeeAgentScenarioPanel = ({
+  blueprint,
+  details,
+}: {
+  blueprint: AgentBlueprint;
+  details: AgentBlueprintDetails | null;
+}) => {
+  const contract = details?.execution_contract;
+  const working = contract?.active || contract?.candidate;
+  const inputs = Object.entries(working?.inputs_schema?.properties || {});
+  const approvals = working?.approval_boundaries || [];
+  const expectedProperties = recordValue(working?.expected_result?.properties);
+  const resultFields = Object.keys(expectedProperties || working?.expected_result || {}).filter((key) => !['schema', 'trigger', 'schedule', 'type', 'properties'].includes(key));
+  const sourceLabels = (working?.sources || []).map((source) => {
+    if (typeof source === 'string') return connectorLabel(source);
+    const item = recordValue(source);
+    return connectorLabel(String(item?.label || item?.provider || item?.key || 'Источник данных'));
+  });
+  const connectionLabels = Object.keys(working?.connections || {}).map((key) => connectorLabel(key));
+  const sources = Array.from(new Set([...sourceLabels, ...connectionLabels]));
+  const mode = buildAgentUserMode(blueprint, details);
+  return (
+    <div className="space-y-4 max-w-5xl">
+      {contract?.has_unpublished_changes ? (
+        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950 ring-1 ring-amber-200">
+          <div className="font-semibold">Есть изменения на проверке</div>
+          <div>Тест использует новую версию. Рабочие запуски продолжат использовать прежнюю, пока вы явно не включите изменения.</div>
         </div>
-      </details>
+      ) : null}
+      <EmployeeWorkspaceSection title="Исходное поручение">
+        <p className="whitespace-pre-wrap text-base leading-7 text-slate-800 [text-wrap:pretty]">{contract?.original_request || blueprint.description || 'Полное поручение не сохранилось у этого старого агента.'}</p>
+        {!contract?.description_complete ? <p className="mt-2 text-sm text-amber-800">Описание собрано из старой версии и может быть неполным.</p> : null}
+      </EmployeeWorkspaceSection>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <EmployeeWorkspaceSection title="Рабочая цель">
+          <p className="text-sm leading-6 text-slate-700">{working?.goal || blueprint.active_goal || blueprint.latest_goal || blueprint.description}</p>
+        </EmployeeWorkspaceSection>
+        <EmployeeWorkspaceSection title="Когда запускается">
+          <div className="text-sm font-semibold text-slate-900">{mode.label}</div>
+          <div className="mt-1 text-sm leading-6 text-slate-600">{working?.schedule?.time ? `${working.schedule.time} · ${working.schedule.timezone}` : mode.description}</div>
+        </EmployeeWorkspaceSection>
+      </div>
+      <EmployeeWorkspaceSection title="Источники и доступы">
+        {sources.length ? <div className="flex flex-wrap gap-2">{sources.map((source) => <span key={source} className="rounded-full bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 ring-1 ring-sky-200">{source}</span>)}</div> : <p className="text-sm text-slate-600">Агент использует данные LocalOS и введённые параметры.</p>}
+      </EmployeeWorkspaceSection>
+      <EmployeeWorkspaceSection title="Как выполняется">
+        <div className="grid gap-2">
+          {(working?.steps || []).map((step, index) => (
+            <div key={step.key || index} className="flex min-h-12 items-center gap-3 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">{index + 1}</span>
+              <span className="text-sm font-medium text-slate-800">{step.title || `Шаг ${index + 1}`}</span>
+              {step.requires_approval ? <span className="ml-auto text-xs font-medium text-amber-700">Попросит решение</span> : null}
+            </div>
+          ))}
+          {!working?.steps?.length ? <p className="text-sm text-amber-800">Для старой версии нет полного списка шагов. Пересоберите сценарий перед включением.</p> : null}
+        </div>
+      </EmployeeWorkspaceSection>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <EmployeeWorkspaceSection title="Что получает на вход">
+          {inputs.length ? <ul className="space-y-2 text-sm text-slate-700">{inputs.map(([key, field]) => <li key={key}><span className="font-semibold text-slate-900">{field.title || key}</span>{field.description ? ` — ${field.description}` : ''}</li>)}</ul> : <p className="text-sm text-slate-600">Дополнительные параметры не требуются.</p>}
+        </EmployeeWorkspaceSection>
+        <EmployeeWorkspaceSection title="Что сохраняет">
+          <p className="text-sm leading-6 text-slate-700">{resultFields.length ? resultFields.map((key) => resultFieldLabels[key] || humanizeMeta(key)).join(', ') : 'Готовый результат и историю выполненных шагов.'}</p>
+        </EmployeeWorkspaceSection>
+      </div>
+      <EmployeeWorkspaceSection title="Ручной контроль" tone={approvals.length ? 'attention' : 'quiet'}>
+        <p className="text-sm leading-6 text-slate-700">{approvals.length ? `Агент остановится перед: ${approvals.map((item) => item.title || 'внешним действием').join(', ')}.` : 'Сценарий не выполняет внешние действия без отдельного подтверждения.'}</p>
+      </EmployeeWorkspaceSection>
     </div>
   );
 };

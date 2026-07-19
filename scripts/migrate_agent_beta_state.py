@@ -20,6 +20,16 @@ def build_plan(cursor) -> dict:
     cursor.execute(
         """
         SELECT COUNT(*) AS count
+        FROM agent_runs r
+        JOIN agent_blueprints b ON b.id = r.blueprint_id
+        WHERE b.status = 'archived'
+          AND r.status IN ('queued', 'retry_wait', 'waiting_approval')
+        """
+    )
+    archived_unfinished_runs = int((cursor.fetchone() or {}).get("count") or 0)
+    cursor.execute(
+        """
+        SELECT COUNT(*) AS count
         FROM agent_blueprints
         WHERE COALESCE(metadata_json->>'execution_mode', '') NOT IN ('one_off', 'manual', 'scheduled')
         """
@@ -36,6 +46,7 @@ def build_plan(cursor) -> dict:
     unsafe_active = int((cursor.fetchone() or {}).get("count") or 0)
     return {
         "archived_pending_approvals": archived_pending,
+        "archived_unfinished_runs": archived_unfinished_runs,
         "legacy_blueprints_without_explicit_mode": legacy_without_mode,
         "active_legacy_blueprints_to_pause": unsafe_active,
     }
@@ -56,6 +67,22 @@ def apply_plan(cursor) -> dict:
         """
     )
     approvals_updated = int(cursor.rowcount or 0)
+    cursor.execute(
+        """
+        UPDATE agent_runs r
+        SET status = 'superseded',
+            completed_at = COALESCE(completed_at, NOW()),
+            heartbeat_at = NULL,
+            next_attempt_at = NULL,
+            error_text = COALESCE(error_text, 'Archived agent run closed during Agents beta reconciliation'),
+            updated_at = NOW()
+        FROM agent_blueprints b
+        WHERE r.blueprint_id = b.id
+          AND b.status = 'archived'
+          AND r.status IN ('queued', 'retry_wait', 'waiting_approval')
+        """
+    )
+    runs_superseded = int(cursor.rowcount or 0)
     cursor.execute(
         """
         UPDATE agent_blueprints
@@ -96,6 +123,7 @@ def apply_plan(cursor) -> dict:
     active_paused = int(cursor.rowcount or 0)
     return {
         "approvals_superseded": approvals_updated,
+        "archived_runs_superseded": runs_superseded,
         "suggested_modes_written": suggestions_updated,
         "active_legacy_blueprints_paused": active_paused,
     }

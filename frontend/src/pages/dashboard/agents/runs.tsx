@@ -11,6 +11,7 @@ import {
   Copy,
   Database,
   Download,
+  ExternalLink,
   FileCheck2,
   FileText,
   LifeBuoy,
@@ -798,69 +799,274 @@ export const toRecordOrNull = (value: unknown): Record<string, unknown> | null =
   return Object.fromEntries(Object.entries(value));
 };
 
-export const HumanResultView = ({ result }: { result: Record<string, unknown> }) => {
+type HumanResultPrimaryItem = {
+  label: string;
+  text: string;
+  context?: string;
+};
+
+const nonEmptyText = (value: unknown) => String(value || '').trim();
+
+const resultReplyDraftValues = (result: Record<string, unknown>): unknown[] => {
+  if (Array.isArray(result.reply_drafts)) return result.reply_drafts;
+  return toRecordOrNull(result.reply_drafts) ? [result.reply_drafts] : [];
+};
+
+const resultPrimaryItems = (result: Record<string, unknown>): HumanResultPrimaryItem[] => {
+  const replyDrafts = resultReplyDraftValues(result);
+  const replies = replyDrafts.flatMap((value, index) => {
+    if (typeof value === 'string' && value.trim()) {
+      return [{
+        label: replyDrafts.length > 1 ? `Готовый ответ ${index + 1}` : 'Готовый ответ',
+        text: value.trim(),
+      }];
+    }
+    const item = toRecordOrNull(value);
+    if (!item) return [];
+    const text = nonEmptyText(item.reply || item.draft_text || item.text || item.message || item.body);
+    if (!text) return [];
+    const context = nonEmptyText(item.review_text || item.review || item.recipient || item.author_name);
+    return [{
+      label: replyDrafts.length > 1 ? `Готовый ответ ${index + 1}` : 'Готовый ответ',
+      text,
+      context: context ? `Для: ${context}` : undefined,
+    }];
+  });
+  if (replies.length) return replies;
+
+  const directCandidates = [
+    { key: 'post_text', label: 'Готовый текст поста' },
+    { key: 'draft_text', label: 'Готовый черновик' },
+    { key: 'reply', label: 'Готовый ответ' },
+    { key: 'body', label: 'Готовое письмо' },
+    { key: 'message', label: 'Готовое сообщение' },
+    { key: 'text', label: 'Готовый результат' },
+  ];
+  for (const candidate of directCandidates) {
+    const text = nonEmptyText(result[candidate.key]);
+    if (!text) continue;
+    const subject = candidate.key === 'body' ? nonEmptyText(result.subject) : '';
+    return [{ label: candidate.label, text, context: subject ? `Тема: ${subject}` : undefined }];
+  }
+  return [];
+};
+
+const resultDestination = (result: Record<string, unknown>) => {
+  const savedDestination = toRecordOrNull(result.saved_destination) || {};
+  const urlKeys = ['content_plan_url', 'localos_url', 'result_url', 'item_url', 'message_url', 'telegram_url', 'url'];
+  let url = '';
+  for (const key of urlKeys) {
+    url = nonEmptyText(savedDestination[key] || result[key]);
+    if (url) break;
+  }
+  if (url && !url.startsWith('/') && !url.startsWith('https://') && !url.startsWith('http://')) {
+    url = '';
+  }
+  const status = nonEmptyText(savedDestination.status || result.destination_status || result.status).toLowerCase();
+  const provider = nonEmptyText(savedDestination.provider || result.provider).toLowerCase();
+  const externalDispatchPerformed = result.external_dispatch_performed === true || savedDestination.external_dispatch_performed === true;
+  const localWritePerformed = result.localos_write_performed === true || savedDestination.localos_write_performed === true;
+  const isContentPlan = Boolean(savedDestination.content_plan_url) || url.includes('/dashboard/content');
+  const isReviews = url.includes('/dashboard/card') && url.includes('tab=reviews');
+  const isTelegram = provider === 'telegram' || url.includes('t.me/') || url.includes('telegram');
+  const isSaved = status === 'draft_saved' || localWritePerformed || Boolean(url && !isTelegram);
+
+  if (status === 'needs_future_date') {
+    return {
+      tone: 'warning',
+      title: 'Результат пока не сохранён',
+      detail: nonEmptyText(savedDestination.message) || 'Выберите новую дату для сохранения результата.',
+      url: '',
+      cta: '',
+    };
+  }
+  if (isContentPlan) {
+    return {
+      tone: 'success',
+      title: 'Черновик сохранён в контент-план',
+      detail: nonEmptyText(savedDestination.scheduled_for) ? `Дата: ${nonEmptyText(savedDestination.scheduled_for)}` : 'Результат находится в разделе «Контент».',
+      url,
+      cta: 'Открыть в контент-плане',
+    };
+  }
+  if (isReviews) {
+    return {
+      tone: 'success',
+      title: 'Черновик сохранён в разделе «Отзывы»',
+      detail: 'Публикация не выполнялась. Проверьте ответ перед использованием.',
+      url,
+      cta: 'Открыть отзывы',
+    };
+  }
+  if (isTelegram && externalDispatchPerformed) {
+    return {
+      tone: 'success',
+      title: 'Сообщение отправлено в Telegram',
+      detail: 'Отправка выполнена после подтверждения.',
+      url,
+      cta: 'Открыть сообщение',
+    };
+  }
+  if (isTelegram) {
+    return {
+      tone: 'neutral',
+      title: 'Сообщение подготовлено, но не отправлено',
+      detail: 'Проверьте текст перед отправкой в Telegram.',
+      url,
+      cta: url ? 'Открыть черновик' : '',
+    };
+  }
+  if (isSaved) {
+    return {
+      tone: 'success',
+      title: 'Результат сохранён в LocalOS',
+      detail: 'Откройте запись, чтобы продолжить работу с результатом.',
+      url,
+      cta: url ? 'Открыть сохранённый результат' : '',
+    };
+  }
+  return null;
+};
+
+export const HumanResultView = ({
+  result,
+  resultState,
+}: {
+  result: Record<string, unknown>;
+  resultState?: 'missing' | 'prepared' | 'saved' | 'blocked';
+}) => {
   const savedDestination = toRecordOrNull(result.saved_destination);
-  const destinationStatus = String(savedDestination?.status || '');
-  const contentPlanUrl = String(savedDestination?.content_plan_url || '');
-  const entries = Object.entries(result).filter(([key, value]) => key !== 'saved_destination' && value !== '' && value !== null && value !== undefined);
-  const priorityKeys = [
-    'title',
-    'draft_text',
-    'post_text',
-    'message',
-    'text',
+  const destinationStatus = String(savedDestination?.status || '').toLowerCase();
+  const primaryItems = resultPrimaryItems(result);
+  const destination = resultDestination(result);
+  const technicalKeys = new Set([
+    'status', 'schema', 'provider', 'capability', 'trace_id', 'run_id', 'step_id', 'source_run_id',
+    'external_dispatch_performed', 'dispatch_state', 'raw', 'payload', 'metadata', 'sentiment',
+    'localos_write_performed', 'provider_write_performed', 'destination_status',
+    'content_plan_url', 'localos_url', 'result_url', 'item_url', 'message_url', 'telegram_url', 'url',
+  ]);
+  const hasBusinessValue = (key: string, value: unknown) => {
+    if (key === 'sentiment' && String(value || '').toLowerCase() === 'unknown') return false;
+    if (technicalKeys.has(key) || key.endsWith('_json') || key.endsWith('_id')) return false;
+    return value !== '' && value !== null && value !== undefined;
+  };
+  const consumedKeys = new Set([
+    'saved_destination', 'title', 'draft_text', 'post_text', 'reply', 'message', 'text', 'body', 'subject',
+    'reply_drafts', 'manual_review_reasons', 'manual_review_reason', 'rules_applied',
+    'preparation_method', 'summary', 'risks', 'facts', 'fields', 'next_questions', 'checklist', 'exceptions',
+    'rows_to_review', 'recommendations', 'provenance', 'delivery_state', 'publish_state',
+  ]);
+  const entries = Object.entries(result).filter(([key, value]) => !consumedKeys.has(key) && hasBusinessValue(key, value));
+  const secondaryKeys = [
     'preparation_method',
     'summary',
     'risks',
     'facts',
     'fields',
     'next_questions',
-    'subject',
-    'body',
     'checklist',
     'exceptions',
     'rows_to_review',
     'recommendations',
-    'reply_drafts',
-    'manual_review_reasons',
-    'rules_applied',
     'provenance',
     'delivery_state',
     'publish_state',
   ];
-  const priorityEntries = priorityKeys
+  const secondaryEntries = secondaryKeys
     .map((key) => ({ key, value: result[key] }))
-    .filter((entry) => entry.value !== '' && entry.value !== null && entry.value !== undefined);
+    .filter((entry) => hasBusinessValue(entry.key, entry.value));
+  const nestedReviewReasons = resultReplyDraftValues(result)
+    .map((value) => toRecordOrNull(value))
+    .map((value) => nonEmptyText(value?.manual_review_reason))
+    .filter(Boolean);
+  const reviewReason = nonEmptyText(result.manual_review_reason)
+    || (Array.isArray(result.manual_review_reasons) ? result.manual_review_reasons.map(nonEmptyText).filter(Boolean).join(' ') : '')
+    || nestedReviewReasons.join(' ');
+  const resultTitle = nonEmptyText(result.title);
   return (
-    <div className="space-y-2">
-      {destinationStatus === 'draft_saved' ? (
-        <div className="rounded-lg bg-emerald-50 px-3 py-3 text-sm leading-6 text-emerald-950 shadow-[inset_0_0_0_1px_rgba(5,150,105,0.18)]">
-          <div className="font-semibold">Черновик сохранён в контент-план</div>
-          <div className="mt-1">Дата: {String(savedDestination?.scheduled_for || '')}</div>
-          {contentPlanUrl ? <a className="mt-2 inline-flex min-h-10 items-center font-semibold text-emerald-800 underline" href={contentPlanUrl}>Открыть контент-план</a> : null}
+    <div className="space-y-4">
+      {resultTitle ? <div className="text-sm font-semibold text-slate-700">{resultTitle}</div> : null}
+
+      {primaryItems.length ? (
+        <section className="overflow-hidden rounded-xl bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.1)]">
+          {primaryItems.map((item, index) => (
+            <div key={`${item.label}-${index}`} className={cn('px-4 py-4 sm:px-5', index > 0 && 'border-t border-slate-100')}>
+              <div className="text-xs font-semibold uppercase text-emerald-700">{item.label}</div>
+              {item.context ? <div className="mt-2 text-xs leading-5 text-slate-500">{item.context}</div> : null}
+              <div className="mt-2 whitespace-pre-wrap text-base font-medium leading-7 text-slate-950 [text-wrap:pretty]">{item.text}</div>
+            </div>
+          ))}
+        </section>
+      ) : null}
+
+      {destination ? (
+        <div className={cn(
+          'rounded-xl px-4 py-3 text-sm leading-6 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]',
+          destination.tone === 'success' && 'bg-emerald-50 text-emerald-950',
+          destination.tone === 'warning' && 'bg-amber-50 text-amber-950',
+          destination.tone === 'neutral' && 'bg-sky-50 text-slate-900',
+        )}>
+          <div className="font-semibold">{destination.title}</div>
+          <div className="mt-1">{destination.detail}</div>
+          {destination.url && destination.cta ? (
+            <a className="mt-2 inline-flex min-h-10 items-center gap-2 font-semibold underline underline-offset-4" href={destination.url} target={destination.url.startsWith('http') ? '_blank' : undefined} rel={destination.url.startsWith('http') ? 'noreferrer' : undefined}>
+              {destination.cta}
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          ) : null}
         </div>
       ) : null}
-      {destinationStatus === 'needs_future_date' ? (
-        <div className="rounded-lg bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-950 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.2)]">
-          <div className="font-semibold">Выберите новую дату</div>
-          <div className="mt-1">{String(savedDestination?.message || 'Указанная дата контент-плана уже прошла.')}</div>
+
+      {!destination && primaryItems.length && resultState ? (
+        <div className="rounded-xl bg-slate-100 px-4 py-3 text-sm leading-6 text-slate-700">
+          {resultState === 'saved'
+            ? 'Результат сохранён в истории этой работы.'
+            : resultState === 'blocked'
+              ? 'Результат подготовлен, но следующий шаг остановлен до вашего решения.'
+              : 'Результат подготовлен и сохранён в истории. Наружу ничего не отправлялось.'}
         </div>
       ) : null}
-      {priorityEntries.slice(0, 6).map(({ key, value }) => (
-        <div key={key} className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{resultFieldLabels[key] || humanizeMeta(key)}</div>
-          <div className="mt-1 text-slate-700">{formatPayloadValue(value)}</div>
+
+      {reviewReason ? (
+        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.18)]">
+          <div className="font-semibold">Проверьте перед использованием</div>
+          <div className="mt-1">{reviewReason}</div>
         </div>
-      ))}
-      {priorityEntries.length ? null : (
-        <div className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
-          {entries.slice(0, 5).map(([key, value]) => (
-            <div key={key} className="mt-1 first:mt-0">
-              <span className="font-medium text-slate-950">{humanizeMeta(key)}:</span> {formatPayloadValue(value)}
+      ) : null}
+
+      {secondaryEntries.length ? (
+        <div className="divide-y divide-slate-100 rounded-xl bg-white px-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+          {secondaryEntries.slice(0, 5).map(({ key, value }) => (
+            <div key={key} className="py-3">
+              <div className="text-xs font-semibold uppercase text-slate-500">{resultFieldLabels[key] || humanizeMeta(key)}</div>
+              <div className="mt-1 text-sm leading-6 text-slate-700">{formatPayloadValue(value)}</div>
             </div>
           ))}
         </div>
+      ) : null}
+
+      {primaryItems.length ? null : entries.length ? (
+        <div className="rounded-xl bg-white px-4 py-3 text-sm leading-6 text-slate-700 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+          {entries.slice(0, 5).map(([key, value]) => (
+            <div key={key} className="mt-2 first:mt-0">
+              <span className="font-semibold text-slate-950">{humanizeMeta(key)}:</span> {formatPayloadValue(value)}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {primaryItems.length || entries.length || destinationStatus === 'needs_future_date' ? null : (
+        <div className="rounded-xl bg-white px-4 py-3 text-sm leading-6 text-slate-600 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+          Агент завершил шаги, но не сохранил отдельный бизнес-результат. Откройте технические детали запуска для диагностики.
+        </div>
       )}
+
+      {result.rules_applied ? (
+        <details>
+          <summary className="min-h-10 cursor-pointer py-2 text-sm font-medium text-slate-500 hover:text-slate-900">Как агент подготовил результат</summary>
+          <div className="pb-2 text-sm leading-6 text-slate-600">{formatPayloadValue(result.rules_applied)}</div>
+        </details>
+      ) : null}
     </div>
   );
 };

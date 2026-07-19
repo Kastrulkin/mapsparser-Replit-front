@@ -17,6 +17,7 @@ The safe pattern is:
 - Request or inspect controlled actions: service suggestion apply, service grouping apply/rollback, finance apply, map refresh jobs, partnership batch approvals and manual-publication status.
 - Use Operator surfaces to answer "what needs attention today?" and route the user to review/content/service/partnership/finance actions.
 - Work through configured Telegram/WhatsApp webhooks and owner-bot control surfaces when the business has the required settings and scopes.
+- Create and run `one_off` or `manual` Agents through a compiled `AgentBlueprint`, with typed inputs, candidate preview, explicit activation, durable run history and normalized business results.
 - Help superadmin review internal proposals such as industry-pattern recalibration, while respecting privileged/admin boundaries.
 
 Every account should also have a visible starter pack of common draft examples.
@@ -45,8 +46,45 @@ Current capability areas:
 | Finance | `available/beta` | read KPIs, prepare import previews/proposals, apply only approved rows | money/billing/payment-related operations require approval |
 | Partnerships and outreach | `beta` | search/import leads, classify fit, draft offers, prepare approval-ready batches | sending is capped, approved, and never implied by draft generation |
 | Operator | `beta` | use attention briefs, action cards, refresh status, draft helpers and Telegram parity | same approval, billing and audit policy as dashboard workflows |
-| User-created Agents | `beta` | one-off/manual read, draft and safe internal-draft runs through AgentBlueprint | async runs and scheduler are cohort-flagged; external actions remain behind approval |
+| User-created Agents | `beta` | one-off/manual read, draft and safe internal-draft runs through AgentBlueprint; typed parameters, version activation/rollback and queued execution are implemented | async runtime is limited to three beta businesses; scheduler lacks a production canary; external actions remain behind approval |
 | Public MCP server | `gap` | do not claim MCP availability | only documented static manifests/OpenAPI aliases are available |
+
+## Compiled Agents Runtime
+
+There is one product called `Agents`. The natural-language builder is the
+simple user surface; it compiles every executable agent into a versioned
+`AgentBlueprint`. `AIAgents` supplies persona/voice for legacy chat scenarios
+and is not a parallel workflow runtime.
+
+Current runtime guarantees:
+
+- explicit `one_off`, `manual` or `scheduled` execution mode;
+- candidate version for preview and active version for reusable work;
+- user parameters derived from `inputs_schema_json` and validated again by the
+  backend;
+- idempotent enqueue and one active queued/running/retry run per blueprint in
+  the admitted async cohort;
+- worker heartbeat, transient retry and browser-independent polling;
+- free preview and a two-credit production reservation with actual settlement;
+- `business_result` and approvals bound to the exact run;
+- a computed execution contract that exposes the original request, candidate
+  and active scenario, saved ordered steps, inputs, result and approval stops;
+- server-derived run progress that survives page reload and never marks a step
+  complete before the durable step journal does;
+- external sends, publication, payments and destructive writes remain separate
+  approved actions.
+
+The product UI uses four user-facing sections: Overview, History, Scenario and
+Settings. Overview owns the single next action and only previews the latest
+result; the complete result belongs to a specific run in History. Scenario is
+the readable projection of the compiled version, not an editable parallel
+workflow.
+
+The certified beta catalog currently allows read, draft and safe internal-draft
+capabilities. Request-only writes can be represented and reviewed, but they do
+not make a workflow eligible for autonomous activation. See
+[Compiled AI Architecture v1](../LOCALOS_COMPILED_AI_ARCHITECTURE_V1.md) for
+the exact runtime and rollout status.
 
 ## LocalOS Operator
 
@@ -89,6 +127,8 @@ The Operator model keeps one context, one permission system, one credit/usage le
 - [Planning and goal loops](planning-and-goals.md)
 - [Agent use cases](use-cases.md)
 - [Popular account examples](popular-account-examples.md)
+- [Google Sheets reference agent](google-sheets-reference-agent.md)
+- [Compiled AI architecture](../LOCALOS_COMPILED_AI_ARCHITECTURE_V1.md)
 - [Approval policy](approval-policy.md)
 - [Agent API security model](security-model.md)
 - [API endpoints](../api/endpoints.md)

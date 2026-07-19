@@ -302,6 +302,15 @@ export type AgentRun = {
   business_result?: Record<string, unknown>;
   result_state?: 'missing' | 'prepared' | 'saved' | 'blocked';
   current_approval?: AgentApproval | null;
+  progress?: {
+    state?: string;
+    total_steps?: number;
+    completed_steps?: number;
+    current_step_index?: number;
+    current_step_key?: string;
+    current_step_status?: string;
+    percent?: number;
+  };
 };
 
 export type AgentRunInputField = {
@@ -429,10 +438,50 @@ export type AgentBlueprintDetails = {
   next_run_at?: string | null;
   learning_events?: AgentLearningEvent[];
   version_events?: AgentVersionEvent[];
+  lifecycle_events?: Array<Record<string, unknown>>;
   feedback_history?: Array<Record<string, unknown>>;
   legacy_migration?: Record<string, unknown>;
   metrics?: AgentMetricsSummary;
   activation_gate?: AgentActivationGate;
+  execution_contract?: AgentExecutionContract;
+};
+
+export type AgentExecutionContractStep = {
+  key?: string;
+  position?: number;
+  title?: string;
+  step_type?: string;
+  capability?: string;
+  artifact_type?: string;
+  requires_approval?: boolean;
+  approval_type?: string;
+};
+
+export type AgentExecutionVersionContract = {
+  role?: 'candidate' | 'active';
+  version_id?: string;
+  version_number?: number;
+  goal?: string;
+  trigger?: string;
+  schedule?: { time?: string | null; timezone?: string | null; next_run_at?: string | null };
+  inputs_schema?: AgentRunInputSchema;
+  steps?: AgentExecutionContractStep[];
+  sources?: unknown[];
+  connections?: Record<string, unknown>;
+  expected_result?: Record<string, unknown>;
+  approval_boundaries?: Array<{ step_key?: string; title?: string; approval_type?: string }>;
+  validation?: { tested?: boolean; status?: string; last_test?: Record<string, unknown> | null };
+  is_active?: boolean;
+};
+
+export type AgentExecutionContract = {
+  schema?: string;
+  original_request?: string;
+  execution_mode?: AgentExecutionMode;
+  candidate?: AgentExecutionVersionContract | null;
+  active?: AgentExecutionVersionContract | null;
+  has_unpublished_changes?: boolean;
+  description_complete?: boolean;
 };
 
 export type AgentVersionDiff = {
@@ -787,7 +836,7 @@ export type LegacyMigrationPlan = {
   };
 };
 
-export type AgentWorkspaceMode = 'overview' | 'settings' | 'run' | 'results' | 'connections' | 'voice' | 'advanced';
+export type AgentWorkspaceMode = 'overview' | 'scenario' | 'settings' | 'run' | 'results' | 'connections' | 'voice' | 'advanced';
 
 export type AgentTodaySummary = {
   completedRuns: number;
@@ -838,6 +887,11 @@ export type AgentRunAnimation = {
   stepIndex: number;
   steps: string[];
   status: 'running' | 'finishing' | 'error';
+  runId?: string;
+  serverCompletedSteps?: number;
+  serverCurrentStepIndex?: number;
+  queueState?: string;
+  recoveredFromReload?: boolean;
   error?: string;
 };
 

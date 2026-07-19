@@ -91,6 +91,7 @@ const providerRouteLabel = (state: string) => ({
 const normalizeWorkspaceMode = (value: string): AgentWorkspaceMode | undefined => {
   switch (value) {
     case 'overview':
+    case 'scenario':
     case 'settings':
     case 'run':
     case 'results':

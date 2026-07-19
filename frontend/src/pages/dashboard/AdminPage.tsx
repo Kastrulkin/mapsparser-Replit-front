@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar, BookOpen } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar, BookOpen, Download, Loader2 } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
@@ -129,8 +129,62 @@ interface AdminAgentBlueprintSummary {
   low_risk: number;
 }
 
+interface AdminAgentRuntimeIssue {
+  run_id: string;
+  blueprint_id: string;
+  business_id: string;
+  agent_name: string;
+  business_name: string;
+  status: string;
+  attempt_count: number;
+  error: string;
+  updated_at?: string;
+}
+
+interface AdminAgentRuntimeOverview {
+  flags: {
+    async_runs_enabled: boolean;
+    schedule_dispatch_enabled: boolean;
+    beta_businesses_count: number;
+    queue_interval_seconds: number;
+  };
+  runs: {
+    queued: number;
+    running: number;
+    retry_wait: number;
+    waiting_approval: number;
+    stale_running: number;
+    failed_24h: number;
+    completed_24h: number;
+    billing_bound_runs: number;
+    last_run_at?: string;
+  };
+  scheduler: {
+    total_events: number;
+    events_24h: number;
+    last_event_at?: string;
+  };
+  consistency: {
+    archived_unfinished_runs: number;
+    archived_pending_approvals: number;
+    waiting_without_pending_approval: number;
+  };
+  integrations: {
+    active: number;
+    inactive: number;
+  };
+  billing: {
+    active_reservations: number;
+    reserved_credits: number;
+    charged_credits: number;
+    released_credits: number;
+  };
+  recent_issues: AdminAgentRuntimeIssue[];
+}
+
 interface AdminAgentBlueprintOverview {
   summary: AdminAgentBlueprintSummary;
+  runtime: AdminAgentRuntimeOverview;
   agents: AdminAgentBlueprint[];
 }
 
@@ -525,6 +579,7 @@ export const AdminPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [agentBlueprintOverview, setAgentBlueprintOverview] = useState<AdminAgentBlueprintOverview | null>(null);
   const [agentBlueprintLoading, setAgentBlueprintLoading] = useState(false);
+  const [downloadingAgentRunId, setDownloadingAgentRunId] = useState('');
   const [subscriptionsOverview, setSubscriptionsOverview] = useState<AdminSubscriptionsOverview | null>(null);
   const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
   const [selectedRadarBusinessId, setSelectedRadarBusinessId] = useState('');
@@ -618,6 +673,7 @@ export const AdminPage: React.FC = () => {
       if (data.success) {
         setAgentBlueprintOverview({
           summary: data.summary,
+          runtime: data.runtime,
           agents: data.agents || [],
         });
       }
@@ -654,6 +710,30 @@ export const AdminPage: React.FC = () => {
       setSubscriptionsLoading(false);
     }
   }, [toast]);
+
+  const downloadAgentSupportExport = async (runId: string) => {
+    setDownloadingAgentRunId(runId);
+    try {
+      const data = await newAuth.makeRequest(`/agent-runs/${runId}/support-export?format=json`);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `agent-run-${runId}-support.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error: unknown) {
+      toast({
+        title: 'Не удалось выгрузить диагностику',
+        description: getErrorMessage(error, 'Повторите попытку позже'),
+        variant: 'destructive',
+      });
+    } finally {
+      setDownloadingAgentRunId('');
+    }
+  };
 
   const runReloadingMutation = useCallback(async (
     request: () => Promise<unknown>,
@@ -1007,6 +1087,39 @@ export const AdminPage: React.FC = () => {
     { label: 'Высокий риск', value: String(agentSummary?.high_risk || 0), tone: 'warning' },
     { label: 'Средний риск', value: String(agentSummary?.medium_risk || 0), tone: 'warning' },
     { label: 'Активные', value: String(agentSummary?.active || 0), tone: 'positive' },
+  ];
+  const agentRuntime = agentBlueprintOverview?.runtime;
+  const agentRuntimeIssues = Number(agentRuntime?.runs.stale_running || 0)
+    + Number(agentRuntime?.runs.failed_24h || 0)
+    + Number(agentRuntime?.consistency.archived_unfinished_runs || 0)
+    + Number(agentRuntime?.consistency.waiting_without_pending_approval || 0);
+  const agentRuntimeMetrics = [
+    {
+      label: 'В очереди и работе',
+      value: String(Number(agentRuntime?.runs.queued || 0) + Number(agentRuntime?.runs.running || 0)),
+      hint: `${agentRuntime?.runs.retry_wait || 0} ожидают повтора`,
+      tone: agentRuntime?.runs.stale_running ? 'warning' : 'default',
+    },
+    {
+      label: 'Завершено за сутки',
+      value: String(agentRuntime?.runs.completed_24h || 0),
+      hint: `${agentRuntime?.runs.failed_24h || 0} ошибок за сутки`,
+      tone: agentRuntime?.runs.failed_24h ? 'warning' : 'positive',
+    },
+    {
+      label: 'Запуски расписания',
+      value: String(agentRuntime?.scheduler.total_events || 0),
+      hint: agentRuntime?.scheduler.last_event_at
+        ? `Последний: ${formatAdminDateTime(agentRuntime.scheduler.last_event_at)}`
+        : 'Canary ещё не зафиксирован',
+      tone: agentRuntime?.scheduler.total_events ? 'positive' : 'warning',
+    },
+    {
+      label: 'Списано кредитов',
+      value: String(agentRuntime?.billing.charged_credits || 0),
+      hint: `${agentRuntime?.billing.active_reservations || 0} активных резервов`,
+      tone: agentRuntime?.billing.active_reservations ? 'warning' : 'positive',
+    },
   ];
   const subscriptionSummary = subscriptionsOverview?.summary;
   const subscriptionMetrics = [
@@ -1364,6 +1477,60 @@ export const AdminPage: React.FC = () => {
             contentClassName="space-y-5"
           >
             <DashboardCompactMetricsRow items={agentMetrics} />
+
+            <div className="border-y border-slate-200 py-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-950">Работа агентов</h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Очередь, расписание, ошибки и списания. Здесь видно, выполняются ли задачи на самом деле.
+                  </p>
+                </div>
+                <div className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold ${agentRuntimeIssues ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                  {agentRuntimeIssues ? `Требуют внимания: ${agentRuntimeIssues}` : 'Состояние штатное'}
+                </div>
+              </div>
+
+              <DashboardCompactMetricsRow items={agentRuntimeMetrics} className="mt-4" />
+
+              <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-600">
+                <span>Фоновая очередь: <strong className="text-slate-900">{agentRuntime?.flags.async_runs_enabled ? 'включена' : 'выключена'}</strong></span>
+                <span>Расписание: <strong className="text-slate-900">{agentRuntime?.flags.schedule_dispatch_enabled ? 'включено' : 'выключено'}</strong></span>
+                <span>Beta-бизнесов: <strong className="tabular-nums text-slate-900">{agentRuntime?.flags.beta_businesses_count || 0}</strong></span>
+                <span>Активных подключений: <strong className="tabular-nums text-slate-900">{agentRuntime?.integrations.active || 0}</strong></span>
+              </div>
+
+              {(agentRuntime?.consistency.archived_unfinished_runs || agentRuntime?.consistency.waiting_without_pending_approval) ? (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+                  Несогласованные состояния: {agentRuntime.consistency.archived_unfinished_runs} незавершённых запусков архивных агентов и {agentRuntime.consistency.waiting_without_pending_approval} запусков без актуального решения.
+                </div>
+              ) : null}
+
+              {(agentRuntime?.recent_issues || []).length > 0 ? (
+                <details className="mt-4 border-t border-slate-200 pt-4">
+                  <summary className="cursor-pointer text-sm font-semibold text-slate-900">Последние ошибки и повторы</summary>
+                  <div className="mt-3 divide-y divide-slate-100">
+                    {(agentRuntime?.recent_issues || []).map((issue) => (
+                      <div key={issue.run_id} className="grid gap-2 py-3 text-sm md:grid-cols-[minmax(180px,0.8fr)_minmax(180px,0.8fr)_minmax(240px,1.3fr)_160px_auto] md:items-center">
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold text-slate-900">{issue.agent_name}</div>
+                          <button type="button" onClick={() => handleBusinessClick(issue.business_id)} className="truncate text-xs text-slate-500 underline-offset-4 hover:underline">
+                            {issue.business_name}
+                          </button>
+                        </div>
+                        <div className="text-slate-600">{issue.status} · попыток {issue.attempt_count}</div>
+                        <div className="break-words text-slate-700">{issue.error}</div>
+                        <div className="tabular-nums text-slate-500">{formatAdminDateTime(issue.updated_at)}</div>
+                        <Button type="button" size="sm" variant="outline" onClick={() => downloadAgentSupportExport(issue.run_id)} disabled={downloadingAgentRunId === issue.run_id}>
+                          {downloadingAgentRunId === issue.run_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                          Диагностика
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
+            </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
               Этот экран нужен LocalOS для модерации и развития продукта: видеть, какие задачи автоматизируют клиенты, где есть внешние отправки или потенциально чувствительные действия, и какие сценарии стоит превращать в готовые шаблоны.

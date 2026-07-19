@@ -275,6 +275,7 @@ import {
 import {
   WizardTextArea
 } from './workspace';
+import { TimezoneSelect } from './timezone-select';
 
 const AGENT_BLUEPRINT_LEGACY_SOURCE_CONTRACT_LABELS = [
   'Preflight и preview run',
@@ -837,13 +838,14 @@ export const DialogAgentBuilder = ({
             </div>
             {executionMode === 'scheduled' ? (
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <input type="time" value={scheduleTime} onChange={(event) => onScheduleTimeChange(event.target.value)} className="min-h-10 rounded-lg px-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none" aria-label="Время запуска" />
-                <select value={scheduleTimezone} onChange={(event) => onScheduleTimezoneChange(event.target.value)} className="min-h-10 rounded-lg px-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none" aria-label="Часовой пояс">
-                  <option value="Europe/Tallinn">Tallinn</option>
-                  <option value="Europe/Moscow">Москва</option>
-                  <option value="Europe/Helsinki">Helsinki</option>
-                  <option value="Europe/Riga">Riga</option>
-                </select>
+                <label className="text-sm font-medium text-slate-800">
+                  Время
+                  <input type="time" value={scheduleTime} onChange={(event) => onScheduleTimeChange(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg px-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.14)] outline-none" aria-label="Время запуска" />
+                </label>
+                <div className="text-sm font-medium text-slate-800">
+                  Часовой пояс
+                  <TimezoneSelect value={scheduleTimezone} onChange={onScheduleTimezoneChange} className="mt-1" />
+                </div>
               </div>
             ) : null}
             <Button type="button" size="sm" variant={executionModeConfirmed ? 'outline' : 'default'} className="mt-3 active:scale-[0.96] transition-transform" onClick={onExecutionModeConfirm} disabled={executionMode === 'scheduled' && (!scheduleTime || !scheduleTimezone)}>

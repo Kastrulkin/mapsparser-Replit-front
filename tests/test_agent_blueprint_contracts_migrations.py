@@ -110,6 +110,101 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
             assert actual.get(route, {}).get(method) == endpoint
 
 
+def test_agent_archive_records_reason_and_result_state(monkeypatch):
+    from flask import Flask
+    from api import agent_blueprints_api
+
+    class ArchiveCursor:
+        def __init__(self, snapshot):
+            self.snapshot = snapshot
+            self.last_result = None
+            self.metadata = None
+            self.executed = []
+
+        def execute(self, query, params=None):
+            normalized = " ".join(query.split()).lower()
+            self.executed.append(normalized)
+            if normalized.startswith("select * from agent_blueprints where id"):
+                self.last_result = {
+                    "id": "bp-archive",
+                    "business_id": "biz-1",
+                    "status": "draft",
+                    "metadata_json": {},
+                }
+                return
+            if normalized.startswith("select count(*) filter"):
+                self.last_result = dict(self.snapshot)
+                return
+            if normalized.startswith("update agent_blueprints set status = 'archived'"):
+                self.metadata = json.loads(params[0])
+                return
+            if normalized.startswith("update agent_approvals") or normalized.startswith("update agent_runs"):
+                self.last_results = []
+                return
+            raise AssertionError(f"Unexpected archive SQL: {query}")
+
+        def fetchone(self):
+            return self.last_result
+
+        def fetchall(self):
+            return self.last_results
+
+    class ArchiveConnection:
+        def __init__(self, cursor):
+            self.cursor_instance = cursor
+            self.committed = False
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            self.committed = True
+
+        def rollback(self):
+            return None
+
+    for snapshot, expected_state in [
+        ({"preview_runs": 0, "work_runs": 0, "completed_work_runs": 0, "running_runs": 0, "preview_results": 0, "work_results": 0}, "without_result"),
+        ({"preview_runs": 1, "work_runs": 0, "completed_work_runs": 0, "running_runs": 0, "preview_results": 1, "work_results": 0}, "test_result_only"),
+        ({"preview_runs": 1, "work_runs": 2, "completed_work_runs": 1, "running_runs": 0, "preview_results": 1, "work_results": 1}, "with_work_result"),
+    ]:
+        cursor = ArchiveCursor(snapshot)
+        connection = ArchiveConnection(cursor)
+
+        class ArchiveDatabase:
+            def __init__(self):
+                self.conn = connection
+
+            def close(self):
+                return None
+
+        monkeypatch.setattr(agent_blueprints_api, "DatabaseManager", ArchiveDatabase)
+        monkeypatch.setattr(agent_blueprints_api, "_require_auth", lambda: ({"user_id": "user-1"}, None))
+        monkeypatch.setattr(agent_blueprints_api, "_require_business_access", lambda cursor_arg, business_id, user_data: (True, None))
+
+        app = Flask(__name__)
+        context = app.test_request_context(
+            "/api/agent-blueprints/bp-archive",
+            method="DELETE",
+            json={"reason_code": "no_useful_result"},
+        )
+        context.push()
+        try:
+            response = agent_blueprints_api.archive_agent_blueprint("bp-archive")
+        finally:
+            context.pop()
+
+        payload = response.get_json()
+        lifecycle_event = cursor.metadata["lifecycle_events"][-1]
+        assert payload["status"] == "archived"
+        assert payload["archive_summary"]["result_state"] == expected_state
+        assert lifecycle_event["reason_code"] == "no_useful_result"
+        assert lifecycle_event["result_state"] == expected_state
+        assert connection.committed is True
+        assert any(query.startswith("update agent_approvals") for query in cursor.executed)
+        assert any(query.startswith("update agent_runs") for query in cursor.executed)
+
+
 def test_agent_blueprint_migration_creates_expected_tables():
     migration = Path("alembic_migrations/versions/20260523_add_agent_blueprint_layer.py").read_text(encoding="utf-8")
     for table_name in [

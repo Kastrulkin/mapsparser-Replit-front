@@ -374,13 +374,13 @@ export const buildEmployeeTestResult = (
         : 'missing';
   return {
     summary,
-    output: output || (blocker
+    output: hasStructuredResult
       ? ''
-      : pendingApproval
-        ? resultPayload
-          ? 'Агент подготовил результат, но отдельный текст результата не был сохранён.'
-          : 'Агент дошёл до проверки, но не сохранил результат. Запустите тест ещё раз или уточните формат результата.'
-        : 'Результат не был сохранён. Запустите тест ещё раз.'),
+      : output || (blocker
+        ? ''
+        : pendingApproval
+          ? 'Агент дошёл до проверки, но не сохранил результат. Запустите тест ещё раз или уточните формат результата.'
+          : 'Результат не был сохранён. Запустите тест ещё раз.'),
     state,
     resultPayload,
     previewItems: approvalItems,

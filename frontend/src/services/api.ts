@@ -4,6 +4,7 @@ import { newAuth } from "@/lib/auth_new";
 type ApiOptions = {
     params?: Record<string, string | number | boolean | null | undefined>;
     headers?: Record<string, string>;
+    body?: unknown;
 };
 
 const buildUrl = (url: string, params?: ApiOptions["params"]) => {
@@ -55,6 +56,7 @@ export const api = {
         const data = await newAuth.makeRequest(buildUrl(url, options.params), {
             method: 'DELETE',
             headers: options.headers,
+            body: options.body === undefined ? undefined : JSON.stringify(options.body),
         });
         return { data };
     }

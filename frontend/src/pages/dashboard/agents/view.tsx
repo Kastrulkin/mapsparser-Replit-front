@@ -4,6 +4,7 @@ import { useLocation, useOutletContext } from 'react-router-dom';
 import {
   Activity,
   AlertTriangle,
+  Archive,
   ArrowDownUp,
   Bot,
   CheckCircle2,
@@ -25,7 +26,6 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
-  Trash2,
   Upload,
   Users,
   Wrench,
@@ -34,6 +34,8 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Dialog,
   DialogContent,
@@ -347,6 +349,7 @@ import {
   employeeStateTitle,
   AgentRunParametersPanel,
   EmployeeAgentOverviewPanel,
+  EmployeeAgentScenarioPanel,
   AgentCockpitPanel,
   CockpitTile,
   AgentSummaryPill,
@@ -479,6 +482,13 @@ export const AgentBlueprintsView = ({ scope }) => {
     selectedEmployeeAction, selectedResultRun, resultNeedsScenarioRebuild, resultNeedsGoogleSheetsSetup, resultNeedsGoogleAccessReconnect, resultGoogleAccessReconnected,
     openGoogleSheetsSourceSetup, openGoogleAccessReconnect, openSelectedAgentClone, runEmployeePrimaryAction, applyFinanceRequests
   } = scope;
+  const [archiveReasonCode, setArchiveReasonCode] = useState('no_longer_needed');
+  const archiveReasonOptions = [
+    { value: 'no_longer_needed', label: 'Задача больше не нужна' },
+    { value: 'no_useful_result', label: 'Не получил полезного результата' },
+    { value: 'created_by_mistake', label: 'Создан по ошибке' },
+    { value: 'replaced_by_another_agent', label: 'Заменён другим агентом' },
+  ];
   return (
     <div className="space-y-5">
       <DashboardPageHeader
@@ -636,30 +646,51 @@ export const AgentBlueprintsView = ({ scope }) => {
       <Dialog open={Boolean(deleteCandidate)} onOpenChange={(open) => {
         if (!open && !actionLoading) {
           setDeleteCandidate(null);
+          setArchiveReasonCode('no_longer_needed');
         }
       }}>
         <DialogContent className="max-w-lg rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Убрать агента из списка?</DialogTitle>
+            <DialogTitle>Архивировать агента?</DialogTitle>
             <DialogDescription>
-              Агент “{deleteCandidate?.name || 'выбранный агент'}” исчезнет из основного списка. История запусков, решения и результаты останутся в архиве LocalOS.
+              Агент “{deleteCandidate?.name || 'выбранный агент'}” перестанет запускаться и исчезнет из рабочего списка. Сценарий, история и результаты сохранятся для анализа.
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm font-semibold text-slate-950">Почему архивируете?</div>
+            <RadioGroup value={archiveReasonCode} onValueChange={setArchiveReasonCode} className="gap-2">
+              {archiveReasonOptions.map((option) => (
+                <Label
+                  key={option.value}
+                  htmlFor={`archive-reason-${option.value}`}
+                  className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium leading-5 text-slate-800 transition-colors hover:bg-slate-50"
+                >
+                  <RadioGroupItem id={`archive-reason-${option.value}`} value={option.value} />
+                  {option.label}
+                </Label>
+              ))}
+            </RadioGroup>
+          </div>
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-950">
-            Это не запускает внешние действия и не удаляет уже сохранённые результаты работы агента.
+            {deleteCandidate?.last_business_result
+              ? 'У агента есть сохранённый рабочий результат. LocalOS отметит это при архивировании.'
+              : 'Сохранённый рабочий результат не найден. LocalOS отметит, что агент архивирован без результата или только после теста.'}
           </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => setDeleteCandidate(null)} disabled={actionLoading}>
+            <Button type="button" variant="outline" onClick={() => {
+              setDeleteCandidate(null);
+              setArchiveReasonCode('no_longer_needed');
+            }} disabled={actionLoading}>
               Отмена
             </Button>
             <Button
               type="button"
               className="bg-red-600 text-white hover:bg-red-700"
-              onClick={() => deleteAgent(deleteCandidate)}
+              onClick={() => deleteAgent(deleteCandidate, archiveReasonCode)}
               disabled={actionLoading || !deleteCandidate}
             >
-              {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-              Убрать из списка
+              {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}
+              Архивировать
             </Button>
           </div>
         </DialogContent>
@@ -828,13 +859,14 @@ export const AgentBlueprintsView = ({ scope }) => {
                 <nav className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1" aria-label="Разделы агента">
                   {([
                     ['overview', 'Обзор'],
-                    ['results', 'Результаты'],
-                    ['settings', 'Настройка'],
+                    ['results', 'История'],
+                    ['scenario', 'Сценарий'],
+                    ['settings', 'Настройки'],
                   ]).map(([value, label]) => (
                     <button
                       key={value}
                       type="button"
-                      onClick={() => setWorkspaceMode(value === 'results' || value === 'settings' ? value : 'overview')}
+                      onClick={() => setWorkspaceMode(value === 'results' || value === 'scenario' || value === 'settings' ? value : 'overview')}
                       className={cn('min-h-10 shrink-0 rounded-lg px-4 text-sm font-semibold transition-[background-color,color,box-shadow] active:scale-[0.96]', workspaceMode === value || (value === 'overview' && workspaceMode === 'run') ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950')}
                     >
                       {label}
@@ -862,6 +894,7 @@ export const AgentBlueprintsView = ({ scope }) => {
                       onPrimaryAction={runEmployeePrimaryAction}
                       onCloneAgent={openSelectedAgentClone}
                       onOpenAdvanced={() => setWorkspaceMode('settings')}
+                      onOpenResults={() => setWorkspaceMode('results')}
                     />
                     <AgentRunParametersPanel
                       schema={selectedEmployeeAction.kind === 'run_test'
@@ -905,6 +938,8 @@ export const AgentBlueprintsView = ({ scope }) => {
                       />
                     ) : null}
                   </div>
+                ) : workspaceMode === 'scenario' ? (
+                  <EmployeeAgentScenarioPanel blueprint={selectedBlueprint} details={blueprintDetails} />
                 ) : workspaceMode === 'results' ? (
                   selectedResultRun || selectedPendingApproval ? (
                     <EmployeeTestResultPanel
@@ -916,7 +951,6 @@ export const AgentBlueprintsView = ({ scope }) => {
                       needsGoogleAccessReconnect={resultNeedsGoogleAccessReconnect}
                       googleAccessJustConnected={resultGoogleAccessReconnected}
                       estimatedRunCredits={estimatedAgentRunCredits(blueprintDetails, selectedEmployeeAction.kind === 'run_test')}
-                      nextAction={selectedEmployeeAction}
                       onApprove={() => decideApproval('approve')}
                       onReject={() => decideApproval('reject')}
                       onRunAgain={() => selectedResultRun?.input_json?.preview_mode === false
@@ -925,8 +959,6 @@ export const AgentBlueprintsView = ({ scope }) => {
                       onRebuildScenario={rebuildScenarioAndRun}
                       onOpenGoogleSheetsSetup={openGoogleSheetsSourceSetup}
                       onOpenGoogleAccessReconnect={openGoogleAccessReconnect}
-                      onNextAction={runEmployeePrimaryAction}
-                      onCloneAgent={openSelectedAgentClone}
                     />
                   ) : (
                     <EmployeeHistoryPanel

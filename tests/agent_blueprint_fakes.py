@@ -51,6 +51,7 @@ class FakeCursor:
             return None
         if normalized_query.startswith("update agent_runs set status = 'superseded'"):
             blueprint_id = params[0]
+            self.last_results = []
             for run in self.tables["agent_runs"].values():
                 if run.get("blueprint_id") != blueprint_id or run.get("status") != "waiting_approval":
                     continue
@@ -60,6 +61,12 @@ class FakeCursor:
                 )
                 if not has_pending:
                     run["status"] = "superseded"
+                    self.last_results.append({
+                        "id": run.get("id"),
+                        "business_id": run.get("business_id"),
+                        "created_by_user_id": run.get("created_by_user_id"),
+                        "billing_reservation_id": run.get("billing_reservation_id"),
+                    })
             return None
         if "from agent_sheet_operation_requests" in normalized_query:
             business_id = params[0]
@@ -132,6 +139,10 @@ class FakeCursor:
                 ),
                 None,
             )
+            return None
+        if normalized_query.startswith("select steps_json from agent_blueprint_versions where id"):
+            version = self.tables["agent_blueprint_versions"].get(params[0])
+            self.last_result = {"steps_json": version.get("steps_json", [])} if version else None
             return None
         if normalized_query.startswith("select * from agent_blueprint_versions where id"):
             self.last_result = self.tables["agent_blueprint_versions"].get(params[0])
@@ -1236,7 +1247,8 @@ class FakeActiveTelegramTriggerCursor(FakeCursor):
             self.last_results = [
                 row
                 for row in self.tables["agent_blueprints"].values()
-                if row.get("status") == "active" and row.get("category") in {"custom", "tables"}
+                if row.get("status") == "active"
+                and row.get("metadata_json", {}).get("execution_mode") == "scheduled"
             ][:limit]
             return None
         if normalized_query.startswith("select id, business_id, metadata_json from agent_blueprints"):
@@ -1244,7 +1256,8 @@ class FakeActiveTelegramTriggerCursor(FakeCursor):
             self.last_results = [
                 row
                 for row in self.tables["agent_blueprints"].values()
-                if row.get("status") == "active" and row.get("category") in {"custom", "tables"}
+                if row.get("status") == "active"
+                and row.get("metadata_json", {}).get("execution_mode") == "scheduled"
             ][:limit]
             return None
         if "from agent_blueprints" in normalized_query and "status = 'active'" in normalized_query:
@@ -1254,7 +1267,6 @@ class FakeActiveTelegramTriggerCursor(FakeCursor):
                 for row in self.tables["agent_blueprints"].values()
                 if row.get("business_id") == business_id
                 and row.get("status") == "active"
-                and row.get("category") in {"custom", "tables"}
             ]
             return None
         if normalized_query.startswith("select * from agent_blueprint_versions where blueprint_id"):

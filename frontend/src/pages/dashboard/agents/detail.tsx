@@ -4,6 +4,7 @@ import { useLocation, useOutletContext } from 'react-router-dom';
 import {
   Activity,
   AlertTriangle,
+  Archive,
   ArrowDownUp,
   Bot,
   CheckCircle2,
@@ -25,7 +26,6 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
-  Trash2,
   Upload,
   Users,
   Wrench,
@@ -574,8 +574,8 @@ export const AgentDetailPanel = ({
         <Button type="button" size="sm" className="shrink-0" variant={mode === 'run' ? 'default' : 'outline'} onClick={() => onModeChange('run')}>Сценарий</Button>
         <Button type="button" size="sm" className="shrink-0" variant={settingsActive ? 'default' : 'outline'} onClick={() => onModeChange('settings')}>Настройки</Button>
         <Button type="button" size="sm" className="shrink-0 text-red-700 hover:text-red-800" variant="outline" onClick={onDeleteAgent} disabled={actionLoading}>
-          <Trash2 className="mr-2 h-4 w-4" />
-          Убрать из списка
+          <Archive className="mr-2 h-4 w-4" />
+          Архивировать агента
         </Button>
       </div>
     </div>
@@ -599,7 +599,6 @@ export const AgentDetailPanel = ({
         onOpenResults={() => onModeChange('results')}
         onOpenConnections={openConnectionsFromActivationGate}
         onOpenVoice={() => onModeChange('voice')}
-        onDeleteAgent={onDeleteAgent}
       />
     ) : null}
 
@@ -1062,7 +1061,6 @@ export const AgentOverviewPanel = ({
   onOpenResults,
   onOpenConnections,
   onOpenVoice,
-  onDeleteAgent,
 }: {
   blueprint: AgentBlueprint;
   detailsBlueprint?: AgentBlueprint;
@@ -1081,7 +1079,6 @@ export const AgentOverviewPanel = ({
   onOpenResults: () => void;
   onOpenConnections: () => void;
   onOpenVoice: () => void;
-  onDeleteAgent: () => void;
 }) => {
   const needsApproval = Boolean(pendingApproval || blueprint.pending_approvals_count);
   const compiledValid = metrics?.compiled?.validation_valid === true;
@@ -1207,10 +1204,6 @@ export const AgentOverviewPanel = ({
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={onOpenVoice}>
               Голос и стиль
-            </Button>
-            <Button type="button" size="sm" variant="outline" className="text-red-700 hover:text-red-800" onClick={onDeleteAgent} disabled={actionLoading}>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Убрать из списка
             </Button>
           </div>
         </div>

@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from core.action_orchestrator import ActionOrchestrator
 from core.channel_router import dispatch_with_routing, load_business_channel_context
 from services.agent_capability_handlers import build_capability_handlers
+from services.agent_run_billing import finalize_agent_run_credits
 from services.agent_domain_request_executors import execute_approved_domain_requests
 from services.agent_blueprint_workspace import build_generic_artifact_payload
 from services.agent_integration_preflight import (
@@ -415,9 +416,19 @@ class AgentBlueprintRunner:
                   WHERE a.run_id = agent_runs.id
                     AND a.status = 'pending'
               )
+            RETURNING id, business_id, created_by_user_id, billing_reservation_id
             """,
             (blueprint_id,),
         )
+        for superseded_run in self.cursor.fetchall() or []:
+            normalized_run = dict(superseded_run)
+            if not normalized_run.get("billing_reservation_id"):
+                continue
+            finalize_agent_run_credits(
+                self.cursor,
+                run={**normalized_run, "status": "superseded"},
+                actual_tokens=0,
+            )
 
     def _build_artifact_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
         base_payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
@@ -1689,6 +1700,7 @@ class AgentBlueprintRunner:
         observability = self._build_run_observability(normalized_run, steps, artifacts, approvals, user_data or {})
         business_result, result_state = self._business_result(normalized_run, artifacts)
         current_approval = next((item for item in reversed(approvals) if item.get("status") == "pending"), None)
+        progress = self._run_progress(normalized_run, steps)
         return {
             **normalized_run,
             "steps": steps,
@@ -1698,6 +1710,7 @@ class AgentBlueprintRunner:
             "business_result": business_result,
             "result_state": result_state,
             "current_approval": current_approval,
+            "progress": progress,
             "run_billing": run_output.get("run_billing") if isinstance(run_output.get("run_billing"), dict) else {},
             "queue_state": {
                 "status": normalized_run.get("status"),
@@ -1707,6 +1720,44 @@ class AgentBlueprintRunner:
                 "attempt_count": int(normalized_run.get("attempt_count") or 0),
                 "max_attempts": int(normalized_run.get("max_attempts") or 0),
             },
+        }
+
+    def _run_progress(self, run: Dict[str, Any], steps: List[Dict[str, Any]]) -> Dict[str, Any]:
+        self.cursor.execute(
+            "SELECT steps_json FROM agent_blueprint_versions WHERE id = %s LIMIT 1",
+            (str(run.get("blueprint_version_id") or ""),),
+        )
+        version_row = self.cursor.fetchone() or {}
+        expected_steps = normalize_steps(version_row.get("steps_json"))
+        total_steps = max(len(expected_steps), len(steps))
+        completed_statuses = {"completed", "succeeded", "skipped"}
+        completed_steps = sum(1 for step in steps if str(step.get("status") or "").lower() in completed_statuses)
+        current_step = next(
+            (step for step in steps if str(step.get("status") or "").lower() in {"running", "waiting_approval", "retry_wait", "failed"}),
+            None,
+        )
+        status = str(run.get("status") or "queued").lower()
+        if status == "completed":
+            completed_steps = total_steps
+        current_index = completed_steps if total_steps else 0
+        if current_step:
+            current_key = str(current_step.get("step_key") or "")
+            current_index = next(
+                (index for index, expected in enumerate(expected_steps) if str(expected.get("key") or expected.get("id") or "") == current_key),
+                current_index,
+            )
+        else:
+            current_key = str((expected_steps[current_index] if current_index < total_steps else {}).get("key") or "")
+        current_index = min(max(total_steps - 1, 0), max(0, current_index))
+        percent = 100 if status == "completed" else min(92, round((completed_steps / max(total_steps, 1)) * 100))
+        return {
+            "state": status,
+            "total_steps": total_steps,
+            "completed_steps": completed_steps,
+            "current_step_index": current_index,
+            "current_step_key": current_key,
+            "current_step_status": str((current_step or {}).get("status") or status),
+            "percent": percent,
         }
 
     def _business_result(

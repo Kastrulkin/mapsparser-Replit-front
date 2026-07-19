@@ -871,6 +871,8 @@ def _handle_reviews_reply_publish_request(envelope: Dict[str, Any], user_data: D
         draft_id=draft_id,
         reply=reply,
         dispatch_state="pending_human",
+        localos_write_performed=True,
+        localos_url="/dashboard/card?tab=reviews&review_filter=needs_reply",
         provider_write_performed=False,
         manual_publish_required=True,
     )

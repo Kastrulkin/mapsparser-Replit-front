@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator
 from services.agent_blueprint_runner import AgentBlueprintRunner, parse_json_field
+from services.agent_capability_handlers import capability_runtime_contract
 from services.agent_run_queue import async_agent_runs_enabled, enqueue_agent_run
 
 
@@ -136,6 +137,13 @@ def dispatch_scheduled_agent_blueprints(
         if not _matches_schedule_trigger(blueprint, version, trigger):
             skipped.append({"blueprint_id": blueprint.get("id"), "reason": "trigger_mismatch"})
             continue
+        beta_gate = _scheduled_version_beta_gate(version)
+        if not beta_gate.get("ready"):
+            skipped.append({"blueprint_id": blueprint.get("id"), "reason": "capability_not_beta_enabled", "capabilities": beta_gate.get("blocked")})
+            continue
+        if not async_agent_runs_enabled(str(blueprint.get("business_id") or "")):
+            skipped.append({"blueprint_id": blueprint.get("id"), "reason": "async_runtime_not_enabled_for_business"})
+            continue
         user_data = {
             "user_id": str(blueprint.get("created_by_user_id") or ""),
             "id": str(blueprint.get("created_by_user_id") or ""),
@@ -155,8 +163,14 @@ def dispatch_scheduled_agent_blueprints(
         for key, value in defaults.items():
             if value and not run_input.get(key):
                 run_input[key] = value
-        runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
-        result = runner.start_run(str(version.get("id") or ""), run_input, user_data)
+        result = enqueue_agent_run(
+            cursor,
+            blueprint=blueprint,
+            version=version,
+            input_payload=run_input,
+            user_data=user_data,
+            idempotency_key=f"scheduler:{blueprint.get('id')}:{now.date().isoformat()}:{trigger}",
+        )
         if result.get("success"):
             run = result.get("run") if isinstance(result.get("run"), dict) else {}
             run_id = str(run.get("id") or "")
@@ -224,9 +238,16 @@ def dispatch_due_scheduled_agent_blueprints(
         version = _resolve_active_version(cursor, blueprint)
         if not version or not _matches_schedule_trigger(blueprint, version, trigger):
             continue
+        beta_gate = _scheduled_version_beta_gate(version)
+        if not beta_gate.get("ready"):
+            skipped.append({"blueprint_id": str(blueprint.get("id") or ""), "business_id": str(blueprint.get("business_id") or ""), "reason": "capability_not_beta_enabled", "capabilities": beta_gate.get("blocked")})
+            continue
         schedule_context = _schedule_context(blueprint, version, now)
         blueprint_id = str(blueprint.get("id") or "")
         business_id = str(blueprint.get("business_id") or "")
+        if not async_agent_runs_enabled(business_id):
+            skipped.append({"blueprint_id": blueprint_id, "business_id": business_id, "reason": "async_runtime_not_enabled_for_business"})
+            continue
         if not schedule_context.get("ready"):
             skipped.append({"blueprint_id": blueprint_id, "business_id": business_id, "reason": schedule_context.get("reason")})
             continue
@@ -236,6 +257,16 @@ def dispatch_due_scheduled_agent_blueprints(
             skipped.append({"blueprint_id": blueprint_id, "business_id": business_id, "reason": "already_recorded_for_schedule"})
             continue
         result = _dispatch_scheduled_blueprint(cursor, blueprint, version, now, trigger, schedule_context)
+        if not result.get("success"):
+            skipped.append(
+                {
+                    "blueprint_id": blueprint_id,
+                    "business_id": business_id,
+                    "reason": result.get("reason") or "run_start_failed",
+                    "trigger_event_id": result.get("trigger_event_id"),
+                }
+            )
+            continue
         dispatched.append(
             {
                 "blueprint_id": blueprint_id,
@@ -263,7 +294,7 @@ def _load_scheduled_blueprints(cursor: Any, *, blueprint_limit: int) -> list[Dic
         SELECT *
         FROM agent_blueprints
         WHERE status = 'active'
-          AND category IN ('custom', 'tables')
+          AND COALESCE(metadata_json->>'execution_mode', '') = 'scheduled'
         ORDER BY updated_at DESC, created_at DESC
         LIMIT %s
         """,
@@ -377,18 +408,14 @@ def _dispatch_scheduled_blueprint(
     for key, value in _custom_process_defaults(blueprint, version).items():
         if value and not run_input.get(key):
             run_input[key] = value
-    if async_agent_runs_enabled(business_id):
-        result = enqueue_agent_run(
-            cursor,
-            blueprint=blueprint,
-            version=version,
-            input_payload=run_input,
-            user_data=user_data,
-            idempotency_key=f"scheduler:{blueprint_id}:{schedule_context.get('schedule_date')}:{schedule_context.get('schedule_time')}",
-        )
-    else:
-        runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
-        result = runner.start_run(str(version.get("id") or ""), run_input, user_data)
+    result = enqueue_agent_run(
+        cursor,
+        blueprint=blueprint,
+        version=version,
+        input_payload=run_input,
+        user_data=user_data,
+        idempotency_key=f"scheduler:{blueprint_id}:{schedule_context.get('schedule_date')}:{schedule_context.get('schedule_time')}",
+    )
     run = result.get("run") if isinstance(result.get("run"), dict) else {}
     run_id = str(run.get("id") or "")
     cursor.execute(
@@ -412,6 +439,7 @@ def _dispatch_scheduled_blueprint(
         "trigger_event_id": trigger_event_id,
         "run_id": run_id,
         "run_status": str(run.get("status") or ""),
+        "reason": None if result.get("success") else str(result.get("code") or result.get("error") or "run_start_failed"),
     }
 
 
@@ -450,7 +478,7 @@ def _load_due_scheduled_businesses(
         SELECT id, business_id, metadata_json
         FROM agent_blueprints
         WHERE status = 'active'
-          AND category IN ('custom', 'tables')
+          AND COALESCE(metadata_json->>'execution_mode', '') = 'scheduled'
         ORDER BY updated_at DESC, created_at DESC
         LIMIT %s
         """,
@@ -539,7 +567,6 @@ def _load_candidate_blueprints(cursor: Any, business_id: str) -> list[Dict[str, 
         FROM agent_blueprints
         WHERE business_id = %s
           AND status = 'active'
-          AND category IN ('custom', 'tables')
         ORDER BY updated_at DESC, created_at DESC
         LIMIT 25
         """,
@@ -598,6 +625,15 @@ def _matches_schedule_trigger(blueprint: Dict[str, Any], version: Dict[str, Any]
     if isinstance(payload, dict) and str(payload.get("trigger") or "") == trigger:
         return True
     return False
+
+
+def _scheduled_version_beta_gate(version: Dict[str, Any]) -> Dict[str, Any]:
+    capabilities = parse_json_field(version.get("capability_allowlist_json"), [])
+    if not isinstance(capabilities, list):
+        capabilities = []
+    contracts = [capability_runtime_contract(str(item or "")) for item in capabilities if str(item or "").strip()]
+    blocked = [item for item in contracts if not item.get("beta_enabled")]
+    return {"ready": not blocked, "blocked": blocked, "capabilities": contracts}
 
 
 def _custom_process_defaults(blueprint: Dict[str, Any], version: Dict[str, Any]) -> Dict[str, Any]:

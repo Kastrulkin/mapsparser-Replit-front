@@ -409,6 +409,7 @@ export const AgentBlueprintsPage = () => {
         legacy_migration: response.data?.legacy_migration || {},
         metrics: response.data?.metrics && typeof response.data.metrics === 'object' ? response.data.metrics : undefined,
         activation_gate: response.data?.activation_gate && typeof response.data.activation_gate === 'object' ? response.data.activation_gate : undefined,
+        execution_contract: response.data?.execution_contract && typeof response.data.execution_contract === 'object' ? response.data.execution_contract : undefined,
       };
       setBlueprintDetails(details);
       setAgentDetailsById((current) => ({
@@ -488,6 +489,7 @@ export const AgentBlueprintsPage = () => {
               legacy_migration: response.data?.legacy_migration || {},
               metrics: response.data?.metrics && typeof response.data.metrics === 'object' ? response.data.metrics : undefined,
               activation_gate: response.data?.activation_gate && typeof response.data.activation_gate === 'object' ? response.data.activation_gate : undefined,
+              execution_contract: response.data?.execution_contract && typeof response.data.execution_contract === 'object' ? response.data.execution_contract : undefined,
             };
           });
           return next;
@@ -528,6 +530,39 @@ export const AgentBlueprintsPage = () => {
       }
     }
   };
+
+  useEffect(() => {
+    if (runAnimation || !selectedBlueprint?.id) return;
+    const inflight = (blueprintDetails?.runs || []).find((run) => ['queued', 'running', 'retry_wait'].includes(String(run.status || '')));
+    if (!inflight?.id) return;
+    let cancelled = false;
+    void api.get(`/agent-runs/${inflight.id}`).then((response) => {
+      if (cancelled) return;
+      const run: AgentRun | null = response.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
+      if (!run) return;
+      const kind: AgentRunAnimation['kind'] = run.input_json?.preview_mode === false ? 'work' : 'test';
+      const steps = workflowStepsForAnimation(blueprintDetails, kind);
+      const total = Math.max(steps.length, Number(run.progress?.total_steps || 0), 1);
+      const completed = Math.min(total, Math.max(0, Number(run.progress?.completed_steps || 0)));
+      const currentIndex = Math.min(total - 1, Math.max(0, Number(run.progress?.current_step_index ?? completed)));
+      setActiveRun(run);
+      setRunAnimation({
+        kind,
+        blueprintId: selectedBlueprint.id,
+        runId: run.id,
+        startedAt: Date.parse(String(run.queued_at || run.started_at || '')) || Date.now(),
+        progress: Math.max(8, Math.min(92, Math.round((completed / total) * 92))),
+        stepIndex: currentIndex,
+        steps,
+        status: 'running',
+        serverCompletedSteps: completed,
+        serverCurrentStepIndex: currentIndex,
+        queueState: String(run.progress?.state || run.status || 'queued'),
+        recoveredFromReload: true,
+      });
+    }).catch((requestError) => console.error(requestError));
+    return () => { cancelled = true; };
+  }, [blueprintDetails?.runs, runAnimation, selectedBlueprint?.id]);
 
   const loadBlueprintReview = useCallback(async (blueprintId: string) => {
     try {
@@ -903,14 +938,15 @@ export const AgentBlueprintsPage = () => {
         if (!current || current.status !== 'running') {
           return current;
         }
-        const progress = Math.min(92, current.progress + 7);
-        const stepIndex = Math.min(
-          current.steps.length - 1,
-          Math.floor((progress / 100) * current.steps.length),
-        );
-        return { ...current, progress, stepIndex };
+        const total = Math.max(current.steps.length, 1);
+        const completed = Math.max(0, current.serverCompletedSteps || 0);
+        const cap = current.queueState === 'queued'
+          ? 12
+          : Math.min(92, Math.round(((completed + 0.85) / total) * 92));
+        const progress = Math.min(cap, current.progress + 3);
+        return { ...current, progress, stepIndex: Math.min(total - 1, current.serverCurrentStepIndex ?? completed) };
       });
-    }, 420);
+    }, 500);
     return () => window.clearInterval(timer);
   }, [runAnimation?.blueprintId, runAnimation?.startedAt, runAnimation?.status]);
 
@@ -923,6 +959,9 @@ export const AgentBlueprintsPage = () => {
       stepIndex: 0,
       steps: workflowStepsForAnimation(blueprintDetails, kind),
       status: 'running',
+      serverCompletedSteps: 0,
+      serverCurrentStepIndex: 0,
+      queueState: 'queued',
     };
     setRunAnimation(animation);
     return animation.startedAt;
@@ -946,6 +985,26 @@ export const AgentBlueprintsPage = () => {
     setRunAnimation((current) => current ? { ...current, status: 'error', error: message } : current);
   };
 
+  const syncRunAnimation = (run: AgentRun | null) => {
+    if (!run) return;
+    setRunAnimation((current) => {
+      if (!current || current.blueprintId !== run.blueprint_id) return current;
+      const total = Math.max(current.steps.length, Number(run.progress?.total_steps || 0), 1);
+      const completed = Math.min(total, Math.max(0, Number(run.progress?.completed_steps || 0)));
+      const currentIndex = Math.min(total - 1, Math.max(0, Number(run.progress?.current_step_index ?? completed)));
+      const floor = Math.min(92, Math.round((completed / total) * 92));
+      return {
+        ...current,
+        runId: run.id,
+        queueState: String(run.progress?.state || run.status || 'queued'),
+        serverCompletedSteps: completed,
+        serverCurrentStepIndex: currentIndex,
+        stepIndex: currentIndex,
+        progress: Math.max(current.progress, floor),
+      };
+    });
+  };
+
   const validatedRunParameters = (preview: boolean) => {
     const schema = preview
       ? blueprintDetails?.candidate_run_input_schema || blueprintDetails?.run_input_schema
@@ -966,6 +1025,7 @@ export const AgentBlueprintsPage = () => {
       const run = response.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
       if (run) {
         setActiveRun(run);
+        syncRunAnimation(run);
         if (['completed', 'waiting_approval', 'failed', 'rejected', 'superseded'].includes(String(run.status || ''))) {
           return run;
         }
@@ -974,6 +1034,28 @@ export const AgentBlueprintsPage = () => {
     }
     throw new Error('Агент продолжает работу дольше ожидаемого. Результат появится в истории после завершения.');
   };
+
+  useEffect(() => {
+    if (!runAnimation?.recoveredFromReload || !runAnimation.runId) return;
+    let cancelled = false;
+    const runId = runAnimation.runId;
+    const startedAt = runAnimation.startedAt;
+    void waitForAgentRun(runId).then(async (run) => {
+      if (cancelled) return;
+      if (run?.status === 'failed') {
+        failRunAnimation(run.error_text || 'Агент не смог завершить задачу.');
+        return;
+      }
+      await finishRunAnimation(startedAt);
+      if (cancelled) return;
+      setRunAnimation(null);
+      setWorkspaceMode('results');
+      if (selectedBlueprint?.id) await loadBlueprintDetails(selectedBlueprint.id);
+    }).catch((requestError) => {
+      if (!cancelled) failRunAnimation(getRequestErrorMessage(requestError, 'Не удалось продолжить отслеживание задачи.'));
+    });
+    return () => { cancelled = true; };
+  }, [runAnimation?.recoveredFromReload, runAnimation?.runId]);
 
   const startRun = async (blueprintToRun?: AgentBlueprint | null, blueprintVersionId = '') => {
     const targetBlueprint = blueprintToRun || selectedBlueprint;
@@ -1035,6 +1117,7 @@ export const AgentBlueprintsPage = () => {
       });
       let nextRun = response.data?.run || null;
       setActiveRun(nextRun);
+      syncRunAnimation(nextRun);
       if (nextRun?.id && ['queued', 'running', 'retry_wait'].includes(String(nextRun.status || ''))) {
         nextRun = await waitForAgentRun(nextRun.id);
       }
@@ -1088,6 +1171,7 @@ export const AgentBlueprintsPage = () => {
       });
       let nextRun = response.data?.run || null;
       setActiveRun(nextRun);
+      syncRunAnimation(nextRun);
       if (nextRun?.id && ['queued', 'running', 'retry_wait'].includes(String(nextRun.status || ''))) {
         nextRun = await waitForAgentRun(nextRun.id);
       }
@@ -1214,14 +1298,16 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
-  const deleteAgent = async (blueprint: AgentBlueprint | null) => {
+  const deleteAgent = async (blueprint: AgentBlueprint | null, reasonCode = 'no_longer_needed') => {
     if (!blueprint) {
       return;
     }
     setActionLoading(true);
     setError(null);
     try {
-      await api.delete(`/agent-blueprints/${blueprint.id}`);
+      await api.delete(`/agent-blueprints/${blueprint.id}`, {
+        body: { reason_code: reasonCode },
+      });
       const remaining = blueprints.filter((item) => item.id !== blueprint.id);
       setSelectedBlueprintId(remaining[0]?.id || null);
       setBlueprintDetails(null);
@@ -1231,7 +1317,7 @@ export const AgentBlueprintsPage = () => {
       await loadBlueprints();
     } catch (requestError) {
       console.error(requestError);
-      setError(getRequestErrorMessage(requestError, 'Не удалось удалить агента.'));
+      setError(getRequestErrorMessage(requestError, 'Не удалось архивировать агента.'));
     } finally {
       setActionLoading(false);
     }

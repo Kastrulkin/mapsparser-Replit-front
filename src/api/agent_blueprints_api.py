@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -48,6 +49,7 @@ from services.agent_metrics import build_agent_metrics_summary
 from services.agent_capability_handlers import capability_runtime_contract
 from services.agent_run_contract import RESERVED_AGENT_INPUT_FIELDS, effective_agent_input_schema, validate_agent_run_input
 from services.agent_run_queue import async_agent_runs_enabled, enqueue_agent_run
+from services.agent_run_billing import finalize_agent_run_credits
 from api.agent_builder_api import (
     _apply_selected_provider_routes,
     _missing_required_provider_routes,
@@ -57,6 +59,18 @@ from api.agent_builder_api import (
 
 
 agent_blueprints_bp = Blueprint("agent_blueprints_api", __name__)
+
+
+def _env_enabled(name: str, default: bool = False) -> bool:
+    fallback = "true" if default else "false"
+    return str(os.getenv(name, fallback)).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_positive_int(name: str, default: int) -> int:
+    try:
+        return max(1, int(str(os.getenv(name, default)).strip()))
+    except (TypeError, ValueError):
+        return max(1, default)
 
 
 def _json_error(message: str, status: int, code: str):
@@ -292,6 +306,176 @@ def _build_admin_agent_review(row: dict) -> dict:
         reasons.append("явных внешних или опасных действий не найдено")
 
     return {"risk_level": level, "risk_reasons": reasons[:4]}
+
+
+def _admin_agent_runtime_overview(cursor) -> dict:
+    cursor.execute(
+        """
+        SELECT COUNT(*) FILTER (WHERE status = 'queued') queued,
+               COUNT(*) FILTER (WHERE status = 'running') running,
+               COUNT(*) FILTER (WHERE status = 'retry_wait') retry_wait,
+               COUNT(*) FILTER (WHERE status = 'waiting_approval') waiting_approval,
+               COUNT(*) FILTER (
+                   WHERE status = 'running'
+                     AND COALESCE(heartbeat_at, started_at, updated_at) < NOW() - INTERVAL '5 minutes'
+               ) stale_running,
+               COUNT(*) FILTER (
+                   WHERE status = 'failed'
+                     AND updated_at >= NOW() - INTERVAL '24 hours'
+               ) failed_24h,
+               COUNT(*) FILTER (
+                   WHERE status = 'completed'
+                     AND updated_at >= NOW() - INTERVAL '24 hours'
+               ) completed_24h,
+               COUNT(*) FILTER (WHERE billing_reservation_id IS NOT NULL) billing_bound_runs,
+               MAX(updated_at) last_run_at
+        FROM agent_runs
+        """
+    )
+    run_state = dict(cursor.fetchone() or {})
+    cursor.execute(
+        """
+        SELECT COUNT(DISTINCT r.id) FILTER (
+                   WHERE b.status = 'archived'
+                     AND r.status IN ('queued', 'retry_wait', 'waiting_approval')
+               ) archived_unfinished_runs,
+               COUNT(DISTINCT a.id) FILTER (
+                   WHERE b.status = 'archived'
+                     AND a.status = 'pending'
+               ) archived_pending_approvals,
+               COUNT(DISTINCT r.id) FILTER (
+                   WHERE r.status = 'waiting_approval'
+                     AND NOT EXISTS (
+                         SELECT 1
+                         FROM agent_approvals current_approval
+                         WHERE current_approval.run_id = r.id
+                           AND current_approval.status = 'pending'
+                     )
+               ) waiting_without_pending_approval
+        FROM agent_runs r
+        JOIN agent_blueprints b ON b.id = r.blueprint_id
+        LEFT JOIN agent_approvals a ON a.run_id = r.id
+        """
+    )
+    consistency = dict(cursor.fetchone() or {})
+    cursor.execute(
+        """
+        SELECT COUNT(*) FILTER (WHERE source = 'scheduler') total,
+               COUNT(*) FILTER (
+                   WHERE source = 'scheduler'
+                     AND created_at >= NOW() - INTERVAL '24 hours'
+               ) events_24h,
+               MAX(created_at) last_event_at
+        FROM agent_trigger_events
+        """
+    )
+    scheduler = dict(cursor.fetchone() or {})
+    cursor.execute(
+        """
+        SELECT COUNT(*) FILTER (WHERE status = 'active') active,
+               COUNT(*) FILTER (WHERE status <> 'active') inactive
+        FROM agent_integrations
+        """
+    )
+    integrations = dict(cursor.fetchone() or {})
+    cursor.execute(
+        """
+        SELECT COUNT(*) FILTER (WHERE status = 'reserved') active_reservations,
+               COALESCE(SUM(reserved_credits), 0) reserved_credits,
+               COALESCE(SUM(charged_credits), 0) charged_credits,
+               COALESCE(SUM(released_credits), 0) released_credits
+        FROM operatorcreditreservations
+        WHERE action_key = 'agent_production_run'
+        """
+    )
+    billing = dict(cursor.fetchone() or {})
+    cursor.execute(
+        """
+        SELECT r.id run_id,
+               r.blueprint_id,
+               r.business_id,
+               r.status,
+               r.attempt_count,
+               r.error_text,
+               r.updated_at,
+               COALESCE(b.name, '') agent_name,
+               COALESCE(biz.name, '') business_name
+        FROM agent_runs r
+        JOIN agent_blueprints b ON b.id = r.blueprint_id
+        LEFT JOIN businesses biz ON biz.id = r.business_id
+        WHERE r.status IN ('failed', 'retry_wait')
+           OR (
+               r.status = 'running'
+               AND COALESCE(r.heartbeat_at, r.started_at, r.updated_at) < NOW() - INTERVAL '5 minutes'
+           )
+        ORDER BY r.updated_at DESC
+        LIMIT 10
+        """
+    )
+    recent_issues = []
+    for row in cursor.fetchall() or []:
+        item = dict(row)
+        recent_issues.append(
+            {
+                "run_id": str(item.get("run_id") or ""),
+                "blueprint_id": str(item.get("blueprint_id") or ""),
+                "business_id": str(item.get("business_id") or ""),
+                "agent_name": str(item.get("agent_name") or "Без названия"),
+                "business_name": str(item.get("business_name") or "Без бизнеса"),
+                "status": str(item.get("status") or "failed"),
+                "attempt_count": int(item.get("attempt_count") or 0),
+                "error": str(item.get("error_text") or "Причина не записана"),
+                "updated_at": item.get("updated_at").isoformat() if item.get("updated_at") else None,
+            }
+        )
+
+    beta_business_ids = [
+        item.strip()
+        for item in str(os.getenv("AGENT_BETA_BUSINESS_IDS", "")).split(",")
+        if item.strip()
+    ]
+    last_run_at = run_state.get("last_run_at")
+    last_scheduler_event_at = scheduler.get("last_event_at")
+    return {
+        "flags": {
+            "async_runs_enabled": _env_enabled("AGENT_ASYNC_RUNS_ENABLED"),
+            "schedule_dispatch_enabled": _env_enabled("AGENT_SCHEDULE_DISPATCH_ENABLED"),
+            "beta_businesses_count": len(beta_business_ids),
+            "queue_interval_seconds": _env_positive_int("AGENT_RUN_QUEUE_INTERVAL_SEC", 2),
+        },
+        "runs": {
+            "queued": int(run_state.get("queued") or 0),
+            "running": int(run_state.get("running") or 0),
+            "retry_wait": int(run_state.get("retry_wait") or 0),
+            "waiting_approval": int(run_state.get("waiting_approval") or 0),
+            "stale_running": int(run_state.get("stale_running") or 0),
+            "failed_24h": int(run_state.get("failed_24h") or 0),
+            "completed_24h": int(run_state.get("completed_24h") or 0),
+            "billing_bound_runs": int(run_state.get("billing_bound_runs") or 0),
+            "last_run_at": last_run_at.isoformat() if last_run_at else None,
+        },
+        "scheduler": {
+            "total_events": int(scheduler.get("total") or 0),
+            "events_24h": int(scheduler.get("events_24h") or 0),
+            "last_event_at": last_scheduler_event_at.isoformat() if last_scheduler_event_at else None,
+        },
+        "consistency": {
+            "archived_unfinished_runs": int(consistency.get("archived_unfinished_runs") or 0),
+            "archived_pending_approvals": int(consistency.get("archived_pending_approvals") or 0),
+            "waiting_without_pending_approval": int(consistency.get("waiting_without_pending_approval") or 0),
+        },
+        "integrations": {
+            "active": int(integrations.get("active") or 0),
+            "inactive": int(integrations.get("inactive") or 0),
+        },
+        "billing": {
+            "active_reservations": int(billing.get("active_reservations") or 0),
+            "reserved_credits": int(billing.get("reserved_credits") or 0),
+            "charged_credits": int(billing.get("charged_credits") or 0),
+            "released_credits": int(billing.get("released_credits") or 0),
+        },
+        "recent_issues": recent_issues,
+    }
 
 
 def _normalize_agent_integration(row: dict, *, attached: bool = True) -> dict:
@@ -1801,6 +1985,115 @@ def _version_number(version: dict | None) -> int:
         return 0
 
 
+def _execution_step_title(step: dict) -> str:
+    title = str(step.get("title") or step.get("label") or "").strip()
+    capability = str(step.get("capability") or step.get("capability_key") or "").strip()
+    step_key = str(step.get("key") or step.get("id") or "").strip()
+    known = {
+        "google_sheets.read_rows": "Прочитать строки Google Таблицы",
+        "content_plan.item.create_draft": "Сохранить черновик в контент-план",
+        "reviews.reply.draft": "Подготовить черновик ответа",
+        "news.generate": "Подготовить публикацию",
+        "services.optimize": "Подготовить рекомендации по услугам",
+    }
+    if title and title != step_key:
+        return title
+    return known.get(capability) or title or step_key.replace("_", " ").strip() or "Выполнить шаг"
+
+
+def _execution_version_contract(cursor, blueprint: dict, version: dict | None, *, role: str) -> dict | None:
+    if not version:
+        return None
+    steps = normalize_steps(version.get("steps_json"))
+    public_schema = effective_agent_input_schema(version.get("inputs_schema_json"), steps)
+    approval_policy = parse_json_field(version.get("approval_policy_json"), {})
+    output_schema = parse_json_field(version.get("output_schema_json"), {})
+    capabilities = parse_json_field(version.get("capability_allowlist_json"), [])
+    preview_status = _activation_preview_run_status(
+        cursor,
+        str(blueprint.get("id") or ""),
+        str(version.get("id") or ""),
+    )
+    normalized_steps = []
+    approval_boundaries = []
+    for index, step in enumerate(steps):
+        capability = str(step.get("capability") or step.get("capability_key") or "").strip()
+        approval_type = str(step.get("approval_type") or "").strip()
+        requires_approval = bool(step.get("requires_approval") or approval_type)
+        normalized = {
+            "key": str(step.get("key") or step.get("id") or f"step_{index + 1}"),
+            "position": index + 1,
+            "title": _execution_step_title(step),
+            "step_type": str(step.get("type") or step.get("step_type") or "action"),
+            "capability": capability,
+            "artifact_type": str(step.get("artifact_type") or ""),
+            "requires_approval": requires_approval,
+            "approval_type": approval_type,
+        }
+        normalized_steps.append(normalized)
+        if requires_approval:
+            approval_boundaries.append(
+                {
+                    "step_key": normalized["key"],
+                    "title": normalized["title"],
+                    "approval_type": approval_type or "manual_review",
+                }
+            )
+    schedule_status = _agent_schedule_status(blueprint)
+    metadata = _blueprint_metadata(blueprint)
+    connection_bindings = metadata.get("agent_binding_integrations") if isinstance(metadata.get("agent_binding_integrations"), dict) else {}
+    required_connectors = metadata.get("required_connectors") if isinstance(metadata.get("required_connectors"), list) else []
+    return {
+        "role": role,
+        "version_id": str(version.get("id") or ""),
+        "version_number": _version_number(version),
+        "goal": str(version.get("goal") or blueprint.get("description") or "").strip(),
+        "trigger": str((metadata.get("custom_process") or {}).get("trigger") or ("schedule.daily" if _agent_execution_mode(blueprint) == "scheduled" else "manual.run")),
+        "schedule": {
+            "time": schedule_status.get("time"),
+            "timezone": schedule_status.get("timezone"),
+            "next_run_at": schedule_status.get("next_run_at") if role == "active" else None,
+        },
+        "inputs_schema": public_schema,
+        "steps": normalized_steps,
+        "sources": required_connectors,
+        "connections": connection_bindings,
+        "expected_result": output_schema,
+        "approval_policy": approval_policy,
+        "approval_boundaries": approval_boundaries,
+        "capabilities": [capability_runtime_contract(str(item or "")) for item in capabilities if str(item or "").strip()],
+        "validation": {
+            "tested": bool(preview_status.get("ready")),
+            "last_test": preview_status.get("latest_run"),
+            "status": preview_status.get("status"),
+        },
+        "is_active": role == "active",
+    }
+
+
+def _build_execution_contract(cursor, blueprint: dict, candidate_version: dict | None, active_version: dict | None) -> dict:
+    metadata = _blueprint_metadata(blueprint)
+    preview = metadata.get("agent_builder_preview") if isinstance(metadata.get("agent_builder_preview"), dict) else {}
+    original_request = str(
+        metadata.get("original_request")
+        or blueprint.get("description")
+        or preview.get("understood_task")
+        or (candidate_version or {}).get("goal")
+        or ""
+    ).strip()
+    candidate = _execution_version_contract(cursor, blueprint, candidate_version, role="candidate")
+    active = _execution_version_contract(cursor, blueprint, active_version, role="active")
+    return {
+        "schema": "localos_agent_execution_contract_v1",
+        "original_request": original_request,
+        "execution_mode": _agent_execution_mode(blueprint),
+        "candidate": candidate,
+        "active": active,
+        "has_unpublished_changes": bool(candidate and (not active or candidate.get("version_id") != active.get("version_id"))),
+        "description_complete": bool(original_request and (candidate or active)),
+    }
+
+
 def _resolve_active_version(cursor, blueprint: dict):
     metadata = _blueprint_metadata(blueprint)
     if str(blueprint.get("status") or "") != "active":
@@ -2147,7 +2440,8 @@ def admin_agent_blueprints_overview():
                     "risk_reasons": review.get("risk_reasons") or [],
                 }
             )
-        return jsonify({"success": True, "summary": summary, "agents": agents})
+        runtime = _admin_agent_runtime_overview(cursor)
+        return jsonify({"success": True, "summary": summary, "runtime": runtime, "agents": agents})
     finally:
         db.close()
 
@@ -2707,6 +3001,7 @@ def get_agent_blueprint(blueprint_id: str):
         metadata = _blueprint_metadata(blueprint)
         learning_events = metadata.get("learning_events") if isinstance(metadata.get("learning_events"), list) else []
         version_events = metadata.get("version_events") if isinstance(metadata.get("version_events"), list) else []
+        lifecycle_events = metadata.get("lifecycle_events") if isinstance(metadata.get("lifecycle_events"), list) else []
         feedback_history = metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else []
         legacy_migration = metadata.get("legacy_migration") if isinstance(metadata.get("legacy_migration"), dict) else {}
         metrics = build_agent_metrics_summary(decorated_blueprint, versions, active_version, runs, approval_queue, metadata)
@@ -2716,6 +3011,7 @@ def get_agent_blueprint(blueprint_id: str):
             active_version=candidate_version,
             metadata=metadata,
         )
+        execution_contract = _build_execution_contract(cursor, blueprint, candidate_version, active_version)
         decorated_blueprint["execution_mode"] = _agent_execution_mode(blueprint)
         decorated_blueprint["execution_mode_source"] = _agent_execution_mode_source(blueprint)
         decorated_blueprint["execution_mode_confirmation_required"] = _agent_execution_mode_confirmation_required(blueprint)
@@ -2761,10 +3057,12 @@ def get_agent_blueprint(blueprint_id: str):
                 "approval_queue": approval_queue,
                 "learning_events": learning_events[-50:],
                 "version_events": version_events[-50:],
+                "lifecycle_events": lifecycle_events[-100:],
                 "feedback_history": feedback_history[-20:],
                 "legacy_migration": legacy_migration,
                 "metrics": metrics,
                 "activation_gate": activation_gate,
+                "execution_contract": execution_contract,
             }
         )
     finally:
@@ -3331,21 +3629,156 @@ def archive_agent_blueprint(blueprint_id: str):
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    payload = request.get_json(silent=True) or {}
+    reason_code = str(payload.get("reason_code") or "no_longer_needed").strip().lower()
+    allowed_reason_codes = {
+        "no_longer_needed",
+        "no_useful_result",
+        "created_by_mistake",
+        "replaced_by_another_agent",
+        "other",
+    }
+    if reason_code not in allowed_reason_codes:
+        return _json_error("Unknown archive reason", 400, "VALIDATION_ERROR")
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
         blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
         if access_error:
             return access_error
+        if str(blueprint.get("status") or "").strip().lower() == "archived":
+            return jsonify({
+                "success": True,
+                "blueprint_id": str(blueprint.get("id") or blueprint_id),
+                "status": "archived",
+                "reused": True,
+            })
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE COALESCE(input_json->>'preview_mode', 'false') = 'true'
+                      AND status <> 'superseded'
+                ) AS preview_runs,
+                COUNT(*) FILTER (
+                    WHERE COALESCE(input_json->>'preview_mode', 'false') <> 'true'
+                      AND status <> 'superseded'
+                ) AS work_runs,
+                COUNT(*) FILTER (
+                    WHERE COALESCE(input_json->>'preview_mode', 'false') <> 'true'
+                      AND status = 'completed'
+                ) AS completed_work_runs,
+                COUNT(*) FILTER (WHERE status = 'running') AS running_runs,
+                COUNT(*) FILTER (
+                    WHERE COALESCE(input_json->>'preview_mode', 'false') = 'true'
+                      AND status <> 'superseded'
+                      AND EXISTS (
+                          SELECT 1
+                          FROM agent_artifacts a
+                          WHERE a.run_id = agent_runs.id
+                            AND a.artifact_type IN ('agent_final_result', 'agent_output_draft', 'telegram_post_draft')
+                      )
+                ) AS preview_results,
+                COUNT(*) FILTER (
+                    WHERE COALESCE(input_json->>'preview_mode', 'false') <> 'true'
+                      AND status <> 'superseded'
+                      AND EXISTS (
+                          SELECT 1
+                          FROM agent_artifacts a
+                          WHERE a.run_id = agent_runs.id
+                            AND a.artifact_type IN ('agent_final_result', 'agent_output_draft', 'telegram_post_draft')
+                      )
+                ) AS work_results
+            FROM agent_runs
+            WHERE blueprint_id = %s
+            """,
+            (blueprint_id,),
+        )
+        archive_snapshot = dict(cursor.fetchone() or {})
+        if int(archive_snapshot.get("running_runs") or 0) > 0:
+            return _json_error(
+                "Дождитесь завершения текущей работы агента, затем архивируйте его.",
+                409,
+                "AGENT_RUN_ALREADY_IN_PROGRESS",
+            )
+        work_results = int(archive_snapshot.get("work_results") or 0)
+        preview_results = int(archive_snapshot.get("preview_results") or 0)
+        if work_results > 0:
+            result_state = "with_work_result"
+        elif preview_results > 0:
+            result_state = "test_result_only"
+        else:
+            result_state = "without_result"
         metadata = _blueprint_metadata(blueprint)
+        archived_at = _utc_now_text()
         archived_event = {
             "action": "archived",
-            "reason": "Archived from agent cockpit",
+            "reason": reason_code,
+            "result_state": result_state,
+            "preview_runs": int(archive_snapshot.get("preview_runs") or 0),
+            "work_runs": int(archive_snapshot.get("work_runs") or 0),
+            "completed_work_runs": int(archive_snapshot.get("completed_work_runs") or 0),
+            "preview_results": preview_results,
+            "work_results": work_results,
             "user_id": _user_id(user_data),
-            "created_at": _utc_now_text(),
+            "created_at": archived_at,
         }
         events = metadata.get("version_events") if isinstance(metadata.get("version_events"), list) else []
         metadata["version_events"] = (events + [archived_event])[-50:]
+        lifecycle_events = metadata.get("lifecycle_events") if isinstance(metadata.get("lifecycle_events"), list) else []
+        metadata["lifecycle_events"] = (lifecycle_events + [{
+            "schema": "localos_agent_lifecycle_event_v1",
+            "event": "archived",
+            "reason_code": reason_code,
+            "result_state": result_state,
+            "preview_runs": archived_event["preview_runs"],
+            "work_runs": archived_event["work_runs"],
+            "completed_work_runs": archived_event["completed_work_runs"],
+            "preview_results": preview_results,
+            "work_results": work_results,
+            "actor_user_id": _user_id(user_data),
+            "occurred_at": archived_at,
+        }])[-100:]
+        cursor.execute(
+            """
+            UPDATE agent_approvals a
+            SET status = 'superseded',
+                decided_by_user_id = %s,
+                decision_reason = 'Agent archived',
+                decided_at = NOW()
+            FROM agent_runs r
+            WHERE a.run_id = r.id
+              AND r.blueprint_id = %s
+              AND a.status = 'pending'
+            """,
+            (_user_id(user_data), blueprint_id),
+        )
+        cursor.execute(
+            """
+            UPDATE agent_runs
+            SET status = 'superseded',
+                error_text = COALESCE(error_text, 'Agent archived before execution'),
+                completed_at = COALESCE(completed_at, NOW()),
+                updated_at = NOW()
+            WHERE blueprint_id = %s
+              AND status IN ('queued', 'retry_wait', 'waiting_approval')
+            RETURNING id, business_id, created_by_user_id, billing_reservation_id
+            """,
+            (blueprint_id,),
+        )
+        released_reservations = 0
+        for superseded_run in cursor.fetchall() or []:
+            normalized_run = dict(superseded_run)
+            if not normalized_run.get("billing_reservation_id"):
+                continue
+            billing_result = finalize_agent_run_credits(
+                cursor,
+                run={**normalized_run, "status": "superseded"},
+                actual_tokens=0,
+            )
+            if billing_result.get("status") in {"released", "already_finalized"}:
+                released_reservations += 1
+        archived_event["billing_reservations_released"] = released_reservations
         cursor.execute(
             """
             UPDATE agent_blueprints
@@ -3357,7 +3790,12 @@ def archive_agent_blueprint(blueprint_id: str):
             (json.dumps(metadata, ensure_ascii=False), str(blueprint.get("id") or blueprint_id)),
         )
         db.conn.commit()
-        return jsonify({"success": True, "blueprint_id": str(blueprint.get("id") or blueprint_id), "status": "archived"})
+        return jsonify({
+            "success": True,
+            "blueprint_id": str(blueprint.get("id") or blueprint_id),
+            "status": "archived",
+            "archive_summary": archived_event,
+        })
     except Exception:
         db.conn.rollback()
         raise

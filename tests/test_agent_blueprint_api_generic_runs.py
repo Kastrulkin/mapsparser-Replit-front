@@ -290,7 +290,17 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "gate.connection_plan" in agents_page_source
     assert "activationGate?.next_binding_key" in agents_page_source
     assert "openConnectionsFromActivationGate" in agents_page_source
-    assert "onDeleteAgent={onDeleteAgent}" in agents_page_source
+    assert "onDeleteAgent={deleteSelectedAgent}" in agents_page_source
+    assert "Архивировать агента" in agents_page_source
+    assert "resultPrimaryItems" in agents_page_source
+    assert "Готовый ответ" in agents_page_source
+    assert "Открыть в контент-плане" in agents_page_source
+    assert "Открыть отзывы" in agents_page_source
+    assert "Сообщение отправлено в Telegram" in agents_page_source
+    assert "output: hasStructuredResult" in agents_page_source
+    assert "Intl.supportedValuesOf('timeZone')" in agents_page_source
+    assert "Найти город или Europe/Paris" in agents_page_source
+    assert agents_page_source.count("<TimezoneSelect") == 3
     assert "Архивировать" in agents_page_source
     assert "primary_action_label" in agents_page_source
     assert "Активировать версию" in agents_page_source

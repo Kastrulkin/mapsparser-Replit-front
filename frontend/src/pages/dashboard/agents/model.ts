@@ -259,7 +259,18 @@ export const workflowStepsForAnimation = (
   details: AgentBlueprintDetails | null,
   kind: AgentRunAnimation['kind'],
 ) => {
-  const version = details?.candidate_version || details?.active_version || details?.versions?.[0] || null;
+  const contract = kind === 'test'
+    ? details?.execution_contract?.candidate
+    : details?.execution_contract?.active;
+  const contractSteps = contract?.steps || [];
+  if (contractSteps.length) {
+    return contractSteps
+      .filter((step) => !String(step.capability || '').match(/publish|send|dispatch/))
+      .map((step) => userFacingAgentTechText(String(step.title || 'Выполняю шаг')));
+  }
+  const version = kind === 'test'
+    ? details?.candidate_version || details?.active_version || details?.versions?.[0] || null
+    : details?.active_version || details?.candidate_version || details?.versions?.[0] || null;
   const rawSteps = recordValue(version)?.steps_json;
   const steps = Array.isArray(rawSteps) ? rawSteps : [];
   const labels: string[] = [];
@@ -629,6 +640,7 @@ export const resultFieldLabels: Record<string, string> = {
   recommendations: 'Рекомендации',
   reply_drafts: 'Черновики ответов',
   manual_review_reasons: 'Почему нужен ручной контроль',
+  manual_review_reason: 'Почему нужен ручной контроль',
   rules_applied: 'Применённые правила',
   provenance: 'Источники',
   delivery_state: 'Отправка',
@@ -1326,6 +1338,14 @@ export const buildEmployeeResponsibilities = (
   blueprint: AgentBlueprint,
   details?: AgentBlueprintDetails | null,
 ): EmployeeResponsibility[] => {
+  const contract = details?.execution_contract?.active || details?.execution_contract?.candidate;
+  if (contract?.steps?.length) {
+    return contract.steps.slice(0, 6).map((step, index) => ({
+      key: String(step.key || `step-${index + 1}`),
+      label: userFacingAgentTechText(String(step.title || `Шаг ${index + 1}`)),
+      done: true,
+    }));
+  }
   const preview = getBlueprintBuilderPreview(details?.blueprint || blueprint);
   const text = [
     blueprint.name,

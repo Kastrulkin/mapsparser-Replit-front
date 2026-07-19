@@ -108,6 +108,8 @@ def test_review_publish_and_service_optimize_capabilities_create_safe_local_reco
     assert publish_request["result"]["status"] == "publish_request_created"
     assert publish_request["result"]["dispatch_state"] == "pending_human"
     assert publish_request["result"]["manual_publish_required"] is True
+    assert publish_request["result"]["localos_write_performed"] is True
+    assert publish_request["result"]["localos_url"] == "/dashboard/card?tab=reviews&review_filter=needs_reply"
     assert publish_request["result"]["provider_write_performed"] is False
     assert db.cursor_instance.inserted["reviewreplydrafts"]["status"] == "publish_requested"
 
@@ -1298,12 +1300,15 @@ def test_telegram_trigger_runtime_starts_active_custom_agent_and_waits_for_sheet
     assert approval["status"] == "pending"
 
 
-def test_scheduled_trigger_runtime_blocks_when_required_sheet_connection_missing():
+def test_scheduled_trigger_runtime_blocks_when_required_sheet_connection_missing(monkeypatch):
     from services.agent_blueprint_draft_builder import compile_agent_blueprint
     from services.agent_trigger_runtime import dispatch_scheduled_agent_blueprints
 
+    monkeypatch.setenv("AGENT_ASYNC_RUNS_ENABLED", "true")
+    monkeypatch.setenv("AGENT_BETA_BUSINESS_IDS", "biz1")
+
     draft = compile_agent_blueprint(
-        "Каждый вечер проверяй Google Sheets, бери новые оплаты и создавай транзакции в финансах LocalOS"
+        "Каждый вечер прочитай новые строки Google Sheets и подготовь результат"
     )
     payload = draft["version_payload"]
     cursor = FakeActiveTelegramTriggerCursor()
@@ -1346,15 +1351,19 @@ def test_scheduled_trigger_runtime_blocks_when_required_sheet_connection_missing
     assert cursor.trigger_events[0]["status"] == "ignored"
 
 
-def test_scheduled_trigger_runtime_starts_active_safe_schedule_agent():
-    from services.agent_trigger_runtime import dispatch_scheduled_agent_blueprints
+def test_scheduled_trigger_runtime_starts_active_safe_agent_outside_legacy_categories(monkeypatch):
+    from services import agent_trigger_runtime
+
+    monkeypatch.setenv("AGENT_ASYNC_RUNS_ENABLED", "true")
+    monkeypatch.setenv("AGENT_BETA_BUSINESS_IDS", "biz1")
+    monkeypatch.setattr(agent_trigger_runtime, "enqueue_agent_run", _fake_scheduled_enqueue)
 
     cursor = FakeActiveTelegramTriggerCursor()
     cursor.tables["agent_blueprints"]["bp1"] = {
         "id": "bp1",
         "business_id": "biz1",
         "name": "Ежедневная сверка",
-        "category": "custom",
+        "category": "reviews",
         "status": "active",
         "created_by_user_id": "user1",
         "metadata_json": {
@@ -1381,21 +1390,61 @@ def test_scheduled_trigger_runtime_starts_active_safe_schedule_agent():
         "created_by_user_id": "user1",
     }
 
-    result = dispatch_scheduled_agent_blueprints(cursor, "biz1")
+    result = agent_trigger_runtime.dispatch_scheduled_agent_blueprints(cursor, "biz1")
 
     run = next(iter(cursor.tables["agent_runs"].values()))
     assert result["success"] is True
     assert result["matched_count"] == 1
-    assert result["started_runs"][0]["run_status"] == "completed"
+    assert result["started_runs"][0]["run_status"] == "queued"
     assert cursor.trigger_events[0]["status"] == "run_started"
     assert cursor.trigger_events[0]["run_id"] == run["id"]
-    assert run["status"] == "completed"
+    assert run["status"] == "queued"
     assert run["input_json"]["trigger"] == "schedule.daily"
     assert run["input_json"]["source_event"]["source"] == "scheduler"
 
 
-def test_due_scheduled_trigger_dispatcher_runs_each_business_once_per_day():
+def test_due_scheduler_skips_capability_that_is_not_beta_enabled():
     from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
+
+    cursor = FakeActiveTelegramTriggerCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Небезопасное напоминание",
+        "category": "communications",
+        "status": "active",
+        "created_by_user_id": "user1",
+        "metadata_json": {
+            "execution_mode": "scheduled",
+            "active_version_id": "ver1",
+            "custom_process": {"trigger": "schedule.daily", "schedule": {"time": "09:00", "timezone": "UTC"}},
+        },
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "version_number": 1,
+        "steps_json": [{"key": "send", "type": "capability", "capability": "communications.send_reminder"}],
+        "capability_allowlist_json": ["communications.send_reminder"],
+        "output_schema_json": {"trigger": "schedule.daily"},
+    }
+
+    result = dispatch_due_scheduled_agent_blueprints(
+        cursor,
+        now=datetime(2026, 6, 10, 9, 5, tzinfo=timezone.utc),
+    )
+
+    assert result["dispatched_count"] == 0
+    assert result["skipped"][0]["reason"] == "capability_not_beta_enabled"
+    assert cursor.tables["agent_runs"] == {}
+
+
+def test_due_scheduled_trigger_dispatcher_runs_each_business_once_per_day(monkeypatch):
+    from services import agent_trigger_runtime
+
+    monkeypatch.setenv("AGENT_ASYNC_RUNS_ENABLED", "true")
+    monkeypatch.setenv("AGENT_BETA_BUSINESS_IDS", "biz1")
+    monkeypatch.setattr(agent_trigger_runtime, "enqueue_agent_run", _fake_scheduled_enqueue)
 
     cursor = FakeActiveTelegramTriggerCursor()
     cursor.tables["agent_blueprints"]["bp1"] = {
@@ -1429,11 +1478,11 @@ def test_due_scheduled_trigger_dispatcher_runs_each_business_once_per_day():
         "created_by_user_id": "user1",
     }
 
-    first = dispatch_due_scheduled_agent_blueprints(
+    first = agent_trigger_runtime.dispatch_due_scheduled_agent_blueprints(
         cursor,
         now=datetime(2026, 6, 10, 19, 5, tzinfo=timezone.utc),
     )
-    second = dispatch_due_scheduled_agent_blueprints(
+    second = agent_trigger_runtime.dispatch_due_scheduled_agent_blueprints(
         cursor,
         now=datetime(2026, 6, 10, 19, 10, tzinfo=timezone.utc),
     )
@@ -1485,8 +1534,12 @@ def test_due_scheduled_trigger_dispatcher_waits_until_schedule_time():
     assert cursor.tables["agent_runs"] == {}
 
 
-def test_due_scheduler_runs_two_blueprints_for_same_business():
-    from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
+def test_due_scheduler_runs_two_blueprints_for_same_business(monkeypatch):
+    from services import agent_trigger_runtime
+
+    monkeypatch.setenv("AGENT_ASYNC_RUNS_ENABLED", "true")
+    monkeypatch.setenv("AGENT_BETA_BUSINESS_IDS", "biz1")
+    monkeypatch.setattr(agent_trigger_runtime, "enqueue_agent_run", _fake_scheduled_enqueue)
 
     cursor = FakeActiveTelegramTriggerCursor()
     for index, schedule_time in enumerate(["09:00", "10:00"], start=1):
@@ -1517,7 +1570,7 @@ def test_due_scheduler_runs_two_blueprints_for_same_business():
             "output_schema_json": {"trigger": "schedule.daily"},
         }
 
-    result = dispatch_due_scheduled_agent_blueprints(
+    result = agent_trigger_runtime.dispatch_due_scheduled_agent_blueprints(
         cursor,
         now=datetime(2026, 7, 10, 8, 5, tzinfo=timezone.utc),
     )
@@ -1527,3 +1580,58 @@ def test_due_scheduler_runs_two_blueprints_for_same_business():
     assert result["dispatched_count"] == 2
     assert {item["blueprint_id"] for item in result["dispatched"]} == {"bp1", "bp2"}
     assert len(cursor.tables["agent_runs"]) == 2
+
+
+def test_due_scheduler_skips_business_outside_async_beta(monkeypatch):
+    from services import agent_trigger_runtime
+
+    monkeypatch.setenv("AGENT_ASYNC_RUNS_ENABLED", "true")
+    monkeypatch.setenv("AGENT_BETA_BUSINESS_IDS", "other-business")
+    cursor = FakeActiveTelegramTriggerCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Ежедневная сверка",
+        "category": "custom",
+        "status": "active",
+        "created_by_user_id": "user1",
+        "metadata_json": {
+            "execution_mode": "scheduled",
+            "active_version_id": "ver1",
+            "custom_process": {
+                "trigger": "schedule.daily",
+                "schedule": {"time": "09:00", "timezone": "UTC"},
+            },
+        },
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": [],
+        "output_schema_json": {"trigger": "schedule.daily"},
+    }
+
+    result = agent_trigger_runtime.dispatch_due_scheduled_agent_blueprints(
+        cursor,
+        now=datetime(2026, 6, 10, 9, 5, tzinfo=timezone.utc),
+    )
+
+    assert result["dispatched_count"] == 0
+    assert result["skipped"][0]["reason"] == "async_runtime_not_enabled_for_business"
+    assert cursor.tables["agent_runs"] == {}
+
+
+def _fake_scheduled_enqueue(cursor, *, blueprint, version, input_payload, user_data, idempotency_key):
+    run_id = f"queued-{blueprint['id']}"
+    run = {
+        "id": run_id,
+        "blueprint_id": blueprint["id"],
+        "blueprint_version_id": version["id"],
+        "business_id": blueprint["business_id"],
+        "status": "queued",
+        "input_json": input_payload,
+        "created_by_user_id": user_data["user_id"],
+        "idempotency_key": idempotency_key,
+    }
+    cursor.tables["agent_runs"][run_id] = run
+    return {"success": True, "run": run, "reused": False}
