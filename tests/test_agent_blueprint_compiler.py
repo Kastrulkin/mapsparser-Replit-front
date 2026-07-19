@@ -243,6 +243,24 @@ def test_agent_compiler_creates_source_only_blueprint_for_google_sheet_result_ur
     assert draft["metadata"]["compiled_validation"]["valid"] is True
 
 
+def test_agent_compiler_keeps_content_plan_step_with_common_typo():
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+
+    draft = compile_agent_blueprint(
+        "Агент открывает Google-таблицу со списком поездок, пишет пост и сохраняет его "
+        "в конент план на 27 июня 2026 года"
+    )
+    payload = draft["version_payload"]
+
+    assert [step["key"] for step in payload["steps"]] == [
+        "read_google_sheets",
+        "prepare_output",
+        "save_content_plan_draft",
+        "save_result",
+    ]
+    assert "content_plan.item.create_draft" in payload["capability_allowlist"]
+
+
 def test_compiled_workflow_validation_rejects_write_without_approval():
     from services.agent_compiled_artifact import validate_compiled_artifact_candidate
 

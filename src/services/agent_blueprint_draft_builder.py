@@ -786,7 +786,7 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
     source_step_key = f"read_{source.get('key') or 'source'}"
     save_to_content_plan = _contains_any(
         description.lower(),
-        ["контент-план", "контент план", "content plan"],
+        ["контент-план", "контент план", "конент-план", "конент план", "content plan"],
     ) and _contains_any(description.lower(), ["сохран", "добав", "запиш", "созда"])
     scheduled_for = _extract_requested_date(description)
     steps = [
