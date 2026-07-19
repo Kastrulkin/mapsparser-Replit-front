@@ -785,6 +785,7 @@ def test_agent_preview_run_and_activation_endpoints_enforce_safe_gate(monkeypatc
     metadata = dict(draft["metadata"])
     metadata["execution_mode"] = "manual"
     metadata["custom_process"] = {
+        "archetype": "google_sheets_to_telegram",
         "google_sheets_read": {
             "integration_id": "sheets-1",
             "spreadsheet_id": "spreadsheet-1",

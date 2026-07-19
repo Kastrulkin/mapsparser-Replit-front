@@ -1053,6 +1053,22 @@ class AgentBlueprintRunner:
             self._fail_run(str(run.get("id")), validation_error, step_id)
             return False
         capability_result = orchestrator_result.get("result") if isinstance(orchestrator_result.get("result"), dict) else {}
+        preview_rows = payload.get("rows") if isinstance(payload.get("rows"), list) else []
+        if (
+            capability == "google_sheets.read_rows"
+            and self._is_safe_preview_input(self._run_input(run))
+            and preview_rows
+            and not capability_result.get("rows")
+        ):
+            capability_result = {
+                **capability_result,
+                "status": "read_completed",
+                "source": "preview_sample_rows",
+                "rows": preview_rows,
+                "count": len(preview_rows),
+                "provider_read_performed": False,
+            }
+            orchestrator_result["result"] = capability_result
         if capability_result.get("status") == "blocked":
             reason_code = str(capability_result.get("reason_code") or "CAPABILITY_BLOCKED")
             runtime_contract = self._production_action_runtime_contract(
@@ -1461,6 +1477,16 @@ class AgentBlueprintRunner:
                 if key in public_keys and value not in (None, "")
             },
         }
+        capability = str(step.get("capability") or "")
+        preview_sheet = run_input.get("google_sheets") if isinstance(run_input.get("google_sheets"), dict) else {}
+        preview_rows = preview_sheet.get("sample_rows") if isinstance(preview_sheet.get("sample_rows"), list) else []
+        if (
+            capability.startswith("google_sheets.")
+            and run_input.get("preview_mode") is True
+            and not payload.get("rows")
+            and preview_rows
+        ):
+            payload["rows"] = [dict(item) for item in preview_rows if isinstance(item, dict)]
         payload["run_id"] = str(run.get("id") or "")
         if str(payload.get("source_run_id") or "").startswith("{{"):
             payload["source_run_id"] = str(run.get("id") or "")

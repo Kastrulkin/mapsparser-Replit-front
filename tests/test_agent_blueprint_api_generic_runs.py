@@ -818,6 +818,60 @@ def test_internal_business_summary_does_not_create_review_replies():
     assert result["external_dispatch_performed"] is False
 
 
+def test_internal_business_summary_uses_public_parameters_of_current_run():
+    from services.agent_blueprint_workspace import _render_output
+
+    result = _render_output(
+        "business_summary",
+        {
+            "workflow_description": "Подготовить короткую внутреннюю сводку",
+            "output_format": "Короткая внутренняя сводка",
+        },
+        [
+            {
+                "source_name": "business_profile",
+                "summary": "Riderra",
+                "raw": {"id": "biz-1", "name": "Riderra", "business_type": "Трансферная компания"},
+            },
+        ],
+        [],
+        {
+            "run_input": {
+                "request": "Подготовить сводку на 21 июля 2026 года.",
+                "business_id": "must-not-be-rendered",
+                "preview_mode": False,
+            },
+        },
+    )
+
+    assert "Параметры этого запуска: Подготовить сводку на 21 июля 2026 года." in result["text"]
+    assert "must-not-be-rendered" not in result["text"]
+
+
+def test_message_row_selection_prefers_date_from_current_run_request():
+    from services.agent_blueprint_workspace import _compose_message_draft, _select_message_items
+
+    rows = [
+        {
+            "source_name": "google_sheets",
+            "summary": "Поездка 20 апреля",
+            "raw": {"id": "trip-20", "date": "20 апреля 2026", "route": "Tallinn - Riga"},
+        },
+        {
+            "source_name": "google_sheets",
+            "summary": "Поездка 21 июля",
+            "raw": {"id": "trip-21", "date": "21 июля 2026", "route": "Tallinn - Helsinki"},
+        },
+    ]
+
+    selected = _select_message_items(rows, "Подготовить сообщение о поездке 21 июля 2026 года")
+    draft = _compose_message_draft(selected, "Подготовить сообщение о поездке 21 июля 2026 года")
+
+    assert [item["raw"]["id"] for item in selected] == ["trip-21"]
+    assert draft.startswith("Поездка на 21 июля 2026")
+    assert "Tallinn - Helsinki" in draft
+
+
 def test_message_result_needs_source_data_without_sheet_rows():
     from services.agent_blueprint_workspace import _render_output
 

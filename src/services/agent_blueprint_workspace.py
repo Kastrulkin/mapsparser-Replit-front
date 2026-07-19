@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import sys
 import uuid
 from typing import Any, Dict, List, Optional
@@ -10,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from services.agent_document_llm import analyze_document_sources_with_llm
 from services.agent_email_llm import draft_email_with_llm
 from services.agent_review_reply_analysis import draft_review_replies_with_llm
+from services.agent_run_contract import RESERVED_AGENT_INPUT_FIELDS
 from services.agent_table_analysis import analyze_table_with_llm
 from services.gigachat_client import analyze_text_with_gigachat
 
@@ -414,6 +416,8 @@ def _render_output(
     feedback_history: List[Dict[str, Any]],
     workspace: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
+    run_parameters = _public_run_parameters(workspace)
+    setup = _setup_for_run(setup, run_parameters)
     facts = [item.get("summary") for item in extracted if item.get("summary")]
     facts = [str(item) for item in facts][:6]
     rules = _clean_text(setup.get("processing_rules"))
@@ -448,7 +452,7 @@ def _render_output(
             run_id=_clean_text((workspace or {}).get("run_id")),
         )
     if category == "business_summary":
-        return _render_business_summary(setup, extracted, feedback_notes)
+        return _render_business_summary(setup, extracted, feedback_notes, run_parameters)
     if category == "documents":
         return analyze_document_sources_with_llm(
             setup,
@@ -482,6 +486,7 @@ def _render_business_summary(
     setup: Dict[str, Any],
     extracted: List[Dict[str, Any]],
     feedback_notes: List[str],
+    run_parameters: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     unique_items = []
     seen = set()
@@ -510,6 +515,9 @@ def _render_business_summary(
     ]
     profile_parts = [item for item in profile_parts if item]
     lines = [f"{company_name}: {' · '.join(profile_parts)}" if profile_parts else company_name]
+    run_context = _run_parameter_summary(run_parameters or {})
+    if run_context:
+        lines.append(f"Параметры этого запуска: {run_context}")
 
     service_names = []
     for item in service_items:
@@ -583,7 +591,7 @@ def _render_message_result(
     user_id: str = "",
     run_id: str = "",
 ) -> Dict[str, Any]:
-    workflow = _clean_text(setup.get("workflow_description"))
+    workflow = _clean_text(setup.get("run_request") or setup.get("workflow_description"))
     google_error = _google_sheets_source_error(extracted)
     if google_error:
         if _is_google_sheets_api_disabled_error(google_error):
@@ -778,6 +786,7 @@ def _build_message_result_fallback(
 def _build_message_prompt(setup: Dict[str, Any], selected_items: List[Dict[str, Any]], feedback_notes: List[str]) -> str:
     payload = {
         "task": _clean_text(setup.get("workflow_description")),
+        "run_parameters": setup.get("run_parameters") if isinstance(setup.get("run_parameters"), dict) else {},
         "extraction_rules": _clean_text(setup.get("extraction_rules")),
         "processing_rules": _clean_text(setup.get("processing_rules")),
         "output_format": _clean_text(setup.get("output_format")),
@@ -811,6 +820,50 @@ def _message_context(selected_items: List[Dict[str, Any]]) -> List[Dict[str, Any
     return context
 
 
+def _public_run_parameters(workspace: Dict[str, Any] | None) -> Dict[str, Any]:
+    run_input = (workspace or {}).get("run_input")
+    if not isinstance(run_input, dict):
+        return {}
+    return {
+        str(key): value
+        for key, value in run_input.items()
+        if str(key) not in RESERVED_AGENT_INPUT_FIELDS and value not in (None, "", [], {})
+    }
+
+
+def _setup_for_run(setup: Dict[str, Any], run_parameters: Dict[str, Any]) -> Dict[str, Any]:
+    if not run_parameters:
+        return setup
+    run_request = _clean_text(run_parameters.get("request"))
+    context = _run_parameter_summary(run_parameters)
+    workflow = _clean_text(setup.get("workflow_description"))
+    if context:
+        workflow = f"{workflow}\n\nПараметры текущего запуска: {context}".strip()
+    return {
+        **setup,
+        "workflow_description": workflow,
+        "run_request": run_request,
+        "run_parameters": run_parameters,
+    }
+
+
+def _run_parameter_summary(run_parameters: Dict[str, Any]) -> str:
+    request_text = _clean_text(run_parameters.get("request"))
+    if request_text:
+        return request_text
+    parts = []
+    for key, value in run_parameters.items():
+        if isinstance(value, list):
+            text = ", ".join(_clean_text(item) for item in value if _clean_text(item))
+        elif isinstance(value, (str, int, float, bool)):
+            text = _clean_text(value)
+        else:
+            continue
+        if text:
+            parts.append(f"{key}: {text}")
+    return "; ".join(parts)
+
+
 def _parse_message_llm_json(raw_response: str) -> Dict[str, Any]:
     text = _clean_text(raw_response)
     if not text:
@@ -840,19 +893,61 @@ def _parse_message_llm_json(raw_response: str) -> Dict[str, Any]:
 def _select_message_items(extracted: List[Dict[str, Any]], workflow: str) -> List[Dict[str, Any]]:
     candidates = [item for item in extracted if _can_use_for_message(item)]
     workflow_lower = workflow.lower()
-    if "20" in workflow_lower:
-        by_day = [item for item in candidates if "20" in _message_item_text(item).lower()]
+    requested_day, month_markers = _requested_date_markers(workflow_lower)
+    if requested_day:
+        day_pattern = re.compile(rf"(?<!\d)0?{re.escape(requested_day)}(?!\d)")
+        by_day = [item for item in candidates if day_pattern.search(_message_item_text(item).lower())]
         if by_day:
-            return by_day
-    preferred_markers = []
-    if "апрел" in workflow_lower:
-        preferred_markers.extend(["апрел", "apr"])
+            by_month = [
+                item
+                for item in by_day
+                if any(marker in _message_item_text(item).lower() for marker in month_markers)
+            ]
+            return by_month or by_day
+    preferred_markers = month_markers
     preferred = [
         item
         for item in candidates
         if any(marker in _message_item_text(item).lower() for marker in preferred_markers)
     ]
     return preferred or candidates[:5]
+
+
+def _requested_date_markers(workflow: str) -> tuple[str, List[str]]:
+    month_groups = {
+        "январ": ["январ", "jan", "-01-"],
+        "феврал": ["феврал", "feb", "-02-"],
+        "март": ["март", "mar", "-03-"],
+        "апрел": ["апрел", "apr", "-04-"],
+        "мая": ["мая", "may", "-05-"],
+        "июн": ["июн", "jun", "-06-"],
+        "июл": ["июл", "jul", "-07-"],
+        "август": ["август", "aug", "-08-"],
+        "сентябр": ["сентябр", "sep", "-09-"],
+        "октябр": ["октябр", "oct", "-10-"],
+        "ноябр": ["ноябр", "nov", "-11-"],
+        "декабр": ["декабр", "dec", "-12-"],
+    }
+    for marker, aliases in month_groups.items():
+        match = re.search(rf"(?<!\d)([0-3]?\d)\s+{marker}\w*", workflow)
+        if match:
+            return str(int(match.group(1))), aliases
+    iso_match = re.search(r"\b\d{4}-(\d{2})-([0-3]\d)\b", workflow)
+    if iso_match:
+        month_aliases = next(
+            (aliases for aliases in month_groups.values() if f"-{iso_match.group(1)}-" in aliases),
+            [],
+        )
+        return str(int(iso_match.group(2))), month_aliases
+    short_match = re.search(r"(?<!\d)([0-3]?\d)[./-]([01]?\d)(?:[./-]\d{2,4})?(?!\d)", workflow)
+    if short_match:
+        month_token = f"-{int(short_match.group(2)):02d}-"
+        month_aliases = next(
+            (aliases for aliases in month_groups.values() if month_token in aliases),
+            [],
+        )
+        return str(int(short_match.group(1))), month_aliases
+    return "", []
 
 
 def _can_use_for_message(item: Dict[str, Any]) -> bool:
@@ -878,9 +973,9 @@ def _message_item_text(item: Dict[str, Any]) -> str:
 def _compose_message_draft(items: List[Dict[str, Any]], workflow: str) -> str:
     first = items[0] if items else {}
     raw = first.get("raw") if isinstance(first.get("raw"), dict) else {}
-    title = "Поездка на 20 апреля" if "20" in workflow or "апрел" in workflow.lower() else "Черновик сообщения"
     route = _first_row_value(raw, ["route", "маршрут", "поездка", "direction", "направление"])
     date = _first_row_value(raw, ["date", "дата", "day", "день"])
+    title = f"Поездка на {date}" if date else "Черновик сообщения"
     time = _first_row_value(raw, ["time", "время", "departure", "выезд", "start"])
     client = _first_row_value(raw, ["client", "клиент", "passenger", "пассажир", "name", "имя"])
     status = _first_row_value(raw, ["status", "статус"])
