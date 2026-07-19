@@ -1590,6 +1590,7 @@ export const AgentRunParametersPanel = ({
                   value={String(value ?? '')}
                   placeholder={field.example === undefined ? undefined : String(field.example)}
                   onChange={(event) => onChange(key, event.target.value)}
+                  onBlur={(event) => onChange(key, event.currentTarget.value)}
                 />
               )}
               {field.description ? <span className="mt-1 block text-xs leading-5 text-slate-500">{field.description}</span> : null}

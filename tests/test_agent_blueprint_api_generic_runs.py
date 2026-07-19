@@ -1496,3 +1496,10 @@ def test_agent_review_reply_analysis_falls_back_without_publish():
     assert result["reply_drafts"]
     assert result["manual_review_reasons"]
     assert result["provenance"] == ["Отзывы"]
+
+
+def test_agent_date_parameter_commits_native_picker_value_on_blur():
+    employee_source = Path("frontend/src/pages/dashboard/agents/employee.tsx").read_text(encoding="utf-8")
+
+    assert 'type={field.format === \'date\' ? \'date\'' in employee_source
+    assert 'onBlur={(event) => onChange(key, event.currentTarget.value)}' in employee_source
