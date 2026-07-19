@@ -1665,7 +1665,7 @@ export const AdminPage: React.FC = () => {
             description="Один список компаний: продажи LocalOS и партнёры клиентов с раздельными сообщениями, комнатами и результатами."
             contentClassName="p-0"
           >
-            <AdminLeadRegistry businessOptions={radarBusinessOptions} />
+            <AdminLeadRegistry businessOptions={radarBusinessOptions} senderBusinessLabel="LocalOS" />
           </DashboardSection>
         ) : activeTab === 'knowledge' ? (
           <DashboardSection

@@ -1633,7 +1633,16 @@ def partnership_parse_lead(lead_id):
             lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
             if not lead:
                 return jsonify({"error": "Lead not found"}), 404
-            if _is_internal_partnership_source_url(lead.get("source_url")):
+            parse_state = _load_latest_partnership_parse_state(cur, lead)
+            if _partnership_parse_is_terminal_closed(parse_state):
+                return jsonify({
+                    "error": "Публичная карточка сообщает, что компания закрыта.",
+                    "code": "PARTNER_BUSINESS_CLOSED",
+                    "next_action": "mark_not_relevant",
+                }), 409
+            lead = _sync_partnership_lead_from_parsed_data(dict(lead))
+            identity_mismatch = str(lead.get("parsed_identity_status") or "") == "mismatch"
+            if _partnership_source_requires_map_match(lead.get("source_url")) or identity_mismatch:
                 if _is_synthetic_partnership_lead(lead):
                     return jsonify(
                         {

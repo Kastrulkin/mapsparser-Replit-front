@@ -134,7 +134,7 @@ def build_next_action(lead: dict[str, Any], workstream: dict[str, Any]) -> dict[
         return {"code": "wait_or_follow_up", "label": "Проверить ответ"}
     if enrichment_status in {"queued", "collecting", "verifying", "researching", "drafting"}:
         return {"code": "prepare_message", "label": "Проверяем контакты"}
-    if readiness_code == "needs_facts":
+    if readiness_code in {"needs_facts", "needs_evidence"}:
         return {"code": "complete_facts", "label": "Добавить факты"}
     if readiness_code == "needs_contact":
         return {"code": "find_contact", "label": "Найти контакт"}

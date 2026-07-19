@@ -31,6 +31,17 @@ export type ServiceConnection = {
   hasHelp: boolean;
 };
 
+export type OutreachSenderAccountSummary = {
+  id: string;
+  channel?: string;
+  sender_identity?: string | null;
+  status?: string;
+  outreach_enabled?: boolean;
+  reply_sync_enabled?: boolean;
+  reply_sync_error?: string | null;
+  health_status?: string | null;
+};
+
 export type IntegrationsRegistryRawState = {
   business?: SettingsHubBusiness | null;
   telegramOwnerLinked?: boolean | null;
@@ -42,6 +53,7 @@ export type IntegrationsRegistryRawState = {
   socialReadiness?: SettingsHubSocialReadiness[];
   externalAccounts?: SettingsHubExternalAccount[];
   crmProviders?: SettingsHubCrmProvider[];
+  outreachSenders?: OutreachSenderAccountSummary[];
 };
 
 const hasText = (value: unknown) => String(value || '').trim().length > 0;
@@ -90,6 +102,7 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
   const accounts = rawState.externalAccounts || [];
   const readiness = rawState.socialReadiness || [];
   const crmProviders = rawState.crmProviders || [];
+  const outreachSenders = rawState.outreachSenders || [];
 
   const ownerBotConnected = Boolean(rawState.telegramOwnerLinked);
   const publicationTargetSet = hasText(rawState.telegramPublishStatus?.telegram_chat_id) || hasText(business.telegram_chat_id);
@@ -107,6 +120,14 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
   const vkOauthConnected = vkAccount?.connection_mode === 'vk_id_oauth';
   const metaAccount = findAccount(accounts, ['meta', 'instagram', 'facebook']);
   const matonAccount = findAccount(accounts, ['maton']);
+  const emailSender = outreachSenders.find((sender) => sender.channel === 'email' && sender.status === 'connected') || null;
+  const emailReady = Boolean(
+    emailSender
+    && emailSender.outreach_enabled
+    && emailSender.reply_sync_enabled
+    && !emailSender.reply_sync_error
+    && !['paused', 'blocked'].includes(String(emailSender.health_status || '')),
+  );
 
   const vkReadiness = findReadiness(readiness, ['vk']);
   const metaReadiness = findReadiness(readiness, ['meta', 'instagram', 'facebook']);
@@ -138,6 +159,22 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
       status: wabaConnected ? 'connected' : phoneAdded ? 'action_required' : 'not_connected',
       nextAction: wabaConnected ? 'Отправка настроена.' : phoneAdded ? 'Добавьте WABA-доступ.' : 'Добавьте номер WhatsApp.',
       primaryAction: { label: wabaConnected ? 'Проверить' : 'Настроить', type: 'drawer', target: 'whatsapp' },
+      hasLogs: true,
+      hasHelp: true,
+    },
+    {
+      id: 'outreach_email',
+      name: 'Email для аутрича',
+      tag: 'Коммуникации',
+      description: 'Личный или рабочий mailbox для одобренных цепочек и проверки ответов.',
+      connectionType: 'credentials',
+      status: emailReady ? 'connected' : emailSender ? 'action_required' : 'not_connected',
+      nextAction: emailReady
+        ? 'Отправка и обязательная проверка ответов работают.'
+        : emailSender
+          ? 'Разрешите отправку или восстановите проверку ответов.'
+          : 'Подключите SMTP и IMAP одного рабочего адреса.',
+      primaryAction: { label: emailReady ? 'Проверить' : 'Настроить', type: 'drawer', target: 'outreach_email' },
       hasLogs: true,
       hasHelp: true,
     },

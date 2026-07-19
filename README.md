@@ -58,13 +58,15 @@ LocalOS помогает владельцам и управляющим лока
 - Telegram и внешние social API используют единый Grimbird proxy на OpenClaw после успешной сетевой проверки.
 
 ### AI-агенты и OpenClaw
-- Agent product cockpit: создание, версии, preview run, run journal, approvals, datahub sources, connectors, provider routes и observability.
-- Compiled AI architecture: пользовательское намерение компилируется в blueprint/capabilities/provider routes, а runtime выполняет проверенный план.
-- OpenClaw / Action Orchestrator выступает execution boundary; LocalOS добавляет policy, billing, approval, audit, recovery и support export.
-- Поддержанные маршруты включают native LocalOS capabilities, Maton delivery route, Google Sheets/table provider executor, Telegram/WhatsApp webhooks и manual handoff там, где нужен человек.
-- Scheduled agents проходят тот же preflight, approval, audit, limits и billing; worker dispatch включается отдельным runtime-флагом.
-- Agent runs поддерживают пилотный durable queue-контур: idempotent enqueue, worker execution, retry/recovery, server-side result metrics и credit reservation. Контур включается только через `AGENT_ASYNC_RUNS_ENABLED` и список `AGENT_BETA_BUSINESS_IDS`.
-- Для каждого аккаунта предусмотрен стартовый набор из 10 популярных draft/templates: Telegram-дайджест владельцу, ответы на негативные отзывы, новости для карточек, SEO-правки услуг, партнёрский outreach, browser-use мониторинг конкурентов, Google Sheets to Telegram, WhatsApp/Telegram FAQ, импорт расходов и проверка записей на завтра.
+- Публично это один продукт «Агенты»: простой конструктор создаёт `AgentBlueprint` с compiled workflow. `AIAgents` остаётся persona/voice и legacy chat configuration, а не вторым runtime.
+- `/dashboard/agents` показывает реестр ИИ-сотрудников, тип запуска, результат, историю, версии, подключения и одно следующее действие. Типы: `one_off` (без автозапуска, можно повторить), `manual` и `scheduled`.
+- Тест использует candidate version; рабочий запуск `manual`/`scheduled` использует только явно включённую active version. Версию можно проверить, активировать и вернуть предыдущую.
+- Параметры каждого запуска строятся из `inputs_schema_json`; служебные поля скрыты, а backend повторно валидирует payload.
+- В controlled beta run идемпотентно ставится в durable queue, выполняется worker-ом, поддерживает heartbeat, retry/recovery и polling. Preview бесплатен; working run резервирует до 2 кредитов и списывает фактическую стоимость в пределах резерва.
+- Результат нормализован в `business_result`/`result_state`; approval показывается только для текущего run перед реальным внешним действием. Старые ожидания решения supersede-ятся.
+- Сертифицированные beta-capabilities охватывают read/draft/safe internal write: Google Sheets read, drafts для отзывов/новостей/услуг, content-plan draft, appointments read, support export и партнёрский analysis/draft. Request-only writes не активируются как beta workflow.
+- OpenClaw / ActionOrchestrator остаётся execution boundary для policy, approval, billing, audit, callbacks и recovery. Provider не является пользовательской моделью агента.
+- Production остаётся cohort beta: async runtime ограничен `AGENT_BETA_BUSINESS_IDS`; scheduler развёрнут за флагом, но production scheduled-canary ещё не зафиксирован. Массовый self-service запуск пока не заявляется.
 
 ### Интеграции и внешние write-действия
 - Google Business Profile подключается через OAuth; production-доступ зависит от статуса Google API approval и конкретного включённого capability.
@@ -152,7 +154,7 @@ LocalOS помогает владельцам и управляющим лока
 - 🧩 [Архитектура агентов LocalOS v1](./docs/LOCALOS_AGENT_ARCHITECTURE_V1.md) — канон Agent/Persona/Blueprint/Compiled Workflow/OpenClaw и инвентаризация существующих блоков
 - 🧑‍💼 [Модель интерфейса агентов Compiled AI](./docs/AGENTS_INTERFACE_MODEL_COMPILED_AI.md) — агенты как ИИ-сотрудники, IA раздела и путь create → test → approve → enable → running
 - 🤖 [10 популярных примеров агентов](./docs/agents/popular-account-examples.md) — стартовый набор draft/templates для каждого аккаунта
-- 🧠 [Compiled AI Architecture v1](./docs/LOCALOS_COMPILED_AI_ARCHITECTURE_V1.md) — DSL, compiled artifact candidate, validation gate and deterministic runtime contract
+- 🧠 [Compiled AI Architecture v1](./docs/LOCALOS_COMPILED_AI_ARCHITECTURE_V1.md) — текущий DSL, version/run contracts, capability certification, queue/billing runtime и rollout gates
 - 🧠 [Compiled AI Envelope over OpenClaw v1](./docs/LOCALOS_COMPILED_AI_ENVELOPE_OVER_OPENCLAW_V1.md) — LocalOS как product/policy/billing/audit слой поверх OpenClaw runtime
 - 🧭 [Политика аудита карточки](./docs/CARD_AUDIT_IDEAL.md) — идеал карточки, пороги, веса и правила gap-анализа
 - 🏨 [Hospitality-аудит карточки](./docs/CARD_AUDIT_HOSPITALITY_V1.md) — отдельный reasoning-режим для hotel/resort/apartment stay

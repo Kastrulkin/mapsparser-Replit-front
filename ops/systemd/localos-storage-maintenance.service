@@ -1,0 +1,9 @@
+[Unit]
+Description=LocalOS storage retention maintenance
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/seo-app
+EnvironmentFile=-/opt/seo-app/.env
+ExecStart=/opt/seo-app/scripts/run_storage_maintenance.sh

@@ -77,6 +77,19 @@ An agent is a product object, not a technical workflow editor.
 
 Communication is a blueprint category, not a separate product entity called "communication agent".
 
+There are not two executable products called "simple Agents" and "Compiled
+Agents". The simple builder is the user experience; every executable result is
+an `AgentBlueprint` with a compiled workflow. The three explicit execution
+modes are:
+
+- `one_off`: no automatic launch; the same agent may still be run again with
+  new parameters;
+- `manual`: a reusable agent launched by the owner;
+- `scheduled`: an explicitly activated agent with time and IANA timezone.
+
+Legacy agents without a confirmed mode may be tested, but cannot perform work
+or run automatically until the owner confirms the mode.
+
 Agents must never bind directly to a provider in user-facing logic. User intent
 compiles to capabilities, and LocalOS resolves the provider behind approval,
 limits, billing, and audit. Existing LocalOS integrations and Maton.ai are
@@ -103,12 +116,28 @@ memory. For example, a Google Sheets read step can expose
 its `rows` payload before policy/orchestrator execution. The saved blueprint is
 the runtime source of truth.
 
-Runs should fail early with a connection preflight when an external source is
+Runs fail early with a connection preflight when an external source is
 missing. Native LocalOS destinations, such as Finance, are already available
 inside the product boundary and should not be presented as another business
 profile to connect. In the controlled beta, accepted runs are idempotently
 queued and executed by the worker. The HTTP request is not the lifetime of the
 task; a saved run can recover after an app or browser restart.
+
+The candidate and active version are separate contracts. Preview always tests
+the candidate. Reusable working runs use only the explicitly active version;
+activation requires a successful preview, and rollback selects an earlier
+tested version without launching it. Run forms come from the selected version's
+`inputs_schema_json`, while server-side validation removes reserved service
+fields and rejects unknown or invalid values.
+
+Preview is free. A production run reserves up to two credits, settles one
+credit per started 1,000 recorded tokens within that reservation, releases the
+unused part, and records any beta overage without charging it. One
+`idempotency_key` maps to one run and one reservation.
+
+The primary result contract is `business_result` plus `result_state`. The UI
+must bind approvals and artifacts to that exact run; an older pending approval
+must never replace the completed result of a newer run.
 
 Scheduled agents use the same compiled runtime. A `schedule.daily` trigger
 records a scheduler event, runs connection preflight, then starts the saved
@@ -121,6 +150,12 @@ The first Agents beta permits one-off/manual read, draft and safe internal-draft
 capabilities. Capability catalog entries declare `runtime_status` and
 `beta_enabled`; request-only or planned capabilities may remain visible in
 technical catalogs but cannot activate a compiled workflow in this cohort.
+
+Current rollout boundary (verified 19 July 2026): async execution is enabled
+only for three beta businesses. Scheduler dispatch code and its feature flag
+are deployed, but production has no active confirmed scheduled blueprint and no
+recorded scheduler event yet. Documentation must therefore describe scheduled
+execution as implemented but not production-proven, not as generally launched.
 
 ## Mandatory Human Approval
 

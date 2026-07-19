@@ -9,7 +9,12 @@ from psycopg2.extras import Json, RealDictCursor
 from api.prospecting.access_schema import _require_auth, _require_superadmin, _resolve_business_for_user
 from api.prospecting.shared import admin_prospecting_bp
 from pg_db_utils import get_db_connection
-from services.contact_intelligence_service import enqueue_enrichment_job, serialize_contact_point
+from services.contact_intelligence_service import (
+    enqueue_enrichment_job,
+    serialize_contact_point,
+)
+from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
+from services.outreach_personalization_ai import generation_contract_current
 
 
 def _serialize_job(row: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -92,7 +97,9 @@ def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
     cursor.execute(
         """
         SELECT id, display_name, role_title, company_name, competence_story,
-               proof_points_json, verified_cases_json, signature_text, confirmed_at
+               proof_points_json, verified_cases_json, signature_text, confirmed_at,
+               outreach_context_json, allowed_offers_json, forbidden_claims_json,
+               voice_examples_json
         FROM outreach_sender_profiles
         WHERE workstream_type = %s
           AND COALESCE(client_business_id, '') = COALESCE(%s, '')
@@ -102,6 +109,41 @@ def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
         (workstream.get("workstream_type"), workstream.get("client_business_id")),
     )
     sender_row = cursor.fetchone()
+    sender_profile = dict(sender_row) if sender_row else None
+    business_service_count = None
+    if workstream.get("workstream_type") == "client_partnership":
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS service_count
+            FROM userservices
+            WHERE business_id = %s AND COALESCE(is_active, TRUE) = TRUE
+            """,
+            (workstream.get("client_business_id"),),
+        )
+        service_row = cursor.fetchone()
+        business_service_count = int(
+            (service_row.get("service_count") if service_row else 0) or 0
+        )
+    profile_completeness = evaluate_sender_profile_completeness(
+        sender_profile,
+        workstream_type=str(workstream.get("workstream_type") or ""),
+        business_service_count=business_service_count,
+    )
+    draft_payload = dict(draft_row) if draft_row else None
+    if draft_payload is not None:
+        draft_payload["generation_current"] = generation_contract_current(
+            draft_payload.get("message_brief_json"),
+            draft_payload.get("quality_gate_json"),
+        )
+        draft_payload["requires_regeneration"] = not draft_payload["generation_current"]
+    first_message = (
+        draft_payload
+        if draft_row
+        and profile_completeness["ready"]
+        and sender_profile
+        and sender_profile.get("confirmed_at")
+        else None
+    )
     selected = next(
         (item for item in contacts if item.get("id") == str(workstream.get("selected_contact_point_id"))),
         None,
@@ -120,8 +162,9 @@ def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
         },
         "selected_recipient": selected,
         "job": _serialize_job(dict(job_row) if job_row else None),
-        "sender_profile": dict(sender_row) if sender_row else None,
-        "first_message": dict(draft_row) if draft_row else None,
+        "sender_profile": sender_profile,
+        "sender_profile_completeness": profile_completeness,
+        "first_message": first_message,
     }
 
 
@@ -138,7 +181,79 @@ def _save_sender_profile(
     company_name = str(data.get("company_name") or "").strip()
     if not display_name or not role_title or not company_name:
         raise ValueError("Укажите имя, роль и компанию отправителя")
-    confirmed = bool(data.get("confirmed"))
+    confirmation_requested = bool(data.get("confirmed"))
+
+    def normalize_facts(value: Any) -> list[dict[str, Any]]:
+        items = value if isinstance(value, list) else []
+        normalized: list[dict[str, Any]] = []
+        for item in items:
+            if isinstance(item, dict):
+                fact = str(
+                    item.get("fact") or item.get("text") or item.get("result") or item.get("title") or ""
+                ).strip()
+                status = str(item.get("status") or ("approved" if confirmation_requested else "missing")).strip().lower()
+                source = str(item.get("source") or "sender_confirmation").strip()
+            else:
+                fact = str(item or "").strip()
+                status = "approved" if confirmation_requested else "missing"
+                source = "sender_confirmation"
+            if fact and status in {"approved", "observed", "hypothesis", "missing"}:
+                normalized.append({"fact": fact, "status": status, "source": source})
+        return normalized
+
+    competence_story = str(data.get("competence_story") or "").strip()
+    competence_status = str(
+        data.get("competence_story_status") or ("approved" if confirmation_requested and competence_story else "missing")
+    ).strip().lower()
+    if competence_status not in {"approved", "observed", "hypothesis", "missing"}:
+        raise ValueError("Неверный статус founder story")
+    outreach_context = data.get("outreach_context") if isinstance(data.get("outreach_context"), dict) else {}
+    proof_points = normalize_facts(data.get("proof_points"))
+    verified_cases = normalize_facts(data.get("verified_cases"))
+    allowed_offers = normalize_facts(data.get("allowed_offers"))
+    forbidden_claims = normalize_facts(data.get("forbidden_claims"))
+    voice_examples = normalize_facts(data.get("voice_examples"))
+    business_service_count = None
+    if workstream_type == "client_partnership":
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS service_count
+            FROM userservices
+            WHERE business_id = %s AND COALESCE(is_active, TRUE) = TRUE
+            """,
+            (client_business_id,),
+        )
+        service_row = cursor.fetchone()
+        business_service_count = int(
+            (service_row.get("service_count") if service_row else 0) or 0
+        )
+    candidate_profile = {
+        "display_name": display_name,
+        "role_title": role_title,
+        "company_name": company_name,
+        "competence_story": competence_story,
+        "proof_points_json": proof_points,
+        "verified_cases_json": verified_cases,
+        "allowed_offers_json": allowed_offers,
+        "forbidden_claims_json": forbidden_claims,
+        "voice_examples_json": voice_examples,
+        "outreach_context_json": {
+            **outreach_context,
+            "competence_story_status": competence_status,
+        },
+    }
+    completeness = evaluate_sender_profile_completeness(
+        candidate_profile,
+        workstream_type=workstream_type,
+        business_service_count=business_service_count,
+    )
+    confirmed = confirmation_requested and bool(completeness["ready"])
+    outreach_context = {
+        **outreach_context,
+        "competence_story_status": competence_status,
+        "fact_status_contract": ["approved", "observed", "hypothesis", "missing"],
+        "profile_completeness": completeness,
+    }
     cursor.execute(
         "SELECT pg_advisory_xact_lock(hashtext(%s))",
         (f"sender-profile:{workstream_type}:{client_business_id or 'localos'}",),
@@ -159,23 +274,33 @@ def _save_sender_profile(
         INSERT INTO outreach_sender_profiles (
             id, workstream_type, client_business_id, display_name, role_title,
             company_name, competence_story, proof_points_json, verified_cases_json,
-            signature_text, is_active, confirmed_at, created_by, created_at, updated_at
+            signature_text, outreach_context_json, allowed_offers_json,
+            forbidden_claims_json, voice_examples_json,
+            is_active, confirmed_at, created_by, created_at, updated_at
         ) VALUES (
             %s, %s, NULLIF(%s, ''), %s, %s, %s, NULLIF(%s, ''), %s, %s,
-            NULLIF(%s, ''), TRUE, CASE WHEN %s THEN NOW() ELSE NULL END,
+            NULLIF(%s, ''), %s, %s, %s, %s,
+            TRUE, CASE WHEN %s THEN NOW() ELSE NULL END,
             NULLIF(%s, ''), NOW(), NOW()
         )
         RETURNING *
         """,
         (
             profile_id, workstream_type, client_business_id or "", display_name, role_title,
-            company_name, str(data.get("competence_story") or ""),
-            Json(data.get("proof_points") if isinstance(data.get("proof_points"), list) else []),
-            Json(data.get("verified_cases") if isinstance(data.get("verified_cases"), list) else []),
-            str(data.get("signature_text") or ""), confirmed, user_id,
+            company_name, competence_story,
+            Json(proof_points),
+            Json(verified_cases),
+            str(data.get("signature_text") or ""),
+            Json(outreach_context),
+            Json(allowed_offers),
+            Json(forbidden_claims),
+            Json(voice_examples),
+            confirmed, user_id,
         ),
     )
-    return dict(cursor.fetchone())
+    profile = dict(cursor.fetchone())
+    profile["profile_completeness"] = completeness
+    return profile
 
 
 @admin_prospecting_bp.route("/api/admin/prospecting/leads/<string:lead_id>/contact-intelligence", methods=["POST"])
@@ -291,7 +416,11 @@ def admin_sender_profiles():
             data=data,
         )
         conn.commit()
-        return jsonify({"success": True, "profile": profile}), 201
+        return jsonify({
+            "success": True,
+            "profile": profile,
+            "profile_completeness": profile.get("profile_completeness") or {},
+        }), 201
     except ValueError as validation_error:
         conn.rollback()
         return jsonify({"error": str(validation_error)}), 400
@@ -393,6 +522,23 @@ def partnership_sender_profile():
         if request.method == "GET":
             cursor.execute(
                 """
+                SELECT name
+                FROM userservices
+                WHERE business_id = %s
+                  AND COALESCE(is_active, TRUE) = TRUE
+                  AND NULLIF(BTRIM(name), '') IS NOT NULL
+                ORDER BY name
+                LIMIT 100
+                """,
+                (business_id,),
+            )
+            business_services = [
+                str(item.get("name") or "").strip()
+                for item in cursor.fetchall() or []
+                if str(item.get("name") or "").strip()
+            ]
+            cursor.execute(
+                """
                 SELECT * FROM outreach_sender_profiles
                 WHERE workstream_type = 'client_partnership'
                   AND client_business_id = %s AND is_active = TRUE
@@ -401,7 +547,22 @@ def partnership_sender_profile():
                 (business_id,),
             )
             row = cursor.fetchone()
-            return jsonify({"success": True, "profile": dict(row) if row else None})
+            profile = dict(row) if row else None
+            completeness = evaluate_sender_profile_completeness(
+                profile,
+                workstream_type="client_partnership",
+                business_service_count=len(business_services),
+            )
+            return jsonify({
+                "success": True,
+                "profile": profile,
+                "profile_completeness": completeness,
+                "suggested_context": {
+                    "services": business_services,
+                    "services_source": "business_services",
+                    "requires_confirmation": True,
+                },
+            })
         profile = _save_sender_profile(
             cursor,
             workstream_type="client_partnership",
@@ -410,7 +571,11 @@ def partnership_sender_profile():
             data=data,
         )
         conn.commit()
-        return jsonify({"success": True, "profile": profile}), 201
+        return jsonify({
+            "success": True,
+            "profile": profile,
+            "profile_completeness": profile.get("profile_completeness") or {},
+        }), 201
     except ValueError as validation_error:
         conn.rollback()
         return jsonify({"error": str(validation_error)}), 400

@@ -61,6 +61,8 @@ from pg_db_utils import get_db_connection
 from services.gigachat_client import analyze_text_with_gigachat
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
+from services.outreach_inbound_service import record_campaign_inbound_reaction
+from services.outreach_safety_service import classify_inbound_event, reconcile_reaction_learning_event
 from services.lead_workstream_service import (
     CLIENT_PARTNERSHIP,
     LOCALOS_SALES,
@@ -336,13 +338,16 @@ def _record_reaction(
     provider_message_id: str | None = None,
     reply_created_at: Any = None,
     prefer_ai: bool = True,
+    inbound_classification_override: str | None = None,
+    inbound_payload: dict[str, Any] | None = None,
 ):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT q.id, q.lead_id, q.workstream_id, q.delivery_status
+            SELECT q.id, q.lead_id, q.workstream_id, q.delivery_status,
+                   q.campaign_touch_id
             FROM outreachsendqueue q
             WHERE q.id = %s
             """,
@@ -387,6 +392,17 @@ def _record_reaction(
             classified_outcome, confidence = _classify_reply_outcome(raw_reply or "")
             classifier_source = "heuristic"
         final_outcome = normalized_outcome or classified_outcome
+        explicit_classification = {
+            "positive": "interested",
+            "question": "question",
+            "hard_no": "not_interested",
+        }.get(str(final_outcome or ""))
+        classification_payload = dict(inbound_payload or {})
+        classification_payload["classification"] = (
+            inbound_classification_override or explicit_classification
+        )
+        classification_payload["raw_reply"] = raw_reply or ""
+        inbound_classification = classify_inbound_event(classification_payload)
         note_prefix = f"classifier={classifier_source}"
         note_value = f"{note_prefix}; {note}" if note else note_prefix
 
@@ -457,6 +473,19 @@ def _record_reaction(
             actor_id=user_id,
             comment=(raw_reply or "").strip() or None,
             payload={"queue_id": queue_id, "outcome": final_outcome},
+        )
+        record_campaign_inbound_reaction(
+            cur,
+            queue_payload=queue_payload,
+            reaction_id=reaction_id,
+            user_id=user_id,
+            raw_reply=raw_reply or "",
+            final_outcome=final_outcome,
+            provider_message_id=normalized_provider_message_id,
+            classifier_source=classifier_source,
+            reply_created_at=reply_created_at,
+            inbound_classification=inbound_classification,
+            classification_payload=classification_payload,
         )
         conn.commit()
         return reaction, None
@@ -663,6 +692,13 @@ def _confirm_reaction(reaction_id: str, outcome: str, note: str | None, user_id:
             """,
             (next_lead_status, next_pipeline_status, payload["lead_id"]),
         )
+        learning_reconciliation = reconcile_reaction_learning_event(
+            cur,
+            reaction_id=reaction_id,
+            confirmed_outcome=normalized_outcome,
+            user_id=user_id,
+        )
+        reaction["learning_reconciliation"] = learning_reconciliation
         conn.commit()
         return reaction, None
     except Exception:

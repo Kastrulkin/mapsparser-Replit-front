@@ -1433,6 +1433,24 @@ def _prepare_partnership_sales_room(
                 audit_json=audit_json,
             )
         if data_mode == SALES_ROOM_DATA_AUDITED:
+            reason_codes = match_json.get("reason_codes") if isinstance(match_json, dict) else []
+            if "SENDER_PROFILE_INCOMPLETE" in (reason_codes or []):
+                conn.rollback()
+                return {
+                    "error": "Сначала заполните профиль отправителя для партнёрского аутрича.",
+                    "code": "SENDER_PROFILE_INCOMPLETE",
+                    "profile_completeness": match_json.get("profile_completeness") or {},
+                    "status_code": 422,
+                }
+            if _partnership_match_needs_evidence(match_json):
+                conn.rollback()
+                return {
+                    "error": "Совместимость пока не подтверждена фактами.",
+                    "code": "PARTNERSHIP_MATCH_NEEDS_EVIDENCE",
+                    "result": match_json,
+                    "status_code": 422,
+                }
+        if data_mode == SALES_ROOM_DATA_AUDITED:
             cur.execute(
                 """
                 INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)

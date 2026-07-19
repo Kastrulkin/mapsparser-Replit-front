@@ -34,7 +34,8 @@ backup_postgres_if_running() {
 
   echo "Creating Postgres backup: ${backup_file}"
   if docker compose exec -T postgres pg_dump -U "${pg_user}" "${pg_db}" | gzip > "${backup_file}"; then
-    cp "${backup_file}" "${latest_file}"
+    ln -f "${backup_file}" "${latest_file}"
+    python3 scripts/prune_postgres_backups.py --apply
     echo "Postgres backup complete: ${backup_file}"
   else
     rm -f "${backup_file}"

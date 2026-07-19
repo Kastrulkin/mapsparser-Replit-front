@@ -8,6 +8,7 @@ import {
   Info,
   KeyRound,
   ListFilter,
+  Mail,
   MapPinned,
   MessageCircle,
   RefreshCw,
@@ -22,6 +23,7 @@ import { ExternalIntegrations } from '@/components/ExternalIntegrations';
 import TelegramConnection from '@/components/TelegramConnection';
 import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
 import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
+import { OutreachEmailSetup } from '@/components/OutreachEmailSetup';
 import WhatsAppConnection from '@/components/WhatsAppConnection';
 import { WABACredentials } from '@/components/WABACredentials';
 import { Button } from '@/components/ui/button';
@@ -45,6 +47,7 @@ import {
   ConnectionStatus,
   ConnectionType,
   ServiceConnection,
+  OutreachSenderAccountSummary,
   mapIntegrationsState,
 } from './integrationsRegistryState';
 import {
@@ -65,6 +68,7 @@ type IntegrationsPageV3Props = {
   currentBusiness?: SettingsHubBusiness | null;
   focus?: string | null;
   returnTo?: string | null;
+  senderScope?: 'business' | 'platform';
 };
 
 type RegistryLoadState = {
@@ -77,6 +81,7 @@ type RegistryLoadState = {
   socialReadiness: SettingsHubSocialReadiness[];
   externalAccounts: RegistryExternalAccount[];
   crmProviders: SettingsHubCrmProvider[];
+  outreachSenders: OutreachSenderAccountSummary[];
 };
 
 type GoogleLocation = {
@@ -96,6 +101,7 @@ const emptyLoadState: RegistryLoadState = {
   socialReadiness: [],
   externalAccounts: [],
   crmProviders: [],
+  outreachSenders: [],
 };
 
 const statusCopy: Record<ConnectionStatus, string> = {
@@ -116,6 +122,7 @@ const typeCopy: Record<ConnectionType, string> = {
 const serviceDescriptions: Record<string, string> = {
   telegram: 'Привяжите бот LocalOS для управления аккаунтом и отдельно выберите канал/чат, куда будут уходить согласованные посты.',
   whatsapp: 'Сохраните номер и WABA-доступ, когда канал готов к отправке сообщений клиентам.',
+  outreach_email: 'Один mailbox используется для отправки одобренных писем и обязательной проверки ответов.',
   google_sheets: 'Этот доступ нужен агентам для чтения Google Таблиц. Он не публикует ничего наружу.',
   google_business: 'Выберите карточку компании для отзывов, статистики и согласованных постов Google.',
   vk: 'Укажите ID и ключ сообщества. Текстовые публикации всё равно идут только после вашего подтверждения.',
@@ -130,6 +137,7 @@ const serviceDescriptions: Record<string, string> = {
 const serviceHelp: Record<string, string[]> = {
   telegram: ['Привяжите бот LocalOS к Telegram владельца.', 'Укажите канал или чат для постов.', 'Проверьте отправку без внешней публикации.'],
   whatsapp: ['Добавьте номер бизнеса.', 'Заполните WABA Phone ID и access token.', 'Проверьте статус перед отправкой сообщений.'],
+  outreach_email: ['Возьмите SMTP, IMAP и пароль приложения у почтового провайдера.', 'Проверьте подключение без отправки письма.', 'Отдельно разрешите отправку; проверка ответов включится вместе с ней.'],
   google_sheets: ['Нажмите подключение Google.', 'Выберите аккаунт, где есть нужная таблица.', 'Вернитесь к агенту и запустите безопасный тест.'],
   google_business: ['Подключите Google-доступ.', 'Загрузите список карточек.', 'Выберите карточку компании и синхронизируйте данные.'],
   vk: ['Укажите числовой ID сообщества.', 'Добавьте ключ сообщества с доступом к стене.', 'LocalOS проверит готовность текстовых публикаций.'],
@@ -149,7 +157,7 @@ const serviceGroups: Array<{ key: ServiceGroupKey; title: string; description: s
 
 const serviceGroup = (serviceId: string): ServiceGroupKey => {
   if (serviceId === 'telegram') return 'owner';
-  if (['whatsapp', 'google_business', 'vk', 'meta', 'yandex_maps', '2gis'].includes(serviceId)) return 'publishing';
+  if (['whatsapp', 'outreach_email', 'google_business', 'vk', 'meta', 'yandex_maps', '2gis'].includes(serviceId)) return 'publishing';
   return 'data';
 };
 
@@ -186,6 +194,7 @@ const findAccount = (accounts: RegistryExternalAccount[], sources: string[]) => 
 const serviceIcon = (id: string) => {
   if (id === 'telegram') return Send;
   if (id === 'whatsapp') return MessageCircle;
+  if (id === 'outreach_email') return Mail;
   if (id === 'google_sheets') return Database;
   if (id === 'google_business') return Building2;
   if (id === 'vk') return MessageCircle;
@@ -222,7 +231,7 @@ const safeDashboardReturnTo = (value?: string | null) => {
   return clean;
 };
 
-export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, returnTo }: IntegrationsPageV3Props) => {
+export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, returnTo, senderScope = 'business' }: IntegrationsPageV3Props) => {
   const { toast } = useToast();
   const [loadState, setLoadState] = useState<RegistryLoadState>(emptyLoadState);
   const [loading, setLoading] = useState(false);
@@ -268,12 +277,15 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       setLoadError(null);
       const headers = authHeaders();
       try {
-        const [ownerStatus, telegramStatus, readiness, accounts, crmProviders] = await Promise.all([
+        const [ownerStatus, telegramStatus, readiness, accounts, crmProviders, outreachSenders] = await Promise.all([
           fetchJson(`/api/telegram/bind/status?business_id=${encodeURIComponent(currentBusinessId)}`, { headers }),
           fetchJson(`/api/business/telegram-bot/status?business_id=${encodeURIComponent(currentBusinessId)}`, { headers }),
           fetchJson(`/api/business/${encodeURIComponent(currentBusinessId)}/social-posts/channel-readiness`, { headers }),
           fetchJson(`/api/business/${encodeURIComponent(currentBusinessId)}/external-accounts`, { headers }),
           fetchJson(`/api/finance/crm/providers?business_id=${encodeURIComponent(currentBusinessId)}`, { headers }),
+          fetchJson(senderScope === 'platform'
+            ? '/api/outreach/sender-accounts?scope_type=platform'
+            : `/api/outreach/sender-accounts?scope_type=business&business_id=${encodeURIComponent(currentBusinessId)}`, { headers }),
         ]);
 
         if (cancelled) return;
@@ -288,6 +300,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
           socialReadiness: readiness.response.ok && readiness.data.success ? firstArray(readiness.data.channel_readiness) : [],
           externalAccounts: accounts.response.ok && accounts.data.success ? firstArray(accounts.data.accounts) : [],
           crmProviders: crmProviders.response.ok && crmProviders.data.success ? firstArray(crmProviders.data.providers) : [],
+          outreachSenders: outreachSenders.response.ok && outreachSenders.data.success ? firstArray(outreachSenders.data.sender_accounts) : [],
         });
         setLastCheckedAt(new Date());
       } catch {
@@ -304,7 +317,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     return () => {
       cancelled = true;
     };
-  }, [currentBusinessId, refreshKey]);
+  }, [currentBusinessId, refreshKey, senderScope]);
 
   const services = useMemo(() => mapIntegrationsState({
     business: currentBusiness || null,
@@ -313,6 +326,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     socialReadiness: loadState.socialReadiness,
     externalAccounts: loadState.externalAccounts,
     crmProviders: loadState.crmProviders,
+    outreachSenders: loadState.outreachSenders,
   }), [currentBusiness, loadState]);
 
   const selectedService = services.find((service) => service.id === activeServiceId) || null;
@@ -546,11 +560,22 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
 
   const renderSetup = (service: ServiceConnection) => {
     if (service.id === 'telegram') {
+      if (senderScope === 'platform') {
+        const returnPath = safeDashboardReturnTo(returnTo) || '/dashboard/bazich';
+        return (
+          <>
+            <TelegramResearchSetup businessId={currentBusinessId} mode="connection" scopeType="platform" />
+            <Button type="button" variant="outline" asChild className="min-h-10 bg-white active:scale-[0.96] transition-transform">
+              <a href={returnPath}>Вернуться к выбранному лиду</a>
+            </Button>
+          </>
+        );
+      }
       return (
         <>
           <TelegramConnection currentBusinessId={currentBusinessId} />
           <TelegramBotCredentials businessId={currentBusinessId || null} business={currentBusiness} onSaved={refresh} />
-          <TelegramResearchSetup businessId={currentBusinessId} mode="connection" />
+          <TelegramResearchSetup businessId={currentBusinessId} mode="connection" scopeType={senderScope} />
         </>
       );
     }
@@ -561,6 +586,17 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
           <WhatsAppConnection currentBusinessId={currentBusinessId} business={currentBusiness} />
           <WABACredentials businessId={currentBusinessId || null} business={currentBusiness} />
         </>
+      );
+    }
+
+    if (service.id === 'outreach_email') {
+      return (
+        <OutreachEmailSetup
+          businessId={senderScope === 'business' ? currentBusinessId : null}
+          scopeType={senderScope}
+          compact
+          onChanged={refresh}
+        />
       );
     }
 
@@ -700,7 +736,11 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <h3 className="text-base font-semibold text-slate-950">Как подключить</h3>
       <ol className="mt-4 space-y-3">
-        {(serviceHelp[service.id] || []).map((item, index) => (
+        {(service.id === 'telegram' && senderScope === 'platform' ? [
+          'Создайте Telegram API application на my.telegram.org.',
+          'Введите номер, ID и ключ приложения, затем подтвердите вход кодом и 2FA при необходимости.',
+          'Отдельно разрешите радар и сообщения от имени LocalOS. Отправка всё равно потребует approval кампании.',
+        ] : serviceHelp[service.id] || []).map((item, index) => (
           <li key={item} className="flex gap-3 text-sm leading-6 text-slate-700">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white tabular-nums">
               {index + 1}
@@ -764,6 +804,11 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
 
   const renderLogs = (service: ServiceConnection) => {
     const accounts = accountsForService(service.id, loadState.externalAccounts);
+    const senderAccounts = service.id === 'outreach_email'
+      ? loadState.outreachSenders.filter((sender) => sender.channel === 'email')
+      : service.id === 'telegram'
+        ? loadState.outreachSenders.filter((sender) => sender.channel === 'telegram')
+        : [];
     const readiness = readinessForService(service.id, loadState.socialReadiness);
     return (
       <div className="space-y-4">
@@ -779,7 +824,18 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
         </div>
         <details className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <summary className="min-h-10 cursor-pointer select-none text-base font-semibold leading-10 text-slate-950">Сохранённые записи подключения</summary>
-          {accounts.length ? (
+          {senderAccounts.length ? (
+            <div className="mt-4 space-y-2">
+              {senderAccounts.map((sender) => (
+                <div key={sender.id} className="rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700 ring-1 ring-slate-200">
+                  <div className="font-medium text-slate-950">{sender.sender_identity || 'Email sender'}</div>
+                  <div className="text-xs text-slate-500">Статус: {sender.status || 'unknown'} · здоровье: {sender.health_status || 'unknown'}</div>
+                  <div className="text-xs text-slate-500">Отправка: {sender.outreach_enabled ? 'разрешена' : 'запрещена'} · ответы: {sender.reply_sync_enabled ? 'проверяются' : 'не проверяются'}</div>
+                  {sender.reply_sync_error ? <div className="text-xs text-rose-700">Ошибка ответов: {sender.reply_sync_error}</div> : null}
+                </div>
+              ))}
+            </div>
+          ) : accounts.length ? (
             <div className="mt-4 space-y-2">
               {accounts.map((account) => (
                 <div key={`${account.source || 'account'}-${account.external_id || account.display_name || 'item'}`} className="rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700 ring-1 ring-slate-200">
@@ -876,8 +932,12 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
 
       <SettingsDetailSheet
         open={Boolean(selectedService)}
-        title={selectedService?.name || 'Подключение'}
-        description={selectedService ? serviceDescriptions[selectedService.id] || selectedService.description : ''}
+        title={selectedService?.id === 'telegram' && senderScope === 'platform'
+          ? 'Telegram для продаж LocalOS'
+          : selectedService?.name || 'Подключение'}
+        description={selectedService?.id === 'telegram' && senderScope === 'platform'
+          ? 'Подключите личный Telegram-аккаунт суперадмина. Он не будет доступен партнёрским кампаниям клиентских бизнесов.'
+          : selectedService ? serviceDescriptions[selectedService.id] || selectedService.description : ''}
         onOpenChange={(open) => {
           if (!open) setActiveServiceId(null);
         }}

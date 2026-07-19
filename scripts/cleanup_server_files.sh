@@ -26,26 +26,21 @@ find . -type f -name "*.pyo" -delete 2>/dev/null || true
 echo "   ✅ Python кеши удалены"
 echo ""
 
-# 2. Очистка старых бэкапов БД (оставляем только последние 5)
+# 2. Очистка старых бэкапов БД по политике 7 daily / 4 weekly / 6 monthly
 echo "🗑️  2. Очистка старых бэкапов БД..."
-if [ -d "db_backups" ]; then
-    cd db_backups
-    BACKUP_COUNT=$(ls -1 *.backup 2>/dev/null | wc -l)
-    if [ "$BACKUP_COUNT" -gt 5 ]; then
-        # Удаляем все кроме последних 5
-        ls -t *.backup 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
-        echo "   ✅ Удалены старые бэкапы (оставлено последних 5)"
-    else
-        echo "   ℹ️  Бэкапов меньше 5, ничего не удалено"
-    fi
-    cd ..
+if [ -d "data/backups/postgres" ]; then
+    python3 scripts/prune_postgres_backups.py --apply
+else
+    echo "   ℹ️  Каталог data/backups/postgres отсутствует"
 fi
 echo ""
 
 # 3. Очистка логов
 echo "🗑️  3. Очистка логов..."
-# Логи проекта
-find . -type f -name "*.log" -not -path "./.git/*" -delete 2>/dev/null || true
+# Только старые runtime-логи проекта. Audit/manually named logs в backups не трогаем.
+if [ -d "logs" ]; then
+    find logs -type f -name "*.log" -mtime +14 -delete 2>/dev/null || true
+fi
 # Логи в /tmp
 > /tmp/seo_main.out 2>/dev/null || true
 > /tmp/seo_worker.out 2>/dev/null || true
@@ -89,12 +84,12 @@ for legacy_dir in dist tmp_frontend_dist tmp_frontend_dist_fix; do
 done
 echo ""
 
-# 7. Очистка старых uploads (если есть)
-echo "🗑️  7. Очистка старых загрузок..."
-if [ -d "uploads" ]; then
-    # Удаляем файлы старше 30 дней
-    find uploads -type f -mtime +30 -delete 2>/dev/null || true
-    echo "   ✅ Удалены файлы старше 30 дней"
+# 7. Очистка старых диагностических bundles. Пользовательские uploads не удаляются.
+echo "🗑️  7. Очистка старых диагностических bundles..."
+if [ -d "debug_data" ]; then
+    bash scripts/prune_debug_data.sh --apply
+else
+    echo "   ℹ️  Каталог debug_data отсутствует"
 fi
 echo ""
 

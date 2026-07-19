@@ -664,7 +664,8 @@ def test_find_existing_business_for_lead_ignores_mismatched_explicit_business(mo
     assert business is None
 
 
-def test_generate_audit_first_message_draft_uses_grounded_fact_for_email() -> None:
+def test_generate_audit_first_message_draft_uses_grounded_fact_for_email(monkeypatch) -> None:
+    monkeypatch.setattr(admin_prospecting, "analyze_text_with_gigachat", lambda *args, **kwargs: "")
     payload = _generate_audit_first_message_draft(
         lead={
             "name": "Апельсин",
@@ -689,7 +690,8 @@ def test_generate_audit_first_message_draft_uses_grounded_fact_for_email() -> No
     assert "По нашей модели" not in text
 
 
-def test_generate_audit_first_message_draft_does_not_include_money_hint() -> None:
+def test_generate_audit_first_message_draft_does_not_include_money_hint(monkeypatch) -> None:
+    monkeypatch.setattr(admin_prospecting, "analyze_text_with_gigachat", lambda *args, **kwargs: "")
     payload = _generate_audit_first_message_draft(
         lead={
             "name": "Комфорт",

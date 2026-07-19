@@ -443,6 +443,12 @@ def _load_due_userbot_sources(conn, limit_sources: int) -> list[dict[str, Any]]:
             WHERE source_type = 'telegram'
               AND status = 'active'
               AND sync_mode = 'telegram_userbot'
+              AND EXISTS (
+                  SELECT 1
+                  FROM telegram_account_permissions p
+                  WHERE p.account_id = knowledge_sources.account_id
+                    AND p.radar_enabled = TRUE
+              )
               AND (next_sync_at IS NULL OR next_sync_at <= NOW())
             ORDER BY next_sync_at ASC NULLS FIRST, last_collected_at ASC NULLS FIRST
             LIMIT %s

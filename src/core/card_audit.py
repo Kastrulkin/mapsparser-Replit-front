@@ -2012,7 +2012,21 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _lead_snapshot_business_id(lead: Dict[str, Any]) -> str:
-    return str(lead.get("parse_business_id") or lead.get("business_id") or "").strip()
+    parse_business_id = str(lead.get("parse_business_id") or "").strip()
+    if parse_business_id:
+        return parse_business_id
+    intent = str(lead.get("intent") or "").strip().lower()
+    is_partnership_lead = (
+        intent in {"partnership", "partnership_outreach"}
+        or bool(lead.get("partner_source_company_id"))
+        or bool(lead.get("partner_source_partner_id"))
+    )
+    if is_partnership_lead:
+        # prospectingleads.business_id is the tenant that owns a partnership
+        # search. It is not the parsed recipient business and must never be
+        # used as evidence for that recipient.
+        return ""
+    return str(lead.get("business_id") or "").strip()
 
 
 def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:

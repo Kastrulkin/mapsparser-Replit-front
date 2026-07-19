@@ -869,6 +869,39 @@ def _ensure_parse_business_for_partnership_lead(lead: dict[str, Any], user_id: s
     created = _create_shadow_business_for_lead(detached, user_id)
     return created, True
 
+
+def _load_latest_partnership_parse_state(cur, lead: dict[str, Any]) -> dict[str, Any]:
+    cur.execute(
+        """
+        SELECT status, error_message, retry_after, updated_at
+        FROM parsequeue
+        WHERE (
+                (%s <> '' AND business_id::text = %s)
+                OR (%s = '' AND %s <> '' AND url = %s)
+              )
+          AND task_type IN ('parse_card', 'sync_yandex_business')
+        ORDER BY COALESCE(updated_at, created_at) DESC
+        LIMIT 1
+        """,
+        (
+            str(lead.get("parse_business_id") or ""),
+            str(lead.get("parse_business_id") or ""),
+            str(lead.get("parse_business_id") or ""),
+            str(lead.get("source_url") or ""),
+            str(lead.get("source_url") or ""),
+        ),
+    )
+    row = cur.fetchone()
+    return dict(row) if row and hasattr(row, "keys") else {}
+
+
+def _partnership_parse_is_terminal_closed(parse_state: dict[str, Any] | None) -> bool:
+    state = parse_state if isinstance(parse_state, dict) else {}
+    if str(state.get("status") or "").strip().lower() != "error":
+        return False
+    error = str(state.get("error_message") or "").strip().lower()
+    return "business_closed" in error or "permanent_closed" in error
+
 def _extract_card_profile_fields(card_row: dict[str, Any]) -> dict[str, Any]:
     overview = card_row.get("overview")
     if isinstance(overview, str):
@@ -891,8 +924,10 @@ def _extract_card_profile_fields(card_row: dict[str, Any]) -> dict[str, Any]:
     website_value = str(card_row.get("site") or "").strip()
 
     return {
-        "name": _pick_text("name", "title", "company_name", "organization_name", "org_name"),
-        "address": _pick_text("address", "full_address", "short_address", "location"),
+        "name": _pick_text("name", "title", "company_name", "organization_name", "org_name")
+        or str(card_row.get("title") or "").strip() or None,
+        "address": _pick_text("address", "full_address", "short_address", "location")
+        or str(card_row.get("address") or "").strip() or None,
         "city": _pick_text("city", "locality", "settlement"),
         "category": _pick_text("category", "rubric", "type", "business_type"),
         "phone": str(card_row.get("phone") or "").strip() or None,
@@ -951,7 +986,7 @@ def _sync_partnership_lead_from_parsed_data(lead: dict[str, Any]) -> dict[str, A
         source_org_id = _extract_yandex_org_id_from_url(source_url)
         cur.execute(
             """
-            SELECT phone, site, overview, rating, reviews_count
+            SELECT title, address, url, phone, site, overview, rating, reviews_count
             FROM cards
             WHERE business_id = %s
               AND (
@@ -973,7 +1008,7 @@ def _sync_partnership_lead_from_parsed_data(lead: dict[str, Any]) -> dict[str, A
         if not row:
             cur.execute(
                 """
-                SELECT phone, site, overview, rating, reviews_count
+                SELECT title, address, url, phone, site, overview, rating, reviews_count
                 FROM cards
                 WHERE business_id = %s
                 ORDER BY created_at DESC
@@ -990,10 +1025,14 @@ def _sync_partnership_lead_from_parsed_data(lead: dict[str, Any]) -> dict[str, A
             lead,
             candidate_name=parsed.get("name"),
             candidate_city=parsed.get("city") or parsed.get("address"),
-            candidate_source_url=source_url,
+            candidate_source_url=parsed.get("source_url") or card.get("url") or source_url,
             candidate_external_id=source_org_id,
         ):
-            return lead
+            mismatch = dict(lead)
+            mismatch["parsed_identity_status"] = "mismatch"
+            mismatch["parsed_candidate_name"] = parsed.get("name")
+            mismatch["parsed_candidate_source_url"] = card.get("url")
+            return mismatch
 
         updates: dict[str, Any] = {}
         raw_name = str(lead.get("name") or "").strip()
@@ -1028,7 +1067,9 @@ def _sync_partnership_lead_from_parsed_data(lead: dict[str, Any]) -> dict[str, A
             updates["messenger_links_json"] = Json(parsed.get("social_links"))
 
         if not updates:
-            return lead
+            confirmed = dict(lead)
+            confirmed["parsed_identity_status"] = "confirmed"
+            return confirmed
 
         assignments: list[str] = []
         values: list[Any] = []
@@ -1053,7 +1094,9 @@ def _sync_partnership_lead_from_parsed_data(lead: dict[str, Any]) -> dict[str, A
 
             sync_parsed_lead_contacts(cur, dict(updated))
             conn.commit()
-            return dict(updated)
+            result = dict(updated)
+            result["parsed_identity_status"] = "confirmed"
+            return result
         return lead
     finally:
         conn.close()

@@ -55,6 +55,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
   const [targetMissing, setTargetMissing] = useState(false);
+  const [progressError, setProgressError] = useState<string | null>(null);
   const missingEventStepRef = useRef<string | null>(null);
   const initialRouteSyncedRef = useRef(false);
   const panelRef = useRef<HTMLElement | null>(null);
@@ -99,6 +100,22 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
       body: JSON.stringify(progressForStep(nextStatus, step, nextCompletedSteps)),
     });
   }, []);
+
+  const persistProgressSafely = useCallback(async (
+    nextStatus: TourStatus,
+    step: GuidedTourStep,
+    nextCompletedSteps: string[],
+  ) => {
+    setProgressError(null);
+    try {
+      await persistProgress(nextStatus, step, nextCompletedSteps);
+      return true;
+    } catch (progressSaveError) {
+      console.warn('Guided tour progress was not saved:', progressSaveError);
+      setProgressError('Не удалось сохранить прогресс. Попробуйте ещё раз.');
+      return false;
+    }
+  }, [persistProgress]);
 
   useEffect(() => {
     if (!isDemo) return;
@@ -219,9 +236,10 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   }, [currentStep, recordEvent, targetMissing]);
 
   const start = async () => {
+    const saved = await persistProgressSafely('active', currentStep, completedSteps);
+    if (!saved) return;
     setStatus('active');
     setOpen(true);
-    await persistProgress('active', currentStep, completedSteps);
     await recordEvent(status === 'paused' ? 'resumed' : 'started', currentStep);
     showStep(currentStep);
   };
@@ -229,10 +247,11 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   const moveTo = async (nextIndex: number, nextCompletedSteps: string[], nextStatus: TourStatus = 'active') => {
     const boundedIndex = Math.max(0, Math.min(nextIndex, GUIDED_TOUR_STEPS.length - 1));
     const nextStep = GUIDED_TOUR_STEPS[boundedIndex];
+    const saved = await persistProgressSafely(nextStatus, nextStep, nextCompletedSteps);
+    if (!saved) return;
     setCurrentIndex(boundedIndex);
     setCompletedSteps(nextCompletedSteps);
     setStatus(nextStatus);
-    await persistProgress(nextStatus, nextStep, nextCompletedSteps);
     if (nextStatus === 'active') {
       await recordEvent('step_viewed', nextStep);
       showStep(nextStep);
@@ -244,10 +263,11 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
       ? completedSteps
       : [...completedSteps, currentStep.key];
     if (currentStep.final || currentIndex === GUIDED_TOUR_STEPS.length - 1) {
+      const saved = await persistProgressSafely('completed', currentStep, nextCompleted);
+      if (!saved) return;
       setCompletedSteps(nextCompleted);
       setStatus('completed');
       setTargetRect(null);
-      await persistProgress('completed', currentStep, nextCompleted);
       await recordEvent('completed', currentStep);
       return;
     }
@@ -264,28 +284,31 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   };
 
   const pause = async () => {
+    const saved = await persistProgressSafely('paused', currentStep, completedSteps);
+    if (!saved) return;
     setStatus('paused');
     setOpen(false);
     setTargetRect(null);
-    await persistProgress('paused', currentStep, completedSteps);
     await recordEvent('paused', currentStep);
   };
 
   const skip = async () => {
+    const saved = await persistProgressSafely('skipped', currentStep, completedSteps);
+    if (!saved) return;
     setStatus('skipped');
     setOpen(false);
     setTargetRect(null);
-    await persistProgress('skipped', currentStep, completedSteps);
     await recordEvent('skipped', currentStep);
   };
 
   const restart = async () => {
     const firstStep = GUIDED_TOUR_STEPS[0];
+    const saved = await persistProgressSafely('active', firstStep, []);
+    if (!saved) return;
     setCurrentIndex(0);
     setCompletedSteps([]);
     setStatus('active');
     setOpen(true);
-    await persistProgress('active', firstStep, []);
     await recordEvent('restarted', firstStep);
     showStep(firstStep);
   };
@@ -386,6 +409,11 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
           {targetMissing && currentStep.target ? (
             <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
               Элемент ещё не загрузился. Можно показать его повторно или перейти дальше.
+            </p>
+          ) : null}
+          {progressError ? (
+            <p role="alert" className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm leading-5 text-red-800">
+              {progressError}
             </p>
           ) : null}
 

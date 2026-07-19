@@ -130,27 +130,76 @@ def _normalize_sources(candidate):
     return sources
 
 
-def _normalize_signals(candidate, source_urls):
+def _normalize_signals(candidate, sources):
     raw_signals = candidate.get("signals") if isinstance(candidate.get("signals"), list) else []
     signals = []
+    source_by_url = {item["url"]: item for item in sources}
+    source_urls = set(source_by_url)
     for raw in raw_signals[:20]:
         if not isinstance(raw, dict):
             continue
         kind = _clean_text(raw.get("kind"), 40).lower()
-        observed = _clean_text(raw.get("observed"), 1200)
+        observed = _clean_text(raw.get("observed_fact") or raw.get("observed"), 1200)
         source_url = _safe_public_url(raw.get("source_url"))
         if kind not in SIGNAL_KINDS or not observed or not source_url:
             continue
         if source_url not in source_urls:
             continue
-        signals.append(
-            {
-                "kind": kind,
-                "observed": observed,
-                "inference": _clean_text(raw.get("inference"), 1000),
-                "source_url": source_url,
-            }
+        source = source_by_url[source_url]
+        published_at = _clean_text(raw.get("published_at") or source.get("published_at"), 80)
+        freshness = "unknown_dated_source"
+        freshness_ok = False
+        if published_at and published_at != "date unavailable":
+            try:
+                published_date = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+                if published_date.tzinfo is None:
+                    published_date = published_date.replace(tzinfo=timezone.utc)
+                age_days = (datetime.now(timezone.utc) - published_date.astimezone(timezone.utc)).days
+                freshness = "fresh" if age_days <= 180 else "stale"
+                freshness_ok = age_days <= 180
+            except (TypeError, ValueError):
+                freshness = "unknown_dated_source"
+        try:
+            confidence = float(raw.get("confidence") or 0.8)
+        except (TypeError, ValueError):
+            confidence = 0.8
+        relevance = _clean_text(
+            raw.get("relevance") or raw.get("why_it_matters") or candidate.get("why_now"),
+            1000,
         )
+        usable = bool(freshness_ok and relevance and len(observed) >= 20)
+        rejected_reasons = []
+        if not freshness_ok:
+            rejected_reasons.append("signal_stale_or_undated")
+        if not relevance:
+            rejected_reasons.append("offer_relevance_missing")
+        if len(observed) < 20:
+            rejected_reasons.append("signal_not_specific")
+        evidence_id = "evidence:" + _json_hash({
+            "kind": kind,
+            "observed_fact": observed,
+            "source_url": source_url,
+            "published_at": published_at,
+        })[:20]
+        signals.append({
+            "evidence_id": evidence_id,
+            "kind": kind,
+            "observed_fact": observed,
+            "fact": observed,
+            "hypothesis": _clean_text(raw.get("hypothesis") or raw.get("inference"), 1000) or None,
+            "relevance": relevance,
+            "source_url": source_url,
+            "source_type": source.get("source_type") or "public_web",
+            "author_or_organization": _clean_text(
+                raw.get("author_or_organization") or source.get("title"), 300,
+            ) or None,
+            "published_at": published_at or None,
+            "researched_at": source.get("researched_at") or datetime.now(timezone.utc).isoformat(),
+            "freshness": freshness,
+            "confidence": max(0, min(1, round(confidence, 2))),
+            "usable_for_outreach": usable,
+            "rejected_reason": ",".join(rejected_reasons) or None,
+        })
     return signals
 
 
@@ -213,17 +262,18 @@ def normalize_candidate(candidate):
         raise ValueError("candidate name is required")
     sources = _normalize_sources(candidate)
     source_urls = {item["url"] for item in sources}
-    signals = _normalize_signals(candidate, source_urls)
+    signals = _normalize_signals(candidate, sources)
+    usable_signals = [item for item in signals if item.get("usable_for_outreach")]
     contacts, contact_evidence = _normalize_contacts(candidate, source_urls)
     breakdown = _score_breakdown(candidate)
     score = _weighted_score(breakdown)
     limitations = candidate.get("limitations") if isinstance(candidate.get("limitations"), list) else []
     limitations = [_clean_text(item, 500) for item in limitations[:12] if _clean_text(item, 500)]
-    has_evidence = bool(sources and signals)
+    has_evidence = bool(sources and usable_signals)
     opener = _clean_text(candidate.get("suggested_opener") or candidate.get("opener"), 1200)
     opener_source_url = _safe_public_url(candidate.get("opener_source_url"))
     if opener_source_url not in source_urls:
-        opener_source_url = signals[0]["source_url"] if signals else ""
+        opener_source_url = usable_signals[0]["source_url"] if usable_signals else ""
     if not has_evidence:
         opener = ""
         opener_source_url = ""
@@ -247,7 +297,7 @@ def normalize_candidate(candidate):
         "contact_evidence": contact_evidence,
         "score": score,
         "score_breakdown": breakdown,
-        "signal_label": _signal_label(score, signals, has_evidence),
+        "signal_label": _signal_label(score, usable_signals, has_evidence),
         "why_now": _clean_text(candidate.get("why_now"), 1600),
         "signals": signals,
         "sources": sources,
@@ -256,7 +306,7 @@ def normalize_candidate(candidate):
         "message_brief": _normalize_message_brief(candidate, has_evidence),
         "limitations": list(dict.fromkeys(limitations)),
     }
-    normalized["qualification_stage"] = _stage(candidate, score, signals)
+    normalized["qualification_stage"] = _stage(candidate, score, usable_signals)
     normalized["report_hash"] = _json_hash(normalized)
     return normalized
 

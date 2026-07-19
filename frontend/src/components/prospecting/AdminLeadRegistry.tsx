@@ -23,6 +23,9 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/checkbox';
+import { OutreachEmailSetup } from '../OutreachEmailSetup';
+import { OutreachLearningInsights } from './OutreachLearningInsights';
+import { OutreachSuppressionManager } from './OutreachSuppressionManager';
 import {
   Sheet,
   SheetContent,
@@ -99,9 +102,13 @@ interface ContactPoint {
 }
 
 interface MessageReadiness {
-  code?: 'ready' | 'needs_contact' | 'needs_facts';
+  code?: 'ready' | 'needs_contact' | 'needs_facts' | 'needs_evidence' | 'suppressed';
   label?: string;
   missing?: string[];
+  missing_items?: Array<{
+    code?: string;
+    label?: string;
+  }>;
 }
 
 interface EnrichmentState {
@@ -131,8 +138,36 @@ interface ContactIntelligence {
     role_title?: string;
     company_name?: string;
     competence_story?: string | null;
+    proof_points_json?: Array<string | { fact?: string; status?: string }>;
+    verified_cases_json?: Array<string | { fact?: string; status?: string }>;
+    allowed_offers_json?: string[];
+    forbidden_claims_json?: string[];
+    voice_examples_json?: string[];
+    outreach_context_json?: {
+      product_outcome?: string;
+      audience?: string;
+      segments?: string[];
+      geography?: string;
+      recipient_roles?: string[];
+      desired_partner_types?: string[];
+      disqualifiers?: string[];
+      allowed_ctas?: string[];
+    };
     confirmed_at?: string | null;
   } | null;
+  sender_profile_completeness?: {
+    ready?: boolean;
+    status?: 'ready' | 'draft';
+    completed_count?: number;
+    required_count?: number;
+    items?: Array<{
+      code?: string;
+      title?: string;
+      label?: string;
+      complete?: boolean;
+    }>;
+    missing_items?: Array<{ code?: string; label?: string }>;
+  };
   first_message?: {
     id?: string;
     channel?: string;
@@ -142,7 +177,70 @@ interface ContactIntelligence {
     approved_text?: string | null;
     message_brief_json?: Record<string, unknown>;
     quality_gate_json?: { passed?: boolean; failures?: string[]; word_count?: number };
+    generation_current?: boolean;
+    requires_regeneration?: boolean;
   } | null;
+}
+
+interface OutreachQualityGate {
+  passed?: boolean;
+  verdict?: 'approve' | 'revise' | 'reject';
+  score?: number;
+  total_score?: number;
+  max_score?: number;
+  criterion_scores?: Record<string, number>;
+  reason_codes?: string[];
+}
+
+interface OutreachTouchPreview {
+  sequence_index: number;
+  channel: string;
+  day_offset: number;
+  angle: string;
+  subject?: string | null;
+  text: string;
+  channel_status: 'ready' | 'connect_required' | 'permission_required' | 'manual' | 'recipient_missing' | 'adapter_unavailable' | 'sender_degraded' | 'sender_paused' | 'sender_selection_required';
+  quality_gate?: OutreachQualityGate;
+  source_url?: string | null;
+  observation?: string | null;
+  problem_hypothesis?: string | null;
+  relevance_bridge?: string | null;
+}
+
+interface OutreachPreview {
+  status?: 'ready' | 'needs_evidence' | 'needs_generation' | 'needs_revision' | 'needs_channel_setup' | 'invalid_sequence' | 'suppressed';
+  missing?: string[];
+  evidence?: Array<{ id?: string; fact?: string; source_url?: string; confidence?: number }>;
+  generation?: { status?: string; source?: string; error?: string | null };
+  quality_gate?: OutreachQualityGate;
+  channel_availability?: Record<string, {
+    status?: string;
+    recipient?: string | null;
+    sender_account_id?: string | null;
+    sender_accounts?: Array<{
+      id: string;
+      sender_identity?: string | null;
+      display_name?: string | null;
+      status?: string;
+    }>;
+  }>;
+  touches?: OutreachTouchPreview[];
+  sequence_issues?: string[];
+}
+
+interface SavedOutreachCampaign {
+  id: string;
+  version?: number;
+  status?: string;
+  stop_reason?: string | null;
+  generation_current?: boolean;
+  requires_regeneration?: boolean;
+  touches?: Array<{
+    id?: string;
+    sequence_index?: number;
+    channel?: string;
+    status?: string;
+  }>;
 }
 
 interface LeadWorkstream {
@@ -196,6 +294,7 @@ interface SearchResult extends LeadItem {
 
 interface AdminLeadRegistryProps {
   businessOptions: BusinessOption[];
+  senderBusinessLabel?: string;
 }
 
 const viewOptions: Array<{ id: RegistryView; label: string }> = [
@@ -209,6 +308,41 @@ const scopeOptions: Array<{ id: ScopeFilter; label: string }> = [
   { id: 'localos_sales', label: 'LocalOS' },
   { id: 'client_partnership', label: 'Партнёры клиентов' },
 ];
+
+const outreachQualityCriterionLabels: Record<string, string> = {
+  source_validity: 'Надёжность источника',
+  observation_accuracy: 'Точность наблюдения',
+  freshness_and_why_now: 'Актуальность сигнала',
+  offer_bridge: 'Связь с предложением',
+  recipient_specificity: 'Конкретность для получателя',
+  proof_integrity: 'Подтверждение опыта',
+  channel_fit: 'Естественность для канала',
+  single_cta_and_length: 'Один вопрос и длина',
+  state_and_suppression_safety: 'Безопасность контакта',
+};
+
+const outreachQualityReasonLabels: Record<string, string> = {
+  SOURCE_MISSING: 'Не хватает подтверждённого источника',
+  SOURCE_MISMATCH: 'Источник не подтверждает наблюдение',
+  STALE_AS_CURRENT: 'Устаревший сигнал используется как текущий',
+  INFERENCE_AS_FACT: 'Гипотеза подана как факт',
+  DECORATIVE_PERSONALIZATION: 'Персонализация не меняет причину обращения',
+  WEAK_OFFER_BRIDGE: 'Неясно, как сигнал связан с предложением',
+  UNSUPPORTED_PROOF: 'Опыт отправителя не подтверждён',
+  MULTIPLE_CTA: 'В сообщении больше одного следующего шага',
+  CHANNEL_LIMIT_EXCEEDED: 'Текст не подходит выбранному каналу',
+  STYLE_VIOLATION: 'Текст звучит неестественно или нарушает голос',
+  TERMINAL_CONTACT_STATE: 'Контакт уже находится в конечном статусе',
+  SUPPRESSED_CONTACT: 'Получатель находится в stop-list',
+  APPROVAL_BYPASS: 'Требуется новое ручное подтверждение',
+  SENSITIVE_TARGETING: 'Сигнал нельзя безопасно использовать в сообщении',
+};
+
+const outreachQualityVerdictLabels: Record<string, string> = {
+  approve: 'Можно подтверждать',
+  revise: 'Нужно исправить',
+  reject: 'Нельзя использовать',
+};
 
 const statusLabels: Record<string, string> = {
   unprocessed: 'Новый',
@@ -321,7 +455,24 @@ const strongestResearch = (workstreams: LeadWorkstream[]) => workstreams
 
 const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
-export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
+const readinessCodeFromLegacyLabel = (label: string) => {
+  const normalized = label.trim().toLowerCase();
+  if (normalized.includes('профил') && normalized.includes('отправител')) return 'sender_profile';
+  if (normalized.includes('опыт основателя') || normalized.includes('опыт команды')) return 'sender_experience';
+  if (normalized.includes('доказательство') || normalized.includes('кейс')) return 'sender_proof';
+  if (normalized.includes('совместим') || normalized.includes('полезны друг другу')) return 'partner_compatibility';
+  if (normalized.includes('категори') && normalized.includes('партн')) return 'partner_category';
+  if (normalized.includes('контакт')) return 'recipient_contact';
+  if (normalized.includes('роль получателя')) return 'recipient_role';
+  if (normalized.includes('почему сейчас') || normalized.includes('публичный сигнал')) return 'timing_signal';
+  if (normalized.includes('проблем')) return 'confirmed_problem';
+  if (normalized.includes('результат первого шага')) return 'first_step_result';
+  if (normalized.includes('сегмент')) return 'lead_segment';
+  if (normalized.includes('stop-list')) return 'suppression';
+  return 'research_evidence';
+};
+
+export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ваш бизнес' }: AdminLeadRegistryProps) {
   const [view, setView] = useState<RegistryView>('leads');
   const [scope, setScope] = useState<ScopeFilter>('all');
   const [clientBusinessId, setClientBusinessId] = useState('');
@@ -349,13 +500,30 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
   const [selectedSearchIds, setSelectedSearchIds] = useState<string[]>([]);
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchError, setSearchError] = useState('');
-  const [localosTelegramReady, setLocalosTelegramReady] = useState(false);
   const [contactIntelligence, setContactIntelligence] = useState<ContactIntelligence | null>(null);
   const [contactIntelligenceLoading, setContactIntelligenceLoading] = useState(false);
   const [senderName, setSenderName] = useState('');
   const [senderRole, setSenderRole] = useState('');
   const [senderCompany, setSenderCompany] = useState('');
   const [senderStory, setSenderStory] = useState('');
+  const [senderProof, setSenderProof] = useState('');
+  const [senderOffer, setSenderOffer] = useState('');
+  const [senderForbidden, setSenderForbidden] = useState('');
+  const [senderVoiceExample, setSenderVoiceExample] = useState('');
+  const [senderOutcome, setSenderOutcome] = useState('');
+  const [senderAudience, setSenderAudience] = useState('');
+  const [senderSegments, setSenderSegments] = useState('');
+  const [senderGeography, setSenderGeography] = useState('');
+  const [senderRecipientRoles, setSenderRecipientRoles] = useState('');
+  const [senderPartnerTypes, setSenderPartnerTypes] = useState('');
+  const [senderDisqualifiers, setSenderDisqualifiers] = useState('');
+  const [senderCtas, setSenderCtas] = useState('');
+  const [senderFactsOpen, setSenderFactsOpen] = useState(false);
+  const [outreachPreview, setOutreachPreview] = useState<OutreachPreview | null>(null);
+  const [savedOutreachCampaign, setSavedOutreachCampaign] = useState<SavedOutreachCampaign | null>(null);
+  const [sequenceChannels, setSequenceChannels] = useState(['telegram', 'email', 'max', 'vk']);
+  const [sequenceDays, setSequenceDays] = useState([0, 3, 7, 12]);
+  const [sequenceSenders, setSequenceSenders] = useState<Record<number, string>>({});
 
   const loadLeads = useCallback(async () => {
     setLoading(true);
@@ -378,12 +546,6 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
   useEffect(() => {
     loadLeads();
   }, [loadLeads]);
-
-  useEffect(() => {
-    newAuth.makeRequest('/admin/prospecting/outbound/health')
-      .then((payload) => setLocalosTelegramReady(Boolean(payload?.telegram_app?.authorized)))
-      .catch(() => setLocalosTelegramReady(false));
-  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -426,6 +588,66 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
   const drawerRecipient = contactIntelligence?.selected_recipient || selectedWorkstream?.selected_recipient || null;
   const drawerReadiness = contactIntelligence?.job?.message_readiness || selectedWorkstream?.message_readiness || {};
   const drawerFirstMessage = contactIntelligence?.first_message || null;
+  const drawerMessageCurrent = Boolean(drawerFirstMessage?.generation_current);
+  const readinessIssues = (() => {
+    const explicitIssues = (drawerReadiness.missing_items || []).length
+      ? (drawerReadiness.missing_items || []).map((item) => ({
+          code: String(item.code || 'research_evidence'),
+          label: String(item.label || 'Добавьте подтверждённые данные'),
+        }))
+      : (drawerReadiness.missing || []).map((label) => ({
+          code: readinessCodeFromLegacyLabel(label),
+          label,
+        }));
+    const profileIssues = (contactIntelligence?.sender_profile_completeness?.missing_items || []).map((item) => ({
+      code: String(item.code || 'sender_profile'),
+      label: String(item.label || 'Дополните профиль отправителя'),
+    }));
+    const combinedIssues = [...explicitIssues, ...profileIssues].filter((item, index, items) => (
+      items.findIndex((candidate) => candidate.code === item.code) === index
+    ));
+    if (combinedIssues.length || drawerFirstMessage?.generated_text) return combinedIssues;
+    const inferredIssues: Array<{ code: string; label: string }> = [];
+    if (!drawerRecipient) {
+      inferredIssues.push({ code: 'recipient_contact', label: 'Выберите подходящий контакт' });
+    }
+    if (!contactIntelligence?.sender_profile?.confirmed_at) {
+      inferredIssues.push({ code: 'sender_profile', label: 'Добавьте факты об отправителе' });
+    }
+    if (
+      selectedWorkstream?.workstream_type === 'client_partnership'
+      && selectedWorkstream.service_compatibility_score == null
+      && !selectedWorkstream.research?.why_now
+    ) {
+      inferredIssues.push({
+        code: 'partner_compatibility',
+        label: 'Подтвердите, чем бизнес отправителя и потенциальный партнёр полезны друг другу',
+      });
+    }
+    return inferredIssues;
+  })();
+  const readyChannelCount = Object.values(outreachPreview?.channel_availability || {})
+    .filter((item) => item.status === 'ready').length;
+  const senderProfileChecklist = contactIntelligence?.sender_profile_completeness;
+  const latestCampaignFirstTouch = (savedOutreachCampaign?.touches || [])
+    .find((touch) => Number(touch.sequence_index || 0) === 0);
+  const pilotAlreadySent = (savedOutreachCampaign?.touches || []).some((touch) => (
+    ['manual_sent', 'sent', 'delivered'].includes(String(touch.status || ''))
+  ));
+  const pilotReplyReceived = savedOutreachCampaign?.stop_reason === 'recipient_replied';
+  const canDispatchPilot = Boolean(
+    savedOutreachCampaign?.status === 'approved'
+    && savedOutreachCampaign?.generation_current
+    && latestCampaignFirstTouch
+    && ['telegram', 'email'].includes(String(latestCampaignFirstTouch.channel || ''))
+    && !pilotAlreadySent,
+  );
+  const canSyncPilotReply = Boolean(
+    latestCampaignFirstTouch
+    && ['telegram', 'email'].includes(String(latestCampaignFirstTouch.channel || ''))
+    && pilotAlreadySent
+    && !pilotReplyReceived,
+  );
 
   useEffect(() => {
     if (!selectedLead) return;
@@ -468,10 +690,23 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
   useEffect(() => {
     const profile = contactIntelligence?.sender_profile;
     if (profile) {
+      const context = profile.outreach_context_json || {};
       setSenderName(String(profile.display_name || ''));
       setSenderRole(String(profile.role_title || ''));
       setSenderCompany(String(profile.company_name || ''));
       setSenderStory(String(profile.competence_story || ''));
+      setSenderProof((profile.proof_points_json || []).map((item) => typeof item === 'string' ? item : String(item.fact || '')).filter(Boolean).join('\n'));
+      setSenderOffer((profile.allowed_offers_json || []).join('\n'));
+      setSenderForbidden((profile.forbidden_claims_json || []).join('\n'));
+      setSenderVoiceExample((profile.voice_examples_json || []).join('\n'));
+      setSenderOutcome(String(context.product_outcome || ''));
+      setSenderAudience(String(context.audience || ''));
+      setSenderSegments((context.segments || []).join('\n'));
+      setSenderGeography(String(context.geography || ''));
+      setSenderRecipientRoles((context.recipient_roles || []).join('\n'));
+      setSenderPartnerTypes((context.desired_partner_types || []).join('\n'));
+      setSenderDisqualifiers((context.disqualifiers || []).join('\n'));
+      setSenderCtas((context.allowed_ctas || []).join('\n'));
       return;
     }
     setSenderName('');
@@ -480,7 +715,48 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
       ? 'LocalOS'
       : String(selectedWorkstream?.client_business_name || ''));
     setSenderStory('');
+    setSenderProof('');
+    setSenderOffer('');
+    setSenderForbidden('');
+    setSenderVoiceExample('');
+    setSenderOutcome('');
+    setSenderAudience('');
+    setSenderSegments('');
+    setSenderGeography('');
+    setSenderRecipientRoles('');
+    setSenderPartnerTypes('');
+    setSenderDisqualifiers('');
+    setSenderCtas('');
   }, [contactIntelligence?.sender_profile?.id, selectedWorkstream?.id]);
+
+  useEffect(() => {
+    setOutreachPreview(null);
+    setSavedOutreachCampaign(null);
+    setSenderFactsOpen(false);
+    setSequenceChannels(['telegram', 'email', 'max', 'vk']);
+    setSequenceDays([0, 3, 7, 12]);
+    setSequenceSenders({});
+  }, [selectedWorkstream?.id]);
+
+  useEffect(() => {
+    const workstreamId = String(selectedWorkstream?.id || '');
+    if (!workstreamId) return undefined;
+    let active = true;
+    const loadCampaign = async () => {
+      try {
+        const payload = await newAuth.makeRequest(`/outreach/workstreams/${encodeURIComponent(workstreamId)}/campaigns`);
+        if (!active) return;
+        const campaigns = Array.isArray(payload?.campaigns) ? payload.campaigns : [];
+        setSavedOutreachCampaign(campaigns[0] || null);
+      } catch (requestError) {
+        if (active) setNotice(requestError instanceof Error ? requestError.message : 'Не удалось загрузить кампанию');
+      }
+    };
+    void loadCampaign();
+    return () => {
+      active = false;
+    };
+  }, [selectedWorkstream?.id]);
 
   const runAction = async (key: string, requestFactory: () => Promise<unknown>, successMessage: string) => {
     setBusyAction(key);
@@ -566,7 +842,7 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
     setBusyAction('sender-profile');
     setNotice('');
     try {
-      await newAuth.makeRequest('/admin/prospecting/sender-profiles', {
+      const payload = await newAuth.makeRequest('/admin/prospecting/sender-profiles', {
         method: 'POST',
         body: JSON.stringify({
           workstream_type: selectedWorkstream.workstream_type,
@@ -575,13 +851,177 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
           role_title: senderRole,
           company_name: senderCompany,
           competence_story: senderStory,
+          proof_points: senderProof.split('\n').map((fact) => fact.trim()).filter(Boolean).map((fact) => ({ fact, status: 'approved' })),
+          allowed_offers: senderOffer.split('\n').map((item) => item.trim()).filter(Boolean),
+          forbidden_claims: senderForbidden.split('\n').map((item) => item.trim()).filter(Boolean),
+          voice_examples: senderVoiceExample.split('\n').map((item) => item.trim()).filter(Boolean),
+          outreach_context: {
+            product_outcome: senderOutcome.trim(),
+            audience: senderAudience.trim(),
+            segments: senderSegments.split('\n').map((item) => item.trim()).filter(Boolean),
+            geography: senderGeography.trim(),
+            recipient_roles: senderRecipientRoles.split('\n').map((item) => item.trim()).filter(Boolean),
+            desired_partner_types: senderPartnerTypes.split('\n').map((item) => item.trim()).filter(Boolean),
+            disqualifiers: senderDisqualifiers.split('\n').map((item) => item.trim()).filter(Boolean),
+            allowed_ctas: senderCtas.split('\n').map((item) => item.trim()).filter(Boolean),
+          },
           confirmed: true,
         }),
       });
-      setNotice('Профиль отправителя подтверждён. Перезапускаем проверку письма.');
-      await startContactIntelligence();
+      const savedProfile = payload?.profile || null;
+      const completeness = payload?.profile_completeness || savedProfile?.profile_completeness || {};
+      setContactIntelligence((current) => current ? {
+        ...current,
+        sender_profile: savedProfile,
+        sender_profile_completeness: completeness,
+      } : current);
+      if (savedProfile?.confirmed_at) {
+        setNotice('Профиль отправителя подтверждён. Перезапускаем проверку письма.');
+        await startContactIntelligence();
+      } else {
+        const missing = Array.isArray(completeness?.missing_items)
+          ? completeness.missing_items.map((item: { label?: string }) => String(item.label || '')).filter(Boolean)
+          : [];
+        setNotice(`Черновик профиля сохранён.${missing.length ? ` Осталось: ${missing.join('; ')}.` : ''}`);
+      }
     } catch (requestError) {
       setNotice(requestError instanceof Error ? requestError.message : 'Не удалось сохранить отправителя');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const scrollToDrawerSection = (elementId: string) => {
+    window.requestAnimationFrame(() => {
+      document.getElementById(elementId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const openSenderFacts = () => {
+    setSenderFactsOpen(true);
+    scrollToDrawerSection('sender-facts');
+  };
+
+  const openRecipientContacts = () => {
+    scrollToDrawerSection('lead-contacts-title');
+  };
+
+  const openSuppressionList = () => {
+    scrollToDrawerSection('lead-suppression-list');
+  };
+
+  const openPartnershipMatching = () => {
+    if (!selectedLead?.id || !selectedWorkstream?.client_business_id) return;
+    window.localStorage.setItem('admin_selected_business_id', selectedWorkstream.client_business_id);
+    const params = new URLSearchParams({
+      lead: selectedLead.id,
+      focus: 'match',
+    });
+    window.location.assign(`/dashboard/partnerships?${params.toString()}`);
+  };
+
+  const updateSequenceChannel = (index: number, channel: string) => {
+    setSequenceChannels((current) => current.map((item, itemIndex) => itemIndex === index ? channel : item));
+    setSequenceSenders((current) => ({ ...current, [index]: '' }));
+    setOutreachPreview(null);
+    setSavedOutreachCampaign(null);
+  };
+
+  const updateSequenceDay = (index: number, day: number) => {
+    setSequenceDays((current) => current.map((item, itemIndex) => itemIndex === index ? Math.max(0, day) : item));
+    setOutreachPreview(null);
+    setSavedOutreachCampaign(null);
+  };
+
+  const campaignSequence = () => [
+    { channel: sequenceChannels[0], day_offset: sequenceDays[0], angle: 'signal', sender_account_id: sequenceSenders[0] || undefined },
+    { channel: sequenceChannels[1], day_offset: sequenceDays[1], angle: 'founder_story', sender_account_id: sequenceSenders[1] || undefined },
+    { channel: sequenceChannels[2], day_offset: sequenceDays[2], angle: 'proof', sender_account_id: sequenceSenders[2] || undefined },
+    { channel: sequenceChannels[3], day_offset: sequenceDays[3], angle: 'respectful_close', sender_account_id: sequenceSenders[3] || undefined },
+  ];
+
+  const reloadLatestOutreachCampaign = async () => {
+    const workstreamId = String(selectedWorkstream?.id || '');
+    if (!workstreamId) return;
+    const payload = await newAuth.makeRequest(`/outreach/workstreams/${encodeURIComponent(workstreamId)}/campaigns`);
+    const campaigns = Array.isArray(payload?.campaigns) ? payload.campaigns : [];
+    setSavedOutreachCampaign(campaigns[0] || null);
+  };
+
+  const prepareOutreachCampaign = async (save: boolean) => {
+    if (!selectedWorkstream?.id) return;
+    setBusyAction(save ? 'save-campaign' : 'preview-campaign');
+    setNotice('');
+    try {
+      const payload = await newAuth.makeRequest(`/outreach/workstreams/${encodeURIComponent(selectedWorkstream.id)}/preview`, {
+        method: 'POST',
+        body: JSON.stringify({ sequence: campaignSequence(), save }),
+      });
+      setOutreachPreview(payload?.preview || null);
+      if (payload?.campaign) {
+        setSavedOutreachCampaign(payload.campaign);
+        setNotice(`Версия ${payload.campaign.version} сохранена как черновик. Проверьте всю цепочку перед approval.`);
+        await reloadLatestOutreachCampaign();
+      }
+    } catch (requestError) {
+      setNotice(requestError instanceof Error ? requestError.message : 'Не удалось подготовить цепочку');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const approveOutreachCampaign = async () => {
+    if (!savedOutreachCampaign?.id) return;
+    setBusyAction('approve-campaign');
+    setNotice('');
+    try {
+      const payload = await newAuth.makeRequest(`/outreach/campaigns/${encodeURIComponent(savedOutreachCampaign.id)}/approve`, { method: 'POST' });
+      setSavedOutreachCampaign((current) => current ? { ...current, status: payload?.campaign?.status || 'approved' } : current);
+      setNotice('Вся цепочка подтверждена. Для пилота отправьте только первое касание; остальные не запустятся скрытно.');
+      await reloadLatestOutreachCampaign();
+    } catch (requestError) {
+      setNotice(requestError instanceof Error ? requestError.message : 'Цепочка не прошла preflight');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const dispatchPilotFirstTouch = async () => {
+    if (!savedOutreachCampaign?.id) return;
+    const confirmed = window.confirm(
+      'Отправить только первое касание этой кампании реальному получателю? LocalOS ещё раз проверит ответы, разрешения, tenant scope, stop-list и лимиты.',
+    );
+    if (!confirmed) return;
+    setBusyAction('pilot-dispatch');
+    setNotice('');
+    try {
+      const payload = await newAuth.makeRequest(`/outreach/campaigns/${encodeURIComponent(savedOutreachCampaign.id)}/pilot-dispatch-first-touch`, {
+        method: 'POST',
+        body: JSON.stringify({ confirm_campaign_id: savedOutreachCampaign.id }),
+      });
+      setNotice(Number(payload?.messages_sent || 0) === 1
+        ? 'Первое пилотное касание отправлено. Остальные каналы не запускались.'
+        : 'Первое касание не отправлено: safety-preflight остановил операцию.');
+      await reloadLatestOutreachCampaign();
+    } catch (requestError) {
+      setNotice(requestError instanceof Error ? requestError.message : 'Пилотное касание не отправлено');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const syncPilotReply = async () => {
+    if (!savedOutreachCampaign?.id) return;
+    setBusyAction('pilot-reply-sync');
+    setNotice('');
+    try {
+      const payload = await newAuth.makeRequest(`/outreach/campaigns/${encodeURIComponent(savedOutreachCampaign.id)}/pilot-reply-sync`, { method: 'POST' });
+      setNotice(payload?.reply_received
+        ? `Ответ получен${payload?.classification ? ` и классифицирован: ${payload.classification}` : ''}. Все следующие касания остановлены.`
+        : 'Нового ответа пока нет. Проверка не отправляла сообщений.');
+      await reloadLatestOutreachCampaign();
+    } catch (requestError) {
+      setNotice(requestError instanceof Error ? requestError.message : 'Не удалось проверить ответ');
     } finally {
       setBusyAction('');
     }
@@ -809,6 +1249,14 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
       )}
 
       <div className="px-4 py-3 sm:px-6">
+        {view === 'results' ? (
+          <div className="pb-5">
+            <OutreachLearningInsights
+              workstreamType={scope === 'client_partnership' ? 'client_partnership' : 'localos_sales'}
+              businessId={scope === 'client_partnership' ? clientBusinessId : null}
+            />
+          </div>
+        ) : null}
         <div className="flex items-center justify-between gap-3 pb-3 text-sm text-slate-500">
           <span className="tabular-nums">{loading ? 'Загружаем…' : `${filteredLeads.length} компаний`}</span>
           <button type="button" onClick={loadLeads} className="flex min-h-10 items-center gap-2 px-2 font-medium hover:text-slate-950">
@@ -972,9 +1420,11 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
                   const completedSteps = [
                     drawerContacts.length > 0,
                     Boolean(drawerRecipient),
-                    Boolean(selectedWorkstream.research?.why_now) || selectedWorkstream.workstream_type === 'client_partnership',
+                    Boolean(selectedWorkstream.research?.why_now)
+                      || (selectedWorkstream.workstream_type === 'client_partnership'
+                        && selectedWorkstream.service_compatibility_score != null),
                     Boolean(drawerFirstMessage?.generated_text),
-                    Boolean(drawerFirstMessage?.quality_gate_json?.passed),
+                    Boolean(drawerFirstMessage?.quality_gate_json?.passed && drawerMessageCurrent),
                   ];
                   const done = completedSteps[index];
                   return (
@@ -1120,16 +1570,34 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 id="first-message-title" className="text-sm font-semibold text-slate-950">Первое письмо</h3>
-                    <p className="mt-1 text-sm text-slate-600">{drawerReadiness.label || 'Сначала проверим контакты и основания'}</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {drawerFirstMessage?.requires_regeneration
+                        ? 'Факты сохранены, но текст нужно подготовить заново'
+                        : drawerReadiness.label || 'Сначала проверим контакты и основания'}
+                    </p>
                   </div>
-                  <Badge variant="outline" className={drawerReadiness.code === 'ready'
+                  <Badge variant="outline" className={drawerReadiness.code === 'ready' && drawerMessageCurrent
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                     : 'border-amber-200 bg-amber-50 text-amber-800'}>
-                    {drawerReadiness.code === 'ready' ? 'Готово к проверке' : drawerReadiness.label || 'Не готово'}
+                    {drawerFirstMessage?.requires_regeneration
+                      ? 'Нужно переписать'
+                      : drawerReadiness.code === 'ready' && drawerMessageCurrent
+                        ? 'Готово к проверке'
+                        : drawerReadiness.label || 'Не готово'}
                   </Badge>
                 </div>
                 {drawerFirstMessage?.generated_text ? (
                   <>
+                    {drawerFirstMessage.requires_regeneration ? (
+                      <div className="mt-3 rounded-md bg-amber-50 p-3 text-pretty text-sm leading-6 text-amber-950">
+                        <div className="font-semibold">Это письмо создано по старым правилам</div>
+                        <p className="mt-1">LocalOS не позволит подтвердить его. Перегенерируйте текст: факты и выбранный контакт сохранятся, а письмо пройдёт текущую AI-проверку.</p>
+                        <Button variant="outline" onClick={startContactIntelligence} disabled={busyAction === 'contact-intelligence'} className="mt-2 min-h-10 bg-white">
+                          {busyAction === 'contact-intelligence' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                          Переписать по текущим правилам
+                        </Button>
+                      </div>
+                    ) : null}
                     <div className="mt-3 whitespace-pre-wrap rounded-md bg-white p-4 text-sm leading-6 text-slate-800">
                       {drawerFirstMessage.edited_text || drawerFirstMessage.generated_text}
                     </div>
@@ -1154,17 +1622,349 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
                     </p>
                   </>
                 ) : (
-                  <div className="mt-3 rounded-md bg-white p-4">
-                    <div className="font-medium text-slate-800">Письмо не будет заменено общим шаблоном.</div>
-                    {(drawerReadiness.missing || []).length > 0 ? (
-                      <ul className="mt-2 space-y-1 text-sm text-amber-700">
-                        {(drawerReadiness.missing || []).map((item) => <li key={item}>• {item}</li>)}
-                      </ul>
+                  <div className="mt-3 rounded-lg bg-white p-4 shadow-sm shadow-slate-900/5">
+                    <div className="font-semibold text-slate-900 text-wrap-balance">Для персонального письма не хватает данных</div>
+                    <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">
+                      {drawerRecipient
+                        ? 'Контакт уже выбран. Письмо появится после того, как будут подтверждены факты об отправителе и причина обратиться именно к этой компании.'
+                        : 'Сначала выберите подходящий контакт, затем подтвердите факты об отправителе и причину обратиться именно к этой компании.'}
+                    </p>
+                    {readinessIssues.length > 0 ? (
+                      <div className="mt-3 space-y-2">
+                        {readinessIssues.map((issue, index) => {
+                          const senderIssue = [
+                            'sender_profile',
+                            'sender_confirmation',
+                            'sender_identity',
+                            'sender_experience',
+                            'sender_proof',
+                            'sender_audience',
+                            'sender_offer',
+                            'sender_voice',
+                            'sender_forbidden_claims',
+                            'sender_services',
+                            'desired_partner_types',
+                          ].includes(issue.code);
+                          const partnerIssue = ['partner_compatibility', 'partner_category'].includes(issue.code);
+                          const contactIssue = ['recipient_contact', 'recipient_role'].includes(issue.code);
+                          const suppressionIssue = issue.code === 'suppression';
+                          const description = senderIssue
+                            ? `Расскажите о ${selectedWorkstream.client_business_name || senderCompany || 'бизнесе отправителя'}: кто пишет, какой опыт подтверждён и что можно предложить партнёру.`
+                            : partnerIssue
+                              ? `Нужны услуги, аудитория и география обеих компаний, чтобы проверить реальную пользу и не придумать повод для партнёрства.`
+                              : contactIssue
+                                ? 'Выберите канал и человека или общий контакт компании, которому уместно адресовать первое сообщение.'
+                                : suppressionIssue
+                                  ? 'Сначала проверьте причину запрета. LocalOS не подготовит отправку, пока действует stop-list.'
+                                  : 'Обновите исследование компании: LocalOS проверит карточку, сайт и доступные публичные источники.';
+                          return (
+                            <div key={`${issue.code}-${issue.label}`} className="rounded-md bg-slate-50 p-3">
+                              <div className="flex gap-3">
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-800 tabular-nums">
+                                  {index + 1}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-semibold text-slate-900">{issue.label}</div>
+                                  <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">{description}</p>
+                                  {senderIssue ? (
+                                    <Button variant="outline" onClick={openSenderFacts} className="mt-2 min-h-10 bg-white active:scale-[0.96] transition-transform">
+                                      Заполнить факты об отправителе <ArrowRight className="ml-2 h-4 w-4" />
+                                    </Button>
+                                  ) : partnerIssue ? (
+                                    <Button variant="outline" onClick={openPartnershipMatching} disabled={!selectedWorkstream.client_business_id} className="mt-2 min-h-10 bg-white active:scale-[0.96] transition-transform">
+                                      Проверить совместимость <ArrowRight className="ml-2 h-4 w-4" />
+                                    </Button>
+                                  ) : contactIssue ? (
+                                    <Button variant="outline" onClick={openRecipientContacts} className="mt-2 min-h-10 bg-white active:scale-[0.96] transition-transform">
+                                      Перейти к контактам <ArrowRight className="ml-2 h-4 w-4" />
+                                    </Button>
+                                  ) : suppressionIssue ? (
+                                    <Button variant="outline" onClick={openSuppressionList} className="mt-2 min-h-10 bg-white active:scale-[0.96] transition-transform">
+                                      Открыть stop-list <ArrowRight className="ml-2 h-4 w-4" />
+                                    </Button>
+                                  ) : (
+                                    <Button variant="outline" onClick={startContactIntelligence} disabled={busyAction === 'contact-intelligence'} className="mt-2 min-h-10 bg-white active:scale-[0.96] transition-transform">
+                                      Обновить исследование <RefreshCw className={`ml-2 h-4 w-4 ${busyAction === 'contact-intelligence' ? 'animate-spin' : ''}`} />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <p className="pt-1 text-xs leading-5 text-slate-500">
+                          После каждого шага LocalOS повторно проверит данные и подготовит письмо только на подтверждённых фактах.
+                        </p>
+                      </div>
                     ) : (
-                      <p className="mt-1 text-sm text-slate-600">Запустите проверку, чтобы подготовить письмо на фактах компании.</p>
+                      <Button variant="outline" onClick={startContactIntelligence} disabled={busyAction === 'contact-intelligence'} className="mt-3 min-h-10 bg-white active:scale-[0.96] transition-transform">
+                        Проверить данные компании
+                      </Button>
                     )}
                   </div>
                 )}
+              </section>
+
+              <section className="rounded-md bg-slate-50 p-4" aria-labelledby="outreach-sequence-title">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 id="outreach-sequence-title" className="text-sm font-semibold text-slate-950">Каналы и порядок</h3>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">Четыре разных угла: сигнал, опыт основателя, кейс и уважительное завершение. Любое изменение создаёт новую версию.</p>
+                  </div>
+                  <Badge variant="outline" className={savedOutreachCampaign?.requires_regeneration
+                    ? 'border-amber-200 bg-amber-50 text-amber-800'
+                    : savedOutreachCampaign?.status === 'approved'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-slate-200 bg-white text-slate-700'}>
+                    {savedOutreachCampaign
+                      ? `Версия ${savedOutreachCampaign.version} · ${savedOutreachCampaign.requires_regeneration ? 'нужно обновить' : savedOutreachCampaign.status === 'approved' ? 'подтверждена' : 'черновик'}`
+                      : 'Не сохранена'}
+                  </Badge>
+                </div>
+
+                {savedOutreachCampaign?.requires_regeneration ? (
+                  <div className="mt-3 rounded-md bg-amber-50 p-3 text-pretty text-sm leading-6 text-amber-950">
+                    <div className="font-semibold">Эту версию нельзя подтвердить</div>
+                    <p className="mt-1">Она создана до текущей проверки персонализации. Покажите новую цепочку, проверьте тексты и сохраните следующую версию.</p>
+                    <Button variant="outline" onClick={() => void prepareOutreachCampaign(false)} disabled={busyAction === 'preview-campaign'} className="mt-2 min-h-10 bg-white">
+                      {busyAction === 'preview-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                      Подготовить новую цепочку
+                    </Button>
+                  </div>
+                ) : null}
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {[0, 1, 2, 3].map((index) => (
+                    <div key={index} className="rounded-md bg-white p-3 text-xs font-semibold text-slate-600">
+                      <div>{['Сигнал', 'Опыт основателя', 'Кейс или материал', 'Завершение'][index]}</div>
+                      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_84px] gap-2">
+                        <select
+                          aria-label={`Канал касания ${index + 1}`}
+                          value={sequenceChannels[index]}
+                          onChange={(event) => updateSequenceChannel(index, event.target.value)}
+                          className="min-h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 outline-none focus:border-slate-400"
+                        >
+                          <option value="telegram">Telegram</option>
+                          <option value="email">Email</option>
+                          <option value="max">MAX · вручную</option>
+                          <option value="vk">VK · вручную</option>
+                          <option value="whatsapp">WhatsApp · вручную</option>
+                          <option value="sms">SMS · вручную</option>
+                        </select>
+                        <label className="sr-only" htmlFor={`touch-day-${index}`}>День касания {index + 1}</label>
+                        <Input
+                          id={`touch-day-${index}`}
+                          type="number"
+                          min={index === 0 ? 0 : 1}
+                          value={sequenceDays[index]}
+                          disabled={index === 0}
+                          onChange={(event) => updateSequenceDay(index, Number(event.target.value))}
+                          className="h-10 bg-white text-center tabular-nums"
+                          title="День от старта"
+                        />
+                      </div>
+                      <div className="mt-1 text-[11px] font-medium text-slate-400">День <span className="tabular-nums">{sequenceDays[index]}</span> от старта</div>
+                    </div>
+                  ))}
+                </div>
+
+                {['max', 'vk', 'whatsapp', 'sms', 'manual'].includes(sequenceChannels[0]) ? (
+                  <div className="mt-3 rounded-md bg-sky-50 px-3 py-3 text-pretty text-sm leading-6 text-sky-900">
+                    Первое касание выполняется вручную. Кампания подождёт вашей отметки и через 48 часов перейдёт в «Нужно внимание» — автоматическое продолжение не начнётся скрытно.
+                  </div>
+                ) : null}
+
+                {outreachPreview?.channel_availability ? (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(outreachPreview.channel_availability).map(([channel, item]) => {
+                      const labels: Record<string, string> = {
+                        ready: 'готов',
+                        connect_required: 'нужно подключить отправителя',
+                        permission_required: 'отправка запрещена',
+                        manual: 'вручную',
+                        recipient_missing: 'нет контакта',
+                        adapter_unavailable: 'нет безопасной отправки',
+                        sender_degraded: 'отправитель ограничен',
+                        sender_paused: 'отправитель на паузе',
+                        sender_selection_required: 'выберите отправителя',
+                      };
+                      return <Badge key={channel} variant="outline" className={item.status === 'ready' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : item.status === 'permission_required' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'bg-white text-slate-700'}>{channel} · {labels[String(item.status || '')] || item.status}</Badge>;
+                      })}
+                    </div>
+                    {[0, 1, 2, 3].map((touchIndex) => {
+                      const channel = sequenceChannels[touchIndex];
+                      const accounts = outreachPreview.channel_availability?.[channel]?.sender_accounts || [];
+                      if (!['telegram', 'email'].includes(channel) || accounts.length <= 1) return null;
+                      return (
+                        <label key={`${channel}-${touchIndex}`} className="block rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-950">
+                          Отправитель для касания {touchIndex + 1} · {channel}
+                          <select
+                            value={sequenceSenders[touchIndex] || ''}
+                            onChange={(event) => {
+                              setSequenceSenders((current) => ({ ...current, [touchIndex]: event.target.value }));
+                              setOutreachPreview(null);
+                              setSavedOutreachCampaign(null);
+                              setNotice('Отправитель выбран. Обновите preview.');
+                            }}
+                            className="mt-2 min-h-10 w-full rounded-md border border-amber-200 bg-white px-3 text-sm font-medium text-slate-900"
+                          >
+                            <option value="">Выберите аккаунт</option>
+                            {accounts.map((account) => (
+                              <option key={account.id} value={account.id} disabled={account.status !== 'ready'}>
+                                {account.display_name || account.sender_identity || account.id} · {account.status}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {outreachPreview?.status === 'needs_evidence' ? (
+                  <div className="mt-3 rounded-md bg-amber-50 px-3 py-3 text-sm text-amber-900">
+                    Нельзя подставить общий шаблон. Не хватает: {(outreachPreview.missing || []).join(', ') || 'подтверждённых фактов для персонализации'}.
+                  </div>
+                ) : null}
+                {outreachPreview?.status === 'needs_generation' ? (
+                  <div className="mt-3 rounded-md bg-amber-50 px-3 py-3 text-pretty text-sm leading-6 text-amber-900">
+                    LocalOS сохранил факты, но не смог подготовить персональный текст. Нажмите «Показать всю цепочку» ещё раз. Сохранение и отправка заблокированы.
+                  </div>
+                ) : null}
+                {outreachPreview?.status === 'needs_revision' ? (
+                  <div className="mt-3 rounded-md bg-amber-50 px-3 py-3 text-pretty text-sm leading-6 text-amber-900">
+                    Текст не прошёл проверку точности и естественности. Проверьте источник и факты об отправителе, затем обновите предпросмотр.
+                  </div>
+                ) : null}
+                {outreachPreview?.status === 'invalid_sequence' ? (
+                  <div className="mt-3 rounded-md bg-rose-50 px-3 py-3 text-pretty text-sm leading-6 text-rose-900">
+                    Интервалы должны идти по возрастанию и оставлять минимум сутки между касаниями. Исправьте дни и обновите предпросмотр.
+                  </div>
+                ) : null}
+                {outreachPreview?.generation?.status === 'ready' ? (
+                  <p className="mt-3 text-pretty text-xs leading-5 text-slate-500">Персонализацию подготовил LocalOS; каждое касание проверено по источнику, фактам и тону.</p>
+                ) : null}
+
+                {outreachPreview?.quality_gate ? (
+                  <div className={`mt-3 flex items-start gap-3 rounded-md p-3 ${outreachPreview.quality_gate.passed
+                    ? 'bg-emerald-50 text-emerald-950 ring-1 ring-inset ring-emerald-200'
+                    : 'bg-amber-50 text-amber-950 ring-1 ring-inset ring-amber-200'}`}>
+                    <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <div className="text-sm font-semibold">Проверка всей цепочки</div>
+                        <div className="tabular-nums text-sm font-semibold">
+                          {Number(outreachPreview.quality_gate.total_score ?? outreachPreview.quality_gate.score ?? 0)}/{Number(outreachPreview.quality_gate.max_score || 18)}
+                        </div>
+                      </div>
+                      <p className="mt-1 text-pretty text-sm leading-6">
+                        {outreachQualityVerdictLabels[String(outreachPreview.quality_gate.verdict || '')] || 'Нужна проверка'}.
+                        {outreachPreview.quality_gate.passed
+                          ? ' Все сообщения опираются на источники и готовы к вашему решению.'
+                          : ' Откройте проверку нужного касания ниже — LocalOS покажет, что исправить.'}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {(outreachPreview?.touches || []).length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    {(outreachPreview?.touches || []).map((touch) => (
+                      <article key={`${touch.sequence_index}-${touch.channel}`} className="rounded-md bg-white p-3 ring-1 ring-slate-200">
+                        <div className="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
+                          <span>День {touch.day_offset} · {touch.channel}</span>
+                          <span className={touch.quality_gate?.passed ? 'text-emerald-700' : 'text-amber-700'}>{touch.quality_gate?.passed ? 'Факты проверены' : 'Нужна проверка'}</span>
+                        </div>
+                        {touch.subject ? <div className="mt-2 text-sm font-semibold text-slate-950">Тема: {touch.subject}</div> : null}
+                        {touch.observation || touch.problem_hypothesis || touch.relevance_bridge ? (
+                          <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
+                            {touch.observation ? <p><span className="font-semibold text-slate-900">Факт:</span> {touch.observation}</p> : null}
+                            {touch.problem_hypothesis ? <p><span className="font-semibold text-slate-900">Гипотеза:</span> {touch.problem_hypothesis}</p> : null}
+                            {touch.relevance_bridge ? <p><span className="font-semibold text-slate-900">Почему это связано:</span> {touch.relevance_bridge}</p> : null}
+                          </div>
+                        ) : null}
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">{touch.text}</p>
+                        {touch.source_url ? <a href={touch.source_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-9 items-center gap-1 text-xs font-semibold text-sky-700">Источник <ExternalLink className="h-3.5 w-3.5" /></a> : null}
+                        {touch.quality_gate ? (
+                          <details open={!touch.quality_gate.passed} className="mt-3 rounded-md bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-200">
+                            <summary className="min-h-10 cursor-pointer select-none py-2 text-sm font-semibold text-slate-800">
+                              Почему такая оценка ·{' '}
+                              <span className="tabular-nums">
+                                {Number(touch.quality_gate.total_score ?? touch.quality_gate.score ?? 0)}/{Number(touch.quality_gate.max_score || 18)}
+                              </span>
+                              {' '}· {outreachQualityVerdictLabels[String(touch.quality_gate.verdict || '')] || 'Нужна проверка'}
+                            </summary>
+                            <div className="grid gap-x-4 gap-y-2 pb-3 sm:grid-cols-2">
+                              {Object.entries(touch.quality_gate.criterion_scores || {}).map(([criterion, score]) => (
+                                <div key={criterion} className="flex items-center justify-between gap-3 text-xs text-slate-600">
+                                  <span>{outreachQualityCriterionLabels[criterion] || criterion}</span>
+                                  <span className={`shrink-0 tabular-nums font-semibold ${Number(score) === 2 ? 'text-emerald-700' : Number(score) === 1 ? 'text-amber-700' : 'text-rose-700'}`}>
+                                    {Number(score)}/2
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                            {(touch.quality_gate.reason_codes || []).length > 0 ? (
+                              <div className="border-t border-slate-200 py-3">
+                                <div className="text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">Что исправить</div>
+                                <ul className="mt-2 space-y-1 text-sm leading-5 text-slate-700">
+                                  {(touch.quality_gate.reason_codes || []).map((reasonCode) => (
+                                    <li key={reasonCode}>• {outreachQualityReasonLabels[reasonCode] || reasonCode}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : (
+                              <p className="border-t border-slate-200 py-3 text-sm text-emerald-700">Критических замечаний нет.</p>
+                            )}
+                          </details>
+                        ) : null}
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <Button variant="outline" onClick={() => void prepareOutreachCampaign(false)} disabled={busyAction === 'preview-campaign'} className="min-h-11 bg-white">
+                    {busyAction === 'preview-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                    Показать всю цепочку
+                  </Button>
+                  <Button variant="outline" onClick={() => void prepareOutreachCampaign(true)} disabled={busyAction === 'save-campaign' || outreachPreview?.status !== 'ready'} className="min-h-11 bg-white">
+                    {busyAction === 'save-campaign' && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+                    Сохранить новую версию
+                  </Button>
+                </div>
+                {savedOutreachCampaign?.status === 'draft' ? (
+                  <Button onClick={() => void approveOutreachCampaign()} disabled={busyAction === 'approve-campaign' || savedOutreachCampaign.requires_regeneration} className="mt-2 min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
+                    {busyAction === 'approve-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                    {savedOutreachCampaign.requires_regeneration ? 'Сначала подготовьте новую цепочку' : 'Подтвердить всю цепочку один раз'}
+                  </Button>
+                ) : null}
+                {canDispatchPilot ? (
+                  <div className="mt-3 rounded-md bg-orange-50 p-3 text-sm text-orange-950">
+                    <div className="font-semibold">Следующий шаг: первое пилотное касание</div>
+                    <p className="mt-1 leading-6 text-orange-900">Будет отправлено ровно одно сообщение. Остальные каналы не запустятся.</p>
+                    <Button onClick={() => void dispatchPilotFirstTouch()} disabled={Boolean(busyAction)} className="mt-2 min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
+                      {busyAction === 'pilot-dispatch' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                      Отправить только первое касание
+                    </Button>
+                  </div>
+                ) : null}
+                {canSyncPilotReply || pilotReplyReceived ? (
+                  <div className={`mt-3 rounded-md p-3 text-sm ${pilotReplyReceived ? 'bg-emerald-50 text-emerald-950' : 'bg-sky-50 text-sky-950'}`}>
+                    <div className="font-semibold">{pilotReplyReceived ? 'Ответ получен — цепочка остановлена' : 'Ожидание ответа на пилот'}</div>
+                    <p className="mt-1 leading-6">{pilotReplyReceived
+                      ? 'LocalOS сохранил ответ и отменил будущие касания по всем каналам.'
+                      : 'Проверка ограничена конкретной кампанией и аккаунтом отправителя.'}</p>
+                    {canSyncPilotReply ? (
+                      <Button variant="outline" onClick={() => void syncPilotReply()} disabled={Boolean(busyAction)} className="mt-2 min-h-11 w-full bg-white">
+                        <RefreshCw className={`mr-2 h-4 w-4 ${busyAction === 'pilot-reply-sync' ? 'animate-spin' : ''}`} />
+                        Проверить ответ сейчас
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+                <p className="mt-2 text-xs leading-5 text-slate-500">Перед каждым касанием LocalOS повторно проверит approval версии, sender account, разрешение, ответ, suppression, cooldown и дневной лимит.</p>
               </section>
 
               <div className="rounded-md bg-slate-50 p-4">
@@ -1173,47 +1973,129 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
                     <div className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Отправитель</div>
                     <div className="mt-1 font-semibold text-slate-950">{selectedWorkstream.workstream_type === 'localos_sales' ? 'LocalOS' : selectedWorkstream.client_business_name || 'Выбранный клиент'}</div>
                   </div>
-                  <Badge variant="outline" className={selectedWorkstream.workstream_type === 'localos_sales' && selectedWorkstream.selected_channel === 'telegram' && localosTelegramReady
+                  <Badge variant="outline" className={readyChannelCount > 0
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                     : 'border-amber-200 bg-amber-50 text-amber-800'}>
-                    {selectedWorkstream.workstream_type === 'localos_sales' && selectedWorkstream.selected_channel === 'telegram' && localosTelegramReady
-                      ? 'Подключён'
-                      : 'Только ручная отправка'}
+                    {outreachPreview
+                      ? readyChannelCount > 0 ? `Готово каналов: ${readyChannelCount}` : 'Нужно подключение'
+                      : 'Проверьте каналы'}
                   </Badge>
                 </div>
-                {selectedWorkstream.workstream_type === 'localos_sales' && selectedWorkstream.selected_channel === 'telegram' && !localosTelegramReady && (
-                  <a
-                    href={`/dashboard/settings/integrations?focus=telegram&return_to=${encodeURIComponent(`/dashboard/bazich?lead=${selectedLead.id}&workstream=${selectedWorkstream.id || ''}`)}`}
-                    className="mt-3 inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-orange-700 hover:text-orange-800"
-                  >
-                    Подключить канал <ArrowRight className="h-4 w-4" />
-                  </a>
-                )}
+                <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">Telegram и email выбираются только из этого контура. MAX, VK и WhatsApp остаются ручными, пока для них нет проверенного adapter и синхронизации ответов.</p>
                 <details className="mt-3 border-t border-slate-200 pt-2">
+                  <summary className="flex min-h-10 cursor-pointer items-center text-sm font-semibold text-slate-700">Подключить или проверить email</summary>
+                  <div className="pt-3">
+                    <OutreachEmailSetup
+                      scopeType={selectedWorkstream.workstream_type === 'localos_sales' ? 'platform' : 'business'}
+                      businessId={selectedWorkstream.workstream_type === 'client_partnership' ? selectedWorkstream.client_business_id : null}
+                      compact
+                      onChanged={() => setOutreachPreview(null)}
+                    />
+                  </div>
+                </details>
+                <a
+                  href={`/dashboard/settings/integrations?focus=telegram&sender_scope=${selectedWorkstream.workstream_type === 'localos_sales' ? 'platform' : 'business'}&return_to=${encodeURIComponent(`/dashboard/bazich?lead=${selectedLead.id}&workstream=${selectedWorkstream.id || ''}`)}`}
+                  className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-orange-700 transition-colors hover:text-orange-800"
+                >
+                  {selectedWorkstream.workstream_type === 'localos_sales'
+                    ? 'Настроить Telegram LocalOS'
+                    : 'Настроить Telegram бизнеса'}
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+                <details
+                  id="sender-facts"
+                  open={senderFactsOpen}
+                  onToggle={(event) => setSenderFactsOpen(event.currentTarget.open)}
+                  className="mt-3 scroll-mt-6 border-t border-slate-200 pt-2"
+                >
                   <summary className="flex min-h-10 cursor-pointer items-center text-sm font-semibold text-slate-700">
-                    {contactIntelligence?.sender_profile?.confirmed_at ? 'Обновить профиль отправителя' : 'Настроить отправителя'}
+                    {senderProfileChecklist?.ready && contactIntelligence?.sender_profile?.confirmed_at
+                      ? 'Обновить факты об отправителе'
+                      : contactIntelligence?.sender_profile
+                        ? 'Продолжить профиль отправителя'
+                        : 'Заполнить факты об отправителе'}
                   </summary>
                   <div className="space-y-3 pt-2">
-                    <Input value={senderName} onChange={(event) => setSenderName(event.target.value)} placeholder="Имя отправителя" className="h-10 bg-white" />
-                    <Input value={senderRole} onChange={(event) => setSenderRole(event.target.value)} placeholder="Роль, например: основатель" className="h-10 bg-white" />
-                    <Input value={senderCompany} onChange={(event) => setSenderCompany(event.target.value)} placeholder="Компания" className="h-10 bg-white" />
-                    <textarea
-                      value={senderStory}
-                      onChange={(event) => setSenderStory(event.target.value)}
-                      placeholder="Коротко: почему этому человеку уместно писать по этой теме"
-                      rows={3}
-                      className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
-                    />
+                    <div className="rounded-lg bg-slate-50 p-3 shadow-sm shadow-slate-900/5">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <div className="font-semibold text-slate-900">Профиль заполняется один раз для всех кампаний этого бизнеса</div>
+                          <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
+                            Можно сохранить черновик. LocalOS подтвердит профиль только после заполнения обязательных фактов и не превратит пропуск в общий шаблон.
+                          </p>
+                        </div>
+                        {senderProfileChecklist ? (
+                          <Badge variant="outline" className={senderProfileChecklist.ready
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-800 tabular-nums'
+                            : 'border-amber-200 bg-amber-50 text-amber-800 tabular-nums'}>
+                            {Number(senderProfileChecklist.completed_count || 0)} из {Number(senderProfileChecklist.required_count || 0)}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      {(senderProfileChecklist?.items || []).length > 0 ? (
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {(senderProfileChecklist?.items || []).map((item) => (
+                            <div key={item.code} className="flex min-h-10 items-center gap-2 text-xs text-slate-700">
+                              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${item.complete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {item.complete ? <Check className="h-3.5 w-3.5" /> : <CircleAlert className="h-3.5 w-3.5" />}
+                              </span>
+                              <span>{item.complete ? item.title : item.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Имя отправителя
+                        <Input value={senderName} onChange={(event) => setSenderName(event.target.value)} placeholder="Например, Анна" className="mt-1 h-10 bg-white" />
+                      </label>
+                      <label className="text-xs font-semibold text-slate-700">
+                        Роль
+                        <Input value={senderRole} onChange={(event) => setSenderRole(event.target.value)} placeholder="Например, основатель" className="mt-1 h-10 bg-white" />
+                      </label>
+                    </div>
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Компания
+                      <Input value={senderCompany} onChange={(event) => setSenderCompany(event.target.value)} placeholder="Название бизнеса" className="mt-1 h-10 bg-white" />
+                    </label>
+                    <textarea value={senderOutcome} onChange={(event) => setSenderOutcome(event.target.value)} placeholder={`Какой конкретный результат даёт ${senderBusinessLabel}`} rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
+                    <textarea value={senderAudience} onChange={(event) => setSenderAudience(event.target.value)} placeholder="Целевая аудитория и её контекст" rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <textarea value={senderSegments} onChange={(event) => setSenderSegments(event.target.value)} placeholder="ICP / сегменты — по одному на строку" rows={3} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
+                      <textarea value={senderRecipientRoles} onChange={(event) => setSenderRecipientRoles(event.target.value)} placeholder="Роли получателей — по одной на строку" rows={3} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
+                    </div>
+                    <Input value={senderGeography} onChange={(event) => setSenderGeography(event.target.value)} placeholder="География поиска" className="h-10 bg-white" />
+                    {selectedWorkstream.workstream_type === 'client_partnership' ? <textarea value={senderPartnerTypes} onChange={(event) => setSenderPartnerTypes(event.target.value)} placeholder="Желаемые типы партнёров — по одному на строку" rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" /> : null}
+                    <textarea value={senderCtas} onChange={(event) => setSenderCtas(event.target.value)} placeholder="Допустимые следующие шаги — по одному на строку" rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
+                    <textarea value={senderDisqualifiers} onChange={(event) => setSenderDisqualifiers(event.target.value)} placeholder="Кого и почему исключать — по одному условию на строку" rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Подтверждённый опыт основателя или команды
+                      <textarea
+                        value={senderStory}
+                        onChange={(event) => setSenderStory(event.target.value)}
+                        placeholder="Что вы действительно делали и почему этот опыт относится к предложению"
+                        rows={3}
+                        className="mt-1 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-800 outline-none focus:border-slate-400"
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Подтверждённые факты и кейсы
+                      <textarea value={senderProof} onChange={(event) => setSenderProof(event.target.value)} placeholder="По одному факту на строку; без неподтверждённых результатов" rows={3} className="mt-1 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-800 outline-none focus:border-slate-400" />
+                    </label>
+                    <textarea value={senderOffer} onChange={(event) => setSenderOffer(event.target.value)} placeholder="Что можно предложить — по одному варианту на строку" rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
+                    <textarea value={senderVoiceExample} onChange={(event) => setSenderVoiceExample(event.target.value)} placeholder="Примеры вашего живого голоса" rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
+                    <textarea value={senderForbidden} onChange={(event) => setSenderForbidden(event.target.value)} placeholder="Что нельзя утверждать — по одному запрету на строку" rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
                     <Button
                       variant="outline"
                       onClick={saveSenderProfile}
                       disabled={busyAction === 'sender-profile' || !senderName.trim() || !senderRole.trim() || !senderCompany.trim()}
-                      className="min-h-10 w-full bg-white"
+                      className="min-h-11 w-full bg-white active:scale-[0.96] transition-transform"
                     >
                       {busyAction === 'sender-profile' && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
-                      Подтвердить профиль
+                      Сохранить и проверить готовность
                     </Button>
-                    <p className="text-xs leading-5 text-slate-500">В письмо попадут только отдельно подтверждённые факты и кейсы. Отправка останется ручной.</p>
+                    <p className="text-xs leading-5 text-slate-500">В сообщения попадут только подтверждённые факты и кейсы. Гипотезы и недостающие данные не превращаются в утверждения.</p>
                   </div>
                 </details>
               </div>
@@ -1244,6 +2126,18 @@ export function AdminLeadRegistry({ businessOptions }: AdminLeadRegistryProps) {
                   </Button>
                 </div>
               )}
+
+              <details id="lead-suppression-list" className="scroll-mt-6 border-t border-slate-200 pt-4">
+                <summary className="min-h-10 cursor-pointer text-sm font-semibold text-slate-700">Stop-list и «не беспокоить»</summary>
+                <div className="pt-3">
+                  <OutreachSuppressionManager
+                    workstreamId={selectedWorkstream.id}
+                    businessId={selectedWorkstream.client_business_id}
+                    scopeType={selectedWorkstream.workstream_type === 'localos_sales' ? 'platform' : 'business'}
+                    onChanged={() => void loadLeads()}
+                  />
+                </div>
+              </details>
 
               {notice && <div className="rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>}
 

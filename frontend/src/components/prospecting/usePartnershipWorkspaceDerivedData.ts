@@ -187,14 +187,17 @@ export function usePartnershipWorkspaceDerivedData<TLead extends PartnershipDeri
       if (leadView === 'deferred') return isDeferred;
       if (leadView === 'overdue_return') return isOverdueReturn;
       if (leadView === 'requires_action') {
-        return ['captcha', 'error'].includes(parseStatus) || ['parse_captcha', 'parse_error', 'fill_contacts'].includes(nextCode);
+        return ['captcha', 'error'].includes(parseStatus) || ['resolve_captcha', 'inspect_parse_error', 'fill_contacts'].includes(nextCode);
       }
       if (leadView === 'no_parse') return !parseStatus || ['pending', 'queued', 'imported'].includes(parseStatus);
       if (leadView === 'ready_for_letter') return ['draft', 'approve_draft'].includes(nextCode);
       if (leadView === 'errors') return ['error', 'failed'].includes(parseStatus);
       if (leadView === 'last_geo_search') return lastGeoSearchLeadIds.includes(item.id);
       if (leadView === 'ready_next_step') {
-        return ['parse', 'match', 'draft', 'approve_draft', 'queue', 'approve_batch', 'confirm_outcome'].includes(nextCode);
+        return [
+          'resolve_and_parse', 'run_parse', 'run_audit', 'run_match', 'draft_offer',
+          'approve_draft', 'queue_for_send', 'approve_batch', 'record_outcome',
+        ].includes(nextCode);
       }
       if (leadView === 'parsed') return parseStatus === 'completed';
       if (leadView === 'with_contacts') return hasAnyContact(item);

@@ -273,6 +273,7 @@ def partnership_bulk_parse_leads():
 
         queued_count = 0
         existing_count = 0
+        map_matched_count = 0
         skipped_count = 0
         tasks: list[dict[str, Any]] = []
         errors: list[dict[str, Any]] = []
@@ -289,16 +290,92 @@ def partnership_bulk_parse_leads():
                     skipped_count += 1
                     errors.append({"lead_id": lead_id, "error": "Lead not found"})
                     continue
+                parse_conn = get_db_connection()
+                try:
+                    parse_cur = parse_conn.cursor()
+                    parse_state = _load_latest_partnership_parse_state(parse_cur, lead)
+                finally:
+                    parse_conn.close()
+                if _partnership_parse_is_terminal_closed(parse_state):
+                    skipped_count += 1
+                    errors.append({
+                        "lead_id": lead_id,
+                        "code": "PARTNER_BUSINESS_CLOSED",
+                        "error": "Публичная карточка сообщает, что компания закрыта.",
+                        "next_action": "mark_not_relevant",
+                    })
+                    continue
+
+                lead = _sync_partnership_lead_from_parsed_data(dict(lead))
+                identity_mismatch = str(lead.get("parsed_identity_status") or "") == "mismatch"
 
                 display_lead = _normalize_lead_for_display(dict(lead))
                 if not display_lead:
                     skipped_count += 1
                     errors.append({"lead_id": lead_id, "error": "Lead is not available for parsing"})
                     continue
-                if _is_internal_partnership_source_url(display_lead.get("source_url")):
-                    skipped_count += 1
-                    errors.append({"lead_id": lead_id, "error": "Google Docs import source is not a map card"})
-                    continue
+                if _partnership_source_requires_map_match(display_lead.get("source_url")) or identity_mismatch:
+                    if _is_synthetic_partnership_lead(display_lead):
+                        skipped_count += 1
+                        errors.append({
+                            "lead_id": lead_id,
+                            "code": "PARTNER_MAP_MATCH_SYNTHETIC",
+                            "error": "Запись обозначает группу или тип бизнеса, а не одну компанию.",
+                        })
+                        continue
+                    candidates, provider_error = _find_yandex_candidates_for_partnership_lead(display_lead)
+                    if provider_error:
+                        skipped_count += 1
+                        errors.append({
+                            "lead_id": lead_id,
+                            "code": "PARTNER_MAP_MATCH_PROVIDER_ERROR",
+                            "error": "Не удалось выполнить поиск на Яндекс Картах.",
+                            "detail": provider_error,
+                        })
+                        continue
+                    candidate, match_status = _select_partnership_map_candidate(candidates)
+                    if not candidate:
+                        skipped_count += 1
+                        errors.append({
+                            "lead_id": lead_id,
+                            "code": "PARTNER_MAP_MATCH_AMBIGUOUS",
+                            "error": "Нельзя однозначно подтвердить карточку компании.",
+                            "reason": match_status,
+                            "candidates": candidates,
+                        })
+                        continue
+                    match_conn = get_db_connection()
+                    try:
+                        match_cur = match_conn.cursor()
+                        scoped_lead = _load_partnership_lead(
+                            match_cur,
+                            lead_id=lead_id,
+                            business_id=business_id,
+                        )
+                        if not scoped_lead:
+                            skipped_count += 1
+                            errors.append({"lead_id": lead_id, "error": "Lead not found"})
+                            continue
+                        _store_partnership_map_match(
+                            match_cur,
+                            lead=scoped_lead,
+                            candidate=candidate,
+                            candidates=candidates,
+                        )
+                        match_conn.commit()
+                        lead = _load_partnership_lead(
+                            match_cur,
+                            lead_id=lead_id,
+                            business_id=business_id,
+                        )
+                    finally:
+                        match_conn.close()
+                    display_lead = _normalize_lead_for_display(dict(lead or {}))
+                    if not display_lead:
+                        skipped_count += 1
+                        errors.append({"lead_id": lead_id, "error": "Matched lead is not available for parsing"})
+                        continue
+                    map_matched_count += 1
 
                 business, _business_created = _ensure_parse_business_for_partnership_lead(display_lead, str(user_data["user_id"]))
                 parse_business_id = str(business.get("id") or "").strip()
@@ -350,8 +427,9 @@ def partnership_bulk_parse_leads():
             {
                 "success": True,
                 "queued_count": queued_count,
-                "existing_count": existing_count,
-                "skipped_count": skipped_count,
+                    "existing_count": existing_count,
+                    "map_matched_count": map_matched_count,
+                    "skipped_count": skipped_count,
                 "tasks": tasks,
                 "errors": errors,
             }
@@ -1426,6 +1504,25 @@ def _make_public_offer_url(slug: str) -> str:
 
 def _is_internal_partnership_source_url(url: Any) -> bool:
     return str(url or "").strip().lower().startswith("localos-doc://")
+
+
+def _is_direct_partnership_map_card_url(url: Any) -> bool:
+    value = str(url or "").strip().lower()
+    if not value.startswith(("http://", "https://")):
+        return False
+    if re.search(r"yandex\.(?:ru|com|kz|by|uz|com\.tr)/maps/org/[^/?#]+/\d+", value):
+        return True
+    if "2gis." in value and re.search(r"/(?:firm|geo)/\d+", value):
+        return True
+    if "google." in value and "/maps/place/" in value:
+        return True
+    if "maps.app.goo.gl/" in value or "maps.apple.com/" in value:
+        return True
+    return False
+
+
+def _partnership_source_requires_map_match(url: Any) -> bool:
+    return _is_internal_partnership_source_url(url) or not _is_direct_partnership_map_card_url(url)
 
 def _load_latest_sales_room_url_for_lead(cur, lead_id: str) -> str:
     _ensure_sales_room_tables(cur.connection)

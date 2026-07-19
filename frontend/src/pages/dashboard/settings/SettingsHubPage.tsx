@@ -310,6 +310,7 @@ export const SettingsIntegrationsPage = () => {
   const params = new URLSearchParams(location.search);
   const focus = params.get('focus') || 'integrations';
   const returnTo = params.get('return_to') || null;
+  const senderScope = params.get('sender_scope') === 'platform' ? 'platform' : 'business';
   const integrationsV3Enabled = import.meta.env.VITE_SETTINGS_INTEGRATIONS_V3 !== 'false';
 
   if (integrationsV3Enabled) {
@@ -319,6 +320,7 @@ export const SettingsIntegrationsPage = () => {
         currentBusiness={currentBusiness || null}
         focus={focus}
         returnTo={returnTo}
+        senderScope={senderScope}
       />
     );
   }

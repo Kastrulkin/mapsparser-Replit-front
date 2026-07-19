@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { DragEventHandler } from 'react';
+import { AlertCircle, CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,14 @@ type PipelineLead = {
   parse_updated_at?: string;
   parse_retry_after?: string;
   parse_error?: string;
+  audit_ready?: boolean;
+  match_summary_json?: {
+    match_score?: number;
+    score_explanation?: string;
+    overlap?: string[];
+    offer_angles?: string[];
+  } | null;
+  artifact_updated_at?: string;
   deferred_reason?: string;
   deferred_until?: string;
   sales_room_status?: string;
@@ -88,6 +97,13 @@ type LeadBasicsPatch = {
   address: string;
 };
 
+type LeadActionKind = 'parse' | 'enrich' | 'audit' | 'match';
+
+type LeadActionState = {
+  leadId: string;
+  action: LeadActionKind;
+};
+
 const mutedPillClass = 'inline-flex max-w-full items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600';
 const compactMetaClass = 'truncate text-[11px] text-slate-500';
 
@@ -127,6 +143,200 @@ const getLeadBasicsDraft = (lead: PipelineLead): LeadBasicsPatch => ({
   city: String(lead.city || '').trim(),
   address: String(lead.address || '').trim(),
 });
+
+const completedAuditStages = new Set([
+  'audited',
+  'matched',
+  'proposal_draft_ready',
+  'selected_for_outreach',
+  'channel_selected',
+  'proposal_approved',
+  'approved_for_send',
+  'queued_for_send',
+  'sent',
+]);
+
+const completedMatchStages = new Set([
+  'matched',
+  'proposal_draft_ready',
+  'selected_for_outreach',
+  'channel_selected',
+  'proposal_approved',
+  'approved_for_send',
+  'queued_for_send',
+  'sent',
+]);
+
+const leadHasMatchResult = (lead: PipelineLead) => (
+  Boolean(lead.match_summary_json) || completedMatchStages.has(String(lead.partnership_stage || '').toLowerCase())
+);
+
+const preparationStepIcon = (state: 'complete' | 'active' | 'waiting' | 'error') => {
+  if (state === 'complete') return <CheckCircle2 className="h-5 w-5 text-emerald-600" />;
+  if (state === 'active') return <Loader2 className="h-5 w-5 animate-spin text-sky-600" />;
+  if (state === 'error') return <AlertCircle className="h-5 w-5 text-red-600" />;
+  return <Circle className="h-5 w-5 text-slate-300" />;
+};
+
+const LeadPreparationGuide = ({
+  lead,
+  loading,
+  activeLeadAction,
+  onRunParse,
+  onRunAudit,
+  onRunMatch,
+  onOpenLead,
+}: {
+  lead: PipelineLead;
+  loading: boolean;
+  activeLeadAction: LeadActionState | null;
+  onRunParse: (leadId: string) => void;
+  onRunAudit: (leadId: string) => void;
+  onRunMatch: (leadId: string) => void;
+  onOpenLead: (leadId: string) => void;
+}) => {
+  const stage = String(lead.partnership_stage || '').toLowerCase();
+  const parseStatus = String(lead.parse_status || '').toLowerCase();
+  const isThisLeadBusy = activeLeadAction?.leadId === lead.id;
+  const runningAction = isThisLeadBusy ? activeLeadAction.action : null;
+  const parseRunning = ['pending', 'processing', 'captcha', 'retry_wait'].includes(parseStatus) || runningAction === 'parse';
+  const parseFailed = parseStatus === 'error' || parseStatus === 'failed';
+  const terminalClosed = lead.next_best_action?.code === 'mark_closed_not_relevant';
+  const identityMismatch = lead.next_best_action?.code === 'repair_recipient_identity_mapping';
+  const auditComplete = Boolean(lead.audit_ready) || completedAuditStages.has(stage);
+  const matchComplete = Boolean(lead.match_summary_json) || completedMatchStages.has(stage);
+  const dataComplete = !identityMismatch && (['completed', 'done'].includes(parseStatus) || auditComplete || matchComplete);
+  const matchScore = lead.match_summary_json?.match_score;
+  const offerAngles = Array.isArray(lead.match_summary_json?.offer_angles)
+    ? lead.match_summary_json.offer_angles.filter(Boolean).slice(0, 3)
+    : [];
+
+  const steps: Array<{
+    label: string;
+    description: string;
+    state: 'complete' | 'active' | 'waiting' | 'error';
+  }> = [
+    {
+      label: 'Данные компании',
+      description: dataComplete
+        ? 'Карточка и открытые данные собраны'
+        : identityMismatch
+          ? 'Найдена карточка другой компании — нужно повторить поиск'
+          : parseRunning
+            ? 'Собираем данные — статус обновится автоматически'
+            : parseFailed
+              ? terminalClosed
+                ? 'Публичная карточка сообщает, что компания закрыта'
+                : 'Сбор не завершён — можно повторить'
+              : 'Нужно собрать карточку, услуги и контакты',
+      state: dataComplete ? 'complete' : parseRunning ? 'active' : parseFailed ? 'error' : 'waiting',
+    },
+    {
+      label: 'Разбор карточки',
+      description: auditComplete
+        ? 'Сильные стороны и факты для предложения найдены'
+        : runningAction === 'audit'
+          ? 'Анализируем карточку'
+          : 'После сбора данных LocalOS найдёт факты для предложения',
+      state: auditComplete ? 'complete' : runningAction === 'audit' ? 'active' : 'waiting',
+    },
+    {
+      label: 'Совместимость',
+      description: matchComplete
+        ? matchScore === undefined
+          ? 'Совместимость рассчитана'
+          : `Совместимость: ${matchScore}%`
+        : runningAction === 'match'
+          ? 'Сопоставляем услуги и аудитории'
+          : 'Проверим, чем бизнесы полезны друг другу',
+      state: matchComplete ? 'complete' : runningAction === 'match' ? 'active' : 'waiting',
+    },
+  ];
+
+  const nextAction = terminalClosed || parseRunning
+    ? null
+    : !dataComplete
+      ? {
+          label: identityMismatch
+            ? 'Найти правильную карточку'
+            : parseFailed
+              ? 'Повторить сбор данных'
+              : lead.next_best_action?.code === 'resolve_and_parse'
+                ? 'Найти карточку и собрать данные'
+                : 'Собрать данные о компании',
+          onClick: () => onRunParse(lead.id),
+        }
+      : !auditComplete
+        ? { label: 'Разобрать карточку', onClick: () => onRunAudit(lead.id) }
+        : !matchComplete
+          ? { label: 'Проверить совместимость', onClick: () => onRunMatch(lead.id) }
+          : null;
+
+  return (
+    <section className="mt-3 rounded-2xl bg-slate-50 p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+      <div className="flex flex-col gap-1">
+        <div className="text-sm font-semibold text-slate-950">Подготовка предложения</div>
+        <p className="text-pretty text-xs leading-5 text-slate-600">Пройдите три шага. LocalOS покажет результат здесь и предложит, что делать дальше.</p>
+      </div>
+
+      <ol className="mt-4 grid gap-3 lg:grid-cols-3">
+        {steps.map((step, index) => (
+          <li key={step.label} className="flex min-w-0 gap-2.5">
+            <span className="relative mt-0.5 shrink-0" aria-hidden="true">{preparationStepIcon(step.state)}</span>
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-slate-900">{index + 1}. {step.label}</div>
+              <div className="mt-0.5 text-pretty text-[11px] leading-4 text-slate-500">{step.description}</div>
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      {terminalClosed ? (
+        <div className="mt-4 rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-900 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.2)]">
+          Публичная карточка сообщает, что компания закрыта. Повторный сбор не запускается — используйте действие «Неактуален» в карточке лида.
+        </div>
+      ) : null}
+
+      {matchComplete ? (
+        <div className="mt-4 rounded-xl bg-emerald-50 p-3 shadow-[inset_0_0_0_1px_rgba(5,150,105,0.16)]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-emerald-950">
+                {matchScore === undefined ? 'Совместимость рассчитана' : `Совместимость ${matchScore}%`}
+              </div>
+              <p className="mt-1 text-pretty text-xs leading-5 text-emerald-900">
+                {lead.match_summary_json?.score_explanation || 'LocalOS нашёл основание для совместного предложения. Откройте результат, чтобы посмотреть факты и варианты оффера.'}
+              </p>
+              {offerAngles.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {offerAngles.map((angle) => <span key={angle} className="rounded-full bg-white px-2 py-1 text-[11px] text-emerald-900 shadow-[inset_0_0_0_1px_rgba(5,150,105,0.16)]">{angle}</span>)}
+                </div>
+              ) : null}
+            </div>
+            <Button size="sm" variant="outline" onClick={() => onOpenLead(lead.id)} className="min-h-10 shrink-0 bg-white active:scale-[0.96] transition-transform">
+              Посмотреть результат
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-slate-500">
+            {parseRunning ? 'Можно заниматься другими лидами — статус обновится сам.' : 'Сейчас нужен только один следующий шаг.'}
+          </p>
+          {nextAction ? (
+            <Button onClick={nextAction.onClick} disabled={loading} className="min-h-10 bg-orange-500 text-white hover:bg-orange-600 active:scale-[0.96] transition-transform">
+              {nextAction.label}
+            </Button>
+          ) : parseRunning ? (
+            <Button disabled className="min-h-10 bg-sky-100 text-sky-800">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Собираем данные
+            </Button>
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+};
 
 const EditableLeadBasics = ({
   lead,
@@ -497,6 +707,7 @@ type PartnershipPipelineListProps = {
   selectedLeadIds: string[];
   visibleLeads: PipelineLead[];
   selectedLeadId: string | null;
+  activeLeadAction: LeadActionState | null;
   bulkStage: string;
   onBulkStageChange: (value: string) => void;
   bulkStageOptions: readonly Option[];
@@ -523,6 +734,7 @@ type PartnershipPipelineListProps = {
   onEnrichContacts: (leadId: string) => void;
   onRunAudit: (leadId: string) => void;
   onRunMatch: (leadId: string) => void;
+  onOpenLead: (leadId: string) => void;
   onPrepareSalesRoom: (leadId: string, dataMode: 'audited' | 'template') => void;
   onMarkManualContact: (leadId: string) => void;
   onSaveLeadBasics: (leadId: string, patch: LeadBasicsPatch) => Promise<void>;
@@ -562,6 +774,7 @@ export const PartnershipPipelineList = ({
   selectedLeadIds,
   visibleLeads,
   selectedLeadId,
+  activeLeadAction,
   bulkStage,
   onBulkStageChange,
   bulkStageOptions,
@@ -588,6 +801,7 @@ export const PartnershipPipelineList = ({
   onEnrichContacts,
   onRunAudit,
   onRunMatch,
+  onOpenLead,
   onPrepareSalesRoom,
   onMarkManualContact,
   onSaveLeadBasics,
@@ -740,7 +954,7 @@ export const PartnershipPipelineList = ({
           {visibleLeads.map((lead) => (
             <div key={lead.id} className={`overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md ${selectedLeadId === lead.id ? 'border-primary/70 ring-2 ring-primary/10' : 'border-slate-200'}`}>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex min-w-0 items-start gap-3">
+                <div className="flex min-w-0 flex-1 items-start gap-3">
                   <input className="mt-1" type="checkbox" checked={selectedLeadIds.includes(lead.id)} onChange={(event) => onToggleLeadSelection(lead.id, event.target.checked)} />
                   <div className="min-w-0 flex-1">
                     <EditableLeadBasics lead={lead} loading={loading} onSave={onSaveLeadBasics} />
@@ -760,21 +974,25 @@ export const PartnershipPipelineList = ({
                       <span className={lead.telegram_url ? 'text-emerald-700' : 'text-slate-400'}>Telegram {lead.telegram_url ? '✓' : '—'}</span>
                       <span className={lead.whatsapp_url ? 'text-emerald-700' : 'text-slate-400'}>WhatsApp {lead.whatsapp_url ? '✓' : '—'}</span>
                     </div>
-                    {lead.next_best_action ? (
-                      <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2">
-                        <div className="text-xs font-semibold text-sky-900">Следующее действие: {lead.next_best_action.label || '—'}</div>
-                        <div className="mt-0.5 text-[11px] text-sky-800">{lead.next_best_action.hint || '—'}</div>
-                      </div>
-                    ) : null}
-                    <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-3 py-3">
+                    <LeadPreparationGuide
+                      lead={lead}
+                      loading={loading}
+                      activeLeadAction={activeLeadAction}
+                      onRunParse={onRunParse}
+                      onRunAudit={onRunAudit}
+                      onRunMatch={onRunMatch}
+                      onOpenLead={onOpenLead}
+                    />
+                    {leadHasMatchResult(lead) ? <div className="mt-3 rounded-xl bg-orange-50/70 px-3 py-3 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.18)]">
                       <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                         <div>
-                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Цифровая комната</div>
-                          <div className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                            Комната для предложения, чата и файлов. Подготовка данных помогает сметчить услуги и сделать оффер предметным.
+                          <div className="text-xs font-semibold uppercase tracking-wide text-orange-800">Следующий шаг</div>
+                          <div className="mt-1 text-sm font-semibold text-orange-950">Подготовить предложение для партнёра</div>
+                          <div className="mt-1 text-[11px] leading-relaxed text-orange-800">
+                            LocalOS соберёт найденные факты, совместимость и следующий шаг в одну страницу. Перед отправкой вы всё проверите.
                           </div>
                           {lead.sales_room_status ? (
-                            <div className="mt-1 text-[11px] font-medium text-emerald-700">Комната готова</div>
+                            <div className="mt-1 text-[11px] font-medium text-emerald-700">Предложение уже подготовлено</div>
                           ) : null}
                         </div>
                         <div className="flex flex-wrap gap-2 xl:justify-end">
@@ -783,15 +1001,13 @@ export const PartnershipPipelineList = ({
                               Открыть комнату
                             </Button>
                           ) : null}
-                          <Button size="sm" variant="outline" onClick={() => onPrepareSalesRoom(lead.id, 'audited')} disabled={loading}>
-                            Создать комнату
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => onPrepareSalesRoom(lead.id, 'template')} disabled={loading}>
-                            Без подготовки данных
+                          <Button size="sm" onClick={() => onPrepareSalesRoom(lead.id, 'audited')} disabled={loading} className="min-h-10 bg-orange-500 text-white hover:bg-orange-600 active:scale-[0.96] transition-transform">
+                            Подготовить предложение
                           </Button>
                           <Button
                             size="sm"
-                            className="bg-emerald-600 text-white hover:bg-emerald-700"
+                            variant="outline"
+                            className="min-h-10 bg-white"
                             onClick={() => onMarkManualContact(lead.id)}
                             disabled={loading}
                           >
@@ -799,30 +1015,36 @@ export const PartnershipPipelineList = ({
                           </Button>
                         </div>
                       </div>
-                    </div>
+                    </div> : null}
                     <details className="mt-3 text-xs text-slate-500">
-                      <summary className="cursor-pointer font-medium text-slate-500">Технические детали</summary>
+                      <summary className="flex min-h-10 cursor-pointer items-center font-medium text-slate-500">Дополнительные действия и технические детали</summary>
                       <div className="mt-2 space-y-1 rounded-xl bg-slate-50 p-3">
                         <div>Парсинг: {lead.parse_status || 'не запускался'}{lead.parse_updated_at ? ` · ${new Date(lead.parse_updated_at).toLocaleString('ru-RU')}` : ''}</div>
                         {Array.isArray(lead.matching_sources_json) && lead.matching_sources_json.length > 1 ? <div>Объединено источников: {lead.matching_sources_json.length}</div> : null}
                         {lead.enrich_payload_json?.provider ? <div>Источник данных: {lead.enrich_payload_json.provider}</div> : null}
                         {lead.parse_error ? <div className="text-red-600">{lead.parse_error}</div> : null}
                         {lead.source_url ? <a href={lead.source_url} target="_blank" rel="noreferrer" className="break-all text-blue-600 underline">Открыть источник</a> : null}
+                        <div className="flex flex-wrap gap-2 pt-3">
+                          <Button variant="outline" size="sm" onClick={() => onPrepareSalesRoom(lead.id, 'template')} disabled={loading}>Предложение без подготовки данных</Button>
+                          <Button variant="outline" size="sm" onClick={() => onUpdateLeadStage(lead.id, 'postponed', 'Партнёр отложен на потом', { deferredReason: deferredReasonInput.trim() || lead.deferred_reason || '', deferredUntil: deferredUntilInput || String(lead.deferred_until || '').slice(0, 10) || '' })} disabled={loading}>Отложить</Button>
+                          <Button variant="outline" size="sm" onClick={() => onUpdateLeadStage(lead.id, 'not_relevant', 'Партнёр помечен как неактуальный', { deferredReason: '', deferredUntil: '' })} disabled={loading}>Неактуален</Button>
+                          <Button variant="outline" size="sm" onClick={() => onDeleteLead(lead.id)} disabled={loading}>Удалить</Button>
+                        </div>
                       </div>
                     </details>
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2 lg:max-w-[360px] lg:justify-end">
-                  <Button variant="outline" size="sm" onClick={() => onRunParse(lead.id)} disabled={loading}>Запустить парсинг</Button>
-                  <Button variant="outline" size="sm" onClick={() => onEnrichContacts(lead.id)} disabled={loading}>Обогатить контакты</Button>
-                  <Button variant="outline" size="sm" onClick={() => onRunAudit(lead.id)} disabled={loading}>Аудит</Button>
-                  <Button variant="outline" size="sm" onClick={() => onRunMatch(lead.id)} disabled={loading}>Матчинг</Button>
-                  <Button size="sm" className="bg-slate-950 text-white hover:bg-slate-800" onClick={() => onUpdateLeadStage(lead.id, 'in_progress', 'Партнёр добавлен в работу', { deferredReason: '', deferredUntil: '' })} disabled={loading}>
-                    {String(lead.pipeline_status || '').toLowerCase() === 'postponed' || String(lead.partnership_stage || '').toLowerCase() === 'deferred' ? 'Вернуть в работу' : 'Сохранить'}
+                  <Button variant="outline" size="sm" className="min-h-10" onClick={() => onOpenLead(lead.id)} disabled={loading}>Вся информация</Button>
+                  <Button variant="outline" size="sm" className="min-h-10" onClick={() => onEnrichContacts(lead.id)} disabled={loading}>
+                    {activeLeadAction?.leadId === lead.id && activeLeadAction.action === 'enrich' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Найти контакты
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => onUpdateLeadStage(lead.id, 'postponed', 'Партнёр отложен на потом', { deferredReason: deferredReasonInput.trim() || lead.deferred_reason || '', deferredUntil: deferredUntilInput || String(lead.deferred_until || '').slice(0, 10) || '' })} disabled={loading}>Отложить</Button>
-                  <Button variant="outline" size="sm" onClick={() => onUpdateLeadStage(lead.id, 'not_relevant', 'Партнёр помечен как неактуальный', { deferredReason: '', deferredUntil: '' })} disabled={loading}>Неактуален</Button>
-                  <Button variant="outline" size="sm" onClick={() => onDeleteLead(lead.id)} disabled={loading}>Удалить</Button>
+                  {['', 'unprocessed', 'postponed'].includes(String(lead.pipeline_status || '').toLowerCase()) || String(lead.partnership_stage || '').toLowerCase() === 'deferred' ? (
+                    <Button size="sm" className="min-h-10 bg-slate-950 text-white hover:bg-slate-800" onClick={() => onUpdateLeadStage(lead.id, 'in_progress', 'Партнёр добавлен в работу', { deferredReason: '', deferredUntil: '' })} disabled={loading}>
+                      {String(lead.pipeline_status || '').toLowerCase() === 'postponed' || String(lead.partnership_stage || '').toLowerCase() === 'deferred' ? 'Вернуть в работу' : 'Взять в работу'}
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </div>

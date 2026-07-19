@@ -6,6 +6,7 @@ import re
 from typing import Any, Callable
 
 from core.telegram_userbot import fetch_recent_messages, load_userbot_account
+from services.telegram_account_permissions_service import assert_account_access
 from services.telegram_opportunity_radar import (
     _row_to_dict,
     ingest_opportunity,
@@ -157,16 +158,22 @@ def _resolve_account(cursor: Any, source: dict[str, Any]) -> dict[str, Any] | No
     source_account_id = str(source.get("account_id") or "").strip()
     business_id = str(source.get("business_id") or "").strip()
 
-    if configured_account_id:
-        return load_userbot_account(cursor, account_id=configured_account_id)
-    if source_account_id:
-        return load_userbot_account(cursor, account_id=source_account_id)
-    account = load_userbot_account(cursor, business_id=business_id)
-    if account:
-        return account
-    if bool(os.getenv("TELEGRAM_OPPORTUNITY_MONITOR_ALLOW_GLOBAL_ACCOUNT", "true").strip().lower() in {"1", "true", "yes", "on"}):
-        return load_userbot_account(cursor)
-    return None
+    account_id = configured_account_id or source_account_id
+    account = (
+        load_userbot_account(cursor, account_id=account_id, business_id=business_id)
+        if account_id
+        else load_userbot_account(cursor, business_id=business_id)
+    )
+    if not account:
+        return None
+    allowed, _reason, _context = assert_account_access(
+        cursor,
+        str(account.get("account_id") or ""),
+        business_id=business_id,
+        scope_type="business",
+        capability="radar",
+    )
+    return account if allowed else None
 
 
 def run_telegram_opportunity_monitor(

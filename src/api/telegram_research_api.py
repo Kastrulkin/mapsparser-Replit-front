@@ -23,6 +23,14 @@ from services.telegram_research_service import (
     list_audience_insights,
     mask_phone,
 )
+from services.telegram_account_permissions_service import (
+    assert_account_access,
+    disconnect_account,
+    ensure_permissions,
+    get_permissions,
+    sync_sender_binding,
+    update_permissions,
+)
 
 
 telegram_research_bp = Blueprint("telegram_research", __name__)
@@ -30,6 +38,40 @@ telegram_research_bp = Blueprint("telegram_research", __name__)
 
 def _user_id(user_data: dict[str, Any]) -> str:
     return str(user_data.get("user_id") or user_data.get("id") or "").strip()
+
+
+def _requested_sender_scope(user_data: dict[str, Any], payload: dict[str, Any]) -> str:
+    """Resolve an explicit sender scope without inferring it from the actor role."""
+    scope_type = str(payload.get("scope_type") or "business").strip().lower()
+    if scope_type not in {"business", "platform"}:
+        raise ValueError("scope_type должен быть business или platform")
+    if scope_type == "platform" and not bool(user_data.get("is_superadmin")):
+        raise PermissionError("Platform scope доступен только суперадмину")
+    return scope_type
+
+
+def _sync_requested_sender_binding(
+    cursor: Any,
+    *,
+    account_id: str,
+    user_data: dict[str, Any],
+    scope_type: str,
+) -> str:
+    sender_account_id = sync_sender_binding(
+        cursor,
+        account_id,
+        owner_user_id=_user_id(user_data),
+        scope_type=scope_type,
+    )
+    cursor.execute(
+        """
+        UPDATE outreach_sender_accounts
+        SET status = 'disabled', updated_at = NOW()
+        WHERE external_account_id = %s AND id <> %s
+        """,
+        (account_id, sender_account_id),
+    )
+    return sender_account_id
 
 
 def _require_business(business_id: str):
@@ -47,7 +89,66 @@ def _require_business(business_id: str):
 
 
 def _account_for_business(cursor: Any, business_id: str) -> dict[str, Any] | None:
-    return load_userbot_account(cursor, business_id=business_id)
+    return _account_for_scope(cursor, business_id, "business")
+
+
+def _account_for_scope(
+    cursor: Any,
+    business_id: str,
+    scope_type: str,
+) -> dict[str, Any] | None:
+    """Load only the Telegram credential explicitly bound to this sender scope.
+
+    ``externalbusinessaccounts`` is the encrypted credential container and may
+    hold more than one Telegram account for a superadmin's current business.
+    ``outreach_sender_accounts`` remains the authority for whether a credential
+    is a business sender or a LocalOS platform sender. Pending authorizations
+    carry the requested scope inside the encrypted auth payload until a binding
+    can be created.
+    """
+    binding_business_id = business_id if scope_type == "business" else None
+    cursor.execute(
+        """
+        SELECT account.id AS account_id,
+               binding.id AS sender_account_id,
+               EXISTS (
+                   SELECT 1
+                   FROM outreach_sender_accounts any_binding
+                   WHERE any_binding.external_account_id = account.id
+                     AND any_binding.channel = 'telegram'
+                     AND any_binding.status = 'connected'
+               ) AS has_any_binding
+        FROM externalbusinessaccounts account
+        LEFT JOIN outreach_sender_accounts binding
+          ON binding.external_account_id = account.id
+         AND binding.channel = 'telegram'
+         AND binding.status = 'connected'
+         AND binding.scope_type = %s
+         AND COALESCE(binding.business_id, '') = COALESCE(%s, '')
+        WHERE account.business_id = %s
+          AND account.source = 'telegram_app'
+          AND account.is_active = TRUE
+        ORDER BY binding.id IS NOT NULL DESC,
+                 account.updated_at DESC NULLS LAST,
+                 account.created_at DESC NULLS LAST
+        """,
+        (scope_type, binding_business_id, business_id),
+    )
+    for row in cursor.fetchall() or []:
+        values = {key: row[key] for key in row.keys()} if hasattr(row, "keys") else {
+            "account_id": row[0],
+            "sender_account_id": row[1],
+            "has_any_binding": row[2],
+        }
+        account = load_userbot_account(cursor, account_id=str(values.get("account_id") or ""))
+        if not account:
+            continue
+        requested_scope = str(account.get("sender_scope") or "").strip().lower()
+        if values.get("sender_account_id") or requested_scope == scope_type:
+            return account
+        if scope_type == "business" and not requested_scope and not values.get("has_any_binding"):
+            return account
+    return None
 
 
 def _business_knowledge_context(cursor: Any, business_id: str) -> dict[str, str]:
@@ -87,7 +188,7 @@ def _save_account(cursor: Any, business_id: str, auth_data: dict[str, Any]) -> s
         cursor.execute(
             """
             UPDATE externalbusinessaccounts
-            SET external_id = %s, display_name = 'Telegram-источники', is_active = TRUE, updated_at = NOW()
+            SET external_id = %s, display_name = 'Telegram-аккаунт', is_active = TRUE, updated_at = NOW()
             WHERE id = %s AND business_id = %s
             """,
             (str(auth_data.get("phone") or ""), account_id, business_id),
@@ -102,7 +203,7 @@ def _save_account(cursor: Any, business_id: str, auth_data: dict[str, Any]) -> s
         INSERT INTO externalbusinessaccounts (
             id, business_id, source, external_id, display_name,
             auth_data_encrypted, is_active, created_at, updated_at
-        ) VALUES (%s, %s, 'telegram_app', %s, 'Telegram-источники', %s, TRUE, NOW(), NOW())
+        ) VALUES (%s, %s, 'telegram_app', %s, 'Telegram-аккаунт', %s, TRUE, NOW(), NOW())
         """,
         (account_id, business_id, str(auth_data.get("phone") or ""), encrypted),
     )
@@ -117,7 +218,7 @@ def _json_text(payload: dict[str, Any]) -> str:
 
 @telegram_research_bp.post("/api/business/<business_id>/telegram-research/connect")
 def connect_research_account(business_id: str):
-    db, cursor, _user_data, error = _require_business(business_id)
+    db, cursor, user_data, error = _require_business(business_id)
     if error:
         return error
     payload = request.get_json(silent=True) or {}
@@ -128,9 +229,16 @@ def connect_research_account(business_id: str):
         db.close()
         return jsonify({"success": False, "error": "Укажите номер, API ID и API hash"}), 400
     try:
-        auth_data = _account_for_business(cursor, business_id) or {}
-        auth_data.update({"phone": phone, "api_id": api_id, "api_hash": api_hash})
+        scope_type = _requested_sender_scope(user_data, payload)
+        auth_data = _account_for_scope(cursor, business_id, scope_type) or {}
+        auth_data.update({
+            "phone": phone,
+            "api_id": api_id,
+            "api_hash": api_hash,
+            "sender_scope": scope_type,
+        })
         account_id = _save_account(cursor, business_id, auth_data)
+        ensure_permissions(cursor, account_id)
         db.conn.commit()
         result = send_code(auth_data)
         auth_data.update({key: value for key, value in result.items() if value is not None})
@@ -140,11 +248,22 @@ def connect_research_account(business_id: str):
         db.conn.commit()
         result_status = str(result.get("status") or "code_sent")
         authorized = result_status == "already_authorized"
+        sender_account_id = None
+        if authorized:
+            sender_account_id = _sync_requested_sender_binding(
+                cursor,
+                account_id=account_id,
+                user_data=user_data,
+                scope_type=scope_type,
+            )
+            db.conn.commit()
         return jsonify({
             "success": True,
             "status": result_status,
             "authorized": authorized,
             "account_id": account_id,
+            "sender_account_id": sender_account_id,
+            "scope_type": scope_type,
             "phone": mask_phone(phone),
             "message": (
                 "Telegram уже подключён. Выберите источники."
@@ -152,6 +271,9 @@ def connect_research_account(business_id: str):
                 else "Код отправлен в Telegram. Введите его для завершения подключения."
             ),
         })
+    except PermissionError as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 403
     except Exception as exc:
         db.conn.rollback()
         return jsonify({"success": False, "error": str(exc)}), 400
@@ -161,14 +283,15 @@ def connect_research_account(business_id: str):
 
 @telegram_research_bp.post("/api/business/<business_id>/telegram-research/confirm")
 def confirm_research_account(business_id: str):
-    db, cursor, _user_data, error = _require_business(business_id)
+    db, cursor, user_data, error = _require_business(business_id)
     if error:
         return error
     payload = request.get_json(silent=True) or {}
     code = str(payload.get("code") or "").strip()
     password = str(payload.get("password") or "")
     try:
-        auth_data = _account_for_business(cursor, business_id)
+        scope_type = _requested_sender_scope(user_data, payload)
+        auth_data = _account_for_scope(cursor, business_id, scope_type)
         if not auth_data:
             return jsonify({"success": False, "error": "Сначала запросите код Telegram"}), 400
         if not code and not (password and auth_data.get("authorization_status") == "password_required"):
@@ -179,6 +302,15 @@ def confirm_research_account(business_id: str):
             for key in ("phone_code_hash", "pending_session_string", "authorization_status"):
                 auth_data.pop(key, None)
         update_userbot_session(cursor, str(auth_data["account_id"]), auth_data)
+        ensure_permissions(cursor, str(auth_data["account_id"]))
+        sender_account_id = None
+        if result.get("status") == "authorized":
+            sender_account_id = _sync_requested_sender_binding(
+                cursor,
+                account_id=str(auth_data["account_id"]),
+                user_data=user_data,
+                scope_type=scope_type,
+            )
         db.conn.commit()
         status = str(result.get("status") or "")
         return jsonify({
@@ -186,9 +318,14 @@ def confirm_research_account(business_id: str):
             "status": status,
             "authorized": status == "authorized",
             "password_required": status == "password_required",
+            "sender_account_id": sender_account_id,
+            "scope_type": scope_type,
             "phone": mask_phone(auth_data.get("phone")),
             "message": "Telegram подключён" if status == "authorized" else "Введите пароль двухэтапной проверки",
         })
+    except PermissionError as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 403
     except Exception as exc:
         db.conn.rollback()
         return jsonify({"success": False, "error": str(exc)}), 400
@@ -205,6 +342,15 @@ def research_dialogs(business_id: str):
         auth_data = _account_for_business(cursor, business_id)
         if not auth_data or not auth_data.get("session_string"):
             return jsonify({"success": False, "error": "Telegram-аккаунт ещё не подключён"}), 409
+        allowed, reason, _context = assert_account_access(
+            cursor,
+            str(auth_data["account_id"]),
+            business_id=business_id,
+            scope_type="business",
+            capability="radar",
+        )
+        if not allowed:
+            return jsonify({"success": False, "error": "Telegram-радар выключен", "reason_code": reason}), 409
         result = list_dialogs(auth_data, limit=int(request.args.get("limit") or 300))
         if result.get("status") != "ok":
             return jsonify({"success": False, "error": "Нужно заново подключить Telegram"}), 409
@@ -238,6 +384,15 @@ def save_research_sources(business_id: str):
         auth_data = _account_for_business(cursor, business_id)
         if not auth_data or not auth_data.get("session_string"):
             return jsonify({"success": False, "error": "Telegram-аккаунт ещё не подключён"}), 409
+        allowed, reason, _context = assert_account_access(
+            cursor,
+            str(auth_data["account_id"]),
+            business_id=business_id,
+            scope_type="business",
+            capability="radar",
+        )
+        if not allowed:
+            return jsonify({"success": False, "error": "Сначала разрешите Telegram-радар", "reason_code": reason}), 409
         knowledge_context = _business_knowledge_context(cursor, business_id)
         selected_chat_ids: list[str] = []
         saved: list[dict[str, Any]] = []
@@ -334,6 +489,18 @@ def queue_research_backfill(business_id: str):
     if error:
         return error
     try:
+        account = _account_for_business(cursor, business_id)
+        if not account:
+            return jsonify({"success": False, "error": "Telegram-аккаунт ещё не подключён"}), 409
+        allowed, reason, _context = assert_account_access(
+            cursor,
+            str(account["account_id"]),
+            business_id=business_id,
+            scope_type="business",
+            capability="radar",
+        )
+        if not allowed:
+            return jsonify({"success": False, "error": "Telegram-радар выключен", "reason_code": reason}), 409
         cursor.execute(
             """
             UPDATE knowledge_sources
@@ -354,11 +521,17 @@ def queue_research_backfill(business_id: str):
 
 @telegram_research_bp.get("/api/business/<business_id>/telegram-research/status")
 def research_status(business_id: str):
-    db, cursor, _user_data, error = _require_business(business_id)
+    db, cursor, user_data, error = _require_business(business_id)
     if error:
         return error
     try:
-        account = _account_for_business(cursor, business_id)
+        scope_type = _requested_sender_scope(user_data, request.args)
+        account = _account_for_scope(cursor, business_id, scope_type)
+        permissions = (
+            ensure_permissions(cursor, str(account["account_id"]))
+            if account
+            else {"radar_enabled": False, "outreach_enabled": False}
+        )
         cursor.execute(
             """
             SELECT id, title, visibility, status, sync_status, backfill_days,
@@ -366,9 +539,10 @@ def research_status(business_id: str):
                    (SELECT COUNT(*) FROM knowledge_documents d WHERE d.source_id = s.id AND d.invalidated_at IS NULL) AS documents_count
             FROM knowledge_sources s
             WHERE source_type = 'telegram' AND business_id = %s
+              AND account_id = %s
             ORDER BY status, title
             """,
-            (business_id,),
+            (business_id, account.get("account_id") if account else "__no_scope_account__"),
         )
         sources = []
         for row in cursor.fetchall():
@@ -379,15 +553,144 @@ def research_status(business_id: str):
                 sources.append(dict(zip(columns, row)))
         return jsonify({
             "success": True,
+            "scope_type": scope_type,
             "enabled": knowledge_layer_enabled(),
             "account": {
                 "configured": bool(account),
                 "authorized": bool(account and account.get("session_string")),
                 "phone": mask_phone(account.get("phone") if account else ""),
+                "account_id": str(account.get("account_id") or "") if account else None,
+                "display_name": "Telegram-аккаунт",
+                "radar_enabled": bool(permissions.get("radar_enabled")),
+                "outreach_enabled": bool(permissions.get("outreach_enabled")),
+                "reply_sync_enabled": bool(permissions.get("outreach_enabled")),
+                "permissions_updated_at": permissions.get("updated_at"),
             },
             "sources": sources,
             "active_sources": sum(1 for source in sources if source.get("status") == "active"),
         })
+    except PermissionError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    finally:
+        db.close()
+
+
+@telegram_research_bp.patch("/api/business/<business_id>/telegram-account/permissions")
+def change_account_permissions(business_id: str):
+    db, cursor, user_data, error = _require_business(business_id)
+    if error:
+        return error
+    payload = request.get_json(silent=True) or {}
+    if "radar_enabled" not in payload and "outreach_enabled" not in payload:
+        db.close()
+        return jsonify({"success": False, "error": "Передайте хотя бы одно разрешение"}), 400
+    for key in ("radar_enabled", "outreach_enabled"):
+        if key in payload and not isinstance(payload[key], bool):
+            db.close()
+            return jsonify({"success": False, "error": f"{key} должно быть boolean"}), 400
+    try:
+        scope_type = _requested_sender_scope(user_data, payload)
+        account = _account_for_scope(cursor, business_id, scope_type)
+        if not account:
+            return jsonify({"success": False, "error": "Telegram-аккаунт ещё не подключён"}), 404
+        account_id = str(account["account_id"])
+        permissions = update_permissions(
+            cursor,
+            account_id,
+            radar_enabled=payload.get("radar_enabled"),
+            outreach_enabled=payload.get("outreach_enabled"),
+            changed_by=_user_id(user_data),
+        )
+        sender_account_id = _sync_requested_sender_binding(
+            cursor,
+            account_id=account_id,
+            user_data=user_data,
+            scope_type=scope_type,
+        )
+        db.conn.commit()
+        return jsonify({
+            "success": True,
+            "account_id": account_id,
+            "permissions": permissions,
+            "sender_account_id": sender_account_id,
+            "scope_type": scope_type,
+            "reply_sync_enabled": bool(permissions.get("outreach_enabled")),
+        })
+    except PermissionError as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 403
+    except Exception as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    finally:
+        db.close()
+
+
+@telegram_research_bp.delete("/api/business/<business_id>/telegram-account")
+def disconnect_telegram_account(business_id: str):
+    db, cursor, user_data, error = _require_business(business_id)
+    if error:
+        return error
+    try:
+        scope_type = _requested_sender_scope(user_data, request.args)
+        account = _account_for_scope(cursor, business_id, scope_type)
+        if not account:
+            return jsonify({"success": False, "error": "Telegram-аккаунт не найден"}), 404
+        disconnect_account(cursor, str(account["account_id"]), changed_by=_user_id(user_data))
+        db.conn.commit()
+        return jsonify({"success": True, "status": "disconnected"})
+    except Exception as exc:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    finally:
+        db.close()
+
+
+@telegram_research_bp.post("/api/business/<business_id>/telegram-account/preflight/<capability>")
+def telegram_account_preflight(business_id: str, capability: str):
+    if capability not in {"radar", "outreach"}:
+        return jsonify({"success": False, "error": "Неизвестная функция"}), 404
+    db, cursor, user_data, error = _require_business(business_id)
+    if error:
+        return error
+    try:
+        payload = request.get_json(silent=True) or {}
+        scope_type = _requested_sender_scope(user_data, payload)
+        account = _account_for_scope(cursor, business_id, scope_type)
+        if not account:
+            return jsonify({
+                "success": True,
+                "ready": False,
+                "reason_code": "connect_required",
+                "scope": {"type": scope_type, "business_id": business_id if scope_type == "business" else None},
+            })
+        allowed, reason, context = assert_account_access(
+            cursor,
+            str(account["account_id"]),
+            business_id=business_id if scope_type == "business" else None,
+            scope_type=scope_type,
+            capability=capability,
+        )
+        if allowed and not account.get("session_string"):
+            allowed, reason = False, "authorization_required"
+        return jsonify({
+            "success": True,
+            "ready": allowed,
+            "reason_code": reason,
+            "account_id": str(account["account_id"]),
+            "phone": mask_phone(account.get("phone")),
+            "reply_sync_required": capability == "outreach",
+            "scope": {
+                "type": scope_type,
+                "business_id": context.get("business_id") if context and scope_type == "business" else None,
+            },
+        })
+    except PermissionError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
     finally:
         db.close()
 

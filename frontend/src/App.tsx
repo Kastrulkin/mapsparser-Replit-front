@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Toaster } from "./components/ui/toaster";
 import { Toaster as Sonner } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -28,10 +28,53 @@ const Sprint = lazy(() => import("./pages/Sprint"));
 const ServicePhrases = lazy(() => import("./pages/ServicePhrases"));
 const CardRecommendations = lazy(() => import("./pages/CardRecommendations"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
+const ROUTE_LOAD_TIMEOUT_MS = 12_000;
+const CHUNK_RELOAD_STORAGE_KEY = "localos_chunk_reload_attempted";
+
+const loadRouteWithRecovery = <T,>(loader: () => Promise<T>, routeName: string): Promise<T> => (
+  new Promise<T>((resolve, reject) => {
+    let settled = false;
+
+    const finishWithError = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+
+      const normalizedError = error instanceof Error
+        ? error
+        : new Error(`Не удалось загрузить экран ${routeName}.`);
+
+      if (window.sessionStorage.getItem(CHUNK_RELOAD_STORAGE_KEY) !== "1") {
+        window.sessionStorage.setItem(CHUNK_RELOAD_STORAGE_KEY, "1");
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set("__localos_reload", String(Date.now()));
+        window.location.replace(nextUrl.toString());
+      }
+
+      reject(normalizedError);
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      finishWithError(new Error(`Не удалось загрузить экран ${routeName} за отведённое время.`));
+    }, ROUTE_LOAD_TIMEOUT_MS);
+
+    loader().then((module) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      window.sessionStorage.removeItem(CHUNK_RELOAD_STORAGE_KEY);
+      resolve(module);
+    }).catch(finishWithError);
+  })
+);
+
 const DashboardLayout = lazy(() =>
-  import("./components/DashboardLayout").then((module) => ({
-    default: module.DashboardLayout,
-  })),
+  loadRouteWithRecovery(
+    () => import("./components/DashboardLayout").then((module) => ({
+      default: module.DashboardLayout,
+    })),
+    "кабинета",
+  ),
 );
 
 const NetworkDashboardPage = lazy(() =>
@@ -70,9 +113,12 @@ const AverageTicketPage = lazy(() =>
   })),
 );
 const SettingsPage = lazy(() =>
-  import("./pages/dashboard/SettingsPage").then((module) => ({
-    default: module.SettingsPage,
-  })),
+  loadRouteWithRecovery(
+    () => import("./pages/dashboard/SettingsPage").then((module) => ({
+      default: module.SettingsPage,
+    })),
+    "настроек",
+  ),
 );
 const AdminPage = lazy(() =>
   import("./pages/dashboard/AdminPage").then((module) => ({
@@ -119,6 +165,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicPartnershipOfferPage = lazy(() => import("./pages/PublicPartnershipOfferPage"));
 const PublicSalesRoomPage = lazy(() => import("./pages/PublicSalesRoomPage"));
 const DemoEntryPage = lazy(() => import("./pages/DemoEntryPage"));
+const VeselayaRascheskaOfferPage = lazy(() => import("./pages/VeselayaRascheskaOfferPage"));
 const CheckoutReturn = lazy(() => import("./pages/CheckoutReturn"));
 const IndustryPatternsE2EPage = import.meta.env.DEV
   ? lazy(() => import("./pages/dev/IndustryPatternsE2EPage"))
@@ -126,13 +173,38 @@ const IndustryPatternsE2EPage = import.meta.env.DEV
 
 const queryClient = new QueryClient();
 
-const RouteFallback = () => (
-  <div className="flex min-h-[40vh] items-center justify-center px-4 py-12">
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
-      Загружаем экран...
+const RouteFallback = () => {
+  const [takingLong, setTakingLong] = useState(false);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setTakingLong(true), 5_000);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  const reloadRoute = () => {
+    window.sessionStorage.removeItem(CHUNK_RELOAD_STORAGE_KEY);
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("__localos_reload", String(Date.now()));
+    window.location.replace(nextUrl.toString());
+  };
+
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center px-4 py-12">
+      <div className="max-w-sm rounded-lg border border-slate-200 bg-white px-5 py-4 text-center text-sm text-slate-600 shadow-sm">
+        <p>{takingLong ? "Экран загружается дольше обычного." : "Загружаем экран..."}</p>
+        {takingLong ? (
+          <button
+            type="button"
+            onClick={reloadRoute}
+            className="mt-3 min-h-10 rounded-md bg-slate-950 px-4 py-2 font-medium text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+          >
+            Обновить экран
+          </button>
+        ) : null}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const shouldRenderHeader = (pathname: string) => {
   if (pathname.startsWith("/dashboard")) {
@@ -148,6 +220,10 @@ const shouldRenderHeader = (pathname: string) => {
   }
 
   if (pathname === "/demo") {
+    return false;
+  }
+
+  if (pathname === "/veselaya-rascheska-hit") {
     return false;
   }
 
@@ -177,8 +253,8 @@ const AppShell = () => {
           <Route path="/docs" element={<DocsPage />} />
           <Route path="/docs/:section" element={<DocsPage />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/demo" element={<DemoEntryPage />} />
+          <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/articles/:slug" element={<ArticleDetailPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/documents/:slug" element={<DocumentDetailPage />} />
@@ -220,6 +296,7 @@ const AppShell = () => {
             <Route path="/__e2e__/industry-patterns" element={<IndustryPatternsE2EPage />} />
           ) : null}
           <Route path="/room/:roomSlug" element={<PublicSalesRoomPage />} />
+          <Route path="/veselaya-rascheska-hit" element={<VeselayaRascheskaOfferPage />} />
           <Route path="/:offerSlug" element={<PublicPartnershipOfferPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

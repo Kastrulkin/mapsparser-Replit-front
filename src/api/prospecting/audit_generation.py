@@ -60,6 +60,7 @@ from pg_db_utils import get_db_connection
 from services.gigachat_client import analyze_text_with_gigachat
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
+from services.telegram_account_permissions_service import assert_account_access
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -961,7 +962,9 @@ def _extract_telegram_invite_link(raw_value: str | None) -> str:
             return ""
     return ""
 
-def _resolve_telegram_app_account(account_id: str | None = None) -> dict[str, Any] | None:
+def _resolve_telegram_app_account(account_id: str) -> dict[str, Any] | None:
+    if not str(account_id or "").strip():
+        return None
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -973,23 +976,123 @@ def _resolve_telegram_app_account(account_id: str | None = None) -> dict[str, An
         conn.close()
 
 def _telegram_app_status_payload() -> dict[str, Any]:
-    account = _resolve_telegram_app_account()
-    if not account:
-        return {
-            "configured": False,
-            "authorized": False,
-            "phone": None,
-            "account_id": None,
-            "status": "missing",
-        }
-    session_string = str(account.get("session_string") or "").strip()
     return {
-        "configured": True,
-        "authorized": bool(session_string),
-        "phone": str(account.get("phone") or "").strip() or None,
-        "account_id": str(account.get("account_id") or "").strip() or None,
-        "status": "ready" if session_string else "not_authorized",
+        "configured": None,
+        "authorized": None,
+        "phone": None,
+        "account_id": None,
+        "status": "sender_account_required",
+        "message": "Статус проверяется для конкретного sender_account_id кампании",
     }
+
+
+def _resolve_telegram_sender(sender_account_id: str) -> tuple[dict[str, Any] | None, str]:
+    if not sender_account_id:
+        return None, "sender_account_required"
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, scope_type, business_id, external_account_id, status
+            FROM outreach_sender_accounts
+            WHERE id = %s AND channel = 'telegram'
+            """,
+            (sender_account_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None, "sender_account_missing"
+        sender = dict(row)
+        if str(sender.get("status") or "") != "connected":
+            return None, "sender_account_disabled"
+        external_account_id = str(sender.get("external_account_id") or "")
+        allowed, reason, _context = assert_account_access(
+            cur,
+            external_account_id,
+            business_id=str(sender.get("business_id") or "") or None,
+            scope_type=str(sender.get("scope_type") or "business"),
+            capability="outreach",
+        )
+        if not allowed:
+            return None, reason
+        account = load_userbot_account(
+            cur,
+            business_id=str(sender.get("business_id") or "") or None,
+            account_id=external_account_id,
+        )
+        return account, "ready" if account else "sender_account_missing"
+    finally:
+        conn.close()
+
+
+def _resolve_email_sender(sender_account_id: str) -> tuple[dict[str, Any] | None, str]:
+    if not sender_account_id:
+        return None, "sender_account_required"
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT * FROM outreach_sender_accounts
+            WHERE id = %s AND channel = 'email'
+            """,
+            (sender_account_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None, "sender_account_missing"
+        sender = dict(row)
+        if str(sender.get("status") or "") != "connected":
+            return None, "sender_account_disabled"
+        if not bool(sender.get("outreach_enabled")):
+            return None, "sender_permission_revoked"
+        if sender.get("health_status") in {"paused", "blocked"}:
+            return None, f"sender_{sender.get('health_status')}"
+        capabilities = sender.get("capabilities_json") or {}
+        if (
+            not isinstance(capabilities, dict)
+            or not capabilities.get("direct_send")
+            or not capabilities.get("reply_sync")
+        ):
+            return None, "sender_adapter_incomplete"
+        return sender, "ready"
+    finally:
+        conn.close()
+
+
+def _dispatch_via_email_sender(item: dict[str, Any], message: str) -> dict[str, Any]:
+    from services.outreach_email_adapter import EmailAdapterError, send_email
+
+    sender_account_id = str(item.get("sender_account_id") or "").strip()
+    sender, sender_reason = _resolve_email_sender(sender_account_id)
+    if not sender:
+        return {
+            "success": False,
+            "error_code": sender_reason,
+            "error_text": "A concrete permitted email sender account is required",
+            "provider_name": "native_email",
+            "retryable": False,
+        }
+    try:
+        return send_email(
+            sender,
+            recipient=str(item.get("email") or ""),
+            subject=str(item.get("subject") or "").strip(),
+            body=message,
+            idempotency_key=str(item.get("idempotency_key") or f"outreach:{item.get('id')}"),
+        )
+    except EmailAdapterError as exc:
+        return {
+            "success": False,
+            "error_code": exc.code,
+            "error_text": str(exc),
+            "provider_name": "native_email",
+            "provider_account_id": sender_account_id,
+            "recipient_kind": "email",
+            "recipient_value": str(item.get("email") or "").strip() or None,
+            "retryable": exc.retryable,
+        }
 
 def _resolve_telegram_app_recipient(lead: dict[str, Any]) -> dict[str, str] | None:
     handle = _extract_telegram_handle(lead.get("telegram_url"))
@@ -1113,12 +1216,13 @@ print(json.dumps(result, ensure_ascii=False))
         raise RuntimeError(f"Invalid telegram reply subprocess output: {stdout[:400]}") from exc
 
 def _dispatch_via_telegram_app(item: dict[str, Any], message: str) -> dict[str, Any]:
-    account = _resolve_telegram_app_account()
+    sender_account_id = str(item.get("sender_account_id") or "").strip()
+    account, sender_reason = _resolve_telegram_sender(sender_account_id)
     if not account:
         return {
             "success": False,
-            "error_code": "telegram_app_missing",
-            "error_text": "Telegram app is not configured",
+            "error_code": sender_reason,
+            "error_text": "A concrete permitted Telegram sender account is required",
             "retryable": False,
         }
 
@@ -1200,7 +1304,11 @@ def _dispatch_via_telegram_app(item: dict[str, Any], message: str) -> dict[str, 
         "route_target": str(send_result.get("route_target") or "").strip() or None,
     }
 
-def _load_telegram_reply_sync_candidates(limit: int = 25, batch_id: str | None = None) -> list[dict[str, Any]]:
+def _load_telegram_reply_sync_candidates(
+    limit: int = 25,
+    batch_id: str | None = None,
+    sender_account_id: str | None = None,
+) -> list[dict[str, Any]]:
     safe_limit = max(1, min(int(limit or 25), 200))
     conn = get_db_connection()
     try:
@@ -1218,19 +1326,32 @@ def _load_telegram_reply_sync_candidates(limit: int = 25, batch_id: str | None =
                 q.recipient_kind,
                 q.recipient_value,
                 q.sent_at,
-                l.name AS lead_name
+                l.name AS lead_name,
+                TRUE AS outreach_permission_checked,
+                permission.outreach_enabled,
+                sender.scope_type AS sender_scope_type,
+                sender.business_id AS sender_business_id
             FROM outreachsendqueue q
             JOIN prospectingleads l ON l.id = q.lead_id
+            JOIN outreach_sender_accounts sender ON sender.id = q.sender_account_id
+            JOIN externalbusinessaccounts account ON account.id = sender.external_account_id
+            JOIN telegram_account_permissions permission ON permission.account_id = account.id
             WHERE q.provider_name = 'telegram_app'
               AND q.delivery_status IN (%s, %s)
               AND q.provider_account_id IS NOT NULL
               AND q.recipient_value IS NOT NULL
               AND q.sent_at >= NOW() - (%s || ' days')::interval
+              AND sender.status = 'connected'
+              AND account.is_active = TRUE
+              AND permission.outreach_enabled = TRUE
         """
         params: list[Any] = [QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED, TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS]
         if batch_id:
             query += " AND q.batch_id = %s"
             params.append(batch_id)
+        if sender_account_id:
+            query += " AND q.sender_account_id = %s"
+            params.append(sender_account_id)
         query += """
             ORDER BY COALESCE(q.sent_at, q.updated_at, q.created_at) DESC
             LIMIT %s
@@ -1251,9 +1372,27 @@ def _sync_telegram_app_replies_for_queue_item(
         return {"status": "skipped", "reason": "missing_queue_id", "imported": 0, "duplicates": 0}
 
     provider_account_id = str(item.get("provider_account_id") or "").strip()
-    account = _resolve_telegram_app_account(provider_account_id or None)
+    account = _resolve_telegram_app_account(provider_account_id)
     if not account:
         return {"status": "failed", "reason": "telegram_app_missing", "imported": 0, "duplicates": 0}
+
+    if item.get("outreach_permission_checked") and not bool(item.get("outreach_enabled")):
+        return {"status": "failed", "reason": "outreach_permission_required", "imported": 0, "duplicates": 0}
+    if not item.get("outreach_permission_checked") and account.get("business_id") is not None:
+        permission_conn = get_db_connection()
+        try:
+            permission_cursor = permission_conn.cursor()
+            allowed, reason, _context = assert_account_access(
+                permission_cursor,
+                provider_account_id,
+                business_id=str(account.get("business_id") or "") or None,
+                scope_type=str(item.get("sender_scope_type") or "business"),
+                capability="outreach",
+            )
+            if not allowed:
+                return {"status": "failed", "reason": reason, "imported": 0, "duplicates": 0}
+        finally:
+            permission_conn.close()
 
     session_string = str(account.get("session_string") or "").strip()
     if not session_string:
@@ -1339,11 +1478,20 @@ def _sync_telegram_app_replies_for_queue_item(
         "duplicates": duplicates,
     }
 
-def _sync_telegram_app_replies(batch_id: str | None = None, limit: int = 25) -> dict[str, Any]:
-    items = _load_telegram_reply_sync_candidates(limit=limit, batch_id=batch_id)
+def _sync_telegram_app_replies(
+    batch_id: str | None = None,
+    limit: int = 25,
+    sender_account_id: str | None = None,
+) -> dict[str, Any]:
+    items = _load_telegram_reply_sync_candidates(
+        limit=limit,
+        batch_id=batch_id,
+        sender_account_id=sender_account_id,
+    )
     summary = {
         "success": True,
         "batch_id": batch_id,
+        "sender_account_id": sender_account_id,
         "picked": len(items),
         "imported": 0,
         "duplicates": 0,
@@ -1495,6 +1643,8 @@ def _dispatch_via_openclaw(item: dict[str, Any], channel: str, message: str) -> 
             "batch_id": item.get("batch_id"),
             "draft_id": item.get("draft_id"),
             "source": "localos_outreach",
+            "sender_account_id": item.get("sender_account_id"),
+            "idempotency_key": item.get("idempotency_key") or f"outreach:{item.get('id')}",
         },
     }
 
@@ -1505,6 +1655,7 @@ def _dispatch_via_openclaw(item: dict[str, Any], channel: str, message: str) -> 
             headers={
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
+                "Idempotency-Key": str(item.get("idempotency_key") or f"outreach:{item.get('id')}"),
             },
             timeout=30,
         )
@@ -1567,10 +1718,10 @@ def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
             "retryable": False,
         }
 
-    if channel == "email":
+    if channel == "email" and not str(item.get("sender_account_id") or "").strip():
         return {
             "delivery_status": QUEUE_STATUS_FAILED,
-            "error_text": "Email provider is not configured for outreach yet",
+            "error_text": "sender_account_required: connect a sender mailbox before email outreach",
             "provider_name": "email",
             "retryable": False,
         }
@@ -1602,8 +1753,35 @@ def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
             "retryable": bool(telegram_result.get("retryable", False)),
         }
 
+    if channel == "email":
+        email_result = _dispatch_via_email_sender(item, message)
+        if email_result.get("success"):
+            return {
+                "delivery_status": QUEUE_STATUS_SENT,
+                "provider_message_id": str(email_result.get("provider_message_id") or "")[:255] or None,
+                "provider_name": str(email_result.get("provider_name") or "native_email"),
+                "provider_account_id": str(email_result.get("provider_account_id") or "")[:255] or None,
+                "recipient_kind": "email",
+                "recipient_value": str(email_result.get("recipient_value") or "")[:255] or None,
+                "error_text": None,
+                "retryable": False,
+            }
+        return {
+            "delivery_status": QUEUE_STATUS_FAILED,
+            "provider_name": str(email_result.get("provider_name") or "native_email"),
+            "provider_account_id": str(email_result.get("provider_account_id") or "")[:255] or None,
+            "recipient_kind": "email",
+            "recipient_value": str(email_result.get("recipient_value") or "")[:255] or None,
+            "error_text": (
+                f"{email_result.get('error_code')}: {email_result.get('error_text')}"
+                if email_result.get("error_code") and email_result.get("error_text")
+                else str(email_result.get("error_text") or "Email delivery failed")
+            )[:500],
+            "retryable": bool(email_result.get("retryable", False)),
+        }
+
     # Runtime-first outbound via OpenClaw for supported machine channels.
-    if channel in {"whatsapp", "email"}:
+    if channel == "whatsapp":
         openclaw_result = _dispatch_via_openclaw(item, channel, message)
         if openclaw_result.get("success"):
             return {

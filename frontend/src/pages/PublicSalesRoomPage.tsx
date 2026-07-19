@@ -62,6 +62,9 @@ type SalesRoomPayload = {
   business?: {
     name?: string;
   };
+  manager?: {
+    name?: string;
+  };
   recipient?: {
     name?: string;
     category?: string;
@@ -141,7 +144,7 @@ type SalesRoomAuditOffer = {
 };
 
 const roomModeLabel = (mode?: string) => {
-  if (mode === 'partner_search') return 'Партнёрское предложение';
+  if (mode === 'partner_search') return 'Предложение партнёрства';
   if (mode === 'client_search') return 'Предложение по росту';
   return 'Предложение';
 };
@@ -724,7 +727,7 @@ export default function PublicSalesRoomPage() {
 
   const recipientName = room.recipient?.name || 'получатель';
   const businessName = room.business?.name || 'Компания';
-  const managerName = 'Александр Демьянов';
+  const managerName = room.manager?.name?.trim() || 'Александр Демьянов';
   const managerInitial = managerName.trim().charAt(0).toUpperCase();
   const welcomeText = String(room.welcome?.body_text || defaultWelcomeText);
   const canEditWelcome = Boolean(room.permissions?.can_edit_welcome);

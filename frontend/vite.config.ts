@@ -36,10 +36,6 @@ export default defineConfig({
             return "charts";
           }
 
-          if (id.includes("node_modules/@radix-ui")) {
-            return "radix";
-          }
-
           if (id.includes("node_modules/lucide-react")) {
             return "icons";
           }

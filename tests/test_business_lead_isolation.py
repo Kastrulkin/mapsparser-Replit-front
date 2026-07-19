@@ -66,3 +66,11 @@ def test_partnership_leads_expose_the_client_business_label():
 
     assert "AS client_business_name" in source
     assert "client_business.id = prospectingleads.business_id" in source
+
+
+def test_partnership_leads_expose_persisted_audit_and_match_summary():
+    source = inspect.getsource(partnership_list_leads)
+
+    assert "AS audit_ready" in source
+    assert "AS match_summary_json" in source
+    assert "partnershipleadartifacts artifact" in source

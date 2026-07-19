@@ -24,5 +24,6 @@ backup_file="${backup_dir}/${pg_db}_${ts}.sql.gz"
 echo "Creating backup: ${backup_file}"
 docker compose up -d postgres >/dev/null
 docker compose exec -T postgres pg_dump -U "${pg_user}" "${pg_db}" | gzip > "${backup_file}"
-cp "${backup_file}" "${backup_dir}/latest.sql.gz"
+ln -f "${backup_file}" "${backup_dir}/latest.sql.gz"
+python3 scripts/prune_postgres_backups.py --apply
 echo "Backup complete: ${backup_file}"

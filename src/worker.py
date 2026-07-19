@@ -45,6 +45,7 @@ from core.map_url_normalizer import is_google_map_url
 from core.review_response_utils import extract_review_response_text
 from yookassa_integration import run_due_renewals
 from services.outreach_dispatch_service import dispatch_due_outreach_queue
+from services.outreach_campaign_service import expire_manual_touches, finalize_no_reply_campaigns
 from core.card_automation import (
     collect_due_telegram_digest_messages,
     ensure_card_automation_tables,
@@ -67,6 +68,7 @@ from services.contact_intelligence_service import (
     claim_next_enrichment_job,
     fail_enrichment_job,
     process_enrichment_job,
+    recover_interrupted_enrichment_jobs,
 )
 
 # Реестр активных Playwright-сессий для human-in-the-loop
@@ -114,6 +116,7 @@ _LAST_SOCIAL_POST_METRICS_AT = 0.0
 _LAST_TELEGRAM_OPPORTUNITY_MONITOR_AT = 0.0
 _LAST_KNOWLEDGE_TELEGRAM_MONITOR_AT = 0.0
 _LAST_CONTACT_INTELLIGENCE_AT = 0.0
+_CONTACT_INTELLIGENCE_RECOVERY_DONE = False
 
 _EDITORIAL_SERVICE_PATTERNS = (
     "хорошее место",
@@ -1413,9 +1416,73 @@ def _dispatch_outreach_queue_if_due() -> None:
         return
 
     _LAST_OUTREACH_DISPATCH_AT = now
+    allowed_business_ids = sorted({
+        item.strip()
+        for item in str(os.getenv("OUTREACH_DISPATCH_BUSINESS_IDS") or "").split(",")
+        if item.strip()
+    })
+    allow_platform = _env_bool("OUTREACH_DISPATCH_PLATFORM_SCOPE_ENABLED", False)
+    if not allowed_business_ids and not allow_platform:
+        print(
+            "[OUTREACH_DISPATCH] skipped: dispatch_cohort_not_configured",
+            flush=True,
+        )
+        return
     try:
+        from api.admin_prospecting import _sync_telegram_app_replies
+        from services.outreach_email_reply_service import sync_email_replies
+
+        reply_sync_limit = max(1, min(int(os.getenv("OUTREACH_REPLY_SYNC_BATCH_SIZE", "50")), 200))
+        telegram_reply_sync = _sync_telegram_app_replies(limit=reply_sync_limit)
+        email_reply_sync = sync_email_replies(
+            sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_SENDER_LIMIT", "25")), 200)),
+            per_sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_MESSAGE_LIMIT", "100")), 500)),
+        )
+        reply_sync_failed = (
+            int(telegram_reply_sync.get("failed") or 0)
+            + int(email_reply_sync.get("failed") or 0)
+        )
+        if reply_sync_failed > 0:
+            print(
+                "[OUTREACH_REPLY_SYNC] "
+                f"telegram_picked={int(telegram_reply_sync.get('picked') or 0)} "
+                f"telegram_imported={int(telegram_reply_sync.get('imported') or 0)} "
+                f"email_picked={int(email_reply_sync.get('picked') or 0)} "
+                f"email_imported={int(email_reply_sync.get('imported') or 0)} "
+                f"failed={reply_sync_failed}",
+                flush=True,
+            )
+            if _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True):
+                print(
+                    "[OUTREACH_DISPATCH] skipped: reply_sync_failed",
+                    flush=True,
+                )
+                return
+        timeout_db = DatabaseManager()
+        try:
+            expired_count = expire_manual_touches(timeout_db.conn.cursor())
+            no_reply_count = finalize_no_reply_campaigns(
+                timeout_db.conn.cursor(),
+                limit=max(1, min(int(os.getenv("OUTREACH_NO_REPLY_BATCH_SIZE", "200")), 1000)),
+                default_grace_hours=max(24, int(os.getenv("OUTREACH_NO_REPLY_GRACE_HOURS", "168"))),
+            )
+            timeout_db.conn.commit()
+            if expired_count > 0:
+                print(f"[OUTREACH_MANUAL_TIMEOUT] needs_attention={expired_count}", flush=True)
+            if no_reply_count > 0:
+                print(f"[OUTREACH_NO_REPLY] finalized={no_reply_count}", flush=True)
+        except Exception:
+            timeout_db.conn.rollback()
+            raise
+        finally:
+            timeout_db.close()
         batch_size = max(1, min(int(os.getenv("OUTREACH_DISPATCH_BATCH_SIZE", "20")), 200))
-        result = dispatch_due_outreach_queue(batch_size=batch_size)
+        result = dispatch_due_outreach_queue(
+            batch_size=batch_size,
+            campaign_only=True,
+            allowed_business_ids=allowed_business_ids,
+            allow_platform=allow_platform,
+        )
         picked = int(result.get("picked") or 0)
         if picked > 0:
             print(
@@ -1579,14 +1646,45 @@ def _process_agent_run_queue_if_due() -> None:
 
 
 def _process_contact_intelligence_if_due() -> None:
-    global _LAST_CONTACT_INTELLIGENCE_AT
+    global _LAST_CONTACT_INTELLIGENCE_AT, _CONTACT_INTELLIGENCE_RECOVERY_DONE
     if not _env_bool("PROSPECTING_CONTACT_INTELLIGENCE_ENABLED", False):
         return
+    if not _CONTACT_INTELLIGENCE_RECOVERY_DONE:
+        recovery_db = DatabaseManager()
+        try:
+            recovered = recover_interrupted_enrichment_jobs(
+                recovery_db.conn.cursor(),
+                minimum_age_seconds=30,
+            )
+            recovery_db.conn.commit()
+            if recovered:
+                print(
+                    f"[CONTACT_INTELLIGENCE] recovered_interrupted={len(recovered)}",
+                    flush=True,
+                )
+        except Exception:
+            recovery_db.conn.rollback()
+            raise
+        finally:
+            recovery_db.close()
+        _CONTACT_INTELLIGENCE_RECOVERY_DONE = True
     now = time.time()
     interval_sec = max(2, int(os.getenv("PROSPECTING_CONTACT_INTELLIGENCE_INTERVAL_SEC", "10")))
     if now - _LAST_CONTACT_INTELLIGENCE_AT < interval_sec:
         return
     _LAST_CONTACT_INTELLIGENCE_AT = now
+
+    batch_size = max(
+        1,
+        min(20, int(os.getenv("PROSPECTING_CONTACT_INTELLIGENCE_BATCH_SIZE", "1"))),
+    )
+    for _index in range(batch_size):
+        if not _process_one_contact_intelligence_job():
+            break
+
+
+def _process_one_contact_intelligence_job() -> bool:
+    """Claim and finish one bounded enrichment job; return False when queue is empty."""
 
     db = None
     job = None
@@ -1596,7 +1694,7 @@ def _process_contact_intelligence_if_due() -> None:
         job = claim_next_enrichment_job(cursor)
         db.conn.commit()
         if not job:
-            return
+            return False
         try:
             result = process_enrichment_job(cursor, job)
         except Exception as error:
@@ -1623,6 +1721,7 @@ def _process_contact_intelligence_if_due() -> None:
             f"workstream_id={job.get('workstream_id')}",
             flush=True,
         )
+        return True
     except Exception:
         try:
             if db:
@@ -1632,6 +1731,7 @@ def _process_contact_intelligence_if_due() -> None:
         print("[CONTACT_INTELLIGENCE] error", flush=True)
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
+        return False
     finally:
         try:
             if db:

@@ -110,6 +110,7 @@ type PartnershipAnalyticsWorkspaceProps = {
   pilotSummary: PilotSummary;
   bestSourceThisWeek: BestSource;
   ralphLoopPanel: ReactNode;
+  outreachLearningPanel: ReactNode;
   funnel: FunnelData;
   sourceQuality: SourceQualityData;
   blockers: BlockersData;
@@ -179,6 +180,7 @@ export const PartnershipAnalyticsWorkspace = ({
   pilotSummary,
   bestSourceThisWeek,
   ralphLoopPanel,
+  outreachLearningPanel,
   funnel,
   sourceQuality,
   blockers,
@@ -425,6 +427,8 @@ export const PartnershipAnalyticsWorkspace = ({
         </>
       )}
     </div>
+
+    {outreachLearningPanel}
 
     <details className="rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
       <summary className="cursor-pointer text-sm font-semibold text-slate-950">

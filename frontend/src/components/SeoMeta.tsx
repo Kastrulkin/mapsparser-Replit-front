@@ -7,6 +7,7 @@ type SeoMetaProps = {
   description: string;
   path: string;
   ogType?: string;
+  image?: string;
   schema?: unknown;
 };
 
@@ -45,9 +46,10 @@ const normalizePath = (path: string) => {
   return `/${path}`;
 };
 
-const SeoMeta = ({ title, description, path, ogType = "website", schema }: SeoMetaProps) => {
+const SeoMeta = ({ title, description, path, ogType = "website", image, schema }: SeoMetaProps) => {
   useEffect(() => {
     const url = `${SITE_URL}${normalizePath(path)}`;
+    const imageUrl = image ? `${SITE_URL}${normalizePath(image)}` : null;
 
     const applyMeta = () => {
       document.title = title;
@@ -57,6 +59,13 @@ const SeoMeta = ({ title, description, path, ogType = "website", schema }: SeoMe
       ensureMeta("property", "og:type").content = ogType;
       ensureMeta("property", "og:url").content = url;
       ensureMeta("property", "og:site_name").content = "LocalOS";
+      ensureMeta("name", "twitter:card").content = "summary_large_image";
+      if (imageUrl) {
+        ensureMeta("property", "og:image").content = imageUrl;
+        ensureMeta("property", "og:image:width").content = "1200";
+        ensureMeta("property", "og:image:height").content = "630";
+        ensureMeta("name", "twitter:image").content = imageUrl;
+      }
       ensureCanonical().href = url;
     };
 
@@ -78,7 +87,7 @@ const SeoMeta = ({ title, description, path, ogType = "website", schema }: SeoMe
       window.clearTimeout(timeoutId);
       document.getElementById(scriptId)?.remove();
     };
-  }, [description, ogType, path, schema, title]);
+  }, [description, image, ogType, path, schema, title]);
 
   return null;
 };

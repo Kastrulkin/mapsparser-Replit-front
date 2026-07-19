@@ -29,6 +29,16 @@ def parse_args() -> argparse.Namespace:
         choices=("localos_sales", "client_partnership"),
         help="Optional workstream filter",
     )
+    parser.add_argument(
+        "--missing-research-only",
+        action="store_true",
+        help="Only process workstreams that do not have a research record yet",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Create a fresh job when the latest enrichment job is terminal",
+    )
     return parser.parse_args()
 
 
@@ -41,6 +51,11 @@ def main() -> int:
     if args.workstream_type:
         where.append("ws.workstream_type = %s")
         params.append(args.workstream_type)
+    if args.missing_research_only:
+        where.append(
+            "NOT EXISTS (SELECT 1 FROM lead_workstream_research research "
+            "WHERE research.workstream_id = ws.id)"
+        )
     where_sql = "WHERE " + " AND ".join(where) if where else ""
     limit_sql = "LIMIT %s" if args.limit > 0 else ""
     if args.limit > 0:
@@ -67,6 +82,8 @@ def main() -> int:
         "jobs_reused": 0,
         "contacts_saved": 0,
         "paid_enrichment": False,
+        "force": args.force,
+        "missing_research_only": args.missing_research_only,
     }
     if args.dry_run:
         database.close()
@@ -79,6 +96,7 @@ def main() -> int:
             job = enqueue_enrichment_job(
                 cursor,
                 str(row["workstream_id"]),
+                force=args.force,
                 allow_paid_enrichment=False,
             )
             if job.get("reused"):

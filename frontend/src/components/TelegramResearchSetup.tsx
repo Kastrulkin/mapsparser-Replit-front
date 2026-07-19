@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, ChevronRight, Loader2, MessageSquareText, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { Check, ChevronRight, Loader2, MessageSquareText, RefreshCw, Search, ShieldCheck, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
 
@@ -20,11 +21,16 @@ type ResearchSource = {
 };
 
 type ResearchStatus = {
+  scope_type?: 'business' | 'platform';
   enabled?: boolean;
   account?: {
     configured?: boolean;
     authorized?: boolean;
     phone?: string;
+    account_id?: string;
+    radar_enabled?: boolean;
+    outreach_enabled?: boolean;
+    reply_sync_enabled?: boolean;
   };
   sources?: ResearchSource[];
   active_sources?: number;
@@ -52,9 +58,10 @@ const syncLabel = (source: ResearchSource) => {
 type TelegramResearchSetupProps = {
   businessId?: string | null;
   mode?: 'full' | 'connection' | 'sources';
+  scopeType?: 'business' | 'platform';
 };
 
-export const TelegramResearchSetup = ({ businessId, mode = 'full' }: TelegramResearchSetupProps) => {
+export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = 'business' }: TelegramResearchSetupProps) => {
   const [status, setStatus] = useState<ResearchStatus | null>(null);
   const [dialogs, setDialogs] = useState<TelegramDialog[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -69,12 +76,13 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full' }: TelegramRes
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [preflight, setPreflight] = useState<{ radar?: string; outreach?: string } | null>(null);
 
   const loadStatus = useCallback(async () => {
     if (!businessId) return;
-    const response = await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/telegram-research/status`);
+    const response = await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/telegram-research/status?scope_type=${encodeURIComponent(scopeType)}`);
     setStatus(response || null);
-  }, [businessId]);
+  }, [businessId, scopeType]);
 
   const loadDialogs = useCallback(async () => {
     if (!businessId) return;
@@ -100,8 +108,45 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full' }: TelegramRes
   }, [businessId, loadStatus]);
 
   useEffect(() => {
-    if (mode !== 'connection' && status?.account?.authorized && dialogs.length === 0) void loadDialogs();
-  }, [dialogs.length, loadDialogs, mode, status?.account?.authorized]);
+    if (scopeType === 'business' && mode !== 'connection' && status?.account?.authorized && status.account.radar_enabled && dialogs.length === 0) void loadDialogs();
+  }, [dialogs.length, loadDialogs, mode, scopeType, status?.account?.authorized, status?.account?.radar_enabled]);
+
+  const updatePermission = async (key: 'radar_enabled' | 'outreach_enabled', enabled: boolean) => {
+    if (!businessId) return;
+    setBusy(key);
+    setError('');
+    try {
+      await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/telegram-account/permissions`, {
+        method: 'PATCH',
+        body: JSON.stringify({ [key]: enabled, scope_type: scopeType }),
+      });
+      setMessage(key === 'radar_enabled'
+        ? enabled ? 'Telegram-радар включён.' : 'Радар остановлен. Собранные данные сохранены.'
+        : enabled ? 'Отправка разрешена. Проверка ответов и stop-on-reply включены обязательно.' : 'Новые Telegram-касания поставлены на паузу.');
+      await loadStatus();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось изменить разрешение');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const disconnectAccount = async () => {
+    if (!businessId || !window.confirm('Отключить Telegram-аккаунт? Радар и будущие отправки будут остановлены.')) return;
+    setBusy('disconnect');
+    setError('');
+    try {
+      await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/telegram-account?scope_type=${encodeURIComponent(scopeType)}`, { method: 'DELETE' });
+      setDialogs([]);
+      setSelectedIds([]);
+      setMessage('Telegram-аккаунт отключён. История и подготовленные черновики сохранены.');
+      await loadStatus();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось отключить аккаунт');
+    } finally {
+      setBusy('');
+    }
+  };
 
   const requestCode = async () => {
     if (!businessId || !phone.trim() || !apiId.trim() || !apiHash.trim()) return;
@@ -110,12 +155,12 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full' }: TelegramRes
     try {
       const response = await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/telegram-research/connect`, {
         method: 'POST',
-        body: JSON.stringify({ phone: phone.trim(), api_id: apiId.trim(), api_hash: apiHash.trim() }),
+        body: JSON.stringify({ phone: phone.trim(), api_id: apiId.trim(), api_hash: apiHash.trim(), scope_type: scopeType }),
       });
       if (response.authorized) {
-        setMessage('Аккаунт уже подключён. Теперь выберите источники.');
+        setMessage(scopeType === 'platform' ? 'Аккаунт LocalOS подключён. Теперь настройте два разрешения.' : 'Аккаунт уже подключён. Теперь выберите источники.');
         await loadStatus();
-        await loadDialogs();
+        if (mode !== 'connection' && scopeType === 'business') await loadDialogs();
         return;
       }
       setCodeRequested(true);
@@ -134,7 +179,7 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full' }: TelegramRes
     try {
       const response = await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/telegram-research/confirm`, {
         method: 'POST',
-        body: JSON.stringify({ code: code.trim(), password }),
+        body: JSON.stringify({ code: code.trim(), password, scope_type: scopeType }),
       });
       if (response.password_required) {
         setPasswordRequired(true);
@@ -145,11 +190,37 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full' }: TelegramRes
       setPasswordRequired(false);
       setCode('');
       setPassword('');
-      setMessage('Аккаунт подключён. Теперь выберите источники.');
+      setMessage(scopeType === 'platform' ? 'Аккаунт LocalOS подключён. Теперь настройте два разрешения.' : 'Аккаунт подключён. Теперь выберите источники.');
       await loadStatus();
-      await loadDialogs();
+      if (mode !== 'connection' && scopeType === 'business') await loadDialogs();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Не удалось завершить подключение');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const runPreflight = async () => {
+    if (!businessId) return;
+    setBusy('preflight');
+    setError('');
+    try {
+      const [radar, outreach] = await Promise.all([
+        newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/telegram-account/preflight/radar`, {
+          method: 'POST',
+          body: JSON.stringify({ scope_type: scopeType }),
+        }),
+        newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/telegram-account/preflight/outreach`, {
+          method: 'POST',
+          body: JSON.stringify({ scope_type: scopeType }),
+        }),
+      ]);
+      setPreflight({
+        radar: radar.ready ? 'Готов' : String(radar.reason_code || 'Нужна проверка'),
+        outreach: outreach.ready ? 'Готов' : String(outreach.reason_code || 'Нужна проверка'),
+      });
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось проверить готовность Telegram');
     } finally {
       setBusy('');
     }
@@ -202,22 +273,6 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full' }: TelegramRes
     );
   }
 
-  if (mode === 'connection' && status?.account?.authorized) {
-    return (
-      <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
-          <div className="min-w-0">
-            <h3 className="text-base font-semibold text-emerald-950">Аккаунт для исследования подключён</h3>
-            <p className="mt-1 text-sm leading-6 text-emerald-800">
-              {status.account.phone ? `${status.account.phone} · ` : ''}Источники и слова для поиска настраиваются в разделе «Telegram-радар».
-            </p>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
   return (
     <section className="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start gap-3">
@@ -225,9 +280,13 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full' }: TelegramRes
           <MessageSquareText className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <h3 className="text-base font-semibold text-slate-950">Telegram-источники для знаний рынка</h3>
+          <h3 className="text-balance text-base font-semibold text-slate-950">
+            {scopeType === 'platform' ? 'Telegram-аккаунт LocalOS' : 'Telegram-аккаунт бизнеса'}
+          </h3>
           <p className="mt-1 text-sm leading-6 text-slate-600">
-            LocalOS читает только выбранные вами чаты, ищет повторяющиеся вопросы и ничего в них не отправляет.
+            {scopeType === 'platform'
+              ? 'Этот аккаунт используется только для поиска клиентов LocalOS. Радар и одобренные сообщения разрешаются независимо.'
+              : 'Одно подключение для радара этого бизнеса и одобренных сообщений партнёрам. Каждую функцию можно разрешить отдельно.'}
           </p>
         </div>
       </div>
@@ -241,8 +300,8 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full' }: TelegramRes
       {!status?.account?.authorized ? (
         <div className="space-y-4 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
           <div>
-            <p className="font-semibold text-slate-950">Подключите отдельный аккаунт для чтения источников</p>
-            <p className="mt-1 text-sm leading-6 text-slate-600">Данные приложения Telegram можно создать на my.telegram.org. Пароль двухэтапной проверки не сохраняется.</p>
+            <p className="font-semibold text-slate-950">Подключите Telegram-аккаунт</p>
+            <p className="mt-1 text-sm leading-6 text-slate-600">Создайте Telegram API application на my.telegram.org и укажите его данные. Этот же аккаунт можно использовать для радара и сообщений; пароль 2FA не сохраняется.</p>
           </div>
           {!codeRequested ? (
             <div className="grid gap-4 sm:grid-cols-2">
@@ -291,15 +350,55 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full' }: TelegramRes
               <ShieldCheck className="h-5 w-5 shrink-0 text-emerald-700" />
               <div>
                 <p className="text-sm font-semibold text-emerald-950">Аккаунт подключён {status.account.phone ? `· ${status.account.phone}` : ''}</p>
-                <p className="text-xs text-emerald-800">Выбрано источников: {status.active_sources || 0}</p>
+                <p className="text-xs text-emerald-800">Один аккаунт · два независимых разрешения</p>
               </div>
             </div>
-            <Button type="button" variant="outline" onClick={() => void loadDialogs()} disabled={busy === 'dialogs'} className="min-h-10 bg-white">
+            {mode !== 'connection' && status.account.radar_enabled ? <Button type="button" variant="outline" onClick={() => void loadDialogs()} disabled={busy === 'dialogs'} className="min-h-10 bg-white">
               <RefreshCw className={cn('mr-2 h-4 w-4', busy === 'dialogs' && 'animate-spin')} />
               Обновить список
-            </Button>
+            </Button> : null}
           </div>
 
+          <div className="divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
+            <div className="flex min-h-20 items-center gap-4 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-slate-950">Telegram-радар</p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">Читает только выбранные публичные источники и ищет сигналы. Выключение останавливает новые синхронизации, но сохраняет историю.</p>
+              </div>
+              <Switch checked={Boolean(status.account.radar_enabled)} disabled={busy === 'radar_enabled'} onCheckedChange={(checked) => void updatePermission('radar_enabled', checked)} aria-label="Использовать для Telegram-радара" />
+            </div>
+            <div className="flex min-h-20 items-center gap-4 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-slate-950">
+                  {scopeType === 'platform' ? 'Сообщения от имени LocalOS' : 'Сообщения от вашего имени'}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">Сообщения уходят с личного аккаунта только после approval кампании. Проверка ответов и остановка следующих касаний включаются вместе.</p>
+              </div>
+              <Switch checked={Boolean(status.account.outreach_enabled)} disabled={busy === 'outreach_enabled'} onCheckedChange={(checked) => void updatePermission('outreach_enabled', checked)} aria-label="Разрешить одобренные сообщения" />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => void runPreflight()} disabled={busy === 'preflight'} className="min-h-10 bg-white">
+              <ShieldCheck className="mr-2 h-4 w-4" />{busy === 'preflight' ? 'Проверяем…' : 'Проверить готовность'}
+            </Button>
+            <Button type="button" variant="outline" asChild className="min-h-10 bg-white"><Link to="/dashboard/telegram-radar">Источники радара</Link></Button>
+            <Button type="button" variant="outline" asChild className="min-h-10 bg-white"><Link to="/dashboard/bazich?view=messages">Кампании аутрича</Link></Button>
+            {mode === 'connection' ? <Button type="button" variant="ghost" onClick={() => void disconnectAccount()} disabled={busy === 'disconnect'} className="min-h-10 text-rose-700 hover:bg-rose-50 hover:text-rose-800"><Trash2 className="mr-2 h-4 w-4" />Отключить аккаунт</Button> : null}
+          </div>
+
+          {preflight ? (
+            <div className="grid gap-2 rounded-2xl bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200 sm:grid-cols-2">
+              <div><span className="font-semibold text-slate-950">Радар:</span> {preflight.radar}</div>
+              <div><span className="font-semibold text-slate-950">Аутрич и stop-on-reply:</span> {preflight.outreach}</div>
+            </div>
+          ) : null}
+
+          {mode !== 'connection' && !status.account.radar_enabled ? (
+            <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900 ring-1 ring-amber-100">Telegram-радар выключен. Включите его выше, чтобы выбирать источники и собирать новые сигналы. Разрешённая отправка сообщений продолжает работать независимо.</div>
+          ) : null}
+
+          {mode !== 'connection' && status.account.radar_enabled ? <>
           <div>
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -356,6 +455,7 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full' }: TelegramRes
               ))}
             </div>
           ) : null}
+          </> : null}
         </div>
       )}
     </section>

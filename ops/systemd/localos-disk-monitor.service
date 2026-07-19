@@ -1,0 +1,8 @@
+[Unit]
+Description=Monitor LocalOS root filesystem usage
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/seo-app
+EnvironmentFile=-/opt/seo-app/.env
+ExecStart=/opt/seo-app/scripts/check_disk_usage.sh

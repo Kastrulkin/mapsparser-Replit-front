@@ -103,6 +103,7 @@ def partnership_list_leads():
         conn = get_db_connection()
         try:
             _ensure_partnership_columns(conn)
+            _ensure_partnership_artifacts_table(conn)
             _ensure_sales_room_tables(conn)
             cur = conn.cursor()
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
@@ -197,7 +198,10 @@ def partnership_list_leads():
                        sr_last.status AS sales_room_status,
                        sr_last.data_mode AS sales_room_data_mode,
                        sr_last.slug AS sales_room_slug,
-                       sr_last.updated_at AS sales_room_updated_at
+                       sr_last.updated_at AS sales_room_updated_at,
+                       COALESCE(artifact_last.audit_ready, FALSE) AS audit_ready,
+                       artifact_last.match_json AS match_summary_json,
+                       artifact_last.updated_at AS artifact_updated_at
                 FROM prospectingleads
                 JOIN lead_workstreams active_ws ON active_ws.lead_id = prospectingleads.id
                 LEFT JOIN LATERAL (
@@ -225,6 +229,15 @@ def partnership_list_leads():
                     ORDER BY sr.updated_at DESC
                     LIMIT 1
                 ) sr_last ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT
+                        COALESCE(audit_json, '{{}}'::jsonb) <> '{{}}'::jsonb AS audit_ready,
+                        match_json,
+                        updated_at
+                    FROM partnershipleadartifacts artifact
+                    WHERE artifact.lead_id = prospectingleads.id
+                    LIMIT 1
+                ) artifact_last ON TRUE
                 WHERE {' AND '.join(where_sql)}
                 ORDER BY active_ws.updated_at DESC NULLS LAST, prospectingleads.created_at DESC
                 LIMIT %s OFFSET %s

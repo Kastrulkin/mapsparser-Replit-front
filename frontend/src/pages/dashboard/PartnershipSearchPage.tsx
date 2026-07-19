@@ -29,6 +29,7 @@ import {
   PartnershipPipelineList,
 } from '@/components/prospecting/PartnershipPipelineSections';
 import { PartnershipAnalyticsWorkspace } from '@/components/prospecting/PartnershipAnalyticsWorkspace';
+import { OutreachLearningInsights } from '@/components/prospecting/OutreachLearningInsights';
 import {
   approvePartnershipBatch,
   approvePartnershipDraft,
@@ -116,6 +117,14 @@ type PartnershipLead = {
   parse_updated_at?: string;
   parse_retry_after?: string;
   parse_error?: string;
+  audit_ready?: boolean;
+  match_summary_json?: {
+    match_score?: number;
+    score_explanation?: string;
+    overlap?: string[];
+    offer_angles?: string[];
+  } | null;
+  artifact_updated_at?: string;
   deferred_reason?: string;
   deferred_until?: string;
   next_best_action?: {
@@ -756,7 +765,13 @@ export const PartnershipSearchPage: React.FC = () => {
   const { currentBusinessId, user } = useOutletContext<any>();
   const [searchParams] = useSearchParams();
   const showDemoPartner = searchParams.get('demo') === 'romashka';
+  const requestedLeadId = searchParams.get('lead');
+  const requestedFocus = searchParams.get('focus');
   const [loading, setLoading] = useState(false);
+  const [activeLeadAction, setActiveLeadAction] = useState<{
+    leadId: string;
+    action: 'parse' | 'enrich' | 'audit' | 'match';
+  } | null>(null);
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
   const [dropColumnId, setDropColumnId] = useState<PartnershipBoardColumnId | null>(null);
   const [linksText, setLinksText] = useState('');
@@ -967,10 +982,10 @@ export const PartnershipSearchPage: React.FC = () => {
     });
   }, [selectedLeadId, selectedLead, items]);
 
-  const loadLeads = async (queryOverride?: string) => {
+  const loadLeads = async (queryOverride?: string, silent = false) => {
     if (!currentBusinessId) return;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const data = await loadPartnershipLeads({
         businessId: currentBusinessId,
@@ -986,9 +1001,19 @@ export const PartnershipSearchPage: React.FC = () => {
     } catch (e: any) {
       setError(e.message || 'Не удалось загрузить список партнёров');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const hasRunningParse = items.some((item) => ['pending', 'processing', 'captcha', 'retry_wait'].includes(String(item.parse_status || '').toLowerCase()));
+    if (!currentBusinessId || !hasRunningParse) return;
+    const timer = window.setInterval(() => {
+      void loadLeads(undefined, true);
+    }, 5000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentBusinessId, items]);
 
   useEffect(() => {
     if (!showDemoPartner) return;
@@ -997,6 +1022,21 @@ export const PartnershipSearchPage: React.FC = () => {
     void loadLeads('Ромашка');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showDemoPartner, currentBusinessId]);
+
+  useEffect(() => {
+    if (!requestedLeadId || !items.length) return;
+    const requestedLead = items.find((item) => item.id === requestedLeadId);
+    if (!requestedLead) return;
+    setWorkspaceView('pipeline');
+    setLeadBucket('active');
+    setLeadView('all');
+    setStage('all');
+    setQuery(String(requestedLead.name || ''));
+    setSelectedLeadId(null);
+    if (requestedFocus === 'match') {
+      setMessage(`Открыта подготовка предложения для ${requestedLead.name || 'этой компании'}. Выполните выделенный следующий шаг — результат появится прямо в карточке.`);
+    }
+  }, [items, requestedFocus, requestedLeadId]);
 
   const loadRalphLoop = async () => {
     if (!currentBusinessId) return;
@@ -1286,53 +1326,75 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const runAudit = async (leadId: string) => {
     if (!currentBusinessId) return;
-    await runPartnershipAction('Не удалось выполнить аудит', async () => {
-      setMatchData(null);
-      setDraftText('');
-      const lead = items.find((x) => x.id === leadId);
-      const parseStatus = String(lead?.parse_status || '').toLowerCase();
-      if (['pending', 'processing', 'captcha'].includes(parseStatus)) {
-        throw new Error('Парсинг ещё не завершён. Дождитесь статуса completed/error и обновите список.');
-      }
-      const data = await runPartnershipLeadAction(currentBusinessId, leadId, 'audit');
-      setAuditData(data.snapshot || null);
-      setSelectedLeadId(leadId);
-      await refreshAllPartnershipData();
-    });
+    setActiveLeadAction({ leadId, action: 'audit' });
+    try {
+      await runPartnershipAction('Не удалось выполнить аудит', async () => {
+        setMatchData(null);
+        setDraftText('');
+        const lead = items.find((x) => x.id === leadId);
+        const parseStatus = String(lead?.parse_status || '').toLowerCase();
+        if (['pending', 'processing', 'captcha', 'retry_wait'].includes(parseStatus)) {
+          throw new Error('Сбор данных ещё не завершён. LocalOS обновит карточку автоматически.');
+        }
+        const data = await runPartnershipLeadAction(currentBusinessId, leadId, 'audit');
+        setAuditData(data.snapshot || null);
+        setMessage(`Разбор карточки ${lead?.name || 'партнёра'} готов. Теперь можно проверить совместимость.`);
+        await refreshAllPartnershipData();
+      });
+    } finally {
+      setActiveLeadAction(null);
+    }
   };
 
   const runParse = async (leadId: string) => {
     if (!currentBusinessId) return;
-    await runPartnershipAction('Не удалось запустить парсинг', async () => {
-      const data = await runPartnershipLeadAction(currentBusinessId, leadId, 'parse');
-      const task = data?.parse_task;
-      if (task?.id) {
-        setMessage(`Парсинг запущен: ${task.id} (${task.status || 'pending'})`);
-      } else {
-        setMessage('Парсинг запрошен');
-      }
-      await refreshOperationalData();
-    });
+    setActiveLeadAction({ leadId, action: 'parse' });
+    try {
+      await runPartnershipAction('Не удалось запустить сбор данных', async () => {
+        await runPartnershipLeadAction(currentBusinessId, leadId, 'parse');
+        const lead = items.find((item) => item.id === leadId);
+        setMessage(`Сбор данных о ${lead?.name || 'компании'} запущен. Статус обновится автоматически.`);
+        await refreshOperationalData();
+      });
+    } finally {
+      setActiveLeadAction(null);
+    }
   };
 
   const runMatch = async (leadId: string) => {
     if (!currentBusinessId) return;
-    await runPartnershipAction('Не удалось выполнить матчинг', async () => {
-      setDraftText('');
-      const data = await runPartnershipLeadAction(currentBusinessId, leadId, 'match');
-      setMatchData(data.result || null);
-      setSelectedLeadId(leadId);
-      await refreshAllPartnershipData();
-    });
+    setActiveLeadAction({ leadId, action: 'match' });
+    try {
+      await runPartnershipAction('Не удалось проверить совместимость', async () => {
+        setDraftText('');
+        const data = await runPartnershipLeadAction(currentBusinessId, leadId, 'match');
+        const result = data.result || null;
+        setMatchData(result);
+        const lead = items.find((item) => item.id === leadId);
+        const score = result?.match_score;
+        setMessage(score === undefined
+          ? `Совместимость с ${lead?.name || 'партнёром'} рассчитана. Результат показан в карточке.`
+          : `Совместимость с ${lead?.name || 'партнёром'}: ${score}%. Результат и следующий шаг показаны в карточке.`);
+        await refreshAllPartnershipData();
+      });
+    } finally {
+      setActiveLeadAction(null);
+    }
   };
 
   const enrichContacts = async (leadId: string) => {
     if (!currentBusinessId) return;
-    await runPartnershipAction('Не удалось обогатить контакты', async () => {
-      await runPartnershipLeadAction(currentBusinessId, leadId, 'enrich-contacts');
-      setMessage('Контакты лида обновлены');
-      await refreshOperationalData();
-    });
+    setActiveLeadAction({ leadId, action: 'enrich' });
+    try {
+      await runPartnershipAction('Не удалось найти дополнительные контакты', async () => {
+        await runPartnershipLeadAction(currentBusinessId, leadId, 'enrich-contacts');
+        const lead = items.find((item) => item.id === leadId);
+        setMessage(`Контакты ${lead?.name || 'партнёра'} обновлены.`);
+        await refreshOperationalData();
+      });
+    } finally {
+      setActiveLeadAction(null);
+    }
   };
 
   const runDraft = async (leadId: string) => {
@@ -2480,6 +2542,7 @@ export const PartnershipSearchPage: React.FC = () => {
                   />
                 </Suspense>
               )}
+              outreachLearningPanel={<OutreachLearningInsights businessId={currentBusinessId} />}
               funnel={funnel}
               sourceQuality={sourceQuality}
               blockers={blockers}
@@ -2532,6 +2595,7 @@ export const PartnershipSearchPage: React.FC = () => {
               selectedLeadIds={selectedLeadIds}
               visibleLeads={visibleLeads}
               selectedLeadId={selectedLeadId}
+              activeLeadAction={activeLeadAction}
               bulkStage={bulkStage}
               onBulkStageChange={setBulkStage}
               bulkStageOptions={BULK_STAGE_OPTIONS}
@@ -2558,6 +2622,7 @@ export const PartnershipSearchPage: React.FC = () => {
               onEnrichContacts={(leadId) => void enrichContacts(leadId)}
               onRunAudit={(leadId) => void runAudit(leadId)}
               onRunMatch={(leadId) => void runMatch(leadId)}
+              onOpenLead={setSelectedLeadId}
               onPrepareSalesRoom={(leadId, dataMode) => void prepareSalesRoom(leadId, dataMode)}
               onMarkManualContact={(leadId) => void markManualContact(leadId)}
               onSaveLeadBasics={(leadId, patch) => saveLeadBasics(leadId, patch)}
@@ -2690,7 +2755,7 @@ export const PartnershipSearchPage: React.FC = () => {
                 auditPresentation={partnershipAuditPresentation(selectedLead)}
                 onClose={() => setSelectedLeadId(null)}
                 auditData={auditData}
-                matchData={matchData}
+                matchData={matchData || selectedLead.match_summary_json || null}
                 draftText={draftText}
                 selectedLeadLogo={selectedLeadLogo}
                 selectedLeadPhotos={selectedLeadPhotos}

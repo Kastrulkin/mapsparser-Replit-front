@@ -5,9 +5,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { ContactPresenceBadges, StatusSummaryCard } from '@/components/prospecting/LeadWorkflowBlocks';
 import { LeadDetailChipList, LeadDetailMetaList, LeadDetailSection } from '@/components/prospecting/LeadDetailSections';
+import { OutreachEmailSetup } from '@/components/OutreachEmailSetup';
+import { OutreachCampaignBuilder } from '@/components/prospecting/OutreachCampaignBuilder';
+import { OutreachSenderProfileSetup } from '@/components/prospecting/OutreachSenderProfileSetup';
+import { OutreachSuppressionManager } from '@/components/prospecting/OutreachSuppressionManager';
 
 type PartnershipLead = {
   id: string;
+  active_workstream_id?: string | null;
+  workstream_id?: string | null;
   name?: string;
   city?: string;
   category?: string;
@@ -215,6 +221,24 @@ export default function PartnershipLeadDetailDrawer({
             />
           </div>
 
+          {matchData ? (
+            <LeadDetailSection title="Совместимость бизнесов" tone="success">
+              <LeadDetailMetaList
+                items={[
+                  { label: 'Оценка совместимости', value: `${matchData.match_score ?? 0}%` },
+                  { label: 'Общие направления', value: (matchData.overlap || []).slice(0, 8).join(', ') || 'Не найдены' },
+                  {
+                    label: 'Чем партнёр дополняет бизнес',
+                    value: ((matchData.complement || {}).partner_strength_tokens || []).slice(0, 6).join(', ') || 'Нужно уточнить',
+                  },
+                  { label: 'Варианты предложения', value: (matchData.offer_angles || []).slice(0, 3).join(' · ') || 'Нужно подготовить' },
+                ]}
+              />
+              {matchData.score_explanation ? <p className="text-pretty text-sm leading-6 text-foreground">{String(matchData.score_explanation)}</p> : null}
+              <LeadDetailChipList items={Array.isArray(matchData.reason_codes) ? matchData.reason_codes : []} emptyText="Дополнительных оснований пока нет." />
+            </LeadDetailSection>
+          ) : null}
+
           <LeadDetailSection title="Источник и контакты">
             <LeadDetailMetaList
               columns={2}
@@ -334,29 +358,55 @@ export default function PartnershipLeadDetailDrawer({
             </LeadDetailSection>
           ) : null}
 
-          {matchData ? (
-            <LeadDetailSection title="Матчинг услуг">
-              <LeadDetailMetaList
-                items={[
-                  { label: 'Match score', value: `${matchData.match_score ?? 0}%` },
-                  { label: 'Пересечения', value: (matchData.overlap || []).slice(0, 8).join(', ') || '—' },
-                  {
-                    label: 'Комплементарные направления',
-                    value: ((matchData.complement || {}).partner_strength_tokens || []).slice(0, 6).join(', ') || '—',
-                  },
-                  { label: 'Углы оффера', value: (matchData.offer_angles || []).slice(0, 3).join(' · ') || '—' },
-                ]}
-              />
-              {matchData.score_explanation ? <p className="text-sm text-foreground">{String(matchData.score_explanation)}</p> : null}
-              <LeadDetailChipList items={Array.isArray(matchData.reason_codes) ? matchData.reason_codes : []} emptyText="Reason codes пока нет." />
-            </LeadDetailSection>
-          ) : null}
-
           {draftText ? (
             <LeadDetailSection title="Первое письмо" tone="info">
               <Textarea value={draftText} rows={8} readOnly />
             </LeadDetailSection>
           ) : null}
+
+          <LeadDetailSection title="Мультиканальный аутрич" tone="info">
+            <details className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <summary className="min-h-10 cursor-pointer text-sm font-semibold text-slate-800">
+                Настроить founder profile
+              </summary>
+              <div className="pt-4">
+                <OutreachSenderProfileSetup
+                  businessId={currentBusinessId}
+                  defaultCompanyName=""
+                />
+              </div>
+            </details>
+            <OutreachCampaignBuilder
+              workstreamId={selectedLead.active_workstream_id || selectedLead.workstream_id}
+              businessId={currentBusinessId}
+              leadSegment={selectedLead.category}
+            />
+            <details className="border-t border-slate-200 pt-3">
+              <summary className="flex min-h-10 cursor-pointer items-center text-sm font-semibold text-slate-700">
+                Подключить или проверить email
+              </summary>
+              <div className="pt-3">
+                <OutreachEmailSetup scopeType="business" businessId={currentBusinessId} compact />
+              </div>
+            </details>
+            <a
+              href={`/dashboard/settings/integrations?focus=telegram&return_to=${encodeURIComponent('/dashboard/partnerships')}`}
+              className="inline-flex min-h-10 items-center text-sm font-semibold text-orange-700 hover:text-orange-800"
+            >
+              Настроить Telegram бизнеса
+            </a>
+            <details className="border-t border-slate-200 pt-3">
+              <summary className="flex min-h-10 cursor-pointer items-center text-sm font-semibold text-slate-700">
+                Stop-list и запреты
+              </summary>
+              <div className="pt-3">
+                <OutreachSuppressionManager
+                  workstreamId={selectedLead.active_workstream_id || selectedLead.workstream_id}
+                  businessId={currentBusinessId}
+                />
+              </div>
+            </details>
+          </LeadDetailSection>
 
           <LeadDetailSection title="Ручное редактирование лида">
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">

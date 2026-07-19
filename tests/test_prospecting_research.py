@@ -5,6 +5,7 @@ from flask import Flask
 
 from api import agent_prospecting_api
 from services.prospecting_research_service import import_report, normalize_candidate, parse_report, preview_report
+from services.outreach_campaign_service import build_evidence_ledger
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,6 +76,12 @@ def test_confirmed_demand_signal_gets_evidence_backed_priority():
             "confidence": 0.9,
         }
     ]
+    ledger = build_evidence_ledger({
+        "research": {"signals_json": candidate["signals"]},
+    })
+    assert ledger[0]["id"].startswith("evidence:")
+    assert ledger[0]["fact"].startswith("The company asked")
+    assert ledger[0]["freshness"] == "fresh"
 
 
 def test_missing_evidence_blocks_opener_and_does_not_invent_pain():

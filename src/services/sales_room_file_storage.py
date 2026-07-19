@@ -141,7 +141,7 @@ def _s3_client() -> Any:
         raise RuntimeError("boto3 is required for SALES_ROOM_STORAGE_BACKEND=s3")
 
     endpoint_url = os.environ.get("SALES_ROOM_S3_ENDPOINT_URL") or "https://storage.yandexcloud.net"
-    region_name = os.environ.get("SALES_ROOM_S3_REGION") or "ru-central1"
+    region_name = os.environ.get("SALES_ROOM_S3_REGION") or None
     access_key = os.environ.get("SALES_ROOM_S3_ACCESS_KEY_ID") or os.environ.get("AWS_ACCESS_KEY_ID")
     secret_key = os.environ.get("SALES_ROOM_S3_SECRET_ACCESS_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY")
     if not access_key or not secret_key:
