@@ -243,6 +243,18 @@ interface SavedOutreachCampaign {
   }>;
 }
 
+interface PilotReadiness {
+  status?: string;
+  reason_code?: string;
+  can_dispatch_first_touch?: boolean;
+  next_action?: string;
+  checks?: Array<{
+    code?: string;
+    label?: string;
+    passed?: boolean;
+  }>;
+}
+
 interface LeadWorkstream {
   id?: string | null;
   workstream_type: WorkstreamType;
@@ -521,6 +533,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [senderFactsOpen, setSenderFactsOpen] = useState(false);
   const [outreachPreview, setOutreachPreview] = useState<OutreachPreview | null>(null);
   const [savedOutreachCampaign, setSavedOutreachCampaign] = useState<SavedOutreachCampaign | null>(null);
+  const [pilotReadiness, setPilotReadiness] = useState<PilotReadiness | null>(null);
   const [sequenceChannels, setSequenceChannels] = useState(['telegram', 'email', 'max', 'vk']);
   const [sequenceDays, setSequenceDays] = useState([0, 3, 7, 12]);
   const [sequenceSenders, setSequenceSenders] = useState<Record<number, string>>({});
@@ -640,7 +653,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     && savedOutreachCampaign?.generation_current
     && latestCampaignFirstTouch
     && ['telegram', 'email'].includes(String(latestCampaignFirstTouch.channel || ''))
-    && !pilotAlreadySent,
+    && !pilotAlreadySent
+    && pilotReadiness?.can_dispatch_first_touch,
   );
   const canSyncPilotReply = Boolean(
     latestCampaignFirstTouch
@@ -654,6 +668,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     if (selectedWorkstreamId && selectedLead.workstreams?.some((item) => item.id === selectedWorkstreamId)) return;
     setSelectedWorkstreamId(selectedLead.workstreams?.[0]?.id || null);
   }, [selectedLead, selectedWorkstreamId]);
+
+  useEffect(() => {
+    setPilotReadiness(null);
+  }, [selectedLeadId, selectedWorkstreamId]);
 
   useEffect(() => {
     if (!selectedLead?.id || !selectedWorkstream?.id) {
@@ -732,6 +750,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   useEffect(() => {
     setOutreachPreview(null);
     setSavedOutreachCampaign(null);
+    setPilotReadiness(null);
     setSenderFactsOpen(false);
     setSequenceChannels(['telegram', 'email', 'max', 'vk']);
     setSequenceDays([0, 3, 7, 12]);
@@ -925,12 +944,14 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setSequenceSenders((current) => ({ ...current, [index]: '' }));
     setOutreachPreview(null);
     setSavedOutreachCampaign(null);
+    setPilotReadiness(null);
   };
 
   const updateSequenceDay = (index: number, day: number) => {
     setSequenceDays((current) => current.map((item, itemIndex) => itemIndex === index ? Math.max(0, day) : item));
     setOutreachPreview(null);
     setSavedOutreachCampaign(null);
+    setPilotReadiness(null);
   };
 
   const campaignSequence = () => [
@@ -950,6 +971,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
   const prepareOutreachCampaign = async (save: boolean) => {
     if (!selectedWorkstream?.id) return;
+    setPilotReadiness(null);
     setBusyAction(save ? 'save-campaign' : 'preview-campaign');
     setNotice('');
     try {
@@ -972,6 +994,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
   const approveOutreachCampaign = async () => {
     if (!savedOutreachCampaign?.id) return;
+    setPilotReadiness(null);
     setBusyAction('approve-campaign');
     setNotice('');
     try {
@@ -981,6 +1004,27 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       await reloadLatestOutreachCampaign();
     } catch (requestError) {
       setNotice(requestError instanceof Error ? requestError.message : 'Цепочка не прошла preflight');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const runPilotPreflight = async () => {
+    if (!savedOutreachCampaign?.id) return;
+    setBusyAction('pilot-preflight');
+    setNotice('');
+    try {
+      const payload = await newAuth.makeRequest(`/outreach/campaigns/${encodeURIComponent(savedOutreachCampaign.id)}/pilot-preflight`, {
+        method: 'POST',
+      });
+      const readiness: PilotReadiness = payload?.pilot_readiness || {};
+      setPilotReadiness(readiness);
+      if (readiness.can_dispatch_first_touch) {
+        setNotice('Проверка пройдена. LocalOS готов отправить только первое касание после вашего отдельного подтверждения.');
+      }
+    } catch (requestError) {
+      setPilotReadiness(null);
+      setNotice(requestError instanceof Error ? requestError.message : 'Не удалось проверить готовность к пилоту');
     } finally {
       setBusyAction('');
     }
@@ -1805,6 +1849,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                               setSequenceSenders((current) => ({ ...current, [touchIndex]: event.target.value }));
                               setOutreachPreview(null);
                               setSavedOutreachCampaign(null);
+                              setPilotReadiness(null);
                               setNotice('Отправитель выбран. Обновите preview.');
                             }}
                             className="mt-2 min-h-10 w-full rounded-md border border-amber-200 bg-white px-3 text-sm font-medium text-slate-900"
@@ -1940,6 +1985,46 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     {savedOutreachCampaign.requires_regeneration ? 'Сначала подготовьте новую цепочку' : 'Подтвердить всю цепочку один раз'}
                   </Button>
                 ) : null}
+                {savedOutreachCampaign && !pilotAlreadySent && !pilotReplyReceived ? (
+                  <section className={`mt-3 rounded-2xl p-4 ${pilotReadiness?.can_dispatch_first_touch
+                    ? 'bg-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.22),0_1px_2px_-1px_rgba(15,23,42,0.08)]'
+                    : 'bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_1px_2px_-1px_rgba(15,23,42,0.06)]'}`}>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h4 className="text-balance text-sm font-semibold text-slate-950">Готовность к первому касанию</h4>
+                        <p className="mt-1 max-w-2xl text-pretty text-sm leading-6 text-slate-600">
+                          LocalOS проверит текущую версию, отправителя, контакт, ответы, stop-list и лимиты. Сообщение не отправится.
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => void runPilotPreflight()}
+                        disabled={Boolean(busyAction)}
+                        className="min-h-11 shrink-0 bg-white"
+                      >
+                        {busyAction === 'pilot-preflight' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                        Проверить готовность
+                      </Button>
+                    </div>
+                    {pilotReadiness ? (
+                      <div className="mt-4 border-t border-slate-200/80 pt-3">
+                        <ul className="grid gap-2 sm:grid-cols-2">
+                          {(pilotReadiness.checks || []).map((check) => (
+                            <li key={String(check.code || check.label)} className="flex items-start gap-2 text-sm leading-5 text-slate-700">
+                              {check.passed
+                                ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                                : <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />}
+                              <span className="text-pretty">{check.label}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className={`mt-3 text-pretty text-sm font-medium leading-6 ${pilotReadiness.can_dispatch_first_touch ? 'text-emerald-900' : 'text-amber-900'}`}>
+                          {pilotReadiness.next_action}
+                        </p>
+                      </div>
+                    ) : null}
+                  </section>
+                ) : null}
                 {canDispatchPilot ? (
                   <div className="mt-3 rounded-md bg-orange-50 p-3 text-sm text-orange-950">
                     <div className="font-semibold">Следующий шаг: первое пилотное касание</div>
@@ -1989,7 +2074,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       scopeType={selectedWorkstream.workstream_type === 'localos_sales' ? 'platform' : 'business'}
                       businessId={selectedWorkstream.workstream_type === 'client_partnership' ? selectedWorkstream.client_business_id : null}
                       compact
-                      onChanged={() => setOutreachPreview(null)}
+                      onChanged={() => {
+                        setOutreachPreview(null);
+                        setPilotReadiness(null);
+                      }}
                     />
                   </div>
                 </details>

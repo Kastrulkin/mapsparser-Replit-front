@@ -804,6 +804,7 @@ def test_pilot_preflight_requires_explicit_check_before_ui_enables_dispatch():
     api = (ROOT / "src/api/outreach_campaign_api.py").read_text()
     service = (ROOT / "src/services/outreach_campaign_service.py").read_text()
     ui = (ROOT / "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx").read_text()
+    admin_ui = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
 
     assert "pilot-preflight" in api
     assert "build_pilot_readiness" in api
@@ -812,6 +813,10 @@ def test_pilot_preflight_requires_explicit_check_before_ui_enables_dispatch():
     assert "Проверить готовность" in ui
     assert "pilotReadiness?.can_dispatch_first_touch" in ui
     assert ui.index("Проверить готовность") < ui.rindex("Отправить только первое касание")
+    assert "Проверить готовность" in admin_ui
+    assert "pilotReadiness?.can_dispatch_first_touch" in admin_ui
+    assert "/pilot-preflight" in admin_ui
+    assert admin_ui.index("Проверить готовность") < admin_ui.rindex("Отправить только первое касание")
 
 
 def test_business_user_reaches_tenant_campaign_authorization_for_pilot(monkeypatch):
