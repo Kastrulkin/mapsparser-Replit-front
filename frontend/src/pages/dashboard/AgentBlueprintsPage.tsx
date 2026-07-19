@@ -14,7 +14,7 @@ import {
   formatPreflightBlock, connectorLabel, autoSelectBuilderConnectionBindings, autoSelectBuilderProviderRoutes
 } from './agents/normalization';
 import {
-  getRunnableVersionId, agentExecutionMode, workflowStepsForAnimation, learningTriggerOptions, agentScenarios, humanizeMeta,
+  getPreviewVersionId, agentExecutionMode, workflowStepsForAnimation, learningTriggerOptions, agentScenarios, humanizeMeta,
   getAgentListStatus, buildTodaySummary, initialRunParameters, validateRunParameters, buildEmployeeDescription, buildEmployeeWorkspaceState,
   buildEmployeeNextAction
 } from './agents/model';
@@ -1071,7 +1071,7 @@ export const AgentBlueprintsPage = () => {
     setDecisionNotice(null);
     const animationStartedAt = beginRunAnimation(targetBlueprint.id, 'test');
     try {
-      const selectedVersionId = blueprintVersionId || getRunnableVersionId(targetBlueprint, blueprintDetails);
+      const selectedVersionId = blueprintVersionId || getPreviewVersionId(targetBlueprint, blueprintDetails);
       const runInput = {
         schema: 'localos_agent_preview_input_v1',
         preview_mode: true,

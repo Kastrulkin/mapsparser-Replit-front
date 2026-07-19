@@ -206,6 +206,10 @@ export const getRunnableVersionId = (blueprint: AgentBlueprint, details?: AgentB
   getActiveVersionId(blueprint, details) || getLatestVersionId(blueprint, details)
 );
 
+export const getPreviewVersionId = (blueprint: AgentBlueprint, details?: AgentBlueprintDetails | null) => (
+  getLatestVersionId(blueprint, details) || getActiveVersionId(blueprint, details)
+);
+
 export const agentExecutionMode = (blueprint: AgentBlueprint, details?: AgentBlueprintDetails | null): AgentExecutionMode => (
   details?.execution_mode || blueprint.execution_mode || 'manual'
 );

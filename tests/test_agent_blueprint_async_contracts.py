@@ -87,6 +87,22 @@ def test_execution_contract_exposes_saved_steps_and_separates_candidate_from_act
     assert contract["active"]["inputs_schema"]["properties"]["date"]["format"] == "date"
 
 
+def test_preview_candidate_resolution_does_not_fall_back_to_active_version(monkeypatch):
+    from api import agent_blueprints_api
+
+    candidate = {"id": "candidate", "version_number": 2}
+    monkeypatch.setattr(agent_blueprints_api, "_load_latest_blueprint_version", lambda cursor, blueprint_id: candidate)
+    monkeypatch.setattr(
+        agent_blueprints_api,
+        "_resolve_active_version",
+        lambda cursor, blueprint: {"id": "active", "version_number": 1},
+    )
+
+    resolved = agent_blueprints_api._resolve_candidate_version(object(), {"id": "bp1", "status": "active"})
+
+    assert resolved == candidate
+
+
 def test_run_progress_uses_saved_version_steps_and_actual_step_statuses():
     from services.agent_blueprint_runner import AgentBlueprintRunner
 
@@ -275,6 +291,7 @@ def test_agent_async_runtime_contract_is_wired_end_to_end():
     assert "_process_agent_run_queue_if_due" in worker_source
     assert "FOR UPDATE SKIP LOCKED" in queue_source
     assert "idempotency_key: window.crypto.randomUUID()" in frontend_source
+    assert "getPreviewVersionId(targetBlueprint, blueprintDetails)" in frontend_source
     assert "waitForAgentRun" in frontend_source
     assert "execution_contract" in frontend_source
     assert "EmployeeAgentScenarioPanel" in frontend_source

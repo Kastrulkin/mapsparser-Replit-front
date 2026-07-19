@@ -2151,9 +2151,6 @@ def _resolve_active_version(cursor, blueprint: dict):
 
 
 def _resolve_candidate_version(cursor, blueprint: dict):
-    active_version = _resolve_active_version(cursor, blueprint)
-    if active_version:
-        return active_version
     return _load_latest_blueprint_version(cursor, str(blueprint.get("id") or ""))
 
 
