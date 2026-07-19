@@ -17,6 +17,8 @@ def test_agent_run_contract_hides_service_fields_and_requires_content_plan_date(
             "integration_id": {"type": "string"},
             "spreadsheet_id": {"type": "string"},
             "sheet_name": {"type": "string"},
+            "files": {"type": "array"},
+            "source_ids": {"type": "array"},
         },
     }
     steps = [{"type": "capability", "capability": "content_plan.item.create_draft"}]
@@ -26,6 +28,8 @@ def test_agent_run_contract_hides_service_fields_and_requires_content_plan_date(
     assert "integration_id" not in public_schema["properties"]
     assert "spreadsheet_id" not in public_schema["properties"]
     assert "sheet_name" not in public_schema["properties"]
+    assert "files" not in public_schema["properties"]
+    assert "source_ids" not in public_schema["properties"]
     assert public_schema["properties"]["scheduled_for"]["format"] == "date"
     assert "scheduled_for" in public_schema["required"]
 
