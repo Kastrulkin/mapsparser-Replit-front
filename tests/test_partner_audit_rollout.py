@@ -23,6 +23,7 @@ from src.core.card_audit import (
     build_lead_card_preview_snapshot,
 )
 from scripts.backfill_partnership_match_artifacts import (
+    _build_prerequisite_assessment,
     _has_verified_category_evidence,
     _is_direct_map_card_url,
     _match_skip_reason,
@@ -288,6 +289,25 @@ def test_match_backfill_persists_assessment_without_promoting_weak_match() -> No
     assert _should_persist_match_assessment("partner_services_missing") is False
 
 
+def test_match_backfill_records_explicit_prerequisite_without_claiming_compatibility() -> None:
+    assessment = _build_prerequisite_assessment(
+        {
+            "source_url": "https://yandex.ru/maps/org/test/123/",
+            "parse_status": "processing",
+        },
+        "partner_services_missing",
+    )
+
+    assert assessment["assessment_kind"] == "prerequisite"
+    assert assessment["readiness_code"] == "needs_evidence"
+    assert assessment["recovery_action"] == "wait_for_parse"
+    assert assessment["match_score"] == 0
+    assert assessment["recipient_observation"] is None
+    assert assessment["compatibility_hypothesis"] is None
+    assert assessment["relevance_bridge"] is None
+    assert "совместим" not in str(assessment["next_action"]).lower()
+
+
 def test_partner_evidence_recovery_actions_are_specific() -> None:
     assert _recovery_action({}, "manual_import_without_public_service_evidence") == "find_public_card"
     assert _recovery_action({}, "public_source_missing") == "find_public_source"
@@ -319,6 +339,8 @@ def test_partner_parse_recovery_is_bounded_and_never_sends_outreach() -> None:
     assert 'default=20' in source
     assert '"parse_limit": max(0, args.parse_limit)' in source
     assert '"external_send": False' in source
+    assert '"prerequisite_assessments_saved": 0' in source
+    assert "assessment_kind" in source
     assert "_enqueue_parse_task_for_business" in source
 
 

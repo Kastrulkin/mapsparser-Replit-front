@@ -1218,6 +1218,8 @@ def test_partnership_sender_profile_guides_user_with_completeness_and_business_s
 
     assert '"profile_completeness": completeness' in route_block
     assert '"services_source": "business_services"' in route_block
+    assert '"desired_partner_types_source": "existing_partner_search"' in route_block
+    assert "regexp_split_to_table" in route_block
     assert '"company_name": str(business_row.get("company_name")' in route_block
     assert '"display_name": suggested_sender_name' in route_block
     assert '"geography": str(business_row.get("geography")' in route_block
@@ -1226,6 +1228,7 @@ def test_partnership_sender_profile_guides_user_with_completeness_and_business_s
     assert "Профиль сохранён, но пока не подтверждён" in frontend_source
     assert "Что нужно заполнить" in frontend_source
     assert "suggestedCompanyName" in frontend_source
+    assert "suggestedPartnerTypes" in frontend_source
     assert "Сохранить и подтвердить" in frontend_source
 
 

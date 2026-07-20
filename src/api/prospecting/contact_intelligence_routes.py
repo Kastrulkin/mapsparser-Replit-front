@@ -588,6 +588,29 @@ def partnership_sender_profile():
             ]
             cursor.execute(
                 """
+                SELECT BTRIM(category_part) AS partner_type, COUNT(*) AS lead_count
+                FROM lead_workstreams workstream
+                JOIN prospectingleads lead ON lead.id = workstream.lead_id
+                CROSS JOIN LATERAL regexp_split_to_table(
+                    COALESCE(NULLIF(BTRIM(lead.category), ''), ''),
+                    '\\s*/\\s*'
+                ) category_part
+                WHERE workstream.workstream_type = 'client_partnership'
+                  AND workstream.client_business_id = %s
+                  AND NULLIF(BTRIM(category_part), '') IS NOT NULL
+                GROUP BY BTRIM(category_part)
+                ORDER BY COUNT(*) DESC, BTRIM(category_part)
+                LIMIT 12
+                """,
+                (business_id,),
+            )
+            suggested_partner_types = [
+                str(item.get("partner_type") or "").strip()
+                for item in cursor.fetchall() or []
+                if str(item.get("partner_type") or "").strip()
+            ]
+            cursor.execute(
+                """
                 SELECT * FROM outreach_sender_profiles
                 WHERE workstream_type = 'client_partnership'
                   AND client_business_id = %s AND is_active = TRUE
@@ -609,6 +632,8 @@ def partnership_sender_profile():
                 "suggested_context": {
                     "services": business_services,
                     "services_source": "business_services",
+                    "desired_partner_types": suggested_partner_types,
+                    "desired_partner_types_source": "existing_partner_search",
                     "company_name": str(business_row.get("company_name") or "").strip(),
                     "display_name": suggested_sender_name,
                     "geography": str(business_row.get("geography") or "").strip(),

@@ -135,6 +135,9 @@ export function OutreachSenderProfileSetup({
       const suggestedCompanyName = String(payload?.suggested_context?.company_name || defaultCompanyName).trim();
       const suggestedDisplayName = String(payload?.suggested_context?.display_name || '').trim();
       const suggestedGeography = String(payload?.suggested_context?.geography || '').trim();
+      const suggestedPartnerTypes = Array.isArray(payload?.suggested_context?.desired_partner_types)
+        ? payload.suggested_context.desired_partner_types.map((item: unknown) => String(item || '').trim()).filter(Boolean)
+        : [];
       setCompleteness(profileCompleteness);
       if (profile) {
         const context = profile.outreach_context_json || {};
@@ -154,7 +157,9 @@ export function OutreachSenderProfileSetup({
           segments: (context.segments || []).join('\n'),
           geography: String(context.geography || suggestedGeography),
           recipientRoles: (context.recipient_roles || []).join('\n'),
-          desiredPartnerTypes: (context.desired_partner_types || []).join('\n'),
+          desiredPartnerTypes: (context.desired_partner_types?.length
+            ? context.desired_partner_types
+            : suggestedPartnerTypes).join('\n'),
           disqualifiers: (context.disqualifiers || []).join('\n'),
           allowedCtas: (context.allowed_ctas || []).join('\n'),
         });
@@ -166,6 +171,7 @@ export function OutreachSenderProfileSetup({
           companyName: suggestedCompanyName,
           services: suggestedServices.join('\n'),
           geography: suggestedGeography,
+          desiredPartnerTypes: suggestedPartnerTypes.join('\n'),
         });
         setConfirmed(false);
       }
@@ -293,7 +299,10 @@ export function OutreachSenderProfileSetup({
               <Textarea value={form.audience} onChange={(event) => update('audience', event.target.value)} placeholder="Кому полезны ваши услуги: аудитория и её контекст" className="min-h-20 bg-white" />
               <div className="grid gap-3 sm:grid-cols-2">
                 <Textarea value={form.segments} onChange={(event) => update('segments', event.target.value)} placeholder="Целевые сегменты — по одному на строку" className="min-h-20 bg-white" />
-                <Textarea value={form.desiredPartnerTypes} onChange={(event) => update('desiredPartnerTypes', event.target.value)} placeholder="Желаемые типы партнёров — по одному на строку" className="min-h-20 bg-white" />
+                <div>
+                  <Textarea value={form.desiredPartnerTypes} onChange={(event) => update('desiredPartnerTypes', event.target.value)} placeholder="Желаемые типы партнёров — по одному на строку" className="min-h-20 bg-white" />
+                  <p className="mt-1 text-xs leading-5 text-slate-500">LocalOS подставляет категории из вашей текущей воронки. Оставьте только те, с кем действительно хотите работать.</p>
+                </div>
                 <Textarea value={form.recipientRoles} onChange={(event) => update('recipientRoles', event.target.value)} placeholder="Роли получателей — по одной на строку" className="min-h-20 bg-white" />
                 <Textarea value={form.allowedCtas} onChange={(event) => update('allowedCtas', event.target.value)} placeholder="Допустимые следующие шаги — по одному на строку" className="min-h-20 bg-white" />
               </div>

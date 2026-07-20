@@ -151,6 +151,85 @@ def _should_persist_match_assessment(skip_reason: str | None) -> bool:
     }
 
 
+def _build_prerequisite_assessment(
+    row: dict[str, object],
+    skip_reason: str,
+    snapshot: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Describe why matching cannot run yet without claiming compatibility."""
+
+    recovery_action = _recovery_action(row, skip_reason, snapshot)
+    reason_codes = {
+        "manual_import_without_public_service_evidence": "PUBLIC_CARD_REQUIRED",
+        "public_source_missing": "PUBLIC_SOURCE_REQUIRED",
+        "partner_services_missing": "RECIPIENT_EVIDENCE_INCOMPLETE",
+    }
+    next_actions = {
+        "find_public_card": "Найдите публичную карточку компании и повторите сбор данных",
+        "find_public_source": "Добавьте официальный публичный источник компании",
+        "wait_for_parse": "Дождитесь завершения сбора данных — результат обновится после повторной проверки",
+        "resolve_captcha": "Завершите проверку источника и повторите сбор данных",
+        "retry_parse": "Повторите сбор данных карточки",
+        "find_alternate_public_source": "Найдите другой публичный источник: карточку, официальный сайт или каталог",
+        "mark_closed_not_relevant": "Проверьте статус и исключите закрытую организацию из воронки",
+        "evaluate_category_only_match": "Повторите мэтчинг по подтверждённой категории компании",
+        "repair_recipient_identity_mapping": "Найдите правильную карточку компании и повторите сбор данных",
+        "start_parse": "Соберите данные публичной карточки компании",
+        "resolve_public_map_card": "Найдите карточку компании на карте и запустите сбор данных",
+        "review_manually": "Проверьте источник и данные компании вручную",
+    }
+    source_url = str(row.get("source_url") or "").strip()
+    if not source_url.lower().startswith(("http://", "https://")):
+        source_url = ""
+    return {
+        "assessment_kind": "prerequisite",
+        "match_score": 0,
+        "overlap": [],
+        "complement": {"our_strength_tokens": [], "partner_strength_tokens": []},
+        "risks": ["Совместимость не оценивалась: не хватает проверяемых данных получателя."],
+        "offer_angles": [],
+        "source_counts": {"our_services": 0, "partner_services": 0},
+        "reason_codes": [reason_codes.get(skip_reason, "RECIPIENT_EVIDENCE_INCOMPLETE")],
+        "score_explanation": "Оценка совместимости ещё не запускалась.",
+        "recipient_observation": None,
+        "compatibility_hypothesis": None,
+        "relevance_bridge": None,
+        "source_url": source_url or None,
+        "score_breakdown": {},
+        "profile_completeness": {},
+        "direct_competitor": False,
+        "readiness_code": "needs_evidence",
+        "prerequisite_code": skip_reason,
+        "recovery_action": recovery_action,
+        "next_action": next_actions.get(recovery_action, next_actions["review_manually"]),
+    }
+
+
+def _persist_match_artifact(
+    cursor: object,
+    *,
+    lead_id: str,
+    snapshot: dict[str, object] | None,
+    match: dict[str, object],
+) -> None:
+    cursor.execute(
+        """
+        INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)
+        VALUES (%s, %s, %s, NOW())
+        ON CONFLICT (lead_id) DO UPDATE
+        SET audit_json = CASE
+                WHEN partnershipleadartifacts.audit_json IS NULL
+                  OR partnershipleadartifacts.audit_json = '{}'::jsonb
+                THEN EXCLUDED.audit_json
+                ELSE partnershipleadartifacts.audit_json
+            END,
+            match_json = EXCLUDED.match_json,
+            updated_at = NOW()
+        """,
+        (lead_id, Json(snapshot or {}), Json(match)),
+    )
+
+
 def _recovery_action(
     row: dict[str, object],
     skip_reason: str,
@@ -285,7 +364,8 @@ def main() -> int:
         "SELECT 1 FROM partnershipleadartifacts artifact "
         "WHERE artifact.lead_id = lead.id "
         "AND artifact.match_json IS NOT NULL "
-        "AND artifact.match_json <> '{}'::jsonb)",
+        "AND artifact.match_json <> '{}'::jsonb "
+        "AND COALESCE(artifact.match_json->>'assessment_kind', '') <> 'prerequisite')",
     ]
     params: list[object] = []
     if args.business_id:
@@ -332,6 +412,7 @@ def main() -> int:
         "workstreams": len(rows),
         "matches_saved": 0,
         "assessments_saved": 0,
+        "prerequisite_assessments_saved": 0,
         "matches_evaluated": 0,
         "eligible": 0,
         "jobs_enqueued": 0,
@@ -357,6 +438,14 @@ def main() -> int:
             if source_skip_reason:
                 report["skipped"][source_skip_reason] = report["skipped"].get(source_skip_reason, 0) + 1
                 _record_recovery(report, row, source_skip_reason, args.sample_size)
+                if args.execute:
+                    _persist_match_artifact(
+                        cursor,
+                        lead_id=str(row["id"]),
+                        snapshot=None,
+                        match=_build_prerequisite_assessment(row, source_skip_reason),
+                    )
+                    report["prerequisite_assessments_saved"] += 1
                 continue
             snapshot = _to_json_compatible(build_lead_card_preview_snapshot(row))
             skip_reason = _skip_reason(row, snapshot)
@@ -411,6 +500,14 @@ def main() -> int:
                         if business_created:
                             report["parse_businesses_created"] += 1
                         database.conn.commit()
+                if args.execute:
+                    _persist_match_artifact(
+                        cursor,
+                        lead_id=str(row["id"]),
+                        snapshot=snapshot,
+                        match=_build_prerequisite_assessment(row, skip_reason, snapshot),
+                    )
+                    report["prerequisite_assessments_saved"] += 1
                 continue
             report["eligible"] += 1
             match = _compute_partnership_match_result(
@@ -438,21 +535,11 @@ def main() -> int:
             if reason:
                 report["skipped"][reason] = report["skipped"].get(reason, 0) + 1
                 if args.execute and _should_persist_match_assessment(reason):
-                    cursor.execute(
-                        """
-                        INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)
-                        VALUES (%s, %s, %s, NOW())
-                        ON CONFLICT (lead_id) DO UPDATE
-                        SET audit_json = CASE
-                                WHEN partnershipleadartifacts.audit_json IS NULL
-                                  OR partnershipleadartifacts.audit_json = '{}'::jsonb
-                                THEN EXCLUDED.audit_json
-                                ELSE partnershipleadartifacts.audit_json
-                            END,
-                            match_json = EXCLUDED.match_json,
-                            updated_at = NOW()
-                        """,
-                        (str(row["id"]), Json(snapshot), Json(match)),
+                    _persist_match_artifact(
+                        cursor,
+                        lead_id=str(row["id"]),
+                        snapshot=snapshot,
+                        match=match,
                     )
                     report["assessments_saved"] += 1
                     if args.refresh_enrichment:
@@ -467,21 +554,11 @@ def main() -> int:
                 continue
             if args.dry_run:
                 continue
-            cursor.execute(
-                """
-                INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)
-                VALUES (%s, %s, %s, NOW())
-                ON CONFLICT (lead_id) DO UPDATE
-                SET audit_json = CASE
-                        WHEN partnershipleadartifacts.audit_json IS NULL
-                          OR partnershipleadartifacts.audit_json = '{}'::jsonb
-                        THEN EXCLUDED.audit_json
-                        ELSE partnershipleadartifacts.audit_json
-                    END,
-                    match_json = EXCLUDED.match_json,
-                    updated_at = NOW()
-                """,
-                (str(row["id"]), Json(snapshot), Json(match)),
+            _persist_match_artifact(
+                cursor,
+                lead_id=str(row["id"]),
+                snapshot=snapshot,
+                match=match,
             )
             report["matches_saved"] += 1
             if args.refresh_enrichment:
