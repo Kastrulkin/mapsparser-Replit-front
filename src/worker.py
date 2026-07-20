@@ -2755,6 +2755,21 @@ def _run_optional_detail_sync(connection: Any, label: str, callback: Any) -> boo
         cursor.close()
 
 
+def _public_post_identity(business_id: str, source: str, item: dict[str, Any]) -> tuple[str, str]:
+    explicit_external_id = str(item.get("id") or item.get("external_post_id") or "").strip()
+    if explicit_external_id:
+        identity_source = f"{business_id}|{source}|external|{explicit_external_id}"
+        post_id = str(uuid.uuid5(uuid.NAMESPACE_URL, identity_source))
+        return post_id, explicit_external_id
+
+    title = str(item.get("title") or item.get("name") or "").strip()
+    body = str(item.get("text") or item.get("content") or "").strip()
+    published = str(item.get("published_at") or item.get("date") or "").strip()
+    identity_source = f"{business_id}|{source}|public|{title}|{body}|{published}"
+    post_id = str(uuid.uuid5(uuid.NAMESPACE_URL, identity_source))
+    return post_id, f"public_{post_id}"
+
+
 def _handle_worker_error(queue_id: str, error_msg: str):
     """Обновить статус задачи на error с сообщением"""
     try:
@@ -5174,7 +5189,11 @@ def process_queue():
                                     if not post_text:
                                         continue
                                         
-                                    post_id = str(uuid.uuid4())
+                                    post_id, external_post_id = _public_post_identity(
+                                        business_id,
+                                        external_source_value,
+                                        item,
+                                    )
                                     # Пытаемся дату достать
                                     pub_at = None
                                     if item.get('date'):
@@ -5184,7 +5203,7 @@ def process_queue():
                                         id=post_id,
                                         business_id=business_id,
                                         source=external_source_value,
-                                        external_post_id=f"html_{post_id}", # Нет реального ID в HTML
+                                        external_post_id=external_post_id,
                                         title=item.get('title') or (post_text[:30] + '...'),
                                         text=post_text,
                                         published_at=pub_at, # Keep None if not found, don't fake it with now()

@@ -26,6 +26,7 @@ from services.outreach_personalization_ai import (
     generate_personalized_sequence,
 )
 from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
+from services.discovered_telegram_source_service import discovered_telegram_signals
 
 try:
     import dns.resolver
@@ -406,6 +407,44 @@ def legacy_contact_candidates(lead: dict[str, Any]) -> list[dict[str, Any]]:
     for payload_key in ("raw_payload_json", "enrich_payload_json"):
         walk(lead.get(payload_key))
     return candidates
+
+
+def exclude_public_channel_contacts(
+    cursor: Any,
+    lead_id: str,
+    contacts: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """A verified public channel is evidence, not a direct-message recipient."""
+    cursor.execute(
+        """
+        SELECT DISTINCT source.canonical_url
+        FROM lead_workstreams workstream
+        JOIN lead_signal_links link
+          ON link.workstream_id = workstream.id
+         AND link.source_type = 'telegram_knowledge_source'
+         AND link.status = 'selected'
+        JOIN knowledge_sources source
+          ON source.id::text = link.source_id
+        WHERE workstream.lead_id = %s
+          AND source.status = 'active'
+          AND source.metadata_json->>'telegram_reference_type' = 'public_channel'
+        """,
+        (lead_id,),
+    )
+    channel_urls = {
+        normalize_contact_value("telegram", row.get("canonical_url") if isinstance(row, dict) else row[0])
+        for row in cursor.fetchall() or []
+    }
+    if not channel_urls:
+        return contacts
+    return [
+        contact
+        for contact in contacts
+        if not (
+            str(contact.get("contact_type") or "") == "telegram"
+            and normalize_contact_value("telegram", contact.get("normalized_value") or contact.get("value")) in channel_urls
+        )
+    ]
 
 
 def upsert_contact_points(cursor, lead_id: str, contacts: list[dict[str, Any]]) -> int:
@@ -921,10 +960,15 @@ def build_native_research_payload(
         if not message_text or not radar_signal.get("message_link"):
             continue
         excerpt = message_text[:180].rstrip(" ,;:")
+        auto_discovered = bool(radar_signal.get("auto_discovered"))
         add_signal(
             "telegram_post",
             f"В публичном Telegram-источнике «{chat_title}» опубликовано: «{excerpt}».",
-            "Сигнал вручную связан с этим лидом и прошёл проверку публичности и свежести.",
+            (
+                "Telegram-канал найден в публичной карточке этого лида; публикация прошла проверки публичности, свежести и специфичности."
+                if auto_discovered
+                else "Сигнал вручную связан с этим лидом и прошёл проверку публичности и свежести."
+            ),
             url=str(radar_signal.get("message_link")),
             confidence=min(0.95, max(0.6, float(radar_signal.get("relevance_score") or 60) / 100)),
             published_at=radar_signal.get("message_date"),
@@ -1134,6 +1178,7 @@ def upsert_native_research(
         json_safe({**dict(row), "id": str(dict(row).get("id"))})
         for row in cursor.fetchall() or []
     ]
+    artifact["radar_signals"] = discovered_telegram_signals(cursor, lead, workstream, limit=3)
     if workstream.get("workstream_type") == "localos_sales":
         artifact.update(load_localos_sales_audit_artifact(cursor, str(lead.get("id") or "")))
     elif workstream.get("workstream_type") == "client_partnership":
@@ -1170,7 +1215,8 @@ def upsert_native_research(
             """,
             (workstream.get("id"), workstream.get("client_business_id")),
         )
-        artifact["radar_signals"] = [dict(row) for row in cursor.fetchall() or []]
+        manual_radar_signals = [dict(row) for row in cursor.fetchall() or []]
+        artifact["radar_signals"] = (artifact.get("radar_signals") or []) + manual_radar_signals
     payload = build_native_research_payload(lead, workstream, artifact)
     cursor.execute(
         """
@@ -1894,7 +1940,8 @@ def sync_parsed_lead_contacts(cursor, lead: dict[str, Any]) -> dict[str, int]:
     lead_id = str(lead.get("id") or "").strip()
     if not lead_id:
         return {"contacts_saved": 0, "jobs_queued": 0}
-    contacts_saved = upsert_contact_points(cursor, lead_id, legacy_contact_candidates(lead))
+    contacts = exclude_public_channel_contacts(cursor, lead_id, legacy_contact_candidates(lead))
+    contacts_saved = upsert_contact_points(cursor, lead_id, contacts)
     cursor.execute("SELECT id FROM lead_workstreams WHERE lead_id = %s", (lead_id,))
     workstream_rows = cursor.fetchall() or []
     jobs_queued = 0
@@ -2128,7 +2175,7 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
         )
 
     cursor.execute("UPDATE lead_enrichment_jobs SET status = 'collecting', current_phase = 'collecting', updated_at = NOW() WHERE id = %s", (job.get("id"),))
-    contacts = legacy_contact_candidates(lead)
+    contacts = exclude_public_channel_contacts(cursor, str(lead["id"]), legacy_contact_candidates(lead))
     website_contacts, warnings = collect_public_website_contacts(lead.get("website"))
     contacts.extend(website_contacts)
     upsert_contact_points(cursor, str(lead["id"]), contacts)

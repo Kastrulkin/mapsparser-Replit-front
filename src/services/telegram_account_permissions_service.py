@@ -315,6 +315,32 @@ def update_permissions(
             """,
             (account_id,),
         )
+    if not bool(current.get("radar_enabled")) and next_radar:
+        cursor.execute(
+            """
+            UPDATE knowledge_sources
+            SET sync_status = CASE
+                    WHEN status = 'candidate'
+                     AND COALESCE((metadata_json->>'auto_discovered')::boolean, FALSE) = TRUE
+                    THEN 'queued'
+                    ELSE sync_status
+                END,
+                next_sync_at = CASE
+                    WHEN status = 'candidate'
+                     AND COALESCE((metadata_json->>'auto_discovered')::boolean, FALSE) = TRUE
+                    THEN NOW()
+                    ELSE next_sync_at
+                END,
+                metadata_json = CASE
+                    WHEN COALESCE((metadata_json->>'auto_discovered')::boolean, FALSE) = TRUE
+                    THEN metadata_json || '{"permission_reason":"ready"}'::jsonb
+                    ELSE metadata_json
+                END,
+                updated_at = NOW()
+            WHERE account_id = %s AND source_type = 'telegram'
+            """,
+            (account_id,),
+        )
     if bool(current.get("outreach_enabled")) and not next_outreach:
         _pause_telegram_work(cursor, account_id, "sender_permission_revoked")
     return get_permissions(cursor, account_id)

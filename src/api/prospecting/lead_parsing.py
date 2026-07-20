@@ -1067,6 +1067,10 @@ def _sync_partnership_lead_from_parsed_data(lead: dict[str, Any]) -> dict[str, A
             updates["messenger_links_json"] = Json(parsed.get("social_links"))
 
         if not updates:
+            from services.discovered_telegram_source_service import sync_discovered_telegram_sources
+
+            sync_discovered_telegram_sources(conn, lead, parsed.get("social_links"))
+            conn.commit()
             confirmed = dict(lead)
             confirmed["parsed_identity_status"] = "confirmed"
             return confirmed
@@ -1091,7 +1095,9 @@ def _sync_partnership_lead_from_parsed_data(lead: dict[str, Any]) -> dict[str, A
         updated = cur.fetchone()
         if updated:
             from services.contact_intelligence_service import sync_parsed_lead_contacts
+            from services.discovered_telegram_source_service import sync_discovered_telegram_sources
 
+            sync_discovered_telegram_sources(conn, dict(updated), parsed.get("social_links"))
             sync_parsed_lead_contacts(cur, dict(updated))
             conn.commit()
             result = dict(updated)
@@ -1201,6 +1207,10 @@ def _sync_lead_contacts_from_parsed_data(lead: dict[str, Any]) -> dict[str, Any]
             updates["messenger_links_json"] = Json(parsed.get("social_links"))
 
         if not updates:
+            from services.discovered_telegram_source_service import sync_discovered_telegram_sources
+
+            sync_discovered_telegram_sources(conn, lead, parsed.get("social_links"))
+            conn.commit()
             return lead
 
         assignments = []
@@ -1223,7 +1233,9 @@ def _sync_lead_contacts_from_parsed_data(lead: dict[str, Any]) -> dict[str, Any]
         updated = cur.fetchone()
         if updated:
             from services.contact_intelligence_service import sync_parsed_lead_contacts
+            from services.discovered_telegram_source_service import sync_discovered_telegram_sources
 
+            sync_discovered_telegram_sources(conn, dict(updated), parsed.get("social_links"))
             sync_parsed_lead_contacts(cur, dict(updated))
             conn.commit()
             return dict(updated)
