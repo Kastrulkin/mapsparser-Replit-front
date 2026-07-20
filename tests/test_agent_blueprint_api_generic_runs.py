@@ -1131,6 +1131,39 @@ def test_internal_content_draft_retries_until_requested_count_is_returned(monkey
     assert result["draft_text"].count("\n\n") == 2
 
 
+def test_multiple_content_drafts_get_business_result_title(monkeypatch):
+    import services.agent_blueprint_workspace as workspace
+
+    monkeypatch.setattr(
+        workspace,
+        "analyze_text_with_gigachat",
+        lambda *args, **kwargs: json.dumps(
+            {
+                "drafts": [
+                    {"title": "Новость 1", "draft_text": "Рассказываем об услуге «Детская стрижка»."},
+                    {"title": "Новость 2", "draft_text": "Услуга «Детская стрижка» доступна в салоне."},
+                    {"title": "Новость 3", "draft_text": "Клиент отметил услугу «Детская стрижка»."},
+                ]
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+    result = workspace._render_output(
+        "custom",
+        {
+            "workflow_description": "Подготовь 3 новости для карточек на основе услуг.",
+            "processing_rules": "Используй только подтверждённые факты",
+            "output_format": "Черновики новостей",
+        },
+        [{"source_name": "services", "summary": "name: Детская стрижка", "raw": {"name": "Детская стрижка"}}],
+        [],
+        {"business_id": "biz-1", "user_id": "user-1", "run_id": "run-1"},
+    )
+
+    assert result["title"] == "3 черновика новостей"
+
+
 def test_workspace_setup_recovers_original_request_for_legacy_blueprint():
     from services.agent_blueprint_workspace import _workspace_setup
 
