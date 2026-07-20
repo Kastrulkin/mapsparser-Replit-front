@@ -55,6 +55,16 @@ Beauty salons are a primary use case and should be described through business ou
 - Reputation: LocalOS can show unanswered or fresh reviews, prepare reply drafts, and keep external publication manual unless a supported provider write flow is approved.
 - Partnerships: LocalOS can find nearby complementary businesses, prepare fit reasons and draft partner messages, but sending stays behind approval/capped dispatch.
 
+## Outreach Sender Identity
+
+Every campaign has one explicit sender mode that is included in the approved version and audit trail:
+
+- `localos`: LocalOS prospects are contacted by LocalOS through a platform-scoped account;
+- `partner_business`: a business contacts its own prospective partners through its tenant-scoped account;
+- `localos_for_partner`: a superadmin may contact a prospective partner through a platform-scoped LocalOS account while transparently naming the represented business.
+
+`localos_for_partner` is representation, not impersonation. The campaign remains scoped to the represented business, uses that business's confirmed services, audience, compatibility evidence and allowed offer, but uses the confirmed LocalOS identity and account. Every message must disclose both facts. LocalOS must never silently fall back between sender modes or select a global account merely because it was connected last. A sender-mode change creates a new preview/version and requires a new approval.
+
 ## Product Boundaries
 
 LocalOS may prepare drafts, previews, recommendations, imports, refresh requests, grouped service drafts and internal changes after explicit confirmation. It must not imply that it automatically publishes to maps/social networks, sends outreach/customer messages, pays, deletes, bulk-mutates, or changes third-party systems unless the exact provider write flow is implemented, tested, documented and approved by the user.

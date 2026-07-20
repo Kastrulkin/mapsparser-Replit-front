@@ -69,6 +69,8 @@ def recipient_key(lead_id: str, normalized_contacts: list[dict[str, Any]] | None
 def strategy_fingerprint(strategy: dict[str, Any]) -> str:
     dimensions = {
         "workstream_type": strategy.get("workstream_type"),
+        "sender_mode": strategy.get("sender_mode"),
+        "represented_business_id": strategy.get("represented_business_id"),
         "segment": strategy.get("segment"),
         "recipient_role": strategy.get("recipient_role"),
         "signal_kind": strategy.get("signal_kind"),
@@ -84,6 +86,38 @@ def strategy_fingerprint(strategy: dict[str, Any]) -> str:
         "angle": strategy.get("angle"),
     }
     return stable_hash(dimensions, "strategy:")
+
+
+def sender_scope_preflight_reason(item: dict[str, Any]) -> str | None:
+    """Validate campaign identity against the concrete sender account scope."""
+    policy = item.get("policy_json") if isinstance(item.get("policy_json"), dict) else {}
+    sender_mode = str(policy.get("sender_mode") or "").strip().lower()
+    if not sender_mode:
+        sender_mode = "localos" if item.get("scope_type") == "platform" else "partner_business"
+    if sender_mode == "localos_for_partner":
+        if item.get("scope_type") != "business":
+            return "sender_mode_scope_mismatch"
+        if item.get("sender_scope_type") != "platform" or item.get("sender_business_id"):
+            return "sender_scope_mismatch"
+        represented_business_id = str(policy.get("represented_business_id") or "")
+        if not represented_business_id or represented_business_id != str(item.get("business_id") or ""):
+            return "represented_business_mismatch"
+        return None
+    if sender_mode == "localos":
+        if item.get("scope_type") != "platform" or item.get("business_id"):
+            return "sender_mode_scope_mismatch"
+    elif sender_mode == "partner_business":
+        if item.get("scope_type") != "business" or not item.get("business_id"):
+            return "sender_mode_scope_mismatch"
+    else:
+        return "sender_mode_invalid"
+    if sender_mode in {"localos", "partner_business"}:
+        if item.get("sender_scope_type") != item.get("scope_type"):
+            return "sender_scope_mismatch"
+        if str(item.get("sender_business_id") or "") != str(item.get("business_id") or ""):
+            return "sender_business_mismatch"
+        return None
+    return None
 
 
 def approval_snapshot_hash(campaign: dict[str, Any], touches: list[dict[str, Any]]) -> str:
@@ -378,10 +412,9 @@ def run_dispatch_preflight(cursor: Any, queue_id: str) -> dict[str, Any]:
         return {"allowed": False, "reason_code": "sender_not_connected", "item": item}
     if item.get("health_status") in SENDER_BLOCKING_HEALTH:
         return {"allowed": False, "reason_code": f"sender_{item.get('health_status')}", "item": item}
-    if item.get("sender_scope_type") != item.get("scope_type"):
-        return {"allowed": False, "reason_code": "sender_scope_mismatch", "item": item}
-    if str(item.get("sender_business_id") or "") != str(item.get("business_id") or ""):
-        return {"allowed": False, "reason_code": "sender_business_mismatch", "item": item}
+    sender_scope_reason = sender_scope_preflight_reason(item)
+    if sender_scope_reason:
+        return {"allowed": False, "reason_code": sender_scope_reason, "item": item}
     if item.get("channel") == "telegram" and not bool(item.get("telegram_outreach_enabled")):
         return {"allowed": False, "reason_code": "sender_permission_revoked", "item": item}
     if item.get("channel") == "email" and not bool(item.get("sender_outreach_enabled")):

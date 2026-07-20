@@ -19,6 +19,7 @@ from services.outreach_safety_service import (
     reconcile_reaction_learning_event,
     recipient_key,
     sender_health,
+    sender_scope_preflight_reason,
     strategy_fingerprint,
     wilson_lower_bound,
 )
@@ -78,6 +79,55 @@ def test_strategy_and_approval_fingerprints_are_stable_and_version_sensitive():
 
     assert first == second
     assert approval_snapshot_hash(campaign, touches) != approval_snapshot_hash(campaign, changed_touches)
+
+
+def test_sender_mode_is_part_of_learning_strategy_identity():
+    base = {
+        "workstream_type": "client_partnership",
+        "segment": "детские центры",
+        "channel": "telegram",
+        "sequence_index": 0,
+    }
+
+    assert strategy_fingerprint({**base, "sender_mode": "partner_business"}) != strategy_fingerprint({
+        **base,
+        "sender_mode": "localos_for_partner",
+        "represented_business_id": "business-1",
+    })
+
+
+def test_localos_can_represent_partner_only_with_explicit_business_policy():
+    valid = {
+        "scope_type": "business",
+        "business_id": "business-1",
+        "sender_scope_type": "platform",
+        "sender_business_id": None,
+        "policy_json": {
+            "sender_mode": "localos_for_partner",
+            "represented_business_id": "business-1",
+        },
+    }
+
+    assert sender_scope_preflight_reason(valid) is None
+    assert sender_scope_preflight_reason({
+        **valid,
+        "policy_json": {
+            "sender_mode": "localos_for_partner",
+            "represented_business_id": "business-2",
+        },
+    }) == "represented_business_mismatch"
+    assert sender_scope_preflight_reason({
+        **valid,
+        "sender_scope_type": "business",
+        "sender_business_id": "business-1",
+    }) == "sender_scope_mismatch"
+    assert sender_scope_preflight_reason({
+        "scope_type": "business",
+        "business_id": "business-1",
+        "sender_scope_type": "business",
+        "sender_business_id": "business-1",
+        "policy_json": {"sender_mode": "localos"},
+    }) == "sender_mode_scope_mismatch"
 
 
 def test_strategy_dimensions_remember_semantic_signal_founder_story_offer_and_touch():

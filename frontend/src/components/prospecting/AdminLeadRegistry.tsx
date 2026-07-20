@@ -40,6 +40,7 @@ const LegacyProspectingManagement = React.lazy(() =>
 );
 
 type WorkstreamType = 'localos_sales' | 'client_partnership';
+type SenderMode = 'localos' | 'partner_business' | 'localos_for_partner';
 type RegistryView = 'leads' | 'messages' | 'results';
 type ScopeFilter = 'all' | 'localos_sales' | 'client_partnership';
 
@@ -239,6 +240,10 @@ interface OutreachPreview {
   }>;
   touches?: OutreachTouchPreview[];
   sequence_issues?: string[];
+  sender_mode?: SenderMode;
+  sender_scope_type?: 'platform' | 'business';
+  represented_business_id?: string | null;
+  represented_business_name?: string | null;
 }
 
 interface SavedOutreachCampaign {
@@ -248,6 +253,10 @@ interface SavedOutreachCampaign {
   stop_reason?: string | null;
   generation_current?: boolean;
   requires_regeneration?: boolean;
+  policy_json?: {
+    sender_mode?: SenderMode;
+    represented_business_id?: string | null;
+  };
   touches?: Array<{
     id?: string;
     sequence_index?: number;
@@ -550,6 +559,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [sequenceChannels, setSequenceChannels] = useState(['telegram', 'email', 'max', 'vk']);
   const [sequenceDays, setSequenceDays] = useState([0, 3, 7, 12]);
   const [sequenceSenders, setSequenceSenders] = useState<Record<number, string>>({});
+  const [senderMode, setSenderMode] = useState<SenderMode>('localos');
 
   const loadLeads = useCallback(async () => {
     setLoading(true);
@@ -609,6 +619,15 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const selectedWorkstream = selectedLead?.workstreams?.find((item) => item.id === selectedWorkstreamId)
     || selectedLead?.workstreams?.[0]
     || null;
+  const selectedSenderScope = selectedWorkstream?.workstream_type === 'localos_sales'
+    || senderMode === 'localos_for_partner'
+    ? 'platform'
+    : 'business';
+  const selectedSenderLabel = selectedWorkstream?.workstream_type === 'localos_sales'
+    ? 'LocalOS'
+    : senderMode === 'localos_for_partner'
+      ? `LocalOS представляет ${selectedWorkstream?.client_business_name || 'бизнес партнёра'}`
+      : selectedWorkstream?.client_business_name || 'Выбранный клиент';
   const drawerContacts = (contactIntelligence?.contacts || selectedWorkstream?.contact_points || [])
     .filter((item) => item.type !== 'website');
   const drawerTelegramSources = contactIntelligence?.telegram_sources || [];
@@ -769,6 +788,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setSequenceChannels(['telegram', 'email', 'max', 'vk']);
     setSequenceDays([0, 3, 7, 12]);
     setSequenceSenders({});
+    setSenderMode(
+      selectedWorkstream?.workstream_type === 'localos_sales'
+        ? 'localos'
+        : 'partner_business',
+    );
   }, [selectedWorkstream?.id]);
 
   useEffect(() => {
@@ -780,7 +804,16 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         const payload = await newAuth.makeRequest(`/outreach/workstreams/${encodeURIComponent(workstreamId)}/campaigns`);
         if (!active) return;
         const campaigns = Array.isArray(payload?.campaigns) ? payload.campaigns : [];
-        setSavedOutreachCampaign(campaigns[0] || null);
+        const latestCampaign = campaigns[0] || null;
+        setSavedOutreachCampaign(latestCampaign);
+        const savedMode = latestCampaign?.policy_json?.sender_mode;
+        if (
+          savedMode === 'localos'
+          || savedMode === 'partner_business'
+          || savedMode === 'localos_for_partner'
+        ) {
+          setSenderMode(savedMode);
+        }
       } catch (requestError) {
         if (active) setNotice(requestError instanceof Error ? requestError.message : 'Не удалось загрузить кампанию');
       }
@@ -968,6 +1001,15 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setPilotReadiness(null);
   };
 
+  const updateSenderMode = (mode: SenderMode) => {
+    setSenderMode(mode);
+    setSequenceSenders({});
+    setOutreachPreview(null);
+    setSavedOutreachCampaign(null);
+    setPilotReadiness(null);
+    setNotice('Способ представления изменён. Подготовьте новый preview и проверьте всю цепочку.');
+  };
+
   const campaignSequence = () => [
     { channel: sequenceChannels[0], day_offset: sequenceDays[0], angle: 'signal', sender_account_id: sequenceSenders[0] || undefined },
     { channel: sequenceChannels[1], day_offset: sequenceDays[1], angle: 'founder_story', sender_account_id: sequenceSenders[1] || undefined },
@@ -991,7 +1033,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     try {
       const payload = await newAuth.makeRequest(`/outreach/workstreams/${encodeURIComponent(selectedWorkstream.id)}/preview`, {
         method: 'POST',
-        body: JSON.stringify({ sequence: campaignSequence(), save }),
+        body: JSON.stringify({ sequence: campaignSequence(), save, sender_mode: senderMode }),
       });
       setOutreachPreview(payload?.preview || null);
       if (payload?.campaign) {
@@ -1830,6 +1872,37 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </Badge>
                 </div>
 
+                {selectedWorkstream.workstream_type === 'client_partnership' ? (
+                  <fieldset className="mt-3 rounded-md bg-white p-3">
+                    <legend className="px-1 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Кто обращается к партнёру</legend>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        aria-pressed={senderMode === 'partner_business'}
+                        onClick={() => updateSenderMode('partner_business')}
+                        className={`min-h-20 rounded-md border p-3 text-left transition-colors ${senderMode === 'partner_business' ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                      >
+                        <span className="block text-sm font-semibold text-slate-950">Сам бизнес</span>
+                        <span className="mt-1 block text-xs leading-5 text-slate-600">Сообщение и подключённый аккаунт принадлежат {selectedWorkstream.client_business_name || 'этому бизнесу'}.</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={senderMode === 'localos_for_partner'}
+                        onClick={() => updateSenderMode('localos_for_partner')}
+                        className={`min-h-20 rounded-md border p-3 text-left transition-colors ${senderMode === 'localos_for_partner' ? 'border-orange-300 bg-orange-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                      >
+                        <span className="block text-sm font-semibold text-slate-950">LocalOS представляет бизнес</span>
+                        <span className="mt-1 block text-xs leading-5 text-slate-600">Отправляем с аккаунта LocalOS и прямо называем {selectedWorkstream.client_business_name || 'бизнес'}, который представляет LocalOS.</span>
+                      </button>
+                    </div>
+                    {senderMode === 'localos_for_partner' ? (
+                      <div className="mt-2 rounded-md bg-orange-50 px-3 py-2 text-pretty text-xs leading-5 text-orange-950">
+                        В каждом сообщении будет явная фраза: LocalOS пишет от своего имени и представляет {selectedWorkstream.client_business_name || 'этот бизнес'} в партнёрском предложении. Скрытая подмена отправителя запрещена.
+                      </div>
+                    ) : null}
+                  </fieldset>
+                ) : null}
+
                 {savedOutreachCampaign?.requires_regeneration ? (
                   <div className="mt-3 rounded-md bg-amber-50 p-3 text-pretty text-sm leading-6 text-amber-950">
                     <div className="font-semibold">Эту версию нельзя подтвердить</div>
@@ -2120,7 +2193,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Отправитель</div>
-                    <div className="mt-1 font-semibold text-slate-950">{selectedWorkstream.workstream_type === 'localos_sales' ? 'LocalOS' : selectedWorkstream.client_business_name || 'Выбранный клиент'}</div>
+                    <div className="mt-1 font-semibold text-slate-950">{selectedSenderLabel}</div>
                   </div>
                   <Badge variant="outline" className={readyChannelCount > 0
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
@@ -2135,8 +2208,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   <summary className="flex min-h-10 cursor-pointer items-center text-sm font-semibold text-slate-700">Подключить или проверить email</summary>
                   <div className="pt-3">
                     <OutreachEmailSetup
-                      scopeType={selectedWorkstream.workstream_type === 'localos_sales' ? 'platform' : 'business'}
-                      businessId={selectedWorkstream.workstream_type === 'client_partnership' ? selectedWorkstream.client_business_id : null}
+                      scopeType={selectedSenderScope}
+                      businessId={selectedSenderScope === 'business' ? selectedWorkstream.client_business_id : null}
                       compact
                       onChanged={() => {
                         setOutreachPreview(null);
@@ -2146,10 +2219,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </div>
                 </details>
                 <a
-                  href={`/dashboard/settings/integrations?focus=telegram&sender_scope=${selectedWorkstream.workstream_type === 'localos_sales' ? 'platform' : 'business'}&return_to=${encodeURIComponent(`/dashboard/bazich?lead=${selectedLead.id}&workstream=${selectedWorkstream.id || ''}`)}`}
+                  href={`/dashboard/settings/integrations?focus=telegram&sender_scope=${selectedSenderScope}&return_to=${encodeURIComponent(`/dashboard/bazich?lead=${selectedLead.id}&workstream=${selectedWorkstream.id || ''}`)}`}
                   className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-orange-700 transition-colors hover:text-orange-800"
                 >
-                  {selectedWorkstream.workstream_type === 'localos_sales'
+                  {selectedSenderScope === 'platform'
                     ? 'Настроить Telegram LocalOS'
                     : 'Настроить Telegram бизнеса'}
                   <ArrowRight className="h-4 w-4" />

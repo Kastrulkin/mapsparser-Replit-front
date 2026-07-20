@@ -29,6 +29,14 @@ from services.outreach_safety_service import (
 AUTOMATIC_CHANNELS = {"telegram", "email"}
 MANUAL_CHANNELS = {"max", "vk", "whatsapp", "sms", "manual"}
 SUPPORTED_CHANNELS = AUTOMATIC_CHANNELS | MANUAL_CHANNELS
+SENDER_MODE_LOCALOS = "localos"
+SENDER_MODE_PARTNER_BUSINESS = "partner_business"
+SENDER_MODE_LOCALOS_FOR_PARTNER = "localos_for_partner"
+SENDER_MODES = {
+    SENDER_MODE_LOCALOS,
+    SENDER_MODE_PARTNER_BUSINESS,
+    SENDER_MODE_LOCALOS_FOR_PARTNER,
+}
 CAMPAIGN_BUSINESS_OUTCOMES = {"meeting_booked", "converted", "no_reply"}
 DEFAULT_SEQUENCE = (
     ("telegram", 0, "signal"),
@@ -58,6 +66,9 @@ PILOT_REASON_GUIDANCE = {
     "sender_permission_revoked": "Разрешите отправку и обязательную проверку ответов.",
     "sender_scope_mismatch": "Выберите аккаунт из правильного контура: LocalOS или текущего бизнеса.",
     "sender_business_mismatch": "Выберите аккаунт, принадлежащий текущему бизнесу.",
+    "sender_mode_scope_mismatch": "Создайте новую версию с правильным способом представления отправителя.",
+    "represented_business_mismatch": "Заново выберите бизнес, которого представляет LocalOS, и создайте новую версию.",
+    "sender_mode_invalid": "Выберите допустимый способ представления отправителя и создайте новую версию.",
     "sender_adapter_incomplete": "Пройдите безопасную проверку отправки и получения ответов.",
     "sender_paused": "Проверьте здоровье аккаунта отправителя.",
     "sender_blocked": "Подключите другой разрешённый аккаунт после проверки причины блокировки.",
@@ -116,6 +127,87 @@ def _list(value: Any) -> list[Any]:
 
 def _text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def resolve_sender_mode(workstream_type: str, requested_mode: Any = None) -> str:
+    """Resolve an explicit sender identity without allowing a hidden fallback."""
+    motion = _text(workstream_type)
+    if motion not in {"localos_sales", "client_partnership"}:
+        raise ValueError("Unsupported workstream_type for outreach sender")
+    requested = _text(requested_mode).lower()
+    default_mode = (
+        SENDER_MODE_LOCALOS
+        if motion == "localos_sales"
+        else SENDER_MODE_PARTNER_BUSINESS
+    )
+    mode = requested or default_mode
+    if mode not in SENDER_MODES:
+        raise ValueError("Unsupported sender_mode")
+    if motion == "localos_sales" and mode != SENDER_MODE_LOCALOS:
+        raise ValueError("LocalOS sales campaigns must be sent by LocalOS")
+    if motion == "client_partnership" and mode == SENDER_MODE_LOCALOS:
+        raise ValueError("Partner campaigns require partner_business or localos_for_partner sender_mode")
+    return mode
+
+
+def _profile_facts(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
+
+
+def _localos_representative_profile(context: dict[str, Any]) -> dict[str, Any]:
+    """Combine who speaks (LocalOS) with what is offered (the represented business)."""
+    localos_profile = dict(context.get("platform_sender_profile") or {})
+    represented_profile = dict(context.get("business_sender_profile") or {})
+    if not localos_profile:
+        return {}
+    localos_context = (
+        localos_profile.get("outreach_context_json")
+        if isinstance(localos_profile.get("outreach_context_json"), dict)
+        else {}
+    )
+    represented_context = (
+        represented_profile.get("outreach_context_json")
+        if isinstance(represented_profile.get("outreach_context_json"), dict)
+        else {}
+    )
+    combined = dict(localos_profile)
+    combined["allowed_offers_json"] = _profile_facts(
+        represented_profile.get("allowed_offers_json")
+    )
+    combined["forbidden_claims_json"] = (
+        _profile_facts(localos_profile.get("forbidden_claims_json"))
+        + _profile_facts(represented_profile.get("forbidden_claims_json"))
+    )
+    combined["outreach_context_json"] = {
+        **represented_context,
+        "competence_story_status": localos_context.get("competence_story_status", "approved"),
+    }
+    combined["confirmed_at"] = (
+        localos_profile.get("confirmed_at")
+        if localos_profile.get("confirmed_at") and represented_profile.get("confirmed_at")
+        else None
+    )
+    combined["_business_service_count"] = context.get("business_service_count")
+    combined["_represented_profile_id"] = represented_profile.get("id")
+    return combined
+
+
+def _apply_sender_mode(context: dict[str, Any], requested_mode: Any = None) -> dict[str, Any]:
+    mode = resolve_sender_mode(_text(context.get("workstream_type")), requested_mode)
+    context["sender_mode"] = mode
+    context["represented_business_id"] = (
+        context.get("client_business_id") if mode == SENDER_MODE_LOCALOS_FOR_PARTNER else None
+    )
+    context["represented_business_name"] = (
+        context.get("client_business_name") if mode == SENDER_MODE_LOCALOS_FOR_PARTNER else None
+    )
+    if mode == SENDER_MODE_LOCALOS_FOR_PARTNER:
+        context["sender_profile"] = _localos_representative_profile(context)
+    elif mode == SENDER_MODE_PARTNER_BUSINESS:
+        context["sender_profile"] = dict(context.get("business_sender_profile") or {})
+    else:
+        context["sender_profile"] = dict(context.get("platform_sender_profile") or context.get("sender_profile") or {})
+    return context
 
 
 def build_pilot_readiness(
@@ -716,6 +808,22 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         (workstream.get("workstream_type"), workstream.get("client_business_id")),
     )
     workstream["sender_profile"] = _dict(cursor.fetchone())
+    workstream["business_sender_profile"] = (
+        dict(workstream["sender_profile"])
+        if workstream.get("workstream_type") == "client_partnership"
+        else {}
+    )
+    cursor.execute(
+        """
+        SELECT * FROM outreach_sender_profiles
+        WHERE workstream_type = 'localos_sales'
+          AND client_business_id IS NULL
+          AND is_active = TRUE
+        ORDER BY updated_at DESC
+        LIMIT 1
+        """
+    )
+    workstream["platform_sender_profile"] = _dict(cursor.fetchone())
     if workstream.get("workstream_type") == "client_partnership":
         cursor.execute(
             """
@@ -884,6 +992,16 @@ def _founder_story(profile: dict[str, Any], evidence_text: str = "") -> dict[str
             value = _text(item)
         if value:
             offers.append(value)
+    forbidden_claims = []
+    for item in _list(profile.get("forbidden_claims_json")):
+        if isinstance(item, dict):
+            if _text(item.get("status") or "approved").lower() not in {"approved", "observed"}:
+                continue
+            value = _text(item.get("fact") or item.get("text") or item.get("claim"))
+        else:
+            value = _text(item)
+        if value:
+            forbidden_claims.append(value)
     if not competence_story and not proofs:
         return None
     def relevance_tokens(value: str) -> set[str]:
@@ -911,7 +1029,7 @@ def _founder_story(profile: dict[str, Any], evidence_text: str = "") -> dict[str
         "story": story,
         "proof": proof,
         "offer": offers[0] if offers else "",
-        "forbidden_claims": [_text(item) for item in _list(profile.get("forbidden_claims_json")) if _text(item)],
+        "forbidden_claims": forbidden_claims,
     }
 
 
@@ -958,6 +1076,15 @@ def build_personalization_candidates(context: dict[str, Any], ledger: list[dict[
             "observed_at": evidence.get("observed_at"),
             "evidence_status": evidence.get("status"),
             "limitations": ["public_evidence_only"] if evidence.get("confidence", 0) < 0.8 else [],
+            "sender_mode": context.get("sender_mode"),
+            "represented_business": context.get("represented_business_name"),
+            "representation_disclosure": (
+                f'Я пишу от LocalOS и представляю бизнес "{_text(context.get("represented_business_name"))}" '
+                "в этом партнёрском предложении."
+                if context.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER
+                and _text(context.get("represented_business_name"))
+                else ""
+            ),
         })
     return candidates
 
@@ -982,6 +1109,8 @@ def _strategy_dimensions(
     """
     return {
         "workstream_type": context.get("workstream_type"),
+        "sender_mode": context.get("sender_mode"),
+        "represented_business_id": context.get("represented_business_id"),
         "segment": research_brief.get("segment") or context.get("category"),
         "recipient_role": research_brief.get("buyer_persona"),
         "signal_kind": candidate.get("evidence_kind") or "public_signal",
@@ -1006,7 +1135,11 @@ def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict
         if not _recipient_contact_eligible(contact):
             continue
         contacts_by_type.setdefault(str(contact.get("contact_type") or ""), contact)
-    scope_type = "platform" if context.get("workstream_type") == "localos_sales" else "business"
+    scope_type = (
+        "platform"
+        if context.get("sender_mode") in {SENDER_MODE_LOCALOS, SENDER_MODE_LOCALOS_FOR_PARTNER}
+        else "business"
+    )
     business_id = None if scope_type == "platform" else context.get("client_business_id")
     cursor.execute(
         """
@@ -1274,18 +1407,22 @@ def _message_for_angle(
     bridge = _text(candidate.get("bridge")).rstrip(". ")
     founder_story = _text(candidate.get("founder_story")).rstrip(". ")
     founder_proof = _text(candidate.get("founder_proof") or founder_story).rstrip(". ")
+    representation = _text(candidate.get("representation_disclosure"))
+    representation_block = f"{representation} " if representation else ""
     if angle == "signal":
-        return f'Здравствуйте! {introduction}Посмотрел публичную карточку "{name}". {observed_fact}. {bridge}. Могу прислать {next_step.lower()} - посмотреть?'
+        return f'Здравствуйте! {introduction}{representation_block}Посмотрел публичную карточку "{name}". {observed_fact}. {bridge}. Могу прислать {next_step.lower()} - посмотреть?'
     if angle == "founder_story":
-        return (
-            f"Здравствуйте! {introduction.rstrip()}\n\n"
+        opening = f"Здравствуйте! {introduction.rstrip()}\n\n"
+        if representation:
+            opening += f"{representation}\n\n"
+        return opening + (
             f'Пишу по поводу карточки "{name}". {founder_story}.\n\n'
             f"Конкретный повод - {observed_fact_inline}.\n\n"
             f"Могу прислать {next_step.lower()} - будет полезно?"
         )
     if angle == "proof":
-        return f'Здравствуйте! Коротко дополню по карточке "{name}". {founder_proof}. Поэтому разбор будет предметным: покажу, что видно по вашей карточке и какой шаг стоит проверить первым. Прислать пример?'
-    return f'Здравствуйте! Закрою тему, чтобы не быть навязчивым. Я писал по публичным данным карточки "{name}". {observed_fact}. Если разбор сейчас не актуален, больше напоминать не буду. Вернуться к этому позже?'
+        return f'Здравствуйте! {representation_block}Коротко дополню по карточке "{name}". {founder_proof}. Поэтому разбор будет предметным: покажу, что видно по вашей карточке и какой шаг стоит проверить первым. Прислать пример?'
+    return f'Здравствуйте! {representation_block}Закрою тему, чтобы не быть навязчивым. Я писал по публичным данным карточки "{name}". {observed_fact}. Если разбор сейчас не актуален, больше напоминать не буду. Вернуться к этому позже?'
 
 
 def _email_subject(angle: str, candidate: dict[str, Any]) -> str:
@@ -1305,8 +1442,9 @@ def build_preview(
     *,
     sequence: list[dict[str, Any]] | None = None,
     start_at: datetime | None = None,
+    sender_mode: str | None = None,
 ) -> dict[str, Any]:
-    context = _load_context(cursor, workstream_id)
+    context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
     ledger = build_evidence_ledger(context)
     candidates = build_personalization_candidates(context, ledger)
     profile_completeness = evaluate_sender_profile_completeness(
@@ -1326,6 +1464,9 @@ def build_preview(
             "status": "suppressed",
             "workstream_id": workstream_id,
             "lead_id": str(context.get("lead_id")),
+            "sender_mode": context.get("sender_mode"),
+            "represented_business_id": context.get("represented_business_id"),
+            "represented_business_name": context.get("represented_business_name"),
             "suppression": suppression,
             "evidence": ledger,
             "personalization_candidates": candidates,
@@ -1346,6 +1487,9 @@ def build_preview(
             "status": "needs_evidence",
             "workstream_id": workstream_id,
             "lead_id": str(context.get("lead_id")),
+            "sender_mode": context.get("sender_mode"),
+            "represented_business_id": context.get("represented_business_id"),
+            "represented_business_name": context.get("represented_business_name"),
             "missing": missing,
             "sender_profile_completeness": profile_completeness,
             "evidence": ledger,
@@ -1575,6 +1719,17 @@ def build_preview(
         "lead_id": str(context.get("lead_id")),
         "scope_type": "platform" if context.get("workstream_type") == "localos_sales" else "business",
         "business_id": context.get("client_business_id"),
+        "sender_mode": context.get("sender_mode"),
+        "sender_scope_type": (
+            "platform"
+            if context.get("sender_mode") in {SENDER_MODE_LOCALOS, SENDER_MODE_LOCALOS_FOR_PARTNER}
+            else "business"
+        ),
+        "represented_business_id": context.get("represented_business_id"),
+        "represented_business_name": context.get("represented_business_name"),
+        "represented_sender_profile_id": (
+            str((context.get("business_sender_profile") or {}).get("id") or "") or None
+        ),
         "sender_profile_id": str(context["sender_profile"].get("id")),
         "evidence": ledger,
         "personalization_candidates": candidates,
@@ -1614,6 +1769,11 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
                 "manual_timeout_action": "needs_attention",
                 "no_reply_grace_hours": 168,
                 "approval_scope": "whole_sequence",
+                "sender_mode": preview.get("sender_mode"),
+                "sender_scope_type": preview.get("sender_scope_type"),
+                "represented_business_id": preview.get("represented_business_id"),
+                "represented_business_name": preview.get("represented_business_name"),
+                "represented_sender_profile_id": preview.get("represented_sender_profile_id"),
             }),
             recipient_key(str(preview["lead_id"])), user_id,
         ),
@@ -1654,7 +1814,12 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
         campaign_id,
         "campaign_preview_created",
         actor_id=user_id,
-        payload={"version": version, "touch_count": len(preview["touches"])},
+        payload={
+            "version": version,
+            "touch_count": len(preview["touches"]),
+            "sender_mode": preview.get("sender_mode"),
+            "represented_business_id": preview.get("represented_business_id"),
+        },
     )
     cursor.execute(
         """

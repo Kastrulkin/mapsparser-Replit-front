@@ -12,6 +12,7 @@ from api.prospecting.access_schema import _require_auth, _resolve_business_for_u
 from pg_db_utils import get_db_connection
 from services.outreach_campaign_service import (
     DEFAULT_SEQUENCE,
+    SENDER_MODE_LOCALOS_FOR_PARTNER,
     SUPPORTED_CHANNELS,
     approve_campaign,
     build_pilot_readiness,
@@ -21,6 +22,7 @@ from services.outreach_campaign_service import (
     record_campaign_business_outcome,
     record_campaign_event,
     record_manual_touch,
+    resolve_sender_mode,
 )
 from services.outreach_safety_service import (
     learning_stat_metrics,
@@ -125,6 +127,17 @@ def _authorized_workstream(cursor: Any, workstream_id: str, user_data: dict[str,
     business_id = str(workstream.get("client_business_id") or "")
     allowed_business = _resolve_business_for_user(cursor, user_data, business_id)
     return workstream if allowed_business == business_id else None
+
+
+def _authorized_sender_mode(
+    workstream: dict[str, Any],
+    requested_mode: Any,
+    user_data: dict[str, Any],
+) -> str:
+    mode = resolve_sender_mode(str(workstream.get("workstream_type") or ""), requested_mode)
+    if mode == SENDER_MODE_LOCALOS_FOR_PARTNER and not user_data.get("is_superadmin"):
+        raise PermissionError("Only a superadmin can send a partner campaign as LocalOS")
+    return mode
 
 
 def _authorized_campaign(cursor: Any, campaign_id: str, user_data: dict[str, Any]) -> dict[str, Any] | None:
@@ -369,9 +382,16 @@ def preview_campaign(workstream_id: str):
     conn = get_db_connection()
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        if not _authorized_workstream(cursor, workstream_id, user_data):
+        workstream = _authorized_workstream(cursor, workstream_id, user_data)
+        if not workstream:
             return jsonify({"success": False, "error": "Workstream not found or access denied"}), 404
-        preview = build_preview(cursor, workstream_id, sequence=sequence)
+        sender_mode = _authorized_sender_mode(workstream, payload.get("sender_mode"), user_data)
+        preview = build_preview(
+            cursor,
+            workstream_id,
+            sequence=sequence,
+            sender_mode=sender_mode,
+        )
         campaign = None
         if bool(payload.get("save")) and preview.get("status") == "ready":
             campaign = persist_preview(
@@ -389,6 +409,9 @@ def preview_campaign(workstream_id: str):
     except ValueError as exc:
         conn.rollback()
         return jsonify({"success": False, "error": str(exc), "reason_code": "preview_blocked"}), 422
+    except PermissionError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc), "reason_code": "sender_mode_forbidden"}), 403
     finally:
         conn.close()
 
@@ -1357,7 +1380,17 @@ def apply_learning_recommendation(workstream_id: str):
             next_day = int(sequence[sequence_index + 1]["day_offset"]) if sequence_index + 1 < len(sequence) else recommended_day + 2
             if previous_day < recommended_day < next_day:
                 sequence[sequence_index]["day_offset"] = recommended_day
-        preview = build_preview(cursor, workstream_id, sequence=sequence)
+        sender_mode = _authorized_sender_mode(
+            workstream,
+            dimensions.get("sender_mode"),
+            user_data,
+        )
+        preview = build_preview(
+            cursor,
+            workstream_id,
+            sequence=sequence,
+            sender_mode=sender_mode,
+        )
         if preview.get("status") != "ready":
             conn.rollback()
             return jsonify({
@@ -1413,6 +1446,9 @@ def apply_learning_recommendation(workstream_id: str):
     except (TypeError, ValueError) as exc:
         conn.rollback()
         return jsonify({"success": False, "error": str(exc)}), 422
+    except PermissionError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc), "reason_code": "sender_mode_forbidden"}), 403
     finally:
         conn.close()
 

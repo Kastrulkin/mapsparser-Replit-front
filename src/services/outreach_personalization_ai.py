@@ -11,8 +11,8 @@ from services.gigachat_client import analyze_text_with_gigachat
 
 
 SCHEMA_VERSION = "1.0"
-PROMPT_VERSION = "outreach_personalization_v1"
-REVIEW_PROMPT_VERSION = "outreach_semantic_review_v1"
+PROMPT_VERSION = "outreach_personalization_v2"
+REVIEW_PROMPT_VERSION = "outreach_semantic_review_v2"
 QUALITY_CRITERIA = (
     "source_validity",
     "observation_accuracy",
@@ -225,6 +225,11 @@ def _request_record(
             ],
             "voice_examples": [_clean(item) for item in voice_examples if _clean(item)][:5],
         },
+        "representation": {
+            "sender_mode": _clean(candidate.get("sender_mode")),
+            "represented_business": _clean(candidate.get("represented_business")),
+            "disclosure": _clean(candidate.get("representation_disclosure")),
+        },
         "sequence": [{
             "sequence_index": int(item.get("sequence_index") or 0),
             "channel": _clean(item.get("channel")).lower(),
@@ -241,6 +246,9 @@ def _request_record(
             "single_cta": True,
             "different_angle_per_touch": True,
             "no_new_recipient_facts": True,
+            "representation_disclosure_required": bool(
+                _clean(candidate.get("sender_mode")) == "localos_for_partner"
+            ),
         },
     }
 
@@ -258,7 +266,8 @@ def _generation_prompt(record: dict[str, Any]) -> str:
         "LocalOS сам соберёт вступление и CTA из разрешённых формулировок. "
         "Если problem_hypothesis отсутствует, верни null и не пиши о боли, потере клиентов или влиянии факта на бизнес. "
         "Заверши каждое касание ровно одним вопросом-CTA. "
-        "Свяжи факт с релевантным опытом отправителя. "
+        "Свяжи факт с релевантным опытом отправителя. Если representation.disclosure заполнен, "
+        "не скрывай и не перефразируй, от чьего имени и в интересах какого бизнеса идёт обращение. "
         "Каждое касание должно иметь новый угол, один простой CTA и работать отдельно. "
         "Не используй ритуальные комплименты, давление, ложную срочность, длинное тире и кавычки-ёлочки. "
         "Telegram - максимум 90 слов, email - максимум 120 слов. "
@@ -447,6 +456,8 @@ def _assemble_constrained_text(
         trusted_sender_block = "Если сейчас неактуально, больше напоминать не буду."
     blocks = [
         opening.rstrip(" .!?;") + ".",
+        _clean(request_record.get("representation", {}).get("disclosure")).rstrip(" .!?;") + "."
+        if _clean(request_record.get("representation", {}).get("disclosure")) else "",
         trusted_sender_block.rstrip(" .!?;") + "." if trusted_sender_block else "",
         _clean(request_record["personalization"]["observation"]).rstrip(" .!?;") + ".",
         _clean(request_record["personalization"]["relevance_to_offer"]).rstrip(" .!?;") + ".",
@@ -512,6 +523,8 @@ def _assemble_policy_bound_text(
         hypothesis_block = f"Гипотеза для проверки: {hypothesis.rstrip(' .!?;')}."
     blocks = [
         opening,
+        _clean(request_record.get("representation", {}).get("disclosure")).rstrip(" .!?;") + "."
+        if _clean(request_record.get("representation", {}).get("disclosure")) else "",
         trusted_sender_block.rstrip(" .!?;") + "." if trusted_sender_block else "",
         _clean(request_record["personalization"]["observation"]).rstrip(" .!?;") + ".",
         hypothesis_block,

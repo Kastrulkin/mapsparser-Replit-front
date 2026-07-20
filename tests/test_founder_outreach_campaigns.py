@@ -15,6 +15,8 @@ from services.outreach_campaign_service import (
     build_evidence_ledger,
     build_pilot_readiness,
     build_personalization_candidates,
+    _localos_representative_profile,
+    resolve_sender_mode,
 )
 from scripts.backfill_partnership_match_artifacts import _skip_reason
 
@@ -96,6 +98,103 @@ def test_personalization_requires_confirmed_founder_profile_and_sourced_evidence
 
     context["sender_profile"]["confirmed_at"] = None
     assert build_personalization_candidates(context, evidence) == []
+
+
+def test_sender_modes_are_explicit_and_never_fall_back_across_motions():
+    assert resolve_sender_mode("localos_sales") == "localos"
+    assert resolve_sender_mode("client_partnership") == "partner_business"
+    assert resolve_sender_mode("client_partnership", "localos_for_partner") == "localos_for_partner"
+
+    for motion, mode in (
+        ("localos_sales", "partner_business"),
+        ("client_partnership", "localos"),
+    ):
+        try:
+            resolve_sender_mode(motion, mode)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Cross-motion sender fallback must be rejected")
+
+
+def test_only_superadmin_can_choose_localos_for_partner():
+    from api.outreach_campaign_api import _authorized_sender_mode
+
+    workstream = {"workstream_type": "client_partnership"}
+    assert _authorized_sender_mode(
+        workstream,
+        "localos_for_partner",
+        {"is_superadmin": True},
+    ) == "localos_for_partner"
+    try:
+        _authorized_sender_mode(
+            workstream,
+            "localos_for_partner",
+            {"is_superadmin": False},
+        )
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("Business user must not use the LocalOS platform identity")
+
+
+def test_localos_representative_uses_localos_identity_and_partner_offer():
+    combined = _localos_representative_profile({
+        "business_service_count": 4,
+        "platform_sender_profile": {
+            "id": "localos-profile",
+            "display_name": "Алексей",
+            "company_name": "LocalOS",
+            "competence_story": "Создаю LocalOS на основе практики локального маркетинга.",
+            "proof_points_json": [{"fact": "Проверили 100 карточек", "status": "approved"}],
+            "allowed_offers_json": ["Аудит карточки"],
+            "forbidden_claims_json": ["Не обещать рост"],
+            "voice_examples_json": ["Здравствуйте! Есть короткое предложение."],
+            "outreach_context_json": {"competence_story_status": "approved"},
+            "confirmed_at": "2026-07-20T12:00:00Z",
+        },
+        "business_sender_profile": {
+            "id": "partner-profile",
+            "allowed_offers_json": ["Совместный день открытых дверей"],
+            "forbidden_claims_json": ["Не обещать поток клиентов"],
+            "outreach_context_json": {
+                "audience": "Семьи с детьми",
+                "desired_partner_types": ["Детские центры"],
+            },
+            "confirmed_at": "2026-07-20T12:00:00Z",
+        },
+    })
+
+    assert combined["id"] == "localos-profile"
+    assert combined["company_name"] == "LocalOS"
+    assert combined["allowed_offers_json"] == ["Совместный день открытых дверей"]
+    assert combined["outreach_context_json"]["audience"] == "Семьи с детьми"
+    assert combined["_represented_profile_id"] == "partner-profile"
+
+
+def test_localos_for_partner_message_discloses_representation():
+    message = _message_for_angle(
+        "signal",
+        {
+            "recipient": "Потенциальный партнёр",
+            "sender": "Алексей",
+            "sender_role": "основатель",
+            "sender_company": "LocalOS",
+            "observed_fact": "В карточке указаны семейные занятия",
+            "bridge": "У аудиторий есть реальное пересечение",
+            "founder_story": "Мы проверяем совместимость локальных услуг",
+            "next_step": "короткий вариант партнёрского теста",
+            "representation_disclosure": (
+                'Я пишу от LocalOS и представляю бизнес "Шансик" '
+                "в этом партнёрском предложении."
+            ),
+        },
+        {"story": "Мы проверяем совместимость локальных услуг"},
+        [],
+    )
+
+    assert "пишу от LocalOS" in message
+    assert 'представляю бизнес "Шансик"' in message
 
 
 def test_partner_compatibility_is_valid_evidence_without_invented_problem():
