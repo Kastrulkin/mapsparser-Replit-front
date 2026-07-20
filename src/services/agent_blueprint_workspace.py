@@ -809,6 +809,11 @@ def _generate_message_result_with_llm(
     user_id: str = "",
     run_id: str = "",
 ) -> Dict[str, Any]:
+    prompt_version = (
+        "agent_custom_message_draft_v2"
+        if _is_internal_content_draft_workflow(_clean_text(setup.get("workflow_description")))
+        else "agent_custom_message_draft_v1"
+    )
     fallback = _build_message_result_fallback(selected_items, selected_facts, rules, output_format, feedback_notes, _clean_text(setup.get("workflow_description")))
     prompt = _build_message_prompt(setup, selected_items, feedback_notes)
     try:
@@ -834,7 +839,7 @@ def _generate_message_result_with_llm(
             "rules_applied": _clean_list(parsed.get("rules_applied")) or fallback["rules_applied"],
             "analysis_source": "gigachat",
             "analysis_prompt_key": "agent_custom_message_draft",
-            "analysis_prompt_version": "agent_custom_message_draft_v1",
+            "analysis_prompt_version": prompt_version,
             "llm_analysis_used": True,
             "llm_error": "",
             "preparation_method": "ИИ подготовил черновик по данным этого тестового запуска. Внешняя отправка не выполнялась.",
@@ -854,7 +859,7 @@ def _generate_message_result_with_llm(
                 "delivery_state": "not_dispatched",
                 "analysis_source": "generation_failed",
                 "analysis_prompt_key": "agent_custom_message_draft",
-                "analysis_prompt_version": "agent_custom_message_draft_v2",
+                "analysis_prompt_version": prompt_version,
                 "llm_analysis_used": False,
                 "llm_error": str(exc)[:240],
                 "preparation_method": "Черновик не сохранён: генерация не вернула готовый текст. Наружу ничего не отправлялось.",
@@ -863,7 +868,7 @@ def _generate_message_result_with_llm(
             **fallback,
             "analysis_source": "deterministic_fallback",
             "analysis_prompt_key": "agent_custom_message_draft",
-            "analysis_prompt_version": "agent_custom_message_draft_v1",
+            "analysis_prompt_version": prompt_version,
             "llm_analysis_used": False,
             "llm_error": str(exc)[:240],
             "preparation_method": "Черновик подготовлен локальным fallback, потому что ИИ-генерация не вернула готовый текст. Внешняя отправка не выполнялась.",

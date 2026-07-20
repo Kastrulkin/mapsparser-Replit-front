@@ -1027,6 +1027,7 @@ def test_internal_content_draft_uses_business_facts_without_sheet(monkeypatch):
     assert result["draft_text"].startswith("30 июля")
     assert result.get("status") != "needs_source_data"
     assert result["external_dispatch_performed"] is False
+    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v2"
 
 
 def test_internal_content_draft_prioritizes_services_and_positive_review(monkeypatch):
