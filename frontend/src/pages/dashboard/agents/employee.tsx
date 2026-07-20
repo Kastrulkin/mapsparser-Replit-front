@@ -1202,6 +1202,9 @@ export const EmployeeTestResultPanel = ({
 }) => {
   const result = buildEmployeeTestResult(activeRun, pendingApproval);
   const isWorkRun = isAgentWorkRun(activeRun);
+  const [evaluation, setEvaluation] = useState<AgentRun['evaluation']>(activeRun?.evaluation || null);
+  const [evaluationLoading, setEvaluationLoading] = useState(false);
+  const [evaluationError, setEvaluationError] = useState('');
   const chargedCredits = Number(activeRun?.run_billing?.actual_credits || activeRun?.run_billing?.charge_credits || 0);
   const labels = approvalActionLabels(pendingApproval);
   const isBlocked = result.state === 'blocker';
@@ -1211,6 +1214,35 @@ export const EmployeeTestResultPanel = ({
   const canRunAfterGoogleReconnect = Boolean(!canRebuildScenario && googleAccessJustConnected && needsGoogleAccessReconnect);
   const canOpenGoogleAccessReconnect = Boolean(!canRunAfterGoogleReconnect && !canRebuildScenario && needsGoogleAccessReconnect && onOpenGoogleAccessReconnect);
   const canOpenGoogleSheetsSetup = Boolean(!canRebuildScenario && !canOpenGoogleAccessReconnect && needsGoogleSheetsSetup && onOpenGoogleSheetsSetup);
+  const canEvaluate = Boolean(isWorkRun && activeRun?.status === 'completed');
+  useEffect(() => {
+    setEvaluation(activeRun?.evaluation || null);
+    setEvaluationError('');
+  }, [activeRun?.id, activeRun?.evaluation?.rating, activeRun?.evaluation?.feedback]);
+  const submitEvaluation = async (rating: 'useful' | 'not_useful') => {
+    if (!activeRun?.id || evaluationLoading) {
+      return;
+    }
+    setEvaluationLoading(true);
+    setEvaluationError('');
+    try {
+      const response = await api.post(`/agent-runs/${activeRun.id}/feedback`, {
+        trigger_type: 'run_review',
+        rating,
+        feedback: rating === 'useful' ? 'Результат полезен' : 'Результат нужно улучшить',
+      });
+      const savedEvaluation = response.data?.evaluation;
+      setEvaluation({
+        rating: savedEvaluation?.rating === 'not_useful' ? 'not_useful' : 'useful',
+        feedback: typeof savedEvaluation?.feedback === 'string' ? savedEvaluation.feedback : '',
+        created_at: typeof savedEvaluation?.created_at === 'string' ? savedEvaluation.created_at : '',
+      });
+    } catch (requestError) {
+      setEvaluationError(getRequestErrorMessage(requestError, 'Не удалось сохранить оценку результата.'));
+    } finally {
+      setEvaluationLoading(false);
+    }
+  };
   const rerunLabel = canRebuildScenario
     ? 'Пересобрать сценарий'
     : canRunAfterGoogleReconnect
@@ -1327,6 +1359,42 @@ export const EmployeeTestResultPanel = ({
       {!result.resultPayload && !result.output ? (
         <div className="mt-5 rounded-xl bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
           Результат не был сохранён. Запустите тест ещё раз или откройте настройки для диагностики.
+        </div>
+      ) : null}
+
+      {canEvaluate ? (
+        <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-4 shadow-[inset_0_0_0_1px_rgba(5,150,105,0.16)]">
+          <div className="text-sm font-semibold text-slate-950">Помог ли результат?</div>
+          <div className="mt-1 text-sm leading-6 text-slate-600">
+            Оценка относится только к этой работе и не изменяет сценарий агента.
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={evaluation?.rating === 'useful' ? 'default' : 'outline'}
+              onClick={() => submitEvaluation('useful')}
+              disabled={actionLoading || evaluationLoading}
+            >
+              {evaluationLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              Да, результат полезен
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={evaluation?.rating === 'not_useful' ? 'default' : 'outline'}
+              onClick={() => submitEvaluation('not_useful')}
+              disabled={actionLoading || evaluationLoading}
+            >
+              Нужно улучшить
+            </Button>
+          </div>
+          {evaluation?.rating ? (
+            <div className="mt-3 text-xs font-medium text-emerald-800">Спасибо. Оценка сохранена.</div>
+          ) : null}
+          {evaluationError ? (
+            <div className="mt-3 text-sm text-rose-700">{evaluationError}</div>
+          ) : null}
         </div>
       ) : null}
 
@@ -1801,6 +1869,10 @@ export const EmployeeAgentScenarioPanel = ({
   const approvals = working?.approval_boundaries || [];
   const expectedProperties = recordValue(working?.expected_result?.properties);
   const resultFields = Object.keys(expectedProperties || working?.expected_result || {}).filter((key) => !['schema', 'trigger', 'schedule', 'type', 'properties'].includes(key));
+  const businessResultFields = resultFields.filter((key) => !['approval_required', 'artifacts', 'result'].includes(key));
+  const savedResultDescription = businessResultFields.length
+    ? `${businessResultFields.map((key) => resultFieldLabels[key] || humanizeMeta(key)).join(', ')}. История выполненных шагов сохраняется автоматически.`
+    : 'Готовый результат и материалы этой работы. История выполненных шагов сохраняется автоматически.';
   const sourceLabels = (working?.sources || []).map((source) => {
     if (typeof source === 'string') return connectorLabel(source);
     const item = recordValue(source);
@@ -1863,7 +1935,7 @@ export const EmployeeAgentScenarioPanel = ({
           {inputs.length ? <ul className="space-y-2 text-sm text-slate-700">{inputs.map(([key, field]) => <li key={key}><span className="font-semibold text-slate-900">{field.title || key}</span>{field.description ? ` — ${field.description}` : ''}</li>)}</ul> : <p className="text-sm text-slate-600">Дополнительные параметры не требуются.</p>}
         </EmployeeWorkspaceSection>
         <EmployeeWorkspaceSection title="Что сохраняет">
-          <p className="text-sm leading-6 text-slate-700">{resultFields.length ? resultFields.map((key) => resultFieldLabels[key] || humanizeMeta(key)).join(', ') : 'Готовый результат и историю выполненных шагов.'}</p>
+          <p className="text-sm leading-6 text-slate-700">{savedResultDescription}</p>
         </EmployeeWorkspaceSection>
       </div>
       <EmployeeWorkspaceSection title="Ручной контроль" tone={approvals.length ? 'attention' : 'quiet'}>

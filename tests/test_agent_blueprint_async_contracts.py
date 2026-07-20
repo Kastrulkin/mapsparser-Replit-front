@@ -6,6 +6,142 @@ from tests.agent_blueprint_fakes import *  # noqa: F403
 from tests.source_contract_helpers import read_agent_blueprints_frontend_source
 
 
+def test_agent_run_evaluation_replaces_same_run_without_creating_version_feedback():
+    from api.agent_blueprints_api import _find_run_evaluation, _upsert_run_evaluation_history
+
+    history = [
+        {"kind": "version_feedback", "run_id": "run-1", "feedback": "Изменить правило"},
+        {"kind": "run_evaluation", "run_id": "run-1", "rating": "not_useful"},
+        {"kind": "run_evaluation", "run_id": "run-2", "rating": "useful"},
+    ]
+    updated = _upsert_run_evaluation_history(
+        history,
+        {"kind": "run_evaluation", "run_id": "run-1", "rating": "useful"},
+    )
+
+    assert len(updated) == 3
+    assert _find_run_evaluation(updated, "run-1")["rating"] == "useful"
+    assert _find_run_evaluation(updated, "run-2")["rating"] == "useful"
+    assert updated[0]["kind"] == "version_feedback"
+
+
+def test_agent_run_evaluation_endpoint_is_idempotent_and_work_run_only(monkeypatch):
+    from flask import Flask
+    from api import agent_blueprints_api
+
+    class Cursor:
+        def __init__(self):
+            self.run = {
+                "id": "run-1",
+                "blueprint_id": "bp-1",
+                "blueprint_version_id": "version-1",
+                "status": "completed",
+                "input_json": {"preview_mode": False},
+            }
+            self.result = None
+            self.metadata = {"run_evaluations": []}
+
+        def execute(self, query, params=None):
+            normalized = " ".join(query.split()).lower()
+            if normalized.startswith("select * from agent_runs"):
+                self.result = dict(self.run)
+                return
+            if normalized.startswith("update agent_blueprints"):
+                self.metadata = json.loads(params[0])
+                self.result = None
+                return
+            raise AssertionError(f"Unexpected SQL: {query}")
+
+        def fetchone(self):
+            return self.result
+
+    class Connection:
+        def __init__(self, cursor):
+            self.test_cursor = cursor
+            self.commits = 0
+            self.rollbacks = 0
+
+        def cursor(self):
+            return self.test_cursor
+
+        def commit(self):
+            self.commits += 1
+
+        def rollback(self):
+            self.rollbacks += 1
+
+    class Database:
+        def __init__(self, connection):
+            self.conn = connection
+
+        def close(self):
+            return None
+
+    cursor = Cursor()
+    connection = Connection(cursor)
+    database = Database(connection)
+    monkeypatch.setattr(agent_blueprints_api, "DatabaseManager", lambda: database)
+    monkeypatch.setattr(agent_blueprints_api, "_require_auth", lambda: ({"user_id": "user-1"}, None))
+    monkeypatch.setattr(
+        agent_blueprints_api,
+        "_require_blueprint_access",
+        lambda _cursor, _blueprint_id, _user_data: (
+            {"id": "bp-1", "business_id": "biz-1", "metadata_json": cursor.metadata},
+            None,
+        ),
+    )
+    app = Flask(__name__)
+    app.register_blueprint(agent_blueprints_api.agent_blueprints_bp)
+    client = app.test_client()
+
+    first = client.post(
+        "/api/agent-runs/run-1/feedback",
+        json={"trigger_type": "run_review", "rating": "not_useful"},
+    )
+    second = client.post(
+        "/api/agent-runs/run-1/feedback",
+        json={"trigger_type": "run_review", "rating": "useful"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.get_json()["version_created"] is False
+    assert connection.commits == 2
+    assert len(cursor.metadata["run_evaluations"]) == 1
+    assert cursor.metadata["run_evaluations"][0]["rating"] == "useful"
+
+    cursor.run["input_json"] = {"preview_mode": True}
+    preview = client.post(
+        "/api/agent-runs/run-1/feedback",
+        json={"trigger_type": "run_review", "rating": "useful"},
+    )
+    assert preview.status_code == 400
+    assert preview.get_json()["code"] == "AGENT_PREVIEW_EVALUATION_NOT_ALLOWED"
+
+    cursor.run["input_json"] = {"preview_mode": False}
+    cursor.run["status"] = "running"
+    running = client.post(
+        "/api/agent-runs/run-1/feedback",
+        json={"trigger_type": "run_review", "rating": "useful"},
+    )
+    assert running.status_code == 409
+    assert running.get_json()["code"] == "AGENT_RUN_EVALUATION_NOT_READY"
+
+
+def test_agent_result_ui_collects_beta_evaluation_without_version_change():
+    source = read_agent_blueprints_frontend_source()
+    api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
+
+    assert "Помог ли результат?" in source
+    assert "Да, результат полезен" in source
+    assert "Оценка относится только к этой работе и не изменяет сценарий агента." in source
+    assert "trigger_type: 'run_review'" in source
+    assert '"version_created": False' in api_source
+    assert "AGENT_PREVIEW_EVALUATION_NOT_ALLOWED" in api_source
+    assert 'feedback_item->>\'kind\' = \'run_evaluation\'' in api_source
+    assert "metadata.get(\"run_evaluations\")" in api_source
+
+
 def test_agent_run_contract_hides_service_fields_and_requires_content_plan_date():
     from services.agent_run_contract import effective_agent_input_schema, validate_agent_run_input
 
@@ -373,6 +509,8 @@ def test_agent_async_runtime_contract_is_wired_end_to_end():
     assert "execution_contract" in frontend_source
     assert "EmployeeAgentScenarioPanel" in frontend_source
     assert "const working = contract?.candidate || contract?.active;" in frontend_source
+    assert "!['approval_required', 'artifacts', 'result'].includes(key)" in frontend_source
+    assert "Готовый результат и материалы этой работы. История выполненных шагов сохраняется автоматически." in frontend_source
     assert "Обновить по цели" in frontend_source
     assert "Рабочая версия не включена" in frontend_source
     assert "2xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]" in frontend_source
@@ -588,7 +726,7 @@ def test_agent_api_rejects_cross_business_resource_ids_before_loading_content(mo
 def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consistency(monkeypatch):
     from api import agent_blueprints_api
 
-    now = datetime(2026, 7, 19, 12, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 19, 15, 21, tzinfo=timezone.utc)
 
     class Cursor:
         def __init__(self):
@@ -707,7 +845,7 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
                         "event_id": "event-1",
                         "event_status": "run_started",
                         "payload_json": {"schedule_date": "2026-07-19", "schedule_time": "17:50"},
-                        "event_created_at": now,
+                        "event_created_at": datetime(2026, 7, 19, 14, 51, tzinfo=timezone.utc),
                         "run_id": "run-1",
                         "run_status": "completed",
                         "run_version_id": "version-1",
@@ -775,7 +913,14 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
                     "last_event_at": now,
                 }
             elif "from agent_integrations" in normalized:
-                self.result = {"active": 5, "inactive": 2}
+                assert "left join externalbusinessaccounts" in normalized
+                self.result = {
+                    "active": 5,
+                    "inactive": 2,
+                    "ready": 3,
+                    "reconnect_required": 1,
+                    "missing_auth": 1,
+                }
             elif "from operatorcreditreservations" in normalized:
                 self.result = {
                     "active_reservations": 1,
@@ -811,7 +956,7 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
     monkeypatch.setenv("AGENT_SCHEDULE_DISPATCH_ENABLED", "true")
     monkeypatch.setenv("AGENT_BETA_BUSINESS_IDS", "biz-1,biz-2,biz-3")
 
-    runtime = agent_blueprints_api._admin_agent_runtime_overview(Cursor())
+    runtime = agent_blueprints_api._admin_agent_runtime_overview(Cursor(), now=now)
 
     assert runtime["flags"]["async_runs_enabled"] is True
     assert runtime["flags"]["schedule_dispatch_enabled"] is True
@@ -819,6 +964,9 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
     assert runtime["runs"]["billing_bound_runs"] == 3
     assert runtime["billing"]["charged_credits"] == 3
     assert runtime["billing"]["active_reservations"] == 1
+    assert runtime["integrations"]["ready"] == 3
+    assert runtime["integrations"]["reconnect_required"] == 1
+    assert runtime["integrations"]["missing_auth"] == 1
     pilots = {item["business_id"]: item for item in runtime["beta_pilots"]}
     assert pilots["biz-1"]["success_rate"] == 90.0
     assert pilots["biz-1"]["status"] == "passed"
@@ -833,14 +981,123 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
     assert runtime["scheduler"]["recent_events"][0]["timezone"] == "Europe/Tallinn"
     canaries = {item["blueprint_id"]: item for item in runtime["scheduler"]["canaries"]}
     assert canaries["bp-1"]["successful_days"] == 1
-    assert canaries["bp-1"]["status"] == "observing"
+    assert canaries["bp-1"]["status"] == "attention"
     assert canaries["bp-1"]["duplicate_runs"] == 1
     assert canaries["bp-1"]["failed_events"] == 1
     assert canaries["bp-1"]["old_version_runs"] == 0
+    assert canaries["bp-1"]["start_delay_limit_minutes"] == 15
     assert canaries["bp-2"]["successful_days"] == 7
     assert canaries["bp-2"]["status"] == "passed"
     assert runtime["consistency"]["archived_unfinished_runs"] == 4
     assert runtime["recent_issues"][0]["error"] == "provider timeout"
+
+
+def test_scheduler_canary_recovers_deferred_slot_and_rejects_late_start():
+    from api.agent_blueprints_api import _build_scheduler_canaries
+
+    base = {
+        "blueprint_id": "bp-1",
+        "business_id": "biz-1",
+        "agent_name": "Canary",
+        "business_name": "Riderra",
+        "active_version_id": "version-1",
+        "active_version_updated_at": "2026-07-20T10:00:00Z",
+        "execution_mode_confirmed_at": "2026-07-20T10:05:00Z",
+        "schedule_json": {"time": "17:50", "timezone": "Europe/Tallinn"},
+        "reason_code": None,
+        "run_version_id": "version-1",
+    }
+    rows = [
+        {
+            **base,
+            "event_id": "deferred",
+            "event_status": "failed",
+            "reason_code": "AGENT_RUN_ALREADY_IN_PROGRESS",
+            "payload_json": {
+                "schedule_date": "2026-07-20",
+                "schedule_time": "17:50",
+                "timezone": "Europe/Tallinn",
+            },
+            "event_created_at": datetime(2026, 7, 20, 14, 50, tzinfo=timezone.utc),
+            "run_id": "",
+            "run_status": "",
+        },
+        {
+            **base,
+            "event_id": "recovered",
+            "event_status": "run_started",
+            "payload_json": {
+                "schedule_date": "2026-07-20",
+                "schedule_time": "17:50",
+                "timezone": "Europe/Tallinn",
+            },
+            "event_created_at": datetime(2026, 7, 20, 14, 55, tzinfo=timezone.utc),
+            "run_id": "run-1",
+            "run_status": "completed",
+        },
+    ]
+
+    canary = _build_scheduler_canaries(
+        rows,
+        now=datetime(2026, 7, 20, 15, 0, tzinfo=timezone.utc),
+    )[0]
+
+    assert canary["successful_days"] == 1
+    assert canary["deferred_events"] == 1
+    assert canary["recovered_deferred_events"] == 1
+    assert canary["unresolved_deferred_events"] == 0
+    assert canary["max_start_delay_minutes"] == 5
+    assert canary["status"] == "observing"
+
+    rows[1]["event_created_at"] = datetime(2026, 7, 20, 15, 21, tzinfo=timezone.utc)
+    late_canary = _build_scheduler_canaries(
+        rows,
+        now=datetime(2026, 7, 20, 15, 25, tzinfo=timezone.utc),
+    )[0]
+
+    assert late_canary["late_runs"] == 1
+    assert late_canary["max_start_delay_minutes"] == 31
+    assert late_canary["successful_days"] == 0
+    assert late_canary["status"] == "attention"
+
+
+def test_scheduler_canary_ignores_activation_day_slot_that_already_passed():
+    from api.agent_blueprints_api import _build_scheduler_canaries
+
+    rows = [
+        {
+            "blueprint_id": "bp-1",
+            "business_id": "biz-1",
+            "agent_name": "Canary",
+            "business_name": "Riderra",
+            "active_version_id": "version-1",
+            "active_version_updated_at": "2026-07-20T15:05:00Z",
+            "execution_mode_confirmed_at": "2026-07-20T15:00:00Z",
+            "schedule_json": {"time": "17:50", "timezone": "Europe/Tallinn"},
+            "event_id": "late-activation-run",
+            "event_status": "run_started",
+            "reason_code": None,
+            "payload_json": {
+                "schedule_date": "2026-07-20",
+                "schedule_time": "17:50",
+                "timezone": "Europe/Tallinn",
+            },
+            "event_created_at": datetime(2026, 7, 20, 15, 10),
+            "run_id": "run-1",
+            "run_status": "completed",
+            "run_version_id": "version-1",
+        }
+    ]
+
+    canary = _build_scheduler_canaries(
+        rows,
+        now=datetime(2026, 7, 20, 15, 20, tzinfo=timezone.utc),
+    )[0]
+
+    assert canary["successful_days"] == 0
+    assert canary["successful_dates"] == []
+    assert canary["missed_dates"] == []
+    assert canary["status"] == "observing"
 
 
 def test_agent_beta_reconciliation_supersedes_archived_unfinished_runs():
@@ -889,6 +1146,9 @@ def test_admin_agents_ui_exposes_runtime_health():
     assert "recent_events" in source
     assert "Проверка работы по расписанию" in source
     assert "successful_days" in source
+    assert "late_runs" in source
+    assert "missed_dates" in source
+    assert "recovered_deferred_events" in source
     assert "Пилот Agents Beta" in source
     assert "beta_pilots" in source
     assert "missing_result_runs" in source

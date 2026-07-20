@@ -172,8 +172,14 @@ interface AdminAgentSchedulerCanary {
   last_success_date?: string;
   failed_events: number;
   deferred_events: number;
+  recovered_deferred_events: number;
+  unresolved_deferred_events: number;
   old_version_runs: number;
   duplicate_runs: number;
+  late_runs: number;
+  max_start_delay_minutes: number;
+  start_delay_limit_minutes: number;
+  missed_dates: string[];
   status: 'observing' | 'attention' | 'passed';
   last_event_at?: string;
 }
@@ -233,6 +239,9 @@ interface AdminAgentRuntimeOverview {
   integrations: {
     active: number;
     inactive: number;
+    ready: number;
+    reconnect_required: number;
+    missing_auth: number;
   };
   billing: {
     active_reservations: number;
@@ -1560,7 +1569,17 @@ export const AdminPage: React.FC = () => {
                 <span>Фоновая очередь: <strong className="text-slate-900">{agentRuntime?.flags.async_runs_enabled ? 'включена' : 'выключена'}</strong></span>
                 <span>Расписание: <strong className="text-slate-900">{agentRuntime?.flags.schedule_dispatch_enabled ? 'включено' : 'выключено'}</strong></span>
                 <span>Beta-бизнесов: <strong className="tabular-nums text-slate-900">{agentRuntime?.flags.beta_businesses_count || 0}</strong></span>
-                <span>Активных подключений: <strong className="tabular-nums text-slate-900">{agentRuntime?.integrations.active || 0}</strong></span>
+                <span>Готовых подключений: <strong className="tabular-nums text-slate-900">{agentRuntime?.integrations.ready || 0}</strong></span>
+                {(agentRuntime?.integrations.reconnect_required || 0) > 0 ? (
+                  <span className="text-amber-800">
+                    Требуют переподключения: <strong className="tabular-nums">{agentRuntime?.integrations.reconnect_required || 0}</strong>
+                  </span>
+                ) : null}
+                {(agentRuntime?.integrations.missing_auth || 0) > 0 ? (
+                  <span className="text-amber-800">
+                    Без доступа: <strong className="tabular-nums">{agentRuntime?.integrations.missing_auth || 0}</strong>
+                  </span>
+                ) : null}
               </div>
 
               {(agentRuntime?.beta_pilots || []).length > 0 ? (
@@ -1633,7 +1652,10 @@ export const AdminPage: React.FC = () => {
                       const passed = canary.status === 'passed';
                       const issueParts = [
                         canary.failed_events ? `${canary.failed_events} ошибок` : '',
-                        canary.deferred_events ? `${canary.deferred_events} отложено` : '',
+                        canary.unresolved_deferred_events ? `${canary.unresolved_deferred_events} ожидают повторения` : '',
+                        canary.recovered_deferred_events ? `${canary.recovered_deferred_events} восстановлено` : '',
+                        canary.late_runs ? `${canary.late_runs} с опозданием до ${canary.max_start_delay_minutes} мин` : '',
+                        (canary.missed_dates || []).length ? `${canary.missed_dates.length} пропущено` : '',
                         canary.duplicate_runs ? `${canary.duplicate_runs} дублей` : '',
                         canary.old_version_runs ? `${canary.old_version_runs} запусков старой версии` : '',
                       ].filter(Boolean);
