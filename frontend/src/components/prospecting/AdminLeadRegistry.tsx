@@ -1874,25 +1874,25 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
                 {selectedWorkstream.workstream_type === 'client_partnership' ? (
                   <fieldset className="mt-3 rounded-md bg-white p-3">
-                    <legend className="px-1 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Кто обращается к партнёру</legend>
+                    <legend className="text-balance px-1 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Кто обращается к партнёру</legend>
                     <div className="mt-2 grid gap-2 sm:grid-cols-2">
                       <button
                         type="button"
                         aria-pressed={senderMode === 'partner_business'}
                         onClick={() => updateSenderMode('partner_business')}
-                        className={`min-h-20 rounded-md border p-3 text-left transition-colors ${senderMode === 'partner_business' ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                        className={`min-h-20 rounded-md border p-3 text-left transition-[transform,background-color,border-color] active:scale-[0.96] ${senderMode === 'partner_business' ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
                       >
                         <span className="block text-sm font-semibold text-slate-950">Сам бизнес</span>
-                        <span className="mt-1 block text-xs leading-5 text-slate-600">Сообщение и подключённый аккаунт принадлежат {selectedWorkstream.client_business_name || 'этому бизнесу'}.</span>
+                        <span className="mt-1 block text-pretty text-xs leading-5 text-slate-600">Сообщение и подключённый аккаунт принадлежат {selectedWorkstream.client_business_name || 'этому бизнесу'}.</span>
                       </button>
                       <button
                         type="button"
                         aria-pressed={senderMode === 'localos_for_partner'}
                         onClick={() => updateSenderMode('localos_for_partner')}
-                        className={`min-h-20 rounded-md border p-3 text-left transition-colors ${senderMode === 'localos_for_partner' ? 'border-orange-300 bg-orange-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                        className={`min-h-20 rounded-md border p-3 text-left transition-[transform,background-color,border-color] active:scale-[0.96] ${senderMode === 'localos_for_partner' ? 'border-orange-300 bg-orange-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
                       >
                         <span className="block text-sm font-semibold text-slate-950">LocalOS представляет бизнес</span>
-                        <span className="mt-1 block text-xs leading-5 text-slate-600">Отправляем с аккаунта LocalOS и прямо называем {selectedWorkstream.client_business_name || 'бизнес'}, который представляет LocalOS.</span>
+                        <span className="mt-1 block text-pretty text-xs leading-5 text-slate-600">Отправляем с аккаунта LocalOS и прямо называем {selectedWorkstream.client_business_name || 'бизнес'}, который представляет LocalOS.</span>
                       </button>
                     </div>
                     {senderMode === 'localos_for_partner' ? (
