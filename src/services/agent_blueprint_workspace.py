@@ -824,7 +824,7 @@ def _generate_message_result_with_llm(
         if not draft_text:
             raise ValueError("LLM response does not contain draft text")
         summary = _clean_list(parsed.get("summary")) or selected_facts[:3]
-        checklist = _clean_list(parsed.get("checklist")) or ["Проверить факты по строке таблицы перед отправкой."]
+        checklist = _clean_list(parsed.get("checklist")) or ["Проверить факты и тон перед использованием."]
         return {
             **fallback,
             "title": _clean_text(parsed.get("title")) or fallback["title"],
@@ -841,6 +841,24 @@ def _generate_message_result_with_llm(
         }
     except Exception:
         exc = sys.exc_info()[1]
+        if _is_internal_content_draft_workflow(_clean_text(setup.get("workflow_description"))):
+            return {
+                "title": "Не удалось подготовить черновик",
+                "status": "generation_failed",
+                "summary": ["Источники прочитаны, но готовый текст не был сформирован."],
+                "next_questions": ["Запустите тест ещё раз. Если ошибка повторится, откройте технические детали запуска."],
+                "rules_applied": [rules] if rules else [],
+                "format": output_format,
+                "feedback_notes": feedback_notes,
+                "external_dispatch_performed": False,
+                "delivery_state": "not_dispatched",
+                "analysis_source": "generation_failed",
+                "analysis_prompt_key": "agent_custom_message_draft",
+                "analysis_prompt_version": "agent_custom_message_draft_v2",
+                "llm_analysis_used": False,
+                "llm_error": str(exc)[:240],
+                "preparation_method": "Черновик не сохранён: генерация не вернула готовый текст. Наружу ничего не отправлялось.",
+            }
         return {
             **fallback,
             "analysis_source": "deterministic_fallback",
@@ -885,10 +903,19 @@ def _build_message_prompt(setup: Dict[str, Any], selected_items: List[Dict[str, 
         "feedback_notes": feedback_notes,
         "sources": _message_context(selected_items),
     }
+    content_contract = ""
+    if _is_internal_content_draft_workflow(_clean_text(setup.get("workflow_description"))):
+        content_contract = (
+            " Верни именно готовый черновик новости или поста, который можно передать владельцу на проверку."
+            " Не пиши анализ источников, отчёт о том, что было найдено, или рекомендации бизнесу вместо самого текста."
+            " Выбери один связный положительный или нейтральный факт. Не превращай жалобы и низкие оценки в рекламный сюжет,"
+            " если пользователь прямо не попросил разобрать проблему. Черновик должен быть короче 700 знаков."
+        )
     return (
         "Ты готовишь безопасный черновик сообщения для LocalOS AI employee test run. "
         "Используй только предоставленные строки источника, не придумывай факты и не выполняй отправку. "
         "Если данных мало, напиши аккуратный короткий черновик только на основе доступных полей. "
+        f"{content_contract} "
         "Верни только JSON без markdown с полями: "
         "title, draft_text, summary(list), checklist(list), rules_applied(list). "
         "draft_text должен быть конкретным сообщением, готовым для проверки владельцем бизнеса.\n\n"
@@ -1010,6 +1037,8 @@ def _select_message_items(extracted: List[Dict[str, Any]], workflow: str) -> Lis
                 if any(marker in _message_item_text(item).lower() for marker in month_markers)
             ]
             return by_month or by_day
+    if internal_content:
+        return _select_internal_content_items(candidates, workflow_lower)
     preferred_markers = month_markers
     preferred = [
         item
@@ -1017,6 +1046,44 @@ def _select_message_items(extracted: List[Dict[str, Any]], workflow: str) -> Lis
         if any(marker in _message_item_text(item).lower() for marker in preferred_markers)
     ]
     return preferred or candidates[:5]
+
+
+def _select_internal_content_items(candidates: List[Dict[str, Any]], workflow: str) -> List[Dict[str, Any]]:
+    wants_problem_story = any(marker in workflow for marker in ["негатив", "жалоб", "проблем", "ошибк", "критик"])
+    services = [item for item in candidates if _clean_text(item.get("source_name")).lower() == "services"]
+    reviews = [
+        item
+        for item in candidates
+        if _clean_text(item.get("source_name")).lower() in {"reviews", "external_reviews"}
+    ]
+    profiles = [item for item in candidates if _clean_text(item.get("source_name")).lower() == "business_profile"]
+    others = [item for item in candidates if item not in services and item not in reviews and item not in profiles]
+
+    if wants_problem_story:
+        eligible_reviews = sorted(reviews, key=lambda item: _review_rating(item) or 6)
+    else:
+        eligible_reviews = [item for item in reviews if _review_rating(item) >= 4]
+
+    selected = services[:3] + eligible_reviews[:1] + profiles[:1]
+    selected_ids = {id(item) for item in selected}
+    fill_pool = services[3:] + eligible_reviews[1:] + others
+    for item in fill_pool:
+        if len(selected) >= 5:
+            break
+        if id(item) not in selected_ids:
+            selected.append(item)
+            selected_ids.add(id(item))
+    if not any(item in services or item in eligible_reviews or item in others for item in selected):
+        return []
+    return selected[:5]
+
+
+def _review_rating(item: Dict[str, Any]) -> int:
+    raw = item.get("raw") if isinstance(item.get("raw"), dict) else {}
+    try:
+        return int(float(raw.get("rating") or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _requested_date_markers(workflow: str) -> tuple[str, List[str]]:

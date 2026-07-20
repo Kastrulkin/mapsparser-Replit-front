@@ -1029,6 +1029,70 @@ def test_internal_content_draft_uses_business_facts_without_sheet(monkeypatch):
     assert result["external_dispatch_performed"] is False
 
 
+def test_internal_content_draft_prioritizes_services_and_positive_review(monkeypatch):
+    import services.agent_blueprint_workspace as workspace
+
+    captured = {}
+
+    def fake_analysis(prompt, **kwargs):
+        captured["prompt"] = prompt
+        return json.dumps(
+            {
+                "title": "Новость салона",
+                "draft_text": "30 июля рассказываем о детской стрижке и бережном подходе мастеров.",
+                "summary": ["Использована услуга и положительный отзыв."],
+                "checklist": ["Проверить дату."],
+                "rules_applied": ["Не публиковать автоматически."],
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr(workspace, "analyze_text_with_gigachat", fake_analysis)
+    result = workspace._render_output(
+        "custom",
+        {
+            "workflow_description": "Подготовь внутренний черновик новости. Ничего не публикуй и не отправляй.",
+            "processing_rules": "Используй только подтверждённые факты",
+            "output_format": "Черновик новости",
+        },
+        [
+            {"source_name": "reviews", "summary": "rating: 2; text: долго ждали", "raw": {"rating": 2, "text": "Долго ждали"}},
+            {"source_name": "services", "summary": "name: Детская стрижка", "raw": {"name": "Детская стрижка"}},
+            {"source_name": "reviews", "summary": "rating: 5; text: бережный мастер", "raw": {"rating": 5, "text": "Бережный мастер"}},
+            {"source_name": "business_profile", "summary": "name: Весёлая расчёска", "raw": {"name": "Весёлая расчёска"}},
+        ],
+        [],
+        {"business_id": "biz-1", "user_id": "user-1", "run_id": "run-1"},
+    )
+
+    assert result["draft_text"].startswith("30 июля")
+    assert "Детская стрижка" in captured["prompt"]
+    assert "Бережный мастер" in captured["prompt"]
+    assert "Долго ждали" not in captured["prompt"]
+    assert "Не пиши анализ источников" in captured["prompt"]
+
+
+def test_internal_content_generation_failure_does_not_save_raw_fallback(monkeypatch):
+    import services.agent_blueprint_workspace as workspace
+
+    monkeypatch.setattr(workspace, "analyze_text_with_gigachat", lambda *args, **kwargs: "not-json")
+    result = workspace._render_output(
+        "custom",
+        {
+            "workflow_description": "Подготовь внутренний черновик новости. Ничего не публикуй и не отправляй.",
+            "processing_rules": "Используй только подтверждённые факты",
+            "output_format": "Черновик новости",
+        },
+        [{"source_name": "services", "summary": "name: Детская стрижка", "raw": {"name": "Детская стрижка"}}],
+        [],
+        {},
+    )
+
+    assert result["status"] == "generation_failed"
+    assert "draft_text" not in result
+    assert result["external_dispatch_performed"] is False
+
+
 def test_internal_content_draft_requests_facts_instead_of_table():
     from services.agent_blueprint_workspace import _render_output
 
