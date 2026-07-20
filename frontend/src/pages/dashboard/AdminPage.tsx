@@ -158,6 +158,26 @@ interface AdminAgentSchedulerEvent {
   created_at?: string;
 }
 
+interface AdminAgentSchedulerCanary {
+  blueprint_id: string;
+  business_id: string;
+  agent_name: string;
+  business_name: string;
+  active_version_id: string;
+  schedule_time: string;
+  timezone: string;
+  target_days: number;
+  successful_days: number;
+  successful_dates: string[];
+  last_success_date?: string;
+  failed_events: number;
+  deferred_events: number;
+  old_version_runs: number;
+  duplicate_runs: number;
+  status: 'observing' | 'attention' | 'passed';
+  last_event_at?: string;
+}
+
 interface AdminAgentRuntimeOverview {
   flags: {
     async_runs_enabled: boolean;
@@ -183,6 +203,7 @@ interface AdminAgentRuntimeOverview {
     deferred_24h: number;
     last_event_at?: string;
     recent_events: AdminAgentSchedulerEvent[];
+    canaries: AdminAgentSchedulerCanary[];
   };
   consistency: {
     archived_unfinished_runs: number;
@@ -1520,6 +1541,55 @@ export const AdminPage: React.FC = () => {
                 <span>Beta-бизнесов: <strong className="tabular-nums text-slate-900">{agentRuntime?.flags.beta_businesses_count || 0}</strong></span>
                 <span>Активных подключений: <strong className="tabular-nums text-slate-900">{agentRuntime?.integrations.active || 0}</strong></span>
               </div>
+
+              {(agentRuntime?.scheduler.canaries || []).length > 0 ? (
+                <div className="mt-4 border-t border-slate-200 pt-4">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <h4 className="text-sm font-semibold text-slate-900">Проверка работы по расписанию</h4>
+                    <span className="text-xs text-slate-500">Нужно 7 последовательных дней без пропусков и дублей</span>
+                  </div>
+                  <div className="mt-2 divide-y divide-slate-100">
+                    {(agentRuntime?.scheduler.canaries || []).map((canary) => {
+                      const hasIssues = canary.status === 'attention';
+                      const passed = canary.status === 'passed';
+                      const issueParts = [
+                        canary.failed_events ? `${canary.failed_events} ошибок` : '',
+                        canary.deferred_events ? `${canary.deferred_events} отложено` : '',
+                        canary.duplicate_runs ? `${canary.duplicate_runs} дублей` : '',
+                        canary.old_version_runs ? `${canary.old_version_runs} запусков старой версии` : '',
+                      ].filter(Boolean);
+                      return (
+                        <div key={canary.blueprint_id} className="grid gap-2 py-3 text-sm md:grid-cols-[minmax(220px,1fr)_minmax(180px,0.7fr)_minmax(210px,0.9fr)] md:items-center">
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold text-slate-900">{canary.agent_name}</div>
+                            <button type="button" onClick={() => handleBusinessClick(canary.business_id)} className="truncate text-xs text-slate-500 underline-offset-4 hover:underline">
+                              {canary.business_name}
+                            </button>
+                          </div>
+                          <div className="text-slate-600 tabular-nums">
+                            {canary.schedule_time || 'Время не записано'}
+                            <div className="text-xs text-slate-500">{canary.timezone || 'Часовой пояс не записан'}</div>
+                          </div>
+                          <div>
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${passed ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : hasIssues ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-sky-200 bg-sky-50 text-sky-700'}`}>
+                              {passed ? 'Проверка пройдена' : `${canary.successful_days} из ${canary.target_days} дней`}
+                            </span>
+                            <div className={`mt-1 text-xs ${hasIssues ? 'text-amber-800' : 'text-slate-500'}`}>
+                              {passed && canary.last_success_date
+                                ? `Последний результат: ${canary.last_success_date}`
+                                : issueParts.length > 0
+                                  ? issueParts.join(' · ')
+                                  : canary.last_success_date
+                                    ? `Последний результат: ${canary.last_success_date}`
+                                    : 'Ожидаем первый запуск'}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
 
               {(agentRuntime?.consistency.archived_unfinished_runs || agentRuntime?.consistency.waiting_without_pending_approval) ? (
                 <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">

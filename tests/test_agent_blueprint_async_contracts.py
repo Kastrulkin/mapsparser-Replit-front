@@ -633,6 +633,91 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
                         "run_status": "completed",
                     }
                 ]
+            elif normalized.startswith("select b.id blueprint_id"):
+                self.result = None
+                base_canary = {
+                    "blueprint_id": "bp-1",
+                    "business_id": "biz-1",
+                    "agent_name": "Проверка таблицы",
+                    "business_name": "Riderra",
+                    "active_version_id": "version-1",
+                    "active_version_updated_at": "2026-07-12T10:00:00Z",
+                    "schedule_json": {"time": "17:50", "timezone": "Europe/Tallinn"},
+                    "reason_code": None,
+                }
+                passed_canary = {
+                    **base_canary,
+                    "blueprint_id": "bp-2",
+                    "agent_name": "Ежедневная проверка карточки",
+                    "active_version_id": "version-2",
+                    "active_version_updated_at": "2026-07-10T10:00:00Z",
+                    "schedule_json": {"time": "18:20", "timezone": "Europe/Tallinn"},
+                }
+                self.results = [
+                    {
+                        **base_canary,
+                        "event_id": "event-1",
+                        "event_status": "run_started",
+                        "payload_json": {"schedule_date": "2026-07-19", "schedule_time": "17:50"},
+                        "event_created_at": now,
+                        "run_id": "run-1",
+                        "run_status": "completed",
+                        "run_version_id": "version-1",
+                    },
+                    {
+                        **base_canary,
+                        "event_id": "event-failed",
+                        "event_status": "failed",
+                        "payload_json": {"schedule_date": "2026-07-18", "schedule_time": "17:50"},
+                        "event_created_at": datetime(2026, 7, 18, 12, 0, tzinfo=timezone.utc),
+                        "run_id": "",
+                        "run_status": "",
+                        "run_version_id": "",
+                    },
+                    {
+                        **base_canary,
+                        "event_id": "event-duplicate-1",
+                        "event_status": "run_started",
+                        "payload_json": {"schedule_date": "2026-07-17", "schedule_time": "17:50"},
+                        "event_created_at": datetime(2026, 7, 17, 12, 0, tzinfo=timezone.utc),
+                        "run_id": "run-duplicate-1",
+                        "run_status": "completed",
+                        "run_version_id": "version-1",
+                    },
+                    {
+                        **base_canary,
+                        "event_id": "event-duplicate-2",
+                        "event_status": "run_started",
+                        "payload_json": {"schedule_date": "2026-07-17", "schedule_time": "17:50"},
+                        "event_created_at": datetime(2026, 7, 17, 12, 1, tzinfo=timezone.utc),
+                        "run_id": "run-duplicate-2",
+                        "run_status": "completed",
+                        "run_version_id": "version-1",
+                    },
+                    {
+                        **base_canary,
+                        "event_id": "event-before-activation",
+                        "event_status": "run_started",
+                        "payload_json": {"schedule_date": "2026-07-11", "schedule_time": "17:50"},
+                        "event_created_at": datetime(2026, 7, 11, 12, 0, tzinfo=timezone.utc),
+                        "run_id": "run-old-version",
+                        "run_status": "completed",
+                        "run_version_id": "version-old",
+                    },
+                    *[
+                        {
+                            **passed_canary,
+                            "event_id": f"passed-event-{day}",
+                            "event_status": "run_started",
+                            "payload_json": {"schedule_date": f"2026-07-{day:02d}", "schedule_time": "18:20"},
+                            "event_created_at": datetime(2026, 7, day, 15, 20, tzinfo=timezone.utc),
+                            "run_id": f"passed-run-{day}",
+                            "run_status": "completed",
+                            "run_version_id": "version-2",
+                        }
+                        for day in range(13, 20)
+                    ],
+                ]
             elif "from agent_trigger_events" in normalized:
                 self.result = {
                     "total": 8,
@@ -690,6 +775,14 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
     assert runtime["scheduler"]["failed_24h"] == 1
     assert runtime["scheduler"]["recent_events"][0]["run_status"] == "completed"
     assert runtime["scheduler"]["recent_events"][0]["timezone"] == "Europe/Tallinn"
+    canaries = {item["blueprint_id"]: item for item in runtime["scheduler"]["canaries"]}
+    assert canaries["bp-1"]["successful_days"] == 1
+    assert canaries["bp-1"]["status"] == "observing"
+    assert canaries["bp-1"]["duplicate_runs"] == 1
+    assert canaries["bp-1"]["failed_events"] == 1
+    assert canaries["bp-1"]["old_version_runs"] == 0
+    assert canaries["bp-2"]["successful_days"] == 7
+    assert canaries["bp-2"]["status"] == "passed"
     assert runtime["consistency"]["archived_unfinished_runs"] == 4
     assert runtime["recent_issues"][0]["error"] == "provider timeout"
 
@@ -738,3 +831,5 @@ def test_admin_agents_ui_exposes_runtime_health():
     assert "schedule_dispatch_enabled" in source
     assert "Последние запуски по расписанию" in source
     assert "recent_events" in source
+    assert "Проверка работы по расписанию" in source
+    assert "successful_days" in source
