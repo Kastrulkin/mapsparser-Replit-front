@@ -862,6 +862,7 @@ def _generate_message_result_with_llm(
 ) -> Dict[str, Any]:
     workflow_description = _clean_text(setup.get("workflow_description"))
     internal_content = _is_internal_content_draft_workflow(workflow_description)
+    requested_content_count = _requested_content_draft_count(workflow_description) if internal_content else 1
     prompt_version = (
         "agent_custom_message_draft_v5"
         if internal_content
@@ -873,6 +874,7 @@ def _generate_message_result_with_llm(
         generation_prompt = prompt
         parsed: Dict[str, Any] = {}
         draft_text = ""
+        content_drafts: List[Dict[str, str]] = []
         title = fallback["title"]
         for attempt in range(3):
             raw_response = analyze_text_with_gigachat(
@@ -883,11 +885,30 @@ def _generate_message_result_with_llm(
                 usage_reference=f"agent-run:{run_id}" if run_id else None,
             )
             parsed = _parse_message_llm_json(raw_response)
-            draft_text = _clean_text(parsed.get("draft_text") or parsed.get("post_text") or parsed.get("message"))
+            content_drafts = _clean_content_drafts(parsed.get("drafts"))
+            if requested_content_count > 1 and len(content_drafts) >= requested_content_count:
+                content_drafts = content_drafts[:requested_content_count]
+                draft_text = "\n\n".join(
+                    f"{index}. {item['title']}\n{item['draft_text']}".strip()
+                    for index, item in enumerate(content_drafts, start=1)
+                )
+            else:
+                draft_text = _clean_text(parsed.get("draft_text") or parsed.get("post_text") or parsed.get("message"))
             title = _clean_text(parsed.get("title")) or fallback["title"]
             if not draft_text:
                 raise ValueError("LLM response does not contain draft text")
-            quality_issue = _internal_content_fact_issue(title, draft_text, selected_items) if internal_content else ""
+            quality_issue = ""
+            if internal_content and requested_content_count > 1 and len(content_drafts) != requested_content_count:
+                quality_issue = (
+                    f"Задание требует {requested_content_count} отдельных черновика, "
+                    f"но получено {len(content_drafts)}. Верни ровно {requested_content_count} объектов в поле drafts."
+                )
+            if internal_content and not quality_issue:
+                drafts_to_check = content_drafts or [{"title": title, "draft_text": draft_text}]
+                for item in drafts_to_check:
+                    quality_issue = _internal_content_fact_issue(item["title"], item["draft_text"], selected_items)
+                    if quality_issue:
+                        break
             if not quality_issue:
                 break
             if attempt == 2:
@@ -908,6 +929,7 @@ def _generate_message_result_with_llm(
             **fallback,
             "title": title,
             "draft_text": draft_text,
+            **({"drafts": content_drafts} if content_drafts else {}),
             "summary": summary,
             "checklist": checklist,
             "rules_applied": _clean_list(parsed.get("rules_applied")) or fallback["rules_applied"],
@@ -988,6 +1010,13 @@ def _build_message_prompt(setup: Dict[str, Any], selected_items: List[Dict[str, 
     }
     content_contract = ""
     if _is_internal_content_draft_workflow(_clean_text(setup.get("workflow_description"))):
+        requested_count = _requested_content_draft_count(_clean_text(setup.get("workflow_description")))
+        count_contract = (
+            f" Задание требует ровно {requested_count} отдельных черновика. Верни их в поле drafts как список объектов"
+            " с полями title и draft_text. Каждый объект должен быть самостоятельным готовым текстом."
+            if requested_count > 1
+            else ""
+        )
         content_contract = (
             " Верни именно готовый черновик новости или поста, который можно передать владельцу на проверку."
             " Не пиши анализ источников, отчёт о том, что было найдено, или рекомендации бизнесу вместо самого текста."
@@ -996,6 +1025,7 @@ def _build_message_prompt(setup: Dict[str, Any], selected_items: List[Dict[str, 
             " а не дату запуска услуги или события. Не называй услугу новой, не обещай её запуск и не добавляй свойства,"
             " аудиторию, процедуры или преимущества, которых нет в источниках. Не дополняй название услуги типичным"
             " отраслевым описанием от себя. Черновик должен быть короче 700 знаков."
+            f"{count_contract}"
         )
     return (
         "Ты готовишь безопасный черновик сообщения для LocalOS AI employee test run. "
@@ -1007,6 +1037,32 @@ def _build_message_prompt(setup: Dict[str, Any], selected_items: List[Dict[str, 
         "draft_text должен быть конкретным сообщением, готовым для проверки владельцем бизнеса.\n\n"
         f"INPUT_JSON:\n{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
+
+
+def _requested_content_draft_count(workflow: str) -> int:
+    match = re.search(r"(?<!\d)(\d{1,2})\s+(?:новост\w*|пост\w*|публикац\w*|черновик\w*)", workflow.lower())
+    if not match:
+        return 1
+    return max(1, min(int(match.group(1)), 10))
+
+
+def _clean_content_drafts(value: Any) -> List[Dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    drafts = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        draft_text = _clean_text(item.get("draft_text") or item.get("text") or item.get("post_text"))
+        if not draft_text:
+            continue
+        drafts.append(
+            {
+                "title": _clean_text(item.get("title")) or f"Черновик {len(drafts) + 1}",
+                "draft_text": draft_text,
+            }
+        )
+    return drafts
 
 
 def _internal_content_fact_issue(title: str, draft_text: str, selected_items: List[Dict[str, Any]]) -> str:
