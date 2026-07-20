@@ -39,9 +39,58 @@ class FakeFailureCursor:
 class FakeSavepointCursor:
     def __init__(self):
         self.queries = []
+        self.closed = False
 
     def execute(self, query, params=None):
         self.queries.append(" ".join(str(query or "").lower().split()))
+
+    def close(self):
+        self.closed = True
+
+
+class FakeSavepointConnection:
+    def __init__(self):
+        self.cursor_instance = FakeSavepointCursor()
+
+    def cursor(self):
+        return self.cursor_instance
+
+
+class FakeDetailConnection:
+    """Model PostgreSQL's failed-transaction state on the detail connection."""
+
+    def __init__(self):
+        self.aborted = False
+        self.saved = []
+        self.queries = []
+
+    def cursor(self):
+        return FakeDetailCursor(self)
+
+    def insert(self, label):
+        if self.aborted:
+            raise RuntimeError("current transaction is aborted")
+        if label == "external_posts":
+            self.aborted = True
+            raise RuntimeError('relation "externalbusinessposts" does not exist')
+        self.saved.append(label)
+
+
+class FakeDetailCursor:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def execute(self, query, params=None):
+        normalized_query = " ".join(str(query or "").lower().split())
+        self.connection.queries.append(normalized_query)
+        if normalized_query.startswith("rollback to savepoint"):
+            self.connection.aborted = False
+            return
+        if self.connection.aborted:
+            raise RuntimeError("current transaction is aborted")
+
+    def close(self):
+        return None
 
 
 def test_extract_apify_cost_from_run_data() -> None:
@@ -185,28 +234,49 @@ def test_failed_operator_refresh_skips_followup_without_reservation(monkeypatch)
 
 
 def test_optional_detail_sync_rolls_back_failed_savepoint() -> None:
-    cursor = FakeSavepointCursor()
+    connection = FakeSavepointConnection()
 
     def fail_callback():
         raise RuntimeError("missing optional table")
 
-    result = worker._run_optional_detail_sync(cursor, "external_posts", fail_callback)
+    result = worker._run_optional_detail_sync(connection, "external_posts", fail_callback)
 
     assert result is False
-    assert cursor.queries == [
+    assert connection.cursor_instance.queries == [
         "savepoint optional_detail_external_posts",
         "rollback to savepoint optional_detail_external_posts",
         "release savepoint optional_detail_external_posts",
     ]
+    assert connection.cursor_instance.closed is True
 
 
 def test_optional_detail_sync_releases_successful_savepoint() -> None:
-    cursor = FakeSavepointCursor()
+    connection = FakeSavepointConnection()
 
-    result = worker._run_optional_detail_sync(cursor, "services", lambda: None)
+    result = worker._run_optional_detail_sync(connection, "services", lambda: None)
 
     assert result is True
-    assert cursor.queries == [
+    assert connection.cursor_instance.queries == [
         "savepoint optional_detail_services",
         "release savepoint optional_detail_services",
     ]
+    assert connection.cursor_instance.closed is True
+
+
+def test_optional_detail_sync_recovers_callback_connection_before_next_sync() -> None:
+    detail_connection = FakeDetailConnection()
+
+    posts_result = worker._run_optional_detail_sync(
+        detail_connection,
+        "external_posts",
+        lambda: detail_connection.insert("external_posts"),
+    )
+    services_result = worker._run_optional_detail_sync(
+        detail_connection,
+        "services",
+        lambda: detail_connection.insert("services"),
+    )
+
+    assert posts_result is False
+    assert services_result is True
+    assert detail_connection.saved == ["services"]
