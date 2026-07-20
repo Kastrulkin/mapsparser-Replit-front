@@ -274,7 +274,7 @@ def build_blueprint_review(cursor: Any, blueprint_id: str) -> Dict[str, Any]:
 def _load_workspace(cursor: Any, run: Dict[str, Any]) -> Dict[str, Any]:
     blueprint = _load_blueprint(cursor, _clean_text(run.get("blueprint_id")))
     metadata = _metadata_from_blueprint(blueprint)
-    setup = metadata.get("agent_setup") if isinstance(metadata.get("agent_setup"), dict) else {}
+    setup = _workspace_setup(blueprint, metadata)
     legacy_sources = metadata.get("agent_sources") if isinstance(metadata.get("agent_sources"), list) else []
     sources = [dict(item) for item in legacy_sources if isinstance(item, dict)]
     if not sources:
@@ -292,6 +292,18 @@ def _load_workspace(cursor: Any, run: Dict[str, Any]) -> Dict[str, Any]:
         "business_id": _clean_text(run.get("business_id")),
         "user_id": _clean_text(run.get("created_by_user_id")),
     }
+
+
+def _workspace_setup(blueprint: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
+    stored_setup = metadata.get("agent_setup") if isinstance(metadata.get("agent_setup"), dict) else {}
+    setup = dict(stored_setup)
+    if not _clean_text(setup.get("workflow_description")):
+        setup["workflow_description"] = _clean_text(
+            metadata.get("request_text")
+            or blueprint.get("description")
+            or blueprint.get("name")
+        )
+    return setup
 
 
 def _compiled_internal_sources(cursor: Any, run: Dict[str, Any], metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
