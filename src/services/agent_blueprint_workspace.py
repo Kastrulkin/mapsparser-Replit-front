@@ -280,19 +280,13 @@ def _load_workspace(cursor: Any, run: Dict[str, Any]) -> Dict[str, Any]:
     if not sources:
         sources = _compiled_internal_sources(cursor, run, metadata)
     internal_sources = _hydrate_internal_sources(cursor, _clean_text(run.get("business_id")), sources)
-    feedback_history = metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else []
-    runtime_feedback = [
-        dict(item)
-        for item in feedback_history
-        if isinstance(item, dict) and item.get("kind") != "run_evaluation"
-    ]
     return {
         "blueprint": blueprint,
         "metadata": metadata,
         "setup": setup,
         "sources": sources,
         "internal_sources": internal_sources,
-        "feedback_history": runtime_feedback,
+        "feedback_history": metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else [],
         "run_input": parse_json_field(run.get("input_json"), {}),
         "run_id": _clean_text(run.get("id")),
         "business_id": _clean_text(run.get("business_id")),

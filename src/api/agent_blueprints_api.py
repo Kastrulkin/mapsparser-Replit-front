@@ -719,8 +719,8 @@ def _admin_agent_runtime_overview(cursor) -> dict:
                        FROM agent_blueprints blueprint
                        CROSS JOIN LATERAL jsonb_array_elements(
                            CASE
-                               WHEN jsonb_typeof(blueprint.metadata_json->'feedback_history') = 'array'
-                               THEN blueprint.metadata_json->'feedback_history'
+                               WHEN jsonb_typeof(blueprint.metadata_json->'run_evaluations') = 'array'
+                               THEN blueprint.metadata_json->'run_evaluations'
                                ELSE '[]'::jsonb
                            END
                        ) feedback_item
@@ -5206,9 +5206,9 @@ def get_agent_run(run_id: str):
         runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
         run_payload = runner.load_run(run_id, user_data)
         metadata = _blueprint_metadata(blueprint)
-        feedback_history = metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else []
+        run_evaluations = metadata.get("run_evaluations") if isinstance(metadata.get("run_evaluations"), list) else []
         if isinstance(run_payload, dict):
-            run_payload["evaluation"] = _find_run_evaluation(feedback_history, run_id)
+            run_payload["evaluation"] = _find_run_evaluation(run_evaluations, run_id)
         return jsonify({"success": True, "run": run_payload})
     finally:
         db.close()
@@ -5314,7 +5314,7 @@ def create_agent_run_feedback(run_id: str):
                     "AGENT_PREVIEW_EVALUATION_NOT_ALLOWED",
                 )
             metadata = _blueprint_metadata(blueprint)
-            history = metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else []
+            history = metadata.get("run_evaluations") if isinstance(metadata.get("run_evaluations"), list) else []
             evaluation = {
                 "kind": "run_evaluation",
                 "run_id": run_id,
@@ -5324,7 +5324,7 @@ def create_agent_run_feedback(run_id: str):
                 "source": "beta_feedback",
                 "created_at": _utc_now_text(),
             }
-            metadata["feedback_history"] = _upsert_run_evaluation_history(history, evaluation)
+            metadata["run_evaluations"] = _upsert_run_evaluation_history(history, evaluation)
             _save_blueprint_metadata(cursor, str(blueprint.get("id") or ""), metadata)
             db.conn.commit()
             return jsonify(

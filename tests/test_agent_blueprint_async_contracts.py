@@ -39,7 +39,7 @@ def test_agent_run_evaluation_endpoint_is_idempotent_and_work_run_only(monkeypat
                 "input_json": {"preview_mode": False},
             }
             self.result = None
-            self.metadata = {"feedback_history": []}
+            self.metadata = {"run_evaluations": []}
 
         def execute(self, query, params=None):
             normalized = " ".join(query.split()).lower()
@@ -107,8 +107,8 @@ def test_agent_run_evaluation_endpoint_is_idempotent_and_work_run_only(monkeypat
     assert second.status_code == 200
     assert second.get_json()["version_created"] is False
     assert connection.commits == 2
-    assert len(cursor.metadata["feedback_history"]) == 1
-    assert cursor.metadata["feedback_history"][0]["rating"] == "useful"
+    assert len(cursor.metadata["run_evaluations"]) == 1
+    assert cursor.metadata["run_evaluations"][0]["rating"] == "useful"
 
     cursor.run["input_json"] = {"preview_mode": True}
     preview = client.post(
@@ -131,7 +131,6 @@ def test_agent_run_evaluation_endpoint_is_idempotent_and_work_run_only(monkeypat
 def test_agent_result_ui_collects_beta_evaluation_without_version_change():
     source = read_agent_blueprints_frontend_source()
     api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
-    workspace_source = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
 
     assert "Помог ли результат?" in source
     assert "Да, результат полезен" in source
@@ -140,7 +139,7 @@ def test_agent_result_ui_collects_beta_evaluation_without_version_change():
     assert '"version_created": False' in api_source
     assert "AGENT_PREVIEW_EVALUATION_NOT_ALLOWED" in api_source
     assert 'feedback_item->>\'kind\' = \'run_evaluation\'' in api_source
-    assert 'item.get("kind") != "run_evaluation"' in workspace_source
+    assert "metadata.get(\"run_evaluations\")" in api_source
 
 
 def test_agent_run_contract_hides_service_fields_and_requires_content_plan_date():
