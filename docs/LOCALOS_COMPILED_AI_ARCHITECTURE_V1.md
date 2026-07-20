@@ -291,10 +291,12 @@ category. Before dispatch, every capability in the active version must have
 `beta_enabled=true`.
 
 `AGENT_SCHEDULE_DISPATCH_ENABLED` is a deployment gate, not proof of a working
-customer schedule. As verified on 19 July 2026, the flag is enabled in
-production, but there is no active confirmed scheduled blueprint and no saved
-scheduler event. Scheduled mode is therefore implemented but not yet
-production-proven.
+customer schedule. On 20 July 2026 two active confirmed read-only Riderra
+blueprints with different local times completed their first independent
+production cycles. Each used its exact active version, produced one final
+result and created no approval or external action. This proves the dispatch
+path for one date; the required seven consecutive real days are still in
+progress and must not be inferred from synthetic runs.
 
 ## Current Rollout Status
 
@@ -310,15 +312,17 @@ production-proven.
 | Production run reservation and settlement | implemented/cohort beta |
 | Version diff, activation and rollback | implemented |
 | Scenario contract and server-driven run progress | implemented |
-| Scheduler dispatch | implemented, production canary missing |
+| Scheduler dispatch | implemented/cohort beta; two canaries completed day 1 of 7 |
 | Certified provider E2E matrix | partial |
 | Mass legacy mode migration | not completed |
 | Mass self-service rollout | not approved |
 
 Production currently admits three businesses to the async beta. Existing
 starter drafts are not activated automatically. The launch gate remains:
-provider E2E, tenant-isolation regression coverage, a successful scheduled
-canary and explicit owner activation.
+Google Sheets production E2E after OAuth reconnection, genuine pilot feedback,
+completion of the seven-day scheduled canary and explicit owner activation.
+See [Agents Beta Production Status](AGENTS_BETA_PRODUCTION_STATUS.md) for dated
+evidence and current counts.
 
 ## Verification
 

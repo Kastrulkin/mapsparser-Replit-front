@@ -66,7 +66,7 @@ LocalOS помогает владельцам и управляющим лока
 - Результат нормализован в `business_result`/`result_state`; approval показывается только для текущего run перед реальным внешним действием. Старые ожидания решения supersede-ятся.
 - Сертифицированные beta-capabilities охватывают read/draft/safe internal write: Google Sheets read, drafts для отзывов/новостей/услуг, content-plan draft, appointments read, support export и партнёрский analysis/draft. Request-only writes не активируются как beta workflow.
 - OpenClaw / ActionOrchestrator остаётся execution boundary для policy, approval, billing, audit, callbacks и recovery. Provider не является пользовательской моделью агента.
-- Production остаётся cohort beta: async runtime ограничен `AGENT_BETA_BUSINESS_IDS`; scheduler развёрнут за флагом, но production scheduled-canary ещё не зафиксирован. Массовый self-service запуск пока не заявляется.
+- Production остаётся cohort beta: async runtime ограничен `AGENT_BETA_BUSINESS_IDS`; scheduler включён для двух безопасных read-only canary Riderra. Первый независимый цикл обоих расписаний подтверждён 20 июля 2026 года, семидневный gate ещё продолжается. Массовый self-service запуск пока не заявляется.
 
 ### Интеграции и внешние write-действия
 - Google Business Profile подключается через OAuth; production-доступ зависит от статуса Google API approval и конкретного включённого capability.
@@ -142,6 +142,7 @@ LocalOS помогает владельцам и управляющим лока
 - 🧭 [Product Operating Model](./PRODUCT.md) — продуктовый канон LocalOS, роли пользователей, agent model и approval-инварианты
 - 🎛️ [Product Design Rules](./DESIGN.md) — процесс audit → distill → shape → implement → harden → polish и правила product UI
 - 🤖 [Agents Product UI Audit](./docs/AGENTS_PRODUCT_UI_AUDIT.md) — рабочий аудит `/dashboard/agents` как product cockpit
+- 🧪 [Agents Beta Production Status](./docs/AGENTS_BETA_PRODUCTION_STATUS.md) — датированные production-доказательства, pilot-метрики и открытые gates
 - 🎨 [Брендбук личного кабинета LocalOS](./docs/DASHBOARD_DESIGN_BRANDBOOK.md) — дизайн-паттерны, UX-принципы и каноничные dashboard-примитивы
 - 🤖 [Настройка Telegram-ботов](./TELEGRAM_BOTS_SETUP.md) — установка и запуск ботов
 - 🌐 [Grimbird Proxy Runbook](./docs/TELEGRAM_PROXY_RUNBOOK.md) — маршруты Telegram и внешних API через OpenClaw

@@ -46,7 +46,7 @@ Current capability areas:
 | Finance | `available/beta` | read KPIs, prepare import previews/proposals, apply only approved rows | money/billing/payment-related operations require approval |
 | Partnerships and outreach | `beta` | search/import leads, classify fit, draft offers, prepare approval-ready batches | sending is capped, approved, and never implied by draft generation |
 | Operator | `beta` | use attention briefs, action cards, refresh status, draft helpers and Telegram parity | same approval, billing and audit policy as dashboard workflows |
-| User-created Agents | `beta` | one-off/manual read, draft and safe internal-draft runs through AgentBlueprint; typed parameters, version activation/rollback and queued execution are implemented | async runtime is limited to three beta businesses; scheduler lacks a production canary; external actions remain behind approval |
+| User-created Agents | `beta` | one-off/manual read, draft and safe internal-draft runs through AgentBlueprint; typed parameters, version activation/rollback, queued execution and two independent read-only schedules are implemented | async runtime is limited to three beta businesses; both schedules completed day 1 of the required 7-day canary on 20 July 2026; external actions remain behind approval |
 | Public MCP server | `gap` | do not claim MCP availability | only documented static manifests/OpenAPI aliases are available |
 
 ## Compiled Agents Runtime
@@ -85,6 +85,9 @@ capabilities. Request-only writes can be represented and reviewed, but they do
 not make a workflow eligible for autonomous activation. See
 [Compiled AI Architecture v1](../LOCALOS_COMPILED_AI_ARCHITECTURE_V1.md) for
 the exact runtime and rollout status.
+
+Current production evidence and the gates that must not be declared complete
+early are recorded in [Agents Beta Production Status](../AGENTS_BETA_PRODUCTION_STATUS.md).
 
 ## LocalOS Operator
 

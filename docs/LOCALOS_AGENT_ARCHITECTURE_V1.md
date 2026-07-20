@@ -168,7 +168,9 @@ dispatcher, but must not become a separate runtime truth. The worker hook is
 `_dispatch_agent_schedules_if_due()` and is disabled by default behind
 `AGENT_SCHEDULE_DISPATCH_ENABLED=false`. When enabled, it calls
 `dispatch_due_scheduled_agent_blueprints()`, which checks due business schedules
-and avoids recording more than one scheduler event per business/day.
+and deduplicates each slot by blueprint ID, local date and local time. Two
+read-only Riderra schedules completed their first independent production cycle
+on 20 July 2026; the seven-day canary remains in progress.
 
 ## Provider Resolver Canon
 
