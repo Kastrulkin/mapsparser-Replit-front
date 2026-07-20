@@ -365,6 +365,10 @@ def test_agent_async_runtime_contract_is_wired_end_to_end():
     assert "['open_result', 'view_history', 'approve'].includes(selectedEmployeeAction.kind)" in frontend_source
     assert "selectedEmployeeAction.targetMode === 'results'" not in frontend_source
     assert "waitForAgentRun" in frontend_source
+    assert "localos:agent-run-resume:" in frontend_source
+    assert "saveAgentRunResume(currentBusinessId" in frontend_source
+    assert "clearAgentRunResume(currentBusinessId, runId)" in frontend_source
+    assert "recoveredFromReload: true" in frontend_source
     assert "execution_contract" in frontend_source
     assert "EmployeeAgentScenarioPanel" in frontend_source
     assert "const working = contract?.candidate || contract?.active;" in frontend_source

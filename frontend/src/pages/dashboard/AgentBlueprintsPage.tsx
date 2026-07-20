@@ -22,6 +22,70 @@ import { isAgentWorkRun, isBusinessBlockerApproval, needsScenarioRebuildForSourc
 import { parseAgentConfig, uploadAgentSource } from './agents/api';
 import { AgentBlueprintsView } from './agents/view';
 
+type AgentRunResumeState = {
+  runId: string;
+  blueprintId: string;
+  kind: AgentRunAnimation['kind'];
+  startedAt: number;
+  storedAt: number;
+};
+
+const AGENT_RUN_RESUME_TTL_MS = 24 * 60 * 60 * 1000;
+
+const agentRunResumeStorageKey = (businessId: string) => `localos:agent-run-resume:${businessId}`;
+
+const readAgentRunResume = (businessId: string): AgentRunResumeState | null => {
+  if (!businessId) return null;
+  try {
+    const raw = window.localStorage.getItem(agentRunResumeStorageKey(businessId));
+    if (!raw) return null;
+    const value = JSON.parse(raw);
+    if (
+      !value
+      || typeof value.runId !== 'string'
+      || typeof value.blueprintId !== 'string'
+      || !['test', 'work'].includes(String(value.kind || ''))
+      || typeof value.startedAt !== 'number'
+      || typeof value.storedAt !== 'number'
+      || Date.now() - value.storedAt > AGENT_RUN_RESUME_TTL_MS
+    ) {
+      window.localStorage.removeItem(agentRunResumeStorageKey(businessId));
+      return null;
+    }
+    return {
+      runId: value.runId,
+      blueprintId: value.blueprintId,
+      kind: value.kind,
+      startedAt: value.startedAt,
+      storedAt: value.storedAt,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const saveAgentRunResume = (businessId: string, state: Omit<AgentRunResumeState, 'storedAt'>) => {
+  if (!businessId || !state.runId || !state.blueprintId) return;
+  try {
+    window.localStorage.setItem(agentRunResumeStorageKey(businessId), JSON.stringify({ ...state, storedAt: Date.now() }));
+  } catch {
+    // A blocked storage API must not block the run itself.
+  }
+};
+
+const clearAgentRunResume = (businessId: string, expectedRunId = '') => {
+  if (!businessId) return;
+  try {
+    if (expectedRunId) {
+      const current = readAgentRunResume(businessId);
+      if (current && current.runId !== expectedRunId) return;
+    }
+    window.localStorage.removeItem(agentRunResumeStorageKey(businessId));
+  } catch {
+    // The result remains available in server history even if storage cleanup fails.
+  }
+};
+
 export const AgentBlueprintsPage = () => {
   const location = useLocation();
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
@@ -31,6 +95,7 @@ export const AgentBlueprintsPage = () => {
   const [agentDetailsById, setAgentDetailsById] = useState<Record<string, AgentBlueprintDetails>>({});
   const [serverTodaySummary, setServerTodaySummary] = useState<AgentServerTodaySummary | null>(null);
   const [activeRun, setActiveRun] = useState<AgentRun | null>(null);
+  const restoredRunIdRef = useRef('');
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -532,6 +597,62 @@ export const AgentBlueprintsPage = () => {
       }
     }
   };
+
+  useEffect(() => {
+    if (!currentBusinessId || !blueprints.length || runAnimation) return;
+    const resume = readAgentRunResume(currentBusinessId);
+    if (!resume) return;
+    const resumeBlueprintExists = blueprints.some((blueprint) => blueprint.id === resume.blueprintId);
+    if (!resumeBlueprintExists) {
+      clearAgentRunResume(currentBusinessId, resume.runId);
+      return;
+    }
+    if (selectedBlueprint?.id !== resume.blueprintId) {
+      setSelectedBlueprintId(resume.blueprintId);
+      return;
+    }
+    if (restoredRunIdRef.current === resume.runId) return;
+    restoredRunIdRef.current = resume.runId;
+    let cancelled = false;
+    void api.get(`/agent-runs/${resume.runId}`).then((response) => {
+      if (cancelled) return;
+      const run: AgentRun | null = response.data?.run && typeof response.data.run === 'object' ? response.data.run : null;
+      if (!run || run.blueprint_id !== resume.blueprintId) {
+        clearAgentRunResume(currentBusinessId, resume.runId);
+        return;
+      }
+      setActiveRun(run);
+      if (!['queued', 'running', 'retry_wait'].includes(String(run.status || ''))) {
+        setWorkspaceMode('results');
+        clearAgentRunResume(currentBusinessId, resume.runId);
+        return;
+      }
+      const steps = workflowStepsForAnimation(blueprintDetails, resume.kind);
+      const total = Math.max(steps.length, Number(run.progress?.total_steps || 0), 1);
+      const completed = Math.min(total, Math.max(0, Number(run.progress?.completed_steps || 0)));
+      const currentIndex = Math.min(total - 1, Math.max(0, Number(run.progress?.current_step_index ?? completed)));
+      setRunAnimation({
+        kind: resume.kind,
+        blueprintId: resume.blueprintId,
+        runId: resume.runId,
+        startedAt: resume.startedAt,
+        progress: Math.max(8, Math.min(92, Math.round((completed / total) * 92))),
+        stepIndex: currentIndex,
+        steps,
+        status: 'running',
+        serverCompletedSteps: completed,
+        serverCurrentStepIndex: currentIndex,
+        queueState: String(run.progress?.state || run.status || 'queued'),
+        recoveredFromReload: true,
+      });
+    }).catch((requestError) => {
+      if (cancelled) return;
+      console.error(requestError);
+      clearAgentRunResume(currentBusinessId, resume.runId);
+      setError('Не удалось восстановить последнюю запущенную задачу. Результат остаётся в истории агента.');
+    });
+    return () => { cancelled = true; };
+  }, [blueprints, currentBusinessId, runAnimation, selectedBlueprint?.id]);
 
   useEffect(() => {
     if (runAnimation || !selectedBlueprint?.id) return;
@@ -1053,13 +1174,14 @@ export const AgentBlueprintsPage = () => {
       if (cancelled) return;
       setRunAnimation(null);
       setWorkspaceMode('results');
+      clearAgentRunResume(currentBusinessId, runId);
       if (selectedBlueprint?.id) await loadBlueprintDetails(selectedBlueprint.id);
       await loadBlueprints();
     }).catch((requestError) => {
       if (!cancelled) failRunAnimation(getRequestErrorMessage(requestError, 'Не удалось продолжить отслеживание задачи.'));
     });
     return () => { cancelled = true; };
-  }, [runAnimation?.recoveredFromReload, runAnimation?.runId]);
+  }, [currentBusinessId, runAnimation?.recoveredFromReload, runAnimation?.runId]);
 
   const startRun = async (
     blueprintToRun?: AgentBlueprint | null,
@@ -1126,6 +1248,14 @@ export const AgentBlueprintsPage = () => {
       let nextRun = response.data?.run || null;
       setActiveRun(nextRun);
       syncRunAnimation(nextRun);
+      if (nextRun?.id) {
+        saveAgentRunResume(currentBusinessId, {
+          runId: nextRun.id,
+          blueprintId: targetBlueprint.id,
+          kind: 'test',
+          startedAt: animationStartedAt,
+        });
+      }
       if (nextRun?.id && ['queued', 'running', 'retry_wait'].includes(String(nextRun.status || ''))) {
         nextRun = await waitForAgentRun(nextRun.id);
       }
@@ -1135,6 +1265,9 @@ export const AgentBlueprintsPage = () => {
       await finishRunAnimation(animationStartedAt);
       setRunAnimation(null);
       setWorkspaceMode('results');
+      if (nextRun?.id) {
+        clearAgentRunResume(currentBusinessId, nextRun.id);
+      }
       setDecisionNotice(nextRun?.id ? 'Тест запущен заново. Ниже показан свежий результат проверки.' : 'Тест запущен заново.');
       await loadBlueprintDetails(targetBlueprint.id);
       await loadBlueprintReview(targetBlueprint.id);
@@ -1185,6 +1318,14 @@ export const AgentBlueprintsPage = () => {
       let nextRun = response.data?.run || null;
       setActiveRun(nextRun);
       syncRunAnimation(nextRun);
+      if (nextRun?.id) {
+        saveAgentRunResume(currentBusinessId, {
+          runId: nextRun.id,
+          blueprintId: targetBlueprint.id,
+          kind: 'work',
+          startedAt: animationStartedAt,
+        });
+      }
       if (nextRun?.id && ['queued', 'running', 'retry_wait'].includes(String(nextRun.status || ''))) {
         nextRun = await waitForAgentRun(nextRun.id);
       }
@@ -1194,6 +1335,9 @@ export const AgentBlueprintsPage = () => {
       await finishRunAnimation(animationStartedAt);
       setRunAnimation(null);
       setWorkspaceMode('results');
+      if (nextRun?.id) {
+        clearAgentRunResume(currentBusinessId, nextRun.id);
+      }
       setDecisionNotice(nextRun?.id ? 'Работа выполнена. Ниже показан свежий сохранённый результат.' : 'Работа запущена.');
       await loadBlueprintDetails(targetBlueprint.id);
       await loadBlueprintReview(targetBlueprint.id);
