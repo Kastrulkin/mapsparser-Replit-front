@@ -605,6 +605,36 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
                     "billing_bound_runs": 3,
                     "last_run_at": now,
                 }
+            elif normalized.startswith("select biz.id business_id"):
+                self.result = None
+                self.results = [
+                    {
+                        "business_id": "biz-1",
+                        "business_name": "Riderra",
+                        "preview_runs": 12,
+                        "work_runs": 10,
+                        "completed_work_runs": 9,
+                        "failed_work_runs": 1,
+                        "result_runs": 9,
+                        "missing_result_runs": 0,
+                        "charged_credits": 7,
+                        "feedback_entries": 2,
+                        "last_run_at": now,
+                    },
+                    {
+                        "business_id": "biz-2",
+                        "business_name": "Нужна проверка",
+                        "preview_runs": 10,
+                        "work_runs": 5,
+                        "completed_work_runs": 4,
+                        "failed_work_runs": 1,
+                        "result_runs": 3,
+                        "missing_result_runs": 1,
+                        "charged_credits": 4,
+                        "feedback_entries": 0,
+                        "last_run_at": now,
+                    },
+                ]
             elif "count(distinct r.id) filter" in normalized:
                 self.result = {
                     "archived_unfinished_runs": 4,
@@ -771,6 +801,11 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
     assert runtime["runs"]["billing_bound_runs"] == 3
     assert runtime["billing"]["charged_credits"] == 3
     assert runtime["billing"]["active_reservations"] == 1
+    pilots = {item["business_id"]: item for item in runtime["beta_pilots"]}
+    assert pilots["biz-1"]["success_rate"] == 90.0
+    assert pilots["biz-1"]["status"] == "passed"
+    assert pilots["biz-2"]["status"] == "attention"
+    assert pilots["biz-2"]["missing_result_runs"] == 1
     assert runtime["scheduler"]["total_events"] == 8
     assert runtime["scheduler"]["failed_24h"] == 1
     assert runtime["scheduler"]["recent_events"][0]["run_status"] == "completed"
@@ -833,3 +868,6 @@ def test_admin_agents_ui_exposes_runtime_health():
     assert "recent_events" in source
     assert "Проверка работы по расписанию" in source
     assert "successful_days" in source
+    assert "Пилот Agents Beta" in source
+    assert "beta_pilots" in source
+    assert "missing_result_runs" in source

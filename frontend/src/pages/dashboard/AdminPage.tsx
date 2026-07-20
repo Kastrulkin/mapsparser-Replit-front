@@ -178,6 +178,25 @@ interface AdminAgentSchedulerCanary {
   last_event_at?: string;
 }
 
+interface AdminAgentBetaPilot {
+  business_id: string;
+  business_name: string;
+  preview_runs: number;
+  preview_target: number;
+  work_runs: number;
+  work_target: number;
+  completed_work_runs: number;
+  failed_work_runs: number;
+  result_runs: number;
+  missing_result_runs: number;
+  success_rate: number;
+  success_rate_target: number;
+  charged_credits: number;
+  feedback_entries: number;
+  status: 'collecting' | 'attention' | 'passed';
+  last_run_at?: string;
+}
+
 interface AdminAgentRuntimeOverview {
   flags: {
     async_runs_enabled: boolean;
@@ -220,6 +239,7 @@ interface AdminAgentRuntimeOverview {
     charged_credits: number;
     released_credits: number;
   };
+  beta_pilots: AdminAgentBetaPilot[];
   recent_issues: AdminAgentRuntimeIssue[];
 }
 
@@ -1541,6 +1561,53 @@ export const AdminPage: React.FC = () => {
                 <span>Beta-бизнесов: <strong className="tabular-nums text-slate-900">{agentRuntime?.flags.beta_businesses_count || 0}</strong></span>
                 <span>Активных подключений: <strong className="tabular-nums text-slate-900">{agentRuntime?.integrations.active || 0}</strong></span>
               </div>
+
+              {(agentRuntime?.beta_pilots || []).length > 0 ? (
+                <div className="mt-4 border-t border-slate-200 pt-4">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <h4 className="text-sm font-semibold text-slate-900">Пилот Agents Beta</h4>
+                    <span className="text-xs text-slate-500">Цель: 10 тестов, 5 рабочих запусков и не менее 90% успеха</span>
+                  </div>
+                  <div className="mt-2 divide-y divide-slate-100">
+                    {(agentRuntime?.beta_pilots || []).map((pilot) => {
+                      const passed = pilot.status === 'passed';
+                      const needsAttention = pilot.status === 'attention';
+                      return (
+                        <div key={pilot.business_id} className="grid gap-3 py-3 text-sm lg:grid-cols-[minmax(180px,1fr)_repeat(4,minmax(105px,0.55fr))_minmax(160px,0.75fr)] lg:items-center">
+                          <div className="min-w-0">
+                            <button type="button" onClick={() => handleBusinessClick(pilot.business_id)} className="truncate font-semibold text-slate-900 underline-offset-4 hover:underline">
+                              {pilot.business_name}
+                            </button>
+                            <div className="mt-1 text-xs text-slate-500">Последний запуск: {formatAdminDateTime(pilot.last_run_at)}</div>
+                          </div>
+                          <div className="text-slate-600">
+                            <span className="font-semibold tabular-nums text-slate-900">{pilot.preview_runs} / {pilot.preview_target}</span>
+                            <div className="text-xs text-slate-500">тестов</div>
+                          </div>
+                          <div className="text-slate-600">
+                            <span className="font-semibold tabular-nums text-slate-900">{pilot.work_runs} / {pilot.work_target}</span>
+                            <div className="text-xs text-slate-500">рабочих</div>
+                          </div>
+                          <div className="text-slate-600">
+                            <span className={`font-semibold tabular-nums ${pilot.success_rate >= pilot.success_rate_target ? 'text-emerald-700' : 'text-slate-900'}`}>{pilot.success_rate}%</span>
+                            <div className="text-xs text-slate-500">успешно</div>
+                          </div>
+                          <div className="text-slate-600">
+                            <span className={`font-semibold tabular-nums ${pilot.missing_result_runs ? 'text-amber-800' : 'text-slate-900'}`}>{pilot.result_runs} / {pilot.completed_work_runs}</span>
+                            <div className="text-xs text-slate-500">с результатом</div>
+                          </div>
+                          <div>
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${passed ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : needsAttention ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-sky-200 bg-sky-50 text-sky-700'}`}>
+                              {passed ? 'Порог пройден' : needsAttention ? 'Требует внимания' : 'Собираем запуски'}
+                            </span>
+                            <div className="mt-1 text-xs text-slate-500 tabular-nums">{pilot.charged_credits} кредитов · обратная связь: {pilot.feedback_entries}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
 
               {(agentRuntime?.scheduler.canaries || []).length > 0 ? (
                 <div className="mt-4 border-t border-slate-200 pt-4">

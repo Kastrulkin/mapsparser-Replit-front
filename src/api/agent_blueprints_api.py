@@ -353,6 +353,11 @@ def _admin_agent_connection_summary(row: dict, active_integrations: dict[str, st
 
 
 def _admin_agent_runtime_overview(cursor) -> dict:
+    beta_business_ids = [
+        item.strip()
+        for item in str(os.getenv("AGENT_BETA_BUSINESS_IDS", "")).split(",")
+        if item.strip()
+    ]
     cursor.execute(
         """
         SELECT COUNT(*) FILTER (WHERE status = 'queued') queued,
@@ -634,6 +639,114 @@ def _admin_agent_runtime_overview(cursor) -> dict:
         """
     )
     billing = dict(cursor.fetchone() or {})
+    beta_pilots = []
+    if beta_business_ids:
+        cursor.execute(
+            """
+            SELECT biz.id business_id,
+                   COALESCE(biz.name, '') business_name,
+                   COUNT(DISTINCT r.id) FILTER (
+                       WHERE COALESCE(r.input_json->>'preview_mode', 'false') = 'true'
+                         AND r.status = 'completed'
+                   ) preview_runs,
+                   COUNT(DISTINCT r.id) FILTER (
+                       WHERE COALESCE(r.input_json->>'preview_mode', 'false') <> 'true'
+                         AND r.status IN ('completed', 'failed')
+                   ) work_runs,
+                   COUNT(DISTINCT r.id) FILTER (
+                       WHERE COALESCE(r.input_json->>'preview_mode', 'false') <> 'true'
+                         AND r.status = 'completed'
+                   ) completed_work_runs,
+                   COUNT(DISTINCT r.id) FILTER (
+                       WHERE COALESCE(r.input_json->>'preview_mode', 'false') <> 'true'
+                         AND r.status = 'failed'
+                   ) failed_work_runs,
+                   COUNT(DISTINCT r.id) FILTER (
+                       WHERE COALESCE(r.input_json->>'preview_mode', 'false') <> 'true'
+                         AND r.status = 'completed'
+                         AND EXISTS (
+                             SELECT 1
+                             FROM agent_artifacts result_artifact
+                             WHERE result_artifact.run_id = r.id
+                               AND result_artifact.artifact_type IN (
+                                   'agent_final_result',
+                                   'agent_output_draft',
+                                   'telegram_post_draft'
+                               )
+                         )
+                   ) result_runs,
+                   COUNT(DISTINCT r.id) FILTER (
+                       WHERE COALESCE(r.input_json->>'preview_mode', 'false') <> 'true'
+                         AND r.status = 'completed'
+                         AND NOT EXISTS (
+                             SELECT 1
+                             FROM agent_artifacts result_artifact
+                             WHERE result_artifact.run_id = r.id
+                               AND result_artifact.artifact_type IN (
+                                   'agent_final_result',
+                                   'agent_output_draft',
+                                   'telegram_post_draft'
+                               )
+                         )
+                   ) missing_result_runs,
+                   COALESCE(SUM(reservation.charged_credits), 0) charged_credits,
+                   (
+                       SELECT COALESCE(SUM(
+                           CASE
+                               WHEN jsonb_typeof(blueprint.metadata_json->'feedback_history') = 'array'
+                               THEN jsonb_array_length(blueprint.metadata_json->'feedback_history')
+                               ELSE 0
+                           END
+                       ), 0)
+                       FROM agent_blueprints blueprint
+                       WHERE blueprint.business_id = biz.id
+                   ) feedback_entries,
+                   MAX(r.updated_at) last_run_at
+            FROM businesses biz
+            LEFT JOIN agent_runs r ON r.business_id = biz.id
+            LEFT JOIN operatorcreditreservations reservation ON reservation.id = r.billing_reservation_id
+            WHERE biz.id = ANY(%s)
+            GROUP BY biz.id, biz.name
+            ORDER BY biz.name
+            """,
+            (beta_business_ids,),
+        )
+        for row in cursor.fetchall() or []:
+            item = dict(row)
+            preview_runs = int(item.get("preview_runs") or 0)
+            work_runs = int(item.get("work_runs") or 0)
+            completed_work_runs = int(item.get("completed_work_runs") or 0)
+            failed_work_runs = int(item.get("failed_work_runs") or 0)
+            missing_result_runs = int(item.get("missing_result_runs") or 0)
+            success_rate = round((completed_work_runs / work_runs) * 100, 1) if work_runs else 0.0
+            gate_passed = (
+                preview_runs >= 10
+                and work_runs >= 5
+                and success_rate >= 90
+                and missing_result_runs == 0
+            )
+            needs_attention = missing_result_runs > 0 or (work_runs >= 5 and success_rate < 90)
+            last_run_at = item.get("last_run_at")
+            beta_pilots.append(
+                {
+                    "business_id": str(item.get("business_id") or ""),
+                    "business_name": str(item.get("business_name") or "Без названия"),
+                    "preview_runs": preview_runs,
+                    "preview_target": 10,
+                    "work_runs": work_runs,
+                    "work_target": 5,
+                    "completed_work_runs": completed_work_runs,
+                    "failed_work_runs": failed_work_runs,
+                    "result_runs": int(item.get("result_runs") or 0),
+                    "missing_result_runs": missing_result_runs,
+                    "success_rate": success_rate,
+                    "success_rate_target": 90,
+                    "charged_credits": int(item.get("charged_credits") or 0),
+                    "feedback_entries": int(item.get("feedback_entries") or 0),
+                    "status": "passed" if gate_passed else "attention" if needs_attention else "collecting",
+                    "last_run_at": last_run_at.isoformat() if last_run_at else None,
+                }
+            )
     cursor.execute(
         """
         SELECT r.id run_id,
@@ -674,11 +787,6 @@ def _admin_agent_runtime_overview(cursor) -> dict:
             }
         )
 
-    beta_business_ids = [
-        item.strip()
-        for item in str(os.getenv("AGENT_BETA_BUSINESS_IDS", "")).split(",")
-        if item.strip()
-    ]
     last_run_at = run_state.get("last_run_at")
     last_scheduler_event_at = scheduler.get("last_event_at")
     return {
@@ -723,6 +831,7 @@ def _admin_agent_runtime_overview(cursor) -> dict:
             "charged_credits": int(billing.get("charged_credits") or 0),
             "released_credits": int(billing.get("released_credits") or 0),
         },
+        "beta_pilots": beta_pilots,
         "recent_issues": recent_issues,
     }
 
