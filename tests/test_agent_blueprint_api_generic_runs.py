@@ -1093,6 +1093,16 @@ def test_internal_content_generation_failure_does_not_save_raw_fallback(monkeypa
     assert result["external_dispatch_performed"] is False
 
 
+def test_message_llm_parser_accepts_unescaped_newline_inside_json_string():
+    from services.agent_blueprint_workspace import _parse_message_llm_json
+
+    parsed = _parse_message_llm_json(
+        '{"title":"Новость","draft_text":"Первая строка\nВторая строка","summary":[]}'
+    )
+
+    assert parsed["draft_text"] == "Первая строка\nВторая строка"
+
+
 def test_internal_content_draft_requests_facts_instead_of_table():
     from services.agent_blueprint_workspace import _render_output
 

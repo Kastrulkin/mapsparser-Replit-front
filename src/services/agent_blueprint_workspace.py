@@ -987,13 +987,13 @@ def _parse_message_llm_json(raw_response: str) -> Dict[str, Any]:
     if not text:
         raise ValueError("empty LLM response")
     try:
-        parsed = json.loads(text)
+        parsed = json.loads(text, strict=False)
     except Exception:
         start = text.find("{")
         end = text.rfind("}")
         if start < 0 or end <= start:
             raise ValueError("LLM response does not contain JSON")
-        parsed = json.loads(text[start : end + 1])
+        parsed = json.loads(text[start : end + 1], strict=False)
     if not isinstance(parsed, dict):
         raise ValueError("LLM response JSON is not an object")
     return parsed
