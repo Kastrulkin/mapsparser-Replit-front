@@ -713,20 +713,56 @@ def _render_message_result(
             user_id=user_id,
             run_id=run_id,
         )
+    return _missing_message_source_result(workflow, rules, output_format, feedback_notes)
+
+
+def _missing_message_source_result(
+    workflow: str,
+    rules: str,
+    output_format: str,
+    feedback_notes: List[str],
+) -> Dict[str, Any]:
+    if _is_internal_content_draft_workflow(workflow):
+        return {
+            "title": "Нужны факты для черновика",
+            "status": "needs_source_data",
+            "summary": [
+                "Агент не нашёл услуг, отзывов или другого подтверждённого материала, на котором можно безопасно построить новость.",
+            ],
+            "next_questions": [
+                "Добавьте услугу, отзыв или короткий подтверждённый факт для новости.",
+                "После этого запустите тест ещё раз.",
+            ],
+            "rules_applied": rules,
+            "format": output_format,
+            "feedback_notes": feedback_notes,
+            "preparation_method": "Черновик не готовился: для него не было подтверждённых фактов.",
+        }
+    if _is_google_sheets_message_workflow(workflow):
+        return {
+            "title": "Нужны данные таблицы",
+            "status": "needs_source_data",
+            "summary": [
+                "Агент не получил строку поездки из Google Sheets или другого источника данных, поэтому сообщение не сформировано.",
+            ],
+            "next_questions": [
+                "Проверьте, что Google Sheets подключён именно как источник данных агента.",
+                "Укажите таблицу и лист со списком поездок, затем запустите тест ещё раз.",
+            ],
+            "rules_applied": rules,
+            "format": output_format,
+            "feedback_notes": feedback_notes,
+            "preparation_method": "Сообщение не готовилось: не было строки источника для безопасного результата.",
+        }
     return {
-        "title": "Нужны данные таблицы",
+        "title": "Нужны данные источника",
         "status": "needs_source_data",
-        "summary": [
-            "Агент не получил строку поездки из Google Sheets или другого источника данных, поэтому сообщение не сформировано.",
-        ],
-        "next_questions": [
-            "Проверьте, что Google Sheets подключён именно как источник данных агента.",
-            "Укажите таблицу и лист со списком поездок, затем запустите тест ещё раз.",
-        ],
+        "summary": ["Агент не получил подтверждённые данные, поэтому безопасный результат не сформирован."],
+        "next_questions": ["Добавьте или подключите данные для этой задачи и запустите тест ещё раз."],
         "rules_applied": rules,
         "format": output_format,
         "feedback_notes": feedback_notes,
-        "preparation_method": "Сообщение не готовилось: не было строки источника для безопасного результата.",
+        "preparation_method": "Результат не готовился: подтверждённые данные источника отсутствуют.",
     }
 
 
@@ -946,7 +982,22 @@ def _parse_message_llm_json(raw_response: str) -> Dict[str, Any]:
 
 
 def _select_message_items(extracted: List[Dict[str, Any]], workflow: str) -> List[Dict[str, Any]]:
-    candidates = [item for item in extracted if _can_use_for_message(item)]
+    internal_content = _is_internal_content_draft_workflow(workflow)
+    candidates = [item for item in extracted if _can_use_for_message(item, allow_internal_content=internal_content)]
+    if internal_content:
+        substantive = [
+            item
+            for item in candidates
+            if _clean_text(item.get("source_name")).lower() != "business_profile"
+        ]
+        if not substantive:
+            return []
+        profile = [
+            item
+            for item in candidates
+            if _clean_text(item.get("source_name")).lower() == "business_profile"
+        ]
+        candidates = substantive + profile[:1]
     workflow_lower = workflow.lower()
     requested_day, month_markers = _requested_date_markers(workflow_lower)
     if requested_day:
@@ -1005,10 +1056,11 @@ def _requested_date_markers(workflow: str) -> tuple[str, List[str]]:
     return "", []
 
 
-def _can_use_for_message(item: Dict[str, Any]) -> bool:
+def _can_use_for_message(item: Dict[str, Any], *, allow_internal_content: bool = False) -> bool:
     source_name = _clean_text(item.get("source_name")).lower()
     if source_name in {"business_profile", "services", "reviews", "external_reviews"}:
-        return False
+        if not allow_internal_content:
+            return False
     summary = _clean_text(item.get("summary"))
     if not summary:
         return False
@@ -1017,6 +1069,23 @@ def _can_use_for_message(item: Dict[str, Any]) -> bool:
     if any(marker in lowered for marker in internal_markers) and source_name in {"профиль бизнеса", "business profile"}:
         return False
     return True
+
+
+def _is_google_sheets_message_workflow(workflow: str) -> bool:
+    lowered = _clean_text(workflow).lower()
+    return any(
+        marker in lowered
+        for marker in ["google sheets", "google-таблиц", "google таблиц", "docs.google", "таблиц"]
+    )
+
+
+def _is_internal_content_draft_workflow(workflow: str) -> bool:
+    lowered = _clean_text(workflow).lower()
+    if _is_google_sheets_message_workflow(lowered):
+        return False
+    content_requested = any(marker in lowered for marker in ["новост", "контент", "пост", "публикац"])
+    internal_only = any(marker in lowered for marker in ["внутрен", "не публи", "без публикац", "не отправ", "без отправ"])
+    return content_requested and internal_only
 
 
 def _message_item_text(item: Dict[str, Any]) -> str:

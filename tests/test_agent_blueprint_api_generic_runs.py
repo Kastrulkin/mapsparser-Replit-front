@@ -978,6 +978,79 @@ def test_message_result_needs_source_data_without_sheet_rows():
     assert "не получил строку поездки" in result["summary"][0].lower()
 
 
+def test_internal_content_draft_uses_business_facts_without_sheet(monkeypatch):
+    import services.agent_blueprint_workspace as workspace
+
+    monkeypatch.setattr(
+        workspace,
+        "analyze_text_with_gigachat",
+        lambda *args, **kwargs: json.dumps(
+            {
+                "title": "Новость HighSpeed and Go",
+                "draft_text": "30 июля рассказываем о поездках HighSpeed and Go по Пхукету.",
+                "summary": ["Использованы профиль и подтверждённая услуга."],
+                "checklist": ["Проверить дату перед публикацией."],
+                "rules_applied": ["Ничего не публиковать автоматически."],
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+    result = workspace._render_output(
+        "custom",
+        {
+            "workflow_description": "Подготовь внутренний черновик новости на 30 июля. Ничего не публикуй и не отправляй.",
+            "processing_rules": "Используй только подтверждённые факты",
+            "output_format": "Черновик новости",
+        },
+        [
+            {
+                "source_name": "business_profile",
+                "summary": "name: HighSpeed and Go; city: Phuket",
+                "raw": {"id": "biz-1", "name": "HighSpeed and Go", "city": "Phuket"},
+            },
+            {
+                "source_name": "services",
+                "summary": "name: Индивидуальный трансфер по Пхукету",
+                "raw": {"id": "service-1", "name": "Индивидуальный трансфер по Пхукету"},
+            },
+        ],
+        [],
+        {"business_id": "biz-1", "user_id": "user-1", "run_id": "run-1"},
+    )
+
+    assert result["title"] == "Новость HighSpeed and Go"
+    assert result["draft_text"].startswith("30 июля")
+    assert result.get("status") != "needs_source_data"
+    assert result["external_dispatch_performed"] is False
+
+
+def test_internal_content_draft_requests_facts_instead_of_table():
+    from services.agent_blueprint_workspace import _render_output
+
+    result = _render_output(
+        "custom",
+        {
+            "workflow_description": "Подготовь внутренний черновик новости. Ничего не публикуй и не отправляй.",
+            "processing_rules": "Не придумывать факты",
+            "output_format": "Черновик новости",
+        },
+        [
+            {
+                "source_name": "business_profile",
+                "summary": "name: HighSpeed and Go; city: Phuket",
+                "raw": {"id": "biz-1", "name": "HighSpeed and Go", "city": "Phuket"},
+            },
+        ],
+        [],
+        {},
+    )
+
+    assert result["status"] == "needs_source_data"
+    assert result["title"] == "Нужны факты для черновика"
+    assert "таблиц" not in " ".join(result["summary"] + result["next_questions"]).lower()
+
+
 def test_message_result_prompts_google_reconnect_when_sheet_auth_is_revoked():
     from services.agent_blueprint_workspace import _render_output
 
