@@ -10,6 +10,7 @@ import {
   MapPin,
   MessageCircle,
   Plus,
+  RadioTower,
   RefreshCw,
   Search,
   Send,
@@ -122,6 +123,18 @@ interface EnrichmentState {
 interface ContactIntelligence {
   contacts?: ContactPoint[];
   contact_summary?: { found?: number; verified?: number };
+  telegram_sources?: Array<{
+    id: string;
+    title?: string;
+    url?: string;
+    status?: 'candidate' | 'active' | 'paused';
+    sync_status?: 'idle' | 'queued' | 'syncing' | 'ready' | 'partial' | 'failed' | 'needs_account';
+    reference_type?: 'public_reference_unverified' | 'public_channel' | 'personal_or_unavailable';
+    permission_reason?: 'ready' | 'radar_permission_required' | 'telegram_account_required';
+    documents_count?: number;
+    last_collected_at?: string | null;
+    error?: string | null;
+  }>;
   selected_recipient?: ContactPoint | null;
   job?: {
     id?: string;
@@ -598,6 +611,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     || null;
   const drawerContacts = (contactIntelligence?.contacts || selectedWorkstream?.contact_points || [])
     .filter((item) => item.type !== 'website');
+  const drawerTelegramSources = contactIntelligence?.telegram_sources || [];
   const drawerRecipient = contactIntelligence?.selected_recipient || selectedWorkstream?.selected_recipient || null;
   const drawerReadiness = contactIntelligence?.job?.message_readiness || selectedWorkstream?.message_readiness || {};
   const drawerFirstMessage = contactIntelligence?.first_message || null;
@@ -1547,6 +1561,56 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     </div>
                   )}
                 </div>
+                {drawerTelegramSources.length > 0 && (
+                  <div className="mt-4 border-t border-slate-200 pt-4">
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700">
+                        <RadioTower className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <h4 className="text-balance text-sm font-semibold text-slate-950">Telegram-источники</h4>
+                        <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
+                          Это публичные каналы для поиска сигналов. LocalOS не использует их как чат получателя.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {drawerTelegramSources.map((source) => {
+                        const confirmedChannel = source.reference_type === 'public_channel' && source.status === 'active';
+                        const checking = ['queued', 'syncing'].includes(String(source.sync_status || ''));
+                        const needsPermission = source.permission_reason === 'radar_permission_required';
+                        const needsAccount = source.permission_reason === 'telegram_account_required';
+                        const statusLabel = confirmedChannel
+                          ? `Публичный канал · ${Number(source.documents_count || 0)} публикаций собрано`
+                          : checking
+                            ? 'Проверяем, что это публичный канал'
+                            : needsPermission
+                              ? 'Ссылка сохранена · разрешите Telegram-радар'
+                              : needsAccount
+                                ? 'Ссылка сохранена · подключите Telegram-радар'
+                                : source.status === 'paused'
+                                  ? 'Не является доступным публичным каналом'
+                                  : 'Ссылка сохранена для проверки';
+                        return (
+                          <a
+                            key={source.id}
+                            href={source.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex min-h-12 items-center gap-3 rounded-md bg-white px-3 py-2 text-left shadow-sm shadow-slate-900/5 transition-[box-shadow] hover:shadow-md"
+                          >
+                            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${confirmedChannel ? 'bg-emerald-500' : checking ? 'bg-sky-500' : 'bg-amber-400'}`} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold text-slate-900">{source.title || source.url || 'Telegram'}</span>
+                              <span className="mt-0.5 block text-pretty text-xs leading-5 text-slate-600 tabular-nums">{statusLabel}</span>
+                            </span>
+                            <ExternalLink className="h-4 w-4 shrink-0 text-slate-400" />
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </section>
 
               {selectedWorkstream.research && (

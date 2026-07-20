@@ -72,6 +72,38 @@ def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
     contacts = [serialize_contact_point(dict(row)) for row in cursor.fetchall() or []]
     cursor.execute(
         """
+        SELECT source.id, source.title, source.canonical_url, source.status,
+               source.sync_status, source.last_collected_at, source.last_sync_error,
+               source.metadata_json,
+               COUNT(document.id) FILTER (WHERE document.invalidated_at IS NULL) AS documents_count
+        FROM lead_signal_links link
+        JOIN knowledge_sources source ON source.id::text = link.source_id
+        LEFT JOIN knowledge_documents document ON document.source_id = source.id
+        WHERE link.workstream_id = %s
+          AND link.source_type = 'telegram_knowledge_source'
+        GROUP BY source.id
+        ORDER BY source.status, source.updated_at DESC
+        """,
+        (workstream.get("id"),),
+    )
+    telegram_sources = []
+    for row in cursor.fetchall() or []:
+        source = dict(row)
+        metadata = source.get("metadata_json") if isinstance(source.get("metadata_json"), dict) else {}
+        telegram_sources.append({
+            "id": str(source.get("id")),
+            "title": source.get("title"),
+            "url": source.get("canonical_url"),
+            "status": source.get("status"),
+            "sync_status": source.get("sync_status"),
+            "reference_type": metadata.get("telegram_reference_type"),
+            "permission_reason": metadata.get("permission_reason"),
+            "documents_count": int(source.get("documents_count") or 0),
+            "last_collected_at": source.get("last_collected_at"),
+            "error": source.get("last_sync_error"),
+        })
+    cursor.execute(
+        """
         SELECT * FROM lead_enrichment_jobs
         WHERE workstream_id = %s
         ORDER BY created_at DESC
@@ -152,6 +184,7 @@ def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
         "workstream_id": str(workstream.get("id")),
         "lead_id": str(workstream.get("lead_id")),
         "contacts": contacts,
+        "telegram_sources": telegram_sources,
         "contact_summary": {
             "found": sum(1 for item in contacts if item.get("type") != "website"),
             "verified": sum(

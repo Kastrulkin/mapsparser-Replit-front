@@ -141,3 +141,15 @@ def test_message_quality_keeps_grounding_when_only_source_punctuation_changes():
 
     assert quality["checks"]["removal"] is True
     assert "decorative_personalization" not in quality["blocking_reasons"]
+
+
+def test_lead_drawer_exposes_channel_source_status_in_human_language():
+    api = Path("src/api/prospecting/contact_intelligence_routes.py").read_text(encoding="utf-8")
+    ui = Path("frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text(encoding="utf-8")
+
+    assert '"telegram_sources": telegram_sources' in api
+    assert "documents_count" in api
+    assert "Telegram-источники" in ui
+    assert "LocalOS не использует их как чат получателя" in ui
+    assert "подключите Telegram-радар" in ui
+    assert "Публичный канал" in ui
