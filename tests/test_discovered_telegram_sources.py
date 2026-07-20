@@ -95,6 +95,8 @@ def test_discovery_is_scoped_and_linked_to_workstream():
     assert "telegram_knowledge_source" in migration
     assert "radar_permission_required" in source
     assert "telegram_account_required" in source
+    assert "source.allowed_uses @>" in source
+    assert "source.allowed_uses ?" not in source
 
 
 def test_verified_channel_is_excluded_from_direct_message_contacts():

@@ -718,12 +718,14 @@ def _admin_agent_runtime_overview(cursor) -> dict:
             completed_work_runs = int(item.get("completed_work_runs") or 0)
             failed_work_runs = int(item.get("failed_work_runs") or 0)
             missing_result_runs = int(item.get("missing_result_runs") or 0)
+            feedback_entries = int(item.get("feedback_entries") or 0)
             success_rate = round((completed_work_runs / work_runs) * 100, 1) if work_runs else 0.0
             gate_passed = (
                 preview_runs >= 10
                 and work_runs >= 5
                 and success_rate >= 90
                 and missing_result_runs == 0
+                and feedback_entries >= 1
             )
             needs_attention = missing_result_runs > 0 or (work_runs >= 5 and success_rate < 90)
             last_run_at = item.get("last_run_at")
@@ -742,7 +744,8 @@ def _admin_agent_runtime_overview(cursor) -> dict:
                     "success_rate": success_rate,
                     "success_rate_target": 90,
                     "charged_credits": int(item.get("charged_credits") or 0),
-                    "feedback_entries": int(item.get("feedback_entries") or 0),
+                    "feedback_entries": feedback_entries,
+                    "feedback_target": 1,
                     "status": "passed" if gate_passed else "attention" if needs_attention else "collecting",
                     "last_run_at": last_run_at.isoformat() if last_run_at else None,
                 }

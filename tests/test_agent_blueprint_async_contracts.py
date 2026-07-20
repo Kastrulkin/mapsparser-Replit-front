@@ -634,6 +634,19 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
                         "feedback_entries": 0,
                         "last_run_at": now,
                     },
+                    {
+                        "business_id": "biz-3",
+                        "business_name": "Запуски готовы, оценки нет",
+                        "preview_runs": 10,
+                        "work_runs": 5,
+                        "completed_work_runs": 5,
+                        "failed_work_runs": 0,
+                        "result_runs": 5,
+                        "missing_result_runs": 0,
+                        "charged_credits": 2,
+                        "feedback_entries": 0,
+                        "last_run_at": now,
+                    },
                 ]
             elif "count(distinct r.id) filter" in normalized:
                 self.result = {
@@ -804,8 +817,11 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
     pilots = {item["business_id"]: item for item in runtime["beta_pilots"]}
     assert pilots["biz-1"]["success_rate"] == 90.0
     assert pilots["biz-1"]["status"] == "passed"
+    assert pilots["biz-1"]["feedback_target"] == 1
     assert pilots["biz-2"]["status"] == "attention"
     assert pilots["biz-2"]["missing_result_runs"] == 1
+    assert pilots["biz-3"]["status"] == "collecting"
+    assert pilots["biz-3"]["feedback_entries"] == 0
     assert runtime["scheduler"]["total_events"] == 8
     assert runtime["scheduler"]["failed_24h"] == 1
     assert runtime["scheduler"]["recent_events"][0]["run_status"] == "completed"
@@ -871,3 +887,5 @@ def test_admin_agents_ui_exposes_runtime_health():
     assert "Пилот Agents Beta" in source
     assert "beta_pilots" in source
     assert "missing_result_runs" in source
+    assert "feedback_target" in source
+    assert "Нужна обратная связь" in source

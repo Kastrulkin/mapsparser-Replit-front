@@ -193,6 +193,7 @@ interface AdminAgentBetaPilot {
   success_rate_target: number;
   charged_credits: number;
   feedback_entries: number;
+  feedback_target: number;
   status: 'collecting' | 'attention' | 'passed';
   last_run_at?: string;
 }
@@ -1566,14 +1567,21 @@ export const AdminPage: React.FC = () => {
                 <div className="mt-4 border-t border-slate-200 pt-4">
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                     <h4 className="text-sm font-semibold text-slate-900">Пилот Agents Beta</h4>
-                    <span className="text-xs text-slate-500">Цель: 10 тестов, 5 рабочих запусков и не менее 90% успеха</span>
+                    <span className="text-xs text-slate-500">Цель: 10 тестов, 5 рабочих запусков, не менее 90% успеха и 1 оценка</span>
                   </div>
                   <div className="mt-2 divide-y divide-slate-100">
                     {(agentRuntime?.beta_pilots || []).map((pilot) => {
                       const passed = pilot.status === 'passed';
                       const needsAttention = pilot.status === 'attention';
+                      const needsFeedback = (
+                        pilot.preview_runs >= pilot.preview_target
+                        && pilot.work_runs >= pilot.work_target
+                        && pilot.success_rate >= pilot.success_rate_target
+                        && pilot.missing_result_runs === 0
+                        && pilot.feedback_entries < pilot.feedback_target
+                      );
                       return (
-                        <div key={pilot.business_id} className="grid gap-3 py-3 text-sm lg:grid-cols-[minmax(180px,1fr)_repeat(4,minmax(105px,0.55fr))_minmax(160px,0.75fr)] lg:items-center">
+                        <div key={pilot.business_id} className="grid gap-3 py-3 text-sm lg:grid-cols-[minmax(180px,1fr)_repeat(5,minmax(90px,0.5fr))_minmax(150px,0.7fr)] lg:items-center">
                           <div className="min-w-0">
                             <button type="button" onClick={() => handleBusinessClick(pilot.business_id)} className="truncate font-semibold text-slate-900 underline-offset-4 hover:underline">
                               {pilot.business_name}
@@ -1596,11 +1604,15 @@ export const AdminPage: React.FC = () => {
                             <span className={`font-semibold tabular-nums ${pilot.missing_result_runs ? 'text-amber-800' : 'text-slate-900'}`}>{pilot.result_runs} / {pilot.completed_work_runs}</span>
                             <div className="text-xs text-slate-500">с результатом</div>
                           </div>
+                          <div className="text-slate-600">
+                            <span className={`font-semibold tabular-nums ${pilot.feedback_entries >= pilot.feedback_target ? 'text-emerald-700' : 'text-slate-900'}`}>{pilot.feedback_entries} / {pilot.feedback_target}</span>
+                            <div className="text-xs text-slate-500">оценок</div>
+                          </div>
                           <div>
                             <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${passed ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : needsAttention ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-sky-200 bg-sky-50 text-sky-700'}`}>
-                              {passed ? 'Порог пройден' : needsAttention ? 'Требует внимания' : 'Собираем запуски'}
+                              {passed ? 'Пилот подтверждён' : needsAttention ? 'Требует внимания' : needsFeedback ? 'Нужна обратная связь' : 'Собираем запуски'}
                             </span>
-                            <div className="mt-1 text-xs text-slate-500 tabular-nums">{pilot.charged_credits} кредитов · обратная связь: {pilot.feedback_entries}</div>
+                            <div className="mt-1 text-xs text-slate-500 tabular-nums">Списано: {pilot.charged_credits} кредитов</div>
                           </div>
                         </div>
                       );

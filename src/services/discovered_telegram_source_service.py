@@ -370,7 +370,7 @@ def discovered_telegram_signals(
           AND source.sync_status = 'ready'
           AND source.visibility = 'public'
           AND source.sync_mode = 'public_preview'
-          AND source.allowed_uses ? 'outreach'
+          AND source.allowed_uses @> '["outreach"]'::jsonb
           AND document.document_type = 'telegram_message'
           AND document.published_at >= NOW() - INTERVAL '180 days'
           AND document.permalink IS NOT NULL
