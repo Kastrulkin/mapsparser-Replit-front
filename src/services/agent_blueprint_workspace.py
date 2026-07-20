@@ -895,6 +895,8 @@ def _generate_message_result_with_llm(
             else:
                 draft_text = _clean_text(parsed.get("draft_text") or parsed.get("post_text") or parsed.get("message"))
             title = _clean_text(parsed.get("title")) or fallback["title"]
+            if requested_content_count > 1 and title == fallback["title"]:
+                title = _content_drafts_title(requested_content_count)
             if not draft_text:
                 raise ValueError("LLM response does not contain draft text")
             quality_issue = ""
@@ -1063,6 +1065,13 @@ def _clean_content_drafts(value: Any) -> List[Dict[str, str]]:
             }
         )
     return drafts
+
+
+def _content_drafts_title(count: int) -> str:
+    remainder_100 = count % 100
+    remainder_10 = count % 10
+    noun = "черновик новостей" if remainder_10 == 1 and remainder_100 != 11 else "черновика новостей" if remainder_10 in {2, 3, 4} and remainder_100 not in {12, 13, 14} else "черновиков новостей"
+    return f"{count} {noun}"
 
 
 def _internal_content_fact_issue(title: str, draft_text: str, selected_items: List[Dict[str, Any]]) -> str:
