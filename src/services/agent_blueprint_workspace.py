@@ -518,6 +518,7 @@ def _render_output(
             run_id=_clean_text((workspace or {}).get("run_id")),
         )
     if _looks_like_message_result(setup, output_format):
+        workspace_run_input = (workspace or {}).get("run_input")
         return _render_message_result(
             setup,
             extracted,
@@ -527,6 +528,7 @@ def _render_output(
             business_id=_clean_text((workspace or {}).get("business_id")),
             user_id=_clean_text((workspace or {}).get("user_id")),
             run_id=_clean_text((workspace or {}).get("run_id")),
+            preview_mode=bool(workspace_run_input.get("preview_mode")) if isinstance(workspace_run_input, dict) else False,
         )
     return {
         "title": "Результат агента",
@@ -645,6 +647,7 @@ def _render_message_result(
     business_id: str = "",
     user_id: str = "",
     run_id: str = "",
+    preview_mode: bool = False,
 ) -> Dict[str, Any]:
     workflow = _clean_text(setup.get("run_request") or setup.get("workflow_description"))
     google_error = _google_sheets_source_error(extracted)
@@ -712,6 +715,7 @@ def _render_message_result(
             business_id=business_id,
             user_id=user_id,
             run_id=run_id,
+            preview_mode=preview_mode,
         )
     return _missing_message_source_result(workflow, rules, output_format, feedback_notes)
 
@@ -808,6 +812,7 @@ def _generate_message_result_with_llm(
     business_id: str = "",
     user_id: str = "",
     run_id: str = "",
+    preview_mode: bool = False,
 ) -> Dict[str, Any]:
     prompt_version = (
         "agent_custom_message_draft_v2"
@@ -842,7 +847,11 @@ def _generate_message_result_with_llm(
             "analysis_prompt_version": prompt_version,
             "llm_analysis_used": True,
             "llm_error": "",
-            "preparation_method": "ИИ подготовил черновик по данным этого тестового запуска. Внешняя отправка не выполнялась.",
+            "preparation_method": (
+                "ИИ подготовил черновик по данным этого теста. Внешняя отправка не выполнялась."
+                if preview_mode
+                else "ИИ подготовил черновик по данным этой работы. Внешняя отправка не выполнялась."
+            ),
         }
     except Exception:
         exc = sys.exc_info()[1]

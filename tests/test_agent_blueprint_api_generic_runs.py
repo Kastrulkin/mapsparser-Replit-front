@@ -1020,7 +1020,12 @@ def test_internal_content_draft_uses_business_facts_without_sheet(monkeypatch):
             },
         ],
         [],
-        {"business_id": "biz-1", "user_id": "user-1", "run_id": "run-1"},
+        {
+            "business_id": "biz-1",
+            "user_id": "user-1",
+            "run_id": "run-1",
+            "run_input": {"preview_mode": False},
+        },
     )
 
     assert result["title"] == "Новость HighSpeed and Go"
@@ -1028,6 +1033,8 @@ def test_internal_content_draft_uses_business_facts_without_sheet(monkeypatch):
     assert result.get("status") != "needs_source_data"
     assert result["external_dispatch_performed"] is False
     assert result["analysis_prompt_version"] == "agent_custom_message_draft_v2"
+    assert "этой работы" in result["preparation_method"]
+    assert "тест" not in result["preparation_method"]
 
 
 def test_internal_content_draft_prioritizes_services_and_positive_review(monkeypatch):
