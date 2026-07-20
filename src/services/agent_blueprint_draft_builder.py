@@ -1161,7 +1161,19 @@ def _is_review_location_analysis_request(text: str) -> bool:
 def _is_review_based_content_request(text: str) -> bool:
     if not _contains_any(text, ["отзыв", "review"]):
         return False
-    return _contains_any(text, ["идеи пост", "идея пост", "3 идеи", "три идеи", "постов", "контент"])
+    return _contains_any(
+        text,
+        [
+            "идеи пост",
+            "идея пост",
+            "3 идеи",
+            "три идеи",
+            "пост",
+            "контент",
+            "новост",
+            "публикац",
+        ],
+    )
 
 
 def _is_photo_quality_request(text: str) -> bool:

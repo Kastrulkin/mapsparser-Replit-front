@@ -169,6 +169,27 @@ def test_agent_builder_understands_core_user_scenarios_without_cross_domain_ques
             assert term not in questions_text, key
 
 
+def test_review_facts_remain_a_source_when_requested_output_is_internal_news():
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint, infer_blueprint_category
+
+    prompt = (
+        "По кнопке прочитай профиль, услуги и последние отзывы бизнеса и подготовь один короткий "
+        "внутренний черновик новости на 30 июля 2026 года. Сохрани результат только в истории агента. "
+        "Ничего не публикуй и не отправляй."
+    )
+
+    draft = compile_agent_blueprint(prompt)
+    payload = draft["version_payload"]
+    output_step = next(step for step in payload["steps"] if step.get("key") == "prepare_output")
+
+    assert infer_blueprint_category(prompt) == "custom"
+    assert draft["category"] == "custom"
+    assert {"external_reviews", "services", "business_profile"}.issubset(set(draft["metadata"]["data_sources"]))
+    assert output_step["payload"]["format"] == "custom_artifact"
+    assert output_step["payload"]["external_dispatch_performed"] is False
+    assert all(step.get("type") != "approval" for step in payload["steps"])
+
+
 def test_agent_builder_understands_second_browser_scenario_pack_without_wrong_domains():
     from services.agent_builder_session import build_agent_builder_state
 
