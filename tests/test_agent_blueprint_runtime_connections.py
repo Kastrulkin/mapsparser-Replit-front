@@ -640,6 +640,61 @@ def test_agent_preflight_merges_answer_config_into_selected_connection():
     assert preflight["ready"] is False
     assert preflight["items"][0]["status"] == "needs_connection"
     assert preflight["items"][0]["resolution"] == "provider_route_required"
+
+
+def test_agent_preflight_rejects_revoked_google_auth_without_saved_binding_metadata():
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def __init__(self):
+            self.results = []
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            if "from agent_integrations integration" in normalized_query:
+                self.results = [
+                    {
+                        "id": "sheets-1",
+                        "business_id": "biz1",
+                        "provider": "google_sheets",
+                        "status": "active",
+                        "display_name": "Trips",
+                        "auth_ref": "google-account-1",
+                        "auth_account_id": "google-account-1",
+                        "auth_is_active": False,
+                        "auth_last_error": "invalid_grant",
+                        "config_json": {
+                            "spreadsheet_id": "spreadsheet-1",
+                            "sheet_name": "Trips",
+                        },
+                    }
+                ]
+                return None
+            if "from externalbusinessaccounts" in normalized_query:
+                self.results = []
+                return None
+            raise AssertionError(f"Unhandled SQL: {query}")
+
+        def fetchall(self):
+            return self.results
+
+    metadata = {
+        "required_integration_bindings": [
+            {
+                "key": "google_sheets_read",
+                "provider": "google_sheets",
+                "capability": "google_sheets.read_rows",
+                "required_config": ["spreadsheet_id", "sheet_name"],
+            }
+        ],
+    }
+
+    preflight = build_agent_integration_preflight(Cursor(), business_id="biz1", metadata=metadata, input_payload={})
+
+    assert preflight["ready"] is False
+    assert preflight["missing_count"] == 1
+    assert preflight["items"][0]["resolution"] == "google_sheets_auth_reconnect_required"
+    assert preflight["items"][0]["next_action_label"] == "Переподключить Google-доступ"
     assert preflight["items"][0]["integration_id"] == "sheets-1"
 
 
@@ -815,7 +870,9 @@ def test_agent_preflight_rejects_revoked_google_auth_bound_to_integration():
 
     assert preflight["ready"] is False
     assert preflight["items"][0]["status"] == "needs_connection"
-    assert preflight["items"][0]["resolution"] == "provider_route_required"
+    assert preflight["items"][0]["resolution"] == "google_sheets_auth_reconnect_required"
+    assert preflight["items"][0]["credential_state"] == "reconnect_required"
+    assert preflight["items"][0]["next_action_label"] == "Переподключить Google-доступ"
 
 
 def test_activation_connection_blocker_keeps_binding_route_context():

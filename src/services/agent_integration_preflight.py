@@ -111,6 +111,20 @@ def _binding_preflight_item(
                 "Manual fallback is selected: LocalOS will prepare draft artifacts and require a human-operated external action.",
             )
         selected_integration = _selected_active_integration(metadata_config, active_integrations)
+        reconnect_integration = _google_sheets_reconnect_integration(
+            provider,
+            metadata_config,
+            active_integrations,
+        )
+        if reconnect_integration:
+            return _base_item(
+                binding,
+                "needs_connection",
+                "google_sheets_auth_reconnect_required",
+                str(reconnect_integration.get("id") or metadata_config.get("integration_id") or ""),
+                [],
+                "Сохранённый Google-доступ больше не работает. Переподключите Google Таблицы и повторите запуск.",
+            )
         selected_config = parse_json_field(selected_integration.get("config_json"), {})
         selected_config = selected_config if isinstance(selected_config, dict) else {}
         resolved_config = _merge_default_config(default_config, selected_config)
@@ -179,7 +193,7 @@ def _binding_preflight_item(
         missing_config = [key for key in required_config if not str(resolved_config.get(key) or "").strip()]
         if not missing_config:
             if provider in ROUTE_REQUIRED_PROVIDERS:
-                if provider == "google_sheets" and str(integration.get("auth_ref") or "").strip():
+                if provider == "google_sheets" and _integration_auth_is_ready(integration):
                     return _base_item(
                         binding,
                         "ready",
@@ -187,6 +201,15 @@ def _binding_preflight_item(
                         str(integration.get("id") or ""),
                         [],
                         "Google Sheets credential and sheet target are connected for native LocalOS read.",
+                    )
+                if provider == "google_sheets" and str(integration.get("auth_ref") or "").strip():
+                    return _base_item(
+                        binding,
+                        "needs_connection",
+                        "google_sheets_auth_reconnect_required",
+                        str(integration.get("id") or ""),
+                        [],
+                        "Сохранённый Google-доступ больше не работает. Переподключите Google Таблицы и повторите запуск.",
                     )
                 return _base_item(
                     binding,
@@ -226,20 +249,47 @@ def _has_native_auth_ref(metadata_config: Dict[str, Any], active_integrations: L
     integration_id = str(metadata_config.get("integration_id") or "").strip()
     has_any_auth_ref = False
     for integration in active_integrations:
-        auth_was_checked = "auth_account_id" in integration
-        auth_is_ready = not auth_was_checked or (
-            bool(str(integration.get("auth_account_id") or "").strip())
-            and integration.get("auth_is_active") is True
-        )
-        if str(integration.get("auth_ref") or "").strip() and auth_is_ready:
+        if _integration_auth_is_ready(integration):
             has_any_auth_ref = True
         if integration_id and str(integration.get("id") or "").strip() != integration_id:
             continue
-        if str(integration.get("auth_ref") or "").strip() and auth_is_ready:
+        if _integration_auth_is_ready(integration):
             return True
     if integration_id:
         return has_any_auth_ref
     return False
+
+
+def _integration_auth_is_ready(integration: Dict[str, Any]) -> bool:
+    if not str(integration.get("auth_ref") or "").strip():
+        return False
+    auth_was_checked = "auth_account_id" in integration
+    if not auth_was_checked:
+        return True
+    return (
+        bool(str(integration.get("auth_account_id") or "").strip())
+        and integration.get("auth_is_active") is True
+    )
+
+
+def _google_sheets_reconnect_integration(
+    provider: str,
+    metadata_config: Dict[str, Any],
+    active_integrations: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    if provider != "google_sheets":
+        return {}
+    integration_id = str(metadata_config.get("integration_id") or "").strip()
+    for integration in active_integrations:
+        if integration_id and str(integration.get("id") or "").strip() != integration_id:
+            continue
+        if (
+            str(integration.get("auth_ref") or "").strip()
+            and "auth_account_id" in integration
+            and not _integration_auth_is_ready(integration)
+        ):
+            return integration
+    return {}
 
 
 def _selected_active_integration(
@@ -355,6 +405,15 @@ def _policy_explanation(
             "approval_state": "blocked",
             "policy_summary": f"{provider} найден, но не хватает настроек: {', '.join(missing_config)}.",
             "next_action_label": "Заполнить настройки",
+        }
+    if resolution == "google_sheets_auth_reconnect_required":
+        return {
+            "execution_boundary": "blocked_until_connected",
+            "autonomy_level": "not_runnable",
+            "credential_state": "reconnect_required",
+            "approval_state": "blocked",
+            "policy_summary": "Google-доступ больше не работает. До переподключения LocalOS не читает таблицу и ничего не запускает.",
+            "next_action_label": "Переподключить Google-доступ",
         }
     if resolution in {"provider_route_required", "agent_integration_needs_provider_route", "builder_answer_needs_provider_route"}:
         return {
