@@ -172,8 +172,14 @@ interface AdminAgentSchedulerCanary {
   last_success_date?: string;
   failed_events: number;
   deferred_events: number;
+  recovered_deferred_events: number;
+  unresolved_deferred_events: number;
   old_version_runs: number;
   duplicate_runs: number;
+  late_runs: number;
+  max_start_delay_minutes: number;
+  start_delay_limit_minutes: number;
+  missed_dates: string[];
   status: 'observing' | 'attention' | 'passed';
   last_event_at?: string;
 }
@@ -1633,7 +1639,10 @@ export const AdminPage: React.FC = () => {
                       const passed = canary.status === 'passed';
                       const issueParts = [
                         canary.failed_events ? `${canary.failed_events} ошибок` : '',
-                        canary.deferred_events ? `${canary.deferred_events} отложено` : '',
+                        canary.unresolved_deferred_events ? `${canary.unresolved_deferred_events} ожидают повторения` : '',
+                        canary.recovered_deferred_events ? `${canary.recovered_deferred_events} восстановлено` : '',
+                        canary.late_runs ? `${canary.late_runs} с опозданием до ${canary.max_start_delay_minutes} мин` : '',
+                        (canary.missed_dates || []).length ? `${canary.missed_dates.length} пропущено` : '',
                         canary.duplicate_runs ? `${canary.duplicate_runs} дублей` : '',
                         canary.old_version_runs ? `${canary.old_version_runs} запусков старой версии` : '',
                       ].filter(Boolean);

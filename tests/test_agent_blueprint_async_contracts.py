@@ -964,14 +964,123 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
     assert runtime["scheduler"]["recent_events"][0]["timezone"] == "Europe/Tallinn"
     canaries = {item["blueprint_id"]: item for item in runtime["scheduler"]["canaries"]}
     assert canaries["bp-1"]["successful_days"] == 1
-    assert canaries["bp-1"]["status"] == "observing"
+    assert canaries["bp-1"]["status"] == "attention"
     assert canaries["bp-1"]["duplicate_runs"] == 1
     assert canaries["bp-1"]["failed_events"] == 1
     assert canaries["bp-1"]["old_version_runs"] == 0
+    assert canaries["bp-1"]["start_delay_limit_minutes"] == 15
     assert canaries["bp-2"]["successful_days"] == 7
     assert canaries["bp-2"]["status"] == "passed"
     assert runtime["consistency"]["archived_unfinished_runs"] == 4
     assert runtime["recent_issues"][0]["error"] == "provider timeout"
+
+
+def test_scheduler_canary_recovers_deferred_slot_and_rejects_late_start():
+    from api.agent_blueprints_api import _build_scheduler_canaries
+
+    base = {
+        "blueprint_id": "bp-1",
+        "business_id": "biz-1",
+        "agent_name": "Canary",
+        "business_name": "Riderra",
+        "active_version_id": "version-1",
+        "active_version_updated_at": "2026-07-20T10:00:00Z",
+        "execution_mode_confirmed_at": "2026-07-20T10:05:00Z",
+        "schedule_json": {"time": "17:50", "timezone": "Europe/Tallinn"},
+        "reason_code": None,
+        "run_version_id": "version-1",
+    }
+    rows = [
+        {
+            **base,
+            "event_id": "deferred",
+            "event_status": "failed",
+            "reason_code": "AGENT_RUN_ALREADY_IN_PROGRESS",
+            "payload_json": {
+                "schedule_date": "2026-07-20",
+                "schedule_time": "17:50",
+                "timezone": "Europe/Tallinn",
+            },
+            "event_created_at": datetime(2026, 7, 20, 14, 50, tzinfo=timezone.utc),
+            "run_id": "",
+            "run_status": "",
+        },
+        {
+            **base,
+            "event_id": "recovered",
+            "event_status": "run_started",
+            "payload_json": {
+                "schedule_date": "2026-07-20",
+                "schedule_time": "17:50",
+                "timezone": "Europe/Tallinn",
+            },
+            "event_created_at": datetime(2026, 7, 20, 14, 55, tzinfo=timezone.utc),
+            "run_id": "run-1",
+            "run_status": "completed",
+        },
+    ]
+
+    canary = _build_scheduler_canaries(
+        rows,
+        now=datetime(2026, 7, 20, 15, 0, tzinfo=timezone.utc),
+    )[0]
+
+    assert canary["successful_days"] == 1
+    assert canary["deferred_events"] == 1
+    assert canary["recovered_deferred_events"] == 1
+    assert canary["unresolved_deferred_events"] == 0
+    assert canary["max_start_delay_minutes"] == 5
+    assert canary["status"] == "observing"
+
+    rows[1]["event_created_at"] = datetime(2026, 7, 20, 15, 21, tzinfo=timezone.utc)
+    late_canary = _build_scheduler_canaries(
+        rows,
+        now=datetime(2026, 7, 20, 15, 25, tzinfo=timezone.utc),
+    )[0]
+
+    assert late_canary["late_runs"] == 1
+    assert late_canary["max_start_delay_minutes"] == 31
+    assert late_canary["successful_days"] == 0
+    assert late_canary["status"] == "attention"
+
+
+def test_scheduler_canary_ignores_activation_day_slot_that_already_passed():
+    from api.agent_blueprints_api import _build_scheduler_canaries
+
+    rows = [
+        {
+            "blueprint_id": "bp-1",
+            "business_id": "biz-1",
+            "agent_name": "Canary",
+            "business_name": "Riderra",
+            "active_version_id": "version-1",
+            "active_version_updated_at": "2026-07-20T15:05:00Z",
+            "execution_mode_confirmed_at": "2026-07-20T15:00:00Z",
+            "schedule_json": {"time": "17:50", "timezone": "Europe/Tallinn"},
+            "event_id": "late-activation-run",
+            "event_status": "run_started",
+            "reason_code": None,
+            "payload_json": {
+                "schedule_date": "2026-07-20",
+                "schedule_time": "17:50",
+                "timezone": "Europe/Tallinn",
+            },
+            "event_created_at": datetime(2026, 7, 20, 15, 10),
+            "run_id": "run-1",
+            "run_status": "completed",
+            "run_version_id": "version-1",
+        }
+    ]
+
+    canary = _build_scheduler_canaries(
+        rows,
+        now=datetime(2026, 7, 20, 15, 20, tzinfo=timezone.utc),
+    )[0]
+
+    assert canary["successful_days"] == 0
+    assert canary["successful_dates"] == []
+    assert canary["missed_dates"] == []
+    assert canary["status"] == "observing"
 
 
 def test_agent_beta_reconciliation_supersedes_archived_unfinished_runs():
@@ -1020,6 +1129,9 @@ def test_admin_agents_ui_exposes_runtime_health():
     assert "recent_events" in source
     assert "Проверка работы по расписанию" in source
     assert "successful_days" in source
+    assert "late_runs" in source
+    assert "missed_dates" in source
+    assert "recovered_deferred_events" in source
     assert "Пилот Agents Beta" in source
     assert "beta_pilots" in source
     assert "missing_result_runs" in source

@@ -1721,6 +1721,97 @@ def test_due_scheduled_trigger_dispatcher_waits_until_schedule_time():
     assert cursor.tables["agent_runs"] == {}
 
 
+def test_scheduler_uses_iana_timezone_for_due_time():
+    from services.agent_trigger_runtime import _schedule_context, _schedule_is_due
+
+    blueprint = {
+        "metadata_json": {
+            "custom_process": {
+                "schedule": {"time": "17:50", "timezone": "Europe/Tallinn"},
+            },
+        },
+    }
+    version = {"output_schema_json": {}}
+    before = datetime(2026, 7, 20, 14, 49, tzinfo=timezone.utc)
+    due = datetime(2026, 7, 20, 14, 50, tzinfo=timezone.utc)
+
+    assert _schedule_context(blueprint, version, before)["due"] is False
+    context = _schedule_context(blueprint, version, due)
+    assert context["due"] is True
+    assert context["schedule_date"] == "2026-07-20"
+    assert context["local_now"].startswith("2026-07-20T17:50:00")
+    assert _schedule_is_due({"time": "17:50", "timezone": "Europe/Tallinn"}, before) is False
+    assert _schedule_is_due({"time": "17:50", "timezone": "Europe/Tallinn"}, due) is True
+
+
+def test_scheduler_starts_next_day_when_activated_after_local_slot():
+    from services.agent_trigger_runtime import _schedule_context
+
+    blueprint = {
+        "metadata_json": {
+            "active_version_updated_at": "2026-07-20T15:05:00Z",
+            "execution_mode_confirmed_at": "2026-07-20T15:00:00Z",
+            "custom_process": {
+                "schedule": {"time": "17:50", "timezone": "Europe/Tallinn"},
+            },
+        },
+    }
+
+    context = _schedule_context(
+        blueprint,
+        {"output_schema_json": {}},
+        datetime(2026, 7, 20, 15, 10, tzinfo=timezone.utc),
+    )
+
+    assert context["ready"] is True
+    assert context["due"] is False
+    assert context["reason"] == "schedule_starts_next_day"
+
+
+def test_scheduler_catches_up_after_restart_when_enabled_before_slot():
+    from services.agent_trigger_runtime import _schedule_context
+
+    blueprint = {
+        "metadata_json": {
+            "active_version_updated_at": "2026-07-20T12:00:00Z",
+            "execution_mode_confirmed_at": "2026-07-20T12:05:00Z",
+            "custom_process": {
+                "schedule": {"time": "17:50", "timezone": "Europe/Tallinn"},
+            },
+        },
+    }
+
+    context = _schedule_context(
+        blueprint,
+        {"output_schema_json": {}},
+        datetime(2026, 7, 20, 15, 10, tzinfo=timezone.utc),
+    )
+
+    assert context["ready"] is True
+    assert context["due"] is True
+
+
+def test_scheduler_rejects_invalid_timezones_and_times():
+    from services.agent_trigger_runtime import _schedule_context, _schedule_is_due
+
+    invalid_timezone = {
+        "metadata_json": {
+            "custom_process": {"schedule": {"time": "17:50", "timezone": "Mars/Olympus"}},
+        },
+    }
+    invalid_time = {
+        "metadata_json": {
+            "custom_process": {"schedule": {"time": "29:90", "timezone": "Europe/Tallinn"}},
+        },
+    }
+    now = datetime(2026, 7, 20, 15, 10, tzinfo=timezone.utc)
+
+    assert _schedule_context(invalid_timezone, {"output_schema_json": {}}, now)["reason"] == "schedule_timezone_invalid"
+    assert _schedule_context(invalid_time, {"output_schema_json": {}}, now)["reason"] == "schedule_time_invalid"
+    assert _schedule_is_due({"time": "17:50", "timezone": "Mars/Olympus"}, now) is False
+    assert _schedule_is_due({"time": "29:90", "timezone": "Europe/Tallinn"}, now) is False
+
+
 def test_due_scheduler_runs_two_blueprints_for_same_business(monkeypatch):
     from services import agent_trigger_runtime
 

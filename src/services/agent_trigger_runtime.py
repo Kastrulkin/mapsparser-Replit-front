@@ -324,14 +324,29 @@ def _schedule_context(
         return {"ready": False, "reason": "schedule_timezone_required"}
     try:
         local_now = now.astimezone(ZoneInfo(timezone_name))
-    except ZoneInfoNotFoundError:
+    except (ValueError, ZoneInfoNotFoundError):
         return {"ready": False, "reason": "schedule_timezone_invalid"}
-    try:
-        hour_text, minute_text = schedule_time.split(":", 1)
-        due_minute = int(hour_text) * 60 + int(minute_text)
-    except Exception:
+    parsed_time = _parse_schedule_time(schedule_time)
+    if not parsed_time:
         return {"ready": False, "reason": "schedule_time_invalid"}
+    due_hour, due_minute_value = parsed_time
+    due_minute = due_hour * 60 + due_minute_value
     current_minute = local_now.hour * 60 + local_now.minute
+    due_local = local_now.replace(hour=due_hour, minute=due_minute_value, second=0, microsecond=0)
+    eligible_at = _schedule_eligible_at(metadata)
+    if eligible_at:
+        eligible_local = eligible_at.astimezone(local_now.tzinfo)
+        if eligible_local.date() == due_local.date() and eligible_local > due_local:
+            return {
+                "ready": True,
+                "due": False,
+                "reason": "schedule_starts_next_day",
+                "schedule_time": schedule_time,
+                "timezone": timezone_name,
+                "schedule_date": local_now.date().isoformat(),
+                "local_now": local_now.isoformat(),
+                "eligible_at": eligible_local.isoformat(),
+            }
     return {
         "ready": True,
         "due": current_minute >= due_minute,
@@ -340,6 +355,40 @@ def _schedule_context(
         "schedule_date": local_now.date().isoformat(),
         "local_now": local_now.isoformat(),
     }
+
+
+def _parse_schedule_time(schedule_time: str) -> tuple[int, int] | None:
+    try:
+        hour_text, minute_text = schedule_time.split(":", 1)
+        hour = int(hour_text)
+        minute = int(minute_text)
+    except (AttributeError, TypeError, ValueError):
+        return None
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        return None
+    return hour, minute
+
+
+def _parse_utc_datetime(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _schedule_eligible_at(metadata: Dict[str, Any]) -> datetime | None:
+    timestamps = [
+        _parse_utc_datetime(metadata.get("execution_mode_confirmed_at")),
+        _parse_utc_datetime(metadata.get("active_version_updated_at")),
+    ]
+    available = [item for item in timestamps if item]
+    return max(available) if available else None
 
 
 def _scheduled_blueprint_event_already_recorded(
@@ -522,18 +571,18 @@ def _load_due_scheduled_businesses(
 def _schedule_is_due(schedule: Dict[str, Any], now: datetime) -> bool:
     if not isinstance(schedule, dict) or not schedule:
         return False
-    schedule_time = str(schedule.get("time") or "19:00").strip()
-    if not schedule_time:
+    schedule_time = str(schedule.get("time") or "").strip()
+    timezone_name = str(schedule.get("timezone") or "").strip()
+    parsed_time = _parse_schedule_time(schedule_time)
+    if not parsed_time or not timezone_name or timezone_name == "business_timezone":
         return False
     try:
-        hour_text, minute_text = schedule_time.split(":", 1)
-        due_hour = max(0, min(int(hour_text), 23))
-        due_minute = max(0, min(int(minute_text), 59))
-    except Exception:
-        due_hour = 19
-        due_minute = 0
+        local_now = now.astimezone(ZoneInfo(timezone_name))
+    except (ValueError, ZoneInfoNotFoundError):
+        return False
+    due_hour, due_minute = parsed_time
     due_value = due_hour * 60 + due_minute
-    now_value = now.hour * 60 + now.minute
+    now_value = local_now.hour * 60 + local_now.minute
     return now_value >= due_value
 
 
