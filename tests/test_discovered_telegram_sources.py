@@ -5,6 +5,7 @@ from services.discovered_telegram_source_service import (
     discovered_telegram_signals,
     parse_telegram_reference,
 )
+from services.contact_intelligence_service import evaluate_first_message
 
 
 def test_public_telegram_reference_is_normalized_without_assuming_direct_message():
@@ -111,3 +112,30 @@ def test_enabling_radar_queues_previously_discovered_candidates():
     assert "metadata_json->>'auto_discovered'" in source
     assert "THEN 'queued'" in source
     assert "permission_reason\":\"ready" in source
+
+
+def test_message_quality_keeps_grounding_when_only_source_punctuation_changes():
+    signal = 'В публичном источнике «Арлекино» опубликовано: «Открыт новый набор». '
+    story = "Я развиваю LocalOS и проверяю карточки локальных компаний."
+    quality = evaluate_first_message(
+        (
+            'Здравствуйте! Пишу по поводу "Арлекино". '
+            "Я развиваю LocalOS и проверяю карточки локальных компаний. "
+            'В публичном источнике "Арлекино" опубликовано — "Открыт новый набор". '
+            "Прислать короткий разбор?"
+        ),
+        {
+            "lead_name": "Арлекино",
+            "signal": signal,
+            "pain": "",
+            "result": "короткий разбор",
+            "founder_story": story,
+            "source_urls": ["https://t.me/arlekinospb/10"],
+            "evidence_ids": ["evidence:telegram:10"],
+            "evidence_fresh": True,
+            "suppression_safe": True,
+        },
+    )
+
+    assert quality["checks"]["removal"] is True
+    assert "decorative_personalization" not in quality["blocking_reasons"]
