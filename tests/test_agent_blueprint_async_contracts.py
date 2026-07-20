@@ -194,6 +194,72 @@ def test_agent_run_queue_reuses_existing_idempotency_key(monkeypatch):
     assert result["run"]["id"] == "run-existing"
 
 
+def test_agent_run_queue_blocks_a_new_key_while_same_blueprint_is_active(monkeypatch):
+    from services import agent_run_queue
+
+    class Cursor:
+        def __init__(self):
+            self.results = [None, {"id": "run-active"}]
+
+        def execute(self, query, params=None):
+            normalized = " ".join(query.split()).lower()
+            if normalized.startswith("select pg_advisory_xact_lock"):
+                return None
+            if "from agent_runs" in normalized:
+                return None
+            raise AssertionError(f"Unexpected SQL: {query}")
+
+        def fetchone(self):
+            return self.results.pop(0)
+
+    monkeypatch.setattr(agent_run_queue, "build_agent_integration_preflight", lambda *args, **kwargs: {"ready": True})
+    monkeypatch.setattr(
+        agent_run_queue,
+        "reserve_agent_run_credits",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("A blocked run must not reserve credits")),
+    )
+
+    result = agent_run_queue.enqueue_agent_run(
+        Cursor(),
+        blueprint={"id": "bp1", "business_id": "biz1", "metadata_json": {}},
+        version={"id": "version1"},
+        input_payload={"preview_mode": False},
+        user_data={"user_id": "user1"},
+        idempotency_key="new-click",
+    )
+
+    assert result == {
+        "success": False,
+        "code": "AGENT_RUN_ALREADY_IN_PROGRESS",
+        "error": "agent run already in progress",
+        "run_id": "run-active",
+    }
+
+
+def test_agent_run_claim_recovers_stale_heartbeat_before_claiming_retry():
+    from services.agent_run_queue import claim_next_agent_run
+
+    class Cursor:
+        def __init__(self):
+            self.queries = []
+            self.result = {"id": "run-stale", "status": "running", "attempt_count": 2}
+
+        def execute(self, query, params=None):
+            self.queries.append(" ".join(query.split()).lower())
+
+        def fetchone(self):
+            return self.result
+
+    cursor = Cursor()
+    claimed = claim_next_agent_run(cursor)
+
+    assert claimed["id"] == "run-stale"
+    assert "heartbeat_at < now() - interval '5 minutes'" in cursor.queries[0]
+    assert "status = case when attempt_count < max_attempts then 'retry_wait' else 'failed' end" in cursor.queries[0]
+    assert "for update skip locked" in cursor.queries[1]
+    assert "attempt_count = r.attempt_count + 1" in cursor.queries[1]
+
+
 def test_unified_run_billing_counts_internal_artifact_tokens_once():
     from services.agent_blueprint_runner import AgentBlueprintRunner
 
@@ -391,6 +457,125 @@ def test_blueprint_access_never_trusts_requested_business_id(monkeypatch):
     assert blueprint is None
     assert error == "forbidden"
     assert checked["business_id"] == "business-other"
+
+
+def test_agent_api_rejects_cross_business_resource_ids_before_loading_content(monkeypatch):
+    from flask import Flask
+
+    from api import agent_blueprints_api
+
+    foreign_name = "Foreign private business"
+
+    class Cursor:
+        def __init__(self):
+            self.result = None
+            self.queries = []
+
+        def execute(self, query, params=None):
+            normalized = " ".join(query.split()).lower()
+            self.queries.append(normalized)
+            if normalized.startswith("select blueprint_id from agent_runs where id"):
+                self.result = {"blueprint_id": "bp-foreign"}
+                return None
+            if normalized.startswith("select * from agent_blueprints where id"):
+                self.result = {
+                    "id": "bp-foreign",
+                    "business_id": "business-foreign",
+                    "name": foreign_name,
+                    "description": "Private workflow content",
+                }
+                return None
+            raise AssertionError(f"Foreign content was queried after the access gate: {query}")
+
+        def fetchone(self):
+            return self.result
+
+    class Connection:
+        def __init__(self):
+            self.cursor_instance = Cursor()
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            raise AssertionError("Cross-business request must not commit")
+
+        def rollback(self):
+            return None
+
+    connections = []
+
+    class Database:
+        def __init__(self):
+            self.conn = Connection()
+            connections.append(self.conn)
+
+        def close(self):
+            return None
+
+    checked_businesses = []
+
+    def deny_foreign_business(cursor, business_id, user_data):
+        checked_businesses.append(business_id)
+        return False, agent_blueprints_api._json_error("Forbidden", 403, "FORBIDDEN")
+
+    monkeypatch.setattr(agent_blueprints_api, "DatabaseManager", Database)
+    monkeypatch.setattr(agent_blueprints_api, "_require_auth", lambda: ({"user_id": "owner-local"}, None))
+    monkeypatch.setattr(agent_blueprints_api, "_require_business_access", deny_foreign_business)
+
+    app = Flask(__name__)
+    endpoint_calls = [
+        ("GET", "/api/agent-blueprints/bp-foreign", lambda: agent_blueprints_api.get_agent_blueprint("bp-foreign")),
+        (
+            "GET",
+            "/api/agent-blueprints/bp-foreign/versions/version-foreign/diff",
+            lambda: agent_blueprints_api.get_agent_blueprint_version_diff("bp-foreign", "version-foreign"),
+        ),
+        (
+            "GET",
+            "/api/agent-blueprints/bp-foreign/integrations",
+            lambda: agent_blueprints_api.list_agent_blueprint_integrations("bp-foreign"),
+        ),
+        (
+            "GET",
+            "/api/agent-blueprints/bp-foreign/sources/catalog",
+            lambda: agent_blueprints_api.list_agent_blueprint_source_catalog("bp-foreign"),
+        ),
+        (
+            "POST",
+            "/api/agent-blueprints/bp-foreign/runs",
+            lambda: agent_blueprints_api.start_agent_blueprint_run("bp-foreign"),
+        ),
+        ("GET", "/api/agent-runs/run-foreign", lambda: agent_blueprints_api.get_agent_run("run-foreign")),
+        (
+            "GET",
+            "/api/agent-runs/run-foreign/support-export",
+            lambda: agent_blueprints_api.get_agent_run_support_export("run-foreign"),
+        ),
+        (
+            "POST",
+            "/api/agent-runs/run-foreign/approvals/approval-foreign/approve",
+            lambda: agent_blueprints_api.approve_agent_run("run-foreign", "approval-foreign"),
+        ),
+    ]
+
+    for method, path, call_endpoint in endpoint_calls:
+        with app.test_request_context(path, method=method, json={} if method == "POST" else None):
+            response, status_code = call_endpoint()
+        body = response.get_json()
+        assert status_code == 403
+        assert body == {"success": False, "error": "Forbidden", "code": "FORBIDDEN"}
+        assert foreign_name not in response.get_data(as_text=True)
+
+    assert checked_businesses == ["business-foreign"] * len(endpoint_calls)
+    assert all(
+        not any(
+            private_table in query
+            for private_table in ("agent_blueprint_versions", "agent_run_steps", "agent_artifacts", "agent_approvals")
+        )
+        for connection in connections
+        for query in connection.cursor_instance.queries
+    )
 
 
 def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consistency(monkeypatch):
