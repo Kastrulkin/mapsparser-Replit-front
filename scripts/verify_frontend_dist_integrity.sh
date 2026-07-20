@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "$(pwd)" != "/opt/seo-app" && "$(pwd)" != *"SEO с Реплит на Курсоре" ]]; then
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "${repo_root}" || "$(pwd -P)" != "$(cd "${repo_root}" && pwd -P)" ]]; then
   echo "Run from project root (/opt/seo-app or local workspace root)"
   exit 1
 fi
