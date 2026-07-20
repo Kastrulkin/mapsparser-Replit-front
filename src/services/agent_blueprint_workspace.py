@@ -817,7 +817,7 @@ def _generate_message_result_with_llm(
     workflow_description = _clean_text(setup.get("workflow_description"))
     internal_content = _is_internal_content_draft_workflow(workflow_description)
     prompt_version = (
-        "agent_custom_message_draft_v3"
+        "agent_custom_message_draft_v4"
         if internal_content
         else "agent_custom_message_draft_v1"
     )
@@ -954,7 +954,8 @@ def _build_message_prompt(setup: Dict[str, Any], selected_items: List[Dict[str, 
             " Выбери один связный положительный или нейтральный факт. Не превращай жалобы и низкие оценки в рекламный сюжет,"
             " если пользователь прямо не попросил разобрать проблему. Дата в задании означает дату подготовки или публикации,"
             " а не дату запуска услуги или события. Не называй услугу новой, не обещай её запуск и не добавляй свойства,"
-            " процедуры или преимущества, которых нет в источниках. Черновик должен быть короче 700 знаков."
+            " аудиторию, процедуры или преимущества, которых нет в источниках. Не дополняй название услуги типичным"
+            " отраслевым описанием от себя. Черновик должен быть короче 700 знаков."
         )
     return (
         "Ты готовишь безопасный черновик сообщения для LocalOS AI employee test run. "
@@ -997,6 +998,18 @@ def _internal_content_fact_issue(title: str, draft_text: str, selected_items: Li
             "Источники не подтверждают, что услуга новая или запускается в указанную дату. "
             "Используй дату только как дату публикации и опиши существующий подтверждённый факт."
         )
+    unsupported_detail_groups = (
+        ("аудиторию", ("детей", "ребён", "подрост")),
+        ("способ выполнения услуги", ("подбер", "исходя из", "особенност", "индивидуальн")),
+        ("качество или преимущество", ("идеальн", "оптимальн", "профессиональн", "бережн", "безболезнен", "гарант")),
+    )
+    for label, markers in unsupported_detail_groups:
+        unsupported_markers = [marker for marker in markers if marker in content and marker not in source_text]
+        if unsupported_markers:
+            return (
+                f"Источники не подтверждают {label}: {', '.join(unsupported_markers)}. "
+                "Удали это утверждение и оставь только прямо указанные в источниках факты."
+            )
     return ""
 
 

@@ -1032,7 +1032,7 @@ def test_internal_content_draft_uses_business_facts_without_sheet(monkeypatch):
     assert result["draft_text"].startswith("30 июля")
     assert result.get("status") != "needs_source_data"
     assert result["external_dispatch_performed"] is False
-    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v3"
+    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v4"
     assert "этой работы" in result["preparation_method"]
     assert "тест" not in result["preparation_method"]
 
@@ -1133,7 +1133,20 @@ def test_internal_content_draft_repairs_unsupported_new_service_claim(monkeypatc
     assert len(prompts) == 2
     assert "Источники не подтверждают" in prompts[1]
     assert "новую услугу" not in result["draft_text"].lower()
-    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v3"
+    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v4"
+
+
+def test_internal_content_fact_gate_rejects_inferred_audience_and_benefits():
+    from services.agent_blueprint_workspace import _internal_content_fact_issue
+
+    issue = _internal_content_fact_issue(
+        "Стрижка челки",
+        "Приглашаем детей и подростков. Мастера подберут идеальную форму исходя из особенностей лица.",
+        [{"source_name": "services", "summary": "name: Стрижка челки", "raw": {"name": "Стрижка челки"}}],
+    )
+
+    assert "не подтверждают" in issue.lower()
+    assert "аудиторию" in issue.lower()
 
 
 def test_internal_content_draft_blocks_unsupported_claim_after_repair(monkeypatch):
