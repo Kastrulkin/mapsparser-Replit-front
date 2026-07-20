@@ -108,7 +108,7 @@ export function OutreachSenderProfileSetup({
 }: {
   businessId?: string | null;
   defaultCompanyName?: string;
-  onChanged?: () => void;
+  onChanged?: (state: { confirmed: boolean; ready: boolean }) => void;
 }) {
   const [form, setForm] = useState<FormState>({ ...emptyForm, companyName: defaultCompanyName });
   const [confirmed, setConfirmed] = useState(false);
@@ -231,7 +231,10 @@ export function OutreachSenderProfileSetup({
         : confirmed
           ? `Профиль сохранён, но пока не подтверждён. Осталось: ${missingLabels.join('; ') || 'заполнить обязательные факты'}.`
           : 'Профиль сохранён как черновик. Подтвердите его, когда все факты будут точными.');
-      onChanged?.();
+      onChanged?.({
+        confirmed: profileConfirmed,
+        ready: Boolean(savedCompleteness?.ready),
+      });
       await load();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить профиль');

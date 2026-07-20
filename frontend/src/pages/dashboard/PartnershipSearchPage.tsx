@@ -63,6 +63,7 @@ import {
   recordPartnershipReaction,
   runPartnershipGeoSearch,
   runPartnershipLeadAction,
+  startPartnershipContactIntelligence,
   updatePartnershipQueueDelivery,
 } from '@/components/prospecting/partnershipApi';
 
@@ -982,6 +983,12 @@ export const PartnershipSearchPage: React.FC = () => {
     });
   }, [selectedLeadId, selectedLead, items]);
 
+  useEffect(() => {
+    setAuditData(null);
+    setMatchData(null);
+    setDraftText('');
+  }, [selectedLeadId]);
+
   const loadLeads = async (queryOverride?: string, silent = false) => {
     if (!currentBusinessId) return;
     try {
@@ -1386,6 +1393,30 @@ export const PartnershipSearchPage: React.FC = () => {
     } finally {
       setActiveLeadAction(null);
     }
+  };
+
+  const handleSenderProfileChanged = (state: { confirmed: boolean; ready: boolean }) => {
+    if (!currentBusinessId || !selectedLead) return;
+    if (!state.confirmed || !state.ready) {
+      setMessage('Черновик профиля сохранён. Заполните оставшиеся пункты и подтвердите факты — LocalOS сразу повторит проверку выбранного лида.');
+      void refreshOperationalData();
+      return;
+    }
+    const leadId = selectedLead.id;
+    const workstreamId = String(selectedLead.active_workstream_id || selectedLead.workstream_id || '').trim();
+    void runPartnershipAction('Профиль сохранён, но не удалось обновить выбранного лида', async () => {
+      const matchPayload = await runPartnershipLeadAction(currentBusinessId, leadId, 'match');
+      setMatchData(matchPayload.result || null);
+      if (workstreamId) {
+        await startPartnershipContactIntelligence(currentBusinessId, leadId, workstreamId);
+      }
+      setMessage(
+        workstreamId
+          ? 'Факты подтверждены. LocalOS заново проверил совместимость и обновляет персонализацию выбранного лида.'
+          : 'Факты подтверждены. LocalOS заново проверил совместимость; для персонализации нужно создать рабочий поток лида.',
+      );
+      await refreshAllPartnershipData();
+    });
   };
 
   const enrichContacts = async (leadId: string) => {
@@ -2772,6 +2803,7 @@ export const PartnershipSearchPage: React.FC = () => {
                 loading={loading}
                 onSaveLeadContacts={() => void saveLeadContacts()}
                 onPrepareSalesRoom={(dataMode) => void prepareSalesRoom(selectedLead.id, dataMode)}
+                onSenderProfileChanged={handleSenderProfileChanged}
                 currentBusinessId={currentBusinessId}
                 pilotCohortOptions={PILOT_COHORT_OPTIONS.filter((option) => option.value !== 'all')}
                 onPilotCohortChange={async (value) => {

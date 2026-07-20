@@ -219,6 +219,20 @@ export const runPartnershipLeadAction = (
     }),
   });
 
+export const startPartnershipContactIntelligence = (
+  businessId: string,
+  leadId: string,
+  workstreamId: string,
+) =>
+  request(`/partnership/leads/${leadId}/contact-intelligence`, {
+    method: 'POST',
+    body: JSON.stringify({
+      business_id: businessId,
+      workstream_id: workstreamId,
+      force: true,
+    }),
+  });
+
 export const preparePartnershipSalesRoom = (
   businessId: string,
   leadId: string,

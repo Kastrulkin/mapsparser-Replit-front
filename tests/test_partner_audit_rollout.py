@@ -400,6 +400,22 @@ def test_parsed_card_identity_uses_top_level_title_and_address() -> None:
     assert parsed["address"] == "Санкт-Петербург, Невский проспект, 1"
 
 
+def test_sender_profile_confirmation_refreshes_only_the_selected_lead() -> None:
+    page = Path("frontend/src/pages/dashboard/PartnershipSearchPage.tsx").read_text(encoding="utf-8")
+    drawer = Path("frontend/src/components/prospecting/PartnershipLeadDetailDrawer.tsx").read_text(encoding="utf-8")
+    profile = Path("frontend/src/components/prospecting/OutreachSenderProfileSetup.tsx").read_text(encoding="utf-8")
+    api = Path("frontend/src/components/prospecting/partnershipApi.ts").read_text(encoding="utf-8")
+
+    assert "onChanged?.({" in profile
+    assert "confirmed: profileConfirmed" in profile
+    assert "ready: Boolean(savedCompleteness?.ready)" in profile
+    assert "onSenderProfileChanged={handleSenderProfileChanged}" in page
+    assert "setMatchData(null);" in page
+    assert "startPartnershipContactIntelligence(currentBusinessId, leadId, workstreamId)" in page
+    assert "onChanged={onSenderProfileChanged}" in drawer
+    assert "/contact-intelligence" in api
+
+
 def test_wrong_parsed_card_is_not_accepted_only_because_source_id_matches() -> None:
     assert _lead_identity_matches_candidate(
         {

@@ -123,6 +123,7 @@ type PartnershipLeadDetailDrawerProps = {
   loading?: boolean;
   onSaveLeadContacts: () => void;
   onPrepareSalesRoom?: (dataMode: 'audited' | 'template') => void | Promise<void>;
+  onSenderProfileChanged?: (state: { confirmed: boolean; ready: boolean }) => void;
   currentBusinessId?: string | null;
   pilotCohortOptions: CohortOption[];
   onPilotCohortChange: (value: string) => void | Promise<void>;
@@ -170,6 +171,7 @@ export default function PartnershipLeadDetailDrawer({
   loading,
   onSaveLeadContacts,
   onPrepareSalesRoom,
+  onSenderProfileChanged,
   currentBusinessId,
   pilotCohortOptions,
   onPilotCohortChange,
@@ -414,6 +416,7 @@ export default function PartnershipLeadDetailDrawer({
                 <OutreachSenderProfileSetup
                   businessId={currentBusinessId}
                   defaultCompanyName=""
+                  onChanged={onSenderProfileChanged}
                 />
               </div>
             </details>
