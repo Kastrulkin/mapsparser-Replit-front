@@ -2734,8 +2734,9 @@ def _finalize_failed_operator_refresh(cursor: Any, queue_id: str, commit_func: A
     }
 
 
-def _run_optional_detail_sync(cursor: Any, label: str, callback: Any) -> bool:
+def _run_optional_detail_sync(connection: Any, label: str, callback: Any) -> bool:
     savepoint_name = "optional_detail_" + "".join(char if char.isalnum() else "_" for char in str(label or "sync").lower())
+    cursor = connection.cursor()
     try:
         cursor.execute(f"SAVEPOINT {savepoint_name}")
         callback()
@@ -2750,6 +2751,8 @@ def _run_optional_detail_sync(cursor: Any, label: str, callback: Any) -> bool:
             print(f"⚠️ Optional detail sync savepoint cleanup failed ({label}): {sys.exc_info()[1]}", flush=True)
         print(f"⚠️ Optional detail sync skipped ({label}): {error_text}", flush=True)
         return False
+    finally:
+        cursor.close()
 
 
 def _handle_worker_error(queue_id: str, error_msg: str):
@@ -5196,7 +5199,7 @@ def process_queue():
                                         print(f"✅ Saved {len(external_posts)} posts to ExternalBusinessPosts")
 
                                     # Не блокируем синк услуг/статистики, если таблица постов ещё не мигрирована.
-                                    _run_optional_detail_sync(cursor, "external_posts", sync_external_posts)
+                                    _run_optional_detail_sync(db_manager.conn, "external_posts", sync_external_posts)
 
                             # 3. СОХРАНЕНИЕ УСЛУГ (Services)
                             products = card_data.get('products')
@@ -5211,7 +5214,7 @@ def process_queue():
                                         sync_worker._sync_services_to_db(db_manager.conn, business_id, products, owner_id, commit=False)
                                         print(f"💾 Синхронизировано {services_count} услуг (owner_id={owner_id})")
 
-                                    _run_optional_detail_sync(cursor, "services", sync_services)
+                                    _run_optional_detail_sync(db_manager.conn, "services", sync_services)
                                 else:
                                     print(f"⚠️ Cannot sync services: owner_id not found for business {business_id}")
 
@@ -5240,7 +5243,7 @@ def process_queue():
                                     sync_worker._upsert_stats(db_manager, [stat_point])
                                     print(f"💾 Сохранена статистика (Рейтинг: {rating_val}, Отзывов: {reviews_count})")
 
-                                _run_optional_detail_sync(cursor, "stats", sync_stats)
+                                _run_optional_detail_sync(db_manager.conn, "stats", sync_stats)
 
                             # Commit changes to External Data tables
                             if db_manager and db_manager.conn:
