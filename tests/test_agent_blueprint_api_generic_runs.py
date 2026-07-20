@@ -1076,6 +1076,24 @@ def test_legacy_review_category_cannot_turn_news_goal_into_review_reply(monkeypa
     assert result["analysis_prompt_version"] == "agent_custom_message_draft_v5"
 
 
+def test_workspace_setup_recovers_original_request_for_legacy_blueprint():
+    from services.agent_blueprint_workspace import _workspace_setup
+
+    setup = _workspace_setup(
+        {
+            "name": "Новости для карточек",
+            "description": "Подготовь 3 новости для карточек на основе услуг и отзывов.",
+        },
+        {
+            "agent_setup": {"status": "ready_for_preview"},
+            "draft_category": "reviews",
+        },
+    )
+
+    assert setup["status"] == "ready_for_preview"
+    assert setup["workflow_description"] == "Подготовь 3 новости для карточек на основе услуг и отзывов."
+
+
 def test_internal_content_draft_prioritizes_services_and_positive_review(monkeypatch):
     import services.agent_blueprint_workspace as workspace
 
