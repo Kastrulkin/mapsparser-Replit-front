@@ -1012,7 +1012,11 @@ def test_internal_content_draft_uses_business_facts_without_sheet(monkeypatch):
             {
                 "source_name": "services",
                 "summary": "name: Индивидуальный трансфер по Пхукету",
-                "raw": {"id": "service-1", "name": "Индивидуальный трансфер по Пхукету"},
+                "raw": {
+                    "id": "service-1",
+                    "name": "Индивидуальный трансфер по Пхукету",
+                    "created_at": datetime(2026, 7, 20, 8, 0, tzinfo=timezone.utc),
+                },
             },
         ],
         [],

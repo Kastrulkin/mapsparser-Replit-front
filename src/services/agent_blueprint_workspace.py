@@ -892,7 +892,7 @@ def _build_message_prompt(setup: Dict[str, Any], selected_items: List[Dict[str, 
         "Верни только JSON без markdown с полями: "
         "title, draft_text, summary(list), checklist(list), rules_applied(list). "
         "draft_text должен быть конкретным сообщением, готовым для проверки владельцем бизнеса.\n\n"
-        f"INPUT_JSON:\n{json.dumps(payload, ensure_ascii=False)}"
+        f"INPUT_JSON:\n{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
 
 
