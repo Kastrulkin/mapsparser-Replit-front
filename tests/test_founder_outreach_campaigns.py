@@ -200,6 +200,67 @@ def test_localos_representative_uses_localos_identity_and_partner_offer():
     assert combined["_represented_profile_id"] == "partner-profile"
 
 
+def test_localos_representative_does_not_require_a_partner_founder_profile():
+    combined = _localos_representative_profile({
+        "business_service_count": 6,
+        "category": "Спортивный клуб, секция / школа танцев",
+        "platform_sender_profile": {
+            "id": "localos-profile",
+            "display_name": "Алексей",
+            "role_title": "основатель",
+            "company_name": "LocalOS",
+            "competence_story": "Создаю LocalOS на основе практики локального маркетинга.",
+            "proof_points_json": [{"fact": "Проверили 100 карточек", "status": "approved"}],
+            "allowed_offers_json": ["Короткий безопасный тест"],
+            "forbidden_claims_json": ["Не обещать рост"],
+            "voice_examples_json": ["Здравствуйте! Есть короткая идея."],
+            "outreach_context_json": {
+                "competence_story_status": "approved",
+                "audience": "Владельцы локального бизнеса",
+            },
+            "confirmed_at": "2026-07-20T12:00:00Z",
+        },
+        "business_sender_profile": {},
+    })
+
+    assert combined["confirmed_at"] == "2026-07-20T12:00:00Z"
+    assert combined["allowed_offers_json"] == ["Короткий безопасный тест"]
+    assert combined["outreach_context_json"]["audience"] == "Владельцы локального бизнеса"
+    assert combined["outreach_context_json"]["desired_partner_types"] == [
+        "Спортивный клуб, секция",
+        "школа танцев",
+    ]
+    assert combined["_represented_profile_id"] is None
+
+
+def test_localos_representative_never_uses_unconfirmed_partner_claims():
+    combined = _localos_representative_profile({
+        "business_service_count": 3,
+        "category": "Кафе",
+        "platform_sender_profile": {
+            "allowed_offers_json": ["Безопасный тест LocalOS"],
+            "forbidden_claims_json": ["Не обещать рост"],
+            "outreach_context_json": {"audience": "Локальный бизнес"},
+            "confirmed_at": "2026-07-20T12:00:00Z",
+        },
+        "business_sender_profile": {
+            "id": "draft-partner-profile",
+            "allowed_offers_json": ["Неподтверждённая скидка"],
+            "forbidden_claims_json": ["Черновой запрет"],
+            "outreach_context_json": {
+                "audience": "Неподтверждённая аудитория",
+                "desired_partner_types": ["Любые"],
+            },
+            "confirmed_at": None,
+        },
+    })
+
+    assert combined["allowed_offers_json"] == ["Безопасный тест LocalOS"]
+    assert combined["forbidden_claims_json"] == ["Не обещать рост"]
+    assert combined["outreach_context_json"]["audience"] == "Локальный бизнес"
+    assert combined["outreach_context_json"]["desired_partner_types"] == ["Кафе"]
+
+
 def test_localos_for_partner_message_discloses_representation():
     message = _message_for_angle(
         "signal",

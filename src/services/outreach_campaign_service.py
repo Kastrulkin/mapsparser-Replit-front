@@ -166,28 +166,52 @@ def _localos_representative_profile(context: dict[str, Any]) -> dict[str, Any]:
         if isinstance(localos_profile.get("outreach_context_json"), dict)
         else {}
     )
+    represented_confirmed = bool(represented_profile.get("confirmed_at"))
     represented_context = (
         represented_profile.get("outreach_context_json")
-        if isinstance(represented_profile.get("outreach_context_json"), dict)
+        if represented_confirmed
+        and isinstance(represented_profile.get("outreach_context_json"), dict)
         else {}
     )
     combined = dict(localos_profile)
-    combined["allowed_offers_json"] = _profile_facts(
-        represented_profile.get("allowed_offers_json")
+    represented_offers = (
+        _profile_facts(represented_profile.get("allowed_offers_json"))
+        if represented_confirmed
+        else []
+    )
+    combined["allowed_offers_json"] = (
+        represented_offers
+        if represented_offers
+        else _profile_facts(localos_profile.get("allowed_offers_json"))
     )
     combined["forbidden_claims_json"] = (
         _profile_facts(localos_profile.get("forbidden_claims_json"))
-        + _profile_facts(represented_profile.get("forbidden_claims_json"))
+        + (
+            _profile_facts(represented_profile.get("forbidden_claims_json"))
+            if represented_confirmed
+            else []
+        )
     )
-    combined["outreach_context_json"] = {
-        **represented_context,
-        "competence_story_status": localos_context.get("competence_story_status", "approved"),
-    }
-    combined["confirmed_at"] = (
-        localos_profile.get("confirmed_at")
-        if localos_profile.get("confirmed_at") and represented_profile.get("confirmed_at")
-        else None
+    combined_context = dict(localos_context)
+    for key, value in represented_context.items():
+        if value not in (None, "", [], {}):
+            combined_context[key] = value
+    if not _profile_facts(combined_context.get("desired_partner_types")):
+        observed_partner_types = [
+            _text(item)
+            for item in re.split(r"\s*/\s*", _text(context.get("category")))
+            if _text(item)
+        ]
+        combined_context["desired_partner_types"] = observed_partner_types
+    combined_context["competence_story_status"] = localos_context.get(
+        "competence_story_status",
+        "approved",
     )
+    combined["outreach_context_json"] = combined_context
+    # The claims in this synthetic sender profile remain LocalOS claims. Facts about
+    # the represented business must still come from sourced research/matching, so a
+    # missing business founder profile must not invalidate the LocalOS identity.
+    combined["confirmed_at"] = localos_profile.get("confirmed_at")
     combined["_business_service_count"] = context.get("business_service_count")
     combined["_represented_profile_id"] = represented_profile.get("id")
     return combined
