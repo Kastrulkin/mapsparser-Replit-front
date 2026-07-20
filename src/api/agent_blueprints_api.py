@@ -472,6 +472,151 @@ def _admin_agent_runtime_overview(cursor) -> dict:
         )
     cursor.execute(
         """
+        SELECT b.id blueprint_id,
+               b.business_id,
+               COALESCE(b.name, '') agent_name,
+               COALESCE(biz.name, '') business_name,
+               COALESCE(b.metadata_json->>'active_version_id', '') active_version_id,
+               COALESCE(b.metadata_json->>'active_version_updated_at', '') active_version_updated_at,
+               COALESCE(b.metadata_json->'custom_process'->'schedule', '{}'::jsonb) schedule_json,
+               e.id event_id,
+               e.status event_status,
+               e.reason_code,
+               e.payload_json,
+               e.created_at event_created_at,
+               r.id run_id,
+               COALESCE(r.status, '') run_status,
+               COALESCE(r.blueprint_version_id, '') run_version_id
+        FROM agent_blueprints b
+        LEFT JOIN businesses biz ON biz.id = b.business_id
+        LEFT JOIN agent_trigger_events e
+          ON e.blueprint_id = b.id
+         AND e.source = 'scheduler'
+         AND e.created_at >= NOW() - INTERVAL '8 days'
+        LEFT JOIN agent_runs r ON r.id = e.run_id
+        WHERE b.status = 'active'
+          AND COALESCE(b.metadata_json->>'execution_mode', '') = 'scheduled'
+        ORDER BY b.id, e.created_at
+        """
+    )
+    canary_by_blueprint = {}
+    for row in cursor.fetchall() or []:
+        item = dict(row)
+        blueprint_id = str(item.get("blueprint_id") or "")
+        if not blueprint_id:
+            continue
+        schedule = parse_json_field(item.get("schedule_json"), {})
+        schedule = schedule if isinstance(schedule, dict) else {}
+        canary = canary_by_blueprint.setdefault(
+            blueprint_id,
+            {
+                "blueprint_id": blueprint_id,
+                "business_id": str(item.get("business_id") or ""),
+                "agent_name": str(item.get("agent_name") or "Без названия"),
+                "business_name": str(item.get("business_name") or "Без бизнеса"),
+                "active_version_id": str(item.get("active_version_id") or ""),
+                "active_version_updated_at": str(item.get("active_version_updated_at") or ""),
+                "schedule_time": str(schedule.get("time") or ""),
+                "timezone": str(schedule.get("timezone") or ""),
+                "successful_dates": set(),
+                "successful_slots": {},
+                "issue_dates": set(),
+                "failed_events": 0,
+                "deferred_events": 0,
+                "old_version_runs": 0,
+                "last_event_at": None,
+            },
+        )
+        event_id = str(item.get("event_id") or "")
+        if not event_id:
+            continue
+        event_created_at = item.get("event_created_at")
+        active_version_updated_at = str(canary.get("active_version_updated_at") or "")
+        if event_created_at and active_version_updated_at:
+            try:
+                active_version_at = datetime.fromisoformat(active_version_updated_at.replace("Z", "+00:00"))
+                if event_created_at < active_version_at:
+                    continue
+            except ValueError:
+                pass
+        if event_created_at:
+            canary["last_event_at"] = event_created_at.isoformat()
+        payload = parse_json_field(item.get("payload_json"), {})
+        payload = payload if isinstance(payload, dict) else {}
+        schedule_date = str(payload.get("schedule_date") or "")
+        schedule_time = str(payload.get("schedule_time") or canary.get("schedule_time") or "")
+        event_status = str(item.get("event_status") or "")
+        if event_status == "failed":
+            canary["failed_events"] += 1
+            if schedule_date:
+                canary["issue_dates"].add(schedule_date)
+        elif event_status == "deferred":
+            canary["deferred_events"] += 1
+            if schedule_date:
+                canary["issue_dates"].add(schedule_date)
+        run_id = str(item.get("run_id") or "")
+        run_version_id = str(item.get("run_version_id") or "")
+        active_version_id = str(canary.get("active_version_id") or "")
+        if run_id and active_version_id and run_version_id and run_version_id != active_version_id:
+            canary["old_version_runs"] += 1
+            if schedule_date:
+                canary["issue_dates"].add(schedule_date)
+        if (
+            event_status == "run_started"
+            and str(item.get("run_status") or "") == "completed"
+            and schedule_date
+            and (not active_version_id or run_version_id == active_version_id)
+        ):
+            slot_key = f"{schedule_date}:{schedule_time}"
+            canary["successful_dates"].add(schedule_date)
+            canary["successful_slots"].setdefault(slot_key, set()).add(run_id or event_id)
+
+    scheduler_canaries = []
+    for canary in canary_by_blueprint.values():
+        successful_dates = canary.pop("successful_dates")
+        successful_slots = canary.pop("successful_slots")
+        issue_dates = canary.pop("issue_dates")
+        duplicate_runs = sum(max(0, len(run_ids) - 1) for run_ids in successful_slots.values())
+        duplicate_dates = {
+            slot_key.split(":", 1)[0]
+            for slot_key, run_ids in successful_slots.items()
+            if len(run_ids) > 1
+        }
+        clean_date_set = successful_dates - issue_dates - duplicate_dates
+        observed_dates = sorted(successful_dates | issue_dates | duplicate_dates, reverse=True)
+        clean_dates = sorted(clean_date_set, reverse=True)
+        consecutive_days = 0
+        previous_date = None
+        for date_text in observed_dates:
+            try:
+                current_date = datetime.strptime(date_text, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if previous_date is not None and current_date != previous_date - timedelta(days=1):
+                break
+            if date_text not in clean_date_set:
+                break
+            consecutive_days += 1
+            previous_date = current_date
+        issue_count = (
+            int(canary.get("failed_events") or 0)
+            + int(canary.get("deferred_events") or 0)
+            + int(canary.get("old_version_runs") or 0)
+            + duplicate_runs
+        )
+        canary.update(
+            {
+                "target_days": 7,
+                "successful_days": consecutive_days,
+                "successful_dates": clean_dates[:7],
+                "last_success_date": clean_dates[0] if clean_dates else None,
+                "duplicate_runs": duplicate_runs,
+                "status": "passed" if consecutive_days >= 7 else "attention" if observed_dates and observed_dates[0] not in clean_date_set else "observing",
+            }
+        )
+        scheduler_canaries.append(canary)
+    cursor.execute(
+        """
         SELECT COUNT(*) FILTER (WHERE status = 'active') active,
                COUNT(*) FILTER (WHERE status <> 'active') inactive
         FROM agent_integrations
@@ -561,6 +706,7 @@ def _admin_agent_runtime_overview(cursor) -> dict:
             "deferred_24h": int(scheduler.get("deferred_24h") or 0),
             "last_event_at": last_scheduler_event_at.isoformat() if last_scheduler_event_at else None,
             "recent_events": recent_scheduler_events,
+            "canaries": scheduler_canaries,
         },
         "consistency": {
             "archived_unfinished_runs": int(consistency.get("archived_unfinished_runs") or 0),
