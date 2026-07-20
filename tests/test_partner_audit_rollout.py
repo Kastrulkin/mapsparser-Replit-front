@@ -298,6 +298,10 @@ def test_partner_evidence_recovery_actions_are_specific() -> None:
     assert _recovery_action({"parse_status": "error"}, "partner_services_missing") == "retry_parse"
     assert _recovery_action({
         "parse_status": "error",
+        "parse_error": "apify_empty_dataset: empty dataset for business card parsing",
+    }, "partner_services_missing") == "find_alternate_public_source"
+    assert _recovery_action({
+        "parse_status": "error",
         "parse_error": "business_closed:permanent_closed",
     }, "partner_services_missing") == "mark_closed_not_relevant"
     assert _recovery_action({"parse_status": "completed"}, "partner_services_missing", {
@@ -443,6 +447,18 @@ def test_closed_partner_is_not_sent_back_to_parser() -> None:
         "parse_error": "business_closed:permanent_closed",
     })
     assert next_action["code"] == "mark_closed_not_relevant"
+
+
+def test_empty_apify_dataset_points_user_to_alternate_source() -> None:
+    next_action = _partnership_next_best_action({
+        "partnership_stage": "imported",
+        "parse_status": "error",
+        "parse_error": "apify_empty_dataset: empty dataset for business card parsing",
+    })
+
+    assert next_action["code"] == "find_alternate_public_source"
+    assert next_action["label"] == "Найти другой публичный источник"
+    assert "официальный сайт" in next_action["hint"]
 
 
 def test_partner_map_match_requires_confidence_and_margin() -> None:

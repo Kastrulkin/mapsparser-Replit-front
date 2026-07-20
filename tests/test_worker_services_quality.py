@@ -254,6 +254,31 @@ def test_queue_transient_parse_retry_accepts_apify_timeout(monkeypatch):
     assert "transient_error=apify_parser_subprocess_timeout" in str(captured["params"][2])
 
 
+def test_apify_empty_dataset_stops_after_small_dedicated_retry_budget(monkeypatch):
+    monkeypatch.setenv("TRANSIENT_PARSE_MAX_ATTEMPTS", "8")
+    monkeypatch.setenv("APIFY_EMPTY_DATASET_MAX_ATTEMPTS", "2")
+    monkeypatch.setattr(
+        worker,
+        "get_db_connection",
+        lambda: (_ for _ in ()).throw(AssertionError("terminal retry must not touch the database")),
+    )
+
+    ok = worker._queue_transient_parse_retry(
+        {
+            "id": "queue-empty-1",
+            "source": "apify_yandex",
+            "error_message": "transient_retry_attempt=2; transient_error=apify_empty_dataset",
+        },
+        "error: apify_parser_subprocess_exception detail=Apify returned empty dataset for business card parsing",
+        {
+            "error": "apify_empty_dataset",
+            "message": "Apify returned empty dataset for business card parsing",
+        },
+    )
+
+    assert ok is False
+
+
 def test_effective_apify_timeout_sec_switches_to_slow_lane_after_timeout_retry(monkeypatch):
     monkeypatch.setenv("APIFY_BUSINESS_PARSE_TIMEOUT_SEC", "330")
     monkeypatch.setenv("APIFY_BUSINESS_PARSE_TIMEOUT_SEC_SLOW", "540")

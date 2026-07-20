@@ -3466,6 +3466,14 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
             max_attempts,
             max(int(os.getenv("APIFY_TIMEOUT_MAX_ATTEMPTS", "3") or 3), 1),
         )
+    if is_apify_empty_dataset:
+        # An empty dataset is usually deterministic for one concrete map URL.
+        # Keep one retry for a transient provider hiccup, then surface an
+        # actionable terminal error instead of spending the full retry budget.
+        max_attempts = min(
+            max_attempts,
+            max(int(os.getenv("APIFY_EMPTY_DATASET_MAX_ATTEMPTS", "2") or 2), 1),
+        )
     if attempt_no > max_attempts:
         return False
 

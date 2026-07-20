@@ -172,6 +172,8 @@ def _recovery_action(
         parse_error = str(row.get("parse_error") or "").strip().lower()
         if "business_closed" in parse_error or "permanent_closed" in parse_error:
             return "mark_closed_not_relevant"
+        if "apify_empty_dataset" in parse_error or "empty dataset" in parse_error:
+            return "find_alternate_public_source"
         return "retry_parse"
     if parse_status in {"completed", "done"}:
         parse_context = snapshot.get("parse_context") if isinstance(snapshot, dict) else {}

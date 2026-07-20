@@ -570,6 +570,13 @@ def _partnership_next_best_action(lead: dict[str, Any]) -> dict[str, Any]:
                 "hint": "Повторный парсинг не поможет: публичная карточка сообщает о закрытии компании.",
                 "priority": "high",
             }
+        if "apify_empty_dataset" in parse_error or "empty dataset" in parse_error:
+            return {
+                "code": "find_alternate_public_source",
+                "label": "Найти другой публичный источник",
+                "hint": "Карточка не вернула данные после повторной проверки. Нужна другая ссылка на карты, официальный сайт или ручное подтверждение фактов.",
+                "priority": "high",
+            }
         return {
             "code": "inspect_parse_error",
             "label": "Разобрать ошибку парсинга",
