@@ -1869,6 +1869,10 @@ export const EmployeeAgentScenarioPanel = ({
   const approvals = working?.approval_boundaries || [];
   const expectedProperties = recordValue(working?.expected_result?.properties);
   const resultFields = Object.keys(expectedProperties || working?.expected_result || {}).filter((key) => !['schema', 'trigger', 'schedule', 'type', 'properties'].includes(key));
+  const businessResultFields = resultFields.filter((key) => !['approval_required', 'artifacts', 'result'].includes(key));
+  const savedResultDescription = businessResultFields.length
+    ? `${businessResultFields.map((key) => resultFieldLabels[key] || humanizeMeta(key)).join(', ')}. История выполненных шагов сохраняется автоматически.`
+    : 'Готовый результат и материалы этой работы. История выполненных шагов сохраняется автоматически.';
   const sourceLabels = (working?.sources || []).map((source) => {
     if (typeof source === 'string') return connectorLabel(source);
     const item = recordValue(source);
@@ -1931,7 +1935,7 @@ export const EmployeeAgentScenarioPanel = ({
           {inputs.length ? <ul className="space-y-2 text-sm text-slate-700">{inputs.map(([key, field]) => <li key={key}><span className="font-semibold text-slate-900">{field.title || key}</span>{field.description ? ` — ${field.description}` : ''}</li>)}</ul> : <p className="text-sm text-slate-600">Дополнительные параметры не требуются.</p>}
         </EmployeeWorkspaceSection>
         <EmployeeWorkspaceSection title="Что сохраняет">
-          <p className="text-sm leading-6 text-slate-700">{resultFields.length ? resultFields.map((key) => resultFieldLabels[key] || humanizeMeta(key)).join(', ') : 'Готовый результат и историю выполненных шагов.'}</p>
+          <p className="text-sm leading-6 text-slate-700">{savedResultDescription}</p>
         </EmployeeWorkspaceSection>
       </div>
       <EmployeeWorkspaceSection title="Ручной контроль" tone={approvals.length ? 'attention' : 'quiet'}>
