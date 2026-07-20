@@ -814,12 +814,14 @@ def _generate_message_result_with_llm(
     run_id: str = "",
     preview_mode: bool = False,
 ) -> Dict[str, Any]:
+    workflow_description = _clean_text(setup.get("workflow_description"))
+    internal_content = _is_internal_content_draft_workflow(workflow_description)
     prompt_version = (
-        "agent_custom_message_draft_v2"
-        if _is_internal_content_draft_workflow(_clean_text(setup.get("workflow_description")))
+        "agent_custom_message_draft_v3"
+        if internal_content
         else "agent_custom_message_draft_v1"
     )
-    fallback = _build_message_result_fallback(selected_items, selected_facts, rules, output_format, feedback_notes, _clean_text(setup.get("workflow_description")))
+    fallback = _build_message_result_fallback(selected_items, selected_facts, rules, output_format, feedback_notes, workflow_description)
     prompt = _build_message_prompt(setup, selected_items, feedback_notes)
     try:
         raw_response = analyze_text_with_gigachat(
@@ -833,11 +835,38 @@ def _generate_message_result_with_llm(
         draft_text = _clean_text(parsed.get("draft_text") or parsed.get("post_text") or parsed.get("message"))
         if not draft_text:
             raise ValueError("LLM response does not contain draft text")
+        title = _clean_text(parsed.get("title")) or fallback["title"]
+        if internal_content:
+            quality_issue = _internal_content_fact_issue(title, draft_text, selected_items)
+            if quality_issue:
+                repair_prompt = (
+                    f"{prompt}\n\n"
+                    "PREVIOUS_OUTPUT_JSON:\n"
+                    f"{json.dumps(parsed, ensure_ascii=False, default=str)}\n\n"
+                    "QUALITY_GATE: Исправь черновик. "
+                    f"{quality_issue} "
+                    "Не добавляй новых фактов. Верни полный исправленный JSON в прежнем формате."
+                )
+                raw_response = analyze_text_with_gigachat(
+                    repair_prompt,
+                    task_type="agent_custom_message_draft",
+                    business_id=business_id or None,
+                    user_id=user_id or None,
+                    usage_reference=f"agent-run:{run_id}" if run_id else None,
+                )
+                parsed = _parse_message_llm_json(raw_response)
+                draft_text = _clean_text(parsed.get("draft_text") or parsed.get("post_text") or parsed.get("message"))
+                title = _clean_text(parsed.get("title")) or fallback["title"]
+                if not draft_text:
+                    raise ValueError("LLM repair response does not contain draft text")
+                quality_issue = _internal_content_fact_issue(title, draft_text, selected_items)
+                if quality_issue:
+                    raise ValueError(f"content_fact_gate: {quality_issue}")
         summary = _clean_list(parsed.get("summary")) or selected_facts[:3]
         checklist = _clean_list(parsed.get("checklist")) or ["Проверить факты и тон перед использованием."]
         return {
             **fallback,
-            "title": _clean_text(parsed.get("title")) or fallback["title"],
+            "title": title,
             "draft_text": draft_text,
             "summary": summary,
             "checklist": checklist,
@@ -855,7 +884,7 @@ def _generate_message_result_with_llm(
         }
     except Exception:
         exc = sys.exc_info()[1]
-        if _is_internal_content_draft_workflow(_clean_text(setup.get("workflow_description"))):
+        if internal_content:
             return {
                 "title": "Не удалось подготовить черновик",
                 "status": "generation_failed",
@@ -923,7 +952,9 @@ def _build_message_prompt(setup: Dict[str, Any], selected_items: List[Dict[str, 
             " Верни именно готовый черновик новости или поста, который можно передать владельцу на проверку."
             " Не пиши анализ источников, отчёт о том, что было найдено, или рекомендации бизнесу вместо самого текста."
             " Выбери один связный положительный или нейтральный факт. Не превращай жалобы и низкие оценки в рекламный сюжет,"
-            " если пользователь прямо не попросил разобрать проблему. Черновик должен быть короче 700 знаков."
+            " если пользователь прямо не попросил разобрать проблему. Дата в задании означает дату подготовки или публикации,"
+            " а не дату запуска услуги или события. Не называй услугу новой, не обещай её запуск и не добавляй свойства,"
+            " процедуры или преимущества, которых нет в источниках. Черновик должен быть короче 700 знаков."
         )
     return (
         "Ты готовишь безопасный черновик сообщения для LocalOS AI employee test run. "
@@ -935,6 +966,38 @@ def _build_message_prompt(setup: Dict[str, Any], selected_items: List[Dict[str, 
         "draft_text должен быть конкретным сообщением, готовым для проверки владельцем бизнеса.\n\n"
         f"INPUT_JSON:\n{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
+
+
+def _internal_content_fact_issue(title: str, draft_text: str, selected_items: List[Dict[str, Any]]) -> str:
+    content = f"{title} {draft_text}".lower()
+    source_text = json.dumps(_message_context(selected_items), ensure_ascii=False, default=str).lower()
+    novelty_markers = (
+        "новая услуга",
+        "новую услугу",
+        "новый сервис",
+        "новое направление",
+        "новинка",
+        "запускаем",
+        "запустили",
+        "начинаем предлагать",
+        "теперь доступна",
+        "теперь доступен",
+    )
+    source_supports_novelty = any(marker in source_text for marker in novelty_markers)
+    claims_novelty = any(marker in content for marker in novelty_markers)
+    claims_dated_launch = bool(
+        re.search(
+            r"\bс\s+\d{1,2}\s+[а-яё]+(?:\s+\d{4}(?:\s+года)?)?\s+"
+            r"(?:мы\s+)?(?:предлагаем|запускаем|становится\s+доступн|доступн)",
+            content,
+        )
+    )
+    if (claims_novelty or claims_dated_launch) and not source_supports_novelty:
+        return (
+            "Источники не подтверждают, что услуга новая или запускается в указанную дату. "
+            "Используй дату только как дату публикации и опиши существующий подтверждённый факт."
+        )
+    return ""
 
 
 def _message_context(selected_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

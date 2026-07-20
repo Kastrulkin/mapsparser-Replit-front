@@ -1032,7 +1032,7 @@ def test_internal_content_draft_uses_business_facts_without_sheet(monkeypatch):
     assert result["draft_text"].startswith("30 июля")
     assert result.get("status") != "needs_source_data"
     assert result["external_dispatch_performed"] is False
-    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v2"
+    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v3"
     assert "этой работы" in result["preparation_method"]
     assert "тест" not in result["preparation_method"]
 
@@ -1078,6 +1078,94 @@ def test_internal_content_draft_prioritizes_services_and_positive_review(monkeyp
     assert "Бережный мастер" in captured["prompt"]
     assert "Долго ждали" not in captured["prompt"]
     assert "Не пиши анализ источников" in captured["prompt"]
+    assert "Дата в задании означает дату подготовки или публикации" in captured["prompt"]
+
+
+def test_internal_content_draft_repairs_unsupported_new_service_claim(monkeypatch):
+    import services.agent_blueprint_workspace as workspace
+
+    responses = iter(
+        [
+            json.dumps(
+                {
+                    "title": "Новая услуга в салоне",
+                    "draft_text": "С 31 июля мы предлагаем новую услугу — детскую стрижку.",
+                    "summary": [],
+                    "checklist": [],
+                    "rules_applied": [],
+                },
+                ensure_ascii=False,
+            ),
+            json.dumps(
+                {
+                    "title": "Детская стрижка в Весёлой расчёске",
+                    "draft_text": "31 июля рассказываем о детской стрижке в Весёлой расчёске.",
+                    "summary": ["Использована подтверждённая услуга."],
+                    "checklist": ["Проверить текст перед использованием."],
+                    "rules_applied": ["Не придумывать факты."],
+                },
+                ensure_ascii=False,
+            ),
+        ]
+    )
+    prompts = []
+
+    def fake_analysis(prompt, **kwargs):
+        prompts.append(prompt)
+        return next(responses)
+
+    monkeypatch.setattr(workspace, "analyze_text_with_gigachat", fake_analysis)
+    result = workspace._render_output(
+        "custom",
+        {
+            "workflow_description": "Подготовь внутренний черновик новости на 31 июля. Ничего не публикуй.",
+            "processing_rules": "Используй только подтверждённые факты",
+            "output_format": "Черновик новости",
+        },
+        [
+            {"source_name": "services", "summary": "name: Детская стрижка", "raw": {"name": "Детская стрижка"}},
+            {"source_name": "business_profile", "summary": "name: Весёлая расчёска", "raw": {"name": "Весёлая расчёска"}},
+        ],
+        [],
+        {"business_id": "biz-1", "user_id": "user-1", "run_id": "run-1"},
+    )
+
+    assert len(prompts) == 2
+    assert "Источники не подтверждают" in prompts[1]
+    assert "новую услугу" not in result["draft_text"].lower()
+    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v3"
+
+
+def test_internal_content_draft_blocks_unsupported_claim_after_repair(monkeypatch):
+    import services.agent_blueprint_workspace as workspace
+
+    unsupported = json.dumps(
+        {
+            "title": "Новая услуга",
+            "draft_text": "С 31 июля мы предлагаем новую услугу — детскую стрижку.",
+            "summary": [],
+            "checklist": [],
+            "rules_applied": [],
+        },
+        ensure_ascii=False,
+    )
+    monkeypatch.setattr(workspace, "analyze_text_with_gigachat", lambda *args, **kwargs: unsupported)
+
+    result = workspace._render_output(
+        "custom",
+        {
+            "workflow_description": "Подготовь внутренний черновик новости на 31 июля. Ничего не публикуй.",
+            "processing_rules": "Используй только подтверждённые факты",
+            "output_format": "Черновик новости",
+        },
+        [{"source_name": "services", "summary": "name: Детская стрижка", "raw": {"name": "Детская стрижка"}}],
+        [],
+        {"business_id": "biz-1", "user_id": "user-1", "run_id": "run-1"},
+    )
+
+    assert result["status"] == "generation_failed"
+    assert "draft_text" not in result
+    assert "content_fact_gate" in result["llm_error"]
 
 
 def test_internal_content_generation_failure_does_not_save_raw_fallback(monkeypatch):
