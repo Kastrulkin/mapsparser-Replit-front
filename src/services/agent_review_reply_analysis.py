@@ -9,7 +9,7 @@ from services.gigachat_client import analyze_text_with_gigachat
 
 
 MAX_REVIEW_LLM_CONTEXT_CHARS = 12000
-REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v6"
+REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v7"
 REVIEW_SOURCE_NAMES = {"reviews", "external_reviews", "отзывы", "отзывы компании", "последние отзывы"}
 ANONYMOUS_AUTHOR_NAMES = {"", "клиент", "аноним", "анонимный пользователь", "пользователь"}
 UNVERIFIED_PROMISE_MARKERS = (
@@ -43,6 +43,18 @@ UNVERIFIED_INTERNAL_ACTION_PATTERNS = (
         r"свяжемся|компенсируем|вернем|вернём|обучим|улучшим|сделаем|гарантируем|позаботимся|"
         r"выясним|решим|передадим|предпримем)\b"
     ),
+)
+FIRST_PERSON_ALLOWED_STATEMENTS = {
+    "благодарим",
+    "понимаем",
+    "приносим",
+    "рады",
+    "сожалеем",
+    "ценим",
+}
+FIRST_PERSON_MODIFIERS = (
+    "искренне|очень|действительно|немедленно|обязательно|внимательно|детально|дополнительно|"
+    "непременно|обстоятельно"
 )
 UNVERIFIED_PROMISE_REVIEW_REASON = (
     "Неподтверждённое обещание генератора удалено. Проверьте безопасный черновик перед публикацией."
@@ -313,6 +325,8 @@ def _reply_quality_reasons(draft: Dict[str, str], source: Dict[str, Any]) -> Lis
         reasons.append(UNVERIFIED_PROMISE_REVIEW_REASON)
     if any(re.search(pattern, normalized_reply) for pattern in UNVERIFIED_INTERNAL_ACTION_PATTERNS):
         reasons.append(UNVERIFIED_PROMISE_REVIEW_REASON)
+    if _has_unverified_first_person_action(normalized_reply):
+        reasons.append(UNVERIFIED_PROMISE_REVIEW_REASON)
     if reply.endswith(("...", "…")):
         reasons.append(INCOMPLETE_REPLY_REVIEW_REASON)
     author_name = _clean_text(source.get("author_name"))
@@ -323,6 +337,14 @@ def _reply_quality_reasons(draft: Dict[str, str], source: Dict[str, Any]) -> Lis
     ):
         reasons.append(UNVERIFIED_NAME_REVIEW_REASON)
     return reasons
+
+
+def _has_unverified_first_person_action(normalized_reply: str) -> bool:
+    pattern = rf"\bмы\s+(?:(?:{FIRST_PERSON_MODIFIERS})\s+){{0,2}}([а-я-]+)"
+    return any(
+        match.group(1) not in FIRST_PERSON_ALLOWED_STATEMENTS
+        for match in re.finditer(pattern, normalized_reply)
+    )
 
 
 def _review_items(extracted_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

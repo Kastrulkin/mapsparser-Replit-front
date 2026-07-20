@@ -1825,6 +1825,50 @@ def test_agent_review_reply_analysis_replaces_unverified_internal_action_promise
     assert result["external_dispatch_performed"] is False
 
 
+def test_agent_review_reply_analysis_replaces_paraphrased_first_person_promise():
+    from services.agent_review_reply_analysis import draft_review_replies_with_llm
+
+    def promise_generator(prompt, *, business_id="", user_id=""):
+        return json.dumps(
+            {
+                "reply_drafts": [
+                    {
+                        "review_id": "rev-review",
+                        "author_name": "Анна",
+                        "rating": "2",
+                        "reply": (
+                            "Анна, приносим извинения за неприятные впечатления. "
+                            "Мы рассмотрим эту ситуацию подробнее, чтобы избежать повторения."
+                        ),
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    result = draft_review_replies_with_llm(
+        {"workflow_description": "Подготовить ответ на негативный отзыв"},
+        [
+            {
+                "source_name": "Отзывы",
+                "raw": {
+                    "id": "rev-review",
+                    "author_name": "Анна",
+                    "rating": 2,
+                    "text": "Результат услуги не понравился",
+                },
+            }
+        ],
+        generator=promise_generator,
+    )
+
+    reply = result["reply_drafts"][0]["reply"].lower().replace("ё", "е")
+    assert "мы рассмотрим" not in reply
+    assert "напишите нам напрямую" in reply
+    assert any("неподтверждённое обещание" in reason.lower() for reason in result["manual_review_reasons"])
+    assert result["external_dispatch_performed"] is False
+
+
 def test_agent_run_completion_refreshes_server_today_summary():
     page_source = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
     recovered_segment = page_source[page_source.index("if (!runAnimation?.recoveredFromReload"):page_source.index("const startRun = async")]
