@@ -32,12 +32,23 @@ def test_run_business_result_prefers_final_artifact():
         "step_id": "step2",
         "artifact_type": "agent_final_result",
         "title": "Final",
-        "payload_json": {"result": {"draft_text": "saved final"}},
+        "payload_json": {
+            "result": {"draft_text": "saved final"},
+            "saved_destination": {
+                "status": "draft_saved",
+                "plan_id": "plan-1",
+                "item_id": "item-1",
+                "content_plan_url": "/dashboard/content?plan_id=plan-1",
+                "localos_write_performed": True,
+            },
+        },
     }
 
     run = AgentBlueprintRunner(cursor).load_run("run1")
 
     assert run["business_result"]["draft_text"] == "saved final"
+    assert run["business_result"]["saved_destination"]["status"] == "draft_saved"
+    assert run["business_result"]["saved_destination"]["content_plan_url"] == "/dashboard/content?plan_id=plan-1"
     assert run["result_state"] == "saved"
 
 

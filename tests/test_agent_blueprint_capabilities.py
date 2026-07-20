@@ -934,6 +934,61 @@ def test_google_sheets_invalid_grant_marks_saved_account_for_reconnect(monkeypat
     assert database.conn.committed is True
 
 
+def test_google_sheets_missing_tab_is_not_reported_as_oauth_failure(monkeypatch):
+    from services import agent_capability_handlers
+    from services.agent_blueprint_workspace import _render_output
+    from services.agent_google_sheets_adapter import GoogleSheetsAdapterError
+
+    class MissingTabAdapter:
+        def read_rows(self, _request):
+            raise GoogleSheetsAdapterError(
+                "Google Sheets read failed with HTTP 400: Unable to parse range: Missing tab!A1:Z"
+            )
+
+    db = FakeCapabilityDatabase()
+    monkeypatch.setattr(agent_capability_handlers, "DatabaseManager", lambda: db)
+    monkeypatch.setattr(
+        agent_capability_handlers,
+        "load_google_sheets_read_adapter",
+        lambda *_args, **_kwargs: MissingTabAdapter(),
+    )
+
+    capability_result = agent_capability_handlers.build_capability_handlers()["google_sheets.read_rows"](
+        {
+            "tenant_id": "biz1",
+            "capability": "google_sheets.read_rows",
+            "payload": {
+                "integration_id": "integration-1",
+                "spreadsheet_id": "spreadsheet-1",
+                "sheet_name": "Missing tab",
+            },
+        },
+        {"user_id": "user-1"},
+    )["result"]
+    business_result = _render_output(
+        "custom",
+        {
+            "workflow_description": "Открой таблицу поездок и подготовь сообщение владельцу",
+            "processing_rules": "Не придумывать факты",
+            "output_format": "Готовое сообщение для проверки",
+        },
+        [
+            {
+                "source_name": "google_sheets_error",
+                "summary": capability_result["provider_error_message"],
+                "raw": capability_result,
+            }
+        ],
+        [],
+        {},
+    )
+
+    assert capability_result["status"] == "provider_read_required"
+    assert business_result["status"] == "needs_sheet_tab"
+    assert business_result["title"] == "Нужно выбрать лист таблицы"
+    assert "Переподключ" not in json.dumps(business_result, ensure_ascii=False)
+
+
 def test_google_sheets_temporary_provider_error_is_raised_for_worker_retry(monkeypatch):
     from services import agent_capability_handlers
     from services.agent_google_sheets_adapter import GoogleSheetsAdapterError
