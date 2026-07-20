@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useOutletContext } from 'react-router-dom';
 import { Bot, Zap } from 'lucide-react';
 import { newAuth } from '@/lib/auth_new';
@@ -95,7 +95,6 @@ export const AgentBlueprintsPage = () => {
   const [agentDetailsById, setAgentDetailsById] = useState<Record<string, AgentBlueprintDetails>>({});
   const [serverTodaySummary, setServerTodaySummary] = useState<AgentServerTodaySummary | null>(null);
   const [activeRun, setActiveRun] = useState<AgentRun | null>(null);
-  const restoredRunIdRef = useRef('');
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -611,8 +610,6 @@ export const AgentBlueprintsPage = () => {
       setSelectedBlueprintId(resume.blueprintId);
       return;
     }
-    if (restoredRunIdRef.current === resume.runId) return;
-    restoredRunIdRef.current = resume.runId;
     let cancelled = false;
     void api.get(`/agent-runs/${resume.runId}`).then((response) => {
       if (cancelled) return;
