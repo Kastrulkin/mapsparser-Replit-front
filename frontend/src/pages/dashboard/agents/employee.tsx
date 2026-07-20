@@ -1276,7 +1276,11 @@ export const EmployeeTestResultPanel = ({
           ) : null}
           {activeRun?.id ? (
             <div className="w-full text-right text-xs font-medium tabular-nums text-slate-500">
-              {isWorkRun ? `За эту работу списано: ${chargedCredits} ${creditWord(chargedCredits)}` : 'Проверка выполнена бесплатно'}
+              {isWorkRun
+                ? chargedCredits > 0
+                  ? `За эту работу списано: ${chargedCredits} ${creditWord(chargedCredits)}`
+                  : 'Списание не потребовалось'
+                : 'Проверка выполнена бесплатно'}
             </div>
           ) : null}
         </div>
