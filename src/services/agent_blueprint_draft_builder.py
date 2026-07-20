@@ -120,6 +120,8 @@ def infer_blueprint_category(description: str) -> str:
         return "custom"
     if _is_review_based_content_request(text):
         return "custom"
+    if _is_content_draft_request(text):
+        return "custom"
     if _contains_any(text, ["контент-план", "темы постов", "тема пост", "постов для карточ", "посты для карточ"]):
         return "custom"
     if _contains_any(text, ["партн", "коллаб"]):
@@ -1334,7 +1336,30 @@ def _is_internal_only_result_request(text: str) -> bool:
         return False
     if _contains_any(text, ["внутренний черновик", "внутренний результат", "внутри localos"]):
         return True
-    return _contains_any(text, ["не публи", "без публикац"]) and _contains_any(text, ["не отправ", "без отправ"])
+    if _contains_any(text, ["не публи", "без публикац"]) and _contains_any(text, ["не отправ", "без отправ"]):
+        return True
+    return _is_content_draft_request(text)
+
+
+def _is_content_draft_request(text: str) -> bool:
+    if not _contains_any(text, ["новост", "пост", "контент", "публикац"]):
+        return False
+    if not _contains_any(text, ["подготов", "созда", "напиш", "черновик", "иде", "тем"]):
+        return False
+    explicit_external_action = _contains_any(
+        text,
+        [
+            "опубликуй",
+            "опубликовать",
+            "размести",
+            "разместить",
+            "отправь",
+            "отправить",
+            "выложи",
+            "выложить",
+        ],
+    )
+    return not explicit_external_action
 
 
 def _is_rich_localos_workflow_request(text: str) -> bool:

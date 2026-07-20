@@ -141,7 +141,7 @@ def validate_workflow_dsl_document(document: Dict[str, Any]) -> Dict[str, Any]:
                     errors.append(_issue(f"steps[{index}].required_approval_type", "Approval gate is not declared in workflow."))
 
     goal = str(document.get("goal") or "")
-    if _goal_requires_internal_summary(goal):
+    if _goal_requires_internal_summary(goal) or _goal_requires_internal_content_draft(goal):
         required_approvals = _clean_string_list(approval_policy.get("required_for"))
         if "final_output" in required_approvals:
             errors.append(
@@ -174,7 +174,7 @@ def validate_workflow_dsl_document(document: Dict[str, Any]) -> Dict[str, Any]:
                 errors.append(
                     _issue(
                         f"steps[{index}].payload.format",
-                        "Internal business summary cannot use the review-reply output renderer.",
+                        "Internal business result cannot use the review-reply output renderer unless the goal asks for review replies.",
                     )
                 )
 
@@ -258,6 +258,27 @@ def _goal_requires_internal_summary(goal: str) -> bool:
     ]
     reply_markers = ["ответ на отзыв", "ответы на отзывы", "черновик ответа", "черновики ответов"]
     return any(marker in lowered for marker in summary_markers) and not any(marker in lowered for marker in reply_markers)
+
+
+def _goal_requires_internal_content_draft(goal: str) -> bool:
+    lowered = goal.lower()
+    content_markers = ["новост", "пост", "контент", "публикац"]
+    draft_markers = ["подготов", "созда", "напиш", "черновик", "иде", "тем"]
+    external_action_markers = [
+        "опубликуй",
+        "опубликовать",
+        "размести",
+        "разместить",
+        "отправь",
+        "отправить",
+        "выложи",
+        "выложить",
+    ]
+    return (
+        any(marker in lowered for marker in content_markers)
+        and any(marker in lowered for marker in draft_markers)
+        and not any(marker in lowered for marker in external_action_markers)
+    )
 
 
 def _goal_requires_daily_schedule(goal: str) -> bool:
