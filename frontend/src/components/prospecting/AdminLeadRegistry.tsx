@@ -182,6 +182,14 @@ interface ContactIntelligence {
     }>;
     missing_items?: Array<{ code?: string; label?: string }>;
   };
+  sender_profile_suggestions?: {
+    display_name?: string;
+    company_name?: string;
+    geography?: string;
+    services?: string[];
+    desired_partner_types?: string[];
+    requires_confirmation?: boolean;
+  } | null;
   first_message?: {
     id?: string;
     channel?: string;
@@ -749,6 +757,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
   useEffect(() => {
     const profile = contactIntelligence?.sender_profile;
+    const suggestions = contactIntelligence?.sender_profile_suggestions;
     if (profile) {
       const context = profile.outreach_context_json || {};
       setSenderName(String(profile.display_name || ''));
@@ -769,11 +778,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       setSenderCtas((context.allowed_ctas || []).join('\n'));
       return;
     }
-    setSenderName('');
+    setSenderName(String(suggestions?.display_name || ''));
     setSenderRole('');
     setSenderCompany(selectedWorkstream?.workstream_type === 'localos_sales'
       ? 'LocalOS'
-      : String(selectedWorkstream?.client_business_name || ''));
+      : String(suggestions?.company_name || selectedWorkstream?.client_business_name || ''));
     setSenderStory('');
     setSenderProof('');
     setSenderOffer('');
@@ -782,12 +791,12 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setSenderOutcome('');
     setSenderAudience('');
     setSenderSegments('');
-    setSenderGeography('');
+    setSenderGeography(String(suggestions?.geography || ''));
     setSenderRecipientRoles('');
-    setSenderPartnerTypes('');
+    setSenderPartnerTypes((suggestions?.desired_partner_types || []).join('\n'));
     setSenderDisqualifiers('');
     setSenderCtas('');
-  }, [contactIntelligence?.sender_profile?.id, selectedWorkstream?.id]);
+  }, [contactIntelligence?.sender_profile?.id, contactIntelligence?.sender_profile_suggestions, selectedWorkstream?.id]);
 
   useEffect(() => {
     setOutreachPreview(null);
@@ -2288,6 +2297,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         </div>
                       ) : null}
                     </div>
+                    {!contactIntelligence?.sender_profile && contactIntelligence?.sender_profile_suggestions?.requires_confirmation ? (
+                      <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-pretty text-xs leading-5 text-sky-900">
+                        LocalOS уже подставил название, географию и типы партнёров из данных бизнеса и текущего поиска. Проверьте их; опыт, кейсы, предложение и голос добавьте только как подтверждённые факты.
+                      </div>
+                    ) : null}
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="text-xs font-semibold text-slate-700">
                         Имя отправителя

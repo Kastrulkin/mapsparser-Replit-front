@@ -58,6 +58,76 @@ def _load_workstream(cursor, *, lead_id: str, workstream_id: str, client_busines
     return dict(row) if row else None
 
 
+def _sender_profile_suggestions(cursor, business_id: str) -> dict[str, Any]:
+    """Prefill observed business data without confirming sender claims."""
+    cursor.execute(
+        """
+        SELECT business.name AS company_name,
+               business.city AS geography,
+               owner.name AS sender_name
+        FROM businesses business
+        LEFT JOIN users owner ON owner.id = business.owner_id
+        WHERE business.id::text = %s
+        LIMIT 1
+        """,
+        (business_id,),
+    )
+    business_row = cursor.fetchone() or {}
+    suggested_sender_name = str(business_row.get("sender_name") or "").strip()
+    if suggested_sender_name.lower() in {"superadmin", "admin", "administrator"}:
+        suggested_sender_name = ""
+    cursor.execute(
+        """
+        SELECT name
+        FROM userservices
+        WHERE business_id = %s
+          AND COALESCE(is_active, TRUE) = TRUE
+          AND NULLIF(BTRIM(name), '') IS NOT NULL
+        ORDER BY name
+        LIMIT 100
+        """,
+        (business_id,),
+    )
+    business_services = [
+        str(item.get("name") or "").strip()
+        for item in cursor.fetchall() or []
+        if str(item.get("name") or "").strip()
+    ]
+    cursor.execute(
+        """
+        SELECT BTRIM(category_part) AS partner_type, COUNT(*) AS lead_count
+        FROM lead_workstreams workstream
+        JOIN prospectingleads lead ON lead.id = workstream.lead_id
+        CROSS JOIN LATERAL regexp_split_to_table(
+            COALESCE(NULLIF(BTRIM(lead.category), ''), ''),
+            '\\s*/\\s*'
+        ) category_part
+        WHERE workstream.workstream_type = 'client_partnership'
+          AND workstream.client_business_id = %s
+          AND NULLIF(BTRIM(category_part), '') IS NOT NULL
+        GROUP BY BTRIM(category_part)
+        ORDER BY COUNT(*) DESC, BTRIM(category_part)
+        LIMIT 12
+        """,
+        (business_id,),
+    )
+    suggested_partner_types = [
+        str(item.get("partner_type") or "").strip()
+        for item in cursor.fetchall() or []
+        if str(item.get("partner_type") or "").strip()
+    ]
+    return {
+        "services": business_services,
+        "services_source": "business_services",
+        "desired_partner_types": suggested_partner_types,
+        "desired_partner_types_source": "existing_partner_search",
+        "company_name": str(business_row.get("company_name") or "").strip(),
+        "display_name": suggested_sender_name,
+        "geography": str(business_row.get("geography") or "").strip(),
+        "requires_confirmation": True,
+    }
+
+
 def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
     cursor.execute(
         """
@@ -180,6 +250,12 @@ def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
         (item for item in contacts if item.get("id") == str(workstream.get("selected_contact_point_id"))),
         None,
     )
+    sender_profile_suggestions = None
+    if workstream.get("workstream_type") == "client_partnership" and workstream.get("client_business_id"):
+        sender_profile_suggestions = _sender_profile_suggestions(
+            cursor,
+            str(workstream.get("client_business_id")),
+        )
     return {
         "workstream_id": str(workstream.get("id")),
         "lead_id": str(workstream.get("lead_id")),
@@ -196,6 +272,7 @@ def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
         "selected_recipient": selected,
         "job": _serialize_job(dict(job_row) if job_row else None),
         "sender_profile": sender_profile,
+        "sender_profile_suggestions": sender_profile_suggestions,
         "sender_profile_completeness": profile_completeness,
         "first_message": first_message,
     }
@@ -553,62 +630,8 @@ def partnership_sender_profile():
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         business_id = str(context.get("business_id"))
         if request.method == "GET":
-            cursor.execute(
-                """
-                SELECT business.name AS company_name,
-                       business.city AS geography,
-                       owner.name AS sender_name
-                FROM businesses business
-                LEFT JOIN users owner ON owner.id = business.owner_id
-                WHERE business.id::text = %s
-                LIMIT 1
-                """,
-                (business_id,),
-            )
-            business_row = cursor.fetchone() or {}
-            suggested_sender_name = str(business_row.get("sender_name") or "").strip()
-            if suggested_sender_name.lower() in {"superadmin", "admin", "administrator"}:
-                suggested_sender_name = ""
-            cursor.execute(
-                """
-                SELECT name
-                FROM userservices
-                WHERE business_id = %s
-                  AND COALESCE(is_active, TRUE) = TRUE
-                  AND NULLIF(BTRIM(name), '') IS NOT NULL
-                ORDER BY name
-                LIMIT 100
-                """,
-                (business_id,),
-            )
-            business_services = [
-                str(item.get("name") or "").strip()
-                for item in cursor.fetchall() or []
-                if str(item.get("name") or "").strip()
-            ]
-            cursor.execute(
-                """
-                SELECT BTRIM(category_part) AS partner_type, COUNT(*) AS lead_count
-                FROM lead_workstreams workstream
-                JOIN prospectingleads lead ON lead.id = workstream.lead_id
-                CROSS JOIN LATERAL regexp_split_to_table(
-                    COALESCE(NULLIF(BTRIM(lead.category), ''), ''),
-                    '\\s*/\\s*'
-                ) category_part
-                WHERE workstream.workstream_type = 'client_partnership'
-                  AND workstream.client_business_id = %s
-                  AND NULLIF(BTRIM(category_part), '') IS NOT NULL
-                GROUP BY BTRIM(category_part)
-                ORDER BY COUNT(*) DESC, BTRIM(category_part)
-                LIMIT 12
-                """,
-                (business_id,),
-            )
-            suggested_partner_types = [
-                str(item.get("partner_type") or "").strip()
-                for item in cursor.fetchall() or []
-                if str(item.get("partner_type") or "").strip()
-            ]
+            suggested_context = _sender_profile_suggestions(cursor, business_id)
+            business_services = list(suggested_context.get("services") or [])
             cursor.execute(
                 """
                 SELECT * FROM outreach_sender_profiles
@@ -629,16 +652,7 @@ def partnership_sender_profile():
                 "success": True,
                 "profile": profile,
                 "profile_completeness": completeness,
-                "suggested_context": {
-                    "services": business_services,
-                    "services_source": "business_services",
-                    "desired_partner_types": suggested_partner_types,
-                    "desired_partner_types_source": "existing_partner_search",
-                    "company_name": str(business_row.get("company_name") or "").strip(),
-                    "display_name": suggested_sender_name,
-                    "geography": str(business_row.get("geography") or "").strip(),
-                    "requires_confirmation": True,
-                },
+                "suggested_context": suggested_context,
             })
         profile = _save_sender_profile(
             cursor,

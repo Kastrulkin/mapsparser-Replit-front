@@ -1210,6 +1210,9 @@ def test_sender_profile_assigns_statuses_to_offers_voice_and_forbidden_claims():
 
 def test_partnership_sender_profile_guides_user_with_completeness_and_business_services():
     backend_source = (ROOT / "src/api/prospecting/contact_intelligence_routes.py").read_text()
+    helper_start = backend_source.index("def _sender_profile_suggestions")
+    helper_end = backend_source.index("\n\ndef _load_intelligence", helper_start)
+    helper_block = backend_source[helper_start:helper_end]
     route_start = backend_source.index("def partnership_sender_profile")
     route_block = backend_source[route_start:]
     frontend_source = (
@@ -1217,19 +1220,35 @@ def test_partnership_sender_profile_guides_user_with_completeness_and_business_s
     ).read_text()
 
     assert '"profile_completeness": completeness' in route_block
-    assert '"services_source": "business_services"' in route_block
-    assert '"desired_partner_types_source": "existing_partner_search"' in route_block
-    assert "regexp_split_to_table" in route_block
-    assert '"company_name": str(business_row.get("company_name")' in route_block
-    assert '"display_name": suggested_sender_name' in route_block
-    assert '"geography": str(business_row.get("geography")' in route_block
-    assert '"requires_confirmation": True' in route_block
+    assert "suggested_context = _sender_profile_suggestions(cursor, business_id)" in route_block
+    assert '"suggested_context": suggested_context' in route_block
+    assert '"services_source": "business_services"' in helper_block
+    assert '"desired_partner_types_source": "existing_partner_search"' in helper_block
+    assert "regexp_split_to_table" in helper_block
+    assert '"company_name": str(business_row.get("company_name")' in helper_block
+    assert '"display_name": suggested_sender_name' in helper_block
+    assert '"geography": str(business_row.get("geography")' in helper_block
+    assert '"requires_confirmation": True' in helper_block
     assert "payload?.profile?.confirmed_at" in frontend_source
     assert "Профиль сохранён, но пока не подтверждён" in frontend_source
     assert "Что нужно заполнить" in frontend_source
     assert "suggestedCompanyName" in frontend_source
     assert "suggestedPartnerTypes" in frontend_source
     assert "Сохранить и подтвердить" in frontend_source
+
+
+def test_admin_lead_sender_profile_reuses_observed_business_suggestions():
+    backend_source = (ROOT / "src/api/prospecting/contact_intelligence_routes.py").read_text()
+    frontend_source = (
+        ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx"
+    ).read_text()
+
+    assert '"sender_profile_suggestions": sender_profile_suggestions' in backend_source
+    assert "const suggestions = contactIntelligence?.sender_profile_suggestions" in frontend_source
+    assert "setSenderName(String(suggestions?.display_name || ''))" in frontend_source
+    assert "setSenderGeography(String(suggestions?.geography || ''))" in frontend_source
+    assert "setSenderPartnerTypes((suggestions?.desired_partner_types || []).join('\\n'))" in frontend_source
+    assert "LocalOS уже подставил название, географию и типы партнёров" in frontend_source
 
 
 def test_contact_intelligence_runtime_has_no_message_send_capability():
