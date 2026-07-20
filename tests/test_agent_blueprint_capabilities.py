@@ -2,6 +2,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from tests.agent_blueprint_fakes import *  # noqa: F403
 from tests.source_contract_helpers import read_agent_blueprints_frontend_source
 
@@ -930,6 +932,56 @@ def test_google_sheets_invalid_grant_marks_saved_account_for_reconnect(monkeypat
     assert "invalid_grant" in payload["provider_error_message"]
     assert update_call[1][1:] == ("biz1", "integration-1", "biz1", "integration-1")
     assert database.conn.committed is True
+
+
+def test_google_sheets_temporary_provider_error_is_raised_for_worker_retry(monkeypatch):
+    from services import agent_capability_handlers
+    from services.agent_google_sheets_adapter import GoogleSheetsAdapterError
+
+    class Cursor:
+        pass
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+    class Database:
+        def __init__(self):
+            self.conn = Connection()
+
+        def close(self):
+            return None
+
+    class TemporaryFailureAdapter:
+        def read_rows(self, _request):
+            raise GoogleSheetsAdapterError("Google Sheets read failed with HTTP 503: backend unavailable")
+
+    monkeypatch.setattr(agent_capability_handlers, "DatabaseManager", Database)
+    monkeypatch.setattr(
+        agent_capability_handlers,
+        "load_google_sheets_read_adapter",
+        lambda *_args, **_kwargs: TemporaryFailureAdapter(),
+    )
+
+    with pytest.raises(RuntimeError, match="temporary Google Sheets provider error"):
+        agent_capability_handlers.build_capability_handlers()["google_sheets.read_rows"](
+            {
+                "tenant_id": "biz1",
+                "capability": "google_sheets.read_rows",
+                "payload": {
+                    "integration_id": "integration-1",
+                    "spreadsheet_id": "spreadsheet-1",
+                    "sheet_name": "Trips",
+                },
+            },
+            {"user_id": "user-1"},
+        )
+
+
+def test_agent_queue_treats_temporary_google_provider_error_as_retryable():
+    from services.agent_run_queue import _is_transient_error
+
+    assert _is_transient_error("temporary Google Sheets provider error: HTTP 503") is True
 
 
 def test_source_result_chain_requires_real_google_sheets_provider_read():

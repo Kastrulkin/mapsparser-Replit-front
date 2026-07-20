@@ -1210,6 +1210,8 @@ def _handle_google_sheets_read_rows(envelope: Dict[str, Any], user_data: Dict[st
             )
         except GoogleSheetsAdapterError as exc:
             error_message = str(exc)[:600]
+            if _google_sheets_error_is_transient(error_message):
+                raise RuntimeError(f"temporary Google Sheets provider error: {error_message}") from exc
             if _google_sheets_auth_needs_reconnect(error_message):
                 _mark_google_sheets_auth_for_reconnect(
                     cursor,
@@ -1259,6 +1261,11 @@ def _handle_google_sheets_read_rows(envelope: Dict[str, Any], user_data: Dict[st
 def _google_sheets_auth_needs_reconnect(error_message: str) -> bool:
     lowered = str(error_message or "").lower()
     return "invalid_grant" in lowered or "expired or revoked" in lowered
+
+
+def _google_sheets_error_is_transient(error_message: str) -> bool:
+    lowered = str(error_message or "").lower()
+    return any(marker in lowered for marker in ("timeout", "timed out", "connection", "temporar", "429", "502", "503", "504"))
 
 
 def _mark_google_sheets_auth_for_reconnect(
