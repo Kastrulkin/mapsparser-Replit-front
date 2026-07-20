@@ -195,6 +195,109 @@ def test_blocking_business_result_stops_before_downstream_write(monkeypatch):
     assert orchestrator.calls == 0
 
 
+def test_content_plan_step_receives_draft_from_compiled_artifact_mapping(monkeypatch):
+    from services import agent_blueprint_runner
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Content plan agent",
+        "category": "custom",
+        "metadata_json": {},
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "inputs_schema_json": {
+            "type": "object",
+            "properties": {"scheduled_for": {"type": "string", "format": "date"}},
+        },
+        "steps_json": [
+            {
+                "key": "prepare_output",
+                "type": "artifact",
+                "title": "Подготовить результат",
+                "artifact_type": "agent_output_draft",
+            },
+            {
+                "key": "save_content_plan_draft",
+                "type": "capability",
+                "title": "Сохранить черновик",
+                "capability": "content_plan.item.create_draft",
+                "payload": {
+                    "scheduled_for": "2099-07-27",
+                    "source_run_id": "{{run_id}}",
+                    "input_mappings": [
+                        {
+                            "from_step": "prepare_output",
+                            "path": "artifact.result.draft_text",
+                            "target": "draft_text",
+                        },
+                        {
+                            "from_step": "prepare_output",
+                            "path": "artifact.result.title",
+                            "target": "theme",
+                        },
+                    ],
+                },
+            },
+        ],
+        "capability_allowlist_json": ["content_plan.item.create_draft"],
+    }
+    monkeypatch.setattr(
+        agent_blueprint_runner,
+        "build_generic_artifact_payload",
+        lambda *_args, **_kwargs: {
+            "status": "generated",
+            "result": {
+                "status": "prepared",
+                "title": "Поездка на 20 апреля",
+                "draft_text": "20 апреля мы выполнили поездку из Таллинна в Хельсинки.",
+            },
+        },
+    )
+
+    class ContentPlanOrchestrator:
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, envelope, user_data, *, allow_execute_when_approved=False):
+            self.calls.append(envelope)
+            return {
+                "success": True,
+                "status": "completed",
+                "result": {
+                    "status": "draft_saved",
+                    "plan_id": "plan-1",
+                    "item_id": "item-1",
+                    "content_plan_url": "/dashboard/content?plan_id=plan-1",
+                    "localos_write_performed": True,
+                    "external_dispatch_performed": False,
+                },
+            }
+
+    orchestrator = ContentPlanOrchestrator()
+    result = AgentBlueprintRunner(cursor, orchestrator=orchestrator).start_run(
+        "ver1",
+        {"scheduled_for": "2099-08-03"},
+        {"user_id": "user1"},
+    )
+
+    assert result["success"] is True
+    assert result["run"]["status"] == "completed"
+    assert len(orchestrator.calls) == 1
+    payload = orchestrator.calls[0]["payload"]
+    assert payload["scheduled_for"] == "2099-08-03"
+    assert payload["source_run_id"] == result["run"]["id"]
+    assert payload["theme"] == "Поездка на 20 апреля"
+    assert payload["draft_text"] == "20 апреля мы выполнили поездку из Таллинна в Хельсинки."
+    assert "input_mappings" not in payload
+    save_step = next(step for step in result["run"]["steps"] if step["step_key"] == "save_content_plan_draft")
+    assert save_step["output_json"]["orchestrator"]["result"]["external_dispatch_performed"] is False
+
+
 def test_successful_retry_clears_previous_transient_error():
     from services.agent_blueprint_runner import AgentBlueprintRunner
 
