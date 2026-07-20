@@ -453,7 +453,7 @@ def main() -> int:
                 report["skipped"][skip_reason] = report["skipped"].get(skip_reason, 0) + 1
                 _record_recovery(report, row, skip_reason, args.sample_size, snapshot)
                 recovery_action = _recovery_action(row, skip_reason, snapshot)
-                if recovery_action == "start_parse":
+                if recovery_action in {"start_parse", "retry_parse"}:
                     report["parse_candidates"] += 1
                     parse_limit_reached = (
                         args.parse_limit > 0

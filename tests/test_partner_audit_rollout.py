@@ -342,6 +342,7 @@ def test_partner_parse_recovery_is_bounded_and_never_sends_outreach() -> None:
     assert '"prerequisite_assessments_saved": 0' in source
     assert "assessment_kind" in source
     assert "_enqueue_parse_task_for_business" in source
+    assert 'recovery_action in {"start_parse", "retry_parse"}' in source
 
 
 def test_partnership_pipeline_passes_open_lead_action_through_list_component() -> None:
