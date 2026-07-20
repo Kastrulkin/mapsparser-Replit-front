@@ -374,6 +374,8 @@ def test_agent_async_runtime_contract_is_wired_end_to_end():
     assert "if (state === 'ready_for_test')" in frontend_source
     assert "Запустите безопасную проверку новой версии" in frontend_source
     assert "serverCompletedSteps" in frontend_source
+    assert "needs_sheet_rows" in frontend_source
+    assert "Проверить данные таблицы" in frontend_source
     assert "billing_reservation_id" in migration_source
 
 

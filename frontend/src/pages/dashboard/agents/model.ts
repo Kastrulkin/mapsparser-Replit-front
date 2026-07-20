@@ -1222,6 +1222,14 @@ export const buildEmployeePrimaryAction = ({
         targetMode: 'results',
       };
     }
+    if (resultPayloadStatus(latestResult) === 'needs_sheet_rows') {
+      return {
+        kind: 'open_result',
+        label: 'Проверить данные таблицы',
+        description: 'Google-доступ работает, но в выбранном листе нет строк с данными.',
+        targetMode: 'results',
+      };
+    }
     return {
       kind: 'open_result',
       label: 'Разобрать результат',

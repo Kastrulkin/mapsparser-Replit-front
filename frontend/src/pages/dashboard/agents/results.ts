@@ -327,6 +327,7 @@ export const isBusinessBlockerPayload = (result: Record<string, unknown> | null)
     'needs_google_access',
     'needs_google_api_enabled',
     'needs_sheet_tab',
+    'needs_sheet_rows',
     'blocked',
   ].includes(status);
 };
@@ -456,6 +457,9 @@ export const needsGoogleSheetsSourceSetup = (activeRun: AgentRun | null, pending
   }
   if (resultPayloadStatus(resultPayload) === 'needs_sheet_tab') {
     return true;
+  }
+  if (resultPayloadStatus(resultPayload) === 'needs_sheet_rows') {
+    return false;
   }
   return text.includes('google sheets') || text.includes('таблиц');
 };

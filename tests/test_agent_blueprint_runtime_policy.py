@@ -235,6 +235,53 @@ def test_successful_retry_clears_previous_transient_error():
     assert result["run"]["next_attempt_at"] is None
 
 
+def test_successful_empty_google_sheet_has_a_distinct_business_blocker():
+    from services.agent_blueprint_workspace import _extract_run_source_items, _render_message_result
+
+    class Cursor:
+        def execute(self, query, params=None):
+            self.results = [
+                {
+                    "step_key": "read_google_sheets",
+                    "output_json": {
+                        "orchestrator": {
+                            "result": {
+                                "status": "read_completed",
+                                "source": "google_sheets",
+                                "provider_read_performed": True,
+                                "sheet_name": "Trips",
+                                "range": "Trips!A1:Z",
+                                "rows": [],
+                                "count": 0,
+                            }
+                        }
+                    },
+                }
+            ]
+
+        def fetchall(self):
+            return self.results
+
+    extracted = _extract_run_source_items(Cursor(), "run-empty-sheet")
+    result = _render_message_result(
+        {
+            "workflow_description": "Прочитать Google Sheets и подготовить сообщение",
+            "run_request": "Прочитать Google Sheets и подготовить сообщение",
+        },
+        extracted,
+        "Не придумывать факты",
+        "Короткий черновик",
+        [],
+    )
+
+    assert extracted[0]["source_name"] == "google_sheets_empty"
+    assert result["status"] == "needs_sheet_rows"
+    assert result["title"] == "В выбранном листе нет строк"
+    assert result["sheet_name"] == "Trips"
+    assert "Google-доступ работает" in result["summary"][0]
+    assert "Переподключ" not in json.dumps(result, ensure_ascii=False)
+
+
 def test_agent_integration_preflight_allows_inline_rows_and_native_finance():
     from services.agent_blueprint_draft_builder import compile_agent_blueprint
     from services.agent_integration_preflight import build_agent_integration_preflight

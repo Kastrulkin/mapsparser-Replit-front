@@ -702,6 +702,29 @@ def _render_message_result(
             "feedback_notes": feedback_notes,
             "preparation_method": "Сообщение не готовилось: Google не выдал строки таблицы для безопасного результата.",
         }
+    empty_sheet = _google_sheets_empty_source(extracted)
+    if empty_sheet:
+        sheet_name = _clean_text(empty_sheet.get("sheet_name"))
+        range_name = _clean_text(empty_sheet.get("range"))
+        location = sheet_name or range_name
+        summary = "Google-доступ работает, но в выбранном листе нет строк с данными."
+        if location:
+            summary = f"Google-доступ работает, но в листе «{location}» нет строк с данными."
+        return {
+            "title": "В выбранном листе нет строк",
+            "status": "needs_sheet_rows",
+            "summary": [summary],
+            "next_questions": [
+                "Проверьте, что выбраны нужные лист и диапазон.",
+                "Добавьте строки с данными и запустите тест ещё раз.",
+            ],
+            "sheet_name": sheet_name,
+            "range": range_name,
+            "rules_applied": rules,
+            "format": output_format,
+            "feedback_notes": feedback_notes,
+            "preparation_method": "Результат не готовился: Google Sheets успешно прочитан, но строк с данными нет.",
+        }
     selected_items = _select_message_items(extracted, workflow)
     selected_facts = [_clean_text(item.get("summary")) for item in selected_items if _clean_text(item.get("summary"))]
     if selected_facts:
@@ -781,6 +804,15 @@ def _google_sheets_source_error(extracted: List[Dict[str, Any]]) -> str:
         if reason:
             return reason
     return ""
+
+
+def _google_sheets_empty_source(extracted: List[Dict[str, Any]]) -> Dict[str, Any]:
+    for item in extracted:
+        if not isinstance(item, dict) or _clean_text(item.get("source_name")) != "google_sheets_empty":
+            continue
+        raw = item.get("raw") if isinstance(item.get("raw"), dict) else {}
+        return raw
+    return {}
 
 
 def _is_google_sheets_api_disabled_error(reason: str) -> bool:
@@ -1367,6 +1399,20 @@ def _extract_run_source_items(cursor: Any, run_id: str) -> List[Dict[str, Any]]:
         source_rows = result.get("rows") if isinstance(result.get("rows"), list) else []
         provider_read_performed = result.get("provider_read_performed") is True
         source_name = "google_sheets" if provider_read_performed else "inline_rows_preview"
+        if not source_rows and source == "google_sheets" and provider_read_performed:
+            items.append(
+                {
+                    "source_name": "google_sheets_empty",
+                    "summary": "Google Sheets прочитан, но строк с данными нет.",
+                    "raw": {
+                        "sheet_name": _clean_text(result.get("sheet_name")),
+                        "range": _clean_text(result.get("range")),
+                        "count": 0,
+                        "provider_read_performed": True,
+                    },
+                    "provider_read_performed": True,
+                }
+            )
         if not source_rows and source == "google_sheets" and result.get("provider_error"):
             items.append(
                 {
