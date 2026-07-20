@@ -39,6 +39,8 @@ latest_job AS (
            workstream_id,
            id AS job_id,
            status AS job_status,
+           error_code,
+           error_message,
            NULLIF(result_json ->> 'draft_id', '') AS result_draft_id,
            updated_at AS job_updated_at
     FROM lead_enrichment_jobs
@@ -60,6 +62,7 @@ SELECT ws.id AS workstream_id,
        latest_research.researched_at,
        latest_job.job_id,
        latest_job.job_status,
+       latest_job.error_code,
        latest_job.result_draft_id,
        latest_job.job_updated_at,
        COALESCE(draft_rollup.sourced_passed_draft_count, 0) AS sourced_passed_draft_count
@@ -69,11 +72,34 @@ JOIN latest_research ON latest_research.workstream_id = ws.id
 JOIN latest_job ON latest_job.workstream_id = ws.id
 LEFT JOIN draft_rollup ON draft_rollup.workstream_id = ws.id
 WHERE ws.workstream_type = 'localos_sales'
-  AND latest_job.job_status = 'ready'
   AND (
-      latest_research.readiness_code <> 'ready'
-      OR latest_job.result_draft_id IS NULL
-      OR COALESCE(draft_rollup.sourced_passed_draft_count, 0) = 0
+      (
+          latest_job.job_status = 'ready'
+          AND (
+              latest_research.readiness_code <> 'ready'
+              OR latest_job.result_draft_id IS NULL
+              OR COALESCE(draft_rollup.sourced_passed_draft_count, 0) = 0
+          )
+      )
+      OR (
+          latest_job.job_status = 'failed'
+          AND (
+              (
+                  latest_job.error_code = 'message_quality_failed'
+                  AND latest_job.error_message IN (
+                      'Письмо длиннее 90 слов',
+                      'Процент не подтверждён доказательством'
+                  )
+              )
+              OR (
+                  latest_job.error_code = 'ai_generation_invalid'
+                  AND (
+                      latest_job.error_message LIKE 'Touch %% does not preserve sourced observation'
+                      OR latest_job.error_message LIKE 'Invalid control character at:%%'
+                  )
+              )
+          )
+      )
   )
 ORDER BY latest_job.job_updated_at, ws.id
 """
@@ -100,6 +126,16 @@ def parse_args() -> argparse.Namespace:
 
 
 def inconsistency_action(row: dict[str, Any]) -> str:
+    if (
+        str(row.get("job_status") or "") == "failed"
+        and str(row.get("error_code") or "") == "ai_generation_invalid"
+    ):
+        return "retry_ai_generation_invalid_after_validator_fix"
+    if (
+        str(row.get("job_status") or "") == "failed"
+        and str(row.get("error_code") or "") == "message_quality_failed"
+    ):
+        return "retry_quality_failed_after_compaction"
     if str(row.get("readiness_code") or "") != "ready":
         return "reconcile_terminal_status"
     if not str(row.get("result_draft_id") or "").strip():

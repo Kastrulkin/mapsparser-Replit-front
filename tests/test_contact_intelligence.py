@@ -957,6 +957,92 @@ def test_prepare_first_message_uses_native_ai_contract_and_semantic_review():
     assert draft_brief["selected_personalization_id"] == "personalization-1"
 
 
+def test_prepare_first_message_compacts_long_approved_facts_before_ai_quality_gate():
+    signal = " ".join(["В публичном аудите карточки найден подтверждённый сигнал"] * 8)
+    story = (
+        "Я развиваю LocalOS на основе практической работы с публичными данными локальных бизнесов. "
+        + " ".join(["Команда проверяет карточки услуги отзывы и контент"] * 8)
+    )
+    bridge = " ".join(["Этот факт можно проверить через короткий аудит карточки"] * 6)
+    brief = {
+        "lead_name": "Клиника",
+        "signal": signal,
+        "pain": "",
+        "result": "короткий разбор карточки с одним приоритетным исправлением",
+        "proof": "Проводил аудиты карточек локальных компаний",
+        "founder_story": story,
+        "source_urls": ["https://maps.example/clinic"],
+        "evidence_ids": ["evidence:clinic"],
+        "evidence_fresh": True,
+        "suppression_safe": True,
+        "cta": "Прислать короткий разбор?",
+    }
+    candidate = {
+        "id": "personalization-long",
+        "evidence_id": "evidence:clinic",
+        "evidence_ids": ["evidence:clinic"],
+        "observed_fact": signal,
+        "bridge": bridge,
+        "source_url": "https://maps.example/clinic",
+        "freshness": "current_snapshot",
+        "founder_story": story,
+        "founder_proof": brief["proof"],
+        "next_step": brief["result"],
+    }
+
+    def generator(_prompt, **_kwargs):
+        return json.dumps({
+            "schema_version": "1.0",
+            "touches": [{
+                "sequence_index": 0,
+                "channel": "telegram",
+                "angle": "founder_story",
+                "opening_style": "concise",
+                "cta_intent": "send_short_review",
+                "evidence_ids": ["evidence:clinic"],
+                "observation": signal,
+                "problem_hypothesis": None,
+                "relevance_bridge": bridge,
+            }],
+        }, ensure_ascii=False)
+
+    def reviewer(_prompt, **_kwargs):
+        return json.dumps({
+            "schema_version": "1.0",
+            "reviews": [{
+                "sequence_index": 0,
+                "scores": {criterion: 2 for criterion in QUALITY_CRITERIA},
+                "total_score": 18,
+                "verdict": "approve",
+                "reason_codes": [],
+                "notes": [],
+            }],
+        }, ensure_ascii=False)
+
+    message, quality, draft_brief = prepare_first_message(
+        {"name": "Клиника"},
+        {"workstream_type": "localos_sales", "created_by": "user-1"},
+        brief,
+        {
+            "display_name": "Александр Демьянов",
+            "role_title": "руководитель",
+            "company_name": "LocalOS",
+            "created_by": "user-1",
+        },
+        {"contact_type": "telegram"},
+        candidate,
+        use_ai=True,
+        generator=generator,
+        reviewer=reviewer,
+    )
+
+    assert quality["passed"] is True
+    assert quality["word_count"] <= 90
+    assert len(draft_brief["signal"].split()) <= 28
+    assert draft_brief["evidence_ids"] == ["evidence:clinic"]
+    assert message.count("?") == 1
+
+
 def test_prepare_first_message_rejects_failed_semantic_review():
     brief = {
         "lead_name": "Клиника",
@@ -1038,6 +1124,20 @@ def test_quality_gate_rejects_unproven_percentages_and_template_claims():
 
     assert quality["passed"] is False
     assert "Найдено неподтверждённое обещание" in quality["failures"]
+
+
+def test_quality_gate_does_not_treat_percentage_in_recipient_name_as_a_claim():
+    quality = evaluate_first_message(
+        "Здравствуйте, Дыши на 100%! По данным аудита карточки: всего услуг - 30; "
+        "с ценой - 14. Могу прислать короткий разбор?",
+        {
+            "lead_name": "Дыши на 100%",
+            "signal": "По данным аудита карточки: всего услуг - 30; с ценой - 14.",
+            "result": "короткий разбор",
+        },
+    )
+
+    assert "Процент не подтверждён доказательством" not in quality["failures"]
 
 
 def test_hunter_timeout_and_rate_limit_are_retryable_but_bad_request_is_not():

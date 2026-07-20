@@ -4,6 +4,8 @@ from services.outreach_personalization_ai import (
     PROMPT_VERSION,
     QUALITY_CRITERIA,
     REVIEW_PROMPT_VERSION,
+    _generation_prompt,
+    _request_record,
     generation_contract_current,
     generate_personalized_sequence,
 )
@@ -81,6 +83,23 @@ def _sequence():
             "subject": "Короткий вопрос",
         },
     ]
+
+
+def test_generation_prompt_keeps_long_evidence_out_of_provider_output_contract():
+    record = _request_record(
+        motion="localos_sales",
+        identity={"company_name": "Клиника"},
+        candidate=_candidate(),
+        founder_story=_story(),
+        sequence=_sequence(),
+        voice_examples=[],
+    )
+
+    prompt = _generation_prompt(record)
+
+    assert "Не повторяй в ответе observation" in prompt
+    required_line = prompt.split("В каждом touch обязательны:", 1)[1].split("Не повторяй", 1)[0]
+    assert "observation" not in required_line
 
 
 def _generation_response():
@@ -261,6 +280,76 @@ def test_constrained_fragments_keep_ai_voice_but_localos_inserts_all_facts():
     assert all(OBSERVATION in item["text"] for item in result["touches"])
     assert all("Можно проверить, как карточка формирует доверие" in item["text"] for item in result["touches"])
     assert _story()["story"] in result["touches"][1]["text"]
+
+
+def test_policy_text_preserves_grounded_words_when_terminal_punctuation_changes():
+    candidate = _candidate()
+    candidate["observed_fact"] = "В публичном отзыве отмечено: мастер работал больше часа!"
+    generated = _policy_bound_generation_response()
+    responses = iter([
+        json.dumps(generated, ensure_ascii=False),
+        json.dumps(_review_response(), ensure_ascii=False),
+    ])
+
+    result = generate_personalized_sequence(
+        motion="localos_sales",
+        identity={"company_name": "Клиника"},
+        candidate=candidate,
+        founder_story=_story(),
+        sequence=_sequence(),
+        generator=lambda _prompt, **_kwargs: next(responses),
+    )
+
+    assert result["status"] == "ready"
+    assert "мастер работал больше часа." in result["touches"][0]["text"]
+
+
+def test_generation_retries_once_when_provider_returns_malformed_json():
+    responses = iter([
+        "{not valid json",
+        json.dumps(_policy_bound_generation_response(), ensure_ascii=False),
+        json.dumps(_review_response(), ensure_ascii=False),
+    ])
+    prompts = []
+
+    def generate(prompt, **_kwargs):
+        prompts.append(prompt)
+        return next(responses)
+
+    result = generate_personalized_sequence(
+        motion="localos_sales",
+        identity={"company_name": "Клиника"},
+        candidate=_candidate(),
+        founder_story=_story(),
+        sequence=_sequence(),
+        generator=generate,
+    )
+
+    assert result["status"] == "ready"
+    assert len(prompts) == 3
+    assert "Предыдущий ответ отклонён валидатором" in prompts[1]
+
+
+def test_generation_accepts_provider_control_character_then_validates_content():
+    with_control_character = json.dumps(
+        _policy_bound_generation_response(), ensure_ascii=False
+    ).replace("Короткий вопрос по карточке", "Короткий\nвопрос по карточке")
+    responses = iter([
+        with_control_character,
+        json.dumps(_review_response(), ensure_ascii=False),
+    ])
+
+    result = generate_personalized_sequence(
+        motion="localos_sales",
+        identity={"company_name": "Клиника"},
+        candidate=_candidate(),
+        founder_story=_story(),
+        sequence=_sequence(),
+        generator=lambda _prompt, **_kwargs: next(responses),
+    )
+
+    assert result["status"] == "ready"
+    assert result["touches"][1]["subject"] == "Короткий вопрос по карточке Клиника"
 
 
 def test_policy_bound_choices_produce_clean_founder_led_copy():

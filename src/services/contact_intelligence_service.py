@@ -1492,6 +1492,22 @@ def _sentence(value: Any) -> str:
     return text if text.endswith((".", "!", "?", "…")) else text + "."
 
 
+def _compact_approved_excerpt(value: Any, max_words: int) -> str:
+    """Shorten a sourced fact without inventing a replacement claim."""
+
+    text = str(value or "").strip()
+    words = text.split()
+    if not text or len(words) <= max_words:
+        return text
+    first_sentence = re.split(r"(?<=[.!?…])\s+", text, maxsplit=1)[0].strip()
+    if 4 <= len(first_sentence.split()) <= max_words:
+        return first_sentence
+    first_clause = re.split(r"[:;]", first_sentence, maxsplit=1)[0].strip(" ,;:.")
+    if 4 <= len(first_clause.split()) <= max_words:
+        return _sentence(first_clause)
+    return _sentence(" ".join(words[:max_words]).rstrip(" ,;:."))
+
+
 def _lowercase_sentence_start(value: str) -> str:
     if value and re.match(r"[А-ЯЁ]", value[0]):
         return value[0].lower() + value[1:]
@@ -1581,7 +1597,20 @@ def evaluate_first_message(text: str, brief: dict[str, Any]) -> dict[str, Any]:
         failures.append("В письме должен быть один простой вопрос")
     if any(pattern.search(str(text or "")) for pattern in UNSUPPORTED_PROMISE_PATTERNS):
         failures.append("Найдено неподтверждённое обещание")
-    if re.search(r"\d+\s*%", str(text or "")) and not bool(brief.get("proof_verified_numeric")):
+    numeric_claim_text = str(text or "")
+    for approved_field in ("lead_name", "signal", "founder_story", "proof", "result"):
+        approved_value = str(brief.get(approved_field) or "").strip(" .!?…")
+        if approved_value:
+            numeric_claim_text = re.sub(
+                re.escape(approved_value),
+                "",
+                numeric_claim_text,
+                flags=re.I,
+            )
+    if (
+        re.search(r"\d+(?:[.,]\d+)?\s*%", numeric_claim_text)
+        and not bool(brief.get("proof_verified_numeric"))
+    ):
         failures.append("Процент не подтверждён доказательством")
     if not str(brief.get("result") or "").strip():
         failures.append("Не указан один конкретный результат")
@@ -1704,6 +1733,24 @@ def prepare_first_message(
         candidate["sender_role"] = candidate.get("sender_role") or sender.get("role_title")
         candidate["sender_company"] = candidate.get("sender_company") or sender.get("company_name")
         candidate["next_step"] = candidate.get("next_step") or brief.get("result")
+        # The evidence ledger keeps the full source text. The actual first touch
+        # uses sentence-safe excerpts so long approved facts cannot turn a valid
+        # enrichment job into a terminal quality failure solely on word count.
+        candidate["observed_fact"] = _compact_approved_excerpt(
+            candidate.get("observed_fact"), 28
+        )
+        candidate["founder_story"] = _compact_approved_excerpt(
+            candidate.get("founder_story"), 22
+        )
+        candidate["founder_proof"] = _compact_approved_excerpt(
+            candidate.get("founder_proof"), 18
+        )
+        compact_bridge = _compact_approved_excerpt(
+            candidate.get("relevance_to_offer") or candidate.get("bridge"), 18
+        )
+        candidate["bridge"] = compact_bridge
+        candidate["relevance_to_offer"] = compact_bridge
+        candidate["next_step"] = _compact_approved_excerpt(candidate.get("next_step"), 16)
 
         draft_brief.update({
             "signal": candidate.get("observed_fact"),

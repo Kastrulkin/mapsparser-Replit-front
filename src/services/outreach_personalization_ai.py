@@ -139,8 +139,8 @@ def generate_personalized_sequence(
                 business_id=business_id,
                 user_id=user_id,
             )
-            generated = _parse_json_object(raw_generation)
             try:
+                generated = _parse_json_object(raw_generation)
                 touches = _normalize_touches(generated.get("touches"), request_record)
                 generation_error = None
                 break
@@ -264,8 +264,9 @@ def _generation_prompt(record: dict[str, Any]) -> str:
         "Telegram - максимум 90 слов, email - максимум 120 слов. "
         "Для email дай спокойную фактическую тему; для других каналов subject=null. "
         "Верни объект schema_version=1.0 и touches. В каждом touch обязательны: "
-        "sequence_index, channel, angle, subject, opening_style, cta_intent, evidence_ids, observation, "
-        "problem_hypothesis, relevance_bridge. Индексы, каналы и углы не меняй.\n\n"
+        "sequence_index, channel, angle, subject, opening_style, cta_intent и evidence_ids. "
+        "Не повторяй в ответе observation, problem_hypothesis или relevance_bridge: "
+        "LocalOS возьмёт их напрямую из проверенного входа. Индексы, каналы и углы не меняй.\n\n"
         f"INPUT_JSON:\n{json.dumps(record, ensure_ascii=False, default=str)}"
     )
 
@@ -353,9 +354,13 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
                 request_record=request_record,
                 template_values=template_values,
             )
-        if not text or observation not in text:
+        normalized_text = _normalized_grounded_fragment(text)
+        if not normalized_text or _normalized_grounded_fragment(observation) not in normalized_text:
             raise ValueError(f"Touch {index} does not preserve sourced observation")
-        if relevance_bridge and relevance_bridge not in text:
+        if (
+            relevance_bridge
+            and _normalized_grounded_fragment(relevance_bridge) not in normalized_text
+        ):
             raise ValueError(f"Touch {index} does not preserve the offer bridge")
         if recipient and recipient.lower() not in text.lower():
             raise ValueError(f"Touch {index} does not identify the recipient")
@@ -571,16 +576,33 @@ def _parse_json_object(raw: Any) -> dict[str, Any]:
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start < 0 or end <= start:
-            raise ValueError("AI response does not contain a JSON object")
-        parsed = json.loads(text[start:end + 1])
+        try:
+            # Providers occasionally return a literal newline or tab inside a
+            # JSON string. The output still goes through the full evidence and
+            # policy validators below, so accepting only these control chars is
+            # safer than discarding an otherwise grounded generation.
+            parsed = json.loads(text, strict=False)
+        except json.JSONDecodeError:
+            start = text.find("{")
+            end = text.rfind("}")
+            if start < 0 or end <= start:
+                raise ValueError("AI response does not contain a JSON object")
+            fragment = text[start:end + 1]
+            try:
+                parsed = json.loads(fragment)
+            except json.JSONDecodeError:
+                parsed = json.loads(fragment, strict=False)
     if not isinstance(parsed, dict):
         raise ValueError("AI response JSON must be an object")
     if str(parsed.get("schema_version") or SCHEMA_VERSION) != SCHEMA_VERSION:
         raise ValueError("Unsupported outreach schema version")
     return parsed
+
+
+def _normalized_grounded_fragment(value: Any) -> str:
+    """Normalize typography only; every grounded word must still be preserved."""
+
+    return " ".join(re.findall(r"[a-zа-яё0-9]+", str(value or "").lower()))
 
 
 def _default_generator(prompt: str, *, business_id: str = "", user_id: str = "") -> str:
