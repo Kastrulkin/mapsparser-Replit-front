@@ -9,7 +9,7 @@ from services.gigachat_client import analyze_text_with_gigachat
 
 
 MAX_REVIEW_LLM_CONTEXT_CHARS = 12000
-REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v7"
+REVIEW_LLM_PROMPT_VERSION = "agent_review_replies_v8"
 REVIEW_SOURCE_NAMES = {"reviews", "external_reviews", "отзывы", "отзывы компании", "последние отзывы"}
 ANONYMOUS_AUTHOR_NAMES = {"", "клиент", "аноним", "анонимный пользователь", "пользователь"}
 UNVERIFIED_PROMISE_MARKERS = (
@@ -55,6 +55,11 @@ FIRST_PERSON_ALLOWED_STATEMENTS = {
 FIRST_PERSON_MODIFIERS = (
     "искренне|очень|действительно|немедленно|обязательно|внимательно|детально|дополнительно|"
     "непременно|обстоятельно"
+)
+UNVERIFIED_FUTURE_ACTION_PATTERN = (
+    r"\b(?:разберем|разберём|проверим|предотвратим|учтем|учтём|примем|исправим|проведем|проведём|"
+    r"свяжемся|компенсируем|вернем|вернём|обучим|улучшим|сделаем|гарантируем|позаботимся|"
+    r"выясним|решим|передадим|предпримем|рассмотрим|обратим|постараемся)\b"
 )
 UNVERIFIED_PROMISE_REVIEW_REASON = (
     "Неподтверждённое обещание генератора удалено. Проверьте безопасный черновик перед публикацией."
@@ -326,6 +331,8 @@ def _reply_quality_reasons(draft: Dict[str, str], source: Dict[str, Any]) -> Lis
     if any(re.search(pattern, normalized_reply) for pattern in UNVERIFIED_INTERNAL_ACTION_PATTERNS):
         reasons.append(UNVERIFIED_PROMISE_REVIEW_REASON)
     if _has_unverified_first_person_action(normalized_reply):
+        reasons.append(UNVERIFIED_PROMISE_REVIEW_REASON)
+    if re.search(UNVERIFIED_FUTURE_ACTION_PATTERN, normalized_reply):
         reasons.append(UNVERIFIED_PROMISE_REVIEW_REASON)
     if reply.endswith(("...", "…")):
         reasons.append(INCOMPLETE_REPLY_REVIEW_REASON)
