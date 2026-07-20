@@ -1046,7 +1046,11 @@ def test_legacy_review_category_cannot_turn_news_goal_into_review_reply(monkeypa
         lambda *args, **kwargs: json.dumps(
             {
                 "title": "Три новости для карточки",
-                "draft_text": "Новость 1: детская стрижка.\nНовость 2: семейный визит.\nНовость 3: бережный подход.",
+                "drafts": [
+                    {"title": "Детская стрижка", "draft_text": "Рассказываем об услуге «Детская стрижка»."},
+                    {"title": "Отзыв клиента", "draft_text": "Клиент отметил бережный подход мастера."},
+                    {"title": "Визит в салон", "draft_text": "В салоне доступна услуга «Детская стрижка»."},
+                ],
                 "summary": ["Подготовлено три внутренних черновика."],
                 "checklist": ["Проверить даты перед публикацией."],
                 "rules_applied": ["Использованы только подтверждённые факты."],
@@ -1072,8 +1076,59 @@ def test_legacy_review_category_cannot_turn_news_goal_into_review_reply(monkeypa
 
     assert result["title"] == "Три новости для карточки"
     assert "draft_text" in result
+    assert len(result["drafts"]) == 3
     assert "reply_drafts" not in result
     assert result["analysis_prompt_version"] == "agent_custom_message_draft_v5"
+
+
+def test_internal_content_draft_retries_until_requested_count_is_returned(monkeypatch):
+    import services.agent_blueprint_workspace as workspace
+
+    responses = iter(
+        [
+            json.dumps(
+                {
+                    "title": "Одна новость",
+                    "draft_text": "Рассказываем об услуге «Детская стрижка».",
+                },
+                ensure_ascii=False,
+            ),
+            json.dumps(
+                {
+                    "title": "Три новости",
+                    "drafts": [
+                        {"title": "Новость 1", "draft_text": "Рассказываем об услуге «Детская стрижка»."},
+                        {"title": "Новость 2", "draft_text": "Услуга «Детская стрижка» доступна в салоне."},
+                        {"title": "Новость 3", "draft_text": "Клиент отметил услугу «Детская стрижка»."},
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+        ]
+    )
+    prompts = []
+
+    def fake_analysis(prompt, **kwargs):
+        prompts.append(prompt)
+        return next(responses)
+
+    monkeypatch.setattr(workspace, "analyze_text_with_gigachat", fake_analysis)
+    result = workspace._render_output(
+        "custom",
+        {
+            "workflow_description": "Подготовь 3 новости для карточек на основе услуг.",
+            "processing_rules": "Используй только подтверждённые факты",
+            "output_format": "Черновики новостей",
+        },
+        [{"source_name": "services", "summary": "name: Детская стрижка", "raw": {"name": "Детская стрижка"}}],
+        [],
+        {"business_id": "biz-1", "user_id": "user-1", "run_id": "run-1"},
+    )
+
+    assert len(prompts) == 2
+    assert "ровно 3 объектов" in prompts[1]
+    assert len(result["drafts"]) == 3
+    assert result["draft_text"].count("\n\n") == 2
 
 
 def test_workspace_setup_recovers_original_request_for_legacy_blueprint():
