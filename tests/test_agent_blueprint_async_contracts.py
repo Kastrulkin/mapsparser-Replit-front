@@ -369,6 +369,7 @@ def test_agent_async_runtime_contract_is_wired_end_to_end():
     assert "saveAgentRunResume(currentBusinessId" in frontend_source
     assert "clearAgentRunResume(currentBusinessId, runId)" in frontend_source
     assert "recoveredFromReload: true" in frontend_source
+    assert "restoredRunIdRef" not in frontend_source
     assert "execution_contract" in frontend_source
     assert "EmployeeAgentScenarioPanel" in frontend_source
     assert "const working = contract?.candidate || contract?.active;" in frontend_source
