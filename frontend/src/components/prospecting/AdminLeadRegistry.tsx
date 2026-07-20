@@ -262,6 +262,8 @@ interface SavedOutreachCampaign {
     sequence_index?: number;
     channel?: string;
     status?: string;
+    sender_account_id?: string | null;
+    message_brief_json?: { channel_status?: string };
   }>;
 }
 
@@ -677,6 +679,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const senderProfileChecklist = contactIntelligence?.sender_profile_completeness;
   const latestCampaignFirstTouch = (savedOutreachCampaign?.touches || [])
     .find((touch) => Number(touch.sequence_index || 0) === 0);
+  const savedCampaignNeedsChannelSetup = (savedOutreachCampaign?.touches || []).some((touch) => {
+    const channel = String(touch.channel || '');
+    const channelStatus = String(touch.message_brief_json?.channel_status || '');
+    return ['telegram', 'email'].includes(channel)
+      ? !touch.sender_account_id || channelStatus !== 'ready'
+      : channelStatus !== 'manual';
+  });
   const pilotAlreadySent = (savedOutreachCampaign?.touches || []).some((touch) => (
     ['manual_sent', 'sent', 'delivered'].includes(String(touch.status || ''))
   ));
@@ -2122,9 +2131,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </Button>
                 </div>
                 {savedOutreachCampaign?.status === 'draft' ? (
-                  <Button onClick={() => void approveOutreachCampaign()} disabled={busyAction === 'approve-campaign' || savedOutreachCampaign.requires_regeneration} className="mt-2 min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
+                  <Button onClick={() => void approveOutreachCampaign()} disabled={busyAction === 'approve-campaign' || savedOutreachCampaign.requires_regeneration || savedCampaignNeedsChannelSetup} className="mt-2 min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
                     {busyAction === 'approve-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                    {savedOutreachCampaign.requires_regeneration ? 'Сначала подготовьте новую цепочку' : 'Подтвердить всю цепочку один раз'}
+                    {savedOutreachCampaign.requires_regeneration
+                      ? 'Сначала подготовьте новую цепочку'
+                      : savedCampaignNeedsChannelSetup
+                        ? 'Сначала настройте каналы и отправителя'
+                        : 'Подтвердить всю цепочку один раз'}
                   </Button>
                 ) : null}
                 {savedOutreachCampaign && !pilotAlreadySent && !pilotReplyReceived ? (

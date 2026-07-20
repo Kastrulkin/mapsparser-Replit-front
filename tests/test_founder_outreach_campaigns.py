@@ -66,6 +66,8 @@ def test_channel_setup_gap_can_be_saved_as_draft_but_not_approved():
     assert 'preview.get("status") in {"ready", "needs_channel_setup"}' in api_source
     assert "['ready', 'needs_channel_setup'].includes" in frontend_source
     assert "Сохранить черновик версии" in frontend_source
+    assert "savedCampaignNeedsChannelSetup" in frontend_source
+    assert "Сначала настройте каналы и отправителя" in frontend_source
     assert "senders_ready" in approve_block
     assert "channels_ready" in approve_block
 
