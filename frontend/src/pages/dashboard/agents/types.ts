@@ -302,6 +302,11 @@ export type AgentRun = {
   business_result?: Record<string, unknown>;
   result_state?: 'missing' | 'prepared' | 'saved' | 'blocked';
   current_approval?: AgentApproval | null;
+  evaluation?: {
+    rating?: 'useful' | 'not_useful';
+    feedback?: string;
+    created_at?: string;
+  } | null;
   progress?: {
     state?: string;
     total_steps?: number;

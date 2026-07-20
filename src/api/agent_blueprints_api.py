@@ -245,6 +245,30 @@ def _blueprint_metadata(blueprint: dict) -> dict:
     return metadata if isinstance(metadata, dict) else {}
 
 
+def _find_run_evaluation(history: list, run_id: str) -> dict | None:
+    for item in reversed(history):
+        if not isinstance(item, dict):
+            continue
+        if item.get("kind") == "run_evaluation" and str(item.get("run_id") or "") == run_id:
+            return dict(item)
+    return None
+
+
+def _upsert_run_evaluation_history(history: list, evaluation: dict, limit: int = 20) -> list:
+    run_id = str(evaluation.get("run_id") or "")
+    preserved = [
+        item
+        for item in history
+        if not (
+            isinstance(item, dict)
+            and item.get("kind") == "run_evaluation"
+            and str(item.get("run_id") or "") == run_id
+        )
+    ]
+    preserved.append(evaluation)
+    return preserved[-limit:]
+
+
 def _save_blueprint_metadata(cursor, blueprint_id: str, metadata: dict) -> None:
     cursor.execute(
         """
@@ -691,15 +715,17 @@ def _admin_agent_runtime_overview(cursor) -> dict:
                    ) missing_result_runs,
                    COALESCE(SUM(reservation.charged_credits), 0) charged_credits,
                    (
-                       SELECT COALESCE(SUM(
+                       SELECT COUNT(DISTINCT feedback_item->>'run_id')
+                       FROM agent_blueprints blueprint
+                       CROSS JOIN LATERAL jsonb_array_elements(
                            CASE
                                WHEN jsonb_typeof(blueprint.metadata_json->'feedback_history') = 'array'
-                               THEN jsonb_array_length(blueprint.metadata_json->'feedback_history')
-                               ELSE 0
+                               THEN blueprint.metadata_json->'feedback_history'
+                               ELSE '[]'::jsonb
                            END
-                       ), 0)
-                       FROM agent_blueprints blueprint
+                       ) feedback_item
                        WHERE blueprint.business_id = biz.id
+                         AND feedback_item->>'kind' = 'run_evaluation'
                    ) feedback_entries,
                    MAX(r.updated_at) last_run_at
             FROM businesses biz
@@ -5178,7 +5204,12 @@ def get_agent_run(run_id: str):
         if access_error:
             return access_error
         runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
-        return jsonify({"success": True, "run": runner.load_run(run_id, user_data)})
+        run_payload = runner.load_run(run_id, user_data)
+        metadata = _blueprint_metadata(blueprint)
+        feedback_history = metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else []
+        if isinstance(run_payload, dict):
+            run_payload["evaluation"] = _find_run_evaluation(feedback_history, run_id)
+        return jsonify({"success": True, "run": run_payload})
     finally:
         db.close()
 
@@ -5244,12 +5275,18 @@ def create_agent_run_feedback(run_id: str):
     if error_response:
         return error_response
     payload = request.get_json(silent=True) or {}
-    feedback_text = str(payload.get("feedback") or "").strip()
-    if not feedback_text:
-        return _json_error("feedback is required", 400, "VALIDATION_ERROR")
     trigger_type = str(payload.get("trigger_type") or payload.get("feedback_type") or "manual_feedback").strip().lower()
     if trigger_type not in {"manual_edit", "approval_rejected", "bad_outcome", "runtime_error", "manual_feedback", "run_review"}:
         trigger_type = "manual_feedback"
+    rating = str(payload.get("rating") or "").strip().lower()
+    feedback_text = str(payload.get("feedback") or "").strip()
+    if trigger_type == "run_review":
+        if rating not in {"useful", "not_useful"}:
+            return _json_error("rating must be useful or not_useful", 400, "VALIDATION_ERROR")
+        if not feedback_text:
+            feedback_text = "Результат полезен" if rating == "useful" else "Результат нужно улучшить"
+    elif not feedback_text:
+        return _json_error("feedback is required", 400, "VALIDATION_ERROR")
     auto_activate = bool(payload.get("auto_activate") is True)
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -5262,6 +5299,42 @@ def create_agent_run_feedback(run_id: str):
         blueprint, access_error = _require_blueprint_access(cursor, str(run.get("blueprint_id") or ""), user_data)
         if access_error:
             return access_error
+        if trigger_type == "run_review":
+            run_input = parse_json_field(run.get("input_json"), {})
+            if str(run.get("status") or "") != "completed":
+                return _json_error(
+                    "Only a completed work run can be evaluated",
+                    409,
+                    "AGENT_RUN_EVALUATION_NOT_READY",
+                )
+            if isinstance(run_input, dict) and run_input.get("preview_mode") is True:
+                return _json_error(
+                    "Preview runs are not included in the beta evaluation",
+                    400,
+                    "AGENT_PREVIEW_EVALUATION_NOT_ALLOWED",
+                )
+            metadata = _blueprint_metadata(blueprint)
+            history = metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else []
+            evaluation = {
+                "kind": "run_evaluation",
+                "run_id": run_id,
+                "rating": rating,
+                "feedback": feedback_text,
+                "created_by_user_id": _user_id(user_data),
+                "source": "beta_feedback",
+                "created_at": _utc_now_text(),
+            }
+            metadata["feedback_history"] = _upsert_run_evaluation_history(history, evaluation)
+            _save_blueprint_metadata(cursor, str(blueprint.get("id") or ""), metadata)
+            db.conn.commit()
+            return jsonify(
+                {
+                    "success": True,
+                    "review_recorded": True,
+                    "version_created": False,
+                    "evaluation": evaluation,
+                }
+            )
         version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), str(run.get("blueprint_version_id") or ""))
         if not version:
             return _json_error("Blueprint version not found", 404, "VERSION_NOT_FOUND")

@@ -6,6 +6,143 @@ from tests.agent_blueprint_fakes import *  # noqa: F403
 from tests.source_contract_helpers import read_agent_blueprints_frontend_source
 
 
+def test_agent_run_evaluation_replaces_same_run_without_creating_version_feedback():
+    from api.agent_blueprints_api import _find_run_evaluation, _upsert_run_evaluation_history
+
+    history = [
+        {"kind": "version_feedback", "run_id": "run-1", "feedback": "Изменить правило"},
+        {"kind": "run_evaluation", "run_id": "run-1", "rating": "not_useful"},
+        {"kind": "run_evaluation", "run_id": "run-2", "rating": "useful"},
+    ]
+    updated = _upsert_run_evaluation_history(
+        history,
+        {"kind": "run_evaluation", "run_id": "run-1", "rating": "useful"},
+    )
+
+    assert len(updated) == 3
+    assert _find_run_evaluation(updated, "run-1")["rating"] == "useful"
+    assert _find_run_evaluation(updated, "run-2")["rating"] == "useful"
+    assert updated[0]["kind"] == "version_feedback"
+
+
+def test_agent_run_evaluation_endpoint_is_idempotent_and_work_run_only(monkeypatch):
+    from flask import Flask
+    from api import agent_blueprints_api
+
+    class Cursor:
+        def __init__(self):
+            self.run = {
+                "id": "run-1",
+                "blueprint_id": "bp-1",
+                "blueprint_version_id": "version-1",
+                "status": "completed",
+                "input_json": {"preview_mode": False},
+            }
+            self.result = None
+            self.metadata = {"feedback_history": []}
+
+        def execute(self, query, params=None):
+            normalized = " ".join(query.split()).lower()
+            if normalized.startswith("select * from agent_runs"):
+                self.result = dict(self.run)
+                return
+            if normalized.startswith("update agent_blueprints"):
+                self.metadata = json.loads(params[0])
+                self.result = None
+                return
+            raise AssertionError(f"Unexpected SQL: {query}")
+
+        def fetchone(self):
+            return self.result
+
+    class Connection:
+        def __init__(self, cursor):
+            self.test_cursor = cursor
+            self.commits = 0
+            self.rollbacks = 0
+
+        def cursor(self):
+            return self.test_cursor
+
+        def commit(self):
+            self.commits += 1
+
+        def rollback(self):
+            self.rollbacks += 1
+
+    class Database:
+        def __init__(self, connection):
+            self.conn = connection
+
+        def close(self):
+            return None
+
+    cursor = Cursor()
+    connection = Connection(cursor)
+    database = Database(connection)
+    monkeypatch.setattr(agent_blueprints_api, "DatabaseManager", lambda: database)
+    monkeypatch.setattr(agent_blueprints_api, "_require_auth", lambda: ({"user_id": "user-1"}, None))
+    monkeypatch.setattr(
+        agent_blueprints_api,
+        "_require_blueprint_access",
+        lambda _cursor, _blueprint_id, _user_data: (
+            {"id": "bp-1", "business_id": "biz-1", "metadata_json": cursor.metadata},
+            None,
+        ),
+    )
+    app = Flask(__name__)
+    app.register_blueprint(agent_blueprints_api.agent_blueprints_bp)
+    client = app.test_client()
+
+    first = client.post(
+        "/api/agent-runs/run-1/feedback",
+        json={"trigger_type": "run_review", "rating": "not_useful"},
+    )
+    second = client.post(
+        "/api/agent-runs/run-1/feedback",
+        json={"trigger_type": "run_review", "rating": "useful"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.get_json()["version_created"] is False
+    assert connection.commits == 2
+    assert len(cursor.metadata["feedback_history"]) == 1
+    assert cursor.metadata["feedback_history"][0]["rating"] == "useful"
+
+    cursor.run["input_json"] = {"preview_mode": True}
+    preview = client.post(
+        "/api/agent-runs/run-1/feedback",
+        json={"trigger_type": "run_review", "rating": "useful"},
+    )
+    assert preview.status_code == 400
+    assert preview.get_json()["code"] == "AGENT_PREVIEW_EVALUATION_NOT_ALLOWED"
+
+    cursor.run["input_json"] = {"preview_mode": False}
+    cursor.run["status"] = "running"
+    running = client.post(
+        "/api/agent-runs/run-1/feedback",
+        json={"trigger_type": "run_review", "rating": "useful"},
+    )
+    assert running.status_code == 409
+    assert running.get_json()["code"] == "AGENT_RUN_EVALUATION_NOT_READY"
+
+
+def test_agent_result_ui_collects_beta_evaluation_without_version_change():
+    source = read_agent_blueprints_frontend_source()
+    api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
+    workspace_source = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
+
+    assert "Помог ли результат?" in source
+    assert "Да, результат полезен" in source
+    assert "Оценка относится только к этой работе и не изменяет сценарий агента." in source
+    assert "trigger_type: 'run_review'" in source
+    assert '"version_created": False' in api_source
+    assert "AGENT_PREVIEW_EVALUATION_NOT_ALLOWED" in api_source
+    assert 'feedback_item->>\'kind\' = \'run_evaluation\'' in api_source
+    assert 'item.get("kind") != "run_evaluation"' in workspace_source
+
+
 def test_agent_run_contract_hides_service_fields_and_requires_content_plan_date():
     from services.agent_run_contract import effective_agent_input_schema, validate_agent_run_input
 
