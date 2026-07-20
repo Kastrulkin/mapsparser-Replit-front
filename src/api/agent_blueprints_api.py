@@ -755,9 +755,34 @@ def _admin_agent_runtime_overview(cursor) -> dict:
     )
     cursor.execute(
         """
-        SELECT COUNT(*) FILTER (WHERE status = 'active') active,
-               COUNT(*) FILTER (WHERE status <> 'active') inactive
-        FROM agent_integrations
+        SELECT COUNT(*) FILTER (WHERE integration.status = 'active') active,
+               COUNT(*) FILTER (WHERE integration.status <> 'active') inactive,
+               COUNT(*) FILTER (
+                   WHERE integration.status = 'active'
+                     AND (
+                         integration.provider <> 'google_sheets'
+                         OR (
+                             NULLIF(integration.auth_ref, '') IS NOT NULL
+                             AND account.id IS NOT NULL
+                             AND account.is_active = TRUE
+                         )
+                     )
+               ) ready,
+               COUNT(*) FILTER (
+                   WHERE integration.status = 'active'
+                     AND integration.provider = 'google_sheets'
+                     AND NULLIF(integration.auth_ref, '') IS NOT NULL
+                     AND (account.id IS NULL OR account.is_active IS NOT TRUE)
+               ) reconnect_required,
+               COUNT(*) FILTER (
+                   WHERE integration.status = 'active'
+                     AND integration.provider = 'google_sheets'
+                     AND NULLIF(integration.auth_ref, '') IS NULL
+               ) missing_auth
+        FROM agent_integrations integration
+        LEFT JOIN externalbusinessaccounts account
+          ON account.id = integration.auth_ref
+         AND account.business_id = integration.business_id
         """
     )
     integrations = dict(cursor.fetchone() or {})
@@ -962,6 +987,9 @@ def _admin_agent_runtime_overview(cursor) -> dict:
         "integrations": {
             "active": int(integrations.get("active") or 0),
             "inactive": int(integrations.get("inactive") or 0),
+            "ready": int(integrations.get("ready") or 0),
+            "reconnect_required": int(integrations.get("reconnect_required") or 0),
+            "missing_auth": int(integrations.get("missing_auth") or 0),
         },
         "billing": {
             "active_reservations": int(billing.get("active_reservations") or 0),

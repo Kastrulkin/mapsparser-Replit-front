@@ -239,6 +239,9 @@ interface AdminAgentRuntimeOverview {
   integrations: {
     active: number;
     inactive: number;
+    ready: number;
+    reconnect_required: number;
+    missing_auth: number;
   };
   billing: {
     active_reservations: number;
@@ -1566,7 +1569,17 @@ export const AdminPage: React.FC = () => {
                 <span>Фоновая очередь: <strong className="text-slate-900">{agentRuntime?.flags.async_runs_enabled ? 'включена' : 'выключена'}</strong></span>
                 <span>Расписание: <strong className="text-slate-900">{agentRuntime?.flags.schedule_dispatch_enabled ? 'включено' : 'выключено'}</strong></span>
                 <span>Beta-бизнесов: <strong className="tabular-nums text-slate-900">{agentRuntime?.flags.beta_businesses_count || 0}</strong></span>
-                <span>Активных подключений: <strong className="tabular-nums text-slate-900">{agentRuntime?.integrations.active || 0}</strong></span>
+                <span>Готовых подключений: <strong className="tabular-nums text-slate-900">{agentRuntime?.integrations.ready || 0}</strong></span>
+                {(agentRuntime?.integrations.reconnect_required || 0) > 0 ? (
+                  <span className="text-amber-800">
+                    Требуют переподключения: <strong className="tabular-nums">{agentRuntime?.integrations.reconnect_required || 0}</strong>
+                  </span>
+                ) : null}
+                {(agentRuntime?.integrations.missing_auth || 0) > 0 ? (
+                  <span className="text-amber-800">
+                    Без доступа: <strong className="tabular-nums">{agentRuntime?.integrations.missing_auth || 0}</strong>
+                  </span>
+                ) : null}
               </div>
 
               {(agentRuntime?.beta_pilots || []).length > 0 ? (

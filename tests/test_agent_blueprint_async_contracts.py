@@ -906,7 +906,14 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
                     "last_event_at": now,
                 }
             elif "from agent_integrations" in normalized:
-                self.result = {"active": 5, "inactive": 2}
+                assert "left join externalbusinessaccounts" in normalized
+                self.result = {
+                    "active": 5,
+                    "inactive": 2,
+                    "ready": 3,
+                    "reconnect_required": 1,
+                    "missing_auth": 1,
+                }
             elif "from operatorcreditreservations" in normalized:
                 self.result = {
                     "active_reservations": 1,
@@ -950,6 +957,9 @@ def test_admin_agent_runtime_overview_exposes_queue_scheduler_billing_and_consis
     assert runtime["runs"]["billing_bound_runs"] == 3
     assert runtime["billing"]["charged_credits"] == 3
     assert runtime["billing"]["active_reservations"] == 1
+    assert runtime["integrations"]["ready"] == 3
+    assert runtime["integrations"]["reconnect_required"] == 1
+    assert runtime["integrations"]["missing_auth"] == 1
     pilots = {item["business_id"]: item for item in runtime["beta_pilots"]}
     assert pilots["biz-1"]["success_rate"] == 90.0
     assert pilots["biz-1"]["status"] == "passed"
