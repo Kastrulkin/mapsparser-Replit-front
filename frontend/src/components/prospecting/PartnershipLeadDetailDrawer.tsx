@@ -89,6 +89,13 @@ type MatchData = {
   offer_angles?: string[];
   score_explanation?: string;
   reason_codes?: string[];
+  readiness_code?: 'ready' | 'needs_sender_profile' | 'needs_evidence';
+  next_action?: string;
+  profile_completeness?: {
+    completed_count?: number;
+    required_count?: number;
+    missing_items?: Array<{ code?: string; label?: string }>;
+  };
 };
 
 type AuditData = {
@@ -169,6 +176,12 @@ export default function PartnershipLeadDetailDrawer({
 }: PartnershipLeadDetailDrawerProps) {
   const flowPrimaryText = `Этап: ${stagePresentation.label} · Канал: ${formatChannelLabel(selectedLead.selected_channel)}`;
   const flowSecondaryText = `Писем: ${selectedLeadFlowStatus?.draftsTotal ?? 0} · утверждено: ${selectedLeadFlowStatus?.draftsApproved ?? 0} · отправлено: ${selectedLeadFlowStatus?.sentTotal ?? 0} · результат: ${selectedLeadFlowStatus?.outcomeFinal || 'пока нет'}`;
+  const matchNeedsSenderProfile = matchData?.readiness_code === 'needs_sender_profile'
+    || Boolean(matchData?.reason_codes?.includes('SENDER_PROFILE_INCOMPLETE'));
+  const matchNeedsEvidence = matchData?.readiness_code === 'needs_evidence';
+  const missingProfileItems = matchData?.profile_completeness?.missing_items
+    ?.map((item) => String(item.label || '').trim())
+    .filter(Boolean) || [];
 
   return (
     <div className="fixed inset-0 z-50 bg-black/25 backdrop-blur-sm" onClick={onClose}>
@@ -222,10 +235,38 @@ export default function PartnershipLeadDetailDrawer({
           </div>
 
           {matchData ? (
-            <LeadDetailSection title="Совместимость бизнесов" tone="success">
+            <LeadDetailSection
+              title={matchNeedsSenderProfile || matchNeedsEvidence ? 'Что нужно для проверки совместимости' : 'Совместимость бизнесов'}
+              tone={matchNeedsSenderProfile || matchNeedsEvidence ? 'warning' : 'success'}
+            >
+              {matchNeedsSenderProfile ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
+                  <div className="text-sm font-semibold">Нужны факты об отправителе</div>
+                  <p className="mt-1 text-sm leading-6">
+                    LocalOS не будет придумывать опыт, кейсы или предложение. Заполнено {matchData.profile_completeness?.completed_count ?? 0} из {matchData.profile_completeness?.required_count ?? 9} обязательных пунктов.
+                  </p>
+                  {missingProfileItems.length > 0 ? (
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                      {missingProfileItems.slice(0, 5).map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  ) : null}
+                  <Button asChild size="sm" className="mt-3 bg-orange-500 text-white hover:bg-orange-600">
+                    <a href="#sender-profile-settings">Заполнить профиль отправителя</a>
+                  </Button>
+                </div>
+              ) : null}
+              {matchNeedsEvidence ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+                  <div className="font-semibold">Нужны дополнительные факты о партнёре</div>
+                  <p className="mt-1">{matchData.next_action || 'Соберите данные карточки и повторите проверку совместимости.'}</p>
+                </div>
+              ) : null}
               <LeadDetailMetaList
                 items={[
-                  { label: 'Оценка совместимости', value: `${matchData.match_score ?? 0}%` },
+                  {
+                    label: 'Оценка совместимости',
+                    value: matchNeedsSenderProfile || matchNeedsEvidence ? 'Пока не подтверждена' : `${matchData.match_score ?? 0}%`,
+                  },
                   { label: 'Общие направления', value: (matchData.overlap || []).slice(0, 8).join(', ') || 'Не найдены' },
                   {
                     label: 'Чем партнёр дополняет бизнес',
@@ -365,9 +406,9 @@ export default function PartnershipLeadDetailDrawer({
           ) : null}
 
           <LeadDetailSection title="Мультиканальный аутрич" tone="info">
-            <details className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <details id="sender-profile-settings" className="scroll-mt-24 rounded-xl border border-slate-200 bg-slate-50 p-4" defaultOpen={matchNeedsSenderProfile}>
               <summary className="min-h-10 cursor-pointer text-sm font-semibold text-slate-800">
-                Настроить founder profile
+                Заполнить профиль отправителя
               </summary>
               <div className="pt-4">
                 <OutreachSenderProfileSetup

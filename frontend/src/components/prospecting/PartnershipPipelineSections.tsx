@@ -45,6 +45,13 @@ type PipelineLead = {
     score_explanation?: string;
     overlap?: string[];
     offer_angles?: string[];
+    readiness_code?: 'ready' | 'needs_sender_profile' | 'needs_evidence';
+    next_action?: string;
+    reason_codes?: string[];
+    profile_completeness?: {
+      completed_count?: number;
+      required_count?: number;
+    };
   } | null;
   artifact_updated_at?: string;
   deferred_reason?: string;
@@ -168,7 +175,10 @@ const completedMatchStages = new Set([
 ]);
 
 const leadHasMatchResult = (lead: PipelineLead) => (
-  Boolean(lead.match_summary_json) || completedMatchStages.has(String(lead.partnership_stage || '').toLowerCase())
+  Boolean(
+    lead.match_summary_json
+    && (!lead.match_summary_json.readiness_code || lead.match_summary_json.readiness_code === 'ready')
+  ) || completedMatchStages.has(String(lead.partnership_stage || '').toLowerCase())
 );
 
 const preparationStepIcon = (state: 'complete' | 'active' | 'waiting' | 'error') => {
@@ -204,7 +214,11 @@ const LeadPreparationGuide = ({
   const terminalClosed = lead.next_best_action?.code === 'mark_closed_not_relevant';
   const identityMismatch = lead.next_best_action?.code === 'repair_recipient_identity_mapping';
   const auditComplete = Boolean(lead.audit_ready) || completedAuditStages.has(stage);
-  const matchComplete = Boolean(lead.match_summary_json) || completedMatchStages.has(stage);
+  const matchAssessment = lead.match_summary_json;
+  const matchNeedsSenderProfile = matchAssessment?.readiness_code === 'needs_sender_profile'
+    || Boolean(matchAssessment?.reason_codes?.includes('SENDER_PROFILE_INCOMPLETE'));
+  const matchNeedsEvidence = matchAssessment?.readiness_code === 'needs_evidence';
+  const matchComplete = leadHasMatchResult(lead);
   const dataComplete = !identityMismatch && (['completed', 'done'].includes(parseStatus) || auditComplete || matchComplete);
   const matchScore = lead.match_summary_json?.match_score;
   const offerAngles = Array.isArray(lead.match_summary_json?.offer_angles)
@@ -248,6 +262,10 @@ const LeadPreparationGuide = ({
           : `Совместимость: ${matchScore}%`
         : runningAction === 'match'
           ? 'Сопоставляем услуги и аудитории'
+          : matchNeedsSenderProfile
+            ? `Нужны факты об отправителе: ${matchAssessment?.profile_completeness?.completed_count ?? 0} из ${matchAssessment?.profile_completeness?.required_count ?? 9}`
+            : matchNeedsEvidence
+              ? 'Нужно собрать больше публичных фактов о партнёре'
           : 'Проверим, чем бизнесы полезны друг другу',
       state: matchComplete ? 'complete' : runningAction === 'match' ? 'active' : 'waiting',
     },
@@ -268,8 +286,12 @@ const LeadPreparationGuide = ({
         }
       : !auditComplete
         ? { label: 'Разобрать карточку', onClick: () => onRunAudit(lead.id) }
-        : !matchComplete
-          ? { label: 'Проверить совместимость', onClick: () => onRunMatch(lead.id) }
+        : matchNeedsSenderProfile
+          ? { label: 'Заполнить профиль отправителя', onClick: () => onOpenLead(lead.id) }
+          : matchNeedsEvidence
+            ? { label: 'Собрать недостающие факты', onClick: () => onRunParse(lead.id) }
+            : !matchComplete
+              ? { label: 'Проверить совместимость', onClick: () => onRunMatch(lead.id) }
           : null;
 
   return (
@@ -317,6 +339,20 @@ const LeadPreparationGuide = ({
               Посмотреть результат
             </Button>
           </div>
+        </div>
+      ) : matchNeedsSenderProfile || matchNeedsEvidence ? (
+        <div className="mt-4 rounded-xl bg-amber-50 p-3 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.2)]">
+          <div className="text-sm font-semibold text-amber-950">
+            {matchNeedsSenderProfile ? 'Нужны факты об отправителе' : 'Нужны факты о партнёре'}
+          </div>
+          <p className="mt-1 text-pretty text-xs leading-5 text-amber-900">
+            {matchAssessment?.next_action || 'LocalOS сохранил результат проверки и показывает, чего не хватает для следующего шага.'}
+          </p>
+          {nextAction ? (
+            <Button onClick={nextAction.onClick} disabled={loading} className="mt-3 min-h-10 bg-orange-500 text-white hover:bg-orange-600 active:scale-[0.96] transition-transform">
+              {nextAction.label}
+            </Button>
+          ) : null}
         </div>
       ) : (
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

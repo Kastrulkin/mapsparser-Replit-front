@@ -27,6 +27,7 @@ from scripts.backfill_partnership_match_artifacts import (
     _is_direct_map_card_url,
     _match_skip_reason,
     _recovery_action,
+    _should_persist_match_assessment,
     _skip_reason,
 )
 from scripts.prepare_partner_audit_rooms import _is_transient_parse_error
@@ -187,6 +188,8 @@ def test_partnership_match_requires_complete_confirmed_sender_profile(monkeypatc
     assert result["match_score"] == 0
     assert "SENDER_PROFILE_INCOMPLETE" in result["reason_codes"]
     assert result["profile_completeness"]["ready"] is False
+    assert result["readiness_code"] == "needs_sender_profile"
+    assert result["next_action"] == "Заполните и подтвердите профиль отправителя"
 
 
 def test_profile_guided_partnership_match_separates_fact_from_hypothesis(monkeypatch) -> None:
@@ -226,6 +229,7 @@ def test_profile_guided_partnership_match_separates_fact_from_hypothesis(monkeyp
     assert "может пересекаться аудитория" in result["compatibility_hypothesis"]
     assert result["relevance_bridge"]
     assert result["profile_completeness"]["ready"] is True
+    assert result["readiness_code"] == "ready"
 
 
 def test_profile_guided_partnership_match_keeps_unrelated_lead_below_threshold(monkeypatch) -> None:
@@ -259,6 +263,7 @@ def test_profile_guided_partnership_match_keeps_unrelated_lead_below_threshold(m
     assert result["match_score"] < 40
     assert "DESIRED_PARTNER_TYPE_MISSING" in result["reason_codes"]
     assert result["relevance_bridge"] is None
+    assert result["readiness_code"] == "needs_evidence"
 
 
 def test_match_backfill_never_saves_incomplete_or_weak_results() -> None:
@@ -274,6 +279,13 @@ def test_match_backfill_never_saves_incomplete_or_weak_results() -> None:
         "recipient_observation": "В публичной карточке указана категория «фитнес».",
         "source_url": "https://maps.example/fitness",
     }) is None
+
+
+def test_match_backfill_persists_assessment_without_promoting_weak_match() -> None:
+    assert _should_persist_match_assessment("sender_profile_incomplete") is True
+    assert _should_persist_match_assessment("compatibility_below_threshold") is True
+    assert _should_persist_match_assessment("compatibility_evidence_missing") is True
+    assert _should_persist_match_assessment("partner_services_missing") is False
 
 
 def test_partner_evidence_recovery_actions_are_specific() -> None:
@@ -295,6 +307,15 @@ def test_partner_evidence_recovery_actions_are_specific() -> None:
         "parse_context": {"last_parse_status": "completed"},
     }) == "evaluate_category_only_match"
     assert _recovery_action({"parse_business_id": "business-1"}, "partner_services_missing") == "retry_parse"
+
+
+def test_partner_parse_recovery_is_bounded_and_never_sends_outreach() -> None:
+    source = Path("scripts/backfill_partnership_match_artifacts.py").read_text()
+
+    assert 'default=20' in source
+    assert '"parse_limit": max(0, args.parse_limit)' in source
+    assert '"external_send": False' in source
+    assert "_enqueue_parse_task_for_business" in source
 
 
 def test_partnership_pipeline_passes_open_lead_action_through_list_component() -> None:

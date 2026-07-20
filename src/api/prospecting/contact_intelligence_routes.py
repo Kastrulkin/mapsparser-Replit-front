@@ -522,6 +522,22 @@ def partnership_sender_profile():
         if request.method == "GET":
             cursor.execute(
                 """
+                SELECT business.name AS company_name,
+                       business.city AS geography,
+                       owner.name AS sender_name
+                FROM businesses business
+                LEFT JOIN users owner ON owner.id = business.owner_id
+                WHERE business.id::text = %s
+                LIMIT 1
+                """,
+                (business_id,),
+            )
+            business_row = cursor.fetchone() or {}
+            suggested_sender_name = str(business_row.get("sender_name") or "").strip()
+            if suggested_sender_name.lower() in {"superadmin", "admin", "administrator"}:
+                suggested_sender_name = ""
+            cursor.execute(
+                """
                 SELECT name
                 FROM userservices
                 WHERE business_id = %s
@@ -560,6 +576,9 @@ def partnership_sender_profile():
                 "suggested_context": {
                     "services": business_services,
                     "services_source": "business_services",
+                    "company_name": str(business_row.get("company_name") or "").strip(),
+                    "display_name": suggested_sender_name,
+                    "geography": str(business_row.get("geography") or "").strip(),
                     "requires_confirmation": True,
                 },
             })

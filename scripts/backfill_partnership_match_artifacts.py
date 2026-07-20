@@ -20,6 +20,9 @@ if str(SRC) not in sys.path:
 
 from api.admin_prospecting import (  # noqa: E402
     _compute_partnership_match_result,
+    _enqueue_parse_task_for_business,
+    _ensure_parse_business_for_partnership_lead,
+    _normalize_lead_for_display,
     _to_json_compatible,
     build_lead_card_preview_snapshot,
 )
@@ -138,6 +141,16 @@ def _match_skip_reason(match: dict[str, object]) -> str | None:
     return None
 
 
+def _should_persist_match_assessment(skip_reason: str | None) -> bool:
+    """Keep a visible result without treating weak evidence as a match."""
+
+    return skip_reason in {
+        "sender_profile_incomplete",
+        "compatibility_below_threshold",
+        "compatibility_evidence_missing",
+    }
+
+
 def _recovery_action(
     row: dict[str, object],
     skip_reason: str,
@@ -243,6 +256,17 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Allow configured OpenClaw matching; deterministic matching is the safe default",
     )
+    parser.add_argument(
+        "--enqueue-missing-parses",
+        action="store_true",
+        help="Enqueue direct public map cards that still lack service evidence",
+    )
+    parser.add_argument(
+        "--parse-limit",
+        type=int,
+        default=20,
+        help="Maximum missing-service parse tasks per run; 0 means no limit",
+    )
     return parser.parse_args()
 
 
@@ -270,7 +294,10 @@ def main() -> int:
         params.append(args.limit)
     cursor.execute(
         f"""
-        SELECT ws.id AS workstream_id, ws.client_business_id, lead.*,
+        SELECT ws.id AS workstream_id, ws.client_business_id,
+               (SELECT owner_id FROM businesses owner_business
+                WHERE owner_business.id::text = ws.client_business_id LIMIT 1) AS client_owner_id,
+               lead.*,
                parse_last.status AS parse_status,
                parse_last.error_message AS parse_error,
                COALESCE(parse_last.updated_at, parse_last.created_at) AS parse_updated_at
@@ -302,10 +329,16 @@ def main() -> int:
         "mode": "execute" if args.execute else "dry-run",
         "workstreams": len(rows),
         "matches_saved": 0,
+        "assessments_saved": 0,
         "matches_evaluated": 0,
         "eligible": 0,
         "jobs_enqueued": 0,
         "jobs_reused": 0,
+        "parse_candidates": 0,
+        "parse_tasks_queued": 0,
+        "parse_tasks_existing": 0,
+        "parse_businesses_created": 0,
+        "parse_limit": max(0, args.parse_limit),
         "score_bands": {"strong": 0, "medium": 0, "low": 0},
         "skipped": {},
         "recovery_actions": {},
@@ -328,6 +361,54 @@ def main() -> int:
             if skip_reason:
                 report["skipped"][skip_reason] = report["skipped"].get(skip_reason, 0) + 1
                 _record_recovery(report, row, skip_reason, args.sample_size, snapshot)
+                recovery_action = _recovery_action(row, skip_reason, snapshot)
+                if recovery_action == "start_parse":
+                    report["parse_candidates"] += 1
+                    parse_limit_reached = (
+                        args.parse_limit > 0
+                        and report["parse_tasks_queued"] + report["parse_tasks_existing"] >= args.parse_limit
+                    )
+                    if args.execute and args.enqueue_missing_parses and not parse_limit_reached:
+                        display_lead = _normalize_lead_for_display(dict(row))
+                        owner_id = str(row.get("client_owner_id") or "").strip()
+                        if not display_lead or not owner_id:
+                            report["skipped"]["parse_owner_or_lead_missing"] = (
+                                report["skipped"].get("parse_owner_or_lead_missing", 0) + 1
+                            )
+                            continue
+                        parse_business, business_created = _ensure_parse_business_for_partnership_lead(
+                            display_lead,
+                            owner_id,
+                        )
+                        parse_business_id = str(parse_business.get("id") or "").strip()
+                        source_url = str(
+                            parse_business.get("yandex_url") or row.get("source_url") or ""
+                        ).strip()
+                        if not parse_business_id or not source_url:
+                            report["skipped"]["parse_business_or_url_missing"] = (
+                                report["skipped"].get("parse_business_or_url_missing", 0) + 1
+                            )
+                            continue
+                        cursor.execute(
+                            """
+                            UPDATE prospectingleads
+                            SET parse_business_id = %s, updated_at = NOW()
+                            WHERE id = %s
+                            """,
+                            (parse_business_id, str(row["id"])),
+                        )
+                        task = _enqueue_parse_task_for_business(
+                            parse_business_id,
+                            owner_id,
+                            source_url,
+                        )
+                        if task.get("existing"):
+                            report["parse_tasks_existing"] += 1
+                        else:
+                            report["parse_tasks_queued"] += 1
+                        if business_created:
+                            report["parse_businesses_created"] += 1
+                        database.conn.commit()
                 continue
             report["eligible"] += 1
             match = _compute_partnership_match_result(
@@ -354,6 +435,33 @@ def main() -> int:
             reason = _match_skip_reason(match)
             if reason:
                 report["skipped"][reason] = report["skipped"].get(reason, 0) + 1
+                if args.execute and _should_persist_match_assessment(reason):
+                    cursor.execute(
+                        """
+                        INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)
+                        VALUES (%s, %s, %s, NOW())
+                        ON CONFLICT (lead_id) DO UPDATE
+                        SET audit_json = CASE
+                                WHEN partnershipleadartifacts.audit_json IS NULL
+                                  OR partnershipleadartifacts.audit_json = '{}'::jsonb
+                                THEN EXCLUDED.audit_json
+                                ELSE partnershipleadartifacts.audit_json
+                            END,
+                            match_json = EXCLUDED.match_json,
+                            updated_at = NOW()
+                        """,
+                        (str(row["id"]), Json(snapshot), Json(match)),
+                    )
+                    report["assessments_saved"] += 1
+                    if args.refresh_enrichment:
+                        job = enqueue_enrichment_job(
+                            cursor,
+                            str(row["workstream_id"]),
+                            force=True,
+                            allow_paid_enrichment=False,
+                        )
+                        key = "jobs_reused" if job.get("reused") else "jobs_enqueued"
+                        report[key] += 1
                 continue
             if args.dry_run:
                 continue

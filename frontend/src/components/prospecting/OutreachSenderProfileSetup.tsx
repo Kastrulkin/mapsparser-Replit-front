@@ -132,13 +132,16 @@ export function OutreachSenderProfileSetup({
       const suggestedServices = Array.isArray(payload?.suggested_context?.services)
         ? payload.suggested_context.services.map((item: unknown) => String(item || '').trim()).filter(Boolean)
         : [];
+      const suggestedCompanyName = String(payload?.suggested_context?.company_name || defaultCompanyName).trim();
+      const suggestedDisplayName = String(payload?.suggested_context?.display_name || '').trim();
+      const suggestedGeography = String(payload?.suggested_context?.geography || '').trim();
       setCompleteness(profileCompleteness);
       if (profile) {
         const context = profile.outreach_context_json || {};
         setForm({
           displayName: String(profile.display_name || ''),
           roleTitle: String(profile.role_title || ''),
-          companyName: String(profile.company_name || defaultCompanyName),
+          companyName: String(profile.company_name || suggestedCompanyName),
           competenceStory: String(profile.competence_story || ''),
           proofPoints: factsToText(profile.proof_points_json),
           verifiedCases: factsToText(profile.verified_cases_json),
@@ -149,7 +152,7 @@ export function OutreachSenderProfileSetup({
           services: (context.services?.length ? context.services : suggestedServices).join('\n'),
           audience: String(context.audience || ''),
           segments: (context.segments || []).join('\n'),
-          geography: String(context.geography || ''),
+          geography: String(context.geography || suggestedGeography),
           recipientRoles: (context.recipient_roles || []).join('\n'),
           desiredPartnerTypes: (context.desired_partner_types || []).join('\n'),
           disqualifiers: (context.disqualifiers || []).join('\n'),
@@ -159,8 +162,10 @@ export function OutreachSenderProfileSetup({
       } else {
         setForm({
           ...emptyForm,
-          companyName: defaultCompanyName,
+          displayName: suggestedDisplayName,
+          companyName: suggestedCompanyName,
           services: suggestedServices.join('\n'),
+          geography: suggestedGeography,
         });
         setConfirmed(false);
       }

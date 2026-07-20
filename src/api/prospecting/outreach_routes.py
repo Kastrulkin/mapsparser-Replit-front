@@ -409,6 +409,19 @@ def _normalize_match_result(
         offer_angles = []
     offer_angles = [str(x).strip() for x in offer_angles if str(x).strip()]
 
+    sender_profile_incomplete = "SENDER_PROFILE_INCOMPLETE" in reason_codes
+    source_url = str(data.get("source_url") or "").strip() or None
+    recipient_observation = str(data.get("recipient_observation") or "").strip() or None
+    if sender_profile_incomplete:
+        readiness_code = "needs_sender_profile"
+        next_action = "Заполните и подтвердите профиль отправителя"
+    elif score < 40 or not recipient_observation or not str(source_url or "").lower().startswith(("http://", "https://")):
+        readiness_code = "needs_evidence"
+        next_action = "Соберите недостающие публичные факты и повторите проверку"
+    else:
+        readiness_code = "ready"
+        next_action = "Проверьте предложение и подготовьте цепочку касаний"
+
     normalized = {
         "match_score": score,
         "overlap": overlap[:30],
@@ -424,13 +437,15 @@ def _normalize_match_result(
         },
         "reason_codes": reason_codes,
         "score_explanation": " ".join(explanation_parts).strip(),
-        "recipient_observation": str(data.get("recipient_observation") or "").strip() or None,
+        "recipient_observation": recipient_observation,
         "compatibility_hypothesis": str(data.get("compatibility_hypothesis") or "").strip() or None,
         "relevance_bridge": str(data.get("relevance_bridge") or "").strip() or None,
-        "source_url": str(data.get("source_url") or "").strip() or None,
+        "source_url": source_url,
         "score_breakdown": data.get("score_breakdown") if isinstance(data.get("score_breakdown"), dict) else {},
         "profile_completeness": data.get("profile_completeness") if isinstance(data.get("profile_completeness"), dict) else {},
         "direct_competitor": bool(data.get("direct_competitor")),
+        "readiness_code": readiness_code,
+        "next_action": next_action,
     }
     return normalized
 
@@ -446,6 +461,28 @@ def _partnership_match_needs_evidence(match: dict[str, Any] | None) -> bool:
         score < 40
         or not str(data.get("recipient_observation") or "").strip()
         or not source_url.startswith(("http://", "https://"))
+    )
+
+
+def _save_partnership_match_assessment(
+    cur,
+    *,
+    lead_id: str,
+    audit_json: dict[str, Any],
+    match_result: dict[str, Any],
+) -> None:
+    """Persist a visible assessment without promoting the lead to matched."""
+
+    cur.execute(
+        """
+        INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)
+        VALUES (%s, %s, %s, NOW())
+        ON CONFLICT (lead_id) DO UPDATE
+        SET audit_json = EXCLUDED.audit_json,
+            match_json = EXCLUDED.match_json,
+            updated_at = NOW()
+        """,
+        (lead_id, Json(audit_json), Json(match_result)),
     )
 
 def _extract_openclaw_result_blob(resp: dict[str, Any] | None) -> dict[str, Any]:
@@ -971,30 +1008,42 @@ def partnership_match_lead(lead_id):
                 audit_json=audit_json,
             )
             if "SENDER_PROFILE_INCOMPLETE" in (match_result.get("reason_codes") or []):
-                conn.rollback()
+                _save_partnership_match_assessment(
+                    cur,
+                    lead_id=lead_id,
+                    audit_json=audit_json,
+                    match_result=match_result,
+                )
+                conn.commit()
                 return jsonify({
-                    "error": "Сначала заполните профиль отправителя для партнёрского аутрича.",
+                    "success": True,
+                    "status": "needs_sender_profile",
                     "code": "SENDER_PROFILE_INCOMPLETE",
+                    "result": match_result,
                     "profile_completeness": match_result.get("profile_completeness") or {},
-                }), 422
+                    "next_action": match_result.get("next_action"),
+                })
             if _partnership_match_needs_evidence(match_result):
-                conn.rollback()
+                _save_partnership_match_assessment(
+                    cur,
+                    lead_id=lead_id,
+                    audit_json=audit_json,
+                    match_result=match_result,
+                )
+                conn.commit()
                 return jsonify({
-                    "error": "Совместимость пока не подтверждена фактами.",
+                    "success": True,
+                    "status": "needs_evidence",
                     "code": "PARTNERSHIP_MATCH_NEEDS_EVIDENCE",
                     "result": match_result,
-                }), 422
+                    "next_action": match_result.get("next_action"),
+                })
 
-            cur.execute(
-                """
-                INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)
-                VALUES (%s, %s, %s, NOW())
-                ON CONFLICT (lead_id) DO UPDATE
-                SET audit_json = EXCLUDED.audit_json,
-                    match_json = EXCLUDED.match_json,
-                    updated_at = NOW()
-                """,
-                (lead_id, Json(audit_json), Json(match_result)),
+            _save_partnership_match_assessment(
+                cur,
+                lead_id=lead_id,
+                audit_json=audit_json,
+                match_result=match_result,
             )
             cur.execute(
                 """
@@ -1041,9 +1090,11 @@ def partnership_bulk_match_leads():
                 return jsonify({"error": "Business not found or access denied"}), 403
 
             matched_count = 0
+            assessment_count = 0
             skipped_count = 0
             results: list[dict[str, Any]] = []
             errors: list[dict[str, Any]] = []
+            needs_attention: list[dict[str, Any]] = []
 
             for lead_id in normalized_ids:
                 lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
@@ -1080,33 +1131,42 @@ def partnership_bulk_match_leads():
                         audit_json=audit_json,
                     )
                     if "SENDER_PROFILE_INCOMPLETE" in (match_result.get("reason_codes") or []):
+                        _save_partnership_match_assessment(
+                            cur,
+                            lead_id=lead_id,
+                            audit_json=audit_json,
+                            match_result=match_result,
+                        )
+                        assessment_count += 1
                         skipped_count += 1
-                        errors.append({
+                        needs_attention.append({
                             "lead_id": lead_id,
                             "code": "SENDER_PROFILE_INCOMPLETE",
-                            "error": "Сначала заполните профиль отправителя для партнёрского аутрича.",
+                            "next_action": match_result.get("next_action"),
                             "profile_completeness": match_result.get("profile_completeness") or {},
                         })
                         continue
                     if _partnership_match_needs_evidence(match_result):
+                        _save_partnership_match_assessment(
+                            cur,
+                            lead_id=lead_id,
+                            audit_json=audit_json,
+                            match_result=match_result,
+                        )
+                        assessment_count += 1
                         skipped_count += 1
-                        errors.append({
+                        needs_attention.append({
                             "lead_id": lead_id,
                             "code": "PARTNERSHIP_MATCH_NEEDS_EVIDENCE",
-                            "error": "Совместимость пока не подтверждена фактами.",
+                            "next_action": match_result.get("next_action"),
                             "result": match_result,
                         })
                         continue
-                    cur.execute(
-                        """
-                        INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)
-                        VALUES (%s, %s, %s, NOW())
-                        ON CONFLICT (lead_id) DO UPDATE
-                        SET audit_json = EXCLUDED.audit_json,
-                            match_json = EXCLUDED.match_json,
-                            updated_at = NOW()
-                        """,
-                        (lead_id, Json(audit_json), Json(match_result)),
+                    _save_partnership_match_assessment(
+                        cur,
+                        lead_id=lead_id,
+                        audit_json=audit_json,
+                        match_result=match_result,
                     )
                     cur.execute(
                         """
@@ -1135,8 +1195,10 @@ def partnership_bulk_match_leads():
                 {
                     "success": True,
                     "matched_count": matched_count,
+                    "assessment_count": assessment_count,
                     "skipped_count": skipped_count,
                     "results": results,
+                    "needs_attention": needs_attention,
                     "errors": errors,
                 }
             )

@@ -1372,9 +1372,15 @@ export const PartnershipSearchPage: React.FC = () => {
         setMatchData(result);
         const lead = items.find((item) => item.id === leadId);
         const score = result?.match_score;
-        setMessage(score === undefined
-          ? `Совместимость с ${lead?.name || 'партнёром'} рассчитана. Результат показан в карточке.`
-          : `Совместимость с ${lead?.name || 'партнёром'}: ${score}%. Результат и следующий шаг показаны в карточке.`);
+        if (result?.readiness_code === 'needs_sender_profile') {
+          setMessage('Проверка сохранена. Чтобы рассчитать совместимость, заполните профиль отправителя — нужные пункты показаны в карточке.');
+        } else if (result?.readiness_code === 'needs_evidence') {
+          setMessage(`Проверка ${lead?.name || 'партнёра'} сохранена, но публичных фактов пока недостаточно. Следующий шаг показан в карточке.`);
+        } else {
+          setMessage(score === undefined
+            ? `Совместимость с ${lead?.name || 'партнёром'} рассчитана. Результат показан в карточке.`
+            : `Совместимость с ${lead?.name || 'партнёром'}: ${score}%. Результат и следующий шаг показаны в карточке.`);
+        }
         await refreshAllPartnershipData();
       });
     } finally {
@@ -1655,10 +1661,12 @@ export const PartnershipSearchPage: React.FC = () => {
     await runPartnershipAction('Не удалось запустить массовый матчинг', async () => {
       const data = await bulkMatchPartnershipLeads(currentBusinessId, selectedLeadIds);
       const matched = Number(data?.matched_count || 0);
+      const assessed = Number(data?.assessment_count || 0);
       const skipped = Number(data?.skipped_count || 0);
       const errs = Array.isArray(data?.errors) ? data.errors.length : 0;
       setMessage(
         `Матчинг выполнен: ${matched}` +
+          (assessed ? `, сохранено проверок с недостающими фактами: ${assessed}` : '') +
           (skipped ? `, пропущено: ${skipped}` : '') +
           (errs ? `, ошибок: ${errs}` : '')
       );
