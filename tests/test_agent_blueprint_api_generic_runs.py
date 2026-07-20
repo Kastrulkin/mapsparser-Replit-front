@@ -1032,7 +1032,7 @@ def test_internal_content_draft_uses_business_facts_without_sheet(monkeypatch):
     assert result["draft_text"].startswith("30 июля")
     assert result.get("status") != "needs_source_data"
     assert result["external_dispatch_performed"] is False
-    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v4"
+    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v5"
     assert "этой работы" in result["preparation_method"]
     assert "тест" not in result["preparation_method"]
 
@@ -1133,7 +1133,7 @@ def test_internal_content_draft_repairs_unsupported_new_service_claim(monkeypatc
     assert len(prompts) == 2
     assert "Источники не подтверждают" in prompts[1]
     assert "новую услугу" not in result["draft_text"].lower()
-    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v4"
+    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v5"
 
 
 def test_internal_content_fact_gate_rejects_inferred_audience_and_benefits():
@@ -1147,6 +1147,40 @@ def test_internal_content_fact_gate_rejects_inferred_audience_and_benefits():
 
     assert "не подтверждают" in issue.lower()
     assert "аудиторию" in issue.lower()
+
+
+def test_internal_content_draft_can_repair_two_consecutive_fact_issues(monkeypatch):
+    import services.agent_blueprint_workspace as workspace
+
+    responses = iter(
+        [
+            '{"title":"Новая услуга","draft_text":"С 31 июля предлагаем новую услугу — стрижку челки."}',
+            '{"title":"Стрижка челки","draft_text":"Профессиональные мастера выполняют стрижку челки."}',
+            '{"title":"Стрижка челки","draft_text":"31 июля рассказываем об услуге «Стрижка челки» за 400 рублей."}',
+        ]
+    )
+    monkeypatch.setattr(workspace, "analyze_text_with_gigachat", lambda *args, **kwargs: next(responses))
+
+    result = workspace._render_output(
+        "custom",
+        {
+            "workflow_description": "Подготовь внутренний черновик новости на 31 июля. Ничего не публикуй.",
+            "processing_rules": "Используй только подтверждённые факты",
+            "output_format": "Черновик новости",
+        },
+        [
+            {
+                "source_name": "services",
+                "summary": "name: Стрижка челки; price: 400",
+                "raw": {"name": "Стрижка челки", "price": "400"},
+            }
+        ],
+        [],
+        {"business_id": "biz-1", "user_id": "user-1", "run_id": "run-1"},
+    )
+
+    assert result["draft_text"] == "31 июля рассказываем об услуге «Стрижка челки» за 400 рублей."
+    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v5"
 
 
 def test_internal_content_draft_blocks_unsupported_claim_after_repair(monkeypatch):

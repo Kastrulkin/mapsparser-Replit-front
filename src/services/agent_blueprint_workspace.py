@@ -817,51 +817,45 @@ def _generate_message_result_with_llm(
     workflow_description = _clean_text(setup.get("workflow_description"))
     internal_content = _is_internal_content_draft_workflow(workflow_description)
     prompt_version = (
-        "agent_custom_message_draft_v4"
+        "agent_custom_message_draft_v5"
         if internal_content
         else "agent_custom_message_draft_v1"
     )
     fallback = _build_message_result_fallback(selected_items, selected_facts, rules, output_format, feedback_notes, workflow_description)
     prompt = _build_message_prompt(setup, selected_items, feedback_notes)
     try:
-        raw_response = analyze_text_with_gigachat(
-            prompt,
-            task_type="agent_custom_message_draft",
-            business_id=business_id or None,
-            user_id=user_id or None,
-            usage_reference=f"agent-run:{run_id}" if run_id else None,
-        )
-        parsed = _parse_message_llm_json(raw_response)
-        draft_text = _clean_text(parsed.get("draft_text") or parsed.get("post_text") or parsed.get("message"))
-        if not draft_text:
-            raise ValueError("LLM response does not contain draft text")
-        title = _clean_text(parsed.get("title")) or fallback["title"]
-        if internal_content:
-            quality_issue = _internal_content_fact_issue(title, draft_text, selected_items)
-            if quality_issue:
-                repair_prompt = (
-                    f"{prompt}\n\n"
-                    "PREVIOUS_OUTPUT_JSON:\n"
-                    f"{json.dumps(parsed, ensure_ascii=False, default=str)}\n\n"
-                    "QUALITY_GATE: Исправь черновик. "
-                    f"{quality_issue} "
-                    "Не добавляй новых фактов. Верни полный исправленный JSON в прежнем формате."
-                )
-                raw_response = analyze_text_with_gigachat(
-                    repair_prompt,
-                    task_type="agent_custom_message_draft",
-                    business_id=business_id or None,
-                    user_id=user_id or None,
-                    usage_reference=f"agent-run:{run_id}" if run_id else None,
-                )
-                parsed = _parse_message_llm_json(raw_response)
-                draft_text = _clean_text(parsed.get("draft_text") or parsed.get("post_text") or parsed.get("message"))
-                title = _clean_text(parsed.get("title")) or fallback["title"]
-                if not draft_text:
-                    raise ValueError("LLM repair response does not contain draft text")
-                quality_issue = _internal_content_fact_issue(title, draft_text, selected_items)
-                if quality_issue:
-                    raise ValueError(f"content_fact_gate: {quality_issue}")
+        generation_prompt = prompt
+        parsed: Dict[str, Any] = {}
+        draft_text = ""
+        title = fallback["title"]
+        for attempt in range(3):
+            raw_response = analyze_text_with_gigachat(
+                generation_prompt,
+                task_type="agent_custom_message_draft",
+                business_id=business_id or None,
+                user_id=user_id or None,
+                usage_reference=f"agent-run:{run_id}" if run_id else None,
+            )
+            parsed = _parse_message_llm_json(raw_response)
+            draft_text = _clean_text(parsed.get("draft_text") or parsed.get("post_text") or parsed.get("message"))
+            title = _clean_text(parsed.get("title")) or fallback["title"]
+            if not draft_text:
+                raise ValueError("LLM response does not contain draft text")
+            quality_issue = _internal_content_fact_issue(title, draft_text, selected_items) if internal_content else ""
+            if not quality_issue:
+                break
+            if attempt == 2:
+                raise ValueError(f"content_fact_gate: {quality_issue}")
+            generation_prompt = (
+                f"{prompt}\n\n"
+                "PREVIOUS_OUTPUT_JSON:\n"
+                f"{json.dumps(parsed, ensure_ascii=False, default=str)}\n\n"
+                "QUALITY_GATE: Исправь черновик. "
+                f"{quality_issue} "
+                "Удаляй неподтверждённую формулировку без замены на синоним, рекламный эпитет или новое обещание. "
+                "Если данных мало, используй простое название услуги, цену и дословно подтверждённые свойства. "
+                "Не добавляй новых фактов. Верни полный исправленный JSON в прежнем формате."
+            )
         summary = _clean_list(parsed.get("summary")) or selected_facts[:3]
         checklist = _clean_list(parsed.get("checklist")) or ["Проверить факты и тон перед использованием."]
         return {
