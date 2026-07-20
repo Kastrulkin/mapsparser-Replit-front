@@ -479,6 +479,8 @@ def _render_output(
     output_format = _clean_text(setup.get("output_format")) or "Краткий структурированный результат"
     feedback_notes = [_clean_text(item.get("feedback")) for item in feedback_history if isinstance(item, dict)]
     feedback_notes = [item for item in feedback_notes if item][-3:]
+    if category == "reviews" and _is_internal_content_draft_workflow(_clean_text(setup.get("workflow_description"))):
+        category = "custom"
     if category == "email":
         return draft_email_with_llm(
             setup,
@@ -1268,7 +1270,12 @@ def _is_internal_content_draft_workflow(workflow: str) -> bool:
         return False
     content_requested = any(marker in lowered for marker in ["новост", "контент", "пост", "публикац"])
     internal_only = any(marker in lowered for marker in ["внутрен", "не публи", "без публикац", "не отправ", "без отправ"])
-    return content_requested and internal_only
+    draft_requested = any(marker in lowered for marker in ["подготов", "созда", "напиш", "черновик", "иде", "тем"])
+    external_action = any(
+        marker in lowered
+        for marker in ["опубликуй", "опубликовать", "размести", "разместить", "отправь", "отправить", "выложи", "выложить"]
+    )
+    return content_requested and (internal_only or draft_requested) and not external_action
 
 
 def _message_item_text(item: Dict[str, Any]) -> str:

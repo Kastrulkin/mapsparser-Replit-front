@@ -1037,6 +1037,45 @@ def test_internal_content_draft_uses_business_facts_without_sheet(monkeypatch):
     assert "тест" not in result["preparation_method"]
 
 
+def test_legacy_review_category_cannot_turn_news_goal_into_review_reply(monkeypatch):
+    import services.agent_blueprint_workspace as workspace
+
+    monkeypatch.setattr(
+        workspace,
+        "analyze_text_with_gigachat",
+        lambda *args, **kwargs: json.dumps(
+            {
+                "title": "Три новости для карточки",
+                "draft_text": "Новость 1: детская стрижка.\nНовость 2: семейный визит.\nНовость 3: бережный подход.",
+                "summary": ["Подготовлено три внутренних черновика."],
+                "checklist": ["Проверить даты перед публикацией."],
+                "rules_applied": ["Использованы только подтверждённые факты."],
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+    result = workspace._render_output(
+        "reviews",
+        {
+            "workflow_description": "Подготовь 3 новости для карточек на основе услуг и отзывов.",
+            "processing_rules": "Используй только подтверждённые факты",
+            "output_format": "reply_drafts",
+        },
+        [
+            {"source_name": "services", "summary": "name: Детская стрижка", "raw": {"name": "Детская стрижка"}},
+            {"source_name": "reviews", "summary": "rating: 5; text: Бережный мастер", "raw": {"rating": 5, "text": "Бережный мастер"}},
+        ],
+        [],
+        {"business_id": "biz-1", "user_id": "user-1", "run_id": "run-1"},
+    )
+
+    assert result["title"] == "Три новости для карточки"
+    assert "draft_text" in result
+    assert "reply_drafts" not in result
+    assert result["analysis_prompt_version"] == "agent_custom_message_draft_v5"
+
+
 def test_internal_content_draft_prioritizes_services_and_positive_review(monkeypatch):
     import services.agent_blueprint_workspace as workspace
 

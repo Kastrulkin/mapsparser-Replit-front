@@ -346,6 +346,55 @@ def test_agent_compiler_keeps_internal_review_draft_without_result_approval():
     assert draft["summary"]["approval_required"] is False
 
 
+def test_agent_compiler_treats_prepared_news_as_internal_content_draft():
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+
+    draft = compile_agent_blueprint(
+        "По кнопке подготовь 3 новости для карточек на основе услуг, отзывов, сезонности и текущих задач."
+    )
+    payload = draft["version_payload"]
+    output_step = next(step for step in payload["steps"] if step["key"] == "prepare_output")
+
+    assert draft["category"] == "custom"
+    assert draft["metadata"]["draft_category"] == "custom"
+    assert draft["metadata"]["data_sources"] == ["external_reviews", "services", "business_profile", "manual_context"]
+    assert output_step["payload"]["category"] == "custom"
+    assert payload["approval_policy"]["required_for"] == []
+    assert payload["approval_policy"]["mode"] == "external_actions_only"
+    assert not any(step["type"] == "approval" for step in payload["steps"])
+    assert payload["steps"][-1]["payload"]["delivery_state"] == "internal_only"
+    assert draft["metadata"]["compiled_validation"]["valid"] is True
+
+
+def test_compiled_workflow_validation_rejects_review_renderer_for_content_draft():
+    from services.agent_compiled_artifact import validate_compiled_artifact_candidate
+
+    version_payload = {
+        "goal": "Подготовь 3 новости для карточек на основе услуг и отзывов.",
+        "trigger": "manual.run",
+        "mode": "draft",
+        "inputs_schema": {"type": "object"},
+        "steps": [
+            {
+                "key": "prepare_output",
+                "type": "artifact",
+                "artifact_type": "agent_output_draft",
+                "payload": {"category": "reviews", "format": "reply_drafts"},
+            }
+        ],
+        "capability_allowlist": [],
+        "approval_policy": {"required_for": []},
+        "required_integration_bindings": [],
+        "limits": {},
+        "output_schema": {"type": "object"},
+    }
+
+    result = validate_compiled_artifact_candidate(version_payload, {})
+
+    assert result["ready"] is False
+    assert any("review-reply" in item["message"] for item in result["validation"]["errors"])
+
+
 def test_compiled_workflow_validation_rejects_review_renderer_for_internal_summary():
     from services.agent_compiled_artifact import validate_compiled_artifact_candidate
 
