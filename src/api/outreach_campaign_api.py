@@ -393,7 +393,7 @@ def preview_campaign(workstream_id: str):
             sender_mode=sender_mode,
         )
         campaign = None
-        if bool(payload.get("save")) and preview.get("status") == "ready":
+        if bool(payload.get("save")) and preview.get("status") in {"ready", "needs_channel_setup"}:
             campaign = persist_preview(
                 cursor,
                 preview,

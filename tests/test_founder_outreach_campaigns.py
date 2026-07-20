@@ -55,6 +55,32 @@ def test_outdated_generation_is_blocked_at_approval_and_dispatch():
     assert 'campaign["requires_regeneration"]' in api_source
 
 
+def test_channel_setup_gap_can_be_saved_as_draft_but_not_approved():
+    api_source = (ROOT / "src/api/outreach_campaign_api.py").read_text()
+    frontend_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    campaign_source = (ROOT / "src/services/outreach_campaign_service.py").read_text()
+    approve_start = campaign_source.index("def approve_campaign")
+    approve_end = campaign_source.index("\n\ndef change_campaign_status", approve_start)
+    approve_block = campaign_source[approve_start:approve_end]
+
+    assert 'preview.get("status") in {"ready", "needs_channel_setup"}' in api_source
+    assert "['ready', 'needs_channel_setup'].includes" in frontend_source
+    assert "Сохранить черновик версии" in frontend_source
+    assert "senders_ready" in approve_block
+    assert "channels_ready" in approve_block
+
+
+def test_campaign_approval_uses_sender_mode_scope_preflight():
+    campaign_source = (ROOT / "src/services/outreach_campaign_service.py").read_text()
+    approve_start = campaign_source.index("def approve_campaign")
+    approve_end = campaign_source.index("\n\ndef change_campaign_status", approve_start)
+    approve_block = campaign_source[approve_start:approve_end]
+
+    assert "sender_scope_preflight_reason({**campaign, **touch})" in approve_block
+    assert "s.scope_type <> c.scope_type" not in approve_block
+    assert "COALESCE(s.business_id, '') <> COALESCE(c.business_id, '')" not in approve_block
+
+
 def test_personalization_requires_confirmed_founder_profile_and_sourced_evidence():
     context = {
         "lead_name": "Тестовая компания",

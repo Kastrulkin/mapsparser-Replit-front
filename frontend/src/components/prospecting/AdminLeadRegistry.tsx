@@ -2024,6 +2024,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     Интервалы должны идти по возрастанию и оставлять минимум сутки между касаниями. Исправьте дни и обновите предпросмотр.
                   </div>
                 ) : null}
+                {outreachPreview?.status === 'needs_channel_setup' ? (
+                  <div className="mt-3 rounded-md bg-sky-50 px-3 py-3 text-pretty text-sm leading-6 text-sky-900">
+                    Тексты и порядок готовы. Сохраните черновик версии; подтверждение и запуск останутся заблокированы, пока вы не подключите отправителя или не выберете ручной канал.
+                  </div>
+                ) : null}
                 {outreachPreview?.generation?.status === 'ready' ? (
                   <p className="mt-3 text-pretty text-xs leading-5 text-slate-500">Персонализацию подготовил LocalOS; каждое касание проверено по источнику, фактам и тону.</p>
                 ) : null}
@@ -2111,9 +2116,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     {busyAction === 'preview-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                     Показать всю цепочку
                   </Button>
-                  <Button variant="outline" onClick={() => void prepareOutreachCampaign(true)} disabled={busyAction === 'save-campaign' || outreachPreview?.status !== 'ready'} className="min-h-11 bg-white">
+                  <Button variant="outline" onClick={() => void prepareOutreachCampaign(true)} disabled={busyAction === 'save-campaign' || !['ready', 'needs_channel_setup'].includes(String(outreachPreview?.status || ''))} className="min-h-11 bg-white">
                     {busyAction === 'save-campaign' && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
-                    Сохранить новую версию
+                    {outreachPreview?.status === 'needs_channel_setup' ? 'Сохранить черновик версии' : 'Сохранить новую версию'}
                   </Button>
                 </div>
                 {savedOutreachCampaign?.status === 'draft' ? (

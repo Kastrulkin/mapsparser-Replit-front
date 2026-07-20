@@ -22,6 +22,7 @@ from services.outreach_safety_service import (
     classify_inbound_event,
     recipient_key,
     record_learning_event,
+    sender_scope_preflight_reason,
     strategy_fingerprint,
 )
 
@@ -1871,7 +1872,15 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
     ):
         raise ValueError("Campaign preflight failed")
     cursor.execute(
-        "SELECT * FROM outreach_campaign_touches WHERE campaign_id = %s ORDER BY sequence_index",
+        """
+        SELECT touch.*,
+               sender.scope_type AS sender_scope_type,
+               sender.business_id AS sender_business_id
+        FROM outreach_campaign_touches touch
+        LEFT JOIN outreach_sender_accounts sender ON sender.id = touch.sender_account_id
+        WHERE touch.campaign_id = %s
+        ORDER BY touch.sequence_index
+        """,
         (campaign_id,),
     )
     approval_touches = [_dict(row) for row in cursor.fetchall()]
@@ -1883,6 +1892,12 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         for touch in approval_touches
     ):
         raise ValueError("Campaign generation is outdated; create a new preview")
+    if any(
+        sender_scope_preflight_reason({**campaign, **touch}) is not None
+        for touch in approval_touches
+        if touch.get("channel") in AUTOMATIC_CHANNELS
+    ):
+        raise ValueError("Sender scope, mode, or represented business preflight failed")
     cursor.execute(
         """
         SELECT COUNT(*)
@@ -1894,8 +1909,6 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
           AND t.channel IN ('telegram', 'email')
           AND (
               s.status <> 'connected'
-              OR s.scope_type <> c.scope_type
-              OR COALESCE(s.business_id, '') <> COALESCE(c.business_id, '')
               OR s.health_status IN ('paused', 'blocked')
               OR COALESCE((s.capabilities_json->>'direct_send')::boolean, FALSE) = FALSE
               OR COALESCE((s.capabilities_json->>'reply_sync')::boolean, FALSE) = FALSE
