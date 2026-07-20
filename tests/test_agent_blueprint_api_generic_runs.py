@@ -1925,6 +1925,14 @@ def test_agent_run_completion_refreshes_server_today_summary():
     assert "await loadBlueprints();" in work_segment
 
 
+def test_agent_overview_uses_normalized_result_after_reload():
+    employee_source = Path("frontend/src/pages/dashboard/agents/employee.tsx").read_text(encoding="utf-8")
+
+    assert "findPreparedResultPayload(detailedLatestRun, pendingApproval)" in employee_source
+    assert "|| details?.last_business_result" in employee_source
+    assert "|| blueprint.last_business_result" in employee_source
+
+
 def test_agent_review_reply_analysis_uses_only_one_unanswered_review_when_requested():
     from services.agent_review_reply_analysis import draft_review_replies_with_llm
 

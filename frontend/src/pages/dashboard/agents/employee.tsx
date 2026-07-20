@@ -1641,7 +1641,10 @@ export const EmployeeAgentOverviewPanel = ({
   const story = buildEmployeeWorkspaceStory(blueprint, details, pendingApproval);
   const latestRun = details?.runs?.[0] || null;
   const detailedLatestRun = activeRun?.id && activeRun.id === latestRun?.id ? activeRun : latestRun;
-  const latestResult = findPreparedResultPayload(detailedLatestRun, pendingApproval);
+  const latestResult = findPreparedResultPayload(detailedLatestRun, pendingApproval)
+    || details?.last_business_result
+    || blueprint.last_business_result
+    || null;
   const healthy = story.state === 'working' && story.attention.length === 0;
   const problem = story.state === 'error' || story.state === 'waiting_for_review' || story.state === 'blocked_result' || story.state === 'needs_connection' || story.state === 'needs_attention';
   const actionDisabled = actionLoading || story.state === 'running_test';
