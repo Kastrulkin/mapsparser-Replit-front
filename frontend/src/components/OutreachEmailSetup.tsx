@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Mail, RefreshCw, ShieldCheck, Unplug } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Mail, Plus, RefreshCw, ShieldCheck, Unplug } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -78,6 +78,7 @@ export const OutreachEmailSetup = ({
   const [form, setForm] = useState<MailboxForm>(emptyForm);
   const [preflightReady, setPreflightReady] = useState(false);
   const [enableOutreachOnConnect, setEnableOutreachOnConnect] = useState(false);
+  const [showConnectForm, setShowConnectForm] = useState(false);
 
   const loadAccounts = useCallback(async () => {
     if (scopeType === 'business' && !businessId) {
@@ -159,6 +160,7 @@ export const OutreachEmailSetup = ({
       });
       setForm(emptyForm);
       setPreflightReady(false);
+      setShowConnectForm(false);
       setNotice(enableOutreachOnConnect
         ? 'Email подключён. LocalOS сможет отправлять только подтверждённые цепочки и остановит их после ответа.'
         : 'Email подключён без права отправки. Разрешение можно включить отдельно.');
@@ -255,7 +257,7 @@ export const OutreachEmailSetup = ({
         <div className="mt-4 flex min-h-11 items-center gap-2 text-sm text-slate-500">
           <RefreshCw className="h-4 w-4 animate-spin" /> Проверяем подключение…
         </div>
-      ) : account ? (
+      ) : account && !showConnectForm ? (
         <div className="mt-5 divide-y divide-slate-100">
           <div className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -297,15 +299,29 @@ export const OutreachEmailSetup = ({
             </div>
           ) : null}
 
-          <div className="pt-4">
+          <div className="flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <Button variant="ghost" onClick={() => void disconnect()} disabled={Boolean(busy)} className="min-h-10 px-3 text-slate-600 hover:text-rose-700">
               {busy === 'disconnect' ? <RefreshCw className="animate-spin" /> : <Unplug />}
               Отключить email
+            </Button>
+            <Button variant="outline" onClick={() => setShowConnectForm(true)} disabled={Boolean(busy)} className="min-h-11 active:scale-[0.96] transition-transform">
+              <Plus />
+              Подключить другой email
             </Button>
           </div>
         </div>
       ) : (
         <div className="mt-5 space-y-4">
+          {account ? (
+            <div className="flex flex-col gap-3 rounded-xl bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-pretty text-sm leading-6 text-slate-700">
+                Текущий адрес {account.sender_identity} останется подключённым. Новый адрес появится отдельным отправителем для выбора в кампании.
+              </p>
+              <Button variant="ghost" onClick={() => setShowConnectForm(false)} disabled={Boolean(busy)} className="min-h-10 shrink-0 px-3">
+                Отмена
+              </Button>
+            </div>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="outreach-email-address">Email отправителя</Label>
