@@ -338,6 +338,12 @@ def _enforce_complete_sequence(preview: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _sequence_is_complete(preview: dict[str, Any]) -> bool:
+    touches = preview.get("touches") if isinstance(preview.get("touches"), list) else []
+    indexes = [touch.get("sequence_index") for touch in touches if isinstance(touch, dict)]
+    return len(touches) == 4 and indexes == [0, 1, 2, 3]
+
+
 def _load_candidates(
     cursor: Any,
     *,
@@ -633,7 +639,14 @@ def prepare_campaigns(
             )
             preflight_preview = _enforce_complete_sequence(preflight_preview)
             preflight_status = _text(preflight_preview.get("status")) or "unknown"
-            if preflight_status not in {"ready", "needs_channel_setup"}:
+            # The deterministic, AI-disabled text can fail the content gate even
+            # when evidence and all four channels are present.  Its only job here
+            # is structural channel preflight; complete sequences still proceed
+            # to the canonical AI generation and semantic review.
+            if (
+                not _sequence_is_complete(preflight_preview)
+                and preflight_status not in {"ready", "needs_channel_setup"}
+            ):
                 result["preview_states"][preflight_status] += 1
                 _save_preparation_blocker(
                     item_cursor,
