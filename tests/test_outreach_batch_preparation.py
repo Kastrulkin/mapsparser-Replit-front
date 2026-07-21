@@ -58,6 +58,13 @@ def _candidate(**overrides):
     return row
 
 
+def _complete_preview(status="needs_channel_setup"):
+    return {
+        "status": status,
+        "touches": [{"sequence_index": index} for index in range(4)],
+    }
+
+
 def test_sequence_selects_localosgo_without_enabling_delivery() -> None:
     sequence = outreach_batch_preparation_service._sequence("sender-localosgo")
     assert [item["channel"] for item in sequence] == ["telegram", "email", "next", "next"]
@@ -185,7 +192,7 @@ def test_prepare_creates_draft_then_supersedes_stale_draft(monkeypatch) -> None:
     monkeypatch.setattr(
         outreach_batch_preparation_service,
         "build_preview",
-        lambda *args, **kwargs: {"status": "needs_channel_setup"},
+        lambda *args, **kwargs: _complete_preview(),
     )
     monkeypatch.setattr(
         outreach_batch_preparation_service,
@@ -262,7 +269,7 @@ def test_batch_scans_past_blocked_and_current_rows(monkeypatch) -> None:
     monkeypatch.setattr(
         outreach_batch_preparation_service,
         "build_preview",
-        lambda *args, **kwargs: {"status": "needs_channel_setup"},
+        lambda *args, **kwargs: _complete_preview(),
     )
     monkeypatch.setattr(
         outreach_batch_preparation_service,
@@ -280,6 +287,66 @@ def test_batch_scans_past_blocked_and_current_rows(monkeypatch) -> None:
     assert result["already_current"] == 1
     assert result["attempted"] == 1
     assert result["created"] == 1
+
+
+def test_incomplete_sequence_is_not_persisted_or_retried(monkeypatch) -> None:
+    initial_connection = BatchConnection()
+    item_connection = BatchConnection()
+    connections = iter([initial_connection, item_connection])
+    monkeypatch.setattr(
+        outreach_batch_preparation_service,
+        "get_db_connection",
+        lambda: next(connections),
+    )
+    monkeypatch.setattr(
+        outreach_batch_preparation_service,
+        "_load_actor_id",
+        lambda cursor, requested: "actor-1",
+    )
+    monkeypatch.setattr(
+        outreach_batch_preparation_service,
+        "_load_platform_email_sender",
+        lambda cursor: "sender-localosgo",
+    )
+    monkeypatch.setattr(
+        outreach_batch_preparation_service,
+        "_load_candidates",
+        lambda cursor, **kwargs: [_candidate(contact_count=1, evidence_count=1)],
+    )
+    monkeypatch.setattr(
+        outreach_batch_preparation_service,
+        "build_preview",
+        lambda *args, **kwargs: {
+            "status": "needs_channel_setup",
+            "touches": [{"sequence_index": 0}, {"sequence_index": 1}],
+        },
+    )
+
+    def forbidden_persist(*args, **kwargs):
+        raise AssertionError("an incomplete sequence must not be persisted")
+
+    monkeypatch.setattr(
+        outreach_batch_preparation_service,
+        "persist_preview",
+        forbidden_persist,
+    )
+
+    result = outreach_batch_preparation_service.prepare_campaigns(
+        workstream_type="localos_sales",
+        execute=True,
+    )
+
+    assert result["created"] == 0
+    assert result["preview_states"] == {"invalid_sequence": 1}
+    assert item_connection.commits == 1
+    update_params = [
+        params
+        for query, params in item_connection.cursor_instance.executed
+        if "UPDATE lead_workstream_research" in query
+    ]
+    assert update_params
+    assert update_params[0][0].adapted["code"] == "invalid_sequence"
+    assert "four_touch_sequence" in update_params[0][0].adapted["missing"]
 
 
 def test_batch_module_contains_no_delivery_or_approval_write() -> None:

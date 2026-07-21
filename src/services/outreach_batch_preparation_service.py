@@ -312,6 +312,32 @@ def _save_preparation_blocker(
     )
 
 
+def _enforce_complete_sequence(preview: dict[str, Any]) -> dict[str, Any]:
+    """Reject previews that cannot represent the approved four-touch cadence.
+
+    ``build_preview`` may legitimately return ``needs_channel_setup`` with only
+    the channels that exist for the recipient.  Such a preview is useful in the
+    UI, but it is not a complete campaign draft and must not be versioned by the
+    bulk runner.  Persisting it also made every following run regenerate the
+    same workstream because a current campaign requires four touches.
+    """
+    status = _text(preview.get("status")) or "unknown"
+    if status not in {"ready", "needs_channel_setup"}:
+        return preview
+    touches = preview.get("touches") if isinstance(preview.get("touches"), list) else []
+    indexes = [touch.get("sequence_index") for touch in touches if isinstance(touch, dict)]
+    if len(touches) == 4 and indexes == [0, 1, 2, 3]:
+        return preview
+    missing = list(preview.get("missing") or [])
+    if "four_touch_sequence" not in missing:
+        missing.append("four_touch_sequence")
+    return {
+        **preview,
+        "status": "invalid_sequence",
+        "missing": missing,
+    }
+
+
 def _load_candidates(
     cursor: Any,
     *,
@@ -589,6 +615,7 @@ def prepare_campaigns(
                 sequence=_sequence(email_sender_id),
                 sender_mode=sender_mode,
             )
+            preview = _enforce_complete_sequence(preview)
             preview_status = _text(preview.get("status")) or "unknown"
             result["preview_states"][preview_status] += 1
             if preview_status not in {"ready", "needs_channel_setup"}:
