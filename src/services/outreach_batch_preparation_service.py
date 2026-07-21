@@ -448,6 +448,10 @@ def inventory(
                 state = "needs_contact"
             elif readiness_code == "needs_evidence":
                 state = "needs_evidence"
+            elif row.get("enrichment_status") == "needs_contact":
+                state = "needs_contact"
+            elif row.get("enrichment_status") == "needs_evidence":
+                state = "needs_evidence"
             elif row.get("latest_campaign_status") == "draft":
                 state = "draft_requires_regeneration"
             elif row.get("enrichment_status") == "ready" and enrichment_fresh:
