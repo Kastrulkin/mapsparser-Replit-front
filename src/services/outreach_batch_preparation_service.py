@@ -321,10 +321,10 @@ def _enforce_complete_sequence(preview: dict[str, Any]) -> dict[str, Any]:
     bulk runner.  Persisting it also made every following run regenerate the
     same workstream because a current campaign requires four touches.
     """
-    status = _text(preview.get("status")) or "unknown"
-    if status not in {"ready", "needs_channel_setup"}:
-        return preview
     touches = preview.get("touches") if isinstance(preview.get("touches"), list) else []
+    status = _text(preview.get("status")) or "unknown"
+    if not touches and status not in {"ready", "needs_channel_setup"}:
+        return preview
     indexes = [touch.get("sequence_index") for touch in touches if isinstance(touch, dict)]
     if len(touches) == 4 and indexes == [0, 1, 2, 3]:
         return preview

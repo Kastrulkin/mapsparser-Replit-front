@@ -408,6 +408,16 @@ def test_complete_preflight_reaches_ai_even_if_deterministic_text_needs_evidence
     assert result["preview_states"] == {"needs_channel_setup": 1}
 
 
+def test_incomplete_preflight_overrides_deterministic_content_status() -> None:
+    preview = outreach_batch_preparation_service._enforce_complete_sequence({
+        "status": "needs_evidence",
+        "touches": [{"sequence_index": 0}, {"sequence_index": 1}],
+    })
+
+    assert preview["status"] == "invalid_sequence"
+    assert preview["missing"] == ["four_touch_sequence"]
+
+
 def test_batch_module_contains_no_delivery_or_approval_write() -> None:
     source = Path(outreach_batch_preparation_service.__file__).read_text(encoding="utf-8")
     forbidden = (
