@@ -43,6 +43,13 @@ CONTACT_TYPES = {
     "phone", "email", "telegram", "whatsapp", "vk", "instagram",
     "max", "website_form", "website", "other",
 }
+MANUAL_CONTACT_HOSTS = {
+    "telegram": {"t.me", "telegram.me"},
+    "whatsapp": {"wa.me", "api.whatsapp.com"},
+    "vk": {"vk.com"},
+    "instagram": {"instagram.com"},
+    "max": {"max.ru"},
+}
 VERIFIED_STATUSES = {"confirmed_source", "verified"}
 ACTIVE_JOB_STATUSES = {
     "queued", "collecting", "verifying", "researching", "drafting", "retry_wait",
@@ -148,6 +155,46 @@ def normalize_contact_value(contact_type: str, value: Any) -> str:
         query = f"?{parsed.query}" if keep_query and parsed.query else ""
         return f"https://{host}{path}{query}"
     return raw.lower()
+
+
+def normalize_manual_contact_value(contact_type: Any, value: Any) -> str:
+    """Normalize a user-entered professional contact and reject channel mismatches."""
+    normalized_type = str(contact_type or "").strip().lower()
+    raw = unescape(str(value or "")).strip()
+    if normalized_type not in CONTACT_TYPES or normalized_type == "website":
+        raise ValueError("Выберите поддерживаемый канал контакта")
+    if not raw:
+        raise ValueError("Укажите контакт или ссылку")
+
+    if normalized_type == "telegram":
+        username = raw.lstrip("@").strip()
+        if re.fullmatch(r"[A-Za-z0-9_]{4,32}", username):
+            raw = f"https://t.me/{username}"
+    elif normalized_type == "whatsapp" and re.fullmatch(r"\+?[\d\s().-]{10,}", raw):
+        digits = re.sub(r"\D", "", raw)
+        if len(digits) == 11 and digits.startswith("8"):
+            digits = "7" + digits[1:]
+        raw = f"https://wa.me/{digits}"
+    elif normalized_type in {"vk", "instagram", "max"} and raw.startswith("@"):
+        host = {"vk": "vk.com", "instagram": "instagram.com", "max": "max.ru"}[normalized_type]
+        raw = f"https://{host}/{raw.lstrip('@')}"
+
+    normalized = normalize_contact_value(normalized_type, raw)
+    if not normalized:
+        raise ValueError("Не удалось распознать контакт")
+    if normalized_type == "email" and not EMAIL_PATTERN.fullmatch(normalized):
+        raise ValueError("Проверьте формат email")
+    if normalized_type == "phone" and not normalize_phone(normalized):
+        raise ValueError("Проверьте формат телефона")
+    if normalized_type in MANUAL_CONTACT_HOSTS:
+        host = urlparse(normalized).netloc.lower().removeprefix("www.")
+        if host not in MANUAL_CONTACT_HOSTS[normalized_type]:
+            raise ValueError("Ссылка не соответствует выбранному каналу")
+    if normalized_type == "website_form":
+        parsed = urlparse(normalized)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Укажите полную ссылку на форму")
+    return normalized
 
 
 def contact_type_from_url(value: Any) -> str | None:

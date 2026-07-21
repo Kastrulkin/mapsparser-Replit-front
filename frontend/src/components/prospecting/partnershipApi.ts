@@ -233,6 +233,26 @@ export const startPartnershipContactIntelligence = (
     }),
   });
 
+export const getPartnershipContactIntelligence = (
+  businessId: string,
+  leadId: string,
+  workstreamId: string,
+) => request(
+  `/partnership/leads/${leadId}/contact-intelligence?business_id=${encodeURIComponent(businessId)}&workstream_id=${encodeURIComponent(workstreamId)}`,
+);
+
+export const addPartnershipLeadContact = (
+  businessId: string,
+  leadId: string,
+  payload: Record<string, unknown>,
+) => request(`/partnership/leads/${leadId}/contacts`, {
+  method: 'POST',
+  body: JSON.stringify({
+    business_id: businessId,
+    ...payload,
+  }),
+});
+
 export const preparePartnershipSalesRoom = (
   businessId: string,
   leadId: string,

@@ -2802,6 +2802,7 @@ export const PartnershipSearchPage: React.FC = () => {
                 setLeadEdit={setLeadEdit}
                 loading={loading}
                 onSaveLeadContacts={() => void saveLeadContacts()}
+                onManualContactSaved={() => refreshAllPartnershipData()}
                 onPrepareSalesRoom={(dataMode) => void prepareSalesRoom(selectedLead.id, dataMode)}
                 onSenderProfileChanged={handleSenderProfileChanged}
                 currentBusinessId={currentBusinessId}

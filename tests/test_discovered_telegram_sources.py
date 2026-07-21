@@ -153,3 +153,16 @@ def test_lead_drawer_exposes_channel_source_status_in_human_language():
     assert "LocalOS не использует их как чат получателя" in ui
     assert "подключите Telegram-радар" in ui
     assert "Публичный канал" in ui
+
+
+def test_manual_telegram_channel_uses_the_same_scoped_radar_pipeline():
+    api = Path("src/api/prospecting/contact_intelligence_routes.py").read_text(encoding="utf-8")
+    service = Path("src/services/discovered_telegram_source_service.py").read_text(encoding="utf-8")
+    admin_ui = Path("frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text(encoding="utf-8")
+    partner_ui = Path("frontend/src/components/prospecting/PartnershipLeadDetailDrawer.tsx").read_text(encoding="utf-8")
+
+    assert 'telegram_usage == "signal_source"' in api
+    assert 'discovery_origin="manual_lead_contact"' in api
+    assert 'discovery_origin: str = "map_parse"' in service
+    assert "Публичный канал — использовать для поиска сигналов" in admin_ui
+    assert "Публичный канал — источник сигналов" in partner_ui

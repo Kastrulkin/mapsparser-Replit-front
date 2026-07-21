@@ -22,6 +22,7 @@ from services.contact_intelligence_service import (
     legacy_contact_candidates,
     merge_research_briefs,
     normalize_contact_value,
+    normalize_manual_contact_value,
     normalize_phone,
     prepare_first_message,
     public_audit_artifact_from_row,
@@ -237,6 +238,19 @@ def test_messenger_contact_drops_prefilled_message_query():
         "telegram",
         "https://t.me/example_team?start=tracking",
     ) == "https://t.me/example_team"
+
+
+def test_manual_contact_normalization_accepts_social_shorthand_and_checks_channel():
+    assert normalize_manual_contact_value("telegram", "@example_team") == "https://t.me/example_team"
+    assert normalize_manual_contact_value("whatsapp", "+7 (921) 555-12-34") == "https://wa.me/79215551234"
+    assert normalize_manual_contact_value("instagram", "@example_team") == "https://instagram.com/example_team"
+
+    try:
+        normalize_manual_contact_value("telegram", "https://vk.com/example_team")
+    except ValueError as error:
+        assert str(error) == "Ссылка не соответствует выбранному каналу"
+    else:
+        raise AssertionError("Telegram must reject a VK URL")
 
 
 def test_malformed_bracketed_url_is_ignored_in_contact_payload():
@@ -1288,6 +1302,14 @@ def test_contact_routes_are_registered():
     assert (
         "/api/partnership/leads/<string:lead_id>/contact-intelligence",
         frozenset({"GET", "POST"}),
+    ) in routes
+    assert (
+        "/api/admin/prospecting/leads/<string:lead_id>/contacts",
+        frozenset({"POST"}),
+    ) in routes
+    assert (
+        "/api/partnership/leads/<string:lead_id>/contacts",
+        frozenset({"POST"}),
     ) in routes
 
 

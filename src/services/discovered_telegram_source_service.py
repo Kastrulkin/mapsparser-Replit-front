@@ -147,6 +147,8 @@ def sync_discovered_telegram_sources(
     conn: Any,
     lead: dict[str, Any],
     links: list[Any] | None = None,
+    *,
+    discovery_origin: str = "map_parse",
 ) -> dict[str, int]:
     """Idempotently register public Telegram references for every lead workstream."""
     lead_id = str(lead.get("id") or "").strip()
@@ -206,7 +208,8 @@ def sync_discovered_telegram_sources(
                     status="candidate",
                     metadata={
                         "auto_discovered": True,
-                        "discovery_origin": "map_parse",
+                        "discovery_origin": discovery_origin,
+                        "added_manually": discovery_origin == "manual_lead_contact",
                         "telegram_username": reference["username"],
                         "telegram_reference_type": "public_reference_unverified",
                         "permission_reason": permission_reason,
@@ -392,6 +395,7 @@ def discovered_telegram_signals(
     ranked: list[tuple[int, dict[str, Any]]] = []
     for raw_row in cursor.fetchall() or []:
         row = _row_dict(raw_row, cursor)
+        source_metadata = row.get("metadata_json") if isinstance(row.get("metadata_json"), dict) else {}
         text = re.sub(r"\s+", " ", str(row.get("message_text") or "")).strip()
         if len(text) < 40 or len(set(re.findall(r"[a-zа-яё0-9]{3,}", text.lower()))) < 6:
             continue
@@ -414,8 +418,8 @@ def discovered_telegram_signals(
             "message_date": published_at,
             "chat_title": row.get("chat_title") or "Telegram",
             "relevance_score": min(score, 95),
-            "auto_discovered": True,
-            "discovery_origin": "map_parse",
+            "auto_discovered": bool(source_metadata.get("auto_discovered", True)),
+            "discovery_origin": str(source_metadata.get("discovery_origin") or "map_parse"),
         }))
     ranked.sort(key=lambda item: (item[0], item[1].get("message_date") or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
     return [item[1] for item in ranked[: max(1, min(limit, 10))]]

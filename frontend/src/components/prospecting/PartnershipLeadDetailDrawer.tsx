@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,6 +9,10 @@ import { OutreachEmailSetup } from '@/components/OutreachEmailSetup';
 import { OutreachCampaignBuilder } from '@/components/prospecting/OutreachCampaignBuilder';
 import { OutreachSenderProfileSetup } from '@/components/prospecting/OutreachSenderProfileSetup';
 import { OutreachSuppressionManager } from '@/components/prospecting/OutreachSuppressionManager';
+import {
+  addPartnershipLeadContact,
+  getPartnershipContactIntelligence,
+} from '@/components/prospecting/partnershipApi';
 
 type PartnershipLead = {
   id: string;
@@ -107,6 +111,23 @@ type CohortOption = {
   label: string;
 };
 
+type LeadContactPoint = {
+  id: string;
+  type?: string;
+  value?: string;
+  person_name?: string | null;
+  role_title?: string | null;
+  verification_status?: string;
+};
+
+type LeadTelegramSource = {
+  id: string;
+  title?: string;
+  url?: string;
+  status?: string;
+  sync_status?: string;
+};
+
 type PartnershipLeadDetailDrawerProps = {
   selectedLead: PartnershipLead;
   selectedLeadFlowStatus?: FlowStatus | null;
@@ -122,12 +143,29 @@ type PartnershipLeadDetailDrawerProps = {
   setLeadEdit: (updater: (previous: LeadEditState) => LeadEditState) => void;
   loading?: boolean;
   onSaveLeadContacts: () => void;
+  onManualContactSaved?: () => void | Promise<void>;
   onPrepareSalesRoom?: (dataMode: 'audited' | 'template') => void | Promise<void>;
   onSenderProfileChanged?: (state: { confirmed: boolean; ready: boolean }) => void;
   currentBusinessId?: string | null;
   pilotCohortOptions: CohortOption[];
   onPilotCohortChange: (value: string) => void | Promise<void>;
 };
+
+const manualChannelOptions = [
+  { value: 'phone', label: 'Телефон', placeholder: '+7 999 000-00-00' },
+  { value: 'email', label: 'Email', placeholder: 'hello@company.ru' },
+  { value: 'telegram', label: 'Telegram', placeholder: '@username или https://t.me/channel' },
+  { value: 'whatsapp', label: 'WhatsApp', placeholder: '+7 999 000-00-00 или ссылка wa.me' },
+  { value: 'vk', label: 'VK', placeholder: 'https://vk.com/company' },
+  { value: 'instagram', label: 'Instagram', placeholder: 'https://instagram.com/company' },
+  { value: 'max', label: 'MAX', placeholder: 'https://max.ru/company' },
+  { value: 'website_form', label: 'Форма на сайте', placeholder: 'https://company.ru/contacts' },
+  { value: 'other', label: 'Другой канал', placeholder: 'Контакт или инструкция для связи' },
+];
+
+const manualChannelLabel = (value?: string) => (
+  manualChannelOptions.find((option) => option.value === value)?.label || 'Другой канал'
+);
 
 function DrawerSection({ children }: { children: ReactNode }) {
   return <div className="space-y-4 px-5 py-5">{children}</div>;
@@ -170,12 +208,25 @@ export default function PartnershipLeadDetailDrawer({
   setLeadEdit,
   loading,
   onSaveLeadContacts,
+  onManualContactSaved,
   onPrepareSalesRoom,
   onSenderProfileChanged,
   currentBusinessId,
   pilotCohortOptions,
   onPilotCohortChange,
 }: PartnershipLeadDetailDrawerProps) {
+  const workstreamId = String(selectedLead.active_workstream_id || selectedLead.workstream_id || '').trim();
+  const [leadContacts, setLeadContacts] = useState<LeadContactPoint[]>([]);
+  const [leadTelegramSources, setLeadTelegramSources] = useState<LeadTelegramSource[]>([]);
+  const [manualContactType, setManualContactType] = useState('telegram');
+  const [manualContactValue, setManualContactValue] = useState('');
+  const [manualTelegramUsage, setManualTelegramUsage] = useState('recipient');
+  const [manualOwnerType, setManualOwnerType] = useState('company');
+  const [manualPersonName, setManualPersonName] = useState('');
+  const [manualRoleTitle, setManualRoleTitle] = useState('');
+  const [manualContactBusy, setManualContactBusy] = useState(false);
+  const [manualContactNotice, setManualContactNotice] = useState('');
+  const [manualContactError, setManualContactError] = useState('');
   const flowPrimaryText = `Этап: ${stagePresentation.label} · Канал: ${formatChannelLabel(selectedLead.selected_channel)}`;
   const flowSecondaryText = `Писем: ${selectedLeadFlowStatus?.draftsTotal ?? 0} · утверждено: ${selectedLeadFlowStatus?.draftsApproved ?? 0} · отправлено: ${selectedLeadFlowStatus?.sentTotal ?? 0} · результат: ${selectedLeadFlowStatus?.outcomeFinal || 'пока нет'}`;
   const matchNeedsSenderProfile = matchData?.readiness_code === 'needs_sender_profile'
@@ -184,6 +235,64 @@ export default function PartnershipLeadDetailDrawer({
   const missingProfileItems = matchData?.profile_completeness?.missing_items
     ?.map((item) => String(item.label || '').trim())
     .filter(Boolean) || [];
+
+  const loadContactPoints = async () => {
+    if (!currentBusinessId || !workstreamId) return;
+    const payload = await getPartnershipContactIntelligence(currentBusinessId, selectedLead.id, workstreamId);
+    setLeadContacts(Array.isArray(payload?.contacts) ? payload.contacts : []);
+    setLeadTelegramSources(Array.isArray(payload?.telegram_sources) ? payload.telegram_sources : []);
+  };
+
+  useEffect(() => {
+    let active = true;
+    if (!currentBusinessId || !workstreamId) {
+      setLeadContacts([]);
+      setLeadTelegramSources([]);
+      return undefined;
+    }
+    getPartnershipContactIntelligence(currentBusinessId, selectedLead.id, workstreamId)
+      .then((payload) => {
+        if (!active) return;
+        setLeadContacts(Array.isArray(payload?.contacts) ? payload.contacts : []);
+        setLeadTelegramSources(Array.isArray(payload?.telegram_sources) ? payload.telegram_sources : []);
+      })
+      .catch(() => {
+        if (active) setManualContactError('Не удалось загрузить дополнительные контакты');
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentBusinessId, selectedLead.id, workstreamId]);
+
+  const saveManualContact = async () => {
+    if (!currentBusinessId || !workstreamId || !manualContactValue.trim()) return;
+    setManualContactBusy(true);
+    setManualContactNotice('');
+    setManualContactError('');
+    try {
+      const result = await addPartnershipLeadContact(currentBusinessId, selectedLead.id, {
+        workstream_id: workstreamId,
+        contact_type: manualContactType,
+        value: manualContactValue,
+        telegram_usage: manualTelegramUsage,
+        owner_type: manualOwnerType,
+        person_name: manualPersonName,
+        role_title: manualRoleTitle,
+      });
+      setManualContactValue('');
+      setManualPersonName('');
+      setManualRoleTitle('');
+      setManualContactNotice(result?.entry_kind === 'telegram_source'
+        ? 'Telegram-канал добавлен в источники. Радар проверит его и соберёт подходящие сигналы.'
+        : 'Контакт сохранён. Он доступен для выбора в аутриче.');
+      await loadContactPoints();
+      await onManualContactSaved?.();
+    } catch (requestError) {
+      setManualContactError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить контакт');
+    } finally {
+      setManualContactBusy(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/25 backdrop-blur-sm" onClick={onClose}>
@@ -307,6 +416,103 @@ export default function PartnershipLeadDetailDrawer({
               whatsappUrl={selectedLead.whatsapp_url}
               hasMessenger={Boolean(selectedLead.telegram_url || selectedLead.whatsapp_url)}
             />
+            {(leadContacts.length > 0 || leadTelegramSources.length > 0) ? (
+              <div className="space-y-2">
+                {leadContacts.filter((contact) => contact.type !== 'website').map((contact) => (
+                  <div key={contact.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                    <div className="font-semibold text-slate-900">{contact.person_name || contact.value || manualChannelLabel(contact.type)}</div>
+                    <div className="mt-0.5 text-xs text-slate-600">
+                      {[contact.role_title, manualChannelLabel(contact.type), contact.person_name ? contact.value : ''].filter(Boolean).join(' · ')}
+                    </div>
+                  </div>
+                ))}
+                {leadTelegramSources.map((source) => (
+                  <a key={source.id} href={source.url} target="_blank" rel="noreferrer" className="block min-h-11 rounded-xl bg-sky-50 px-3 py-2 text-sm text-sky-900">
+                    <span className="font-semibold">{source.title || source.url || 'Telegram-канал'}</span>
+                    <span className="mt-0.5 block text-xs">Источник сигналов · {source.status === 'active' ? 'проверен' : 'ожидает проверки радара'}</span>
+                  </a>
+                ))}
+              </div>
+            ) : null}
+            <details className="rounded-xl bg-slate-50 p-4">
+              <summary className="flex min-h-10 cursor-pointer items-center text-sm font-semibold text-slate-800">
+                Добавить контакт или соцсеть вручную
+              </summary>
+              <div className="grid gap-3 pt-3 sm:grid-cols-2">
+                <label className="text-xs font-semibold text-slate-700">
+                  Канал
+                  <Select value={manualContactType} onValueChange={(value) => setManualContactType(value)}>
+                    <SelectTrigger className="mt-1 h-11 bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {manualChannelOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="text-xs font-semibold text-slate-700">
+                  Контакт или ссылка
+                  <Input
+                    value={manualContactValue}
+                    onChange={(event) => {
+                      setManualContactValue(event.target.value);
+                      setManualContactError('');
+                    }}
+                    placeholder={manualChannelOptions.find((option) => option.value === manualContactType)?.placeholder || 'Укажите контакт'}
+                    className="mt-1 h-11 bg-white font-normal"
+                  />
+                </label>
+                {manualContactType === 'telegram' ? (
+                  <label className="text-xs font-semibold text-slate-700 sm:col-span-2">
+                    Как использовать Telegram-ссылку
+                    <Select value={manualTelegramUsage} onValueChange={setManualTelegramUsage}>
+                      <SelectTrigger className="mt-1 h-11 bg-white"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="recipient">Личный аккаунт или чат — получатель</SelectItem>
+                        <SelectItem value="signal_source">Публичный канал — источник сигналов</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </label>
+                ) : null}
+                {!(manualContactType === 'telegram' && manualTelegramUsage === 'signal_source') ? (
+                  <>
+                    <label className="text-xs font-semibold text-slate-700 sm:col-span-2">
+                      Кому принадлежит контакт
+                      <Select value={manualOwnerType} onValueChange={setManualOwnerType}>
+                        <SelectTrigger className="mt-1 h-11 bg-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="company">Компании — общий контакт</SelectItem>
+                          <SelectItem value="person">Конкретному человеку</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    {manualOwnerType === 'person' ? (
+                      <>
+                        <Input value={manualPersonName} onChange={(event) => setManualPersonName(event.target.value)} placeholder="Имя человека" className="h-11 bg-white" />
+                        <Input value={manualRoleTitle} onChange={(event) => setManualRoleTitle(event.target.value)} placeholder="Роль, например управляющая" className="h-11 bg-white" />
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+              <p className="mt-3 text-pretty text-xs leading-5 text-slate-600">
+                {manualContactType === 'telegram' && manualTelegramUsage === 'signal_source'
+                  ? 'Публичный канал не станет получателем. После проверки его публикации можно использовать как подтверждённые сигналы для персонализации.'
+                  : 'LocalOS сохранит контакт отдельно и не будет считать его проверенным только потому, что он добавлен вручную.'}
+              </p>
+              {manualContactNotice ? <div className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{manualContactNotice}</div> : null}
+              {manualContactError ? <div role="alert" className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{manualContactError}</div> : null}
+              <Button
+                type="button"
+                onClick={() => void saveManualContact()}
+                disabled={manualContactBusy || !manualContactValue.trim() || !currentBusinessId || !workstreamId}
+                className="mt-3 min-h-11 active:scale-[0.96] transition-transform"
+              >
+                {manualContactBusy
+                  ? 'Сохраняем…'
+                  : manualContactType === 'telegram' && manualTelegramUsage === 'signal_source'
+                    ? 'Добавить канал'
+                    : 'Сохранить контакт'}
+              </Button>
+            </details>
           </LeadDetailSection>
 
           <LeadDetailSection title="Цифровая комната">

@@ -447,6 +447,18 @@ const contactTypeLabels: Record<string, string> = {
   other: 'Другой канал',
 };
 
+const manualContactOptions = [
+  { value: 'phone', label: 'Телефон', placeholder: '+7 999 000-00-00' },
+  { value: 'email', label: 'Email', placeholder: 'hello@company.ru' },
+  { value: 'telegram', label: 'Telegram', placeholder: '@username или https://t.me/channel' },
+  { value: 'whatsapp', label: 'WhatsApp', placeholder: '+7 999 000-00-00 или ссылка wa.me' },
+  { value: 'vk', label: 'VK', placeholder: 'https://vk.com/company' },
+  { value: 'instagram', label: 'Instagram', placeholder: 'https://instagram.com/company' },
+  { value: 'max', label: 'MAX', placeholder: 'https://max.ru/company' },
+  { value: 'website_form', label: 'Форма на сайте', placeholder: 'https://company.ru/contacts' },
+  { value: 'other', label: 'Другой канал', placeholder: 'Контакт или инструкция для связи' },
+];
+
 const verificationLabel = (status?: string) => {
   if (status === 'verified') return 'Проверен';
   if (status === 'confirmed_source') return 'Подтверждён источником';
@@ -454,7 +466,15 @@ const verificationLabel = (status?: string) => {
   if (status === 'accept_all') return 'Домен принимает все адреса';
   if (status === 'invalid') return 'Не работает';
   if (status === 'stale') return 'Нужно обновить';
+  if (status === 'manually_added') return 'Добавлен вручную';
   return 'Нужна проверка';
+};
+
+const contactSourceLabel = (sourceType?: string) => {
+  if (sourceType === 'official_website') return 'официальный сайт';
+  if (sourceType === 'hunter_public_sources') return 'публичные источники Hunter';
+  if (sourceType === 'manual') return 'вручную';
+  return 'карточка компании';
 };
 
 const enrichmentLabel = (state?: EnrichmentState | null) => {
@@ -546,6 +566,14 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [searchError, setSearchError] = useState('');
   const [contactIntelligence, setContactIntelligence] = useState<ContactIntelligence | null>(null);
   const [contactIntelligenceLoading, setContactIntelligenceLoading] = useState(false);
+  const [manualContactOpen, setManualContactOpen] = useState(false);
+  const [manualContactType, setManualContactType] = useState('telegram');
+  const [manualContactValue, setManualContactValue] = useState('');
+  const [manualTelegramUsage, setManualTelegramUsage] = useState('recipient');
+  const [manualOwnerType, setManualOwnerType] = useState('company');
+  const [manualPersonName, setManualPersonName] = useState('');
+  const [manualRoleTitle, setManualRoleTitle] = useState('');
+  const [manualContactError, setManualContactError] = useState('');
   const [senderName, setSenderName] = useState('');
   const [senderRole, setSenderRole] = useState('');
   const [senderCompany, setSenderCompany] = useState('');
@@ -811,6 +839,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         ? 'localos'
         : 'partner_business',
     );
+    setManualContactOpen(false);
+    setManualContactValue('');
+    setManualContactError('');
   }, [selectedWorkstream?.id]);
 
   useEffect(() => {
@@ -888,6 +919,43 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       await loadLeads();
     } catch (requestError) {
       setNotice(requestError instanceof Error ? requestError.message : 'Не удалось запустить проверку');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const saveManualContact = async () => {
+    if (!selectedLead || !selectedWorkstream?.id || !manualContactValue.trim()) return;
+    setBusyAction('manual-contact');
+    setManualContactError('');
+    setNotice('');
+    try {
+      const result = await newAuth.makeRequest(`/admin/prospecting/leads/${selectedLead.id}/contacts`, {
+        method: 'POST',
+        body: JSON.stringify({
+          workstream_id: selectedWorkstream.id,
+          contact_type: manualContactType,
+          value: manualContactValue,
+          telegram_usage: manualTelegramUsage,
+          owner_type: manualOwnerType,
+          person_name: manualPersonName,
+          role_title: manualRoleTitle,
+        }),
+      });
+      const refreshed = await newAuth.makeRequest(
+        `/admin/prospecting/leads/${selectedLead.id}/contact-intelligence?workstream_id=${encodeURIComponent(selectedWorkstream.id)}`,
+      );
+      setContactIntelligence(refreshed);
+      setManualContactValue('');
+      setManualPersonName('');
+      setManualRoleTitle('');
+      setManualContactOpen(false);
+      setNotice(result?.entry_kind === 'telegram_source'
+        ? 'Telegram-канал добавлен в источники сигналов. Радар проверит, что канал публичный.'
+        : 'Контакт добавлен вручную. Выберите его получателем, когда будете готовы.');
+      await loadLeads();
+    } catch (requestError) {
+      setManualContactError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить контакт');
     } finally {
       setBusyAction('');
     }
@@ -1564,17 +1632,31 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       {drawerContacts.length} найдено · {drawerContacts.filter((item) => ['verified', 'confirmed_source'].includes(String(item.verification_status || ''))).length} проверено
                     </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    onClick={startContactIntelligence}
-                    disabled={busyAction === 'contact-intelligence' || ['queued', 'collecting', 'verifying', 'researching', 'drafting'].includes(String(contactIntelligence?.job?.status || selectedWorkstream.enrichment_state?.status || ''))}
-                    className="min-h-10 bg-white"
-                  >
-                    {busyAction === 'contact-intelligence' || ['queued', 'collecting', 'verifying', 'researching', 'drafting'].includes(String(contactIntelligence?.job?.status || selectedWorkstream.enrichment_state?.status || ''))
-                      ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      : <Search className="mr-2 h-4 w-4" />}
-                    {drawerContacts.length ? 'Проверить ещё раз' : 'Найти контакты'}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setManualContactOpen((current) => !current);
+                        setManualContactError('');
+                      }}
+                      disabled={busyAction === 'manual-contact'}
+                      className="min-h-10 bg-white active:scale-[0.96] transition-transform"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Добавить вручную
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={startContactIntelligence}
+                      disabled={busyAction === 'contact-intelligence' || ['queued', 'collecting', 'verifying', 'researching', 'drafting'].includes(String(contactIntelligence?.job?.status || selectedWorkstream.enrichment_state?.status || ''))}
+                      className="min-h-10 bg-white"
+                    >
+                      {busyAction === 'contact-intelligence' || ['queued', 'collecting', 'verifying', 'researching', 'drafting'].includes(String(contactIntelligence?.job?.status || selectedWorkstream.enrichment_state?.status || ''))
+                        ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        : <Search className="mr-2 h-4 w-4" />}
+                      {drawerContacts.length ? 'Проверить ещё раз' : 'Найти контакты'}
+                    </Button>
+                  </div>
                 </div>
                 <p className="mt-3 text-xs font-medium text-slate-500">
                   {contactIntelligenceLoading ? 'Загружаем контакты…' : enrichmentLabel(selectedWorkstream.enrichment_state || (contactIntelligence?.job ? {
@@ -1584,6 +1666,98 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     error: contactIntelligence.job.error,
                   } : null))}
                 </p>
+                {manualContactOpen && (
+                  <div className="mt-3 rounded-md bg-white p-3 shadow-sm shadow-slate-900/5">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="text-xs font-semibold text-slate-700" htmlFor="manual-lead-contact-type">
+                        Канал
+                        <select
+                          id="manual-lead-contact-type"
+                          value={manualContactType}
+                          onChange={(event) => {
+                            setManualContactType(event.target.value);
+                            setManualContactError('');
+                          }}
+                          className="mt-1 h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 outline-none focus:border-slate-400"
+                        >
+                          {manualContactOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="text-xs font-semibold text-slate-700" htmlFor="manual-lead-contact-value">
+                        Контакт или ссылка
+                        <Input
+                          id="manual-lead-contact-value"
+                          value={manualContactValue}
+                          onChange={(event) => {
+                            setManualContactValue(event.target.value);
+                            setManualContactError('');
+                          }}
+                          placeholder={manualContactOptions.find((option) => option.value === manualContactType)?.placeholder || 'Укажите контакт'}
+                          className="mt-1 h-11 font-normal"
+                        />
+                      </label>
+                      {manualContactType === 'telegram' && (
+                        <label className="text-xs font-semibold text-slate-700 sm:col-span-2" htmlFor="manual-telegram-usage">
+                          Как использовать Telegram-ссылку
+                          <select
+                            id="manual-telegram-usage"
+                            value={manualTelegramUsage}
+                            onChange={(event) => setManualTelegramUsage(event.target.value)}
+                            className="mt-1 h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 outline-none focus:border-slate-400"
+                          >
+                            <option value="recipient">Личный аккаунт или чат — можно выбрать получателем</option>
+                            <option value="signal_source">Публичный канал — использовать для поиска сигналов</option>
+                          </select>
+                        </label>
+                      )}
+                      {!(manualContactType === 'telegram' && manualTelegramUsage === 'signal_source') && (
+                        <>
+                          <label className="text-xs font-semibold text-slate-700" htmlFor="manual-contact-owner-type">
+                            Кому принадлежит
+                            <select
+                              id="manual-contact-owner-type"
+                              value={manualOwnerType}
+                              onChange={(event) => setManualOwnerType(event.target.value)}
+                              className="mt-1 h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 outline-none focus:border-slate-400"
+                            >
+                              <option value="company">Компании — общий контакт</option>
+                              <option value="person">Конкретному человеку</option>
+                            </select>
+                          </label>
+                          {manualOwnerType === 'person' && (
+                            <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
+                              <label className="text-xs font-semibold text-slate-700" htmlFor="manual-contact-person-name">
+                                Имя человека
+                                <Input id="manual-contact-person-name" value={manualPersonName} onChange={(event) => setManualPersonName(event.target.value)} placeholder="Анна" className="mt-1 h-11 font-normal" />
+                              </label>
+                              <label className="text-xs font-semibold text-slate-700" htmlFor="manual-contact-role-title">
+                                Роль
+                                <Input id="manual-contact-role-title" value={manualRoleTitle} onChange={(event) => setManualRoleTitle(event.target.value)} placeholder="Управляющая" className="mt-1 h-11 font-normal" />
+                              </label>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <p className="mt-3 text-pretty text-xs leading-5 text-slate-600">
+                      {manualContactType === 'telegram' && manualTelegramUsage === 'signal_source'
+                        ? 'Канал появится ниже в Telegram-источниках. Радар сначала проверит, что он публичный; канал не будет выбран как чат получателя.'
+                        : 'Контакт будет помечен как добавленный вручную. LocalOS не считает его проверенным, пока формат или источник не подтверждены.'}
+                    </p>
+                    {manualContactError ? <div role="alert" className="mt-3 rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">{manualContactError}</div> : null}
+                    <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                      <Button variant="ghost" onClick={() => setManualContactOpen(false)} disabled={busyAction === 'manual-contact'} className="min-h-10">Отмена</Button>
+                      <Button
+                        onClick={() => void saveManualContact()}
+                        disabled={busyAction === 'manual-contact' || !manualContactValue.trim()}
+                        className="min-h-11 bg-slate-950 text-white active:scale-[0.96] transition-transform hover:bg-slate-800"
+                      >
+                        {busyAction === 'manual-contact' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                        {manualContactType === 'telegram' && manualTelegramUsage === 'signal_source' ? 'Добавить канал' : 'Сохранить контакт'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <div className="mt-3 space-y-2">
                   {drawerContacts.map((contact) => {
                     const selected = drawerRecipient?.id === contact.id;
@@ -1608,7 +1782,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                             {[contact.role_title, contactTypeLabels[String(contact.type || '')], contact.person_name ? contact.value : ''].filter(Boolean).join(' · ')}
                           </span>
                           <span className="mt-0.5 block truncate text-xs text-slate-500">
-                            {verificationLabel(contact.verification_status)} · источник {contact.source_type === 'official_website' ? 'официальный сайт' : contact.source_type === 'hunter_public_sources' ? 'публичные источники Hunter' : 'карточка компании'}
+                            {verificationLabel(contact.verification_status)} · источник {contactSourceLabel(contact.source_type)}
                           </span>
                         </span>
                         {['verified', 'confirmed_source'].includes(String(contact.verification_status || '')) && <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />}

@@ -11,7 +11,13 @@ from api.prospecting.shared import admin_prospecting_bp
 from pg_db_utils import get_db_connection
 from services.contact_intelligence_service import (
     enqueue_enrichment_job,
+    normalize_manual_contact_value,
     serialize_contact_point,
+    upsert_contact_points,
+)
+from services.discovered_telegram_source_service import (
+    parse_telegram_reference,
+    sync_discovered_telegram_sources,
 )
 from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
 from services.outreach_personalization_ai import generation_contract_current
@@ -56,6 +62,86 @@ def _load_workstream(cursor, *, lead_id: str, workstream_id: str, client_busines
     )
     row = cursor.fetchone()
     return dict(row) if row else None
+
+
+MANUAL_CONTACT_TYPES = {
+    "phone", "email", "telegram", "whatsapp", "vk", "instagram",
+    "max", "website_form", "other",
+}
+
+
+def _save_manual_lead_contact(
+    conn,
+    cursor,
+    *,
+    workstream: dict[str, Any],
+    data: dict[str, Any],
+    actor_id: str,
+) -> dict[str, Any]:
+    contact_type = str(data.get("contact_type") or "").strip().lower()
+    if contact_type not in MANUAL_CONTACT_TYPES:
+        raise ValueError("Выберите поддерживаемый канал контакта")
+    normalized_value = normalize_manual_contact_value(contact_type, data.get("value"))
+    telegram_usage = str(data.get("telegram_usage") or "recipient").strip().lower()
+    if contact_type == "telegram":
+        reference = parse_telegram_reference(normalized_value)
+        if not reference or reference.get("kind") == "bot":
+            raise ValueError("Укажите публичную Telegram-ссылку или username, не ссылку на бота")
+        if telegram_usage == "signal_source":
+            result = sync_discovered_telegram_sources(
+                conn,
+                {
+                    "id": str(workstream.get("lead_id") or ""),
+                    "name": str(workstream.get("lead_name") or "Telegram"),
+                },
+                [normalized_value],
+                discovery_origin="manual_lead_contact",
+            )
+            return {
+                "entry_kind": "telegram_source",
+                "value": reference.get("canonical_url") or normalized_value,
+                "source_count": int(result.get("sources") or 0),
+                "queued": int(result.get("queued") or 0),
+            }
+        if telegram_usage != "recipient":
+            raise ValueError("Выберите назначение Telegram-ссылки")
+
+    owner_type = str(data.get("owner_type") or "company").strip().lower()
+    if owner_type not in {"company", "person"}:
+        raise ValueError("Неверный тип владельца контакта")
+    upsert_contact_points(cursor, str(workstream.get("lead_id") or ""), [{
+        "contact_type": contact_type,
+        "value": normalized_value,
+        "normalized_value": normalized_value,
+        "owner_type": owner_type,
+        "person_name": str(data.get("person_name") or "").strip(),
+        "role_title": str(data.get("role_title") or "").strip(),
+        "source_url": str(data.get("source_url") or "").strip(),
+        "source_type": "manual",
+        "provider": "manual_entry",
+        "confidence": 0.7,
+        "verification_status": "manually_added",
+        "metadata": {
+            "entry_method": "manual",
+            "added_by": actor_id,
+            "telegram_usage": telegram_usage if contact_type == "telegram" else None,
+        },
+    }])
+    cursor.execute(
+        """
+        SELECT * FROM lead_contact_points
+        WHERE lead_id = %s AND contact_type = %s AND normalized_value = %s
+        LIMIT 1
+        """,
+        (str(workstream.get("lead_id") or ""), contact_type, normalized_value),
+    )
+    contact_row = cursor.fetchone()
+    if not contact_row:
+        raise ValueError("Не удалось сохранить контакт")
+    return {
+        "entry_kind": "contact",
+        "contact": serialize_contact_point(dict(contact_row)),
+    }
 
 
 def _sender_profile_suggestions(cursor, business_id: str) -> dict[str, Any]:
@@ -459,6 +545,37 @@ def admin_get_contact_intelligence(lead_id: str):
         conn.close()
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/leads/<string:lead_id>/contacts", methods=["POST"])
+def admin_add_manual_lead_contact(lead_id: str):
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    workstream_id = str(data.get("workstream_id") or "").strip()
+    if not workstream_id:
+        return jsonify({"error": "workstream_id is required"}), 400
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        workstream = _load_workstream(cursor, lead_id=lead_id, workstream_id=workstream_id)
+        if not workstream:
+            return jsonify({"error": "Lead workstream not found"}), 404
+        result = _save_manual_lead_contact(
+            conn,
+            cursor,
+            workstream=workstream,
+            data=data,
+            actor_id=str(user_data.get("user_id") or ""),
+        )
+        conn.commit()
+        return jsonify({"success": True, **result}), 201
+    except ValueError as validation_error:
+        conn.rollback()
+        return jsonify({"error": str(validation_error)}), 400
+    finally:
+        conn.close()
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/leads/<string:lead_id>/recipient", methods=["POST"])
 def admin_select_contact_recipient(lead_id: str):
     _, error = _require_superadmin()
@@ -581,6 +698,41 @@ def partnership_contact_intelligence(lead_id: str):
             conn.commit()
             return jsonify({"success": True, "job": _serialize_job(job), "reused": bool(job.get("reused"))}), 202
         return jsonify({"success": True, **_load_intelligence(cursor, workstream)})
+    finally:
+        conn.close()
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/contacts", methods=["POST"])
+def partnership_add_manual_lead_contact(lead_id: str):
+    data = request.get_json(silent=True) or {}
+    conn, context, error = _partnership_context(data)
+    if error:
+        return error
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        workstream_id = str(data.get("workstream_id") or "").strip()
+        if not workstream_id:
+            return jsonify({"error": "workstream_id is required"}), 400
+        workstream = _load_workstream(
+            cursor,
+            lead_id=lead_id,
+            workstream_id=workstream_id,
+            client_business_id=str(context.get("business_id")),
+        )
+        if not workstream:
+            return jsonify({"error": "Lead workstream not found"}), 404
+        result = _save_manual_lead_contact(
+            conn,
+            cursor,
+            workstream=workstream,
+            data=data,
+            actor_id=str(context.get("user", {}).get("user_id") or ""),
+        )
+        conn.commit()
+        return jsonify({"success": True, **result}), 201
+    except ValueError as validation_error:
+        conn.rollback()
+        return jsonify({"error": str(validation_error)}), 400
     finally:
         conn.close()
 
