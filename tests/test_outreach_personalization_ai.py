@@ -1,5 +1,6 @@
 import json
 
+from gigachat_config import GigaChatConfig
 from services.outreach_personalization_ai import (
     PROMPT_VERSION,
     QUALITY_CRITERIA,
@@ -9,6 +10,12 @@ from services.outreach_personalization_ai import (
     generation_contract_current,
     generate_personalized_sequence,
 )
+
+
+def test_outreach_personalization_uses_gigachat_max() -> None:
+    config = GigaChatConfig()
+
+    assert config.get_model_config(task_type="outreach_personalization")["model"] == "GigaChat-Max"
 
 
 OBSERVATION = "Рейтинг - 4,1; публичных отзывов - 27."

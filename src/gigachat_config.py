@@ -82,6 +82,7 @@ class GigaChatConfig:
         "ai_agent_marketing": "GigaChat-Pro",        # Маркетинговый агент
         "ai_agent_booking": "GigaChat-Pro",         # Агент записи (по умолчанию Pro)
         "ai_agent_booking_complex": "GigaChat-Max", # Агент записи (сложная логика)
+        "outreach_personalization": "GigaChat-Max", # Персонализация и semantic review аутрича
         "default": "GigaChat-Pro"                    # По умолчанию
     }
     
