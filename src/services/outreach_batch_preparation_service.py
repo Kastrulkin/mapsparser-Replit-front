@@ -286,16 +286,58 @@ def _save_preparation_blocker(
     preview: dict[str, Any],
 ) -> None:
     quality_gate = preview.get("quality_gate") if isinstance(preview.get("quality_gate"), dict) else {}
+    preview_code = _text(preview.get("status")) or "needs_evidence"
+    transient_quality_codes = {"needs_generation", "needs_revision"}
+    cursor.execute(
+        """
+        SELECT message_readiness_json
+        FROM lead_workstream_research
+        WHERE workstream_id = %s
+        ORDER BY researched_at DESC NULLS LAST, created_at DESC
+        LIMIT 1
+        """,
+        (workstream_id,),
+    )
+    previous_row = cursor.fetchone()
+    previous = (
+        previous_row.get("message_readiness_json")
+        if previous_row and isinstance(previous_row.get("message_readiness_json"), dict)
+        else {}
+    )
+    previous_attempts = 0
+    if (
+        previous.get("source") == "outreach_batch_preparation"
+        and previous.get("contract") == _preparation_contract(sender_mode)
+        and _text(previous.get("original_code") or previous.get("code"))
+        in transient_quality_codes
+    ):
+        previous_attempts = int(previous.get("generation_attempts") or 1)
+    generation_attempts = (
+        previous_attempts + 1 if preview_code in transient_quality_codes else 0
+    )
+    effective_code = preview_code
+    if preview_code in transient_quality_codes and generation_attempts >= 3:
+        effective_code = "needs_evidence"
+    missing = list(preview.get("missing") or [])
+    reason_codes = list(quality_gate.get("reason_codes") or [])
+    if effective_code == "needs_evidence" and preview_code in transient_quality_codes:
+        if "additional_recipient_evidence" not in missing:
+            missing.append("additional_recipient_evidence")
+        if "AI_QUALITY_GATE_REPEATED_FAILURE" not in reason_codes:
+            reason_codes.append("AI_QUALITY_GATE_REPEATED_FAILURE")
     payload = {
-        "code": _text(preview.get("status")) or "needs_evidence",
+        "code": effective_code,
+        "original_code": preview_code,
         "label": "Нужна дополнительная проверка перед черновиком",
-        "missing": list(preview.get("missing") or []),
-        "reason_codes": list(quality_gate.get("reason_codes") or []),
+        "missing": missing,
+        "reason_codes": reason_codes,
         "source": "outreach_batch_preparation",
         "sender_mode": sender_mode,
         "contract": _preparation_contract(sender_mode),
         "checked_at": datetime.now(timezone.utc).isoformat(),
     }
+    if generation_attempts:
+        payload["generation_attempts"] = generation_attempts
     cursor.execute(
         """
         UPDATE lead_workstream_research

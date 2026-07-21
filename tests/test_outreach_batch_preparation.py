@@ -13,6 +13,9 @@ class BatchCursor:
         self.executed.append((str(query), params))
         self.rowcount = 1 if "UPDATE outreach_campaigns" in str(query) else 0
 
+    def fetchone(self):
+        return None
+
 
 class BatchConnection:
     def __init__(self):
@@ -416,6 +419,38 @@ def test_incomplete_preflight_overrides_deterministic_content_status() -> None:
 
     assert preview["status"] == "invalid_sequence"
     assert preview["missing"] == ["four_touch_sequence"]
+
+
+def test_repeated_quality_failure_becomes_stable_needs_evidence() -> None:
+    class PreviousReadinessCursor(BatchCursor):
+        def fetchone(self):
+            return {
+                "message_readiness_json": {
+                    "source": "outreach_batch_preparation",
+                    "contract": outreach_batch_preparation_service._preparation_contract("localos"),
+                    "code": "needs_revision",
+                    "original_code": "needs_revision",
+                    "generation_attempts": 2,
+                },
+            }
+
+    cursor = PreviousReadinessCursor()
+    outreach_batch_preparation_service._save_preparation_blocker(
+        cursor,
+        workstream_id="workstream-1",
+        sender_mode="localos",
+        preview={"status": "needs_revision", "quality_gate": {"reason_codes": []}},
+    )
+
+    update_payloads = [
+        params[0].adapted
+        for query, params in cursor.executed
+        if "UPDATE lead_workstream_research" in query
+    ]
+    assert update_payloads[0]["code"] == "needs_evidence"
+    assert update_payloads[0]["original_code"] == "needs_revision"
+    assert update_payloads[0]["generation_attempts"] == 3
+    assert "additional_recipient_evidence" in update_payloads[0]["missing"]
 
 
 def test_batch_module_contains_no_delivery_or_approval_write() -> None:
