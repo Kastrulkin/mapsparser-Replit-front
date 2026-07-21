@@ -624,6 +624,25 @@ def prepare_campaigns(
                 item_conn.rollback()
                 result["preview_states"]["would_preview"] += 1
                 continue
+            preflight_preview = build_preview(
+                item_cursor,
+                _text(row.get("id")),
+                sequence=_sequence(email_sender_id),
+                sender_mode=sender_mode,
+                generate_ai=False,
+            )
+            preflight_preview = _enforce_complete_sequence(preflight_preview)
+            preflight_status = _text(preflight_preview.get("status")) or "unknown"
+            if preflight_status not in {"ready", "needs_channel_setup"}:
+                result["preview_states"][preflight_status] += 1
+                _save_preparation_blocker(
+                    item_cursor,
+                    workstream_id=_text(row.get("id")),
+                    sender_mode=sender_mode,
+                    preview=preflight_preview,
+                )
+                item_conn.commit()
+                continue
             preview = build_preview(
                 item_cursor,
                 _text(row.get("id")),

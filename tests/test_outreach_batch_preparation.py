@@ -313,13 +313,19 @@ def test_incomplete_sequence_is_not_persisted_or_retried(monkeypatch) -> None:
         "_load_candidates",
         lambda cursor, **kwargs: [_candidate(contact_count=1, evidence_count=1)],
     )
+    preview_calls = []
+
+    def incomplete_preview(*args, **kwargs):
+        preview_calls.append(kwargs)
+        return {
+            "status": "needs_channel_setup",
+            "touches": [{"sequence_index": 0}, {"sequence_index": 1}],
+        }
+
     monkeypatch.setattr(
         outreach_batch_preparation_service,
         "build_preview",
-        lambda *args, **kwargs: {
-            "status": "needs_channel_setup",
-            "touches": [{"sequence_index": 0}, {"sequence_index": 1}],
-        },
+        incomplete_preview,
     )
 
     def forbidden_persist(*args, **kwargs):
@@ -338,6 +344,8 @@ def test_incomplete_sequence_is_not_persisted_or_retried(monkeypatch) -> None:
 
     assert result["created"] == 0
     assert result["preview_states"] == {"invalid_sequence": 1}
+    assert len(preview_calls) == 1
+    assert preview_calls[0]["generate_ai"] is False
     assert item_connection.commits == 1
     update_params = [
         params

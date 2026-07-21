@@ -1477,6 +1477,7 @@ def build_preview(
     sequence: list[dict[str, Any]] | None = None,
     start_at: datetime | None = None,
     sender_mode: str | None = None,
+    generate_ai: bool | None = None,
 ) -> dict[str, Any]:
     context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
     ledger = build_evidence_ledger(context)
@@ -1629,7 +1630,7 @@ def build_preview(
         })
         previous_angles.append(angle)
         previous_offset = day_offset
-    ai_enabled = ai_personalization_enabled()
+    ai_enabled = ai_personalization_enabled() if generate_ai is None else bool(generate_ai)
     generation: dict[str, Any] = {
         "schema_version": "1.0",
         "status": "disabled",
