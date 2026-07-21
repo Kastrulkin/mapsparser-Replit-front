@@ -411,6 +411,17 @@ def inventory(
         sender_mode = _scope_sender_mode(workstream_type)
         for row in rows:
             blocked = _blocked_reason(row, now)
+            readiness = (
+                row.get("message_readiness_json")
+                if isinstance(row.get("message_readiness_json"), dict)
+                else {}
+            )
+            readiness_code = ""
+            if (
+                readiness.get("source") == "outreach_batch_preparation"
+                and readiness.get("contract") == _preparation_contract(sender_mode)
+            ):
+                readiness_code = _text(readiness.get("code"))
             latest_campaign_id = _text(row.get("latest_campaign_id"))
             current_draft = bool(
                 not blocked
@@ -427,6 +438,10 @@ def inventory(
                 state = blocked
             elif current_draft:
                 state = "draft_current"
+            elif readiness_code == "invalid_sequence":
+                state = "needs_contact"
+            elif readiness_code == "needs_evidence":
+                state = "needs_evidence"
             elif row.get("latest_campaign_status") == "draft":
                 state = "draft_requires_regeneration"
             elif row.get("enrichment_status") == "ready" and enrichment_fresh:
