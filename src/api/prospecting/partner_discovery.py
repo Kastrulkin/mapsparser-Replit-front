@@ -885,6 +885,12 @@ def _insert_partnership_lead_if_new(
                 """,
                 params,
             )
+        _ensure_imported_partnership_workstream(
+            cur,
+            lead_id=existing_id,
+            business_id=business_id,
+            created_by=created_by,
+        )
         return existing_id, False
 
     lead_id = str(uuid.uuid4())
@@ -936,7 +942,57 @@ def _insert_partnership_lead_if_new(
             Json(_merge_source_labels([], source, source_provider)),
         ),
     )
+    _ensure_imported_partnership_workstream(
+        cur,
+        lead_id=lead_id,
+        business_id=business_id,
+        created_by=created_by,
+    )
     return lead_id, True
+
+
+def _ensure_imported_partnership_workstream(
+    cur,
+    *,
+    lead_id: str,
+    business_id: str,
+    created_by: str,
+) -> str:
+    """Ensure every imported partner lead enters the canonical workstream flow."""
+    cur.execute(
+        """
+        SELECT id FROM lead_workstreams
+        WHERE lead_id = %s
+          AND workstream_type = 'client_partnership'
+          AND client_business_id = %s
+        LIMIT 1
+        """,
+        (lead_id, business_id),
+    )
+    existing = cur.fetchone()
+    if existing:
+        if hasattr(existing, "get"):
+            return str(existing.get("id") or "")
+        return str(existing[0])
+
+    workstream_id = str(uuid.uuid4())
+    cur.execute(
+        """
+        INSERT INTO lead_workstreams (
+            id, lead_id, workstream_type, client_business_id, status,
+            created_by, created_at, updated_at
+        ) VALUES (
+            %s, %s, 'client_partnership', %s, 'unprocessed',
+            NULLIF(%s, ''), NOW(), NOW()
+        )
+        RETURNING id
+        """,
+        (workstream_id, lead_id, business_id, created_by),
+    )
+    from services.contact_intelligence_service import enqueue_enrichment_job
+
+    enqueue_enrichment_job(cur, workstream_id, allow_paid_enrichment=False)
+    return workstream_id
 
 def _pick_first_value(row: dict[str, Any], candidates: list[str]) -> str | None:
     for key in candidates:

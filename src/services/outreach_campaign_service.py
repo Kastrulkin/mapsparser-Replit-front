@@ -700,7 +700,12 @@ def _contact_outreach_rank(contact: dict[str, Any]) -> tuple[int, int, int, floa
 
 
 def _normalize_outreach_fact(value: Any) -> str:
-    fact = _text(value)
+    fact = (
+        _text(value)
+        .replace("—", "-")
+        .replace("«", '"')
+        .replace("»", '"')
+    )
     services_match = re.search(
         r"(?:в аудите публичной карточки )?найдено\s+(\d+)\s+услуг,\s+цена указана у\s+(\d+)",
         fact,
@@ -939,7 +944,7 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             "relevance": "Есть конкретная точка для проверки карточки и работы с отзывами.",
         })
     match = context.get("partnership_match") or {}
-    match_fact = _text(match.get("recipient_observation"))
+    match_fact = _normalize_outreach_fact(match.get("recipient_observation"))
     if (
         context.get("workstream_type") == "client_partnership"
         and match_fact
@@ -1313,7 +1318,11 @@ def _quality_gate(
         "removal": contains(candidate.get("recipient")) and any(contains(anchor) for anchor in personalization_anchors),
         "bridge": any(contains(anchor) for anchor in personalization_anchors[1:]),
         "fact": bool(candidate.get("source_url") and candidate.get("evidence_status") in {"approved", "observed"}),
-        "freshness": bool(candidate.get("freshness") and float(candidate.get("confidence") or 0) >= 0.6),
+        "freshness": _text(candidate.get("freshness")).lower() not in {
+            "",
+            "stale",
+            "unknown_dated_source",
+        },
         "specificity": bool(contains(candidate.get("recipient")) and len(_text(candidate.get("observed_fact"))) >= 20),
         "proof_integrity": bool(story) and not any(
             claim.lower() in text.lower() for claim in story.get("forbidden_claims", [])

@@ -376,6 +376,28 @@ def test_policy_bound_choices_produce_clean_founder_led_copy():
     assert "Гипотеза для проверки:" in result["touches"][0]["text"]
 
 
+def test_existing_hypothesis_label_is_not_duplicated() -> None:
+    candidate = _candidate()
+    candidate["problem_hypothesis"] = (
+        "Гипотеза для проверки: у компаний может пересекаться аудитория."
+    )
+    responses = iter([
+        json.dumps(_policy_bound_generation_response(), ensure_ascii=False),
+        json.dumps(_review_response(), ensure_ascii=False),
+    ])
+
+    result = generate_personalized_sequence(
+        motion="client_partnership",
+        identity={"company_name": "Клиника"},
+        candidate=candidate,
+        founder_story=_story(),
+        sequence=_sequence(),
+        generator=lambda _prompt, **_kwargs: next(responses),
+    )
+
+    assert result["touches"][0]["text"].count("Гипотеза для проверки:") == 1
+
+
 def test_constrained_fragments_allow_neutral_recipient_vocabulary():
     generated = _fragment_generation_response()
     generated["touches"][0]["opening_template"] = (

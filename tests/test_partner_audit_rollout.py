@@ -1,6 +1,8 @@
 from pathlib import Path
 
 from src.api import admin_prospecting
+from src.api.prospecting.search_routes import _geo_distance_km
+from src.api.prospecting.partner_discovery import _ensure_imported_partnership_workstream
 from src.api.admin_prospecting import (
     _build_organika_partner_offer_text,
     _candidate_is_closed,
@@ -55,6 +57,42 @@ class PartnershipMatchCursor:
         if "FROM prospectingleads" in self.query:
             return self.lead
         return None
+
+
+class ImportedWorkstreamCursor:
+    def __init__(self):
+        self.queries = []
+        self.fetchone_calls = 0
+
+    def execute(self, query, params=None):
+        self.queries.append((str(query), params))
+
+    def fetchone(self):
+        self.fetchone_calls += 1
+        return None
+
+
+def test_imported_partner_lead_gets_canonical_workstream(monkeypatch) -> None:
+    cursor = ImportedWorkstreamCursor()
+    queued = []
+    monkeypatch.setattr(
+        "services.contact_intelligence_service.enqueue_enrichment_job",
+        lambda current_cursor, workstream_id, **kwargs: queued.append(
+            (current_cursor, workstream_id, kwargs)
+        ),
+    )
+
+    workstream_id = _ensure_imported_partnership_workstream(
+        cursor,
+        lead_id="lead-1",
+        business_id="business-1",
+        created_by="admin-1",
+    )
+
+    assert workstream_id
+    assert any("INSERT INTO lead_workstreams" in query for query, _params in cursor.queries)
+    assert queued[0][1] == workstream_id
+    assert queued[0][2] == {"allow_paid_enrichment": False}
 
 
 def _complete_partner_sender_profile():
@@ -167,7 +205,7 @@ def test_partner_audit_uses_the_parsed_company_snapshot() -> None:
     assert _lead_snapshot_business_id({"business_id": "regular-business"}) == "regular-business"
 
 
-def test_partnership_match_requires_complete_confirmed_sender_profile(monkeypatch) -> None:
+def test_partnership_match_uses_search_context_when_sender_profile_is_incomplete(monkeypatch) -> None:
     monkeypatch.setattr(admin_prospecting, "_is_partnership_openclaw_enabled", lambda: False)
     cursor = PartnershipMatchCursor(
         ["Массаж"],
@@ -176,6 +214,17 @@ def test_partnership_match_requires_complete_confirmed_sender_profile(monkeypatc
             "role_title": "основатель",
             "company_name": "Студия",
             "confirmed_at": None,
+        },
+        {
+            "name": "Фитнес-клуб Движение",
+            "category": "Фитнес-клуб",
+            "city": "Санкт-Петербург",
+            "address": "Невский проспект, 1",
+            "source_url": "https://maps.example/fitness",
+            "search_payload_json": {
+                "category": "Фитнес-клуб",
+                "city": "Санкт-Петербург",
+            },
         },
     )
 
@@ -186,11 +235,52 @@ def test_partnership_match_requires_complete_confirmed_sender_profile(monkeypatc
         audit_json={"services_preview": [{"current_name": "Фитнес"}]},
     )
 
-    assert result["match_score"] == 0
-    assert "SENDER_PROFILE_INCOMPLETE" in result["reason_codes"]
+    assert result["match_score"] >= 40
+    assert "MATCH_CONTEXT_PARTNER_SEARCH" in result["reason_codes"]
+    assert "PARTNER_SENDER_PROFILE_INCOMPLETE" in result["reason_codes"]
+    assert "SENDER_PROFILE_INCOMPLETE" not in result["reason_codes"]
     assert result["profile_completeness"]["ready"] is False
-    assert result["readiness_code"] == "needs_sender_profile"
-    assert result["next_action"] == "Заполните и подтвердите профиль отправителя"
+    assert result["readiness_code"] == "ready"
+    assert result["next_action"] == "Проверьте предложение и подготовьте цепочку касаний"
+
+
+def test_geo_distance_supports_strict_partner_search_radius() -> None:
+    assert _geo_distance_km(59.987283, 30.219413, 59.987283, 30.219413) == 0
+    assert _geo_distance_km(59.987283, 30.219413, 60.020000, 30.219413) < 5
+    assert _geo_distance_km(59.987283, 30.219413, 60.050000, 30.219413) > 5
+
+
+def test_partnership_match_uses_category_for_legacy_curated_list(monkeypatch) -> None:
+    monkeypatch.setattr(admin_prospecting, "_is_partnership_openclaw_enabled", lambda: False)
+    cursor = PartnershipMatchCursor(
+        ["Массаж"],
+        {
+            "display_name": "Анна",
+            "role_title": "основатель",
+            "company_name": "Студия",
+            "confirmed_at": None,
+        },
+        {
+            "name": "Фитнес-клуб Движение",
+            "category": "Фитнес-клуб",
+            "city": "Санкт-Петербург",
+            "address": "Невский проспект, 1",
+            "source_url": "https://maps.example/fitness",
+            "search_payload_json": {"source": "manual_google_doc_import"},
+        },
+    )
+
+    result = admin_prospecting._compute_partnership_match_result(
+        cursor,
+        business_id="business-1",
+        lead_id="lead-1",
+        audit_json={"services_preview": [{"current_name": "Фитнес-клуб"}]},
+    )
+
+    assert result["match_score"] >= 40
+    assert "MATCH_CONTEXT_LEAD_CATEGORY" in result["reason_codes"]
+    assert "PARTNER_SENDER_PROFILE_INCOMPLETE" in result["reason_codes"]
+    assert result["readiness_code"] == "ready"
 
 
 def test_profile_guided_partnership_match_separates_fact_from_hypothesis(monkeypatch) -> None:

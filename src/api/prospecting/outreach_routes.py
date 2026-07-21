@@ -699,21 +699,14 @@ def _compute_partnership_match_result(
         workstream_type="client_partnership",
         business_service_count=len(own_services),
     )
-    if not sender_profile.get("confirmed_at") or not profile_completeness["ready"]:
-        return _normalize_match_result(
-            {
-                "match_score": 0,
-                "reason_codes": ["SENDER_PROFILE_INCOMPLETE"],
-                "profile_completeness": profile_completeness,
-                "risks": ["Сначала заполните профиль отправителя и желаемые типы партнёров."],
-            },
-            own_services_count=len(own_services),
-            partner_services_count=len(partner_services),
-        )
+    sender_profile_ready = bool(
+        sender_profile.get("confirmed_at") and profile_completeness["ready"]
+    )
 
     cur.execute(
         """
-        SELECT name, category, city, address, source_url, website, updated_at
+        SELECT name, category, city, address, source_url, website, updated_at,
+               search_payload_json
         FROM prospectingleads WHERE id = %s LIMIT 1
         """,
         (lead_id,),
@@ -730,6 +723,25 @@ def _compute_partnership_match_result(
         for item in sender_context.get("desired_partner_types") or []
         if str(item or "").strip()
     ]
+    match_context_source = "sender_profile"
+    search_payload = (
+        lead.get("search_payload_json")
+        if isinstance(lead.get("search_payload_json"), dict)
+        else {}
+    )
+    if not desired_partner_types:
+        desired_partner_types = list(dict.fromkeys(
+            str(search_payload.get(key) or "").strip()
+            for key in ("category", "query", "category_source")
+            if str(search_payload.get(key) or "").strip()
+        ))
+        match_context_source = "partner_search" if desired_partner_types else "missing"
+    if not desired_partner_types and str(lead.get("category") or "").strip():
+        # Legacy curated partner lists predate structured search context. Their
+        # public category remains a valid compatibility input and is kept
+        # separate from the founder-profile readiness gate.
+        desired_partner_types = [str(lead.get("category") or "").strip()]
+        match_context_source = "lead_category"
     recipient_descriptor = " ".join([
         str(lead.get("category") or ""),
         " ".join(partner_services),
@@ -746,7 +758,13 @@ def _compute_partnership_match_result(
         " ".join(str(item) for item in sender_context.get("segments") or []),
     ])
     common_audience_tags = sorted(_audience_tags(audience_text).intersection(_audience_tags(recipient_descriptor)))
-    geography_tokens = _normalized_match_tokens(str(sender_context.get("geography") or ""))
+    search_geography = " ".join([
+        str(search_payload.get("city") or ""),
+        str(search_payload.get("location") or ""),
+    ]).strip()
+    geography_tokens = _normalized_match_tokens(
+        str(sender_context.get("geography") or search_geography)
+    )
     recipient_geography_tokens = _normalized_match_tokens(
         " ".join([str(lead.get("city") or ""), str(lead.get("address") or "")])
     )
@@ -796,9 +814,25 @@ def _compute_partnership_match_result(
         "Гипотеза для проверки: " + "; ".join(hypothesis_parts) + "."
         if hypothesis_parts else ""
     )
-    relevance_bridge = (
-        "Это соответствует подтверждённому профилю партнёрского поиска и подходит для одного безопасного совместного теста."
-        if score >= 40 else ""
+    if score >= 40 and match_context_source == "sender_profile":
+        relevance_bridge = (
+            "Это соответствует подтверждённому профилю партнёрского поиска "
+            "и подходит для одного безопасного совместного теста."
+        )
+    elif score >= 40 and match_context_source in {"partner_search", "lead_category"}:
+        relevance_bridge = (
+            "Это соответствует сохранённому контексту подбора партнёров и подходит "
+            "для одного безопасного совместного теста."
+        )
+    else:
+        relevance_bridge = ""
+    profile_risk = (
+        []
+        if sender_profile_ready
+        else [
+            "Профиль бизнеса не готов для отправки от его имени; оценка совместимости "
+            "может использоваться в режиме LocalOS за партнёра."
+        ]
     )
     match_result: dict[str, Any] | None = None
     deterministic_result = {
@@ -808,7 +842,7 @@ def _compute_partnership_match_result(
             "our_strength_tokens": sorted(list(own_tokens - partner_tokens))[:30],
             "partner_strength_tokens": sorted(list(partner_tokens - own_tokens))[:30],
         },
-        "risks": [
+        "risks": profile_risk + [
             "Низкая точность, если у партнёра мало структурированных услуг."
             if not partner_services
             else "Проверьте каннибализацию по пересекающимся услугам."
@@ -824,6 +858,16 @@ def _compute_partnership_match_result(
         "reason_codes": [
             "DESIRED_PARTNER_TYPE_MATCH" if matched_partner_types else "DESIRED_PARTNER_TYPE_MISSING",
             "AUDIENCE_OVERLAP_HYPOTHESIS" if common_audience_tags else "AUDIENCE_OVERLAP_MISSING",
+            "MATCH_CONTEXT_SENDER_PROFILE"
+            if match_context_source == "sender_profile"
+            else "MATCH_CONTEXT_PARTNER_SEARCH"
+            if match_context_source == "partner_search"
+            else "MATCH_CONTEXT_LEAD_CATEGORY"
+            if match_context_source == "lead_category"
+            else "MATCH_CONTEXT_MISSING",
+            "PARTNER_SENDER_PROFILE_READY"
+            if sender_profile_ready
+            else "PARTNER_SENDER_PROFILE_INCOMPLETE",
         ],
     }
 
@@ -851,7 +895,7 @@ def _compute_partnership_match_result(
         match_result = deterministic_result
     else:
         # AI may improve wording and angles, but it cannot replace the deterministic
-        # score, sender-profile gate, or sourced recipient observation.
+        # score, sourced recipient observation, or campaign sender-profile gate.
         ai_reason_codes = match_result.get("reason_codes")
         if not isinstance(ai_reason_codes, list):
             ai_reason_codes = []

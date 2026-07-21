@@ -428,9 +428,53 @@ def test_saved_compact_service_fact_is_normalized_to_style_contract():
 
     evidence = build_evidence_ledger(context)
 
+    assert "—" not in evidence[0]["fact"]
     assert evidence[0]["fact"] == (
         "По данным аудита карточки: всего услуг - 60; с ценой - 15."
     )
+
+
+def test_public_category_fact_is_normalized_to_style_contract():
+    context = {
+        "research": {
+            "evidence_json": [
+                {
+                    "id": "category-1",
+                    "kind": "service_compatibility",
+                    "fact": "В публичной карточке указана категория «Фитнес-клуб».",
+                    "status": "observed",
+                    "source_url": "https://example.test/maps/fitness",
+                    "observed_at": "2026-07-21T10:00:00Z",
+                    "freshness": "current_snapshot",
+                    "confidence": 0.55,
+                },
+            ],
+        },
+    }
+
+    evidence = build_evidence_ledger(context)
+
+    assert evidence[0]["fact"] == 'В публичной карточке указана категория "Фитнес-клуб".'
+
+
+def test_partnership_match_fact_is_normalized_to_style_contract():
+    context = {
+        "workstream_type": "client_partnership",
+        "source_url": "https://example.test/maps/fitness",
+        "partnership_match": {
+            "match_score": 65,
+            "recipient_observation": (
+                "В публичной карточке указана категория «Фитнес-клуб»."
+            ),
+            "compatibility_hypothesis": "У компаний может пересекаться аудитория.",
+            "relevance_bridge": "Основание для безопасного теста.",
+        },
+        "research": {},
+    }
+
+    evidence = build_evidence_ledger(context)
+
+    assert evidence[0]["fact"] == 'В публичной карточке указана категория "Фитнес-клуб".'
 
 
 def test_preview_content_can_pass_before_channel_permission_is_granted():

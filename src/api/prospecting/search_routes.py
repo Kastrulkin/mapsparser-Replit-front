@@ -12,6 +12,7 @@ import uuid
 import re
 import time
 import random
+import math
 from difflib import SequenceMatcher
 from urllib.parse import unquote
 from datetime import date, datetime, timedelta, timezone
@@ -550,6 +551,19 @@ def partnership_import_file():
         print(f"Error importing partnership file: {e}")
         return jsonify({"error": str(e)}), 500
 
+def _geo_distance_km(lat_a: float, lon_a: float, lat_b: float, lon_b: float) -> float:
+    earth_radius_km = 6371.0088
+    lat_a_rad = math.radians(lat_a)
+    lat_b_rad = math.radians(lat_b)
+    delta_lat = math.radians(lat_b - lat_a)
+    delta_lon = math.radians(lon_b - lon_a)
+    haversine = (
+        math.sin(delta_lat / 2) ** 2
+        + math.cos(lat_a_rad) * math.cos(lat_b_rad) * math.sin(delta_lon / 2) ** 2
+    )
+    return earth_radius_km * 2 * math.asin(min(1.0, math.sqrt(haversine)))
+
+
 @admin_prospecting_bp.route("/api/partnership/geo-search", methods=["POST"])
 def partnership_geo_search():
     """Unified LocalOS geo-search router for partnership leads."""
@@ -603,6 +617,12 @@ def partnership_geo_search():
                 return jsonify({"error": "Business not found or access denied"}), 403
             cur.execute("SELECT * FROM businesses WHERE id = %s LIMIT 1", (business_id,))
             business_row = dict(cur.fetchone() or {})
+            try:
+                business_lat = float(business_row.get("geo_lat"))
+                business_lon = float(business_row.get("geo_lon"))
+            except (TypeError, ValueError):
+                business_lat = None
+                business_lon = None
             provider_status = {
                 "requested": provider,
                 "google": {"enabled": provider in {"google", "both"}, "executed": False, "items_count": 0},
@@ -716,6 +736,8 @@ def partnership_geo_search():
             imported_ids: list[str] = []
             merged_count = 0
             skipped = 0
+            outside_radius_count = 0
+            missing_coordinates_count = 0
             for item in candidates:
                 if not isinstance(item, dict):
                     continue
@@ -734,14 +756,25 @@ def partnership_geo_search():
                 whatsapp_url = str(item.get("whatsapp_url") or "").strip() or None
                 external_place_id = str(item.get("place_id") or item.get("external_place_id") or item.get("google_place_id") or "").strip() or None
                 external_source_id = str(item.get("source_id") or item.get("external_source_id") or external_place_id or "").strip() or None
+                candidate_lat = item.get("lat") if item.get("lat") is not None else item.get("geo_lat")
+                candidate_lon = item.get("lon") if item.get("lon") is not None else item.get("geo_lon")
                 try:
-                    lat = float(item.get("lat")) if item.get("lat") is not None else None
+                    lat = float(candidate_lat) if candidate_lat is not None else None
                 except Exception:
                     lat = None
                 try:
-                    lon = float(item.get("lon")) if item.get("lon") is not None else None
+                    lon = float(candidate_lon) if candidate_lon is not None else None
                 except Exception:
                     lon = None
+                if business_lat is not None and business_lon is not None and not has_seed_items:
+                    if lat is None or lon is None:
+                        missing_coordinates_count += 1
+                        skipped += 1
+                        continue
+                    if _geo_distance_km(business_lat, business_lon, lat, lon) > radius_km:
+                        outside_radius_count += 1
+                        skipped += 1
+                        continue
                 try:
                     rating = float(item.get("rating")) if item.get("rating") is not None else None
                 except Exception:
@@ -818,6 +851,8 @@ def partnership_geo_search():
                 "skipped_count": skipped,
                 "lead_ids": imported_ids,
                 "source_total": len(candidates),
+                "outside_radius_count": outside_radius_count,
+                "missing_coordinates_count": missing_coordinates_count,
                 "openclaw_meta": meta_blob if isinstance(meta_blob, dict) else {},
                 "provider_status": provider_status,
                 "warnings": warnings,

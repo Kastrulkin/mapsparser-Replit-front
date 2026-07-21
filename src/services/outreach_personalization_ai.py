@@ -520,6 +520,12 @@ def _assemble_policy_bound_text(
     hypothesis_block = ""
     hypothesis = _clean(request_record["personalization"].get("problem_hypothesis"))
     if hypothesis and angle == "signal":
+        hypothesis = re.sub(
+            r"^гипотеза\s+для\s+проверки\s*:\s*",
+            "",
+            hypothesis,
+            flags=re.IGNORECASE,
+        )
         hypothesis_block = f"Гипотеза для проверки: {hypothesis.rstrip(' .!?;')}."
     blocks = [
         opening,
