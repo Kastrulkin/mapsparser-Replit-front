@@ -404,7 +404,12 @@ def _load_candidates(
     return [dict(row) for row in cursor.fetchall()]
 
 
-def _campaign_is_current(cursor: Any, campaign_id: str, sender_mode: str) -> bool:
+def _campaign_is_current(
+    cursor: Any,
+    campaign_id: str,
+    sender_mode: str,
+    email_sender_id: str | None = None,
+) -> bool:
     cursor.execute(
         "SELECT policy_json FROM outreach_campaigns WHERE id = %s AND status = 'draft'",
         (campaign_id,),
@@ -417,7 +422,7 @@ def _campaign_is_current(cursor: Any, campaign_id: str, sender_mode: str) -> boo
         return False
     cursor.execute(
         """
-        SELECT message_brief_json, quality_gate_json
+        SELECT channel, sender_account_id, message_brief_json, quality_gate_json
         FROM outreach_campaign_touches
         WHERE campaign_id = %s
         ORDER BY sequence_index
@@ -425,7 +430,12 @@ def _campaign_is_current(cursor: Any, campaign_id: str, sender_mode: str) -> boo
         (campaign_id,),
     )
     touches = [dict(item) for item in cursor.fetchall()]
-    return len(touches) == 4 and all(
+    email_sender_current = bool(email_sender_id) and all(
+        _text(touch.get("sender_account_id")) == email_sender_id
+        for touch in touches
+        if touch.get("channel") == "email"
+    )
+    return len(touches) == 4 and email_sender_current and all(
         generation_contract_current(
             touch.get("message_brief_json"),
             touch.get("quality_gate_json"),
@@ -445,6 +455,7 @@ def inventory(
     conn = get_db_connection()
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
+        email_sender_id = _load_platform_email_sender(cursor)
         rows = _load_candidates(
             cursor,
             workstream_type=workstream_type,
@@ -475,7 +486,12 @@ def inventory(
                 not blocked
                 and latest_campaign_id
                 and row.get("latest_campaign_status") == "draft"
-                and _campaign_is_current(cursor, latest_campaign_id, sender_mode)
+                and _campaign_is_current(
+                    cursor,
+                    latest_campaign_id,
+                    sender_mode,
+                    email_sender_id,
+                )
             )
             updated_at = row.get("enrichment_updated_at")
             enrichment_fresh = False
@@ -663,7 +679,12 @@ def prepare_campaigns(
             if (
                 latest_campaign_id
                 and latest_campaign_status == "draft"
-                and _campaign_is_current(item_cursor, latest_campaign_id, sender_mode)
+                and _campaign_is_current(
+                    item_cursor,
+                    latest_campaign_id,
+                    sender_mode,
+                    email_sender_id,
+                )
             ):
                 item_conn.rollback()
                 result["already_current"] += 1
@@ -721,26 +742,31 @@ def prepare_campaigns(
                 item_conn.commit()
                 continue
             campaign = persist_preview(item_cursor, preview, user_id=actor)
-            if latest_campaign_id and latest_campaign_status == "draft":
-                item_cursor.execute(
-                    """
-                    UPDATE outreach_campaigns
-                    SET status = 'cancelled',
-                        stop_reason = 'superseded_generation_contract',
-                        updated_at = NOW()
-                    WHERE id = %s AND status = 'draft'
-                    """,
-                    (latest_campaign_id,),
+            item_cursor.execute(
+                """
+                UPDATE outreach_campaigns
+                SET status = 'cancelled',
+                    stop_reason = 'superseded_generation_contract',
+                    updated_at = NOW()
+                WHERE workstream_id = %s
+                  AND id <> %s
+                  AND status = 'draft'
+                RETURNING id
+                """,
+                (_text(row.get("id")), campaign["id"]),
+            )
+            superseded_ids = [
+                _text(item.get("id")) for item in item_cursor.fetchall() if item.get("id")
+            ]
+            for superseded_id in superseded_ids:
+                record_campaign_event(
+                    item_cursor,
+                    superseded_id,
+                    "campaign_superseded",
+                    actor_id=actor,
+                    payload={"replacement_campaign_id": campaign["id"]},
                 )
-                if item_cursor.rowcount:
-                    record_campaign_event(
-                        item_cursor,
-                        latest_campaign_id,
-                        "campaign_superseded",
-                        actor_id=actor,
-                        payload={"replacement_campaign_id": campaign["id"]},
-                    )
-                    result["superseded"] += 1
+            result["superseded"] += len(superseded_ids)
             item_conn.commit()
             result["created"] += 1
             result["campaigns"].append({

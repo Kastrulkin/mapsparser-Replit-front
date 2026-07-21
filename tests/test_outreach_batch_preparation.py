@@ -8,13 +8,20 @@ class BatchCursor:
     def __init__(self):
         self.executed = []
         self.rowcount = 0
+        self.last_query = ""
 
     def execute(self, query, params=None):
+        self.last_query = str(query)
         self.executed.append((str(query), params))
         self.rowcount = 1 if "UPDATE outreach_campaigns" in str(query) else 0
 
     def fetchone(self):
         return None
+
+    def fetchall(self):
+        if "UPDATE outreach_campaigns" in self.last_query and "RETURNING id" in self.last_query:
+            return [{"id": "campaign-old"}]
+        return []
 
 
 class BatchConnection:
@@ -73,6 +80,30 @@ def test_sequence_selects_localosgo_without_enabling_delivery() -> None:
     assert [item["channel"] for item in sequence] == ["telegram", "email", "next", "next"]
     assert [item["day_offset"] for item in sequence] == [0, 3, 7, 12]
     assert sequence[1]["sender_account_id"] == "sender-localosgo"
+
+
+def test_current_campaign_requires_selected_email_sender() -> None:
+    class CurrentCampaignCursor(BatchCursor):
+        def fetchone(self):
+            return {"policy_json": {"sender_mode": "localos"}}
+
+        def fetchall(self):
+            return [
+                {
+                    "channel": "email" if index == 1 else "telegram",
+                    "sender_account_id": "sender-old" if index == 1 else None,
+                    "message_brief_json": {},
+                    "quality_gate_json": {"passed": True},
+                }
+                for index in range(4)
+            ]
+
+    assert outreach_batch_preparation_service._campaign_is_current(
+        CurrentCampaignCursor(),
+        "campaign-1",
+        "localos",
+        "sender-localosgo",
+    ) is False
 
 
 def test_terminal_reply_suppression_and_cooldown_are_blocking() -> None:
@@ -190,7 +221,7 @@ def test_prepare_creates_draft_then_supersedes_stale_draft(monkeypatch) -> None:
     monkeypatch.setattr(
         outreach_batch_preparation_service,
         "_campaign_is_current",
-        lambda cursor, campaign_id, sender_mode: False,
+        lambda cursor, campaign_id, sender_mode, email_sender_id: False,
     )
     monkeypatch.setattr(
         outreach_batch_preparation_service,
@@ -267,7 +298,7 @@ def test_batch_scans_past_blocked_and_current_rows(monkeypatch) -> None:
     monkeypatch.setattr(
         outreach_batch_preparation_service,
         "_campaign_is_current",
-        lambda cursor, campaign_id, sender_mode: campaign_id == "campaign-current",
+        lambda cursor, campaign_id, sender_mode, email_sender_id: campaign_id == "campaign-current",
     )
     monkeypatch.setattr(
         outreach_batch_preparation_service,
