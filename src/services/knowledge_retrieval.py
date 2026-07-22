@@ -61,10 +61,8 @@ def _query_instruction(request: KnowledgeSearchRequest) -> str:
     return f"{instruction}\nЗапрос: {request.query.strip()}"
 
 
-def _filters(request: KnowledgeSearchRequest) -> tuple[str, list[Any]]:
+def _filters(request: KnowledgeSearchRequest, *, include_chunk: bool = True) -> tuple[str, list[Any]]:
     filters = [
-        "chunk.status = 'ready'",
-        "chunk.stale_at IS NULL",
         "document.invalidated_at IS NULL",
         "source.status = 'active'",
         "document.allowed_uses @> jsonb_build_array(%s::text)",
@@ -72,6 +70,8 @@ def _filters(request: KnowledgeSearchRequest) -> tuple[str, list[Any]]:
         "AND source.visibility NOT IN ('private', 'invite')) OR "
         "(document.business_id IS NULL AND document.sensitivity_class = 'shared_deidentified'))",
     ]
+    if include_chunk:
+        filters[0:0] = ["chunk.status = 'ready'", "chunk.stale_at IS NULL"]
     params: list[Any] = [request.purpose, request.business_id]
     if request.source_types:
         filters.append("document.document_type = ANY(%s)")
@@ -130,20 +130,80 @@ def _base_select(extra_columns: str = "") -> str:
 
 
 def _vector_rows(cursor: Any, request: KnowledgeSearchRequest, vector: list[Any]) -> list[dict[str, Any]]:
-    where_sql, params = _filters(request)
+    where_sql, params = _filters(request, include_chunk=False)
     vector_value = _vector_literal(vector)
     cursor.execute(
         f"""
-        SELECT candidate.*, 1 - candidate.distance AS similarity
-        FROM (
-            {_base_select("chunk.embedding <=> %s::halfvec AS distance")}
+        WITH nearest AS MATERIALIZED (
+            SELECT chunk.id AS chunk_id, chunk.content_text,
+                   chunk.embedding <=> %s::halfvec AS distance
+            FROM knowledge_embedding_chunks chunk
+            WHERE chunk.status = 'ready' AND chunk.stale_at IS NULL
+            ORDER BY distance
+            LIMIT 2000
+        ), eligible AS (
+            SELECT nearest.chunk_id, nearest.content_text, nearest.distance,
+                   document.id AS document_id, document.permalink, document.published_at,
+                   document.updated_at AS document_updated_at,
+                   document.sensitivity_class, document.document_type,
+                   source.id AS source_id, source.source_type, source.title AS source_title,
+                   source.metadata_json AS source_metadata_json,
+                   (document.business_id IS NOT NULL) AS tenant_specific,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY nearest.chunk_id
+                       ORDER BY (document.business_id = %s) DESC,
+                                COALESCE(document.published_at, document.updated_at) DESC
+                   ) AS tenant_rank
+            FROM nearest
+            JOIN knowledge_document_chunk_links link ON link.chunk_id = nearest.chunk_id
+            JOIN knowledge_documents document ON document.id = link.document_id
+            JOIN knowledge_sources source ON source.id = document.source_id
             WHERE {where_sql}
-            ORDER BY chunk.id, distance
-        ) candidate
-        ORDER BY candidate.distance ASC
-        LIMIT 50
+        ), top_candidates AS (
+            SELECT * FROM eligible
+            WHERE tenant_rank = 1
+            ORDER BY distance
+            LIMIT 50
+        )
+        SELECT candidate.*,
+               1 - candidate.distance AS similarity,
+               COALESCE(
+                   (candidate.source_metadata_json->>'retrieval_quality_weight')::numeric,
+                   (candidate.source_metadata_json->>'confidence')::numeric,
+                   0.7
+               ) AS source_confidence,
+               GREATEST(0.0, 1.0 - EXTRACT(EPOCH FROM (
+                   NOW() - COALESCE(candidate.published_at, candidate.document_updated_at)
+               )) / 31557600.0) AS freshness_score,
+               COALESCE((
+                   SELECT COUNT(DISTINCT evidence.source_id)
+                   FROM knowledge_evidence evidence
+                   WHERE evidence.document_id = candidate.document_id
+                     AND evidence.invalidated_at IS NULL
+               ), 0) AS confirmation_count,
+               COALESCE((
+                   SELECT COUNT(*)
+                   FROM knowledge_retrieval_events event
+                   WHERE event.result_chunk_ids @> jsonb_build_array(candidate.chunk_id::text)
+                     AND event.outcome IN ('accepted', 'published', 'applied')
+               ), 0) AS successful_uses,
+               COALESCE((
+                   SELECT jsonb_agg(DISTINCT evidence.id::text)
+                   FROM knowledge_evidence evidence
+                   WHERE evidence.document_id = candidate.document_id
+                     AND evidence.invalidated_at IS NULL
+               ), '[]'::jsonb) AS evidence_ids,
+               COALESCE((
+                   SELECT jsonb_agg(DISTINCT evidence.assertion_id::text)
+                   FROM knowledge_evidence evidence
+                   WHERE evidence.document_id = candidate.document_id
+                     AND evidence.invalidated_at IS NULL
+                     AND evidence.assertion_id IS NOT NULL
+               ), '[]'::jsonb) AS assertion_ids
+        FROM top_candidates candidate
+        ORDER BY candidate.distance
         """,
-        [vector_value, *params],
+        [vector_value, request.business_id, *params],
     )
     return [dict(row) for row in cursor.fetchall()]
 
