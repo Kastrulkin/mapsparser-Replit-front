@@ -3,6 +3,7 @@ import json
 import os
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 try:
     from telethon import TelegramClient
@@ -458,6 +459,109 @@ def _normalize_telegram_peer(value: str):
         return raw_peer
 
 
+def _normalize_entity_reference(value: str):
+    raw_reference = str(value or "").strip()
+    if not raw_reference:
+        return raw_reference
+    candidate = raw_reference
+    if raw_reference.startswith("https://") or raw_reference.startswith("http://"):
+        parsed = urlparse(raw_reference)
+        if parsed.netloc.lower().removeprefix("www.") in {"t.me", "telegram.me"}:
+            parts = [part for part in parsed.path.split("/") if part]
+            if parts and parts[0].lower() == "s":
+                parts = parts[1:]
+            if parts:
+                candidate = f"@{parts[0].lstrip('@')}"
+    return _normalize_telegram_peer(candidate)
+
+
+def classify_telegram_entity(entity: Any) -> dict[str, Any]:
+    """Describe a Telethon entity without guessing from the t.me URL shape."""
+    class_name = type(entity).__name__.lower()
+    username = str(getattr(entity, "username", None) or "").strip() or None
+    entity_id = str(getattr(entity, "id", None) or "").strip() or None
+    title = str(getattr(entity, "title", None) or "").strip()
+
+    if class_name.startswith("user") or hasattr(entity, "bot"):
+        first_name = str(getattr(entity, "first_name", None) or "").strip()
+        last_name = str(getattr(entity, "last_name", None) or "").strip()
+        entity_type = "bot" if bool(getattr(entity, "bot", False)) else "user"
+        return {
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "username": username,
+            "title": " ".join(part for part in (first_name, last_name) if part),
+            "signal_source_eligible": False,
+            "recipient_eligible": entity_type == "user",
+        }
+
+    if class_name.startswith("channel") or any(
+        hasattr(entity, attribute) for attribute in ("broadcast", "megagroup", "gigagroup")
+    ):
+        if bool(getattr(entity, "megagroup", False)):
+            entity_type = "megagroup"
+        elif bool(getattr(entity, "gigagroup", False)):
+            entity_type = "gigagroup"
+        elif bool(getattr(entity, "broadcast", False)):
+            entity_type = "broadcast_channel"
+        else:
+            entity_type = "channel"
+        return {
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "username": username,
+            "title": title,
+            "signal_source_eligible": True,
+            "recipient_eligible": False,
+        }
+
+    if class_name.startswith("chat"):
+        return {
+            "entity_type": "group_chat",
+            "entity_id": entity_id,
+            "username": username,
+            "title": title,
+            "signal_source_eligible": True,
+            "recipient_eligible": False,
+        }
+
+    return {
+        "entity_type": "unknown",
+        "entity_id": entity_id,
+        "username": username,
+        "title": title,
+        "signal_source_eligible": False,
+        "recipient_eligible": False,
+    }
+
+
+async def _inspect_telegram_entity_async(auth_data: dict[str, Any], reference: str) -> dict[str, Any]:
+    raw_reference = str(reference or "").strip()
+    normalized = _normalize_entity_reference(raw_reference)
+    client = await _connect_client(auth_data)
+    try:
+        route_info = getattr(client, "_localos_route_info", None) or {
+            "route_kind": "unknown",
+            "route_label": "unknown",
+            "route_target": "unknown",
+        }
+        if not await client.is_user_authorized():
+            return {
+                "status": "not_authorized",
+                "reference": raw_reference,
+                **route_info,
+            }
+        entity = await asyncio.wait_for(client.get_entity(normalized), timeout=REQUEST_TIMEOUT_SEC)
+        return {
+            "status": "ok",
+            "reference": raw_reference,
+            **classify_telegram_entity(entity),
+            **route_info,
+        }
+    finally:
+        await client.disconnect()
+
+
 async def _fetch_recent_messages_async(
     auth_data: dict[str, Any],
     peer: str,
@@ -677,3 +781,7 @@ def fetch_recent_messages(
             limit=limit,
         )
     )
+
+
+def inspect_telegram_entity(auth_data: dict[str, Any], reference: str) -> dict[str, Any]:
+    return asyncio.run(_inspect_telegram_entity_async(auth_data, reference))

@@ -5,7 +5,10 @@ from services.discovered_telegram_source_service import (
     discovered_telegram_signals,
     parse_telegram_reference,
 )
-from services.contact_intelligence_service import evaluate_first_message
+from services.contact_intelligence_service import (
+    evaluate_first_message,
+    exclude_public_channel_contacts,
+)
 
 
 def test_public_telegram_reference_is_normalized_without_assuming_direct_message():
@@ -80,7 +83,8 @@ def test_monitor_requires_radar_permission_and_preflights_auto_discovered_source
     assert "permission.radar_enabled = TRUE" in source
     assert "source.status = 'candidate'" in source
     assert "mark_discovered_source_classification" in source
-    assert "not inspection.get(\"is_public_channel\")" in source
+    assert "inspect_telegram_entity" in source
+    assert 'classification_method="telegram_entity_api"' in source
 
 
 def test_discovery_is_scoped_and_linked_to_workstream():
@@ -103,8 +107,43 @@ def test_verified_channel_is_excluded_from_direct_message_contacts():
     source = Path("src/services/contact_intelligence_service.py").read_text(encoding="utf-8")
 
     assert "def exclude_public_channel_contacts" in source
-    assert "telegram_reference_type' = 'public_channel'" in source
+    assert "('public_channel', 'public_group', 'bot')" in source
     assert "exclude_public_channel_contacts(cursor" in source
+
+
+def test_public_channel_from_website_enrichment_stays_out_of_recipients():
+    class Cursor:
+        def execute(self, _query, _params=None):
+            return None
+
+        def fetchall(self):
+            return [{"canonical_url": "https://t.me/cream_shop"}]
+
+    contacts = exclude_public_channel_contacts(
+        Cursor(),
+        "lead-1",
+        [
+            {
+                "contact_type": "telegram",
+                "value": "https://t.me/cream_shop",
+                "source_type": "official_website",
+            },
+            {"contact_type": "phone", "value": "+79990000000"},
+        ],
+    )
+
+    assert contacts == [{"contact_type": "phone", "value": "+79990000000"}]
+
+
+def test_website_contacts_are_filtered_after_they_are_collected():
+    source = Path("src/services/contact_intelligence_service.py").read_text(encoding="utf-8")
+    collect_index = source.index("contacts.extend(website_contacts)")
+    filter_index = source.index(
+        'contacts = exclude_public_channel_contacts(cursor, str(lead["id"]), contacts)',
+        collect_index,
+    )
+
+    assert filter_index > collect_index
 
 
 def test_enabling_radar_queues_previously_discovered_candidates():

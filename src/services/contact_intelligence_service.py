@@ -474,7 +474,10 @@ def exclude_public_channel_contacts(
           ON source.id::text = link.source_id
         WHERE workstream.lead_id = %s
           AND source.status = 'active'
-          AND source.metadata_json->>'telegram_reference_type' = 'public_channel'
+          AND (
+                source.metadata_json->>'telegram_reference_type' IN ('public_channel', 'public_group', 'bot')
+                OR source.metadata_json->>'recipient_eligible' = 'false'
+              )
         """,
         (lead_id,),
     )
@@ -2225,9 +2228,10 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
         )
 
     cursor.execute("UPDATE lead_enrichment_jobs SET status = 'collecting', current_phase = 'collecting', updated_at = NOW() WHERE id = %s", (job.get("id"),))
-    contacts = exclude_public_channel_contacts(cursor, str(lead["id"]), legacy_contact_candidates(lead))
+    contacts = legacy_contact_candidates(lead)
     website_contacts, warnings = collect_public_website_contacts(lead.get("website"))
     contacts.extend(website_contacts)
+    contacts = exclude_public_channel_contacts(cursor, str(lead["id"]), contacts)
     upsert_contact_points(cursor, str(lead["id"]), contacts)
 
     cursor.execute("UPDATE lead_enrichment_jobs SET status = 'verifying', current_phase = 'verifying', updated_at = NOW() WHERE id = %s", (job.get("id"),))

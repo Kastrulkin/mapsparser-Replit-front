@@ -7,6 +7,7 @@ from urllib import request
 from bs4 import BeautifulSoup
 from psycopg2.extras import Json, RealDictCursor
 
+from core.telegram_userbot import inspect_telegram_entity, load_userbot_account
 from services.knowledge_graph_service import upsert_document
 
 
@@ -96,6 +97,27 @@ def inspect_public_channel(canonical_url: str, *, timeout: int = 20) -> dict[str
     }
 
 
+def _inspect_source_entity(conn: Any, source: dict[str, Any]) -> dict[str, Any]:
+    account_id = str(source.get("account_id") or "").strip()
+    if not account_id:
+        raise RuntimeError("telegram_account_required")
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        account = load_userbot_account(cursor, account_id=account_id)
+    finally:
+        cursor.close()
+    if not account:
+        raise RuntimeError("telegram_account_unavailable")
+    source_business_id = str(source.get("business_id") or "").strip()
+    account_business_id = str(account.get("business_id") or "").strip()
+    if source_business_id != account_business_id:
+        raise RuntimeError("telegram_account_scope_mismatch")
+    inspection = inspect_telegram_entity(account, str(source.get("canonical_url") or ""))
+    if inspection.get("status") != "ok":
+        raise RuntimeError(f"telegram_entity_{inspection.get('status') or 'failed'}")
+    return inspection
+
+
 def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, Any]:
     if not _monitor_enabled():
         return {"status": "disabled", "sources_checked": 0, "documents_seen": 0}
@@ -120,6 +142,7 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
           AND source.sync_mode = 'public_preview'
           AND source.visibility = 'public'
           AND source.canonical_url LIKE %s
+          AND (source.next_sync_at IS NULL OR source.next_sync_at <= NOW())
           AND (source.last_collected_at IS NULL OR source.last_collected_at < NOW() - (%s * INTERVAL '1 second'))
         ORDER BY source.last_collected_at ASC NULLS FIRST, source.updated_at ASC
         LIMIT %s
@@ -142,21 +165,60 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
     errors: list[dict[str, str]] = []
     for source in sources:
         try:
-            inspection = inspect_public_channel(str(source.get("canonical_url") or ""))
             auto_discovered = bool((source.get("metadata_json") or {}).get("auto_discovered"))
             workstream_ids: list[str] = []
-            if auto_discovered:
+            metadata = source.get("metadata_json") if isinstance(source.get("metadata_json"), dict) else {}
+            entity_inspection: dict[str, Any] | None = None
+            entity_error = ""
+            if auto_discovered and metadata.get("classification_method") != "telegram_entity_api":
+                try:
+                    entity_inspection = _inspect_source_entity(conn, source)
+                except Exception as error:
+                    entity_error = str(error)[:160]
+                if entity_inspection:
+                    from services.discovered_telegram_source_service import mark_discovered_source_classification
+
+                    workstream_ids = mark_discovered_source_classification(
+                        conn,
+                        source_id=str(source["id"]),
+                        entity_type=str(entity_inspection.get("entity_type") or "unknown"),
+                        entity_id=str(entity_inspection.get("entity_id") or ""),
+                        username=str(entity_inspection.get("username") or ""),
+                        signal_source_eligible=bool(entity_inspection.get("signal_source_eligible")),
+                        recipient_eligible=bool(entity_inspection.get("recipient_eligible")),
+                        classification_method="telegram_entity_api",
+                        title=str(entity_inspection.get("title") or ""),
+                        reason="telegram_entity_api",
+                    )
+                    if not entity_inspection.get("signal_source_eligible"):
+                        continue
+
+            inspection = inspect_public_channel(str(source.get("canonical_url") or ""))
+            if auto_discovered and entity_inspection is None and metadata.get("classification_method") != "telegram_entity_api":
+                if not inspection.get("is_public_channel"):
+                    raise RuntimeError(
+                        f"telegram_entity_and_public_preview_unavailable:{entity_error or 'not_public_channel'}"
+                    )
                 from services.discovered_telegram_source_service import mark_discovered_source_classification
 
+                username = str(metadata.get("telegram_username") or "").strip()
                 workstream_ids = mark_discovered_source_classification(
                     conn,
                     source_id=str(source["id"]),
-                    is_public_channel=bool(inspection.get("is_public_channel")),
+                    is_public_channel=True,
+                    username=username,
+                    signal_source_eligible=True,
+                    recipient_eligible=False,
+                    classification_method="public_preview_fallback",
                     title=str(inspection.get("title") or ""),
-                    reason=str(inspection.get("reason") or ""),
+                    reason=(
+                        f"public_preview_fallback:{entity_error}"
+                        if entity_error
+                        else str(inspection.get("reason") or "public_preview_fallback")
+                    ),
                 )
-                if not inspection.get("is_public_channel"):
-                    continue
+            elif not inspection.get("is_public_channel"):
+                raise RuntimeError("public_preview_unavailable_for_verified_entity")
             messages = list(inspection.get("messages") or [])
             max_external_id = ""
             for message in messages:
@@ -212,7 +274,8 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
             cursor.execute(
                 """
                 UPDATE knowledge_sources
-                SET sync_status = 'failed', last_sync_error = %s,
+                SET sync_status = CASE WHEN status = 'candidate' THEN 'queued' ELSE 'failed' END,
+                    last_sync_error = %s,
                     next_sync_at = NOW() + (%s * INTERVAL '1 second'), updated_at = NOW()
                 WHERE id = %s
                 """,

@@ -263,11 +263,44 @@ def mark_discovered_source_classification(
     conn: Any,
     *,
     source_id: str,
-    is_public_channel: bool,
+    is_public_channel: bool | None = None,
+    entity_type: str | None = None,
+    entity_id: str | None = None,
+    username: str | None = None,
+    signal_source_eligible: bool | None = None,
+    recipient_eligible: bool | None = None,
+    classification_method: str = "public_preview",
     title: str | None = None,
     reason: str = "",
 ) -> list[str]:
-    """Persist preflight classification and prevent channels from being used as DM contacts."""
+    """Persist entity classification and keep non-users out of DM recipients."""
+    normalized_entity_type = str(entity_type or "").strip().lower()
+    if signal_source_eligible is None:
+        signal_source_eligible = bool(is_public_channel)
+    if recipient_eligible is None:
+        recipient_eligible = normalized_entity_type == "user"
+    reference_types = {
+        "broadcast_channel": "public_channel",
+        "channel": "public_channel",
+        "megagroup": "public_group",
+        "gigagroup": "public_group",
+        "group_chat": "public_group",
+        "user": "personal_account",
+        "bot": "bot",
+        "unknown": "unavailable",
+    }
+    reference_type = reference_types.get(normalized_entity_type)
+    if not reference_type:
+        reference_type = "public_channel" if signal_source_eligible else "personal_or_unavailable"
+    should_block_recipient = bool(signal_source_eligible) or reference_type == "bot"
+    status = "active" if signal_source_eligible else "paused"
+    sync_status = "ready" if signal_source_eligible else "idle"
+    last_sync_error = None if signal_source_eligible or recipient_eligible else (reason or "unsupported_telegram_entity")
+    reason_code = {
+        "public_channel": "telegram_public_channel_source",
+        "public_group": "telegram_public_group_source",
+        "bot": "telegram_bot_not_recipient",
+    }.get(reference_type, "telegram_non_recipient_entity")
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     try:
         cursor.execute(
@@ -285,13 +318,19 @@ def mark_discovered_source_classification(
             """,
             (
                 str(title or "").strip(),
-                "active" if is_public_channel else "paused",
-                "ready" if is_public_channel else "idle",
-                None if is_public_channel else (reason or "not_public_channel"),
+                status,
+                sync_status,
+                last_sync_error,
                 Json({
-                    "telegram_reference_type": "public_channel" if is_public_channel else "personal_or_unavailable",
+                    "telegram_reference_type": reference_type,
+                    "telegram_entity_type": normalized_entity_type or None,
+                    "telegram_entity_id": str(entity_id or "").strip() or None,
+                    "telegram_username": str(username or "").strip() or None,
+                    "signal_source_eligible": bool(signal_source_eligible),
+                    "recipient_eligible": bool(recipient_eligible),
                     "classified_at": datetime.now(timezone.utc).isoformat(),
-                    "classification_reason": reason or ("public_preview" if is_public_channel else "not_public_channel"),
+                    "classification_method": classification_method,
+                    "classification_reason": reason or classification_method,
                 }),
                 source_id,
             ),
@@ -307,11 +346,11 @@ def mark_discovered_source_classification(
             WHERE source_type = 'telegram_knowledge_source' AND source_id = %s
             RETURNING workstream_id
             """,
-            ("selected" if is_public_channel else "rejected", source_id),
+            ("selected" if signal_source_eligible else "rejected", source_id),
         )
         workstream_ids = [str(_row_dict(row, cursor).get("workstream_id") or "") for row in cursor.fetchall() or []]
         workstream_ids = [item for item in workstream_ids if item]
-        if is_public_channel and workstream_ids:
+        if should_block_recipient and workstream_ids:
             cursor.execute(
                 """
                 UPDATE lead_contact_points contact
@@ -324,7 +363,7 @@ def mark_discovered_source_classification(
                   AND contact.contact_type = 'telegram'
                   AND contact.normalized_value = %s
                 """,
-                (Json({"reason_code": "telegram_public_channel_source"}), workstream_ids, canonical_url),
+                (Json({"reason_code": reason_code}), workstream_ids, canonical_url),
             )
             cursor.execute(
                 """
@@ -336,6 +375,27 @@ def mark_discovered_source_classification(
                   AND contact.verification_status = 'invalid'
                 """,
                 (workstream_ids,),
+            )
+        elif recipient_eligible and workstream_ids:
+            cursor.execute(
+                """
+                UPDATE lead_contact_points contact
+                SET verification_status = 'found',
+                    metadata_json = contact.metadata_json - 'reason_code',
+                    updated_at = NOW()
+                FROM lead_workstreams workstream
+                WHERE workstream.id = ANY(%s::uuid[])
+                  AND contact.lead_id = workstream.lead_id
+                  AND contact.contact_type = 'telegram'
+                  AND contact.normalized_value = %s
+                  AND contact.verification_status = 'invalid'
+                  AND contact.metadata_json->>'reason_code' IN (
+                      'telegram_public_channel_source',
+                      'telegram_public_group_source',
+                      'telegram_non_recipient_entity'
+                  )
+                """,
+                (workstream_ids, canonical_url),
             )
         return workstream_ids
     finally:
