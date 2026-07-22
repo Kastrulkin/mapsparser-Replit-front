@@ -4,7 +4,7 @@ import json
 import sys
 from typing import Any, Callable, Dict, List
 
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
 
 
 MAX_EMAIL_LLM_CONTEXT_CHARS = 10000

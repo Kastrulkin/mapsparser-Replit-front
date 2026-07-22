@@ -6,7 +6,7 @@ from typing import Any
 from psycopg2.extras import Json
 
 from core.knowledge_policy import KnowledgePolicyError, prepare_external_model_text
-from services.gigachat_client import get_gigachat_client
+from services.llm import LLMTaskRequest, run_llm_task
 
 
 def _enabled() -> bool:
@@ -88,8 +88,21 @@ def analyze_knowledge_text(
             ),
         )
 
-        client = get_gigachat_client()
-        content, usage = client.analyze_text(safe_payload["text"], task_type="ai_agent_marketing")
+        llm_result = run_llm_task(
+            LLMTaskRequest(
+                task_key="knowledge_semantic_analysis",
+                prompt=safe_payload["text"],
+                business_id="",
+                user_id="",
+                prompt_version=analysis_version,
+                data_class="business_internal",
+                usage_reference=f"knowledge-analysis:{run_id}",
+            )
+        )
+        if llm_result.status != "completed":
+            raise RuntimeError(llm_result.fallback_reason or llm_result.status)
+        content = llm_result.content
+        usage = llm_result.usage
         input_tokens = int(usage.get("prompt_tokens") or estimated_input_tokens)
         output_tokens = int(usage.get("completion_tokens") or 0)
         cursor.execute(

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable
 
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.operator_manual_review import BILLING_URL, _build_ui_action, _clean_text, _stable_id
 from services.operator_paid_preflight import build_paid_action_preflight

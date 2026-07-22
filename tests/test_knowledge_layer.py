@@ -357,6 +357,10 @@ def test_knowledge_schema_applies_on_postgres(run_migrations, postgres_container
             "knowledge_nodes_v",
             "knowledge_edges_v",
             "metric_observations_v",
+            "knowledge_embedding_chunks",
+            "knowledge_document_chunk_links",
+            "knowledge_embedding_jobs",
+            "knowledge_retrieval_events",
         ):
             cursor.execute("SELECT to_regclass(%s)", (f"public.{relation}",))
             assert cursor.fetchone()[0] == relation

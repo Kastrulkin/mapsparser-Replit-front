@@ -23,7 +23,7 @@ from core.industry_pattern_recalibration import (
 )
 from core.seo_keywords import collect_ranked_keywords
 from core.content_plan_generator import build_content_plan_skeleton
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
 from subscription_manager import get_allowed_content_plan_horizons, get_subscription_access
 
 

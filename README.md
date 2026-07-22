@@ -105,6 +105,8 @@ LocalOS помогает владельцам и управляющим лока
 - **Frontend**: TypeScript, React 18, Vite 7, TailwindCSS 3.4, Radix UI, shadcn/ui
 - **Парсинг**: Selenium, Playwright, BeautifulSoup, pandas
 - **AI**: GigaChat API, Transformers, Hugging Face API
+- **LLM routing**: GigaChat Max for Russian customer-facing copy; cohort-gated DeepSeek Pro/Flash for analysis, classification, compiler, documents and tables. Financial arithmetic, validation, approval and execution remain inside LocalOS.
+- **Semantic memory**: разрешённые knowledge-документы индексируются через GigaChat Embeddings в PostgreSQL/pgvector; tenant-safe hybrid retrieval добавляет provenance-контекст для услуг, отзывов, контента и бизнес-рекомендаций. Rollout и ограничения описаны в `docs/SEMANTIC_MEMORY_ROLLOUT.md`.
 - **Инфраструктура**: Docker, Docker Compose, Nginx, systemd, venv (для локальных тестов)
 - **База данных (runtime)**: PostgreSQL 16 в Docker
   - **Legacy**: SQLite (`src/reports.db`) используется только для старых отчётов и вспомогательных скриптов
@@ -146,6 +148,7 @@ LocalOS помогает владельцам и управляющим лока
 - 🧭 [Product Operating Model](./PRODUCT.md) — продуктовый канон LocalOS, роли пользователей, agent model и approval-инварианты
 - 🎛️ [Product Design Rules](./DESIGN.md) — процесс audit → distill → shape → implement → harden → polish и правила product UI
 - 🤖 [Agents Product UI Audit](./docs/AGENTS_PRODUCT_UI_AUDIT.md) — рабочий аудит `/dashboard/agents` как product cockpit
+- 🧭 [LLM Routing Rollout](./docs/LLM_ROUTING_ROLLOUT.md) — безопасное включение, пилотные метрики и rollback GigaChat / DeepSeek
 - 🧪 [Agents Beta Production Status](./docs/AGENTS_BETA_PRODUCTION_STATUS.md) — датированные production-доказательства, pilot-метрики и открытые gates
 - 🎨 [Брендбук личного кабинета LocalOS](./docs/DASHBOARD_DESIGN_BRANDBOOK.md) — дизайн-паттерны, UX-принципы и каноничные dashboard-примитивы
 - 🤖 [Настройка Telegram-ботов](./TELEGRAM_BOTS_SETUP.md) — установка и запуск ботов
@@ -508,6 +511,18 @@ API_BASE_URL=http://localhost:8000
 # GigaChat (для AI функций)
 GIGACHAT_CLIENT_ID=ваш_client_id
 GIGACHAT_CLIENT_SECRET=ваш_client_secret
+
+# Optional DeepSeek pilot. Safe defaults keep routing disabled.
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL_REASONING=deepseek-v4-pro
+DEEPSEEK_MODEL_FAST=deepseek-v4-flash
+LLM_ROUTER_ENABLED=false
+LLM_SHADOW_MODE=false
+# Maximum parallel background comparisons in each app/worker process.
+LLM_SHADOW_MAX_CONCURRENCY=4
+# Comma-separated business ids allowed to send public/redacted data to DeepSeek.
+LLM_DEEPSEEK_BUSINESS_IDS=
 
 # Шифрование для внешних интеграций (Яндекс.Бизнес, Google Business, 2ГИС)
 # ВАЖНО: Используйте случайную строку длиной 32+ символов для продакшена!

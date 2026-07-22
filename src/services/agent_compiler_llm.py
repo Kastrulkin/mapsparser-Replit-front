@@ -14,7 +14,7 @@ from services.agent_compiler_registry import (
     get_compiled_agent_template,
     infer_compiled_template_key,
 )
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import LLMTaskRequest, analyze_text_with_gigachat, run_llm_task
 
 
 IntentGenerator = Callable[[str, str, str], str]
@@ -31,14 +31,30 @@ def infer_agent_workflow_intent(
     text = str(description or "").strip()
     if not text:
         return {"status": "empty_description", "intent": {}, "source": "none"}
-    generator = intent_generator or _default_intent_generator
+    source = "gigachat"
     try:
-        raw = generator(_build_agent_compiler_prompt(text, planner_context=planner_context), business_id, user_id)
+        prompt = _build_agent_compiler_prompt(text, planner_context=planner_context)
+        if intent_generator:
+            raw = intent_generator(prompt, business_id, user_id)
+        else:
+            result = run_llm_task(
+                LLMTaskRequest(
+                    task_key="agent_compiler",
+                    prompt=prompt,
+                    business_id=business_id,
+                    user_id=user_id,
+                    prompt_version="agent_compiler_v1",
+                )
+            )
+            if result.status != "completed":
+                raise RuntimeError(result.fallback_reason or result.status)
+            raw = result.content
+            source = result.provider
     except Exception:
         return {
             "status": "llm_unavailable",
             "intent": {},
-            "source": "gigachat",
+            "source": source,
             "error": str(sys.exc_info()[1]),
         }
     parsed = _parse_json_object(raw)
@@ -46,7 +62,7 @@ def infer_agent_workflow_intent(
         return {
             "status": "invalid_json",
             "intent": {},
-            "source": "gigachat",
+            "source": source,
             "raw_preview": str(raw or "")[:500],
         }
     intent = _sanitize_intent(parsed)
@@ -54,13 +70,13 @@ def infer_agent_workflow_intent(
         return {
             "status": "unsupported_intent",
             "intent": {},
-            "source": "gigachat",
+            "source": source,
             "raw": parsed,
         }
     return {
         "status": "compiled_intent",
         "intent": intent,
-        "source": "gigachat",
+        "source": source,
         "raw": parsed,
     }
 

@@ -62,7 +62,7 @@ def postgres_container():
         from testcontainers.postgres import PostgresContainer
     except ImportError as e:
         pytest.skip(f"testcontainers not available: {e}")
-    with PostgresContainer("postgres:14") as postgres:
+    with PostgresContainer("pgvector/pgvector:0.8.0-pg16-trixie") as postgres:
         yield postgres
 
 

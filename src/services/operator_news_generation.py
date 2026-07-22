@@ -5,7 +5,8 @@ import json
 import uuid
 from typing import Any, Callable
 
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
+from services.knowledge_retrieval import semantic_context_for_cursor
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.operator_manual_review import BILLING_URL, _build_ui_action
 from services.operator_paid_preflight import build_paid_action_preflight
@@ -307,10 +308,24 @@ def generate_news_draft_from_operator(
         }
 
     business = _load_business_context(cursor, business_id)
+    knowledge_context, _ = semantic_context_for_cursor(
+        cursor,
+        business_id=business_id,
+        query=source_text,
+        purpose="client_content",
+        consumer="news_generation",
+        pipeline_id=idempotency_key,
+    )
+    news_prompt = _build_news_prompt(source_text=source_text, business=business)
+    if knowledge_context:
+        news_prompt += (
+            "\n\nПодтверждённый контекст LocalOS. Используй только подходящие факты, "
+            "избегай смысловых дублей:\n" + knowledge_context
+        )
     generator = news_generator or _default_news_generator
     try:
         generated = generator(
-            _build_news_prompt(source_text=source_text, business=business),
+            news_prompt,
             business_id=business_id,
             user_id=user_id,
         )

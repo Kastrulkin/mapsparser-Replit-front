@@ -64,6 +64,12 @@ from services.telegram_opportunity_monitor import run_telegram_opportunity_monit
 from services.knowledge_public_telegram import run_public_telegram_monitor
 from services.telegram_research_service import purge_expired_private_telegram_content, run_userbot_market_sync
 from services.knowledge_graph_service import knowledge_layer_enabled, record_external_card_change
+from services.knowledge_embedding_ingestion import ingest_semantic_sources
+from services.knowledge_embeddings import (
+    enqueue_document_chunks,
+    process_embedding_jobs,
+    run_embedding_maintenance,
+)
 from services.contact_intelligence_service import (
     claim_next_enrichment_job,
     fail_enrichment_job,
@@ -82,6 +88,9 @@ _LAST_BILLING_ALERT_BY_TENANT: Dict[str, float] = {}
 _LAST_CALLBACK_ALERT_BY_TENANT: Dict[str, float] = {}
 _LAST_CALLBACK_ALERT_SCAN_AT = 0.0
 _LAST_YOOKASSA_RENEWALS_AT = 0.0
+_LAST_KNOWLEDGE_EMBEDDINGS_AT = 0.0
+_LAST_KNOWLEDGE_SEMANTIC_INGEST_AT = 0.0
+_LAST_KNOWLEDGE_EMBEDDING_MAINTENANCE_AT = 0.0
 
 
 def _record_external_card_change_if_enabled(
@@ -1985,6 +1994,74 @@ def _run_knowledge_telegram_monitor_if_due() -> None:
         except Exception:
             pass
         print("[KNOWLEDGE_TELEGRAM_MONITOR] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+    finally:
+        try:
+            if db:
+                db.close()
+        except Exception:
+            pass
+
+
+def _run_knowledge_embeddings_if_due() -> None:
+    global _LAST_KNOWLEDGE_EMBEDDINGS_AT, _LAST_KNOWLEDGE_SEMANTIC_INGEST_AT
+    global _LAST_KNOWLEDGE_EMBEDDING_MAINTENANCE_AT
+    if not _env_bool("KNOWLEDGE_LAYER_ENABLED", False):
+        return
+    if not _env_bool("KNOWLEDGE_EMBEDDINGS_ENABLED", False):
+        return
+    now = time.time()
+    check_interval = max(10, int(os.getenv("KNOWLEDGE_EMBEDDINGS_CHECK_INTERVAL_SEC", "20")))
+    if now - _LAST_KNOWLEDGE_EMBEDDINGS_AT < check_interval:
+        return
+    _LAST_KNOWLEDGE_EMBEDDINGS_AT = now
+    db = None
+    try:
+        db = DatabaseManager()
+        ingest_result = {}
+        maintenance_result = {}
+        ingest_interval = max(300, int(os.getenv("KNOWLEDGE_SEMANTIC_INGEST_INTERVAL_SEC", "900")))
+        if now - _LAST_KNOWLEDGE_SEMANTIC_INGEST_AT >= ingest_interval:
+            ingest_result = ingest_semantic_sources(
+                db.conn,
+                limit_per_source=max(1, int(os.getenv("KNOWLEDGE_SEMANTIC_INGEST_BATCH_SIZE", "1000"))),
+            )
+            _LAST_KNOWLEDGE_SEMANTIC_INGEST_AT = now
+        maintenance_interval = max(
+            86400,
+            int(os.getenv("KNOWLEDGE_EMBEDDING_MAINTENANCE_INTERVAL_SEC", "604800")),
+        )
+        if now - _LAST_KNOWLEDGE_EMBEDDING_MAINTENANCE_AT >= maintenance_interval:
+            maintenance_result = run_embedding_maintenance(db.conn)
+            _LAST_KNOWLEDGE_EMBEDDING_MAINTENANCE_AT = now
+        enqueue_result = enqueue_document_chunks(
+            db.conn,
+            limit=max(1, int(os.getenv("KNOWLEDGE_EMBEDDINGS_ENQUEUE_BATCH_SIZE", "1000"))),
+        )
+        process_result = process_embedding_jobs(db.conn)
+        db.conn.commit()
+        if (
+            ingest_result or maintenance_result or int(enqueue_result.get("queued") or 0) > 0
+            or process_result.get("status") != "idle"
+        ):
+            print(
+                "[KNOWLEDGE_EMBEDDINGS] "
+                f"ingest={ingest_result} maintenance={maintenance_result} "
+                f"linked={int(enqueue_result.get('linked') or 0)} "
+                f"queued={int(enqueue_result.get('queued') or 0)} "
+                f"status={process_result.get('status')} "
+                f"processed={int(process_result.get('processed') or 0)} "
+                f"balance={process_result.get('balance')}",
+                flush=True,
+            )
+    except Exception:
+        try:
+            if db:
+                db.conn.rollback()
+        except Exception:
+            pass
+        print("[KNOWLEDGE_EMBEDDINGS] error", flush=True)
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
     finally:
@@ -6524,6 +6601,7 @@ if __name__ == "__main__":
             _collect_social_post_metrics_if_due()
             _run_telegram_opportunity_monitor_if_due()
             _run_knowledge_telegram_monitor_if_due()
+            _run_knowledge_embeddings_if_due()
             _dispatch_outreach_queue_if_due()
             _dispatch_openclaw_callback_outbox_if_due()
             _check_openclaw_callback_alerts_if_due()

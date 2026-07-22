@@ -7,7 +7,7 @@ import os
 import re
 from typing import Any, Callable
 
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
 
 
 SCHEMA_VERSION = "1.0"

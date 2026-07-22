@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import uuid
 from typing import Any
 
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
@@ -89,53 +88,6 @@ def build_agent_billing_estimate_items() -> list[dict[str, Any]]:
     ]
 
 
-def _row_value(row: Any, key: str, index: int = 0) -> Any:
-    if row is None:
-        return None
-    if isinstance(row, dict):
-        return row.get(key)
-    if isinstance(row, (list, tuple)) and len(row) > index:
-        return row[index]
-    return None
-
-
-def _record_agent_creation_token_estimate(
-    cursor: Any,
-    *,
-    business_id: str,
-    user_id: str,
-    source_id: str,
-) -> str | None:
-    cursor.execute("SELECT to_regclass('public.tokenusage')")
-    reg = _row_value(cursor.fetchone(), "to_regclass")
-    if not reg:
-        return None
-
-    usage_id = str(uuid.uuid4())
-    total_tokens = AGENT_CREATION_ACTUAL_CREDITS * TOKENS_PER_CREDIT
-    prompt_tokens = int(total_tokens * 0.7)
-    completion_tokens = total_tokens - prompt_tokens
-    cursor.execute(
-        """
-        INSERT INTO TokenUsage
-        (id, business_id, user_id, task_type, model, prompt_tokens, completion_tokens, total_tokens, endpoint)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            usage_id,
-            business_id,
-            user_id,
-            AGENT_CREATION_TASK_TYPE,
-            "agent_compiler_estimate",
-            prompt_tokens,
-            completion_tokens,
-            total_tokens,
-            f"agent_creation:{source_id}",
-        ),
-    )
-    return usage_id
-
-
 def charge_agent_creation_credits(
     cursor: Any,
     *,
@@ -201,14 +153,6 @@ def charge_agent_creation_credits(
         finalization_mode="charge",
         external_id=idempotency_key,
     )
-    token_usage_id = None
-    if finalization.get("status") == "charged":
-        token_usage_id = _record_agent_creation_token_estimate(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            source_id=source_id,
-        )
     return {
         **finalization,
         "task_type": AGENT_CREATION_TASK_TYPE,
@@ -216,6 +160,7 @@ def charge_agent_creation_credits(
         "idempotency_key": idempotency_key,
         "estimated_credits": AGENT_CREATION_ESTIMATED_CREDITS,
         "actual_credits": AGENT_CREATION_ACTUAL_CREDITS,
-        "token_usage_id": token_usage_id,
+        "token_usage_id": None,
+        "usage_record_mode": "provider_actual",
         "billing_url": BILLING_URL,
     }

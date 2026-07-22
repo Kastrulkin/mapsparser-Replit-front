@@ -5,7 +5,9 @@ import re
 import sys
 from typing import Any, Callable, Dict, List
 
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
+from services.knowledge_retrieval import semantic_context_for_business
+from services.llm.analytics import queue_review_signal_analysis, redact_review_text
 
 
 MAX_REVIEW_LLM_CONTEXT_CHARS = 12000
@@ -99,12 +101,45 @@ def draft_review_replies_with_llm(
             }
         )
         return fallback
+    if business_id:
+        queue_review_signal_analysis(
+            selected_reviews,
+            business_id=business_id,
+            user_id=user_id,
+            pipeline_id=run_id,
+        )
     prompt = _build_review_prompt(setup, selected_reviews, feedback_history or [], reply_limit)
+    knowledge_context = ""
+    if business_id:
+        knowledge_context, _ = semantic_context_for_business(
+            business_id=business_id,
+            query="\n".join(str(item.get("text") or "") for item in selected_reviews),
+            purpose="client_content",
+            consumer="review_reply",
+            pipeline_id=run_id,
+            source_types=("public_review", "service_observation", "private_chat_aggregate"),
+        )
+    if knowledge_context:
+        prompt += (
+            "\n\nКонтекст подтверждённых сильных сторон и тем бизнеса. Не раскрывай источники "
+            "и не добавляй непроверенных обещаний:\n" + knowledge_context
+        )
     try:
         raw_response = (
             generator(prompt, business_id=business_id, user_id=user_id)
             if generator
-            else _default_review_generator(prompt, business_id=business_id, user_id=user_id, run_id=run_id)
+            else _default_review_generator(
+                prompt,
+                business_id=business_id,
+                user_id=user_id,
+                run_id=run_id,
+                fallback_prompt=_build_review_fallback_prompt(
+                    setup,
+                    selected_reviews,
+                    feedback_history or [],
+                    reply_limit,
+                ),
+            )
         )
         parsed = _parse_llm_json(raw_response)
         normalized = _normalize_llm_review_replies(parsed, fallback, selected_reviews, reply_limit)
@@ -180,14 +215,44 @@ def build_review_replies_fallback(
     }
 
 
-def _default_review_generator(prompt: str, *, business_id: str = "", user_id: str = "", run_id: str = "") -> str:
+def _default_review_generator(
+    prompt: str,
+    *,
+    business_id: str = "",
+    user_id: str = "",
+    run_id: str = "",
+    fallback_prompt: str = "",
+) -> str:
     return analyze_text_with_gigachat(
         prompt,
         task_type="agent_review_replies",
         business_id=business_id or None,
         user_id=user_id or None,
         usage_reference=f"agent-run:{run_id}" if run_id else None,
+        pipeline_id=run_id or None,
+        pipeline_stage="copy",
+        fallback_prompt=fallback_prompt or None,
     )
+
+
+def _build_review_fallback_prompt(
+    setup: Dict[str, Any],
+    selected_reviews: List[Dict[str, Any]],
+    feedback_history: List[Dict[str, Any]],
+    reply_limit: int,
+) -> str:
+    sanitized = []
+    for review in selected_reviews:
+        sanitized.append(
+            {
+                "source_name": _clean_text(review.get("source_name")),
+                "review_id": _clean_text(review.get("review_id")),
+                "rating": review.get("rating"),
+                "author_name": "",
+                "text": redact_review_text(review.get("text")),
+            }
+        )
+    return _build_review_prompt(setup, sanitized, feedback_history, reply_limit)
 
 
 def _build_review_prompt(

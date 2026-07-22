@@ -210,7 +210,7 @@ def compile_agent_blueprint(
         if ai_intent and _intent_is_supported_by_text(request_text, ai_intent):
             draft = _source_destination_compilation(request_text, ai_intent)
             metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
-            metadata["compiler_source"] = "gigachat_intent_extractor"
+            metadata["compiler_source"] = f"{str(ai_result.get('source') or 'llm')}_intent_extractor"
             metadata["llm_intent"] = {
                 "status": ai_result.get("status"),
                 "source": ai_result.get("source"),

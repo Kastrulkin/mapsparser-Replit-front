@@ -4,7 +4,8 @@ import hashlib
 import json
 from typing import Any, Callable
 
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
+from services.llm.analytics import redact_review_text
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.operator_paid_preflight import build_paid_action_preflight
 
@@ -95,12 +96,20 @@ def _extract_reply(value: Any) -> str:
     return text
 
 
-def _default_reply_generator(prompt: str, *, business_id: str, user_id: str) -> str:
+def _default_reply_generator(
+    prompt: str,
+    *,
+    business_id: str,
+    user_id: str,
+    fallback_prompt: str = "",
+) -> str:
     return analyze_text_with_gigachat(
         prompt,
         task_type="review_reply",
         business_id=business_id,
         user_id=user_id,
+        pipeline_stage="copy",
+        fallback_prompt=fallback_prompt or None,
     )
 
 
@@ -316,13 +325,17 @@ def process_operator_chat_message(
         review_text=review_text,
     )
 
-    generator = reply_generator or _default_reply_generator
     try:
-        generated = generator(
-            _build_review_reply_prompt(review_text),
-            business_id=business_id,
-            user_id=user_id,
-        )
+        prompt = _build_review_reply_prompt(review_text)
+        if reply_generator:
+            generated = reply_generator(prompt, business_id=business_id, user_id=user_id)
+        else:
+            generated = _default_reply_generator(
+                prompt,
+                business_id=business_id,
+                user_id=user_id,
+                fallback_prompt=_build_review_reply_prompt(redact_review_text(review_text)),
+            )
         reply_text = _extract_reply(generated)
     except Exception:
         release = finalize_reserved_action_credits(

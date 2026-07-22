@@ -13,7 +13,7 @@ from services.agent_email_llm import draft_email_with_llm
 from services.agent_review_reply_analysis import draft_review_replies_with_llm
 from services.agent_run_contract import RESERVED_AGENT_INPUT_FIELDS
 from services.agent_table_analysis import analyze_table_with_llm
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
 
 
 MAX_SOURCE_TEXT_CHARS = 30000

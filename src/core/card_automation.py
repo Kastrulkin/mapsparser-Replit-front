@@ -20,7 +20,7 @@ from core.industry_pattern_recalibration import (
     run_monthly_industry_pattern_recalibration,
 )
 from core.learning_patterns import format_learning_candidates_for_digest, get_service_optimization_learning_candidates
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
 
 
 ACTION_NEWS = "news"

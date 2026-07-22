@@ -95,7 +95,8 @@ from services.telegram_static_answers import (
     guest_welcome_text,
     tariff_detail_text,
 )
-from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
+from services.gigachat_client import analyze_screenshot_with_gigachat
+from services.llm import analyze_text_with_gigachat
 from subscription_manager import get_subscription_info
 from auth_system import create_session
 

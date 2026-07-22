@@ -4,7 +4,7 @@ import json
 import sys
 from typing import Any, Callable, Dict, List
 
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import LLMTaskRequest, analyze_text_with_gigachat, run_llm_task
 
 
 MAX_TABLE_LLM_CONTEXT_CHARS = 12000
@@ -22,17 +22,30 @@ def analyze_table_with_llm(
 ) -> Dict[str, Any]:
     fallback = build_table_analysis_fallback(setup, extracted_items, feedback_history or [])
     prompt = _build_table_prompt(setup, extracted_items, feedback_history or [])
+    analysis_source = "gigachat"
     try:
-        raw_response = (
-            generator(prompt, business_id=business_id, user_id=user_id)
-            if generator
-            else _default_table_generator(prompt, business_id=business_id, user_id=user_id, run_id=run_id)
-        )
+        if generator:
+            raw_response = generator(prompt, business_id=business_id, user_id=user_id)
+        else:
+            result = run_llm_task(
+                LLMTaskRequest(
+                    task_key="agent_table_analysis",
+                    prompt=prompt,
+                    business_id=business_id,
+                    user_id=user_id,
+                    prompt_version=TABLE_LLM_PROMPT_VERSION,
+                    usage_reference=f"agent-run:{run_id}" if run_id else "",
+                )
+            )
+            if result.status != "completed":
+                raise RuntimeError(result.fallback_reason or result.status)
+            raw_response = result.content
+            analysis_source = result.provider
         parsed = _parse_llm_json(raw_response)
         normalized = _normalize_llm_table(parsed, fallback)
         normalized.update(
             {
-                "analysis_source": "gigachat",
+                "analysis_source": analysis_source,
                 "analysis_prompt_key": "agent_table_analysis",
                 "analysis_prompt_version": TABLE_LLM_PROMPT_VERSION,
                 "llm_analysis_used": True,

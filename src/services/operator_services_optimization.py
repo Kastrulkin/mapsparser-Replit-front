@@ -4,7 +4,9 @@ import json
 import uuid
 from typing import Any, Callable
 
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
+from services.knowledge_retrieval import semantic_context_for_cursor
+from services.llm.analytics import queue_service_catalog_analysis
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.operator_manual_review import BILLING_URL, _build_ui_action
 from services.operator_news_generation import _clean_text, _extract_json_candidate, _row_to_dict, _stable_id
@@ -148,7 +150,7 @@ def _build_services_prompt(services: list[dict[str, Any]]) -> str:
 def _default_services_generator(prompt: str, *, business_id: str, user_id: str) -> str:
     return analyze_text_with_gigachat(
         prompt,
-        task_type="service_optimization",
+        task_type="service_copy_generation",
         business_id=business_id,
         user_id=user_id,
     )
@@ -360,10 +362,33 @@ def optimize_services_from_operator(
             "blocked_reasons": blocked,
         }
 
+    queue_service_catalog_analysis(
+        services,
+        business_id=business_id,
+        user_id=user_id,
+        pipeline_id=idempotency_key,
+    )
+    knowledge_context, _ = semantic_context_for_cursor(
+        cursor,
+        business_id=business_id,
+        query="\n".join(
+            f"{_clean_text(item.get('name'))}: {_clean_text(item.get('description'))}"
+            for item in services
+        ),
+        purpose="industry_recommendations",
+        consumer="service_optimization",
+        pipeline_id=idempotency_key,
+    )
+    services_prompt = _build_services_prompt(services)
+    if knowledge_context:
+        services_prompt += (
+            "\n\nПодтверждённый контекст из памяти LocalOS. Используй только релевантные факты "
+            "и не придумывай данные:\n" + knowledge_context
+        )
     generator = services_generator or _default_services_generator
     try:
         generated = generator(
-            _build_services_prompt(services),
+            services_prompt,
             business_id=business_id,
             user_id=user_id,
         )

@@ -74,21 +74,9 @@ class GigaChatConfig:
         }
     }
     
-    # Маппинг задач на модели
-    TASK_MODEL_MAPPING = {
-        "service_optimization": "GigaChat-Max",      # Анализ и оптимизация услуг
-        "review_reply": "GigaChat-Pro",              # Ответы на отзывы
-        "news_generation": "GigaChat-Pro",          # Генерация новостей
-        "ai_agent_marketing": "GigaChat-Pro",        # Маркетинговый агент
-        "ai_agent_booking": "GigaChat-Pro",         # Агент записи (по умолчанию Pro)
-        "ai_agent_booking_complex": "GigaChat-Max", # Агент записи (сложная логика)
-        "outreach_personalization": "GigaChat-Max", # Персонализация и semantic review аутрича
-        "default": "GigaChat-Pro"                    # По умолчанию
-    }
-    
     def __init__(self):
         # Модель по умолчанию (можно изменить через переменную окружения)
-        default_model = os.getenv('GIGACHAT_MODEL', 'GigaChat-Pro')
+        default_model = os.getenv('GIGACHAT_MODEL', 'GigaChat-Max')
         # Маппинг старых названий на новые
         model_mapping = {
             'GigaChat-2-Pro': 'GigaChat-Pro',
@@ -107,8 +95,8 @@ class GigaChatConfig:
         
         # Валидация модели
         if self.model not in self.AVAILABLE_MODELS:
-            print(f"⚠️ Предупреждение: Модель '{self.model}' не найдена в списке доступных. Используется GigaChat-Pro")
-            self.model = 'GigaChat-Pro'
+            print(f"⚠️ Предупреждение: Модель '{self.model}' не найдена в списке доступных. Используется GigaChat-Max")
+            self.model = 'GigaChat-Max'
     
     def get_model_info(self):
         """Возвращает информацию о текущей модели"""
@@ -118,15 +106,9 @@ class GigaChatConfig:
         """Возвращает конфигурацию для API запроса
         
         Args:
-            task_type: Тип задачи (service_optimization, review_reply, news_generation, 
-                      ai_agent_marketing, ai_agent_booking, ai_agent_booking_complex)
-                      Если указан, будет использована соответствующая модель из TASK_MODEL_MAPPING
+            task_type: Ключ задачи из единого services.llm registry.
         """
-        # Если указан тип задачи, используем соответствующую модель
-        if task_type and task_type in self.TASK_MODEL_MAPPING:
-            model_name = self.TASK_MODEL_MAPPING[task_type]
-        else:
-            model_name = self.model
+        model_name = self.get_model_for_task(task_type or "")
         
         # Получаем информацию о модели
         model_info = self.AVAILABLE_MODELS.get(model_name, self.AVAILABLE_MODELS['GigaChat-Pro'])
@@ -141,7 +123,15 @@ class GigaChatConfig:
     
     def get_model_for_task(self, task_type: str) -> str:
         """Возвращает название модели для конкретной задачи"""
-        return self.TASK_MODEL_MAPPING.get(task_type, self.TASK_MODEL_MAPPING['default'])
+        try:
+            from services.llm.registry import get_task_definition, model_for_definition
+
+            definition = get_task_definition(task_type)
+            if definition and definition.primary_provider == "gigachat":
+                return model_for_definition(definition)
+        except Exception:
+            pass
+        return self.model
     
     def list_available_models(self):
         """Возвращает список доступных моделей (без дубликатов для обратной совместимости)"""

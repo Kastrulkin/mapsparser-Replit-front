@@ -50,7 +50,8 @@ except ImportError:
 from yandex_maps_scraper import parse_yandex_card
 from analyzer import analyze_card
 from report import generate_html_report
-from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
+from services.gigachat_client import analyze_screenshot_with_gigachat
+from services.llm import analyze_text_with_gigachat
 from database_manager import DatabaseManager, get_db_connection
 from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR, normalize_status
 from auth_system import CONSENT_VERSION, authenticate_user, create_session, normalize_email, verify_email_token, verify_session, rotate_verification_token

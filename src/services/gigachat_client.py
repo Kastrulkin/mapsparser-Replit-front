@@ -330,7 +330,8 @@ class GigaChatClient:
     
     def analyze_text(self, prompt: str, task_type: str = None, functions: List[Dict] = None,
                      business_id: str = None, user_id: str = None,
-                     usage_reference: str = None) -> Tuple[str, Dict[str, Any]]:
+                     usage_reference: str = None, prompt_version: str = None,
+                     shadow: bool = False, record_usage: bool = True) -> Tuple[str, Dict[str, Any]]:
         """Анализ текста с поддержкой Function Calling
         
         Args:
@@ -344,6 +345,7 @@ class GigaChatClient:
         Returns:
             Tuple[str, Dict]: (content, usage_info) - содержимое ответа и информация об использовании токенов
         """
+        started_at = time.monotonic()
         try:
             token = self.get_access_token()
             
@@ -395,14 +397,20 @@ class GigaChatClient:
                     }
             
             # Сохраняем использование токенов в БД
-            if usage_info and (business_id or user_id):
+            if record_usage and usage_info and (business_id or user_id):
                 self._save_token_usage(
                     business_id=business_id,
                     user_id=user_id,
                     task_type=task_type or "unknown",
                     model=model_config["model"],
                     usage_info=usage_info,
-                    endpoint=usage_reference or "chat/completions"
+                    endpoint=usage_reference or "chat/completions",
+                    provider="gigachat",
+                    provider_request_id=str(result.get("id") or ""),
+                    latency_ms=int((time.monotonic() - started_at) * 1000),
+                    request_status="completed",
+                    prompt_version=prompt_version or "",
+                    shadow=shadow,
                 )
             
             # Извлекаем содержимое ответа
@@ -446,9 +454,13 @@ class GigaChatClient:
             print(f"❌ Ошибка анализа текста: {e}")
             raise
     
-    def _save_token_usage(self, business_id: str = None, user_id: str = None, 
+    def _save_token_usage(self, business_id: str = None, user_id: str = None,
                          task_type: str = "unknown", model: str = "unknown",
-                         usage_info: Dict[str, Any] = None, endpoint: str = "unknown"):
+                         usage_info: Dict[str, Any] = None, endpoint: str = "unknown",
+                         provider: str = "gigachat", provider_request_id: str = "",
+                         latency_ms: int = 0, request_status: str = "completed",
+                         prompt_version: str = "", shadow: bool = False,
+                         metadata: Dict[str, Any] = None):
         """Сохранить информацию об использовании токенов в БД"""
         try:
             import uuid
@@ -470,8 +482,9 @@ class GigaChatClient:
             usage_id = str(uuid.uuid4())
             cursor.execute("""
                 INSERT INTO TokenUsage 
-                (id, business_id, user_id, task_type, model, prompt_tokens, completion_tokens, total_tokens, endpoint)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (id, business_id, user_id, task_type, model, prompt_tokens, completion_tokens, total_tokens, endpoint,
+                 provider, provider_request_id, latency_ms, request_status, prompt_version, shadow, metadata_json)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 usage_id,
                 business_id,
@@ -481,7 +494,14 @@ class GigaChatClient:
                 usage_info.get("prompt_tokens", 0),
                 usage_info.get("completion_tokens", 0),
                 usage_info.get("total_tokens", 0),
-                endpoint
+                endpoint,
+                provider,
+                provider_request_id or None,
+                int(latency_ms or 0),
+                request_status,
+                prompt_version or None,
+                bool(shadow),
+                json.dumps(metadata or {}, ensure_ascii=False),
             ))
             
             db.conn.commit()

@@ -13,6 +13,13 @@ from services.knowledge_graph_service import (
     overview,
     serialize_for_json,
 )
+from services.knowledge_embedding_ingestion import ingest_semantic_sources
+from services.knowledge_embeddings import embedding_status, enqueue_document_chunks
+from services.knowledge_retrieval import (
+    KnowledgeSearchRequest,
+    record_retrieval_outcome,
+    retrieve_knowledge,
+)
 
 
 admin_knowledge_bp = Blueprint("admin_knowledge", __name__)
@@ -164,6 +171,101 @@ def knowledge_privacy_decision(review_id):
             return _response({"success": False, "error": "Privacy review not found"}, 404)
         conn.commit()
         return _response({"success": True, "claim": claim})
+    except ValueError as error:
+        conn.rollback()
+        return _response({"success": False, "error": str(error)}, 400)
+    finally:
+        conn.close()
+
+
+@admin_knowledge_bp.get("/api/admin/knowledge/embeddings/status")
+def knowledge_embeddings_status():
+    _, auth_error = _require_superadmin()
+    if auth_error:
+        return auth_error
+    conn = get_db_connection()
+    try:
+        return _response({"success": True, "data": embedding_status(conn)})
+    finally:
+        conn.close()
+
+
+@admin_knowledge_bp.post("/api/admin/knowledge/embeddings/backfill")
+def knowledge_embeddings_backfill():
+    _, auth_error = _require_superadmin()
+    if auth_error:
+        return auth_error
+    payload = _request_json()
+    conn = get_db_connection()
+    try:
+        ingestion = ingest_semantic_sources(
+            conn,
+            limit_per_source=max(1, min(int(payload.get("source_limit") or 1000), 10000)),
+        )
+        queued = enqueue_document_chunks(
+            conn,
+            limit=max(1, min(int(payload.get("document_limit") or 1000), 10000)),
+            document_id=str(payload.get("document_id") or "").strip(),
+        )
+        conn.commit()
+        return _response({"success": True, "ingestion": ingestion, "queue": queued}, 202)
+    except (TypeError, ValueError) as error:
+        conn.rollback()
+        return _response({"success": False, "error": str(error)}, 400)
+    finally:
+        conn.close()
+
+
+@admin_knowledge_bp.post("/api/admin/knowledge/embeddings/search")
+def knowledge_embeddings_search():
+    _, auth_error = _require_superadmin()
+    if auth_error:
+        return auth_error
+    payload = _request_json()
+    business_id = str(payload.get("business_id") or "").strip()
+    query = str(payload.get("query") or "").strip()
+    purpose = str(payload.get("purpose") or "industry_recommendations").strip()
+    if not business_id or not query:
+        return _response({"success": False, "error": "business_id and query are required"}, 400)
+    conn = get_db_connection()
+    try:
+        result = retrieve_knowledge(
+            conn,
+            KnowledgeSearchRequest(
+                business_id=business_id,
+                query=query,
+                purpose=purpose,
+                source_types=tuple(str(item) for item in payload.get("source_types") or [] if item),
+                limit=max(1, min(int(payload.get("limit") or 12), 15)),
+                pipeline_id=str(payload.get("pipeline_id") or ""),
+                consumer=str(payload.get("consumer") or "admin_search"),
+            ),
+        )
+        conn.commit()
+        result["hits"] = [hit.__dict__ for hit in result.get("hits") or []]
+        return _response({"success": True, "data": result})
+    finally:
+        conn.close()
+
+
+@admin_knowledge_bp.post("/api/admin/knowledge/embeddings/retrieval/<event_id>/outcome")
+def knowledge_retrieval_outcome(event_id):
+    _, auth_error = _require_superadmin()
+    if auth_error:
+        return auth_error
+    payload = _request_json()
+    conn = get_db_connection()
+    try:
+        updated = record_retrieval_outcome(
+            conn,
+            event_id=event_id,
+            outcome=str(payload.get("outcome") or ""),
+            edit_ratio=payload.get("edit_ratio"),
+            selected_evidence_ids=payload.get("selected_evidence_ids")
+            if isinstance(payload.get("selected_evidence_ids"), list) else None,
+        )
+        conn.commit()
+        return _response({"success": True, "updated": updated}, 200 if updated else 404)
     except ValueError as error:
         conn.rollback()
         return _response({"success": False, "error": str(error)}, 400)

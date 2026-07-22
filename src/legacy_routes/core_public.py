@@ -453,6 +453,7 @@ def get_user_token_usage_stats():
                 "month_total": {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0, "requests_count": 0},
                 "period_total": {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0, "requests_count": 0},
                 "by_category": [],
+                "by_provider": [],
             })
 
         now_utc = datetime.now(timezone.utc)
@@ -524,6 +525,17 @@ def get_user_token_usage_stats():
             bucket["completion_tokens"] += int(row.get("completion_tokens") or 0)
             bucket["requests_count"] += int(row.get("requests_count") or 0)
 
+        from services.llm.metrics import normalize_pilot_metric, pilot_metrics_select
+
+        cursor.execute(
+            pilot_metrics_select(f"{where_sql} AND created_at >= %s"),
+            [*params, period_start],
+        )
+        provider_stats = [
+            normalize_pilot_metric(_row_to_dict(cursor, raw_row) or {})
+            for raw_row in cursor.fetchall() or []
+        ]
+
         db.close()
         return jsonify({
             "success": True,
@@ -531,6 +543,7 @@ def get_user_token_usage_stats():
             "month_total": month_total,
             "period_total": period_total,
             "by_category": sorted(grouped.values(), key=lambda item: item["total_tokens"], reverse=True),
+            "by_provider": provider_stats,
         })
     except Exception as e:
         print(f"❌ Ошибка получения token usage: {e}")
@@ -590,7 +603,8 @@ def get_token_usage_stats():
                 },
                 "by_user": [],
                 "by_business": [],
-                "by_task_type": []
+                "by_task_type": [],
+                "by_provider": []
             })
 
         # Общая статистика
@@ -685,6 +699,14 @@ def get_token_usage_stats():
                 "requests_count": _field(row, "requests_count", 4, 0) or 0
             })
 
+        from services.llm.metrics import normalize_pilot_metric, pilot_metrics_select
+
+        cursor.execute(pilot_metrics_select())
+        provider_stats = [
+            normalize_pilot_metric(_row_to_dict(cursor, raw_row) or {})
+            for raw_row in cursor.fetchall() or []
+        ]
+
         db.close()
 
         return jsonify({
@@ -697,7 +719,8 @@ def get_token_usage_stats():
             },
             "by_user": users_stats,
             "by_business": businesses_stats,
-            "by_task_type": task_types_stats
+            "by_task_type": task_types_stats,
+            "by_provider": provider_stats
         })
 
     except Exception as e:

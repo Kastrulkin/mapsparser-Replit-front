@@ -11,7 +11,9 @@ from psycopg2.extras import Json
 from auth_system import verify_session
 from core.helpers import get_business_owner_id
 from database_manager import DatabaseManager
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
+from services.llm.analytics import build_average_ticket_analysis_payload, queue_average_ticket_analysis
+from services.knowledge_retrieval import semantic_context_for_cursor
 
 
 average_ticket_bp = Blueprint("average_ticket_api", __name__)
@@ -1032,9 +1034,48 @@ def generate_average_ticket_matrix():
         if len(services) < 2:
             return jsonify({"error": "Недостаточно услуг в разделе Работа с картами"}), 400
 
+        pipeline_id = str(uuid.uuid4())
+        latest = _load_latest_matrix(cursor, business_id)
+        current_matrix = latest.get("matrix") if latest else {}
+        events = _load_events(
+            cursor,
+            business_id,
+            (date.today() - timedelta(days=30)).isoformat(),
+            date.today().isoformat(),
+        )
+        kpis = _load_finance_metrics(cursor, business_id, events, current_matrix or {})
+        queue_average_ticket_analysis(
+            kpis,
+            services,
+            business_id=business_id,
+            user_id=str(user_data.get("user_id") or ""),
+            pipeline_id=pipeline_id,
+        )
+
         prompt_template = _prompt_from_db(cursor)
         payload = _build_generation_payload(business, services)
         prompt = _build_prompt(prompt_template, payload)
+        knowledge_context, _ = semantic_context_for_cursor(
+            cursor,
+            business_id=business_id,
+            query=json.dumps(
+                build_average_ticket_analysis_payload(kpis, services),
+                ensure_ascii=False,
+                default=str,
+            ),
+            purpose="industry_recommendations",
+            consumer="average_ticket",
+            pipeline_id=pipeline_id,
+        )
+        if knowledge_context:
+            prompt += (
+                "\n\nРелевантные подтверждённые сигналы LocalOS. Финансовые значения выше являются "
+                "источником истины; контекст используй только для идей и обоснований:\n" + knowledge_context
+            )
+        fallback_prompt = _build_prompt(
+            prompt_template,
+            build_average_ticket_analysis_payload(kpis, services),
+        )
         generation_mode = "gigachat"
         raw_matrix = None
         error_note = None
@@ -1044,6 +1085,10 @@ def generate_average_ticket_matrix():
                 task_type=PROMPT_TYPE,
                 business_id=business_id,
                 user_id=user_data.get("user_id"),
+                usage_reference=f"llm-pipeline:{pipeline_id}:copy",
+                pipeline_id=pipeline_id,
+                pipeline_stage="copy",
+                fallback_prompt=fallback_prompt,
             )
             raw_matrix = _extract_json_object(result)
         except Exception:
