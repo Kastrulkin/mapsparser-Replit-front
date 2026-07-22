@@ -372,7 +372,7 @@ def _claim_jobs(conn, batch_size: int) -> list[dict[str, Any]]:
 def process_embedding_jobs(conn, *, batch_size: int | None = None) -> dict[str, Any]:
     if not _enabled():
         return {"status": "disabled", "processed": 0}
-    safe_batch = max(1, min(int(batch_size or os.getenv("KNOWLEDGE_EMBEDDINGS_BATCH_SIZE") or 16), 32))
+    safe_batch = max(1, min(int(batch_size or os.getenv("KNOWLEDGE_EMBEDDINGS_BATCH_SIZE") or 16), 64))
     client = GigaChatEmbeddingClient()
     balance = client.embedding_balance()
     minimum = max(0, int(os.getenv("KNOWLEDGE_EMBEDDINGS_MIN_BALANCE") or 10000000))

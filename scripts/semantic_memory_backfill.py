@@ -92,7 +92,7 @@ def main() -> None:
     if str(os.getenv("KNOWLEDGE_EMBEDDINGS_ENABLED") or "").lower() not in {"1", "true", "yes", "on"}:
         raise SystemExit("KNOWLEDGE_EMBEDDINGS_ENABLED is not enabled")
     workers = max(1, min(args.workers, 4))
-    embedding_batch = max(1, min(args.embedding_batch, 32))
+    embedding_batch = max(1, min(args.embedding_batch, 64))
     source_batch = max(1, min(args.source_batch, 10000))
     document_batch = max(1, min(args.document_batch, 10000))
     _ingest_all(source_batch)
