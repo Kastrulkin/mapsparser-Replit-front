@@ -20,6 +20,7 @@ This documentation has two layers:
 - [Integrations](integrations.md)
 - [Pricing and billing](pricing-and-billing.md)
 - [FAQ](faq.md)
+- [Founder-led multichannel outreach](OUTREACH_SYSTEM.md)
 
 ## For Agents and Integrations
 
@@ -46,6 +47,7 @@ This documentation has two layers:
   - [Finance Module](FINANCE_MODULE.md)
   - [Industry Patterns Optimizer](INDUSTRY_PATTERNS_OPTIMIZER.md)
   - [Partnership Roadmap Backlog](PARTNERSHIP_ROADMAP_BACKLOG.md)
+  - [Outreach System](OUTREACH_SYSTEM.md)
 
 ## Status Labels
 

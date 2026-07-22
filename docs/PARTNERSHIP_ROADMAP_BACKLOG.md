@@ -3,6 +3,8 @@
 Дата: 11 марта 2026  
 Статус: Active planning
 
+Текущий end-to-end outreach lifecycle, sender modes, contact enrichment, Telegram entity classification, evidence ledger, multichannel drafts, approval и learning loop описаны в [`OUTREACH_SYSTEM.md`](OUTREACH_SYSTEM.md). Этот файл остаётся историей и backlog отдельных partnership-этапов и не заменяет текущую продуктовую спецификацию аутрича.
+
 ## Цель
 Запустить пользовательский трек `Поиск партнёрств` поверх текущего supervised outreach-пайплайна, без дублирования платформенных сущностей.
 
@@ -200,6 +202,7 @@ client outreach and partnership outreach do not share the same batch selection.
 ---
 
 ## Sprint P8: OpenClaw Geo Search
+Статус: LocalOS geo-search router и Yandex/Apify path implemented; OpenClaw provider path остаётся conditional по конфигурации capability/provider.
 ### Задачи
 - Подключить поиск компаний в радиусе X км через OpenClaw.
 

@@ -20,7 +20,7 @@ It is not only a map SEO tool. In the current codebase LocalOS includes:
 - Telegram control surface and notifications;
 - Google Business Profile OAuth, location binding, sync, and publishing endpoints;
 - external account storage for map integrations;
-- partnership prospecting, shortlist management, supervised outreach, and delivery/reaction tracking;
+- client and partnership prospecting, public contact enrichment, signal monitoring, founder-led multichannel drafts, supervised delivery, stop-on-reply, and outcome learning;
 - AI agent webhooks for Telegram and WhatsApp;
 - Agent cockpit, compiled workflows, provider routes, run journals, billing ledgers, and approval queues;
 - OpenClaw / Action Orchestrator integration with LocalOS policy, audit, recovery, and human-in-the-loop boundaries;
@@ -57,7 +57,7 @@ Confirmed areas:
 - Google Business Profile OAuth, sync, location binding, and publish endpoints;
 - Yandex and 2GIS sync/admin endpoints.
 - AI-agent builder/cockpit, compiled workflow runtime, connector route selection, run observability, approval queues, and billing ledgers.
-- supervised outreach through shortlist selection, draft approval, capped send batches, manual delivery status, and inbound reaction tracking.
+- supervised outreach through shared lead workstreams, sourced evidence, explicit sender identity, versioned multichannel approval, runtime preflight, inbound reply stops, and attributable outcomes.
 - parser reliability controls including proxy health gating, captcha retry caps, TTL/DLQ handling, and failure taxonomy.
 
 Not confirmed as a public contract:
@@ -74,10 +74,12 @@ The last three months of development shifted LocalOS from a card-audit tool towa
 - agent workflows now use a compiled plan model with explicit capabilities, provider routes, connection preflight, versioning, preview runs, run journals, and approval queues;
 - OpenClaw is treated as the execution boundary, while LocalOS owns policy, human approval, billing, audit, support export, and recovery flows;
 - Google Business Profile support now covers OAuth, status, location selection, sync, review-reply publishing, and post publishing. A repeat Basic API Access application for project `localos-gbp` was submitted on 18 July 2026 using the verified managed client profile «Веселая расческа»; the integration remains `beta / Google review pending` until approval and a live publish proof;
-- outreach now includes lead sourcing/import, shortlist decisions, message drafts, approval, capped send batches, delivery tracking, and reaction/outcome classification;
+- outreach now includes lead sourcing/import, map and website contact enrichment, Telegram channel/user classification, public signal evidence, sender profiles, founder-led personalization, versioned multichannel drafts, approval, reply-aware delivery and strategy/outcome learning;
 - content planning gained network modes, weekly/location filters, bulk actions, learning metrics, and quality signal prioritization;
 - finance gained onboarding analytics, KPI history, partial-data handling, CRM adapter scaffolding, average-ticket/upsell views, and approved apply flows for agents;
 - Telegram gained guest/client control flows, production proxy routing, refresh/retry commands, approvals, and agent binding guardrails;
 - parsing gained Apify-backed sources, proxy/captcha controls, retry caps, task TTL/DLQ, queue monitoring, and clearer failure classes.
 
 See [Documentation Gaps](DOCUMENTATION_GAPS.md).
+
+See also [LocalOS Outreach System](OUTREACH_SYSTEM.md) for the current lifecycle, channel limits and data boundaries.

@@ -1,5 +1,13 @@
 # Documentation Changelog
 
+## 2026-07-22
+
+- Added the canonical `OUTREACH_SYSTEM.md` lifecycle from lead search and public contact enrichment through evidence, sender identity, versioned multichannel drafts, approval, stop-on-reply and outcome learning.
+- Documented the three explicit sender modes: `localos`, `partner_business` and transparent `localos_for_partner` representation.
+- Documented Telegram entity API classification, the shared account with independent radar/outreach permissions, and the rule that channels/groups are evidence sources rather than DM recipients.
+- Clarified that Telegram/email are the current automatic adapter boundary, other channels remain manual, and saved evidence/outcomes do not imply automatic model fine-tuning.
+- Updated README, product model, use cases, agent registry, Telegram proxy runbook and partnership roadmap references to use the same current contract.
+
 ## 2026-07-19
 
 - Documented the new Google Cloud project `localos-gbp` and kept it separate from the current production OAuth client while review is pending.

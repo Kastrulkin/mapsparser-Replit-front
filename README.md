@@ -45,10 +45,14 @@ LocalOS помогает владельцам и управляющим лока
 - Subscription/access controls, блокировка неактивных пользователей и биллинг agent/operator actions.
 
 ### Партнёрства и supervised outreach
-- Поиск, импорт и нормализация потенциальных партнёров, geo provider selector, shortlist, dedupe и quality analytics.
-- Transitional outreach flow на `prospectingleads`: выбор лидов, канал, черновики первых сообщений, approval, capped send batches, ручной delivery status и inbound reactions.
-- Генерация партнёрских писем и отраслевые шаблоны, включая beauty/adult beauty паттерны.
-- Экспорт weekly review, pilot/cohort summaries, source performance и next-best-action guidance.
+- Единый путь для потенциальных клиентов LocalOS и партнёров бизнеса: поиск/импорт → карточка → парсинг → аудит/matching → контактное обогащение → evidence ledger → founder-led personalization → versioned draft цепочки → approval → контролируемые касания → первый ответ.
+- Лиды остаются в `prospectingleads`; `lead_workstreams` разделяет `localos_sales` и `client_partnership`, не создавая вторую CRM.
+- Контакты нормализуются из карты, raw/enrich payload и официального сайта с provenance. Website collector проверяет публичные contact/about/team pages, ссылки, формы и JSON-LD.
+- Telegram entity API отличает личный аккаунт, bot, broadcast channel и группы. Публичные каналы становятся источниками радара и не используются как DM-получатели; посты сохраняются как evidence.
+- Поддерживаются sender modes `localos`, `partner_business` и прозрачный `localos_for_partner`. Личность отправителя добавляется после evidence получателя и использует только подтверждённые founder story, proof, offers и voice examples.
+- LocalOS создаёт до трёх evidence-bound вариантов персонализации и проверяет removal, bridge, fact, freshness, specificity, proof integrity, human tone и один CTA. При нехватке фактов возвращается `needs_evidence`, а не общий шаблон.
+- Автоматические adapters предусмотрены для Telegram и email; WhatsApp, MAX, VK, SMS и другие каналы пока участвуют как manual touches. Любая внешняя отправка требует approval и повторного runtime preflight; любой ответ останавливает будущие касания.
+- Outcome events связываются со стратегией, каналом, evidence и sender story через learning loop. История пригодна для оценки связок и будущего обучения, но автоматический fine-tuning модели не заявляется.
 
 ### Operator и Telegram control surface
 - `/dashboard/operator` собирает в одну очередь действия по отзывам, новостям, услугам, партнёрствам, refresh jobs, approvals и billing visibility.
@@ -152,6 +156,7 @@ LocalOS помогает владельцам и управляющим лока
 - 🔗 [Настройка внешних интеграций](./INTEGRATIONS_SETUP.md) — Яндекс.Бизнес, Google Business, 2ГИС
 - 🗺️ [Google Business Profile: production и повторная заявка](./docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md) — OAuth-клиенты, агентская организация, case Google и checklist после одобрения
 - 🤝 [Roadmap поиска партнёрств](./docs/PARTNERSHIP_ROADMAP_BACKLOG.md) — P0–P10, включая fallback-режим импорта партнёров файлом
+- ✉️ [Founder-led мультиканальный аутрич](./docs/OUTREACH_SYSTEM.md) — поиск, контакты, сигналы, sender identity, персонализация, approval, stop-on-reply и learning loop
 - 🧩 [Архитектура агентов LocalOS v1](./docs/LOCALOS_AGENT_ARCHITECTURE_V1.md) — канон Agent/Persona/Blueprint/Compiled Workflow/OpenClaw и инвентаризация существующих блоков
 - 🧑‍💼 [Модель интерфейса агентов Compiled AI](./docs/AGENTS_INTERFACE_MODEL_COMPILED_AI.md) — агенты как ИИ-сотрудники, IA раздела и путь create → test → approve → enable → running
 - 🤖 [10 популярных примеров агентов](./docs/agents/popular-account-examples.md) — стартовый набор draft/templates для каждого аккаунта
@@ -162,9 +167,9 @@ LocalOS помогает владельцам и управляющим лока
 - 🧠 [Система audit-profile](./docs/CARD_AUDIT_PROFILE_SYSTEM_V1.md) — общая модель сильного аудита по вертикалям: hospitality, wellness, medical, beauty и др.
 - 🤖 [LocalOS for AI Agents](./docs/agents/index.md) — краткий вход для AI-агентов: доступные действия, approval, gaps и machine-readable manifests
 
-### Поиск партнёрств: fallback-режим импорта списком
+### Поиск партнёрств: geo-search и fallback-импорт
 
-До полного покрытия geo-search API партнёрский поток поддерживает каноничный fallback:
+Партнёрский поток поддерживает geo-search через доступный provider и сохраняет каноничный fallback на случай недоступности или ограничений provider:
 - список партнёров загружается в LocalOS файлом (`CSV/JSON/JSONL`);
 - LocalOS выполняет валидацию/очистку и хранит source of truth + статусы;
 - OpenClaw получает уже подготовленные `seed_items` для capability-вызовов (`search/enrich/draft`) без самостоятельных бизнес-решений.

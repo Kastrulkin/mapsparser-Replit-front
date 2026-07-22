@@ -62,7 +62,13 @@ Status: `beta`
 
 Use when a business wants nearby partners and supervised outreach.
 
-LocalOS supports lead import, geo-search, lead parsing, audit, matching, draft offers, approvals, send batches, delivery status, and reaction tracking.
+LocalOS supports lead import, geo-search, lead parsing, audit, service/audience matching, map and website contact enrichment, public signal collection, founder-led draft sequences, approval, controlled delivery, stop-on-reply, and outcome tracking.
+
+The sender is explicit: the business may speak for itself after completing its sender profile, or LocalOS may transparently represent the business through `localos_for_partner`. Matching still works when the business sender profile is incomplete; only the `partner_business` campaign is blocked.
+
+Telegram and email are automatic only when a scoped sender account, permission, direct-send capability and reply sync are ready. WhatsApp, MAX, VK, SMS and other channels are manual until verified adapters exist.
+
+See [LocalOS Outreach System](OUTREACH_SYSTEM.md).
 
 ## 9. Run AI Agents for Client Communication
 

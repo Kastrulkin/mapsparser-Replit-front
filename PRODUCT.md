@@ -41,7 +41,7 @@ Current product surfaces cover:
 - review storage, unanswered-review workflows, reply drafts, bulk draft generation and manual publication helpers;
 - news drafts, social post drafts, content history, content plans and public content materials;
 - finance dashboard, data quality, imports, KPI history, average-ticket work and approved finance apply flows;
-- partnerships and supervised outreach: search/import, shortlist, match reasons, draft offers, approvals, capped batches and delivery status;
+- partnerships and supervised outreach: search/import, card parsing, contact enrichment, match reasons, public signals, founder-led personalization, versioned multichannel drafts, approvals, stop-on-reply, delivery outcomes and strategy learning events;
 - Operator as a work center across web and Telegram for attention briefs, review/content/service/partnership actions, map refresh jobs and billing visibility;
 - AI agents as compiled workflows with preview, preflight, provider resolution, approvals, run journal and audit.
 
@@ -64,6 +64,28 @@ Every campaign has one explicit sender mode that is included in the approved ver
 - `localos_for_partner`: a superadmin may contact a prospective partner through a platform-scoped LocalOS account while transparently naming the represented business.
 
 `localos_for_partner` is representation, not impersonation. The campaign remains scoped to the represented business, uses that business's confirmed services, audience, compatibility evidence and allowed offer, but uses the confirmed LocalOS identity and account. Every message must disclose both facts. LocalOS must never silently fall back between sender modes or select a global account merely because it was connected last. A sender-mode change creates a new preview/version and requires a new approval.
+
+## Outreach Operating Model
+
+LocalOS treats outreach as one supervised lifecycle, not as a text generator:
+
+1. search or import a company into the shared `prospectingleads` source of truth;
+2. attach a `localos_sales` or `client_partnership` workstream;
+3. parse the public card, audit/match where applicable, enrich contacts from map payloads and the official website, and keep provenance;
+4. classify Telegram entities so personal users remain recipients while channels/groups become radar evidence sources;
+5. build an evidence ledger from map/audit facts, public websites, reviews, social activity, Telegram posts and partnership compatibility;
+6. add the confirmed sender profile only after recipient evidence exists, producing the explicit chain observation → relevance bridge → founder story/proof → one CTA;
+7. create and quality-check a versioned multichannel draft;
+8. require human approval before queue/dispatch and repeat safety preflight before every touch;
+9. stop all future channels on any human reply and record the attributable outcome for the learning loop.
+
+The recommended default sequence is Telegram day 0 for the signal, email day 3 for founder story, the next available channel day 7 for proof/useful material, and a respectful close on day 12. Telegram and email are the current automatic channel boundary when their direct-send and reply-sync capabilities are connected and permitted. WhatsApp, MAX, VK, SMS and other channels remain manual until a verified adapter supports both delivery and reply sync.
+
+An outreach fact must have evidence ID, source URL, date/freshness and confidence. Hypotheses remain explicitly labeled. A missing material fact returns `needs_evidence`; it must not be replaced with a generic template. Sender claims are accepted only from confirmed `approved` or `observed` profile facts.
+
+Learning events store strategy dimensions and outcomes such as sent, reply, question, hard no, unsubscribe, meeting, conversion and no reply. They support evidence-based strategy comparison; LocalOS does not claim automatic online fine-tuning of the production language model.
+
+Canonical implementation/status reference: [`docs/OUTREACH_SYSTEM.md`](docs/OUTREACH_SYSTEM.md).
 
 ## Product Boundaries
 

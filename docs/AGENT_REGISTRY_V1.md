@@ -169,22 +169,32 @@ Goal-loop state должен иметь objective, `intent`, budget, checkpoints
   - спорные действия: required
   - безопасные confirm-path: policy-based
 
-### 5) Outreach First Message Agent
+### 5) Outreach Preparation Agent
 - Agent id: `outreach_first_message_agent`
 - Intent: `client_outreach`
 - Capabilities:
-  - draft generation in outreach flow
-  - dispatch via queue/batch
+  - contact/evidence readiness analysis
+  - founder-led personalization candidates
+  - versioned multichannel draft generation
+  - quality and semantic review
+  - approved dispatch via queue/batch boundary
 - Input:
   - lead snapshot
-  - channel
-  - value angle
-  - prompt template из админки
-- Output: first message draft
-- Approval: required
+  - verified contact points and evidence ledger
+  - explicit sender mode/profile
+  - channel order and intervals
+  - campaign policy and prompt version
+- Output:
+  - `needs_contact`, `needs_evidence`, or versioned draft sequence
+  - per-touch evidence, sender identity, quality verdict and channel readiness
+- Approval: required for the whole current campaign version; any content/order/interval change requires a new approval
 - Learning metrics:
   - `reply_rate`
   - `hard_no_rate`
+  - `question_rate`
+  - `meeting_rate`
+  - `conversion_rate`
+  - outcome by strategy fingerprint, signal kind, sender mode and channel
   - `% edited_before_send`
 
 ### 6) Partnership Match Agent (new)
@@ -198,11 +208,11 @@ Goal-loop state должен иметь objective, `intent`, budget, checkpoints
   - your services
   - partner services/profile
   - city/type constraints
-  - prompt template из админки
+  - public evidence and sender mode (`partner_business` or `localos_for_partner`)
 - Output:
   - match score
   - overlap/complement map
-  - draft offer letter
+  - sourced personalization candidates and draft sequence readiness
 - Approval: required
 - Learning metrics:
   - `match_accept_rate`
