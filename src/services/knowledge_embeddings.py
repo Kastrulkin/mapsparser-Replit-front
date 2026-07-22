@@ -207,6 +207,7 @@ def enqueue_document_chunks(conn, *, limit: int = 1000, document_id: str = "") -
         "OR (d.sensitivity_class = 'tenant_confidential' "
         "AND d.document_type = ANY(%s)))",
         "jsonb_array_length(d.allowed_uses) > 0",
+        "COALESCE((d.metadata_json->>'embedding_blocked')::boolean, FALSE) = FALSE",
     ]
     params: list[Any] = [sorted(SAFE_TENANT_DOCUMENT_TYPES)]
     if document_id:
@@ -238,6 +239,14 @@ def enqueue_document_chunks(conn, *, limit: int = 1000, document_id: str = "") -
         declared = list(document.get("pii_flags") or [])
         all_flags = set(declared + flags + detect_pii_flags(safe_text))
         if "secret" in all_flags:
+            cursor.execute(
+                """
+                UPDATE knowledge_documents
+                SET metadata_json = metadata_json || %s, updated_at = NOW()
+                WHERE id = %s
+                """,
+                (Json({"embedding_blocked": True, "embedding_blocked_reason": "secret_detected"}), document["id"]),
+            )
             blocked += 1
             continue
         cursor.execute(
@@ -245,6 +254,17 @@ def enqueue_document_chunks(conn, *, limit: int = 1000, document_id: str = "") -
             (document["id"], document["content_hash"]),
         )
         chunks = split_text(safe_text)
+        if not chunks:
+            cursor.execute(
+                """
+                UPDATE knowledge_documents
+                SET metadata_json = metadata_json || %s, updated_at = NOW()
+                WHERE id = %s
+                """,
+                (Json({"embedding_blocked": True, "embedding_blocked_reason": "empty_after_redaction"}), document["id"]),
+            )
+            blocked += 1
+            continue
         for chunk in chunks:
             chunk_id = str(uuid.uuid4())
             cursor.execute(
