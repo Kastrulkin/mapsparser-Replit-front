@@ -123,6 +123,8 @@ def _record_external_card_change_if_enabled(
         db_manager.conn.rollback()
         print(f"[KNOWLEDGE] Failed to record external card change for {business_id}: {exc}")
 _LAST_OUTREACH_DISPATCH_AT = 0.0
+_LAST_OUTREACH_REPLY_SYNC_AT = 0.0
+_OUTREACH_REPLY_SYNC_HEALTHY = True
 _LAST_OUTREACH_REPLY_NOTIFICATION_AT = 0.0
 _LAST_CARD_AUTOMATION_AT = 0.0
 _LAST_AGENT_SCHEDULE_DISPATCH_AT = 0.0
@@ -1421,9 +1423,71 @@ def _run_yookassa_renewals_if_due() -> None:
         print(f"[YOOKASSA_RENEWALS] unexpected error: {e}", flush=True)
 
 
+def _sync_outreach_replies_if_due() -> bool:
+    global _LAST_OUTREACH_REPLY_SYNC_AT, _OUTREACH_REPLY_SYNC_HEALTHY
+    if not _env_bool("OUTREACH_REPLY_SYNC_ENABLED", True):
+        return True
+
+    now = time.time()
+    interval_sec = max(10, int(os.getenv("OUTREACH_REPLY_SYNC_INTERVAL_SEC", "60")))
+    if now - _LAST_OUTREACH_REPLY_SYNC_AT < interval_sec:
+        return _OUTREACH_REPLY_SYNC_HEALTHY
+    _LAST_OUTREACH_REPLY_SYNC_AT = now
+
+    try:
+        from api.admin_prospecting import _sync_telegram_app_replies
+        from services.outreach_email_reply_service import sync_email_replies
+        from services.outreach_vk_reply_service import sync_vk_replies
+
+        reply_sync_limit = max(1, min(int(os.getenv("OUTREACH_REPLY_SYNC_BATCH_SIZE", "50")), 200))
+        telegram_reply_sync = _sync_telegram_app_replies(limit=reply_sync_limit)
+        email_reply_sync = sync_email_replies(
+            sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_SENDER_LIMIT", "25")), 200)),
+            per_sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_MESSAGE_LIMIT", "100")), 500)),
+        )
+        vk_reply_sync = sync_vk_replies(
+            sender_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_SENDER_LIMIT", "25")), 200)),
+            per_conversation_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_MESSAGE_LIMIT", "50")), 200)),
+        )
+        reply_sync_failed = (
+            int(telegram_reply_sync.get("failed") or 0)
+            + int(email_reply_sync.get("failed") or 0)
+            + int(vk_reply_sync.get("failed") or 0)
+        )
+        imported = (
+            int(telegram_reply_sync.get("imported") or 0)
+            + int(email_reply_sync.get("imported") or 0)
+            + int(vk_reply_sync.get("imported") or 0)
+        )
+        if reply_sync_failed > 0 or imported > 0:
+            print(
+                "[OUTREACH_REPLY_SYNC] "
+                f"telegram_picked={int(telegram_reply_sync.get('picked') or 0)} "
+                f"telegram_imported={int(telegram_reply_sync.get('imported') or 0)} "
+                f"email_picked={int(email_reply_sync.get('picked') or 0)} "
+                f"email_imported={int(email_reply_sync.get('imported') or 0)} "
+                f"vk_picked={int(vk_reply_sync.get('picked') or 0)} "
+                f"vk_imported={int(vk_reply_sync.get('imported') or 0)} "
+                f"failed={reply_sync_failed}",
+                flush=True,
+            )
+        _OUTREACH_REPLY_SYNC_HEALTHY = (
+            reply_sync_failed <= 0 or not _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True)
+        )
+        return _OUTREACH_REPLY_SYNC_HEALTHY
+    except Exception as e:
+        print(f"[OUTREACH_REPLY_SYNC] error: {e}", flush=True)
+        _OUTREACH_REPLY_SYNC_HEALTHY = not _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True)
+        return _OUTREACH_REPLY_SYNC_HEALTHY
+
+
 def _dispatch_outreach_queue_if_due() -> None:
     global _LAST_OUTREACH_DISPATCH_AT
+    reply_sync_ready = _sync_outreach_replies_if_due()
     if not _env_bool("OUTREACH_DISPATCH_ENABLED", False):
+        return
+    if not reply_sync_ready:
+        print("[OUTREACH_DISPATCH] skipped: reply_sync_failed", flush=True)
         return
 
     now = time.time()
@@ -1445,43 +1509,6 @@ def _dispatch_outreach_queue_if_due() -> None:
         )
         return
     try:
-        from api.admin_prospecting import _sync_telegram_app_replies
-        from services.outreach_email_reply_service import sync_email_replies
-        from services.outreach_vk_reply_service import sync_vk_replies
-
-        reply_sync_limit = max(1, min(int(os.getenv("OUTREACH_REPLY_SYNC_BATCH_SIZE", "50")), 200))
-        telegram_reply_sync = _sync_telegram_app_replies(limit=reply_sync_limit)
-        email_reply_sync = sync_email_replies(
-            sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_SENDER_LIMIT", "25")), 200)),
-            per_sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_MESSAGE_LIMIT", "100")), 500)),
-        )
-        vk_reply_sync = sync_vk_replies(
-            sender_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_SENDER_LIMIT", "25")), 200)),
-            per_conversation_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_MESSAGE_LIMIT", "50")), 200)),
-        )
-        reply_sync_failed = (
-            int(telegram_reply_sync.get("failed") or 0)
-            + int(email_reply_sync.get("failed") or 0)
-            + int(vk_reply_sync.get("failed") or 0)
-        )
-        if reply_sync_failed > 0:
-            print(
-                "[OUTREACH_REPLY_SYNC] "
-                f"telegram_picked={int(telegram_reply_sync.get('picked') or 0)} "
-                f"telegram_imported={int(telegram_reply_sync.get('imported') or 0)} "
-                f"email_picked={int(email_reply_sync.get('picked') or 0)} "
-                f"email_imported={int(email_reply_sync.get('imported') or 0)} "
-                f"vk_picked={int(vk_reply_sync.get('picked') or 0)} "
-                f"vk_imported={int(vk_reply_sync.get('imported') or 0)} "
-                f"failed={reply_sync_failed}",
-                flush=True,
-            )
-            if _env_bool("OUTREACH_REPLY_SYNC_FAIL_CLOSED", True):
-                print(
-                    "[OUTREACH_DISPATCH] skipped: reply_sync_failed",
-                    flush=True,
-                )
-                return
         timeout_db = DatabaseManager()
         try:
             expired_count = expire_manual_touches(timeout_db.conn.cursor())

@@ -670,7 +670,7 @@ def test_worker_finalizes_no_reply_only_after_reply_sync_and_before_dispatch():
     function_end = worker.index("\ndef _run_card_automation_if_due()", function_start)
     block = worker[function_start:function_end]
 
-    assert block.index("_sync_telegram_app_replies") < block.index("finalize_no_reply_campaigns")
+    assert block.index("_sync_outreach_replies_if_due") < block.index("finalize_no_reply_campaigns")
     assert block.index("finalize_no_reply_campaigns") < block.index("dispatch_due_outreach_queue")
     assert 'OUTREACH_NO_REPLY_GRACE_HOURS", "168"' in block
 

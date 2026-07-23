@@ -1061,12 +1061,15 @@ def test_manual_first_touch_blocks_automatic_continuation_until_user_action():
 
 def test_worker_syncs_replies_before_dispatch_and_fails_closed():
     worker = (ROOT / "src/worker.py").read_text()
+    sync_start = worker.index("def _sync_outreach_replies_if_due()")
     function_start = worker.index("def _dispatch_outreach_queue_if_due()")
     function_end = worker.index("\ndef _run_card_automation_if_due()", function_start)
+    sync_block = worker[sync_start:function_start]
     dispatch_block = worker[function_start:function_end]
 
-    assert dispatch_block.index("_sync_telegram_app_replies") < dispatch_block.index("dispatch_due_outreach_queue")
-    assert "OUTREACH_REPLY_SYNC_FAIL_CLOSED" in dispatch_block
+    assert "_sync_telegram_app_replies" in sync_block
+    assert "OUTREACH_REPLY_SYNC_FAIL_CLOSED" in sync_block
+    assert dispatch_block.index("_sync_outreach_replies_if_due") < dispatch_block.index("dispatch_due_outreach_queue")
     assert "skipped: reply_sync_failed" in dispatch_block
 
 
