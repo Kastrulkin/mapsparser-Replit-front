@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-retention_days="${DEBUG_RETENTION_DAYS:-30}"
+retention_days="${DEBUG_RETENTION_DAYS:-7}"
 apply=0
 if [[ "${1:-}" == "--apply" ]]; then
   apply=1

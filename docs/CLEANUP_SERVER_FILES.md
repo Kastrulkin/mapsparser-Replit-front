@@ -40,11 +40,11 @@ rm -f /tmp/seo_main.out /tmp/seo_worker.out 2>/dev/null || true
 
 ## Текущая политика хранения
 
-- PostgreSQL: 7 ежедневных, 4 еженедельных и 6 ежемесячных стандартных backup-файлов.
-- Именованные backup-файлы перед миграциями и ручными изменениями сохраняются вне автоматической ротации.
+- PostgreSQL: 3 ежедневных, 2 еженедельных и 2 ежемесячных стандартных backup-файла. Значения можно изменить через `POSTGRES_BACKUP_DAILY_RETENTION`, `POSTGRES_BACKUP_WEEKLY_RETENTION` и `POSTGRES_BACKUP_MONTHLY_RETENTION`.
+- Именованные backup-файлы перед миграциями и ручными изменениями хранятся 7 дней, занимают суммарно не более 4 ГБ, а два самых свежих сохраняются всегда. Для бессрочной защиты конкретного файла создайте рядом `<backup>.keep`.
 - Несжатые SQL-бэкапы переводятся в gzip только после проверки gzip и SHA-256 распакованного содержимого.
 - `latest.sql.gz` является hardlink на последний стандартный бэкап, а не второй полной копией.
-- Debug bundles старше 30 дней удаляются; пользовательские медиа и файлы цифровых комнат исключены.
+- Debug bundles старше 7 дней удаляются; пользовательские медиа и файлы цифровых комнат исключены.
 - Journald ограничен 300 МБ и 14 днями, rsyslog ротируется ежедневно или при достижении 100 МБ.
 
 Ручная проверка без изменений:
@@ -52,6 +52,7 @@ rm -f /tmp/seo_main.out /tmp/seo_worker.out 2>/dev/null || true
 ```bash
 cd /opt/seo-app
 python3 scripts/prune_postgres_backups.py
+python3 scripts/prune_named_database_backups.py
 bash scripts/prune_debug_data.sh
 bash scripts/compress_sql_backups.sh
 ```

@@ -34,7 +34,19 @@ def test_prune_keeps_milestones_and_links_latest_to_newest(tmp_path: Path) -> No
     assert milestone.exists()
 
     subprocess.run(
-        [sys.executable, str(SCRIPT), "--directory", str(tmp_path), "--apply"],
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--directory",
+            str(tmp_path),
+            "--daily",
+            "7",
+            "--weekly",
+            "4",
+            "--monthly",
+            "6",
+            "--apply",
+        ],
         check=True,
         capture_output=True,
         text=True,
@@ -47,3 +59,20 @@ def test_prune_keeps_milestones_and_links_latest_to_newest(tmp_path: Path) -> No
     newest = automated[-1]
     assert latest.exists()
     assert os.stat(latest).st_ino == os.stat(newest).st_ino
+
+
+def test_default_retention_is_sized_for_small_production_disk(tmp_path: Path) -> None:
+    start = datetime(2026, 7, 1, 12, 0, 0)
+    for offset in range(10):
+        timestamp = start + timedelta(days=offset)
+        (tmp_path / f"local_{timestamp:%Y%m%d_%H%M%S}.sql.gz").write_bytes(b"backup")
+
+    subprocess.run(
+        [sys.executable, str(SCRIPT), "--directory", str(tmp_path), "--apply"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    remaining = sorted(tmp_path.glob("local_????????_??????.sql.gz"))
+    assert len(remaining) == 4

@@ -36,19 +36,31 @@ def newest_by_key(
     return kept
 
 
-def retained_paths(items: list[tuple[Path, datetime]]) -> set[Path]:
+def retained_paths(
+    items: list[tuple[Path, datetime]],
+    *,
+    daily: int,
+    weekly: int,
+    monthly: int,
+) -> set[Path]:
     keep: set[Path] = set()
-    keep.update(newest_by_key(items, lambda value: value.date(), 7))
-    keep.update(newest_by_key(items, lambda value: value.isocalendar()[:2], 4))
-    keep.update(newest_by_key(items, lambda value: (value.year, value.month), 6))
+    keep.update(newest_by_key(items, lambda value: value.date(), daily))
+    keep.update(newest_by_key(items, lambda value: value.isocalendar()[:2], weekly))
+    keep.update(newest_by_key(items, lambda value: (value.year, value.month), monthly))
     return keep
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Retain 7 daily, 4 weekly and 6 monthly PostgreSQL backups.")
+    parser = argparse.ArgumentParser(description="Rotate standard PostgreSQL backups.")
     parser.add_argument("--directory", default="data/backups/postgres")
+    parser.add_argument("--daily", type=int, default=int(os.getenv("POSTGRES_BACKUP_DAILY_RETENTION", "3")))
+    parser.add_argument("--weekly", type=int, default=int(os.getenv("POSTGRES_BACKUP_WEEKLY_RETENTION", "2")))
+    parser.add_argument("--monthly", type=int, default=int(os.getenv("POSTGRES_BACKUP_MONTHLY_RETENTION", "2")))
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
+
+    if min(args.daily, args.weekly, args.monthly) < 0:
+        parser.error("retention counts must be non-negative")
 
     backup_dir = Path(args.directory)
     candidates: list[tuple[Path, datetime]] = []
@@ -62,7 +74,12 @@ def main() -> int:
             continue
         candidates.append((path, timestamp))
 
-    keep = retained_paths(candidates)
+    keep = retained_paths(
+        candidates,
+        daily=args.daily,
+        weekly=args.weekly,
+        monthly=args.monthly,
+    )
     remove = [path for path, _timestamp in candidates if path not in keep]
     reclaimed = sum(path.stat().st_size for path in remove)
 
@@ -88,7 +105,8 @@ def main() -> int:
 
     print(
         f"kept={len(keep) + len(unparsed)} removed={len(remove)} "
-        f"reclaimed_bytes={reclaimed} apply={args.apply}"
+        f"reclaimed_bytes={reclaimed} daily={args.daily} weekly={args.weekly} "
+        f"monthly={args.monthly} apply={args.apply}"
     )
     return 0
 
