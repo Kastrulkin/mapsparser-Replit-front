@@ -38,6 +38,12 @@ def _deepseek_business_allowed(business_id: str) -> bool:
 
 
 def _provider_for_request(definition: LLMTaskDefinition, request: LLMTaskRequest) -> str:
+    if (
+        request.task_key == "operator_intent_classify"
+        and definition.primary_provider == "deepseek"
+        and _env_enabled("OPERATOR_DEEPSEEK_ROUTER_ENABLED")
+    ):
+        return "deepseek"
     if not _env_enabled("LLM_ROUTER_ENABLED"):
         return "gigachat"
     if definition.primary_provider != "deepseek":

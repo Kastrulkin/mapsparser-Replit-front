@@ -101,7 +101,10 @@ def test_ai_router_cheap_gate_skips_smalltalk_and_allows_operator_commands() -> 
     assert should_use_ai_intent_router("посмотри что там с карточкой")
     assert should_use_ai_intent_router("надо ответить людям")
     assert should_use_ai_intent_router("собери свежие данные по салону")
+    assert should_use_ai_intent_router("почему рейтинг просел")
+    assert should_use_ai_intent_router("разберись с этим")
     assert not should_use_ai_intent_router("привет")
+    assert not should_use_ai_intent_router("Добрый день!")
     assert not should_use_ai_intent_router("спасибо")
     assert not should_use_ai_intent_router("?")
 

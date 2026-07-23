@@ -26,52 +26,18 @@ SUPPORTED_AI_INTENTS = {
 }
 
 
-AI_ROUTER_ACTION_MARKERS = (
-    "посмотри",
-    "проверь",
-    "обнов",
-    "спарс",
-    "парс",
-    "собер",
-    "подтян",
-    "загруз",
-    "получи",
-    "актуализ",
-    "синхрониз",
-    "подготов",
-    "сгенер",
-    "напиши",
-    "создай",
-    "сделай",
-    "ответ",
-    "оптимиз",
-    "улучш",
-    "примени",
-    "надо",
-    "нужно",
-)
-
-AI_ROUTER_SCOPE_MARKERS = (
-    "карточ",
-    "аккаунт",
-    "профил",
-    "данные",
-    "карт",
-    "яндекс",
-    "2гис",
-    "2gis",
-    "google",
-    "отзыв",
-    "ответ",
-    "клиент",
-    "люд",
-    "услуг",
-    "новост",
-    "пост",
-    "соцсет",
-    "салон",
-    "бизнес",
-)
+AI_ROUTER_SMALLTALK = {
+    "доброе утро",
+    "добрый день",
+    "добрый вечер",
+    "здравствуй",
+    "здравствуйте",
+    "привет",
+    "спасибо",
+    "благодарю",
+    "ок",
+    "окей",
+}
 
 
 def should_use_ai_intent_router(message: Any) -> bool:
@@ -80,9 +46,13 @@ def should_use_ai_intent_router(message: Any) -> bool:
         return False
     if len(text) < 5:
         return False
-    has_action = any(marker in text for marker in AI_ROUTER_ACTION_MARKERS)
-    has_scope = any(marker in text for marker in AI_ROUTER_SCOPE_MARKERS)
-    return has_action and has_scope
+    normalized = text.strip(" .,!?:;—-\n\t")
+    if normalized in AI_ROUTER_SMALLTALK:
+        return False
+    # This gate is reached only after deterministic Operator handlers. Any
+    # remaining meaningful phrase is sent to the constrained intent classifier;
+    # the model can select only an allow-listed intent and never executes tools.
+    return bool(normalized)
 
 
 def _build_intent_prompt(message: str) -> str:

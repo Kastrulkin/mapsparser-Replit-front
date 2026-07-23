@@ -184,6 +184,25 @@ def test_router_uses_deepseek_only_for_enabled_cohort(monkeypatch):
     assert calls[1][0] == "gigachat"
 
 
+def test_operator_router_can_use_deepseek_without_enabling_other_tasks(monkeypatch):
+    monkeypatch.setenv("LLM_ROUTER_ENABLED", "false")
+    monkeypatch.setenv("OPERATOR_DEEPSEEK_ROUTER_ENABLED", "true")
+
+    definition = get_task_definition("operator_intent_classify")
+    other_definition = get_task_definition("agent_compiler")
+
+    assert definition is not None
+    assert other_definition is not None
+    assert gateway._provider_for_request(
+        definition,
+        LLMTaskRequest(task_key="operator_intent_classify", prompt="classify", business_id="business-2"),
+    ) == "deepseek"
+    assert gateway._provider_for_request(
+        other_definition,
+        LLMTaskRequest(task_key="agent_compiler", prompt="build", business_id="business-2"),
+    ) == "gigachat"
+
+
 def test_public_platform_audit_uses_deepseek_without_tenant_id(monkeypatch):
     calls = []
 
