@@ -816,7 +816,7 @@ def test_generate_lead_audit_enrichment_uses_ai_payload(monkeypatch) -> None:
     assert "AI summary" not in enrichment["summary_text"]
     assert "услуг 3" in enrichment["summary_text"]
     assert enrichment["recommended_actions"][0]["title"] == "Action 1"
-    assert enrichment["meta"]["source"] == "gigachat"
+    assert enrichment["meta"]["source"] == "deepseek"
 
 
 def test_resolve_telegram_app_recipient_prefers_username() -> None:

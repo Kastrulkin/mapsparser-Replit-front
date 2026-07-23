@@ -681,9 +681,10 @@ def test_organika_offer_has_one_safe_test_and_no_automatic_action() -> None:
         audit_json={"audit_profile": "education_children"},
     ).lower()
     assert "родител" in text
-    assert "20-минутн" in text
-    assert "автоматической рассылки" in text
-    assert "заранее не обещаются" in text
+    assert "простого формата" in text
+    assert "возможные форматы сотрудничества" in text
+    assert "20-минутн" not in text
+    assert "автоматической рассылки" not in text
 
 
 def test_organika_fashion_offer_names_the_shared_family_audience() -> None:

@@ -211,6 +211,7 @@ def _persist_match_artifact(
     lead_id: str,
     snapshot: dict[str, object] | None,
     match: dict[str, object],
+    replace_audit: bool = False,
 ) -> None:
     cursor.execute(
         """
@@ -218,6 +219,8 @@ def _persist_match_artifact(
         VALUES (%s, %s, %s, NOW())
         ON CONFLICT (lead_id) DO UPDATE
         SET audit_json = CASE
+                WHEN %s
+                THEN EXCLUDED.audit_json
                 WHEN partnershipleadartifacts.audit_json IS NULL
                   OR partnershipleadartifacts.audit_json = '{}'::jsonb
                 THEN EXCLUDED.audit_json
@@ -226,7 +229,7 @@ def _persist_match_artifact(
             match_json = EXCLUDED.match_json,
             updated_at = NOW()
         """,
-        (lead_id, Json(snapshot or {}), Json(match)),
+        (lead_id, Json(snapshot or {}), Json(match), replace_audit),
     )
 
 
@@ -326,6 +329,11 @@ def parse_args() -> argparse.Namespace:
     mode.add_argument("--execute", action="store_true")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--business-id")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Rebuild audit and matching artifacts even when a match already exists",
+    )
     parser.add_argument("--sample-size", type=int, default=10)
     parser.add_argument(
         "--refresh-enrichment",
@@ -358,15 +366,16 @@ def main() -> int:
 
     database = DatabaseManager()
     cursor = database.conn.cursor()
-    where = [
-        "ws.workstream_type = 'client_partnership'",
-        "NOT EXISTS ("
-        "SELECT 1 FROM partnershipleadartifacts artifact "
-        "WHERE artifact.lead_id = lead.id "
-        "AND artifact.match_json IS NOT NULL "
-        "AND artifact.match_json <> '{}'::jsonb "
-        "AND COALESCE(artifact.match_json->>'assessment_kind', '') <> 'prerequisite')",
-    ]
+    where = ["ws.workstream_type = 'client_partnership'"]
+    if not args.force:
+        where.append(
+            "NOT EXISTS ("
+            "SELECT 1 FROM partnershipleadartifacts artifact "
+            "WHERE artifact.lead_id = lead.id "
+            "AND artifact.match_json IS NOT NULL "
+            "AND artifact.match_json <> '{}'::jsonb "
+            "AND COALESCE(artifact.match_json->>'assessment_kind', '') <> 'prerequisite')"
+        )
     params: list[object] = []
     if args.business_id:
         where.append("ws.client_business_id = %s")
@@ -444,6 +453,7 @@ def main() -> int:
                         lead_id=str(row["id"]),
                         snapshot=None,
                         match=_build_prerequisite_assessment(row, source_skip_reason),
+                        replace_audit=args.force,
                     )
                     report["prerequisite_assessments_saved"] += 1
                 continue
@@ -506,6 +516,7 @@ def main() -> int:
                         lead_id=str(row["id"]),
                         snapshot=snapshot,
                         match=_build_prerequisite_assessment(row, skip_reason, snapshot),
+                        replace_audit=args.force,
                     )
                     report["prerequisite_assessments_saved"] += 1
                 continue
@@ -540,6 +551,7 @@ def main() -> int:
                         lead_id=str(row["id"]),
                         snapshot=snapshot,
                         match=match,
+                        replace_audit=args.force,
                     )
                     report["assessments_saved"] += 1
                     if args.refresh_enrichment:
@@ -559,6 +571,7 @@ def main() -> int:
                 lead_id=str(row["id"]),
                 snapshot=snapshot,
                 match=match,
+                replace_audit=args.force,
             )
             report["matches_saved"] += 1
             if args.refresh_enrichment:

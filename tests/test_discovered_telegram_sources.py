@@ -4,6 +4,8 @@ from pathlib import Path
 from services.discovered_telegram_source_service import (
     discovered_telegram_signals,
     parse_telegram_reference,
+    source_attribution_for_lead,
+    sync_discovered_telegram_sources,
 )
 from services.contact_intelligence_service import (
     evaluate_first_message,
@@ -21,6 +23,154 @@ def test_public_telegram_reference_is_normalized_without_assuming_direct_message
         "discovered_url": "https://t.me/s/LocalOS_news/123?single",
         "message_id": "123",
     }
+
+
+def test_booking_provider_channel_is_shared_source_not_lead_channel(monkeypatch):
+    class Cursor:
+        def __init__(self):
+            self.last_query = ""
+            self.executions = []
+
+        def execute(self, query, params=None):
+            self.last_query = query
+            self.executions.append((query, params or ()))
+
+        def fetchall(self):
+            if "FROM lead_workstreams" in self.last_query:
+                return [{
+                    "id": "workstream-047",
+                    "workstream_type": "client_partnership",
+                    "client_business_id": "business-047",
+                }]
+            return []
+
+        def fetchone(self):
+            if "FROM outreach_sender_accounts" in self.last_query:
+                return {"account_id": "telegram-account", "radar_enabled": True}
+            return None
+
+        def close(self):
+            return None
+
+    class Connection:
+        def __init__(self):
+            self.cursor_instance = Cursor()
+
+        def cursor(self, **_kwargs):
+            return self.cursor_instance
+
+    saved_sources = []
+
+    def fake_upsert_source(_conn, **payload):
+        saved_sources.append(payload)
+        return {"id": "source-dikidi"}
+
+    monkeypatch.setattr(
+        "services.discovered_telegram_source_service.upsert_source",
+        fake_upsert_source,
+    )
+    connection = Connection()
+
+    result = sync_discovered_telegram_sources(
+        connection,
+        {
+            "id": "lead-047",
+            "name": "047 Beauty Zone",
+            "messenger_links_json": ["https://t.me/dikidi_business"],
+        },
+    )
+
+    assert result["references"] == 1
+    assert result["sources"] == 1
+    assert saved_sources[0]["title"] == "Telegram · Dikidi"
+    assert not any(
+        "INSERT INTO lead_signal_links" in query
+        for query, _params in connection.cursor_instance.executions
+    )
+
+
+def test_residential_telegram_source_belongs_to_complex_not_sender_business():
+    attribution = source_attribution_for_lead({
+        "id": "lead-legenda-yakhtennaya",
+        "name": "Legenda на Яхтенной, 24",
+        "category": "Жилой комплекс",
+    })
+
+    assert attribution == {
+        "source_owner_type": "residential_complex",
+        "source_owner_role": "outreach_recipient",
+        "source_owner_scope": "lead_signal_links",
+        "sender_business_is_owner": False,
+        "lead_attribution": "recipient_signal_source",
+    }
+
+
+def test_residential_source_is_saved_as_recipient_radar_source(monkeypatch):
+    class Cursor:
+        def __init__(self):
+            self.last_query = ""
+            self.executions = []
+
+        def execute(self, query, params=None):
+            self.last_query = query
+            self.executions.append((query, params or ()))
+
+        def fetchall(self):
+            if "FROM lead_workstreams" in self.last_query:
+                return [{
+                    "id": "workstream-legenda",
+                    "workstream_type": "client_partnership",
+                    "client_business_id": "business-oliver",
+                }]
+            return []
+
+        def fetchone(self):
+            if "FROM outreach_sender_accounts" in self.last_query:
+                return {"account_id": "telegram-account", "radar_enabled": True}
+            return None
+
+        def close(self):
+            return None
+
+    class Connection:
+        def __init__(self):
+            self.cursor_instance = Cursor()
+
+        def cursor(self, **_kwargs):
+            return self.cursor_instance
+
+    saved_sources = []
+
+    def fake_upsert_source(_conn, **payload):
+        saved_sources.append(payload)
+        return {"id": "source-legenda"}
+
+    monkeypatch.setattr(
+        "services.discovered_telegram_source_service.upsert_source",
+        fake_upsert_source,
+    )
+    connection = Connection()
+
+    result = sync_discovered_telegram_sources(
+        connection,
+        {
+            "id": "lead-legenda-yakhtennaya",
+            "name": "Legenda на Яхтенной, 24",
+            "category": "Жилой комплекс",
+            "messenger_links_json": ["https://t.me/LegendaDevelopment"],
+        },
+    )
+
+    assert result == {"references": 1, "sources": 1, "queued": 1}
+    assert saved_sources[0]["title"] == "Telegram ЖК · @LegendaDevelopment"
+    assert saved_sources[0]["source_role"] == "community"
+    assert saved_sources[0]["business_id"] == "business-oliver"
+    assert saved_sources[0]["metadata"]["source_owner_type"] == "residential_complex"
+    assert saved_sources[0]["metadata"]["sender_business_is_owner"] is False
+    assert any(
+        "INSERT INTO lead_signal_links" in query
+        for query, _params in connection.cursor_instance.executions
+    )
 
 
 def test_private_invites_shares_and_bots_are_not_channel_candidates():
@@ -74,6 +224,9 @@ def test_only_specific_fresh_channel_posts_become_personalization_signals():
     assert signals[0]["message_link"] == "https://t.me/example/10"
     assert signals[0]["auto_discovered"] is True
     assert signals[0]["relevance_score"] >= 60
+    assert signals[0]["source_owner_type"] == "prospecting_recipient"
+    assert signals[0]["source_owner_name"] == "Example"
+    assert signals[0]["sender_business_is_owner"] is False
 
 
 def test_monitor_requires_radar_permission_and_preflights_auto_discovered_sources():
@@ -189,7 +342,9 @@ def test_lead_drawer_exposes_channel_source_status_in_human_language():
     assert '"telegram_sources": telegram_sources' in api
     assert "documents_count" in api
     assert "Telegram-источники" in ui
-    assert "LocalOS не использует их как чат получателя" in ui
+    assert "Они не считаются каналами бизнеса-отправителя" in ui
+    assert "source_owner_label" in api
+    assert "Источник {ownerLabel}" in ui
     assert "подключите Telegram-радар" in ui
     assert "Публичный канал" in ui
 

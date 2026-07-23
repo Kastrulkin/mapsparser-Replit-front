@@ -57,7 +57,7 @@ try:
 except ImportError:
     from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
 from services.lead_workstream_service import (
@@ -685,10 +685,13 @@ def _normalize_public_sales_room_proposal(cur, row: dict[str, Any], room_json: d
             lead_name=str(recipient.get("name") or "компания"),
         )
     room_json["proposal"] = {
-        "title": "Предложение",
-        "summary": "",
+        "title": str(
+            proposal.get("title")
+            or ("Идея сотрудничества" if mode == SALES_ROOM_MODE_PARTNER else "Предложение")
+        ).strip(),
+        "summary": str(proposal.get("summary") or "").strip(),
         "body_text": body_text,
-        "bullets": [],
+        "bullets": proposal.get("bullets") if isinstance(proposal.get("bullets"), list) else [],
         "next_step": str(proposal.get("next_step") or "Обсудить детали и выбрать первый шаг.").strip(),
         "data_mode": str(proposal.get("data_mode") or room_json.get("data_mode") or ""),
     }
@@ -1056,6 +1059,8 @@ def _refresh_existing_partnership_sales_room(
         business_name=business_name,
         lead_name=lead_name,
         audit_json=audit_json,
+        lead=lead,
+        business_profile=business_profile,
     )
     research = lead.get("research") if isinstance(lead.get("research"), dict) else {}
     opener = str(research.get("suggested_opener") or "").strip()
@@ -1194,6 +1199,7 @@ def _refresh_existing_client_sales_room(
         data_mode=SALES_ROOM_DATA_TEMPLATE,
         lead=lead,
         business_name=business_name,
+        business_profile=business_profile,
     )
     body_text = str(proposal_json.get("body_text") or "").strip()
     generated_room_json = _build_sales_room_payload(
@@ -1303,6 +1309,7 @@ def _create_or_update_sales_room(
         audit_json=audit_json,
         match_json=match_json,
         offer_draft_json=offer_draft_json,
+        business_profile=business_profile,
     )
     room_json = _build_sales_room_payload(
         mode=mode,
@@ -1320,11 +1327,11 @@ def _create_or_update_sales_room(
         INSERT INTO sales_rooms (
             id, slug, business_id, mode, lead_id, workstream_id, partner_card_id,
             data_mode, audit_public_url, match_json, proposal_json, room_json,
-            status, created_by, created_at, updated_at
+            status, visibility, created_by, created_at, updated_at
         ) VALUES (
             %s, %s, %s, %s, %s, NULLIF(%s, '')::uuid, NULLIF(%s, '')::uuid,
             %s, %s, %s, %s, %s,
-            'ready', NULLIF(%s, '')::uuid, NOW(), NOW()
+            'ready', 'shared', NULLIF(%s, '')::uuid, NOW(), NOW()
         )
         RETURNING *
         """,

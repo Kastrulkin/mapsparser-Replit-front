@@ -10,10 +10,33 @@ from src.api.admin_prospecting import (
     _build_sales_room_payload,
     _build_sales_room_proposal,
     _normalize_sales_room_audit_offer_payload,
+    _normalize_public_sales_room_proposal,
     _public_sales_room_rate_buckets,
     _public_audit_offer_visible_for_user,
     _serialize_public_audit_offer,
 )
+
+
+def test_public_room_preserves_human_approved_proposal_heading() -> None:
+    room_json = {
+        "proposal": {
+            "title": "Идея сотрудничества",
+            "summary": "Небольшой совместный пилот.",
+            "body_text": "Кажется, у нас есть общая аудитория.",
+            "bullets": ["Формат уже собран"],
+            "next_step": "Выбрать формат.",
+        }
+    }
+
+    normalized = _normalize_public_sales_room_proposal(
+        None,
+        {"mode": SALES_ROOM_MODE_PARTNER, "lead_id": "lead-1"},
+        room_json,
+    )
+
+    assert normalized["proposal"]["title"] == "Идея сотрудничества"
+    assert normalized["proposal"]["summary"] == "Небольшой совместный пилот."
+    assert normalized["proposal"]["bullets"] == ["Формат уже собран"]
 
 
 def test_partner_sales_room_invitation_points_to_room() -> None:
@@ -41,6 +64,171 @@ def test_template_room_does_not_claim_audit() -> None:
 
     assert proposal["data_mode"] == SALES_ROOM_DATA_TEMPLATE
     assert "аудит" not in proposal["summary"].lower()
+
+
+def test_audited_localos_offer_uses_audit_facts_and_online_to_offline_value() -> None:
+    proposal = _build_sales_room_proposal(
+        mode=SALES_ROOM_MODE_CLIENT,
+        data_mode=SALES_ROOM_DATA_AUDITED,
+        lead={
+            "name": "047 Beauty Zone",
+            "category": "салон красоты",
+            "source_url": "https://yandex.ru/maps/org/047-beauty-zone",
+        },
+        business_name="LocalOS",
+        audit_json={
+            "summary_text": "Карточку можно усилить.",
+            "findings": [{
+                "title": "Не заполнены цены",
+                "description": "В карточке 12 услуг, цены указаны только у 2.",
+            }],
+        },
+        match_json={},
+    )
+
+    body = proposal["body_text"].lower()
+    assert "12 услуг" in body
+    assert "цены указаны только у 2" in body
+    assert "онлайн" in body
+    assert "офлайн" in body
+    assert "клиент" in body
+
+
+def test_beauty_to_residential_room_uses_flyers_and_masterclasses_only() -> None:
+    proposal = _build_sales_room_proposal(
+        mode=SALES_ROOM_MODE_PARTNER,
+        data_mode=SALES_ROOM_DATA_TEMPLATE,
+        lead={
+            "name": "Legenda на Яхтенной, 24",
+            "category": "Жилой комплекс",
+        },
+        business_name="Оливер",
+        business_profile={
+            "name": "Оливер",
+            "business_type": "beauty_salon",
+            "industry": "Салон красоты",
+        },
+        audit_json={},
+        match_json={},
+    )
+
+    body = proposal["body_text"].lower()
+    assert proposal["title"] == "Идея сотрудничества"
+    assert "мы ваши соседи - оливер" in body
+    assert "разместить наши листовки" in body
+    assert "приглашать жителей на открытые мастер-классы" in body
+    assert "управляющей компанией" in body
+    assert "кросс-рекомендац" not in body
+    assert "интеграц" not in body
+    assert "скид" not in body
+
+
+def test_veselaya_to_residential_room_leads_with_special_conditions() -> None:
+    proposal = _build_sales_room_proposal(
+        mode=SALES_ROOM_MODE_PARTNER,
+        data_mode=SALES_ROOM_DATA_TEMPLATE,
+        lead={"name": "ЖК Северная Долина", "category": "Жилой комплекс"},
+        business_name="Весёлая расчёска",
+        business_profile={},
+        audit_json={},
+        match_json={},
+    )
+
+    body = proposal["body_text"].lower()
+    assert "мы ваши соседи - весёлая расчёска" in body
+    assert "особые условия на детские стрижки для жителей жк северная долина" in body
+    assert "каналы жк" in body
+    assert "листовки" in body
+    assert "мастер-класс" in body
+    assert "конкретные условия" in body
+
+
+def test_unconfirmed_beauty_business_does_not_inherit_oliver_formats() -> None:
+    proposal = _build_sales_room_proposal(
+        mode=SALES_ROOM_MODE_PARTNER,
+        data_mode=SALES_ROOM_DATA_TEMPLATE,
+        lead={"name": "ЖК Соседи", "category": "Жилой комплекс"},
+        business_name="Другой салон",
+        business_profile={
+            "name": "Другой салон",
+            "business_type": "beauty_salon",
+            "industry": "Салон красоты",
+        },
+        audit_json={},
+        match_json={},
+    )
+
+    body = proposal["body_text"].lower()
+    assert "пригласить ваших жителей к нам" in body
+    assert "мастер-класс" not in body
+    assert "листов" not in body
+    assert "скид" not in body
+
+
+def test_non_beauty_to_residential_room_invites_residents_without_invented_terms() -> None:
+    proposal = _build_sales_room_proposal(
+        mode=SALES_ROOM_MODE_PARTNER,
+        data_mode=SALES_ROOM_DATA_TEMPLATE,
+        lead={
+            "name": "ЖК Новые кварталы",
+            "category": "Жилой комплекс",
+        },
+        business_name="Новамед",
+        business_profile={
+            "name": "Новамед",
+            "business_type": "cosmetology",
+            "industry": "Косметология",
+        },
+        audit_json={},
+        match_json={},
+    )
+
+    body = proposal["body_text"].lower()
+    assert proposal["title"] == "Идея сотрудничества"
+    assert "мы ваши соседи - новамед" in body
+    assert "пригласить ваших жителей к нам" in body
+    assert "конкретный формат и условия" in body
+    assert "управляющей компанией" in body
+    assert "мастер-класс" not in body
+    assert "скид" not in body
+    assert "особые условия" not in body
+
+
+def test_residential_room_ignores_unreviewed_generic_ai_offer() -> None:
+    proposal = _build_sales_room_proposal(
+        mode=SALES_ROOM_MODE_PARTNER,
+        data_mode=SALES_ROOM_DATA_TEMPLATE,
+        lead={"name": "ЖК Новые кварталы", "category": "Жилой комплекс"},
+        business_name="Новамед",
+        business_profile={"name": "Новамед", "business_type": "medical_center"},
+        audit_json={},
+        match_json={},
+        offer_draft_json={
+            "generated_text": "Предлагаем один безопасный совместный тест без интеграции."
+        },
+    )
+
+    assert "пригласить ваших жителей к нам" in proposal["body_text"]
+    assert "безопасный совместный тест" not in proposal["body_text"]
+
+
+def test_residential_room_preserves_explicitly_edited_offer() -> None:
+    proposal = _build_sales_room_proposal(
+        mode=SALES_ROOM_MODE_PARTNER,
+        data_mode=SALES_ROOM_DATA_TEMPLATE,
+        lead={"name": "ЖК Новые кварталы", "category": "Жилой комплекс"},
+        business_name="Новамед",
+        business_profile={"name": "Новамед", "business_type": "medical_center"},
+        audit_json={},
+        match_json={},
+        offer_draft_json={
+            "edited_text": "Хотим пригласить жителей на подтверждённый день открытых дверей."
+        },
+    )
+
+    assert proposal["body_text"] == (
+        "Хотим пригласить жителей на подтверждённый день открытых дверей."
+    )
 
 
 def test_sales_room_payload_hides_audit_for_template_mode() -> None:

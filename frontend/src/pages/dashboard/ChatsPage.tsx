@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { MessageSquare, Bot, User as UserIcon, Send, Pause, Play, X, FlaskConical } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { OutreachSandbox } from '@/components/outreach/OutreachSandbox';
 
 interface Conversation {
   id: string;
@@ -58,6 +59,7 @@ export const ChatsPage: React.FC = () => {
   const [sandboxMessages, setSandboxMessages] = useState<SandboxMessage[]>([]);
   const [sandboxInput, setSandboxInput] = useState('');
   const [sandboxLoading, setSandboxLoading] = useState(false);
+  const [workspaceMode, setWorkspaceMode] = useState<'dialogs' | 'agent' | 'outreach'>('dialogs');
   const { toast } = useToast();
   const { t } = useLanguage();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -254,7 +256,7 @@ export const ChatsPage: React.FC = () => {
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
-  const isSandbox = selectedConversationId === 'sandbox';
+  const isSandbox = workspaceMode === 'agent';
 
   const handleSandboxSend = async () => {
     if (!sandboxInput.trim() || !selectedAgentId || sandboxLoading) return;
@@ -339,9 +341,41 @@ export const ChatsPage: React.FC = () => {
   }
 
   return (
-    <div className="h-full flex gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      <div className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1" role="tablist" aria-label="Разделы чатов">
+        {[
+          { id: 'dialogs', label: 'Диалоги' },
+          { id: 'agent', label: 'Песочница агента' },
+          { id: 'outreach', label: 'Аутрич-песочница' },
+        ].map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={workspaceMode === item.id}
+            onClick={() => {
+              if (item.id === 'dialogs' || item.id === 'agent' || item.id === 'outreach') {
+                setWorkspaceMode(item.id);
+                if (item.id === 'agent') setSelectedConversationId('sandbox');
+                if (item.id === 'dialogs' && selectedConversationId === 'sandbox') setSelectedConversationId(null);
+              }
+            }}
+            className={`min-h-10 shrink-0 rounded-md px-3 text-sm font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-out active:scale-[0.96] ${workspaceMode === item.id
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {workspaceMode === 'outreach' ? (
+        <OutreachSandbox businessId={currentBusinessId} />
+      ) : (
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
       {/* Левая панель: Агенты */}
-      <div className="w-64 bg-white rounded-lg border border-gray-200 p-4">
+      <div className="w-full shrink-0 bg-white rounded-lg border border-gray-200 p-4 lg:w-64">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">{t.dashboard.chats.agents.title}</h2>
         <div className="space-y-2">
           {agents.map((agent) => (
@@ -371,7 +405,7 @@ export const ChatsPage: React.FC = () => {
       </div>
 
       {/* Средняя панель: Список чатов */}
-      <div className="w-80 bg-white rounded-lg border border-gray-200 flex flex-col">
+      <div className={`w-full shrink-0 bg-white rounded-lg border border-gray-200 flex-col lg:w-80 ${isSandbox ? 'hidden lg:flex' : 'flex'}`}>
         <div className="p-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">
             {selectedAgent ? `${t.dashboard.chats.list.title}: ${selectedAgent.name}` : t.dashboard.chats.list.title}
@@ -379,28 +413,6 @@ export const ChatsPage: React.FC = () => {
         </div>
         <ScrollArea className="flex-1">
           <div className="p-2">
-            {/* Песочница - всегда первый элемент */}
-            {selectedAgentId && (
-              <button
-                onClick={() => {
-                  setSelectedConversationId('sandbox');
-                  setSandboxMessages([]);
-                }}
-                className={`w-full text-left p-3 rounded-lg border mb-2 transition-colors ${isSandbox
-                    ? 'bg-blue-50 border-blue-200'
-                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                  }`}
-              >
-                <div className="flex items-center gap-2">
-                  <FlaskConical className="w-4 h-4 text-purple-500" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-900">{t.dashboard.chats.sandbox.title}</div>
-                    <div className="text-xs text-gray-500">{t.dashboard.chats.sandbox.subtitle}</div>
-                  </div>
-                </div>
-              </button>
-            )}
-
             {conversations.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
                 {t.dashboard.chats.list.empty}
@@ -436,7 +448,7 @@ export const ChatsPage: React.FC = () => {
       </div>
 
       {/* Правая панель: Детали чата */}
-      <div className="flex-1 bg-white rounded-lg border border-gray-200 flex flex-col">
+      <div className="min-h-[28rem] flex-1 bg-white rounded-lg border border-gray-200 flex flex-col">
         {isSandbox ? (
           <>
             <div className="p-4 border-b border-gray-200 flex items-center gap-2">
@@ -659,6 +671,8 @@ export const ChatsPage: React.FC = () => {
           </div>
         )}
       </div>
+      </div>
+      )}
     </div>
   );
 };

@@ -24,6 +24,7 @@ from services.outreach_campaign_service import (
     persist_preview,
     record_campaign_event,
 )
+from services.outreach_decision_service import DECISION_VERSION
 from services.outreach_personalization_ai import (
     PROMPT_VERSION,
     REVIEW_PROMPT_VERSION,
@@ -66,6 +67,50 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_json_safe(item) for item in value]
     return value
+
+
+def _without_calculated_at(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _without_calculated_at(item)
+            for key, item in value.items()
+            if key != "calculated_at"
+        }
+    if isinstance(value, list):
+        return [_without_calculated_at(item) for item in value]
+    return value
+
+
+def _decision_is_current(row: dict[str, Any]) -> bool:
+    decision = (
+        row.get("outreach_decision_json")
+        if isinstance(row.get("outreach_decision_json"), dict)
+        else {}
+    )
+    if _text(decision.get("version")) != DECISION_VERSION:
+        return False
+    enrichment_status = _text(row.get("enrichment_status")).lower()
+    enrichment_updated_at = row.get("enrichment_updated_at")
+    calculated_at = decision.get("calculated_at")
+    if (
+        enrichment_status not in ACTIVE_ENRICHMENT_STATES
+        and isinstance(enrichment_updated_at, datetime)
+        and calculated_at
+    ):
+        try:
+            calculated = datetime.fromisoformat(str(calculated_at).replace("Z", "+00:00"))
+            if calculated.tzinfo is None:
+                calculated = calculated.replace(tzinfo=timezone.utc)
+            enriched = (
+                enrichment_updated_at
+                if enrichment_updated_at.tzinfo
+                else enrichment_updated_at.replace(tzinfo=timezone.utc)
+            )
+            if enriched.astimezone(timezone.utc) > calculated.astimezone(timezone.utc):
+                return False
+        except (TypeError, ValueError):
+            return False
+    return True
 
 
 def _scope_sender_mode(workstream_type: str) -> str:
@@ -114,11 +159,16 @@ def _load_platform_email_sender(cursor: Any) -> str | None:
     return _text(row.get("id")) if row else None
 
 
-def _sequence(email_sender_id: str | None) -> list[dict[str, Any]]:
+def _sequence(email_sender_id: str | None, sender_mode: str) -> list[dict[str, Any]]:
+    second_angle = (
+        "matching_authority"
+        if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER
+        else "founder_story"
+    )
     email_touch: dict[str, Any] = {
         "channel": "email",
         "day_offset": 3,
-        "angle": "founder_story",
+        "angle": second_angle,
     }
     if email_sender_id:
         email_touch["sender_account_id"] = email_sender_id
@@ -161,6 +211,7 @@ def _candidate_query(
                COALESCE(contact_counts.contact_count, 0) AS contact_count,
                COALESCE(research_counts.evidence_count, 0) AS evidence_count,
                research_counts.message_readiness_json,
+               research_counts.outreach_decision_json,
                latest_campaign.id AS latest_campaign_id,
                latest_campaign.status AS latest_campaign_status,
                latest_campaign.stop_reason AS latest_campaign_stop_reason,
@@ -202,7 +253,8 @@ def _candidate_query(
         ) contact_counts ON TRUE
         LEFT JOIN LATERAL (
             SELECT jsonb_array_length(COALESCE(research.evidence_json, '[]'::jsonb)) AS evidence_count,
-                   research.message_readiness_json
+                   research.message_readiness_json,
+                   research.outreach_decision_json
             FROM lead_workstream_research research
             WHERE research.workstream_id = ws.id
             ORDER BY research.researched_at DESC NULLS LAST, research.created_at DESC
@@ -251,7 +303,7 @@ def _blocked_reason(row: dict[str, Any], now: datetime) -> str | None:
 
 
 def _preparation_contract(sender_mode: str) -> str:
-    return f"{PROMPT_VERSION}:{REVIEW_PROMPT_VERSION}:{sender_mode}"
+    return f"{DECISION_VERSION}:{PROMPT_VERSION}:{REVIEW_PROMPT_VERSION}:{sender_mode}"
 
 
 def _preparation_prerequisite(row: dict[str, Any], sender_mode: str) -> str | None:
@@ -259,6 +311,24 @@ def _preparation_prerequisite(row: dict[str, Any], sender_mode: str) -> str | No
     enrichment_status = _text(row.get("enrichment_status")).lower()
     if enrichment_status in ACTIVE_ENRICHMENT_STATES:
         return "enrichment_in_progress"
+    decision = (
+        row.get("outreach_decision_json")
+        if isinstance(row.get("outreach_decision_json"), dict)
+        else {}
+    )
+    if _text(decision.get("version")) == DECISION_VERSION:
+        action = _text(decision.get("action"))
+        if action == "write_now":
+            return None
+        if action in {
+            "needs_contact",
+            "needs_sender_setup",
+            "needs_evidence",
+            "excluded",
+        }:
+            return action
+        if action == "observe":
+            return "needs_evidence"
     if not int(row.get("contact_count") or 0):
         return "needs_contact"
     if not int(row.get("evidence_count") or 0):
@@ -275,6 +345,22 @@ def _preparation_prerequisite(row: dict[str, Any], sender_mode: str) -> str | No
         in {"needs_evidence", "invalid_sequence"}
     ):
         return _text(readiness.get("code"))
+    if (
+        readiness.get("source") == "outreach_batch_preparation"
+        and readiness.get("contract") == _preparation_contract(sender_mode)
+        and _text(readiness.get("code")) == "needs_generation"
+        and readiness.get("retryable") is True
+    ):
+        try:
+            checked_at = datetime.fromisoformat(
+                str(readiness.get("checked_at") or "").replace("Z", "+00:00")
+            )
+            if checked_at.tzinfo is None:
+                checked_at = checked_at.replace(tzinfo=timezone.utc)
+            if checked_at.astimezone(timezone.utc) > datetime.now(timezone.utc) - timedelta(minutes=5):
+                return "generation_retry_wait"
+        except (TypeError, ValueError):
+            pass
     return None
 
 
@@ -286,8 +372,14 @@ def _save_preparation_blocker(
     preview: dict[str, Any],
 ) -> None:
     quality_gate = preview.get("quality_gate") if isinstance(preview.get("quality_gate"), dict) else {}
+    generation = preview.get("generation") if isinstance(preview.get("generation"), dict) else {}
     preview_code = _text(preview.get("status")) or "needs_evidence"
     transient_quality_codes = {"needs_generation", "needs_revision"}
+    generation_error = _text(generation.get("error")).lower()
+    provider_retryable = preview_code == "needs_generation" and any(
+        marker in generation_error
+        for marker in ("429", "rate limit", "timeout", "temporarily unavailable", "connection")
+    )
     cursor.execute(
         """
         SELECT message_readiness_json
@@ -316,7 +408,11 @@ def _save_preparation_blocker(
         previous_attempts + 1 if preview_code in transient_quality_codes else 0
     )
     effective_code = preview_code
-    if preview_code in transient_quality_codes and generation_attempts >= 3:
+    if (
+        preview_code in transient_quality_codes
+        and generation_attempts >= 3
+        and not provider_retryable
+    ):
         effective_code = "needs_evidence"
     missing = list(preview.get("missing") or [])
     reason_codes = list(quality_gate.get("reason_codes") or [])
@@ -336,6 +432,9 @@ def _save_preparation_blocker(
         "contract": _preparation_contract(sender_mode),
         "checked_at": datetime.now(timezone.utc).isoformat(),
     }
+    if provider_retryable:
+        payload["retryable"] = True
+        payload["provider_error"] = generation_error[:500]
     if generation_attempts:
         payload["generation_attempts"] = generation_attempts
     cursor.execute(
@@ -411,14 +510,58 @@ def _campaign_is_current(
     email_sender_id: str | None = None,
 ) -> bool:
     cursor.execute(
-        "SELECT policy_json FROM outreach_campaigns WHERE id = %s AND status = 'draft'",
+        """
+        SELECT policy_json, sender_mode, selected_offer_json, trust_strategy,
+               decision_snapshot_json, room_id, workstream_id
+        FROM outreach_campaigns
+        WHERE id = %s AND status = 'draft'
+        """,
         (campaign_id,),
     )
     row = cursor.fetchone()
     if not row:
         return False
     policy = row.get("policy_json") if isinstance(row.get("policy_json"), dict) else {}
-    if _text(policy.get("sender_mode")) != sender_mode:
+    decision = (
+        row.get("decision_snapshot_json")
+        if isinstance(row.get("decision_snapshot_json"), dict)
+        else {}
+    )
+    selected_offer = (
+        row.get("selected_offer_json")
+        if isinstance(row.get("selected_offer_json"), dict)
+        else {}
+    )
+    cursor.execute(
+        """
+        SELECT outreach_decision_json
+        FROM lead_workstream_research
+        WHERE workstream_id = %s
+        ORDER BY researched_at DESC NULLS LAST, created_at DESC
+        LIMIT 1
+        """,
+        (row.get("workstream_id"),),
+    )
+    research_row = cursor.fetchone()
+    latest_decision = (
+        research_row.get("outreach_decision_json")
+        if research_row and isinstance(research_row.get("outreach_decision_json"), dict)
+        else {}
+    )
+    if (
+        _text(policy.get("sender_mode")) != sender_mode
+        or _text(row.get("sender_mode")) != sender_mode
+        or _text(decision.get("version")) != DECISION_VERSION
+        or _text(decision.get("action")) != "write_now"
+        or not selected_offer
+        or not _text(row.get("trust_strategy"))
+        or not row.get("room_id")
+        or (
+            latest_decision
+            and _without_calculated_at(latest_decision)
+            != _without_calculated_at(decision)
+        )
+    ):
         return False
     cursor.execute(
         """
@@ -442,6 +585,116 @@ def _campaign_is_current(
         )
         for touch in touches
     )
+
+
+def _save_decision_snapshot(
+    cursor: Any,
+    *,
+    workstream_id: str,
+    decision: dict[str, Any],
+) -> None:
+    cursor.execute(
+        """
+        UPDATE lead_workstream_research
+        SET outreach_decision_json = %s
+        WHERE id = (
+            SELECT id FROM lead_workstream_research
+            WHERE workstream_id = %s
+            ORDER BY researched_at DESC NULLS LAST, created_at DESC
+            LIMIT 1
+        )
+        """,
+        (Json(_json_safe(decision)), workstream_id),
+    )
+
+
+def refresh_decisions(
+    *,
+    workstream_type: str,
+    business_ids: list[str] | None = None,
+    workstream_ids: list[str] | None = None,
+    limit: int | None = None,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    execute: bool = False,
+) -> dict[str, Any]:
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        rows = _load_candidates(
+            cursor,
+            workstream_type=workstream_type,
+            business_ids=business_ids or [],
+            workstream_ids=workstream_ids or [],
+            limit=limit,
+        )
+    finally:
+        conn.close()
+
+    sender_mode = _scope_sender_mode(workstream_type)
+    result: dict[str, Any] = {
+        "mode": "refresh_decisions",
+        "execute": execute,
+        "workstream_type": workstream_type,
+        "planned": len(rows),
+        "attempted": 0,
+        "updated": 0,
+        "already_current": 0,
+        "actions": Counter(),
+        "errors": [],
+    }
+    for row in rows:
+        current = (
+            row.get("outreach_decision_json")
+            if isinstance(row.get("outreach_decision_json"), dict)
+            else {}
+        )
+        if _decision_is_current(row):
+            result["already_current"] += 1
+            continue
+        if result["attempted"] >= max(1, batch_size):
+            break
+        result["attempted"] += 1
+        if not execute:
+            continue
+        item_conn = get_db_connection()
+        try:
+            item_cursor = item_conn.cursor(cursor_factory=RealDictCursor)
+            item_cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                (f"outreach-decision:{_text(row.get('id'))}",),
+            )
+            preview = build_preview(
+                item_cursor,
+                _text(row.get("id")),
+                sender_mode=sender_mode,
+                generate_ai=False,
+            )
+            decision = (
+                preview.get("decision")
+                if isinstance(preview.get("decision"), dict)
+                else {}
+            )
+            if _text(decision.get("version")) != DECISION_VERSION:
+                raise ValueError("Outreach v2 decision was not produced")
+            _save_decision_snapshot(
+                item_cursor,
+                workstream_id=_text(row.get("id")),
+                decision=decision,
+            )
+            item_conn.commit()
+            result["updated"] += 1
+            result["actions"][_text(decision.get("action")) or "unknown"] += 1
+        except Exception as exc:
+            item_conn.rollback()
+            result["errors"].append({
+                "workstream_id": _text(row.get("id")),
+                "lead_id": _text(row.get("lead_id")),
+                "error": str(exc),
+            })
+        finally:
+            item_conn.close()
+    result["actions"] = dict(sorted(result["actions"].items()))
+    return result
 
 
 def inventory(
@@ -481,6 +734,16 @@ def inventory(
                 and readiness.get("contract") == _preparation_contract(sender_mode)
             ):
                 readiness_code = _text(readiness.get("code"))
+            decision = (
+                row.get("outreach_decision_json")
+                if isinstance(row.get("outreach_decision_json"), dict)
+                else {}
+            )
+            decision_action = (
+                _text(decision.get("action"))
+                if _text(decision.get("version")) == DECISION_VERSION
+                else ""
+            )
             latest_campaign_id = _text(row.get("latest_campaign_id"))
             current_draft = bool(
                 not blocked
@@ -506,6 +769,20 @@ def inventory(
                 state = "needs_contact"
             elif readiness_code == "needs_evidence":
                 state = "needs_evidence"
+            elif readiness_code == "needs_generation" and readiness.get("retryable") is True:
+                state = "generation_retry_wait"
+            elif decision_action == "needs_contact":
+                state = "needs_contact"
+            elif decision_action == "needs_sender_setup":
+                state = "needs_sender_setup"
+            elif decision_action == "needs_evidence":
+                state = "needs_evidence"
+            elif decision_action == "observe":
+                state = "needs_evidence"
+            elif decision_action == "excluded":
+                state = "excluded"
+            elif decision_action == "write_now":
+                state = "ready_for_campaign"
             elif row.get("enrichment_status") == "needs_contact":
                 state = "needs_contact"
             elif row.get("enrichment_status") == "needs_evidence":
@@ -551,6 +828,7 @@ def enqueue_enrichment(
     limit: int | None = None,
     execute: bool = False,
     freshness_days: int = DEFAULT_FRESHNESS_DAYS,
+    force_all: bool = False,
 ) -> dict[str, Any]:
     snapshot = inventory(
         workstream_type=workstream_type,
@@ -560,10 +838,24 @@ def enqueue_enrichment(
         freshness_days=freshness_days,
     )
     eligible_states = {"needs_contact", "needs_evidence", "needs_refresh"}
-    targets = [item for item in snapshot["items"] if item["state"] in eligible_states]
+    force_blocked_states = {
+        "terminal_state",
+        "suppressed",
+        "campaign_already_active",
+        "recipient_replied",
+        "contact_cooldown",
+        "enrichment_in_progress",
+    }
+    targets = [
+        item
+        for item in snapshot["items"]
+        if item["state"] in eligible_states
+        or (force_all and item["state"] not in force_blocked_states)
+    ]
     result: dict[str, Any] = {
         "mode": "enqueue_enrichment",
         "execute": execute,
+        "force_all": force_all,
         "planned": len(targets),
         "queued": 0,
         "reused": 0,
@@ -700,7 +992,7 @@ def prepare_campaigns(
             preflight_preview = build_preview(
                 item_cursor,
                 _text(row.get("id")),
-                sequence=_sequence(email_sender_id),
+                sequence=_sequence(email_sender_id, sender_mode),
                 sender_mode=sender_mode,
                 generate_ai=False,
             )
@@ -726,7 +1018,7 @@ def prepare_campaigns(
             preview = build_preview(
                 item_cursor,
                 _text(row.get("id")),
-                sequence=_sequence(email_sender_id),
+                sequence=_sequence(email_sender_id, sender_mode),
                 sender_mode=sender_mode,
             )
             preview = _enforce_complete_sequence(preview)
@@ -797,7 +1089,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--action",
-        choices=("inventory", "enqueue-enrichment", "prepare"),
+        choices=("inventory", "refresh-decisions", "enqueue-enrichment", "prepare"),
         default="inventory",
     )
     parser.add_argument(
@@ -812,6 +1104,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--freshness-days", type=int, default=DEFAULT_FRESHNESS_DAYS)
     parser.add_argument("--actor-id")
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument(
+        "--force-all",
+        action="store_true",
+        help="Refresh every non-blocked workstream after upstream audit data changes",
+    )
     return parser
 
 
@@ -826,6 +1123,15 @@ def main() -> None:
             limit=effective_limit,
             freshness_days=args.freshness_days,
         )
+    elif args.action == "refresh-decisions":
+        result = refresh_decisions(
+            workstream_type=args.workstream_type,
+            business_ids=args.business_id,
+            workstream_ids=args.workstream_id,
+            limit=effective_limit,
+            batch_size=max(1, min(args.batch_size, 100)),
+            execute=args.execute,
+        )
     elif args.action == "enqueue-enrichment":
         result = enqueue_enrichment(
             workstream_type=args.workstream_type,
@@ -834,6 +1140,7 @@ def main() -> None:
             limit=effective_limit,
             execute=args.execute,
             freshness_days=args.freshness_days,
+            force_all=args.force_all,
         )
     else:
         result = prepare_campaigns(

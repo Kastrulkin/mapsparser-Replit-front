@@ -76,16 +76,45 @@ def _complete_preview(status="needs_channel_setup"):
 
 
 def test_sequence_selects_localosgo_without_enabling_delivery() -> None:
-    sequence = outreach_batch_preparation_service._sequence("sender-localosgo")
+    sequence = outreach_batch_preparation_service._sequence("sender-localosgo", "localos")
     assert [item["channel"] for item in sequence] == ["telegram", "email", "next", "next"]
     assert [item["day_offset"] for item in sequence] == [0, 3, 7, 12]
     assert sequence[1]["sender_account_id"] == "sender-localosgo"
 
 
+def test_localos_for_partner_sequence_uses_matching_authority() -> None:
+    sequence = outreach_batch_preparation_service._sequence(
+        "sender-localosgo",
+        "localos_for_partner",
+    )
+    assert sequence[1]["angle"] == "matching_authority"
+
+
 def test_current_campaign_requires_selected_email_sender() -> None:
     class CurrentCampaignCursor(BatchCursor):
+        fetch_count = 0
+
         def fetchone(self):
-            return {"policy_json": {"sender_mode": "localos"}}
+            self.fetch_count += 1
+            if self.fetch_count == 1:
+                return {
+                    "policy_json": {"sender_mode": "localos"},
+                    "sender_mode": "localos",
+                    "selected_offer_json": {"id": "offer-1"},
+                    "trust_strategy": "founder_story",
+                    "decision_snapshot_json": {
+                        "version": outreach_batch_preparation_service.DECISION_VERSION,
+                        "action": "write_now",
+                    },
+                    "room_id": "room-1",
+                    "workstream_id": "workstream-1",
+                }
+            return {
+                "outreach_decision_json": {
+                    "version": outreach_batch_preparation_service.DECISION_VERSION,
+                    "action": "write_now",
+                }
+            }
 
         def fetchall(self):
             return [
@@ -139,6 +168,60 @@ def test_preparation_prerequisite_requires_contacts_and_evidence() -> None:
         _candidate(enrichment_status="ready", contact_count=1, evidence_count=1),
         "localos",
     ) is None
+
+
+def test_current_v2_decision_overrides_legacy_enrichment_status() -> None:
+    current = {
+        "version": outreach_batch_preparation_service.DECISION_VERSION,
+        "action": "write_now",
+    }
+    assert outreach_batch_preparation_service._preparation_prerequisite(
+        _candidate(
+            enrichment_status="needs_evidence",
+            contact_count=1,
+            evidence_count=1,
+            outreach_decision_json=current,
+        ),
+        "localos_for_partner",
+    ) is None
+    assert outreach_batch_preparation_service._preparation_prerequisite(
+        _candidate(
+            enrichment_status="ready",
+            contact_count=1,
+            evidence_count=1,
+            outreach_decision_json={
+                "version": outreach_batch_preparation_service.DECISION_VERSION,
+                "action": "needs_sender_setup",
+            },
+        ),
+        "partner_business",
+    ) == "needs_sender_setup"
+
+
+def test_decision_becomes_stale_after_terminal_enrichment_update() -> None:
+    decision_time = datetime(2026, 7, 22, 10, 0, tzinfo=timezone.utc)
+    assert outreach_batch_preparation_service._decision_is_current(
+        _candidate(
+            outreach_decision_json={
+                "version": outreach_batch_preparation_service.DECISION_VERSION,
+                "action": "needs_evidence",
+                "calculated_at": decision_time.isoformat(),
+            },
+            enrichment_status="needs_evidence",
+            enrichment_updated_at=decision_time.replace(minute=1),
+        )
+    ) is False
+    assert outreach_batch_preparation_service._decision_is_current(
+        _candidate(
+            outreach_decision_json={
+                "version": outreach_batch_preparation_service.DECISION_VERSION,
+                "action": "needs_evidence",
+                "calculated_at": decision_time.isoformat(),
+            },
+            enrichment_status="collecting",
+            enrichment_updated_at=decision_time.replace(minute=1),
+        )
+    ) is True
     assert outreach_batch_preparation_service._preparation_prerequisite(
         _candidate(
             enrichment_status="ready",
@@ -482,6 +565,29 @@ def test_repeated_quality_failure_becomes_stable_needs_evidence() -> None:
     assert update_payloads[0]["original_code"] == "needs_revision"
     assert update_payloads[0]["generation_attempts"] == 3
     assert "additional_recipient_evidence" in update_payloads[0]["missing"]
+
+
+def test_provider_rate_limit_remains_retryable_generation_blocker() -> None:
+    cursor = BatchCursor()
+    outreach_batch_preparation_service._save_preparation_blocker(
+        cursor,
+        workstream_id="workstream-1",
+        sender_mode="localos",
+        preview={
+            "status": "needs_generation",
+            "generation": {"error": "GigaChat failed after retries: HTTP 429"},
+            "quality_gate": {"reason_codes": []},
+        },
+    )
+
+    update_payloads = [
+        params[0].adapted
+        for query, params in cursor.executed
+        if "UPDATE lead_workstream_research" in query
+    ]
+    assert update_payloads[0]["code"] == "needs_generation"
+    assert update_payloads[0]["retryable"] is True
+    assert "429" in update_payloads[0]["provider_error"]
 
 
 def test_batch_module_contains_no_delivery_or_approval_write() -> None:

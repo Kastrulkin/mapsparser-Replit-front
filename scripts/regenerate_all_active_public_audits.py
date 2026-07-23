@@ -17,12 +17,11 @@ for candidate in (str(REPO_ROOT), str(SRC_ROOT)):
     if candidate not in sys.path:
         sys.path.insert(0, candidate)
 
-from api.admin_prospecting import _attach_admin_prospecting_public_offer_metadata
 from api.admin_prospecting import _build_admin_lead_offer_payload
 from api.admin_prospecting import _build_offer_slug
 from api.admin_prospecting import _drop_mismatched_explicit_business_link
 from api.admin_prospecting import _ensure_admin_prospecting_public_offers_table
-from api.admin_prospecting import _generate_lead_audit_enrichment
+from api.prospecting.audit_generation import _generate_lead_audit_enrichment
 from api.admin_prospecting import _normalize_lead_for_display
 from api.admin_prospecting import _normalize_public_audit_languages
 from api.admin_prospecting import _normalize_recommended_actions
@@ -314,6 +313,11 @@ def main() -> None:
     parser.add_argument("--write-lead-ids-file", type=str, default="")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--skip-ai-enrichment", action="store_true")
+    parser.add_argument(
+        "--skip-schema-ensure",
+        action="store_true",
+        help="Skip compatibility DDL after another process has already ensured the schema",
+    )
     args = parser.parse_args()
     lead_ids: list[str] = []
     if args.lead_ids_file:
@@ -322,7 +326,9 @@ def main() -> None:
 
     conn = _connect()
     try:
-        _ensure_admin_prospecting_public_offers_table(conn)
+        if not args.skip_schema_ensure:
+            _ensure_admin_prospecting_public_offers_table(conn)
+            conn.commit()
         cur = conn.cursor()
         user_id = _pick_superadmin_user_id(cur)
         leads = _load_target_leads(
@@ -402,7 +408,11 @@ def main() -> None:
                 page_json = normalize_public_audit_page_json(page_json)
                 slug = _ensure_slug(cur, display_lead, lead_id, str(raw_lead.get("offer_slug") or "").strip() or None)
                 _upsert_offer(cur, lead_id, slug, page_json, user_id, raw_lead)
-                display_lead = _attach_admin_prospecting_public_offer_metadata(conn, display_lead)
+                # The compatibility metadata helper performs defensive DDL.
+                # Calling it inside every row causes table-lock deadlocks when
+                # audit shards run concurrently; the URL is deterministic once
+                # the slug has been persisted, so no second schema check is needed.
+                display_lead["public_audit_url"] = f"https://localos.pro/{slug}"
                 conn.commit()
                 processed += 1
                 print(
@@ -412,6 +422,11 @@ def main() -> None:
                             "name": str(display_lead.get("name") or ""),
                             "slug": slug,
                             "public_audit_url": str(display_lead.get("public_audit_url") or ""),
+                            "ai_source": str(
+                                ai_enrichment.get("meta", {}).get("source")
+                                if isinstance(ai_enrichment.get("meta"), dict)
+                                else ""
+                            ),
                         },
                         ensure_ascii=False,
                     ),

@@ -37,6 +37,13 @@ def serialize_sales_room_message(row: dict[str, Any]) -> dict[str, Any]:
             "author_contact": row.get("author_contact") or "",
             "body_text": row.get("body_text") or "",
             "attachments": attachments,
+            "direction": row.get("direction") or "room",
+            "source_channel": row.get("source_channel"),
+            "provider_event_id": row.get("provider_event_id"),
+            "campaign_id": row.get("campaign_id"),
+            "campaign_touch_id": row.get("campaign_touch_id"),
+            "delivery_status": row.get("delivery_status") or "recorded",
+            "occurred_at": row.get("occurred_at"),
             "created_at": row.get("created_at"),
         }
     )
@@ -81,7 +88,9 @@ def serialize_sales_room_suggestion(row: dict[str, Any]) -> dict[str, Any]:
 def load_sales_room_messages(cur, room_id: str, limit: int = 50) -> list[dict[str, Any]]:
     cur.execute(
         """
-        SELECT id, author_type, author_name, author_contact, body_text, attachments_json, created_at
+        SELECT id, author_type, author_name, author_contact, body_text, attachments_json,
+               direction, source_channel, provider_event_id, campaign_id,
+               campaign_touch_id, delivery_status, occurred_at, created_at
         FROM sales_room_messages
         WHERE room_id = %s
         ORDER BY created_at ASC
@@ -228,7 +237,8 @@ def update_sales_room_proposal_body(cur, *, room_id: str, body_text: str) -> Non
 def load_sales_room_by_slug(cur, slug: str) -> dict[str, Any]:
     cur.execute(
         """
-        SELECT id, slug, business_id, mode, lead_id, room_json, status, updated_at
+        SELECT id, slug, business_id, mode, lead_id, room_json, status,
+               visibility, updated_at
         FROM sales_rooms
         WHERE slug = %s
         LIMIT 1

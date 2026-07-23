@@ -952,18 +952,20 @@ def vk_oauth_callback():
     try:
         state_payload = decode_vk_oauth_state(state)
         return_to = _safe_vk_return_path(state_payload.get("return_to"))
+        is_outreach = str(state_payload.get("purpose") or "") == "outreach_sender"
+        status_param = "vk_outreach_auth" if is_outreach else "vk_auth"
         if request.args.get("error"):
             return redirect(
-                f"{frontend_url}{_append_vk_auth_params(return_to, {'vk_auth': 'cancelled'})}"
+                f"{frontend_url}{_append_vk_auth_params(return_to, {status_param: 'cancelled'})}"
             )
         code = str(request.args.get("code") or "").strip()
         device_id = str(request.args.get("device_id") or "").strip()
         if not code or not device_id:
             return redirect(
-                f"{frontend_url}{_append_vk_auth_params(return_to, {'vk_auth': 'error'})}"
+                f"{frontend_url}{_append_vk_auth_params(return_to, {status_param: 'error'})}"
             )
         callback_params = {
-            "vk_auth": "pending",
+            status_param: "pending",
             "vk_code": code,
             "vk_device_id": device_id,
             "vk_state": state,

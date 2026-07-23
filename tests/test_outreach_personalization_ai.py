@@ -42,6 +42,25 @@ def test_saved_generation_contract_blocks_old_drafts_when_ai_is_required():
     ) is False
 
 
+def test_saved_generation_contract_accepts_current_manual_product_correction():
+    brief = {
+        "generation_source": "manual_product_correction",
+        "generation_prompt_version": PROMPT_VERSION,
+        "semantic_review_prompt_version": REVIEW_PROMPT_VERSION,
+    }
+    gate = {
+        "passed": True,
+        "manual_review": {
+            "passed": True,
+            "review_version": REVIEW_PROMPT_VERSION,
+            "reviewer_role": "superadmin",
+        },
+    }
+
+    assert generation_contract_current(brief, gate, require_ai=True) is True
+    assert generation_contract_current(brief, {"passed": True}, require_ai=True) is False
+
+
 def _candidate():
     return {
         "evidence_id": "map-rating",
@@ -403,6 +422,116 @@ def test_existing_hypothesis_label_is_not_duplicated() -> None:
     )
 
     assert result["touches"][0]["text"].count("Гипотеза для проверки:") == 1
+
+
+def test_localos_for_partner_uses_neighbour_language_without_audit_pitch() -> None:
+    candidate = _candidate()
+    candidate.update({
+        "sender_mode": "localos_for_partner",
+        "represented_business": "Весёлая расчёска",
+        "represented_business_opening": (
+            "Мы ваши соседи - сеть детских парикмахерских Весёлая расчёска."
+        ),
+        "representation_disclosure": "",
+        "observed_fact": "Компании работают с семьями одного района.",
+        "relevance_to_offer": "Можно проверить простой формат знакомства двух мест",
+        "problem_hypothesis": None,
+    })
+    generated = _policy_bound_generation_response()
+    generated["touches"][0]["cta_intent"] = "send_formats"
+    generated["touches"][1]["cta_intent"] = "discuss_pilot"
+    responses = iter([
+        json.dumps(generated, ensure_ascii=False),
+        json.dumps(_review_response(), ensure_ascii=False),
+    ])
+
+    result = generate_personalized_sequence(
+        motion="client_partnership",
+        identity={"company_name": "Плоды Просвещения"},
+        candidate=candidate,
+        founder_story={
+            **_story(),
+            "story": "LocalOS проверил совместимость компаний по общей аудитории.",
+            "proof": "",
+        },
+        sequence=_sequence(),
+        generator=lambda _prompt, **_kwargs: next(responses),
+    )
+
+    assert result["status"] == "ready"
+    assert result["touches"][0]["text"].startswith(
+        "Здравствуйте! Мы ваши соседи - сеть детских парикмахерских Весёлая расчёска."
+    )
+    assert all("LocalOS" not in item["text"] for item in result["touches"])
+    assert all("Александр" not in item["text"] for item in result["touches"])
+    assert result["touches"][0]["text"].endswith("Прислать несколько простых форматов?")
+    assert "несколько простых форматов" in result["touches"][0]["text"]
+    assert "по карточке" not in result["touches"][0]["text"]
+    assert result["touches"][1]["subject"] == (
+        "Идея для Весёлая расчёска и Плоды Просвещения"
+    )
+
+
+def test_oliver_partner_voice_never_leaks_localos_identity_or_offer() -> None:
+    candidate = _candidate()
+    candidate.update({
+        "sender_mode": "localos_for_partner",
+        "represented_business": "Оливер",
+        "recipient_type": "residential_complex",
+        "represented_business_opening": "Мы ваши соседи - Оливер.",
+        "representation_disclosure": "",
+        "observed_fact": "У компаний может пересекаться локальная аудитория.",
+        "relevance_to_offer": (
+            "Можно проверить простой совместный формат для двух мест по соседству"
+        ),
+        "problem_hypothesis": None,
+    })
+    generated = _policy_bound_generation_response()
+    generated["touches"][0]["cta_intent"] = "send_formats"
+    partner_responses = iter([
+        json.dumps(generated, ensure_ascii=False),
+        json.dumps(_review_response(), ensure_ascii=False),
+    ])
+
+    partner_result = generate_personalized_sequence(
+        motion="client_partnership",
+        identity={"company_name": "Legenda на Яхтенной, 24"},
+        candidate=candidate,
+        founder_story={
+            **_story(),
+            "story": "LocalOS помогает локальным компаниям находить партнёров.",
+            "offer": "Подключить платный LocalOS",
+        },
+        sequence=_sequence(),
+        generator=lambda _prompt, **_kwargs: next(partner_responses),
+    )
+
+    assert partner_result["status"] == "ready"
+    first_touch = partner_result["touches"][0]["text"]
+    assert first_touch.startswith("Здравствуйте! Мы ваши соседи - Оливер.")
+    assert "LocalOS" not in first_touch
+    assert "представля" not in first_touch.lower()
+    assert "платный" not in first_touch.lower()
+    assert "Хотели бы пригласить ваших жителей к нам." in first_touch
+    assert "Конкретный формат и условия предложим отдельно" in first_touch
+    assert "скид" not in first_touch.lower()
+    assert "мастер-класс" not in first_touch.lower()
+
+    localos_responses = iter([
+        json.dumps(_policy_bound_generation_response(), ensure_ascii=False),
+        json.dumps(_review_response(), ensure_ascii=False),
+    ])
+    localos_result = generate_personalized_sequence(
+        motion="localos_sales",
+        identity={"company_name": "047 Beauty Zone"},
+        candidate=_candidate(),
+        founder_story=_story(),
+        sequence=_sequence(),
+        generator=lambda _prompt, **_kwargs: next(localos_responses),
+    )
+
+    assert localos_result["status"] == "ready"
+    assert "Я Александр, руководитель LocalOS" in localos_result["touches"][0]["text"]
 
 
 def test_constrained_fragments_allow_neutral_recipient_vocabulary():

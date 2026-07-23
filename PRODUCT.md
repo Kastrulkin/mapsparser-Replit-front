@@ -61,9 +61,9 @@ Every campaign has one explicit sender mode that is included in the approved ver
 
 - `localos`: LocalOS prospects are contacted by LocalOS through a platform-scoped account;
 - `partner_business`: a business contacts its own prospective partners through its tenant-scoped account;
-- `localos_for_partner`: a superadmin may contact a prospective partner through a platform-scoped LocalOS account while transparently naming the represented business.
+- `localos_for_partner`: after explicit business authorisation, a superadmin may contact a prospective partner in the represented business's first-person voice through a platform-scoped LocalOS account.
 
-`localos_for_partner` is representation, not impersonation. The campaign remains scoped to the represented business, uses that business's confirmed services, audience, compatibility evidence and allowed offer, but uses the confirmed LocalOS identity and account. Every message must disclose both facts. LocalOS must never silently fall back between sender modes or select a global account merely because it was connected last. A sender-mode change creates a new preview/version and requires a new approval.
+`localos_for_partner` is authorised representation. The campaign remains scoped to the represented business and uses its name, services, audience, compatibility evidence and safe partnership offer. LocalOS supplies the technical account and internal matching infrastructure, but its name, founder story, proof and commercial offer are forbidden in the external copy. Messages use the represented business's plural voice, for example «Мы ваши соседи - [business]». The internal audit trail preserves the technical sender, represented business and authorisation. LocalOS must never silently fall back between sender modes or select a global account merely because it was connected last. A sender-mode change creates a new preview/version and requires a new approval.
 
 ## Outreach Operating Model
 
@@ -74,16 +74,20 @@ LocalOS treats outreach as one supervised lifecycle, not as a text generator:
 3. parse the public card, audit/match where applicable, enrich contacts from map payloads and the official website, and keep provenance;
 4. classify Telegram entities so personal users remain recipients while channels/groups become radar evidence sources;
 5. build an evidence ledger from map/audit facts, public websites, reviews, social activity, Telegram posts and partnership compatibility;
-6. add the confirmed sender profile only after recipient evidence exists, producing the explicit chain observation → relevance bridge → founder story/proof → one CTA;
-7. create and quality-check a versioned multichannel draft;
-8. require human approval before queue/dispatch and repeat safety preflight before every touch;
-9. stop all future channels on any human reply and record the attributable outcome for the learning loop.
+6. apply hard gates, then calculate fit, signal, readiness and priority with an explainable action;
+7. choose an allowed offer and trust strategy before generation, then apply the sender-mode-specific recipe;
+8. create and quality-check a versioned multichannel draft and prepare a private relationship room;
+9. require human approval before queue/dispatch and repeat safety preflight before every touch;
+10. stop all future channels on any human reply, update relationship memory and prepare a separately approved room invitation;
+11. record attributable offer/trust/channel/timing outcomes for the learning loop.
 
 The recommended default sequence is Telegram day 0 for the signal, email day 3 for founder story, the next available channel day 7 for proof/useful material, and a respectful close on day 12. Telegram and email are the current automatic channel boundary when their direct-send and reply-sync capabilities are connected and permitted. WhatsApp, MAX, VK, SMS and other channels remain manual until a verified adapter supports both delivery and reply sync.
 
 An outreach fact must have evidence ID, source URL, date/freshness and confidence. Hypotheses remain explicitly labeled. A missing material fact returns `needs_evidence`; it must not be replaced with a generic template. Sender claims are accepted only from confirmed `approved` or `observed` profile facts.
 
 Learning events store strategy dimensions and outcomes such as sent, reply, question, hard no, unsubscribe, meeting, conversion and no reply. They support evidence-based strategy comparison; LocalOS does not claim automatic online fine-tuning of the production language model.
+
+The outreach sandbox in Chats uses the same decision, personalization and quality-gate code with `dry_run=true`. Preview and simulated reply endpoints roll back the database transaction, create no production records and perform no external dispatch. Saving is a separate explicit request that creates a new `draft` version only.
 
 Canonical implementation/status reference: [`docs/OUTREACH_SYSTEM.md`](docs/OUTREACH_SYSTEM.md).
 

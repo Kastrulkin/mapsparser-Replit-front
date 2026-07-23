@@ -78,7 +78,10 @@ def strategy_fingerprint(strategy: dict[str, Any]) -> str:
         "founder_story_id": strategy.get("founder_story_id"),
         "proof_id": strategy.get("proof_id"),
         "bridge_type": strategy.get("bridge_type"),
+        "offer_id": strategy.get("offer_id"),
         "offer": strategy.get("offer"),
+        "trust_strategy": strategy.get("trust_strategy"),
+        "trust_statement": strategy.get("trust_statement"),
         "cta": strategy.get("cta"),
         "channel": strategy.get("channel"),
         "sequence_index": strategy.get("sequence_index"),
@@ -390,7 +393,7 @@ def run_dispatch_preflight(cursor: Any, queue_id: str) -> dict[str, Any]:
         FROM outreach_campaign_touches
         WHERE campaign_id = %s
           AND sequence_index < %s
-          AND channel IN ('max', 'vk', 'whatsapp', 'sms', 'manual')
+          AND channel IN ('max', 'whatsapp', 'sms', 'manual')
           AND status NOT IN ('manual_sent', 'manual_skipped')
         ORDER BY sequence_index DESC
         LIMIT 1
@@ -417,10 +420,10 @@ def run_dispatch_preflight(cursor: Any, queue_id: str) -> dict[str, Any]:
         return {"allowed": False, "reason_code": sender_scope_reason, "item": item}
     if item.get("channel") == "telegram" and not bool(item.get("telegram_outreach_enabled")):
         return {"allowed": False, "reason_code": "sender_permission_revoked", "item": item}
-    if item.get("channel") == "email" and not bool(item.get("sender_outreach_enabled")):
+    if item.get("channel") in {"email", "vk"} and not bool(item.get("sender_outreach_enabled")):
         return {"allowed": False, "reason_code": "sender_permission_revoked", "item": item}
     capabilities = item.get("sender_capabilities_json") or {}
-    if item.get("channel") in {"telegram", "email"} and (
+    if item.get("channel") in {"telegram", "email", "vk"} and (
         not isinstance(capabilities, dict)
         or not capabilities.get("direct_send")
         or not capabilities.get("reply_sync")
@@ -956,14 +959,24 @@ def refresh_strategy_stats(
         SELECT
             COUNT(*) FILTER (WHERE outcome_type = 'sent') AS sent_count,
             COUNT(*) FILTER (WHERE outcome_type = 'delivered') AS delivered_count,
-            COUNT(*) FILTER (WHERE outcome_type IN ('replied', 'positive_reply', 'question', 'hard_no', 'unsubscribe', 'complaint')) AS reply_count,
-            COUNT(*) FILTER (WHERE outcome_type = 'positive_reply') AS positive_reply_count,
+            COUNT(*) FILTER (WHERE outcome_type IN (
+                'replied', 'positive_reply', 'question', 'hard_no', 'unsubscribe',
+                'complaint', 'interested', 'call_planned', 'contacts_exchanged',
+                'pilot_agreed', 'campaign_launched', 'joint_project',
+                'recurring_partnership', 'not_relevant', 'lost'
+            )) AS reply_count,
+            COUNT(*) FILTER (WHERE outcome_type IN (
+                'positive_reply', 'interested', 'call_planned', 'contacts_exchanged',
+                'pilot_agreed', 'campaign_launched', 'joint_project', 'recurring_partnership'
+            )) AS positive_reply_count,
             COUNT(*) FILTER (WHERE outcome_type = 'question') AS question_count,
             COUNT(*) FILTER (WHERE outcome_type = 'hard_no') AS hard_no_count,
             COUNT(*) FILTER (WHERE outcome_type = 'unsubscribe') AS unsubscribe_count,
             COUNT(*) FILTER (WHERE outcome_type = 'complaint') AS complaint_count,
-            COUNT(*) FILTER (WHERE outcome_type = 'meeting_booked') AS meeting_count,
-            COUNT(*) FILTER (WHERE outcome_type = 'converted') AS converted_count,
+            COUNT(*) FILTER (WHERE outcome_type IN ('meeting_booked', 'call_planned')) AS meeting_count,
+            COUNT(*) FILTER (WHERE outcome_type IN (
+                'converted', 'campaign_launched', 'joint_project', 'recurring_partnership'
+            )) AS converted_count,
             MIN(occurred_at) AS first_event_at,
             MAX(occurred_at) AS last_event_at,
             COALESCE((ARRAY_AGG(dimensions_json ORDER BY occurred_at DESC))[1], '{}'::jsonb) AS dimensions_json

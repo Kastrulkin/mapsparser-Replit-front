@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -16,6 +17,21 @@ from services.outreach_personalization_ai import (
     generation_contract_current,
     generate_personalized_sequence,
 )
+from services.outreach_decision_service import (
+    _is_residential_recipient,
+    build_outreach_decision,
+    offer_candidates,
+    select_offer,
+    select_trust,
+    trust_candidates,
+)
+from services.outreach_relationship_service import (
+    ROOM_INVITATION_CLASSIFICATIONS,
+    mark_room_ready_after_positive_reply,
+    mirror_inbound_to_room,
+    prepare_private_room,
+    upsert_relationship_from_reply,
+)
 from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
 from services.outreach_safety_service import (
     approval_snapshot_hash,
@@ -27,8 +43,8 @@ from services.outreach_safety_service import (
 )
 
 
-AUTOMATIC_CHANNELS = {"telegram", "email"}
-MANUAL_CHANNELS = {"max", "vk", "whatsapp", "sms", "manual"}
+AUTOMATIC_CHANNELS = {"telegram", "email", "vk"}
+MANUAL_CHANNELS = {"max", "whatsapp", "sms", "manual"}
 SUPPORTED_CHANNELS = AUTOMATIC_CHANNELS | MANUAL_CHANNELS
 SENDER_MODE_LOCALOS = "localos"
 SENDER_MODE_PARTNER_BUSINESS = "partner_business"
@@ -38,7 +54,11 @@ SENDER_MODES = {
     SENDER_MODE_PARTNER_BUSINESS,
     SENDER_MODE_LOCALOS_FOR_PARTNER,
 }
-CAMPAIGN_BUSINESS_OUTCOMES = {"meeting_booked", "converted", "no_reply"}
+CAMPAIGN_BUSINESS_OUTCOMES = {
+    "no_reply", "interested", "question", "call_planned", "contacts_exchanged",
+    "pilot_agreed", "campaign_launched", "joint_project", "recurring_partnership",
+    "hard_no", "not_relevant", "lost", "meeting_booked", "converted",
+}
 DEFAULT_SEQUENCE = (
     ("telegram", 0, "signal"),
     ("email", 3, "founder_story"),
@@ -130,6 +150,48 @@ def _text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
+def _represented_business_opening(context: dict[str, Any]) -> str:
+    """Build the external company voice for an authorised LocalOS sender account."""
+    business_name = _text(context.get("represented_business_name"))
+    if not business_name:
+        return ""
+    profile = (
+        context.get("business_sender_profile")
+        if isinstance(context.get("business_sender_profile"), dict)
+        else {}
+    )
+    profile_context = (
+        profile.get("outreach_context_json")
+        if profile.get("confirmed_at") and isinstance(profile.get("outreach_context_json"), dict)
+        else {}
+    )
+    descriptor = _text(
+        profile_context.get("sender_description")
+        or profile_context.get("business_description")
+    ).strip(" .")
+    categories = _list(context.get("client_business_categories"))
+    primary_category = _text(categories[0] if categories else "").lower()
+    business_type = _text(context.get("client_business_type")).lower()
+    if not descriptor:
+        descriptor_by_category = {
+            "детский салон-парикмахерская": "детская парикмахерская",
+            "детская парикмахерская": "детская парикмахерская",
+            "салон красоты": "салон красоты",
+            "медицинский центр": "медицинский центр",
+            "стоматологическая клиника": "стоматологическая клиника",
+            "фитнес-клуб": "фитнес-клуб",
+            "образовательный центр": "образовательный центр",
+        }
+        descriptor = descriptor_by_category.get(primary_category) or descriptor_by_category.get(business_type) or ""
+        if descriptor and context.get("client_business_network_id"):
+            if descriptor == "детская парикмахерская":
+                descriptor = "сеть детских парикмахерских"
+            elif not descriptor.startswith("сеть "):
+                descriptor = f"сеть {descriptor}"
+    identity = f"{descriptor} {business_name}" if descriptor else business_name
+    return f"Мы ваши соседи - {identity}."
+
+
 def resolve_sender_mode(workstream_type: str, requested_mode: Any = None) -> str:
     """Resolve an explicit sender identity without allowing a hidden fallback."""
     motion = _text(workstream_type)
@@ -156,35 +218,26 @@ def _profile_facts(value: Any) -> list[Any]:
 
 
 def _localos_representative_profile(context: dict[str, Any]) -> dict[str, Any]:
-    """Combine who speaks (LocalOS) with what is offered (the represented business)."""
+    """Use LocalOS infrastructure while keeping the external voice with the authorised business."""
     localos_profile = dict(context.get("platform_sender_profile") or {})
-    represented_profile = dict(context.get("business_sender_profile") or {})
     if not localos_profile:
         return {}
-    localos_context = (
-        localos_profile.get("outreach_context_json")
-        if isinstance(localos_profile.get("outreach_context_json"), dict)
-        else {}
-    )
+    represented_profile = dict(context.get("business_sender_profile") or {})
     represented_confirmed = bool(represented_profile.get("confirmed_at"))
-    represented_context = (
-        represented_profile.get("outreach_context_json")
-        if represented_confirmed
-        and isinstance(represented_profile.get("outreach_context_json"), dict)
-        else {}
-    )
-    combined = dict(localos_profile)
+    identity = dict(localos_profile)
+    identity["display_name"] = ""
+    identity["role_title"] = ""
+    identity["company_name"] = _text(context.get("represented_business_name"))
+    identity["competence_story"] = ""
+    identity["proof_points_json"] = []
+    identity["verified_cases_json"] = []
     represented_offers = (
         _profile_facts(represented_profile.get("allowed_offers_json"))
         if represented_confirmed
         else []
     )
-    combined["allowed_offers_json"] = (
-        represented_offers
-        if represented_offers
-        else _profile_facts(localos_profile.get("allowed_offers_json"))
-    )
-    combined["forbidden_claims_json"] = (
+    identity["allowed_offers_json"] = represented_offers
+    identity["forbidden_claims_json"] = (
         _profile_facts(localos_profile.get("forbidden_claims_json"))
         + (
             _profile_facts(represented_profile.get("forbidden_claims_json"))
@@ -192,29 +245,25 @@ def _localos_representative_profile(context: dict[str, Any]) -> dict[str, Any]:
             else []
         )
     )
-    combined_context = dict(localos_context)
-    for key, value in represented_context.items():
-        if value not in (None, "", [], {}):
-            combined_context[key] = value
-    if not _profile_facts(combined_context.get("desired_partner_types")):
-        observed_partner_types = [
+    identity["voice_examples_json"] = []
+    represented_context = (
+        dict(represented_profile.get("outreach_context_json"))
+        if represented_confirmed
+        and isinstance(represented_profile.get("outreach_context_json"), dict)
+        else {}
+    )
+    if not _profile_facts(represented_context.get("desired_partner_types")):
+        represented_context["desired_partner_types"] = [
             _text(item)
             for item in re.split(r"\s*/\s*", _text(context.get("category")))
             if _text(item)
         ]
-        combined_context["desired_partner_types"] = observed_partner_types
-    combined_context["competence_story_status"] = localos_context.get(
-        "competence_story_status",
-        "approved",
-    )
-    combined["outreach_context_json"] = combined_context
-    # The claims in this synthetic sender profile remain LocalOS claims. Facts about
-    # the represented business must still come from sourced research/matching, so a
-    # missing business founder profile must not invalidate the LocalOS identity.
-    combined["confirmed_at"] = localos_profile.get("confirmed_at")
-    combined["_business_service_count"] = context.get("business_service_count")
-    combined["_represented_profile_id"] = represented_profile.get("id")
-    return combined
+    represented_context["representation_only"] = True
+    represented_context["competence_story_status"] = "missing"
+    identity["outreach_context_json"] = represented_context
+    identity["_business_service_count"] = context.get("business_service_count")
+    identity["_represented_profile_id"] = (context.get("business_sender_profile") or {}).get("id")
+    return identity
 
 
 def _apply_sender_mode(context: dict[str, Any], requested_mode: Any = None) -> dict[str, Any]:
@@ -471,7 +520,7 @@ def _review_contacts(context: dict[str, Any], generated_at: datetime) -> list[di
         if not value or not source_url:
             continue
         raw_channel = _text(contact.get("contact_type")).lower()
-        channel = raw_channel if raw_channel in {"telegram", "email", "whatsapp", "max"} else "manual"
+        channel = raw_channel if raw_channel in {"telegram", "email", "vk", "whatsapp", "max"} else "manual"
         verification = _text(contact.get("verification_status")).lower()
         if channel != "email":
             email_status = "not_applicable"
@@ -595,7 +644,7 @@ def _review_record(
         questions = re.findall(r"[^.!?\n]*\?", body)
         cta = _text(questions[-1]) if questions else ""
         raw_channel = _text(touch.get("channel")).lower()
-        channel = raw_channel if raw_channel in {"telegram", "email", "whatsapp", "max"} else "manual"
+        channel = raw_channel if raw_channel in {"telegram", "email", "vk", "whatsapp", "max"} else "manual"
         evidence_id = _text(touch.get("evidence_id"))
         canonical_touches.append({
             "touch_no": int(touch.get("sequence_index") or 0) + 1,
@@ -639,6 +688,11 @@ def _review_record(
         "campaign": {
             "status": "draft",
             "stop_on_reply": True,
+            "sender_mode": context.get("sender_mode"),
+            "selected_offer": selected_candidate.get("next_step"),
+            "selected_offer_id": selected_candidate.get("offer_id"),
+            "trust_strategy": selected_candidate.get("trust_strategy"),
+            "trust_statement": selected_candidate.get("trust_statement"),
         },
         "outcome": {
             "reply_status": "not_contacted",
@@ -762,6 +816,8 @@ def _normalize_outreach_fact(value: Any) -> str:
 def _outreach_bridge(evidence: dict[str, Any]) -> str:
     fact = _text(evidence.get("fact")).lower()
     kind = _text(evidence.get("kind"))
+    if kind == "residential_context":
+        return "Это позволяет обсудить предложение непосредственно для жителей комплекса"
     if (
         ("услуг в карточке" in fact and "указанной ценой" in fact)
         or ("всего услуг" in fact and "с ценой" in fact)
@@ -807,7 +863,12 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         SELECT ws.*, l.name AS lead_name, l.address, l.city, l.category,
                l.rating, l.reviews_count, l.website, l.source_url,
                l.phone, l.email, l.telegram_url, l.whatsapp_url,
-               client.name AS client_business_name
+               l.business_id AS lead_business_id,
+               client.name AS client_business_name,
+               client.business_type AS client_business_type,
+               client.categories AS client_business_categories,
+               client.description AS client_business_description,
+               client.network_id AS client_business_network_id
         FROM lead_workstreams ws
         JOIN prospectingleads l ON l.id = ws.lead_id
         LEFT JOIN businesses client ON client.id = ws.client_business_id
@@ -944,10 +1005,37 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             "relevance": "Есть конкретная точка для проверки карточки и работы с отзывами.",
         })
     match = context.get("partnership_match") or {}
+    residential_recipient = _is_residential_recipient(context)
+    if (
+        context.get("workstream_type") == "client_partnership"
+        and residential_recipient
+        and context.get("source_url")
+    ):
+        lead_name = _text(context.get("lead_name")) or "жилого комплекса"
+        ledger.append({
+            "id": "residential-recipient-context",
+            "kind": "residential_context",
+            "fact": f'В публичной карточке {lead_name} указана категория "Жилой комплекс".',
+            "status": "observed",
+            "source_url": context.get("source_url"),
+            "observed_at": context.get("updated_at"),
+            "freshness": "current_snapshot",
+            "confidence": 0.95,
+            "hypothesis": None,
+            "relevance": "Есть конкретный получатель и аудитория жителей для партнёрского предложения.",
+        })
     match_fact = _normalize_outreach_fact(match.get("recipient_observation"))
+    placeholder_residential_fact = residential_recipient and any(
+        token in match_fact.lower()
+        for token in (
+            "общее описание без структуры",
+            "нет цены или формата",
+        )
+    )
     if (
         context.get("workstream_type") == "client_partnership"
         and match_fact
+        and not placeholder_residential_fact
         and float(match.get("match_score") or 0) >= 40
     ):
         ledger.append({
@@ -966,7 +1054,9 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
     def evidence_priority(item: dict[str, Any]) -> tuple[int, float]:
         fact = _text(item.get("fact")).lower()
         kind = _text(item.get("kind"))
-        if kind == "service_compatibility":
+        if kind == "residential_context":
+            rank = -1
+        elif kind == "service_compatibility":
             rank = 0
         elif (
             "по данным аудита, услуг в карточке" in fact
@@ -1063,28 +1153,59 @@ def _founder_story(profile: dict[str, Any], evidence_text: str = "") -> dict[str
     }
 
 
-def build_personalization_candidates(context: dict[str, Any], ledger: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_personalization_candidates(
+    context: dict[str, Any],
+    ledger: list[dict[str, Any]],
+    *,
+    selected_offer: dict[str, Any] | None = None,
+    selected_trust: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     profile = context.get("sender_profile") or {}
+    sender_mode = _text(context.get("sender_mode")) or SENDER_MODE_LOCALOS
     completeness = evaluate_sender_profile_completeness(
         profile,
         workstream_type=_text(context.get("workstream_type") or profile.get("workstream_type") or "localos_sales"),
         business_service_count=context.get("business_service_count") or profile.get("_business_service_count"),
     )
     story = _founder_story(profile) if completeness["ready"] else None
-    if not story or not ledger:
+    if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER:
+        story = None
+    if not ledger or (sender_mode != SENDER_MODE_LOCALOS_FOR_PARTNER and not story):
+        return []
+    offer = selected_offer or {
+        "text": story.get("offer") if story else "",
+        "cta": story.get("offer") if story else "",
+        "source": "approved_sender_profile",
+    }
+    trust = selected_trust or {
+        "strategy": "founder_story",
+        "statement": story.get("story") if story else "",
+        "source": "approved_sender_profile",
+    }
+    next_step = _text(offer.get("cta") or offer.get("text"))
+    trust_statement = _text(trust.get("statement"))
+    if not next_step or not trust_statement:
         return []
     candidates = []
     lead_name = _text(context.get("lead_name"))
+    recipient_type = (
+        "residential_complex"
+        if _is_residential_recipient(context)
+        else "business"
+    )
     for index, evidence in enumerate(ledger[:3]):
-        relevant_story = _founder_story(
-            context.get("sender_profile") or {},
-            f"{evidence.get('fact') or ''} {evidence.get('relevance') or ''}",
-        ) or story
+        relevant_story = None
+        if story:
+            relevant_story = _founder_story(
+                context.get("sender_profile") or {},
+                f"{evidence.get('fact') or ''} {evidence.get('relevance') or ''}",
+            ) or story
         problem_hypothesis = _text(evidence.get("hypothesis")) or None
         relevance_to_offer = _outreach_bridge(evidence)
         candidates.append({
             "id": f"personalization-{index + 1}",
             "recipient": lead_name,
+            "recipient_type": recipient_type,
             "evidence_id": evidence["id"],
             "evidence_ids": [evidence["id"]],
             "observed_fact": evidence["fact"],
@@ -1093,12 +1214,26 @@ def build_personalization_candidates(context: dict[str, Any], ledger: list[dict[
             "relevance_to_offer": relevance_to_offer,
             "bridge": relevance_to_offer,
             "evidence_kind": evidence.get("kind"),
-            "founder_story": relevant_story["story"],
-            "founder_proof": relevant_story.get("proof"),
-            "sender": relevant_story.get("sender"),
-            "sender_role": relevant_story.get("role"),
-            "sender_company": relevant_story.get("company"),
-            "next_step": relevant_story.get("offer") or "Могу прислать короткий разбор и один безопасный вариант теста.",
+            "founder_story": relevant_story.get("story") if relevant_story else "",
+            "founder_proof": relevant_story.get("proof") if relevant_story else "",
+            "sender": (
+                relevant_story.get("sender") if relevant_story
+                else _text(profile.get("display_name"))
+            ),
+            "sender_role": (
+                relevant_story.get("role") if relevant_story
+                else _text(profile.get("role_title"))
+            ),
+            "sender_company": (
+                relevant_story.get("company") if relevant_story
+                else _text(profile.get("company_name"))
+            ),
+            "trust_strategy": trust.get("strategy"),
+            "trust_statement": trust_statement,
+            "trust_source": trust.get("source"),
+            "offer_id": offer.get("id"),
+            "offer_source": offer.get("source"),
+            "next_step": next_step,
             "source_url": evidence.get("source_url"),
             "source_type": evidence.get("source_type"),
             "confidence": evidence.get("confidence"),
@@ -1106,13 +1241,12 @@ def build_personalization_candidates(context: dict[str, Any], ledger: list[dict[
             "observed_at": evidence.get("observed_at"),
             "evidence_status": evidence.get("status"),
             "limitations": ["public_evidence_only"] if evidence.get("confidence", 0) < 0.8 else [],
-            "sender_mode": context.get("sender_mode"),
+            "sender_mode": sender_mode,
             "represented_business": context.get("represented_business_name"),
-            "representation_disclosure": (
-                f'Я пишу от LocalOS и представляю бизнес "{_text(context.get("represented_business_name"))}" '
-                "в этом партнёрском предложении."
+            "representation_disclosure": "",
+            "represented_business_opening": (
+                _represented_business_opening(context)
                 if context.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER
-                and _text(context.get("represented_business_name"))
                 else ""
             ),
         })
@@ -1149,8 +1283,15 @@ def _strategy_dimensions(
         "founder_story_id": str(context.get("sender_profile", {}).get("id") or ""),
         "founder_story": candidate.get("founder_story") or story.get("story"),
         "founder_proof": candidate.get("founder_proof") or story.get("proof"),
+        "trust_strategy": candidate.get("trust_strategy"),
+        "trust_statement": candidate.get("trust_statement"),
         "bridge_type": candidate.get("relevance_to_offer") or candidate.get("bridge"),
-        "offer": story.get("offer") or candidate.get("next_step"),
+        "offer_id": candidate.get("offer_id"),
+        "offer": (
+            candidate.get("next_step")
+            if candidate.get("offer_id")
+            else story.get("offer") or candidate.get("next_step")
+        ),
         "cta": candidate.get("next_step"),
         "channel": channel,
         "sequence_index": sequence_index,
@@ -1223,7 +1364,7 @@ def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict
                 return "sender_degraded"
             if channel == "telegram" and not sender_item.get("telegram_outreach_enabled"):
                 return "permission_required"
-            if channel == "email" and not sender_item.get("sender_outreach_enabled"):
+            if channel in {"email", "vk"} and not sender_item.get("sender_outreach_enabled"):
                 return "permission_required"
             if channel in AUTOMATIC_CHANNELS and (
                 not capabilities.get("direct_send") or not capabilities.get("reply_sync")
@@ -1287,11 +1428,12 @@ def _suppression_status(cursor: Any, context: dict[str, Any]) -> dict[str, Any]:
 def _quality_gate(
     text: str,
     candidate: dict[str, Any],
-    story: dict[str, Any],
+    story: dict[str, Any] | None,
     *,
     channel: str,
     channel_status: str,
     suppressed: bool,
+    angle: str | None = None,
 ) -> dict[str, Any]:
     question_count = text.count("?")
     word_count = len(re.findall(r"\b[\wа-яА-ЯёЁ0-9-]+\b", text, flags=re.UNICODE))
@@ -1307,7 +1449,10 @@ def _quality_gate(
         candidate.get("bridge"),
         candidate.get("founder_story"),
         candidate.get("founder_proof"),
+        candidate.get("trust_statement"),
     )
+    proof_context = story or {}
+    respectful_close = _text(angle) == "respectful_close"
     banned_machine_phrases = (
         "есть конкретный элемент карточки",
         "подтверждённый контекст",
@@ -1315,7 +1460,10 @@ def _quality_gate(
         "без приписывания бизнесу скрытой проблемы",
     )
     checks = {
-        "removal": contains(candidate.get("recipient")) and any(contains(anchor) for anchor in personalization_anchors),
+        "removal": contains(candidate.get("recipient")) and (
+            any(contains(anchor) for anchor in personalization_anchors)
+            or respectful_close
+        ),
         "bridge": any(contains(anchor) for anchor in personalization_anchors[1:]),
         "fact": bool(candidate.get("source_url") and candidate.get("evidence_status") in {"approved", "observed"}),
         "freshness": _text(candidate.get("freshness")).lower() not in {
@@ -1323,9 +1471,12 @@ def _quality_gate(
             "stale",
             "unknown_dated_source",
         },
-        "specificity": bool(contains(candidate.get("recipient")) and len(_text(candidate.get("observed_fact"))) >= 20),
-        "proof_integrity": bool(story) and not any(
-            claim.lower() in text.lower() for claim in story.get("forbidden_claims", [])
+        "specificity": bool(
+            contains(candidate.get("recipient"))
+            and (respectful_close or len(_text(candidate.get("observed_fact"))) >= 20)
+        ),
+        "proof_integrity": bool(story or candidate.get("trust_statement")) and not any(
+            claim.lower() in text.lower() for claim in proof_context.get("forbidden_claims", [])
         ),
         "channel_fit": channel in SUPPORTED_CHANNELS and word_count <= channel_word_limit,
         "single_cta": question_count == 1 and bool(_text(candidate.get("next_step"))),
@@ -1416,7 +1567,7 @@ def _quality_gate(
 def _message_for_angle(
     angle: str,
     candidate: dict[str, Any],
-    story: dict[str, Any],
+    story: dict[str, Any] | None,
     previous_angles: list[str],
 ) -> str:
     name = candidate["recipient"]
@@ -1441,28 +1592,95 @@ def _message_for_angle(
     bridge = _text(candidate.get("bridge")).rstrip(". ")
     founder_story = _text(candidate.get("founder_story")).rstrip(". ")
     founder_proof = _text(candidate.get("founder_proof") or founder_story).rstrip(". ")
+    trust_statement = _text(candidate.get("trust_statement")).rstrip(". ")
+    sender_mode = _text(candidate.get("sender_mode"))
     representation = _text(candidate.get("representation_disclosure"))
+    represented_business_opening = _text(candidate.get("represented_business_opening"))
     representation_block = f"{representation} " if representation else ""
+    residential_recipient = _text(candidate.get("recipient_type")) == "residential_complex"
+    if residential_recipient:
+        if represented_business_opening:
+            company_opening = represented_business_opening
+        elif sender_company:
+            company_opening = f"Мы ваши соседи - {sender_company}."
+        else:
+            company_opening = introduction.strip()
+        greeting = "Здравствуйте!"
+        opening = f"{greeting}\n\n{company_opening}\n\n" if company_opening else f"{greeting}\n\n"
+        invitation = "Хотели бы пригласить ваших жителей к нам."
+        terms = "Конкретный формат и условия предложим отдельно с учётом правил комплекса."
+        if angle == "signal":
+            return (
+                opening
+                + f"{invitation}\n\n{observed_fact}. {bridge}.\n\n"
+                + f"{terms} Подскажите, с кем можно это обсудить?"
+            )
+        if angle in {"founder_story", "business_reputation", "matching_authority"}:
+            trust_or_story = trust_statement or founder_story
+            trust_block = f"{trust_or_story}. " if trust_or_story else ""
+            return (
+                opening
+                + f"{trust_block}{invitation} {observed_fact}. {bridge}.\n\n"
+                + f"{terms} Можно обсудить подходящий формат для жителей?"
+            )
+        if angle == "proof":
+            proof = founder_proof or trust_statement
+            proof_block = f"{proof}. " if proof else ""
+            return (
+                opening
+                + f"{proof_block}{invitation} {observed_fact}. {bridge}.\n\n"
+                + f"{terms} Прислать один вариант предложения для жителей?"
+            )
+        return (
+            opening
+            + f"Коротко закроем тему по {name}. {invitation} {bridge}. "
+            + "Если сейчас неактуально, больше писать не будем. Вернуться к этому позже?"
+        )
     if angle == "signal":
+        if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER:
+            return (
+                f"Здравствуйте!\n\n{represented_business_opening}\n\n"
+                f'Обратили внимание на "{name}": {observed_fact_inline}. {bridge}.\n\n'
+                "Мы собрали несколько простых идей для небольшого совместного пилота. Прислать?"
+            )
+        if sender_mode == SENDER_MODE_PARTNER_BUSINESS:
+            return f'Здравствуйте! {introduction}{representation_block}Обратил внимание на "{name}": {observed_fact_inline}. {bridge}. {next_step} - обсудим?'
         return f'Здравствуйте! {introduction}{representation_block}Посмотрел публичную карточку "{name}". {observed_fact}. {bridge}. Могу прислать {next_step.lower()} - посмотреть?'
-    if angle == "founder_story":
+    if angle in {"founder_story", "business_reputation", "matching_authority"}:
+        if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER:
+            opening = "Здравствуйте!\n\n"
+            if represented_business_opening:
+                opening += f"{represented_business_opening}\n\n"
+            return opening + (
+                f'Пишем по поводу возможного знакомства с "{name}". {trust_statement}.\n\n'
+                f"Основание для знакомства - {observed_fact_inline}.\n\n"
+                f"{next_step} - обсудим?"
+            )
         opening = f"Здравствуйте! {introduction.rstrip()}\n\n"
         if representation:
             opening += f"{representation}\n\n"
+        trust_or_story = trust_statement if angle == "business_reputation" else founder_story or trust_statement
         return opening + (
-            f'Пишу по поводу карточки "{name}". {founder_story}.\n\n'
+            f'Пишу по поводу карточки "{name}". {trust_or_story}.\n\n'
             f"Конкретный повод - {observed_fact_inline}.\n\n"
-            f"Могу прислать {next_step.lower()} - будет полезно?"
+            f"{next_step} - будет полезно?"
         )
     if angle == "proof":
-        return f'Здравствуйте! {representation_block}Коротко дополню по карточке "{name}". {founder_proof}. Поэтому разбор будет предметным: покажу, что видно по вашей карточке и какой шаг стоит проверить первым. Прислать пример?'
-    return f'Здравствуйте! {representation_block}Закрою тему, чтобы не быть навязчивым. Я писал по публичным данным карточки "{name}". {observed_fact}. Если разбор сейчас не актуален, больше напоминать не буду. Вернуться к этому позже?'
+        proof = founder_proof or trust_statement
+        company_identity = f"{represented_business_opening} " if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER else ""
+        verb = "дополним" if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER else "дополню"
+        return f'Здравствуйте! {company_identity}Коротко {verb} по "{name}". {proof}. {next_step} - прислать детали?'
+    if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER:
+        return f'Здравствуйте! {represented_business_opening} Коротко закроем тему по "{name}". {bridge}. Если сейчас неактуально, больше писать не будем. Вернуться позже?'
+    return f'Здравствуйте! {representation_block}Коротко закрою тему по "{name}". {bridge}. Если сейчас неактуально, больше не напомню. Вернуться позже?'
 
 
 def _email_subject(angle: str, candidate: dict[str, Any]) -> str:
     labels = {
         "signal": "короткий вопрос по публичному сигналу",
         "founder_story": "вопрос по публичной карточке",
+        "business_reputation": "идея для знакомства компаний",
+        "matching_authority": "основание для знакомства компаний",
         "proof": "пример, который может быть полезен",
         "respectful_close": "закрою тему",
     }
@@ -1477,65 +1695,123 @@ def build_preview(
     sequence: list[dict[str, Any]] | None = None,
     start_at: datetime | None = None,
     sender_mode: str | None = None,
+    offer_id: str | None = None,
+    trust_strategy: str | None = None,
     generate_ai: bool | None = None,
 ) -> dict[str, Any]:
     context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
     ledger = build_evidence_ledger(context)
-    candidates = build_personalization_candidates(context, ledger)
     profile_completeness = evaluate_sender_profile_completeness(
         context.get("sender_profile") or {},
         workstream_type=_text(context.get("workstream_type") or "localos_sales"),
         business_service_count=context.get("business_service_count"),
     )
+    profile_ready = bool(profile_completeness["ready"])
+    if context.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER:
+        platform_profile = context.get("platform_sender_profile") or {}
+        profile_ready = bool(platform_profile.get("confirmed_at"))
     story = (
         _founder_story(context.get("sender_profile") or {})
-        if profile_completeness["ready"]
+        if profile_ready and context.get("sender_mode") != SENDER_MODE_LOCALOS_FOR_PARTNER
         else None
     )
     availability = channel_availability(cursor, context)
     suppression = _suppression_status(cursor, context)
-    if suppression["suppressed"]:
+    decision = build_outreach_decision(
+        context,
+        ledger,
+        availability,
+        suppression,
+        sender_mode=_text(context.get("sender_mode")),
+        profile_ready=profile_ready,
+    )
+    offers = offer_candidates(context, _text(context.get("sender_mode")))
+    trusts = trust_candidates(context, _text(context.get("sender_mode")))
+    selected_offer = select_offer(offers, offer_id)
+    selected_trust = select_trust(trusts, trust_strategy)
+    candidates = build_personalization_candidates(
+        context,
+        ledger,
+        selected_offer=selected_offer,
+        selected_trust=selected_trust,
+    )
+    base_payload = {
+        "workstream_id": workstream_id,
+        "lead_id": str(context.get("lead_id")),
+        "lead": {
+            "name": context.get("lead_name"),
+            "city": context.get("city"),
+            "category": context.get("category"),
+            "source_url": context.get("source_url"),
+        },
+        "sender_mode": context.get("sender_mode"),
+        "represented_business_id": context.get("represented_business_id"),
+        "represented_business_name": context.get("represented_business_name"),
+        "decision": decision,
+        "offers": offers,
+        "trust_strategies": trusts,
+        "selected_offer": selected_offer,
+        "selected_trust": selected_trust,
+        "evidence": ledger,
+        "personalization_candidates": candidates,
+        "channel_availability": availability,
+    }
+    if decision["action"] == "excluded":
         return {
-            "status": "suppressed",
-            "workstream_id": workstream_id,
-            "lead_id": str(context.get("lead_id")),
-            "sender_mode": context.get("sender_mode"),
-            "represented_business_id": context.get("represented_business_id"),
-            "represented_business_name": context.get("represented_business_name"),
+            **base_payload,
+            "status": "suppressed" if suppression["suppressed"] else "excluded",
             "suppression": suppression,
-            "evidence": ledger,
-            "personalization_candidates": candidates,
-            "channel_availability": availability,
             "touches": [],
         }
-    if not story or not candidates:
+    if decision["action"] != "write_now" or not candidates:
         missing = []
-        if not story:
+        if not profile_ready:
             missing.extend(
                 item["code"] for item in profile_completeness["missing_items"]
             )
             if not profile_completeness["missing_items"]:
-                missing.append("approved_founder_profile")
+                missing.append("approved_sender_profile")
         if not ledger:
             missing.append("recipient_evidence")
+        if not selected_offer:
+            missing.append("approved_offer")
+        if not selected_trust:
+            missing.append("trust_strategy")
         return {
-            "status": "needs_evidence",
-            "workstream_id": workstream_id,
-            "lead_id": str(context.get("lead_id")),
-            "sender_mode": context.get("sender_mode"),
-            "represented_business_id": context.get("represented_business_id"),
-            "represented_business_name": context.get("represented_business_name"),
+            **base_payload,
+            "status": decision["action"],
             "missing": missing,
             "sender_profile_completeness": profile_completeness,
-            "evidence": ledger,
-            "personalization_candidates": candidates,
-            "channel_availability": availability,
             "touches": [],
         }
     selected_sequence = sequence or [
         {"channel": channel, "day_offset": day, "angle": angle}
         for channel, day, angle in DEFAULT_SEQUENCE
     ]
+    if sequence is None and context.get("sender_mode") == SENDER_MODE_PARTNER_BUSINESS:
+        selected_sequence[1]["angle"] = "business_reputation"
+    if sequence is None and context.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER:
+        selected_sequence[1]["angle"] = "matching_authority"
+    if context.get("sender_mode") == SENDER_MODE_PARTNER_BUSINESS:
+        selected_sequence = [
+            {
+                **item,
+                "angle": "business_reputation"
+                if _text(item.get("angle")) == "founder_story"
+                else _text(item.get("angle")),
+            }
+            for item in selected_sequence
+        ]
+    if context.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER:
+        selected_sequence = [
+            {
+                **item,
+                "angle": "matching_authority"
+                if _text(item.get("angle")) == "founder_story"
+                else _text(item.get("angle")),
+            }
+            for item in selected_sequence
+        ]
     usable = [channel for channel, item in availability.items() if item["status"] in {"ready", "manual"}]
     touches = []
     previous_angles: list[str] = []
@@ -1593,12 +1869,13 @@ def build_preview(
             channel=requested_channel,
             channel_status=availability_item["status"],
             suppressed=suppression["suppressed"],
+            angle=angle,
         )
         strategy = _strategy_dimensions(
             context,
             research_brief,
             candidate,
-            story,
+            story or {},
             channel=requested_channel,
             sequence_index=len(touches),
             day_offset=day_offset,
@@ -1643,6 +1920,15 @@ def build_preview(
     semantic_failed = False
     if ai_enabled and touches:
         sender_profile = context.get("sender_profile") or {}
+        generation_story = story or {
+            "sender": _text(sender_profile.get("display_name")),
+            "role": _text(sender_profile.get("role_title")),
+            "company": _text(sender_profile.get("company_name")),
+            "story": _text(selected_trust.get("statement")),
+            "proof": "",
+            "offer": _text(selected_offer.get("text")),
+            "forbidden_claims": [],
+        }
 
         def voice_example_text(item: Any) -> str:
             if isinstance(item, dict):
@@ -1662,7 +1948,7 @@ def build_preview(
                 "contact_role": _text(primary_candidate.get("contact_role")),
             },
             candidate=primary_candidate,
-            founder_story=story,
+            founder_story=generation_story,
             sequence=touches,
             voice_examples=voice_examples,
             business_id=_text(context.get("client_business_id")),
@@ -1696,6 +1982,7 @@ def build_preview(
                     channel=touch["channel"],
                     channel_status=touch["channel_status"],
                     suppressed=suppression["suppressed"],
+                    angle=touch["angle"],
                 )
                 gate = _merge_semantic_quality(gate, semantic_review)
                 if not semantic_review.get("passed"):
@@ -1752,9 +2039,15 @@ def build_preview(
         "status": preview_status,
         "workstream_id": workstream_id,
         "lead_id": str(context.get("lead_id")),
+        "lead": base_payload["lead"],
         "scope_type": "platform" if context.get("workstream_type") == "localos_sales" else "business",
         "business_id": context.get("client_business_id"),
         "sender_mode": context.get("sender_mode"),
+        "decision": decision,
+        "offers": offers,
+        "trust_strategies": trusts,
+        "selected_offer": selected_offer,
+        "selected_trust": selected_trust,
         "sender_scope_type": (
             "platform"
             if context.get("sender_mode") in {SENDER_MODE_LOCALOS, SENDER_MODE_LOCALOS_FOR_PARTNER}
@@ -1790,12 +2083,19 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
         """
         INSERT INTO outreach_campaigns (
             id, workstream_id, lead_id, scope_type, business_id, sender_profile_id,
-            version, status, policy_json, recipient_key, created_by, created_at, updated_at
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, 'draft', %s, %s, %s, NOW(), NOW())
+            version, status, sender_mode, selected_offer_json, trust_strategy,
+            decision_snapshot_json, policy_json, recipient_key, created_by, created_at, updated_at
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s, %s, 'draft', %s, %s, NULLIF(%s, ''),
+            %s, %s, %s, %s, NOW(), NOW()
+        )
         """,
         (
             campaign_id, workstream_id, preview["lead_id"], preview["scope_type"],
             preview.get("business_id"), preview.get("sender_profile_id"), version,
+            preview.get("sender_mode"), Json(preview.get("selected_offer") or {}),
+            preview.get("selected_trust", {}).get("strategy") or "",
+            Json(_json_safe(preview.get("decision") or {})),
             Json({
                 "stop_on_reply": True,
                 "daily_limit": 10,
@@ -1860,7 +2160,7 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
         """
         UPDATE lead_workstream_research
         SET evidence_json = %s, personalization_candidates_json = %s,
-            selected_personalization_id = %s
+            selected_personalization_id = %s, outreach_decision_json = %s
         WHERE id = (
             SELECT id FROM lead_workstream_research
             WHERE workstream_id = %s ORDER BY researched_at DESC, created_at DESC LIMIT 1
@@ -1868,10 +2168,34 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
         """,
         (
             Json(_json_safe(preview["evidence"])), Json(_json_safe(preview["personalization_candidates"])),
-            preview["personalization_candidates"][0]["id"], workstream_id,
+            preview["personalization_candidates"][0]["id"],
+            Json(_json_safe(preview.get("decision") or {})), workstream_id,
         ),
     )
-    return {"id": campaign_id, "version": version, "status": "draft"}
+    context = _apply_sender_mode(
+        _load_context(cursor, workstream_id),
+        _text(preview.get("sender_mode")),
+    )
+    room_sync_enabled = str(os.getenv("OUTREACH_ROOM_SYNC_ENABLED") or "true").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    room = (
+        prepare_private_room(
+            cursor,
+            campaign_id=campaign_id,
+            preview=preview,
+            context=context,
+            user_id=user_id,
+        )
+        if room_sync_enabled
+        else None
+    )
+    return {
+        "id": campaign_id,
+        "version": version,
+        "status": "draft",
+        "room": room,
+    }
 
 
 def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str, Any]:
@@ -1879,10 +2203,10 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         """
         SELECT c.*, COUNT(t.id) AS touch_count,
                BOOL_AND(COALESCE((t.quality_gate_json->>'passed')::boolean, FALSE)) AS quality_passed,
-               BOOL_AND(CASE WHEN t.channel IN ('telegram', 'email') THEN t.sender_account_id IS NOT NULL ELSE TRUE END) AS senders_ready,
+               BOOL_AND(CASE WHEN t.channel IN ('telegram', 'email', 'vk') THEN t.sender_account_id IS NOT NULL ELSE TRUE END) AS senders_ready,
                BOOL_AND(
                    CASE
-                       WHEN t.channel IN ('telegram', 'email') THEN t.message_brief_json->>'channel_status' = 'ready'
+                       WHEN t.channel IN ('telegram', 'email', 'vk') THEN t.message_brief_json->>'channel_status' = 'ready'
                        ELSE t.message_brief_json->>'channel_status' = 'manual'
                    END
                ) AS channels_ready
@@ -1940,14 +2264,14 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         JOIN outreach_sender_accounts s ON s.id = t.sender_account_id
         LEFT JOIN telegram_account_permissions p ON p.account_id = s.external_account_id
         WHERE t.campaign_id = %s
-          AND t.channel IN ('telegram', 'email')
+          AND t.channel IN ('telegram', 'email', 'vk')
           AND (
               s.status <> 'connected'
               OR s.health_status IN ('paused', 'blocked')
               OR COALESCE((s.capabilities_json->>'direct_send')::boolean, FALSE) = FALSE
               OR COALESCE((s.capabilities_json->>'reply_sync')::boolean, FALSE) = FALSE
               OR (t.channel = 'telegram' AND COALESCE(p.outreach_enabled, FALSE) = FALSE)
-              OR (t.channel = 'email' AND COALESCE(s.outreach_enabled, FALSE) = FALSE)
+              OR (t.channel IN ('email', 'vk') AND COALESCE(s.outreach_enabled, FALSE) = FALSE)
           )
         """,
         (campaign_id,),
@@ -2074,7 +2398,7 @@ def change_campaign_status(
             LEFT JOIN outreach_sender_accounts s ON s.id = t.sender_account_id
             LEFT JOIN telegram_account_permissions p ON p.account_id = s.external_account_id
             WHERE t.campaign_id = %s
-              AND t.channel IN ('telegram', 'email')
+              AND t.channel IN ('telegram', 'email', 'vk')
               AND (
                   s.id IS NULL
                   OR s.status <> 'connected'
@@ -2084,7 +2408,7 @@ def change_campaign_status(
                   OR COALESCE((s.capabilities_json->>'direct_send')::boolean, FALSE) = FALSE
                   OR COALESCE((s.capabilities_json->>'reply_sync')::boolean, FALSE) = FALSE
                   OR (t.channel = 'telegram' AND COALESCE(p.outreach_enabled, FALSE) = FALSE)
-                  OR (t.channel = 'email' AND COALESCE(s.outreach_enabled, FALSE) = FALSE)
+                  OR (t.channel IN ('email', 'vk') AND COALESCE(s.outreach_enabled, FALSE) = FALSE)
               )
             """,
             (campaign_id,),
@@ -2217,6 +2541,35 @@ def record_manual_touch(
             """,
             (classification["classification"], touch["workstream_id"]),
         )
+        upsert_relationship_from_reply(
+            cursor,
+            workstream_id=str(touch.get("workstream_id") or ""),
+            lead_id=str(touch.get("lead_id") or ""),
+            scope_type=str(touch.get("scope_type") or "business"),
+            business_id=str(touch.get("business_id") or "") or None,
+            raw_reply=note,
+            classification=classification["classification"],
+            provider_event_id=None,
+        )
+        room_sync_enabled = str(os.getenv("OUTREACH_ROOM_SYNC_ENABLED") or "true").strip().lower() in {
+            "1", "true", "yes", "on",
+        }
+        if room_sync_enabled:
+            mirror_inbound_to_room(
+                cursor,
+                campaign_id=campaign_id,
+                touch_id=touch_id,
+                channel=str(touch.get("channel") or "manual"),
+                provider_event_id=None,
+                raw_reply=note,
+                occurred_at=datetime.now(timezone.utc),
+            )
+            if classification["classification"] in ROOM_INVITATION_CLASSIFICATIONS:
+                mark_room_ready_after_positive_reply(
+                    cursor,
+                    campaign_id=campaign_id,
+                    represented_business_name=None,
+                )
         learning_outcome = {
             "interested": "positive_reply",
             "question": "question",
@@ -2366,7 +2719,7 @@ def record_campaign_business_outcome(
         raise LookupError("Campaign not found")
 
     has_human_reply = bool(campaign.get("has_human_reply"))
-    if outcome_type in {"meeting_booked", "converted"}:
+    if outcome_type != "no_reply":
         if not has_human_reply:
             raise ValueError("Record the recipient reply before the business outcome")
         if not note.strip():
@@ -2382,7 +2735,10 @@ def record_campaign_business_outcome(
             FROM outreach_learning_events
             WHERE campaign_id = %s
               AND outcome_type IN ('replied', 'positive_reply', 'question', 'hard_no',
-                                   'unsubscribe', 'complaint', 'meeting_booked', 'converted')
+                                   'unsubscribe', 'complaint', 'meeting_booked', 'converted',
+                                   'interested', 'call_planned', 'contacts_exchanged',
+                                   'pilot_agreed', 'campaign_launched', 'joint_project',
+                                   'recurring_partnership', 'not_relevant', 'lost')
             LIMIT 1
             """,
             (campaign_id,),
@@ -2438,14 +2794,36 @@ def record_campaign_business_outcome(
         payload={"source": "manual_business_outcome", "note": note.strip()},
     )
     lifecycle_status = {
+        "no_reply": "closed_lost",
+        "interested": "replied",
+        "question": "replied",
+        "call_planned": "qualified",
+        "contacts_exchanged": "qualified",
+        "pilot_agreed": "qualified",
+        "campaign_launched": "converted",
+        "joint_project": "converted",
+        "recurring_partnership": "converted",
+        "hard_no": "closed_lost",
+        "not_relevant": "not_relevant",
+        "lost": "closed_lost",
         "meeting_booked": "qualified",
         "converted": "converted",
-        "no_reply": "closed_lost",
     }[outcome_type]
     next_step = {
+        "no_reply": "Кампания завершена без ответа",
+        "interested": "Уточнить интерес и следующий шаг",
+        "question": "Ответить на вопрос",
+        "call_planned": "Провести разговор и зафиксировать договорённости",
+        "contacts_exchanged": "Согласовать следующий шаг между командами",
+        "pilot_agreed": "Подготовить пилот",
+        "campaign_launched": "Отслеживать результат кампании",
+        "joint_project": "Вести совместный проект",
+        "recurring_partnership": "Поддерживать регулярное партнёрство",
+        "hard_no": "Не продолжать аутрич",
+        "not_relevant": "Закрыть как нерелевантный контакт",
+        "lost": "Зафиксировать причину потери",
         "meeting_booked": "Провести встречу и зафиксировать результат",
         "converted": "Зафиксировать результат сотрудничества",
-        "no_reply": "Кампания завершена без ответа",
     }[outcome_type]
     cursor.execute(
         """
@@ -2469,6 +2847,37 @@ def record_campaign_business_outcome(
         reason_code=outcome_type,
         payload={"note": note.strip(), "learning_event_id": learning_event_id},
     )
+    if campaign.get("room_id"):
+        room_status = (
+            "won"
+            if outcome_type in {"campaign_launched", "joint_project", "recurring_partnership", "converted"}
+            else "lost" if outcome_type in {"hard_no", "not_relevant", "lost", "no_reply"}
+            else "negotiating"
+        )
+        cursor.execute(
+            """
+            UPDATE sales_rooms
+            SET status = %s,
+                room_json = room_json || jsonb_build_object(
+                    'outcome', %s,
+                    'next_step', %s,
+                    'outcome_note', %s
+                ),
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (room_status, outcome_type, next_step, note.strip(), campaign.get("room_id")),
+        )
+        cursor.execute(
+            """
+            INSERT INTO sales_room_events (id, room_id, event_type, metadata_json, created_at)
+            VALUES (%s, %s, 'outcome_recorded', %s, NOW())
+            """,
+            (
+                str(uuid.uuid4()), campaign.get("room_id"),
+                Json({"outcome": outcome_type, "note": note.strip()}),
+            ),
+        )
     return {
         "campaign_id": campaign_id,
         "touch_id": touch_id,

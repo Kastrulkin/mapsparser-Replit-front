@@ -42,7 +42,11 @@ def _provider_for_request(definition: LLMTaskDefinition, request: LLMTaskRequest
         return "gigachat"
     if definition.primary_provider != "deepseek":
         return definition.primary_provider
-    if not _deepseek_business_allowed(request.business_id):
+    platform_public_task = bool(
+        not request.business_id
+        and definition.data_class == "public"
+    )
+    if not platform_public_task and not _deepseek_business_allowed(request.business_id):
         return "gigachat"
     if _env_enabled("LLM_SHADOW_MODE") and definition.shadow_allowed:
         return "gigachat"

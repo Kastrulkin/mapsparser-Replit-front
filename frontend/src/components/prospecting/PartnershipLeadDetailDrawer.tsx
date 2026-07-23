@@ -126,6 +126,10 @@ type LeadTelegramSource = {
   url?: string;
   status?: string;
   sync_status?: string;
+  source_owner_type?: 'residential_complex' | 'prospecting_recipient';
+  source_owner_name?: string;
+  source_owner_label?: string;
+  sender_business_is_owner?: boolean;
 };
 
 type PartnershipLeadDetailDrawerProps = {
@@ -429,7 +433,8 @@ export default function PartnershipLeadDetailDrawer({
                 {leadTelegramSources.map((source) => (
                   <a key={source.id} href={source.url} target="_blank" rel="noreferrer" className="block min-h-11 rounded-xl bg-sky-50 px-3 py-2 text-sm text-sky-900">
                     <span className="font-semibold">{source.title || source.url || 'Telegram-канал'}</span>
-                    <span className="mt-0.5 block text-xs">Источник сигналов · {source.status === 'active' ? 'проверен' : 'ожидает проверки радара'}</span>
+                    <span className="mt-0.5 block text-xs">Источник {source.source_owner_label || source.source_owner_name || 'получателя'}</span>
+                    <span className="mt-0.5 block text-xs">{source.status === 'active' ? 'Проверен радаром' : 'Ожидает проверки радара'}</span>
                   </a>
                 ))}
               </div>

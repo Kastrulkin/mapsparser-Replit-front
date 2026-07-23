@@ -57,7 +57,7 @@ try:
 except ImportError:
     from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
 from services.telegram_account_permissions_service import assert_account_access
@@ -112,7 +112,7 @@ SHORTLIST_APPROVED = "shortlist_approved"
 SHORTLIST_REJECTED = "shortlist_rejected"
 SELECTED_FOR_OUTREACH = "selected_for_outreach"
 CHANNEL_SELECTED = "channel_selected"
-ALLOWED_OUTREACH_CHANNELS = {"telegram", "whatsapp", "max", "email", "manual"}
+ALLOWED_OUTREACH_CHANNELS = {"telegram", "whatsapp", "max", "email", "vk", "manual"}
 DRAFT_GENERATED = "generated"
 DRAFT_APPROVED = "approved"
 DRAFT_REJECTED = "rejected"
@@ -316,7 +316,7 @@ def _generate_lead_audit_enrichment(
         },
     )
     try:
-        result_text = analyze_text_with_gigachat(prompt, task_type="ai_agent_marketing")
+        result_text = analyze_text_with_gigachat(prompt, task_type="lead_audit_enrichment")
         parsed = _extract_json_candidate(result_text)
         if not parsed:
             raise ValueError("AI audit enrichment did not return JSON")
@@ -332,7 +332,7 @@ def _generate_lead_audit_enrichment(
                 + "\nЗапрещены фразы: высокий потенциал, strategic improvement, online presence, solid base."
                 + "\nНужны 1-2 конкретные проблемы из top_findings/current_state и короткое business consequence."
             )
-            result_text = analyze_text_with_gigachat(retry_prompt, task_type="ai_agent_marketing")
+            result_text = analyze_text_with_gigachat(retry_prompt, task_type="lead_audit_enrichment")
             parsed = _extract_json_candidate(result_text)
             if not parsed:
                 raise ValueError("AI audit enrichment retry did not return JSON")
@@ -358,10 +358,10 @@ def _generate_lead_audit_enrichment(
             "recommended_actions": editorial_payload.get("recommended_actions") if isinstance(editorial_payload.get("recommended_actions"), list) else recommended_actions,
             "why_now": str(editorial_payload.get("why_now") or "").strip(),
             "meta": {
-                "source": "gigachat",
+                "source": "deepseek",
                 "prompt_key": "lead_audit_enrichment",
-                "prompt_version": "v1",
-                "prompt_source": "gigachat",
+                "prompt_version": "v2",
+                "prompt_source": "deepseek",
                 "raw_response": str(result_text or "")[:4000],
             },
         }
@@ -1061,6 +1061,94 @@ def _resolve_email_sender(sender_account_id: str) -> tuple[dict[str, Any] | None
         conn.close()
 
 
+def _resolve_vk_sender(sender_account_id: str) -> tuple[dict[str, Any] | None, str]:
+    if not sender_account_id:
+        return None, "sender_account_required"
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT * FROM outreach_sender_accounts
+            WHERE id = %s AND channel = 'vk'
+            """,
+            (sender_account_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None, "sender_account_missing"
+        sender = dict(row)
+        if str(sender.get("status") or "") != "connected":
+            return None, "sender_account_disabled"
+        if not bool(sender.get("outreach_enabled")):
+            return None, "sender_permission_revoked"
+        if sender.get("health_status") in {"paused", "blocked"}:
+            return None, f"sender_{sender.get('health_status')}"
+        capabilities = sender.get("capabilities_json") or {}
+        if (
+            not isinstance(capabilities, dict)
+            or not capabilities.get("direct_send")
+            or not capabilities.get("reply_sync")
+        ):
+            return None, "sender_adapter_incomplete"
+        from services.outreach_vk_adapter import ensure_vk_outreach_config
+
+        _config, refreshed_encrypted = ensure_vk_outreach_config(sender)
+        if refreshed_encrypted:
+            cur.execute(
+                """
+                UPDATE outreach_sender_accounts
+                SET auth_data_encrypted = %s, updated_at = NOW()
+                WHERE id = %s
+                """,
+                (refreshed_encrypted, sender_account_id),
+            )
+            conn.commit()
+            sender["auth_data_encrypted"] = refreshed_encrypted
+        return sender, "ready"
+    finally:
+        conn.close()
+
+
+def _dispatch_via_vk_sender(item: dict[str, Any], message: str) -> dict[str, Any]:
+    from services.outreach_vk_adapter import VkOutreachAdapterError, send_vk_message
+
+    sender_account_id = str(item.get("sender_account_id") or "").strip()
+    sender, sender_reason = _resolve_vk_sender(sender_account_id)
+    capabilities = sender.get("capabilities_json") if isinstance(sender, dict) else {}
+    provider_name = (
+        str(capabilities.get("provider") or "vk_user_api")
+        if isinstance(capabilities, dict)
+        else "vk_user_api"
+    )
+    if not sender:
+        return {
+            "success": False,
+            "error_code": sender_reason,
+            "error_text": "A concrete permitted VK sender account is required",
+            "provider_name": provider_name,
+            "retryable": False,
+        }
+    try:
+        return send_vk_message(
+            sender,
+            recipient_value=str(item.get("contact_value") or ""),
+            body=message,
+            idempotency_key=str(item.get("idempotency_key") or f"outreach:{item.get('id')}"),
+        )
+    except VkOutreachAdapterError as exc:
+        return {
+            "success": False,
+            "error_code": exc.code,
+            "error_text": str(exc),
+            "provider_name": provider_name,
+            "provider_account_id": sender_account_id,
+            "recipient_kind": "vk",
+            "recipient_value": str(item.get("contact_value") or "").strip() or None,
+            "retryable": exc.retryable,
+        }
+
+
 def _dispatch_via_email_sender(item: dict[str, Any], message: str) -> dict[str, Any]:
     from services.outreach_email_adapter import EmailAdapterError, send_email
 
@@ -1726,6 +1814,14 @@ def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
             "retryable": False,
         }
 
+    if channel == "vk" and not str(item.get("sender_account_id") or "").strip():
+        return {
+            "delivery_status": QUEUE_STATUS_FAILED,
+            "error_text": "sender_account_required: connect a VK account before VK outreach",
+            "provider_name": "vk_user_api",
+            "retryable": False,
+        }
+
     if channel == "telegram":
         telegram_result = _dispatch_via_telegram_app(item, message)
         if telegram_result.get("success"):
@@ -1778,6 +1874,33 @@ def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
                 else str(email_result.get("error_text") or "Email delivery failed")
             )[:500],
             "retryable": bool(email_result.get("retryable", False)),
+        }
+
+    if channel == "vk":
+        vk_result = _dispatch_via_vk_sender(item, message)
+        if vk_result.get("success"):
+            return {
+                "delivery_status": QUEUE_STATUS_SENT,
+                "provider_message_id": str(vk_result.get("provider_message_id") or "")[:255] or None,
+                "provider_name": "vk_user_api",
+                "provider_account_id": str(vk_result.get("provider_account_id") or "")[:255] or None,
+                "recipient_kind": str(vk_result.get("recipient_kind") or "peer_id")[:64],
+                "recipient_value": str(vk_result.get("recipient_value") or "")[:255] or None,
+                "error_text": None,
+                "retryable": False,
+            }
+        return {
+            "delivery_status": QUEUE_STATUS_FAILED,
+            "provider_name": "vk_user_api",
+            "provider_account_id": str(vk_result.get("provider_account_id") or "")[:255] or None,
+            "recipient_kind": str(vk_result.get("recipient_kind") or "vk")[:64],
+            "recipient_value": str(vk_result.get("recipient_value") or "")[:255] or None,
+            "error_text": (
+                f"{vk_result.get('error_code')}: {vk_result.get('error_text')}"
+                if vk_result.get("error_code") and vk_result.get("error_text")
+                else str(vk_result.get("error_text") or "VK delivery failed")
+            )[:500],
+            "retryable": bool(vk_result.get("retryable", False)),
         }
 
     # Runtime-first outbound via OpenClaw for supported machine channels.

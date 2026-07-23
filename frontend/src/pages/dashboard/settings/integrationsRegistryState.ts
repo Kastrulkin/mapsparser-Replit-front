@@ -121,12 +121,20 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
   const metaAccount = findAccount(accounts, ['meta', 'instagram', 'facebook']);
   const matonAccount = findAccount(accounts, ['maton']);
   const emailSender = outreachSenders.find((sender) => sender.channel === 'email' && sender.status === 'connected') || null;
+  const vkOutreachSender = outreachSenders.find((sender) => sender.channel === 'vk' && sender.status === 'connected') || null;
   const emailReady = Boolean(
     emailSender
     && emailSender.outreach_enabled
     && emailSender.reply_sync_enabled
     && !emailSender.reply_sync_error
     && !['paused', 'blocked'].includes(String(emailSender.health_status || '')),
+  );
+  const vkOutreachReady = Boolean(
+    vkOutreachSender
+    && vkOutreachSender.outreach_enabled
+    && vkOutreachSender.reply_sync_enabled
+    && !vkOutreachSender.reply_sync_error
+    && !['paused', 'blocked'].includes(String(vkOutreachSender.health_status || '')),
   );
 
   const vkReadiness = findReadiness(readiness, ['vk']);
@@ -178,6 +186,22 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
           ? 'Разрешите отправку или восстановите проверку ответов.'
           : 'Подключите SMTP и IMAP одного рабочего адреса.',
       primaryAction: { label: emailReady ? 'Проверить' : 'Настроить', type: 'drawer', target: 'outreach_email' },
+      hasLogs: true,
+      hasHelp: true,
+    },
+    {
+      id: 'outreach_vk',
+      name: 'VK-сообщество для аутрича',
+      tag: 'Коммуникации',
+      description: 'Личный профиль для одобренных сообщений и проверки ответов.',
+      connectionType: 'oauth',
+      status: vkOutreachReady ? 'connected' : vkOutreachSender ? 'action_required' : 'not_connected',
+      nextAction: vkOutreachReady
+        ? 'Отправка и обязательная проверка ответов работают.'
+        : vkOutreachSender
+          ? 'Разрешите отправку или восстановите проверку ответов.'
+          : 'Подключите VK-сообщество ключом с правом на сообщения.',
+      primaryAction: { label: vkOutreachReady ? 'Проверить' : 'Настроить', type: 'drawer', target: 'outreach_vk' },
       hasLogs: true,
       hasHelp: true,
     },

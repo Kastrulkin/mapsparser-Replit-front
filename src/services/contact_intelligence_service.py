@@ -20,7 +20,13 @@ from bs4 import BeautifulSoup
 from psycopg2.extras import Json, RealDictCursor
 from urllib3.exceptions import HTTPError as Urllib3HTTPError
 
-from services.outreach_campaign_service import build_evidence_ledger, build_personalization_candidates
+from services.outreach_campaign_service import (
+    SENDER_MODE_LOCALOS,
+    SENDER_MODE_LOCALOS_FOR_PARTNER,
+    SENDER_MODE_PARTNER_BUSINESS,
+    build_evidence_ledger,
+    build_personalization_candidates,
+)
 from services.outreach_personalization_ai import (
     ai_personalization_enabled,
     generate_personalized_sequence,
@@ -69,6 +75,8 @@ CONTACT_PAGE_HINTS = (
 )
 EMAIL_PATTERN = re.compile(r"(?<![\w.+-])([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})(?![\w.-])", re.I)
 PHONE_PATTERN = re.compile(r"(?:\+?\d[\d\s().-]{8,}\d)")
+EXTERNAL_SERVICE_EMAIL_DOMAINS = {"dikidi.net"}
+EXTERNAL_SERVICE_TELEGRAM_USERNAMES = {"dikidi_business"}
 UNSUPPORTED_PROMISE_PATTERNS = (
     re.compile(r"\+\s*\d+\s*[–—-]\s*\d+\s*%", re.I),
     re.compile(r"недополуча(?:ете|ют) клиент", re.I),
@@ -240,6 +248,21 @@ def extract_contacts_from_html(html: str, page_url: str) -> list[dict[str, Any]]
     found: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
 
+    def belongs_to_external_service(contact_type: str, normalized: str) -> bool:
+        if contact_type == "email" and "@" in normalized:
+            domain = normalized.rsplit("@", 1)[1].lower()
+            return any(
+                domain == service_domain or domain.endswith(f".{service_domain}")
+                for service_domain in EXTERNAL_SERVICE_EMAIL_DOMAINS
+            )
+        if contact_type == "telegram":
+            try:
+                username = urlparse(normalized).path.strip("/").split("/", 1)[0].lower()
+            except ValueError:
+                return False
+            return username in EXTERNAL_SERVICE_TELEGRAM_USERNAMES
+        return False
+
     def add(
         contact_type: str,
         value: Any,
@@ -250,7 +273,12 @@ def extract_contacts_from_html(html: str, page_url: str) -> list[dict[str, Any]]
     ) -> None:
         normalized = normalize_contact_value(contact_type, value)
         key = (contact_type, normalized)
-        if contact_type not in CONTACT_TYPES or not normalized or key in seen:
+        if (
+            contact_type not in CONTACT_TYPES
+            or not normalized
+            or key in seen
+            or belongs_to_external_service(contact_type, normalized)
+        ):
             return
         seen.add(key)
         found.append(
@@ -626,6 +654,48 @@ def _load_sender_profile(cursor, workstream: dict[str, Any]) -> dict[str, Any] |
     )
     row = cursor.fetchone()
     return dict(row) if row else None
+
+
+def _load_platform_sender_profile(cursor) -> dict[str, Any] | None:
+    cursor.execute(
+        """
+        SELECT * FROM outreach_sender_profiles
+        WHERE workstream_type = 'localos_sales'
+          AND client_business_id IS NULL
+          AND is_active = TRUE
+        ORDER BY confirmed_at DESC NULLS LAST, updated_at DESC
+        LIMIT 1
+        """
+    )
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
+def _resolve_sender_mode(cursor, workstream: dict[str, Any]) -> str:
+    if workstream.get("workstream_type") == "localos_sales":
+        return SENDER_MODE_LOCALOS
+    cursor.execute(
+        """
+        SELECT COALESCE(NULLIF(sender_mode, ''), policy_json ->> 'sender_mode') AS sender_mode
+        FROM outreach_campaigns
+        WHERE workstream_id = %s
+        ORDER BY version DESC, created_at DESC
+        LIMIT 1
+        """,
+        (workstream.get("id"),),
+    )
+    campaign_row = cursor.fetchone()
+    saved_mode = str(
+        campaign_row.get("sender_mode")
+        if isinstance(campaign_row, dict)
+        else campaign_row[0] if campaign_row else ""
+    ).strip()
+    if saved_mode in {SENDER_MODE_PARTNER_BUSINESS, SENDER_MODE_LOCALOS_FOR_PARTNER}:
+        return saved_mode
+    business_profile = _load_sender_profile(cursor, workstream)
+    if business_profile and business_profile.get("confirmed_at"):
+        return SENDER_MODE_PARTNER_BUSINESS
+    return SENDER_MODE_LOCALOS_FOR_PARTNER
 
 
 def _select_best_contact(cursor, workstream: dict[str, Any]) -> dict[str, Any] | None:
@@ -1483,18 +1553,24 @@ def build_message_brief(
         missing.append(label)
         missing_items.append({"code": code, "label": label})
 
-    profile_completeness = evaluate_sender_profile_completeness(
-        sender,
-        workstream_type=workstream_type,
-        business_service_count=workstream.get("business_service_count"),
-    )
-    if not sender:
-        add_missing("sender_profile", "Добавьте факты об отправителе")
-    else:
-        for item in profile_completeness["missing_items"]:
-            add_missing(str(item["code"]), str(item["label"]))
-        if not sender.get("confirmed_at") and profile_completeness["ready"]:
-            add_missing("sender_confirmation", "Подтвердите заполненный профиль отправителя")
+    # Contact enrichment is sender-mode agnostic.  A business founder profile
+    # is mandatory for ``partner_business`` at campaign preview time, but it
+    # must not erase valid partnership matching for ``localos_for_partner``.
+    # LocalOS sales always uses the platform founder profile, so its gate stays
+    # here as an upstream readiness requirement.
+    if workstream_type == "localos_sales":
+        profile_completeness = evaluate_sender_profile_completeness(
+            sender,
+            workstream_type=workstream_type,
+            business_service_count=workstream.get("business_service_count"),
+        )
+        if not sender:
+            add_missing("sender_profile", "Добавьте факты об отправителе")
+        else:
+            for item in profile_completeness["missing_items"]:
+                add_missing(str(item["code"]), str(item["label"]))
+            if not sender.get("confirmed_at") and profile_completeness["ready"]:
+                add_missing("sender_confirmation", "Подтвердите заполненный профиль отправителя")
     if not contact:
         add_missing("recipient_contact", "Выберите подходящий контакт")
     if workstream_type == "localos_sales":
@@ -1865,6 +1941,11 @@ def prepare_first_message(
         channel = str(contact.get("contact_type") or "manual").strip().lower()
         if channel not in {"telegram", "email", "whatsapp", "max", "vk", "sms", "manual"}:
             channel = "manual"
+        generation_angle = (
+            "matching_authority"
+            if workstream.get("sender_mode") == SENDER_MODE_LOCALOS_FOR_PARTNER
+            else "founder_story"
+        )
         generation = generate_personalized_sequence(
             motion=str(workstream.get("workstream_type") or ""),
             identity={
@@ -1882,7 +1963,7 @@ def prepare_first_message(
             sequence=[{
                 "sequence_index": 0,
                 "channel": channel,
-                "angle": "founder_story",
+                "angle": generation_angle,
                 "day_offset": 0,
                 "text": deterministic_message,
                 "subject": None,
@@ -2213,6 +2294,7 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
     }
     lead["id"] = combined.get("lead_id")
     workstream = dict(combined)
+    workstream["sender_mode"] = _resolve_sender_mode(cursor, workstream)
     if workstream.get("workstream_type") == "client_partnership":
         cursor.execute(
             """
@@ -2226,6 +2308,7 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
         workstream["business_service_count"] = int(
             (service_row.get("service_count") if isinstance(service_row, dict) else service_row[0]) or 0
         )
+        workstream["represented_business_name"] = workstream.get("client_business_name")
 
     cursor.execute("UPDATE lead_enrichment_jobs SET status = 'collecting', current_phase = 'collecting', updated_at = NOW() WHERE id = %s", (job.get("id"),))
     contacts = legacy_contact_candidates(lead)
@@ -2261,8 +2344,22 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
 
     cursor.execute("UPDATE lead_enrichment_jobs SET status = 'researching', current_phase = 'researching', updated_at = NOW() WHERE id = %s", (job.get("id"),))
     research = upsert_native_research(cursor, lead, workstream)
-    sender = _load_sender_profile(cursor, workstream)
-    scope_type = "platform" if workstream.get("workstream_type") == "localos_sales" else "business"
+    sender = (
+        _load_platform_sender_profile(cursor)
+        if workstream.get("sender_mode") in {
+            SENDER_MODE_LOCALOS,
+            SENDER_MODE_LOCALOS_FOR_PARTNER,
+        }
+        else _load_sender_profile(cursor, workstream)
+    )
+    scope_type = (
+        "platform"
+        if workstream.get("sender_mode") in {
+            SENDER_MODE_LOCALOS,
+            SENDER_MODE_LOCALOS_FOR_PARTNER,
+        }
+        else "business"
+    )
     suppression_business_id = None if scope_type == "platform" else workstream.get("client_business_id")
     cursor.execute(
         """
@@ -2296,8 +2393,27 @@ def process_enrichment_job(cursor, job: dict[str, Any]) -> dict[str, Any]:
         "sender_profile": sender or {},
     }
     evidence = json_safe(build_evidence_ledger(personalization_context))
+    selected_offer = None
+    selected_trust = None
+    if workstream.get("workstream_type") == "client_partnership":
+        selected_offer = {
+            "id": "partnership-safe-test",
+            "text": brief.get("result"),
+            "cta": brief.get("cta"),
+            "source": "partnership_matching",
+        }
+        selected_trust = {
+            "strategy": "matching_authority",
+            "statement": "LocalOS сопоставил публичные услуги, аудиторию и географию компаний.",
+            "source": "partnership_matching",
+        }
     personalization_candidates = json_safe(
-        build_personalization_candidates(personalization_context, evidence)
+        build_personalization_candidates(
+            personalization_context,
+            evidence,
+            selected_offer=selected_offer,
+            selected_trust=selected_trust,
+        )
     )
     if research:
         cursor.execute(

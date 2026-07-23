@@ -132,6 +132,10 @@ interface ContactIntelligence {
     sync_status?: 'idle' | 'queued' | 'syncing' | 'ready' | 'partial' | 'failed' | 'needs_account';
     reference_type?: 'public_reference_unverified' | 'public_channel' | 'personal_or_unavailable';
     permission_reason?: 'ready' | 'radar_permission_required' | 'telegram_account_required';
+    source_owner_type?: 'residential_complex' | 'prospecting_recipient';
+    source_owner_name?: string;
+    source_owner_label?: string;
+    sender_business_is_owner?: boolean;
     documents_count?: number;
     last_collected_at?: string | null;
     error?: string | null;
@@ -154,9 +158,9 @@ interface ContactIntelligence {
     competence_story?: string | null;
     proof_points_json?: Array<string | { fact?: string; status?: string }>;
     verified_cases_json?: Array<string | { fact?: string; status?: string }>;
-    allowed_offers_json?: string[];
-    forbidden_claims_json?: string[];
-    voice_examples_json?: string[];
+    allowed_offers_json?: Array<string | { fact?: string; text?: string; status?: string }>;
+    forbidden_claims_json?: Array<string | { fact?: string; text?: string; status?: string }>;
+    voice_examples_json?: Array<string | { fact?: string; text?: string; status?: string }>;
     outreach_context_json?: {
       product_outcome?: string;
       audience?: string;
@@ -169,6 +173,8 @@ interface ContactIntelligence {
     };
     confirmed_at?: string | null;
   } | null;
+  sender_profile_scope?: 'platform' | 'business';
+  sender_mode?: SenderMode;
   sender_profile_completeness?: {
     ready?: boolean;
     status?: 'ready' | 'draft';
@@ -254,11 +260,39 @@ interface OutreachPreview {
   represented_business_name?: string | null;
 }
 
+interface OutreachInboundEvent {
+  id: string;
+  touch_id?: string | null;
+  channel?: string;
+  event_type?: string;
+  classification?: string;
+  is_human?: boolean;
+  stops_campaign?: boolean;
+  raw_payload_json?: Record<string, unknown>;
+  occurred_at?: string;
+  created_at?: string;
+}
+
+interface OutreachDelivery {
+  id: string;
+  touch_id?: string | null;
+  channel?: string;
+  delivery_status?: string;
+  provider_message_id?: string | null;
+  error_text?: string | null;
+  scheduled_at?: string | null;
+  sent_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 interface SavedOutreachCampaign {
   id: string;
   version?: number;
+  created_at?: string;
   status?: string;
   stop_reason?: string | null;
+  last_reply_at?: string | null;
   generation_current?: boolean;
   requires_regeneration?: boolean;
   policy_json?: {
@@ -271,8 +305,22 @@ interface SavedOutreachCampaign {
     channel?: string;
     status?: string;
     sender_account_id?: string | null;
-    message_brief_json?: { channel_status?: string };
+    angle_type?: string;
+    scheduled_at?: string;
+    subject?: string | null;
+    generated_text?: string | null;
+    approved_text?: string | null;
+    quality_gate_json?: OutreachQualityGate;
+    message_brief_json?: {
+      channel_status?: string;
+      source_url?: string | null;
+      observation?: string | null;
+      problem_hypothesis?: string | null;
+      relevance_bridge?: string | null;
+    };
   }>;
+  inbound_events?: OutreachInboundEvent[];
+  deliveries?: OutreachDelivery[];
 }
 
 interface PilotReadiness {
@@ -447,6 +495,71 @@ const contactTypeLabels: Record<string, string> = {
   other: 'Другой канал',
 };
 
+const outreachTouchStatusLabels: Record<string, string> = {
+  contact_ready: 'Контакт найден',
+  recipient_missing: 'Нет контакта',
+  reply: 'Есть ответ',
+  draft: 'Черновик',
+  approved: 'Подтверждено',
+  scheduled: 'Запланировано',
+  queued: 'В очереди',
+  sent: 'Отправлено',
+  delivered: 'Доставлено',
+  manual_sent: 'Отправлено вручную',
+  paused: 'На паузе',
+  cancelled: 'Отменено',
+  stopped: 'Остановлено',
+  skipped: 'Пропущено',
+  failed: 'Ошибка отправки',
+};
+
+const outreachReplyClassificationLabels: Record<string, string> = {
+  interested: 'Интерес',
+  question: 'Вопрос',
+  not_interested: 'Не интересно',
+  unsubscribe: 'Просьба не писать',
+  complaint: 'Жалоба',
+  human_unknown: 'Ответ получателя',
+  out_of_office: 'Автоответ',
+  bounce: 'Письмо не доставлено',
+  temporary_delivery_failure: 'Временная ошибка доставки',
+  permanent_delivery_failure: 'Контакт недоступен',
+  system_acknowledgement: 'Системное уведомление',
+};
+
+const formatOutreachMoment = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const inboundMessageText = (event: OutreachInboundEvent) => {
+  const payload = event.raw_payload_json || {};
+  const candidates = [payload.raw_reply, payload.reply, payload.body, payload.message_text, payload.text];
+  const message = candidates.find((item) => typeof item === 'string' && item.trim());
+  return typeof message === 'string' ? message.trim() : '';
+};
+
+const outreachStatusTone = (status?: string) => {
+  if (status === 'reply' || ['sent', 'delivered', 'manual_sent'].includes(String(status || ''))) {
+    return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+  }
+  if (['scheduled', 'queued', 'approved'].includes(String(status || ''))) {
+    return 'border-sky-200 bg-sky-50 text-sky-800';
+  }
+  if (status === 'failed') return 'border-rose-200 bg-rose-50 text-rose-800';
+  if (['paused', 'stopped'].includes(String(status || ''))) {
+    return 'border-amber-200 bg-amber-50 text-amber-800';
+  }
+  return 'border-slate-200 bg-white text-slate-700';
+};
+
 const manualContactOptions = [
   { value: 'phone', label: 'Телефон', placeholder: '+7 999 000-00-00' },
   { value: 'email', label: 'Email', placeholder: 'hello@company.ru' },
@@ -518,6 +631,13 @@ const strongestResearch = (workstreams: LeadWorkstream[]) => workstreams
   .sort((left, right) => Number(right.score || 0) - Number(left.score || 0))[0] || null;
 
 const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+
+const senderProfileFactLines = (
+  items: Array<string | { fact?: string; text?: string }> | undefined,
+) => (items || [])
+  .map((item) => typeof item === 'string' ? item : String(item.fact || item.text || ''))
+  .filter(Boolean)
+  .join('\n');
 
 const readinessCodeFromLegacyLabel = (label: string) => {
   const normalized = label.trim().toLowerCase();
@@ -661,10 +781,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     || senderMode === 'localos_for_partner'
     ? 'platform'
     : 'business';
+  const usesPlatformSender = selectedSenderScope === 'platform';
   const selectedSenderLabel = selectedWorkstream?.workstream_type === 'localos_sales'
     ? 'LocalOS'
     : senderMode === 'localos_for_partner'
-      ? `LocalOS представляет ${selectedWorkstream?.client_business_name || 'бизнес партнёра'}`
+      ? `${selectedWorkstream?.client_business_name || 'Бизнес партнёра'} через LocalOS`
       : selectedWorkstream?.client_business_name || 'Выбранный клиент';
   const drawerContacts = (contactIntelligence?.contacts || selectedWorkstream?.contact_points || [])
     .filter((item) => item.type !== 'website');
@@ -713,6 +834,79 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const readyChannelCount = Object.values(outreachPreview?.channel_availability || {})
     .filter((item) => item.status === 'ready').length;
   const senderProfileChecklist = contactIntelligence?.sender_profile_completeness;
+  const savedCampaignFirstScheduledAt = (savedOutreachCampaign?.touches || [])
+    .map((touch) => touch.scheduled_at)
+    .filter((value): value is string => Boolean(value))
+    .sort()[0];
+  const savedCampaignDisplayTouches: OutreachTouchPreview[] = (savedOutreachCampaign?.touches || [])
+    .filter((touch) => Boolean(touch.generated_text || touch.approved_text))
+    .sort((left, right) => Number(left.sequence_index || 0) - Number(right.sequence_index || 0))
+    .map((touch) => {
+      const scheduledAt = touch.scheduled_at ? new Date(touch.scheduled_at).getTime() : Number.NaN;
+      const firstScheduledAt = savedCampaignFirstScheduledAt ? new Date(savedCampaignFirstScheduledAt).getTime() : Number.NaN;
+      const calculatedDayOffset = Number.isFinite(scheduledAt) && Number.isFinite(firstScheduledAt)
+        ? Math.max(0, Math.round((scheduledAt - firstScheduledAt) / 86_400_000))
+        : Number(touch.sequence_index || 0) * 3;
+      return {
+        sequence_index: Number(touch.sequence_index || 0),
+        channel: String(touch.channel || 'manual'),
+        day_offset: calculatedDayOffset,
+        angle: String(touch.angle_type || ''),
+        subject: touch.subject,
+        text: String(touch.approved_text || touch.generated_text || ''),
+        channel_status: touch.message_brief_json?.channel_status || 'manual',
+        quality_gate: touch.quality_gate_json,
+        source_url: touch.message_brief_json?.source_url,
+        observation: touch.message_brief_json?.observation,
+        problem_hypothesis: touch.message_brief_json?.problem_hypothesis,
+        relevance_bridge: touch.message_brief_json?.relevance_bridge,
+      };
+    });
+  const displayedOutreachTouches = (outreachPreview?.touches || []).length > 0
+    ? outreachPreview?.touches || []
+    : savedCampaignDisplayTouches;
+  const savedConversationTouches = [...(savedOutreachCampaign?.touches || [])]
+    .sort((left, right) => Number(left.sequence_index || 0) - Number(right.sequence_index || 0));
+  const humanReplyEvents = (savedOutreachCampaign?.inbound_events || [])
+    .filter((event) => Boolean(event.is_human))
+    .sort((left, right) => {
+      const leftAt = new Date(left.occurred_at || left.created_at || 0).getTime();
+      const rightAt = new Date(right.occurred_at || right.created_at || 0).getTime();
+      return leftAt - rightAt;
+    });
+  const deliveryByTouchId = new Map<string, OutreachDelivery>();
+  (savedOutreachCampaign?.deliveries || []).forEach((delivery) => {
+    if (delivery.touch_id) deliveryByTouchId.set(delivery.touch_id, delivery);
+  });
+  const conversationChannelCodes = Array.from(new Set([
+    ...savedConversationTouches.map((touch) => String(touch.channel || '')).filter(Boolean),
+    ...drawerContacts.map((contact) => String(contact.type || '')).filter(Boolean),
+    String(selectedWorkstream?.selected_channel || ''),
+  ])).filter(Boolean);
+  const conversationChannels = conversationChannelCodes.map((channel) => {
+    const contacts = drawerContacts.filter((contact) => String(contact.type || '') === channel);
+    const touches = savedConversationTouches.filter((touch) => String(touch.channel || '') === channel);
+    const latestTouch = touches[touches.length - 1];
+    const latestDelivery = latestTouch?.id ? deliveryByTouchId.get(latestTouch.id) : undefined;
+    const replyReceived = humanReplyEvents.some((event) => String(event.channel || '') === channel);
+    const status = replyReceived
+      ? 'reply'
+      : String(latestDelivery?.delivery_status || latestTouch?.status || (contacts.length ? 'contact_ready' : 'recipient_missing'));
+    const preferredContact = contacts.find((contact) => contact.id === drawerRecipient?.id) || contacts[0];
+    return {
+      channel,
+      label: contactTypeLabels[channel] || (channel === 'manual' ? 'Ручной канал' : channel),
+      contact: preferredContact?.value || '',
+      status,
+      touchCount: touches.length,
+    };
+  });
+  const unlinkedReplyEvents = humanReplyEvents.filter((event) => (
+    !event.touch_id || !savedConversationTouches.some((touch) => touch.id === event.touch_id)
+  ));
+  const sequenceAngleLabels = selectedWorkstream?.workstream_type === 'client_partnership'
+    ? ['Почему пишем', 'Идея сотрудничества', 'Полезный формат', 'Завершение']
+    : ['Сигнал', 'Опыт основателя', 'Кейс или материал', 'Завершение'];
   const latestCampaignFirstTouch = (savedOutreachCampaign?.touches || [])
     .find((touch) => Number(touch.sequence_index || 0) === 0);
   const savedCampaignNeedsChannelSetup = (savedOutreachCampaign?.touches || []).some((touch) => {
@@ -762,7 +956,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       if (showLoading) setContactIntelligenceLoading(true);
       try {
         const payload = await newAuth.makeRequest(
-          `/admin/prospecting/leads/${selectedLead.id}/contact-intelligence?workstream_id=${encodeURIComponent(selectedWorkstream.id || '')}`,
+          `/admin/prospecting/leads/${selectedLead.id}/contact-intelligence?workstream_id=${encodeURIComponent(selectedWorkstream.id || '')}&sender_mode=${encodeURIComponent(senderMode)}`,
         );
         if (!active) return;
         setContactIntelligence(payload);
@@ -781,7 +975,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       active = false;
       window.clearTimeout(timer);
     };
-  }, [selectedLead?.id, selectedWorkstream?.id, contactIntelligence?.job?.id]);
+  }, [selectedLead?.id, selectedWorkstream?.id, senderMode, contactIntelligence?.job?.id]);
 
   useEffect(() => {
     const profile = contactIntelligence?.sender_profile;
@@ -793,9 +987,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       setSenderCompany(String(profile.company_name || ''));
       setSenderStory(String(profile.competence_story || ''));
       setSenderProof((profile.proof_points_json || []).map((item) => typeof item === 'string' ? item : String(item.fact || '')).filter(Boolean).join('\n'));
-      setSenderOffer((profile.allowed_offers_json || []).join('\n'));
-      setSenderForbidden((profile.forbidden_claims_json || []).join('\n'));
-      setSenderVoiceExample((profile.voice_examples_json || []).join('\n'));
+      setSenderOffer(senderProfileFactLines(profile.allowed_offers_json));
+      setSenderForbidden(senderProfileFactLines(profile.forbidden_claims_json));
+      setSenderVoiceExample(senderProfileFactLines(profile.voice_examples_json));
       setSenderOutcome(String(context.product_outcome || ''));
       setSenderAudience(String(context.audience || ''));
       setSenderSegments((context.segments || []).join('\n'));
@@ -808,7 +1002,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     }
     setSenderName(String(suggestions?.display_name || ''));
     setSenderRole('');
-    setSenderCompany(selectedWorkstream?.workstream_type === 'localos_sales'
+    setSenderCompany(usesPlatformSender
       ? 'LocalOS'
       : String(suggestions?.company_name || selectedWorkstream?.client_business_name || ''));
     setSenderStory('');
@@ -824,7 +1018,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setSenderPartnerTypes((suggestions?.desired_partner_types || []).join('\n'));
     setSenderDisqualifiers('');
     setSenderCtas('');
-  }, [contactIntelligence?.sender_profile?.id, contactIntelligence?.sender_profile_suggestions, selectedWorkstream?.id]);
+  }, [contactIntelligence?.sender_profile?.id, contactIntelligence?.sender_profile_suggestions, selectedWorkstream?.id, usesPlatformSender]);
 
   useEffect(() => {
     setOutreachPreview(null);
@@ -943,7 +1137,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         }),
       });
       const refreshed = await newAuth.makeRequest(
-        `/admin/prospecting/leads/${selectedLead.id}/contact-intelligence?workstream_id=${encodeURIComponent(selectedWorkstream.id)}`,
+        `/admin/prospecting/leads/${selectedLead.id}/contact-intelligence?workstream_id=${encodeURIComponent(selectedWorkstream.id)}&sender_mode=${encodeURIComponent(senderMode)}`,
       );
       setContactIntelligence(refreshed);
       setManualContactValue('');
@@ -997,8 +1191,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       const payload = await newAuth.makeRequest('/admin/prospecting/sender-profiles', {
         method: 'POST',
         body: JSON.stringify({
-          workstream_type: selectedWorkstream.workstream_type,
-          client_business_id: selectedWorkstream.client_business_id,
+          sender_mode: senderMode,
+          workstream_type: usesPlatformSender ? 'localos_sales' : selectedWorkstream.workstream_type,
+          client_business_id: usesPlatformSender ? null : selectedWorkstream.client_business_id,
           display_name: senderName,
           role_title: senderRole,
           company_name: senderCompany,
@@ -1556,7 +1751,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       </details>
 
       <Sheet open={Boolean(selectedLead)} onOpenChange={(open) => { if (!open) setSelectedLeadId(null); }}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+        <SheetContent className="w-[96vw] max-w-none overflow-y-auto sm:max-w-6xl">
           <SheetHeader className="pr-8">
             <SheetTitle className="text-wrap-balance text-xl">{selectedLead?.name || 'Карточка лида'}</SheetTitle>
             <SheetDescription>{[selectedLead?.category, selectedLead?.city || selectedLead?.address].filter(Boolean).join(' · ')}</SheetDescription>
@@ -1623,6 +1818,141 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   );
                 })}
               </div>
+
+              <section
+                className="grid gap-4 lg:grid-cols-[minmax(280px,0.72fr)_minmax(0,1.55fr)]"
+                aria-label="Каналы и история сообщений"
+              >
+                <div className="rounded-2xl bg-slate-50 p-4 shadow-sm shadow-slate-900/5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-950">Каналы</h3>
+                      <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">Контакты получателя и состояние каждого канала в текущей цепочке.</p>
+                    </div>
+                    <Badge variant="outline" className="shrink-0 border-slate-200 bg-white text-slate-700 tabular-nums">
+                      {conversationChannels.length}
+                    </Badge>
+                  </div>
+
+                  {conversationChannels.length > 0 ? (
+                    <div className="mt-4 space-y-2">
+                      {conversationChannels.map((item) => (
+                        <div key={item.channel} className="rounded-xl bg-white px-3 py-3 shadow-sm shadow-slate-900/5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-slate-950">{item.label}</div>
+                              <div className="mt-1 truncate text-xs text-slate-500">
+                                {item.contact || (item.touchCount > 0 ? 'Добавлен в цепочку' : 'Контакт получателя не найден')}
+                              </div>
+                            </div>
+                            <Badge variant="outline" className={`shrink-0 ${outreachStatusTone(item.status)}`}>
+                              {outreachTouchStatusLabels[item.status] || item.status}
+                            </Badge>
+                          </div>
+                          {item.touchCount > 0 ? (
+                            <div className="mt-2 text-[11px] font-medium text-slate-400 tabular-nums">
+                              Касаний в цепочке: {item.touchCount}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-xl bg-white px-3 py-4 text-pretty text-sm leading-6 text-slate-600 shadow-sm shadow-slate-900/5">
+                      Каналы ещё не найдены. Запустите проверку контактов или добавьте контакт вручную.
+                    </div>
+                  )}
+                </div>
+
+                <div className="min-w-0 rounded-2xl bg-slate-50 p-4 shadow-sm shadow-slate-900/5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-950">История сообщений</h3>
+                      <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">Ответ показан прямо под тем сообщением, на которое он пришёл.</p>
+                    </div>
+                    {savedOutreachCampaign ? (
+                      <Badge variant="outline" className={outreachStatusTone(savedOutreachCampaign.status)}>
+                        Версия {savedOutreachCampaign.version || 1} · {outreachTouchStatusLabels[String(savedOutreachCampaign.status || '')] || savedOutreachCampaign.status || 'Черновик'}
+                      </Badge>
+                    ) : null}
+                  </div>
+
+                  {savedConversationTouches.length > 0 ? (
+                    <div className="mt-4 space-y-3">
+                      {savedConversationTouches.map((touch) => {
+                        const delivery = touch.id ? deliveryByTouchId.get(touch.id) : undefined;
+                        const replyEvents = humanReplyEvents.filter((event) => event.touch_id === touch.id);
+                        const status = String(delivery?.delivery_status || touch.status || 'draft');
+                        const messageText = String(touch.approved_text || touch.generated_text || '');
+                        const sentMoment = formatOutreachMoment(delivery?.sent_at);
+                        const scheduledMoment = formatOutreachMoment(delivery?.scheduled_at || touch.scheduled_at);
+                        return (
+                          <article key={touch.id || `${touch.sequence_index}-${touch.channel}`} className="overflow-hidden rounded-xl bg-white shadow-sm shadow-slate-900/5">
+                            <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
+                              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
+                                <MessageCircle className="h-4 w-4" />
+                                <span>Касание {Number(touch.sequence_index || 0) + 1} · {contactTypeLabels[String(touch.channel || '')] || touch.channel || 'Ручной канал'}</span>
+                              </div>
+                              <Badge variant="outline" className={outreachStatusTone(replyEvents.length > 0 ? 'reply' : status)}>
+                                {replyEvents.length > 0 ? 'Есть ответ' : outreachTouchStatusLabels[status] || status}
+                              </Badge>
+                            </div>
+                            <div className="px-4 pb-4">
+                              {touch.subject ? <div className="mt-3 text-sm font-semibold text-slate-950">Тема: {touch.subject}</div> : null}
+                              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-800">
+                                {messageText || 'Текст сообщения ещё не подготовлен.'}
+                              </p>
+                              {sentMoment || scheduledMoment ? (
+                                <div className="mt-3 text-xs text-slate-500 tabular-nums">
+                                  {sentMoment ? `Отправлено ${sentMoment}` : `Запланировано ${scheduledMoment}`}
+                                </div>
+                              ) : null}
+                              {delivery?.error_text ? (
+                                <div className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-800">
+                                  Ошибка доставки: {delivery.error_text}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            {replyEvents.map((event) => {
+                              const replyText = inboundMessageText(event);
+                              return (
+                                <div key={event.id} className="border-t border-emerald-100 bg-emerald-50 px-4 py-4">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="text-xs font-semibold uppercase tracking-[0.06em] text-emerald-800">Ответ на это сообщение</div>
+                                    <div className="text-xs text-emerald-700 tabular-nums">{formatOutreachMoment(event.occurred_at || event.created_at)}</div>
+                                  </div>
+                                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-emerald-950">
+                                    {replyText || 'Текст ответа не сохранён провайдером.'}
+                                  </p>
+                                  <div className="mt-2 text-xs font-medium text-emerald-800">
+                                    {outreachReplyClassificationLabels[String(event.classification || '')] || 'Ответ получателя'}
+                                    {event.stops_campaign ? ' · следующие касания остановлены' : ''}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </article>
+                        );
+                      })}
+
+                      {unlinkedReplyEvents.map((event) => (
+                        <div key={event.id} className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm shadow-slate-900/5">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-[0.06em] text-amber-800">
+                            <span>Ответ без привязки к касанию</span>
+                            <span className="tabular-nums">{formatOutreachMoment(event.occurred_at || event.created_at)}</span>
+                          </div>
+                          <p className="mt-2 whitespace-pre-wrap leading-6">{inboundMessageText(event) || 'Текст ответа не сохранён провайдером.'}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-xl bg-white px-4 py-5 text-pretty text-sm leading-6 text-slate-600 shadow-sm shadow-slate-900/5">
+                      Цепочка ещё не сохранена. Подготовьте её ниже — здесь появятся сообщения, статусы отправки и ответы.
+                    </div>
+                  )}
+                </div>
+              </section>
 
               <section className="rounded-md bg-slate-50 p-4" aria-labelledby="lead-contacts-title">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1804,7 +2134,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       <div className="min-w-0">
                         <h4 className="text-balance text-sm font-semibold text-slate-950">Telegram-источники</h4>
                         <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
-                          Это публичные каналы для поиска сигналов. LocalOS не использует их как чат получателя.
+                          Это публичные каналы и чаты получателя для поиска сигналов. Они не считаются каналами бизнеса-отправителя и не используются для личной отправки.
                         </p>
                       </div>
                     </div>
@@ -1825,6 +2155,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                                 : source.status === 'paused'
                                   ? 'Не является доступным публичным каналом'
                                   : 'Ссылка сохранена для проверки';
+                        const ownerLabel = source.source_owner_label || source.source_owner_name || 'Получатель';
                         return (
                           <a
                             key={source.id}
@@ -1836,6 +2167,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                             <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${confirmedChannel ? 'bg-emerald-500' : checking ? 'bg-sky-500' : 'bg-amber-400'}`} />
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-sm font-semibold text-slate-900">{source.title || source.url || 'Telegram'}</span>
+                              <span className="mt-0.5 block text-pretty text-xs leading-5 text-slate-600">Источник {ownerLabel}</span>
                               <span className="mt-0.5 block text-pretty text-xs leading-5 text-slate-600 tabular-nums">{statusLabel}</span>
                             </span>
                             <ExternalLink className="h-4 w-4 shrink-0 text-slate-400" />
@@ -2083,13 +2415,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         onClick={() => updateSenderMode('localos_for_partner')}
                         className={`min-h-20 rounded-md border p-3 text-left transition-[transform,background-color,border-color] active:scale-[0.96] ${senderMode === 'localos_for_partner' ? 'border-orange-300 bg-orange-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
                       >
-                        <span className="block text-sm font-semibold text-slate-950">LocalOS представляет бизнес</span>
-                        <span className="mt-1 block text-pretty text-xs leading-5 text-slate-600">Отправляем с аккаунта LocalOS и прямо называем {selectedWorkstream.client_business_name || 'бизнес'}, который представляет LocalOS.</span>
+                        <span className="block text-sm font-semibold text-slate-950">От имени бизнеса через LocalOS</span>
+                        <span className="mt-1 block text-pretty text-xs leading-5 text-slate-600">Текст написан от лица {selectedWorkstream.client_business_name || 'бизнеса'}, а для доставки используется подключённый аккаунт LocalOS.</span>
                       </button>
                     </div>
                     {senderMode === 'localos_for_partner' ? (
                       <div className="mt-2 rounded-md bg-orange-50 px-3 py-2 text-pretty text-xs leading-5 text-orange-950">
-                        В каждом сообщении будет явная фраза: LocalOS пишет от своего имени и представляет {selectedWorkstream.client_business_name || 'этот бизнес'} в партнёрском предложении. Скрытая подмена отправителя запрещена.
+                        Получатель увидит обращение от лица «{selectedWorkstream.client_business_name || 'этого бизнеса'}»: «Мы ваши соседи - …». LocalOS во внешнем тексте не упоминается. Внутри системы сохраняются технический отправитель и разрешение бизнеса.
                       </div>
                     ) : null}
                   </fieldset>
@@ -2109,7 +2441,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {[0, 1, 2, 3].map((index) => (
                     <div key={index} className="rounded-md bg-white p-3 text-xs font-semibold text-slate-600">
-                      <div>{['Сигнал', 'Опыт основателя', 'Кейс или материал', 'Завершение'][index]}</div>
+                      <div>{sequenceAngleLabels[index]}</div>
                       <div className="mt-2 grid grid-cols-[minmax(0,1fr)_84px] gap-2">
                         <select
                           aria-label={`Канал касания ${index + 1}`}
@@ -2247,9 +2579,14 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </div>
                 ) : null}
 
-                {(outreachPreview?.touches || []).length > 0 ? (
+                {displayedOutreachTouches.length > 0 ? (
                   <div className="mt-3 space-y-2">
-                    {(outreachPreview?.touches || []).map((touch) => (
+                    {!outreachPreview?.touches?.length && savedOutreachCampaign ? (
+                      <div className="rounded-md bg-sky-50 px-3 py-2 text-sm leading-6 text-sky-900">
+                        Показана сохранённая цепочка версии {savedOutreachCampaign.version}. Для просмотра повторная генерация не нужна.
+                      </div>
+                    ) : null}
+                    {displayedOutreachTouches.map((touch) => (
                       <article key={`${touch.sequence_index}-${touch.channel}`} className="rounded-md bg-white p-3 ring-1 ring-slate-200">
                         <div className="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
                           <span>День {touch.day_offset} · {touch.channel}</span>
@@ -2306,7 +2643,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <Button variant="outline" onClick={() => void prepareOutreachCampaign(false)} disabled={busyAction === 'preview-campaign'} className="min-h-11 bg-white">
                     {busyAction === 'preview-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                    Показать всю цепочку
+                    {savedOutreachCampaign ? 'Подготовить новую версию' : 'Подготовить цепочку'}
                   </Button>
                   <Button variant="outline" onClick={() => void prepareOutreachCampaign(true)} disabled={busyAction === 'save-campaign' || !['ready', 'needs_channel_setup'].includes(String(outreachPreview?.status || ''))} className="min-h-11 bg-white">
                     {busyAction === 'save-campaign' && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
@@ -2445,9 +2782,15 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     <div className="rounded-lg bg-slate-50 p-3 shadow-sm shadow-slate-900/5">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
-                          <div className="font-semibold text-slate-900">Профиль заполняется один раз для всех кампаний этого бизнеса</div>
+                          <div className="font-semibold text-slate-900">
+                            {usesPlatformSender
+                              ? 'Профиль Александра и LocalOS'
+                              : 'Профиль отправителя этого бизнеса'}
+                          </div>
                           <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
-                            Можно сохранить черновик. LocalOS подтвердит профиль только после заполнения обязательных фактов и не превратит пропуск в общий шаблон.
+                            {usesPlatformSender
+                              ? 'В этом режиме факты об Александре и LocalOS не попадают в сообщение: текст строится от лица выбранного бизнеса.'
+                              : 'Профиль используется только в кампаниях этого бизнеса. Его факты не смешиваются с профилями других отправителей.'}
                           </p>
                         </div>
                         {senderProfileChecklist ? (
@@ -2471,6 +2814,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         </div>
                       ) : null}
                     </div>
+                    {senderMode === 'localos_for_partner' ? (
+                      <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-pretty text-xs leading-5 text-sky-950">
+                        Сообщение будет написано от лица «{selectedWorkstream.client_business_name || 'бизнеса клиента'}». Название, категория, услуги, аудитория и география берутся из карточки бизнеса, аудита и проверки совместимости. Профиль Александра и LocalOS во внешний текст не подставляется.
+                      </div>
+                    ) : null}
                     {!contactIntelligence?.sender_profile && contactIntelligence?.sender_profile_suggestions?.requires_confirmation ? (
                       <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-pretty text-xs leading-5 text-sky-900">
                         LocalOS уже подставил название, географию и типы партнёров из данных бизнеса и текущего поиска. Проверьте их; опыт, кейсы, предложение и голос добавьте только как подтверждённые факты.
@@ -2490,14 +2838,14 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       Компания
                       <Input value={senderCompany} onChange={(event) => setSenderCompany(event.target.value)} placeholder="Название бизнеса" className="mt-1 h-10 bg-white" />
                     </label>
-                    <textarea value={senderOutcome} onChange={(event) => setSenderOutcome(event.target.value)} placeholder={`Какой конкретный результат даёт ${senderBusinessLabel}`} rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
+                    <textarea value={senderOutcome} onChange={(event) => setSenderOutcome(event.target.value)} placeholder={`Какой конкретный результат даёт ${usesPlatformSender ? 'LocalOS' : senderBusinessLabel}`} rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
                     <textarea value={senderAudience} onChange={(event) => setSenderAudience(event.target.value)} placeholder="Целевая аудитория и её контекст" rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
                     <div className="grid gap-2 sm:grid-cols-2">
                       <textarea value={senderSegments} onChange={(event) => setSenderSegments(event.target.value)} placeholder="ICP / сегменты — по одному на строку" rows={3} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
                       <textarea value={senderRecipientRoles} onChange={(event) => setSenderRecipientRoles(event.target.value)} placeholder="Роли получателей — по одной на строку" rows={3} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
                     </div>
                     <Input value={senderGeography} onChange={(event) => setSenderGeography(event.target.value)} placeholder="География поиска" className="h-10 bg-white" />
-                    {selectedWorkstream.workstream_type === 'client_partnership' ? <textarea value={senderPartnerTypes} onChange={(event) => setSenderPartnerTypes(event.target.value)} placeholder="Желаемые типы партнёров — по одному на строку" rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" /> : null}
+                    {selectedWorkstream.workstream_type === 'client_partnership' && !usesPlatformSender ? <textarea value={senderPartnerTypes} onChange={(event) => setSenderPartnerTypes(event.target.value)} placeholder="Желаемые типы партнёров — по одному на строку" rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" /> : null}
                     <textarea value={senderCtas} onChange={(event) => setSenderCtas(event.target.value)} placeholder="Допустимые следующие шаги — по одному на строку" rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
                     <textarea value={senderDisqualifiers} onChange={(event) => setSenderDisqualifiers(event.target.value)} placeholder="Кого и почему исключать — по одному условию на строку" rows={2} className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400" />
                     <label className="block text-xs font-semibold text-slate-700">

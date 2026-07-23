@@ -11,8 +11,8 @@ from services.llm import analyze_text_with_gigachat
 
 
 SCHEMA_VERSION = "1.0"
-PROMPT_VERSION = "outreach_personalization_v2"
-REVIEW_PROMPT_VERSION = "outreach_semantic_review_v2"
+PROMPT_VERSION = "outreach_personalization_v4"
+REVIEW_PROMPT_VERSION = "outreach_semantic_review_v4"
 QUALITY_CRITERIA = (
     "source_validity",
     "observation_accuracy",
@@ -87,6 +87,14 @@ def generation_contract_current(
         or ""
     ).strip()
     semantic_review = gate.get("semantic_review") if isinstance(gate.get("semantic_review"), dict) else {}
+    manual_review = gate.get("manual_review") if isinstance(gate.get("manual_review"), dict) else {}
+    if source == "manual_product_correction":
+        return bool(
+            prompt_version == PROMPT_VERSION
+            and review_prompt_version == REVIEW_PROMPT_VERSION
+            and manual_review.get("passed")
+            and manual_review.get("review_version") == REVIEW_PROMPT_VERSION
+        )
     return bool(
         source == "gigachat"
         and prompt_version == PROMPT_VERSION
@@ -185,6 +193,8 @@ def _request_record(
     voice_examples: list[Any],
 ) -> dict[str, Any]:
     hypothesis = _clean(candidate.get("problem_hypothesis")) or None
+    sender_mode = _clean(candidate.get("sender_mode"))
+    represented_business_voice = sender_mode == "localos_for_partner"
     return {
         "schema_version": SCHEMA_VERSION,
         "motion": _clean(motion),
@@ -192,6 +202,7 @@ def _request_record(
             "company_name": _clean(identity.get("company_name")),
             "contact_name": _clean(identity.get("contact_name")),
             "contact_role": _clean(identity.get("contact_role")),
+            "recipient_type": _clean(candidate.get("recipient_type")) or "business",
         },
         "evidence": [{
             "evidence_id": _clean(candidate.get("evidence_id")),
@@ -214,11 +225,11 @@ def _request_record(
             ),
         },
         "sender": {
-            "name": _clean(candidate.get("sender")),
-            "role": _clean(candidate.get("sender_role")),
-            "business": _clean(candidate.get("sender_company")),
-            "founder_story": _clean(founder_story.get("story")),
-            "proof": _clean(founder_story.get("proof")),
+            "name": "" if represented_business_voice else _clean(candidate.get("sender")),
+            "role": "" if represented_business_voice else _clean(candidate.get("sender_role")),
+            "business": "" if represented_business_voice else _clean(candidate.get("sender_company")),
+            "founder_story": "" if represented_business_voice else _clean(founder_story.get("story")),
+            "proof": "" if represented_business_voice else _clean(founder_story.get("proof")),
             "offer": _clean(founder_story.get("offer") or candidate.get("next_step")),
             "forbidden_claims": [
                 _clean(item) for item in founder_story.get("forbidden_claims") or [] if _clean(item)
@@ -226,9 +237,10 @@ def _request_record(
             "voice_examples": [_clean(item) for item in voice_examples if _clean(item)][:5],
         },
         "representation": {
-            "sender_mode": _clean(candidate.get("sender_mode")),
+            "sender_mode": sender_mode,
             "represented_business": _clean(candidate.get("represented_business")),
             "disclosure": _clean(candidate.get("representation_disclosure")),
+            "business_opening": _clean(candidate.get("represented_business_opening")),
         },
         "sequence": [{
             "sequence_index": int(item.get("sequence_index") or 0),
@@ -246,28 +258,39 @@ def _request_record(
             "single_cta": True,
             "different_angle_per_touch": True,
             "no_new_recipient_facts": True,
-            "representation_disclosure_required": bool(
+            "representation_disclosure_required": False,
+            "represented_business_voice_required": bool(
                 _clean(candidate.get("sender_mode")) == "localos_for_partner"
             ),
+            "residential_invitation_required": bool(
+                _clean(candidate.get("recipient_type")) == "residential_complex"
+            ),
+            "residential_terms_require_explicit_evidence": True,
         },
     }
 
 
 def _generation_prompt(record: dict[str, Any]) -> str:
     return (
-        "Ты готовишь founder-led мультиканальную outreach-цепочку LocalOS. "
+        "Ты готовишь мультиканальную outreach-цепочку LocalOS. "
         "Используй только INPUT_JSON и верни только JSON без markdown. "
         "Не добавляй факты, боли, результаты, коммерческие условия или знакомство, которых нет во входе. "
         "Observation - факт. problem_hypothesis - только гипотеза: не утверждай её как факт. "
         "LocalOS сам вставит observation, bridge, founder story и proof без изменений. "
         "Ты выбираешь только opening_style и cta_intent для каждого касания. "
         "opening_style: direct, warm или concise. "
-        "cta_intent: send_short_review, send_example или ask_permission. "
+        "Для localos_sales cta_intent: send_short_review, send_example или ask_permission. "
+        "Для client_partnership cta_intent: send_formats, discuss_pilot или ask_relevance. "
         "LocalOS сам соберёт вступление и CTA из разрешённых формулировок. "
         "Если problem_hypothesis отсутствует, верни null и не пиши о боли, потере клиентов или влиянии факта на бизнес. "
         "Заверши каждое касание ровно одним вопросом-CTA. "
-        "Свяжи факт с релевантным опытом отправителя. Если representation.disclosure заполнен, "
-        "не скрывай и не перефразируй, от чьего имени и в интересах какого бизнеса идёт обращение. "
+        "Свяжи факт с релевантным опытом или выбранной стратегией доверия. "
+        "В localos_for_partner обращение написано от первого лица множественного числа представляемого бизнеса. "
+        "Используй business_opening как неизменяемое начало и нигде во внешнем тексте не упоминай LocalOS, его основателя, кейсы или коммерческое предложение. "
+        "Для партнёрства говори о соседних проектах, общей локальной аудитории и небольшом совместном пилоте. "
+        "Если recipient_type=residential_complex, основа предложения - пригласить жителей комплекса в бизнес отправителя. "
+        "Не придумывай скидки, особые условия, подарки, мастер-классы или другие мероприятия: они допустимы только как подтверждённый offer во входе. "
+        "Не предлагай аудит карточки, 20-минутный созвон, интеграцию или автоматическую рассылку. "
         "Каждое касание должно иметь новый угол, один простой CTA и работать отдельно. "
         "Не используй ритуальные комплименты, давление, ложную срочность, длинное тире и кавычки-ёлочки. "
         "Telegram - максимум 90 слов, email - максимум 120 слов. "
@@ -335,8 +358,11 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
         template = _clean(item.get("text_template"))
         text = _clean(item.get("text"))
         evidence_ids = [_clean(entry) for entry in item.get("evidence_ids") or [] if _clean(entry)]
-        if channel != expected_item["channel"] or angle != expected_item["angle"]:
-            raise ValueError(f"Touch {index} changed channel or angle")
+        # Channel order and message angles are campaign policy, not model
+        # output.  Preserve the approved structure even when the provider
+        # echoes a translated or invented label alongside otherwise valid copy.
+        channel = expected_item["channel"]
+        angle = expected_item["angle"]
         if template:
             required_fields = {"RECIPIENT", "OBSERVATION", "BRIDGE"}
             used_fields = set(re.findall(r"\{\{([A-Z_]+)\}\}", template))
@@ -364,7 +390,10 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
                 template_values=template_values,
             )
         normalized_text = _normalized_grounded_fragment(text)
-        if not normalized_text or _normalized_grounded_fragment(observation) not in normalized_text:
+        if not normalized_text or (
+            angle != "respectful_close"
+            and _normalized_grounded_fragment(observation) not in normalized_text
+        ):
             raise ValueError(f"Touch {index} does not preserve sourced observation")
         if (
             relevance_bridge
@@ -384,7 +413,7 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
             "sequence_index": index,
             "channel": channel,
             "angle": angle,
-            "subject": _safe_subject(channel, recipient),
+            "subject": _safe_subject(channel, recipient, request_record),
             "text": text,
             "evidence_ids": evidence_ids,
             "observation": _clean(item.get("observation")) or observation,
@@ -454,12 +483,17 @@ def _assemble_constrained_text(
         )
     elif angle == "respectful_close":
         trusted_sender_block = "Если сейчас неактуально, больше напоминать не буду."
+    observation_block = (
+        ""
+        if angle == "respectful_close"
+        else _clean(request_record["personalization"]["observation"]).rstrip(" .!?;") + "."
+    )
     blocks = [
         opening.rstrip(" .!?;") + ".",
         _clean(request_record.get("representation", {}).get("disclosure")).rstrip(" .!?;") + "."
         if _clean(request_record.get("representation", {}).get("disclosure")) else "",
         trusted_sender_block.rstrip(" .!?;") + "." if trusted_sender_block else "",
-        _clean(request_record["personalization"]["observation"]).rstrip(" .!?;") + ".",
+        observation_block,
         _clean(request_record["personalization"]["relevance_to_offer"]).rstrip(" .!?;") + ".",
         cta,
     ]
@@ -476,11 +510,49 @@ def _assemble_policy_bound_text(
 ) -> str:
     if opening_style not in {"direct", "warm", "concise"}:
         raise ValueError(f"Touch {index} has unsupported opening_style")
-    cta_by_intent = {
-        "send_short_review": "Могу прислать короткий разбор?",
-        "send_example": "Прислать пример разбора?",
-        "ask_permission": "Можно отправить короткий разбор?",
-    }
+    sender_mode = _clean(request_record.get("representation", {}).get("sender_mode"))
+    partnership_motion = (
+        _clean(request_record.get("motion")) == "client_partnership"
+        or sender_mode in {"partner_business", "localos_for_partner"}
+    )
+    residential_recipient = (
+        _clean(request_record.get("identity", {}).get("recipient_type"))
+        == "residential_complex"
+    )
+    cta_by_intent = (
+        {
+            "send_formats": "Могу прислать несколько простых форматов?",
+            "discuss_pilot": "Интересно обсудить небольшой совместный пилот?",
+            "ask_relevance": "Такой формат в принципе может быть вам интересен?",
+            "send_short_review": "Могу прислать несколько простых форматов?",
+            "send_example": "Прислать один пример возможного пилота?",
+            "ask_permission": "Можно отправить несколько идей сотрудничества?",
+        }
+        if partnership_motion
+        else {
+            "send_short_review": "Могу прислать короткий разбор?",
+            "send_example": "Прислать пример разбора?",
+            "ask_permission": "Можно отправить короткий разбор?",
+        }
+    )
+    if sender_mode == "localos_for_partner":
+        cta_by_intent.update({
+            "send_formats": "Прислать несколько простых форматов?",
+            "discuss_pilot": "Обсудим небольшой совместный пилот?",
+            "ask_relevance": "Такой формат может быть вам интересен?",
+            "send_short_review": "Прислать несколько простых форматов?",
+            "send_example": "Прислать один пример возможного пилота?",
+            "ask_permission": "Можно прислать несколько идей сотрудничества?",
+        })
+    if residential_recipient:
+        cta_by_intent.update({
+            "send_formats": "Подскажите, с кем можно обсудить предложение для жителей?",
+            "discuss_pilot": "Можно обсудить подходящий формат для жителей?",
+            "ask_relevance": "Такое предложение для жителей может быть вам интересно?",
+            "send_short_review": "Подскажите, с кем можно обсудить предложение для жителей?",
+            "send_example": "Прислать один вариант предложения для жителей?",
+            "ask_permission": "Можно прислать предложение для жителей?",
+        })
     if cta_intent not in cta_by_intent:
         raise ValueError(f"Touch {index} has unsupported cta_intent")
 
@@ -498,7 +570,46 @@ def _assemble_policy_bound_text(
 
     salutation = "Добрый день!" if opening_style == "warm" else "Здравствуйте!"
     angle = _clean(expected_item.get("angle"))
-    if angle == "signal":
+    disclosure = _clean(request_record.get("representation", {}).get("disclosure"))
+    represented_business_opening = _clean(
+        request_record.get("representation", {}).get("business_opening")
+    )
+    if residential_recipient and sender_mode == "localos_for_partner":
+        sender_opening = represented_business_opening or _clean(
+            f'Мы ваши соседи - {request_record.get("representation", {}).get("represented_business")}. '
+        )
+        if angle == "respectful_close":
+            opening = f'{salutation} {sender_opening} Коротко закроем тему по "{recipient}".'
+        else:
+            opening = (
+                f'{salutation} {sender_opening} Пишем по поводу "{recipient}". '
+                "Хотели бы пригласить ваших жителей к нам."
+            )
+    elif residential_recipient and partnership_motion:
+        business_name = sender_business or sender_identity
+        neighbour_opening = f"Мы ваши соседи - {business_name}." if business_name else ""
+        if angle == "respectful_close":
+            opening = f'{salutation} {neighbour_opening} Коротко закроем тему по "{recipient}".'
+        else:
+            opening = (
+                f'{salutation} {neighbour_opening} Пишем по поводу "{recipient}". '
+                "Хотели бы пригласить ваших жителей к нам."
+            )
+    elif sender_mode == "localos_for_partner":
+        sender_opening = represented_business_opening or _clean(
+            f'Мы ваши соседи - {request_record.get("representation", {}).get("represented_business")}.'
+        )
+        if angle == "signal":
+            opening = f'{salutation} {sender_opening} Пишем с идеей для "{recipient}".'
+        elif angle == "respectful_close":
+            opening = f'{salutation} {sender_opening} Коротко закроем тему по "{recipient}".'
+        else:
+            opening = f'{salutation} {sender_opening} Коротко продолжим про сотрудничество с "{recipient}".'
+    elif partnership_motion and angle == "signal":
+        opening = f'{salutation} Я {sender_identity}. Пишу с идеей для двух соседних проектов - нас и "{recipient}".'
+    elif partnership_motion:
+        opening = f'{salutation} Коротко продолжу про возможное сотрудничество с "{recipient}".'
+    elif angle == "signal":
         opening = f'{salutation} Я {sender_identity}. Посмотрел публичную карточку "{recipient}".'
     elif angle == "founder_story":
         opening = f'{salutation} Я {sender_identity}. Пишу по поводу карточки "{recipient}".'
@@ -510,12 +621,18 @@ def _assemble_policy_bound_text(
         opening = f'{salutation} Я {sender_identity}. Пишу по поводу "{recipient}".'
 
     trusted_sender_block = ""
-    if angle == "founder_story":
+    if angle in {"founder_story", "business_reputation", "matching_authority"}:
         trusted_sender_block = _clean(sender.get("founder_story"))
     elif angle == "proof":
-        trusted_sender_block = _clean(sender.get("proof") or sender.get("founder_story"))
+        trusted_sender_block = _clean(sender.get("proof"))
+        if partnership_motion and not trusted_sender_block:
+            trusted_sender_block = _clean(sender.get("founder_story"))
     elif angle == "respectful_close":
-        trusted_sender_block = "Если сейчас неактуально, больше напоминать не буду."
+        trusted_sender_block = (
+            "Если сейчас неактуально, больше писать не будем."
+            if sender_mode == "localos_for_partner"
+            else "Если сейчас неактуально, больше напоминать не буду."
+        )
 
     hypothesis_block = ""
     hypothesis = _clean(request_record["personalization"].get("problem_hypothesis"))
@@ -527,22 +644,48 @@ def _assemble_policy_bound_text(
             flags=re.IGNORECASE,
         )
         hypothesis_block = f"Гипотеза для проверки: {hypothesis.rstrip(' .!?;')}."
+    observation_block = (
+        ""
+        if angle == "respectful_close"
+        else _clean(request_record["personalization"]["observation"]).rstrip(" .!?;") + "."
+    )
     blocks = [
         opening,
-        _clean(request_record.get("representation", {}).get("disclosure")).rstrip(" .!?;") + "."
-        if _clean(request_record.get("representation", {}).get("disclosure")) else "",
+        disclosure.rstrip(" .!?;") + "."
+        if disclosure and sender_mode != "localos_for_partner" else "",
         trusted_sender_block.rstrip(" .!?;") + "." if trusted_sender_block else "",
-        _clean(request_record["personalization"]["observation"]).rstrip(" .!?;") + ".",
+        observation_block,
         hypothesis_block,
         _clean(request_record["personalization"]["relevance_to_offer"]).rstrip(" .!?;") + ".",
+        (
+            "Конкретный формат и условия предложим отдельно с учётом правил комплекса."
+            if residential_recipient and angle != "respectful_close"
+            else ""
+        ),
         cta_by_intent[cta_intent],
     ]
     return _clean(" ".join(block for block in blocks if block))
 
 
-def _safe_subject(channel: str, recipient: str) -> str | None:
+def _safe_subject(
+    channel: str,
+    recipient: str,
+    request_record: dict[str, Any],
+) -> str | None:
     if channel != "email":
         return None
+    sender_mode = _clean(request_record.get("representation", {}).get("sender_mode"))
+    if (
+        _clean(request_record.get("motion")) == "client_partnership"
+        or sender_mode in {"partner_business", "localos_for_partner"}
+    ):
+        represented_business = _clean(
+            request_record.get("representation", {}).get("represented_business")
+        )
+        if represented_business and recipient:
+            return f"Идея для {represented_business} и {recipient}"
+        suffix = f" для {recipient}" if recipient else ""
+        return f"Идея сотрудничества{suffix}"
     suffix = f" по карточке {recipient}" if recipient else ""
     return f"Короткий вопрос{suffix}"
 

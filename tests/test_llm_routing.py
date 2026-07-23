@@ -40,6 +40,7 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
         "service_catalog_analysis",
         "review_signal_classify",
         "review_signal_synthesis",
+        "lead_audit_enrichment",
     }
     expected_tasks = {
         "review_reply",
@@ -181,6 +182,30 @@ def test_router_uses_deepseek_only_for_enabled_cohort(monkeypatch):
     assert disabled.provider == "gigachat"
     assert calls[0][0] == "deepseek"
     assert calls[1][0] == "gigachat"
+
+
+def test_public_platform_audit_uses_deepseek_without_tenant_id(monkeypatch):
+    calls = []
+
+    def fake_generate(request, definition, *, provider, prompt, shadow=False):
+        calls.append(provider)
+        return LLMTaskResult(
+            status="completed",
+            content='{"summary_text":"Недостаток","recommended_actions":[],"why_now":"Сейчас"}',
+            provider=provider,
+            model="test-model",
+        )
+
+    monkeypatch.setenv("LLM_ROUTER_ENABLED", "true")
+    monkeypatch.setenv("LLM_SHADOW_MODE", "true")
+    monkeypatch.setattr(gateway, "_generate_once", fake_generate)
+
+    result = gateway.run_llm_task(
+        LLMTaskRequest(task_key="lead_audit_enrichment", prompt="public audit")
+    )
+
+    assert result.status == "completed"
+    assert calls == ["deepseek"]
 
 
 def test_shadow_keeps_gigachat_result_and_records_deepseek_attempt(monkeypatch):

@@ -10,6 +10,13 @@ from services.outreach_email_adapter import (
     normalize_mailbox_config,
     preflight_mailbox,
 )
+from services.outreach_vk_adapter import (
+    ensure_vk_outreach_config,
+    encrypt_vk_outreach_config,
+    preflight_vk_sender,
+    verify_vk_community_access,
+)
+from services.vk_oauth_service import oauth_token_expiry
 
 
 def _dict(row: Any) -> dict[str, Any]:
@@ -38,15 +45,21 @@ def _record_sender_event(
     )
 
 
-def _record_sender_recovery(cursor: Any, sender_account_id: str, *, actor_id: str | None) -> None:
+def _record_sender_recovery(
+    cursor: Any,
+    sender_account_id: str,
+    *,
+    actor_id: str | None,
+    provider_code: str = "native_email",
+) -> None:
     cursor.execute(
         """
         INSERT INTO outreach_sender_health_events (
             id, sender_account_id, event_type, severity, provider_code,
             metrics_json, occurred_at, created_at
-        ) VALUES (%s, %s, 'recovered', 'info', 'native_email', %s, NOW(), NOW())
+        ) VALUES (%s, %s, 'recovered', 'info', %s, %s, NOW(), NOW())
         """,
-        (str(uuid.uuid4()), sender_account_id, Json({"actor_id": actor_id})),
+        (str(uuid.uuid4()), sender_account_id, provider_code, Json({"actor_id": actor_id})),
     )
     cursor.execute(
         """
@@ -264,6 +277,219 @@ def connect_email_sender(
     return safe_sender_payload(sender)
 
 
+def connect_vk_sender(
+    cursor: Any,
+    *,
+    scope_type: str,
+    business_id: str | None,
+    owner_user_id: str | None,
+    token_payload: dict[str, Any],
+    device_id: str,
+    verification: dict[str, Any],
+) -> dict[str, Any]:
+    user_id = str(verification.get("user_id") or "").strip()
+    if not user_id:
+        raise ValueError("vk_identity_missing")
+    config = {
+        "access_token": str(token_payload.get("access_token") or "").strip(),
+        "refresh_token": str(token_payload.get("refresh_token") or "").strip() or None,
+        "expires_in": token_payload.get("expires_in"),
+        "expires_at": oauth_token_expiry(token_payload.get("expires_in")),
+        "device_id": str(device_id or "").strip() or None,
+        "user_id": user_id,
+        "screen_name": verification.get("screen_name"),
+        "connected_at": verification.get("verified_at"),
+    }
+    encrypted = encrypt_vk_outreach_config(config)
+    capabilities = verification.get("capabilities") or {}
+    cursor.execute(
+        """
+        SELECT * FROM outreach_sender_accounts
+        WHERE scope_type = %s
+          AND COALESCE(business_id, '') = COALESCE(%s, '')
+          AND channel = 'vk'
+          AND sender_identity = %s
+        FOR UPDATE
+        """,
+        (scope_type, business_id, user_id),
+    )
+    current = _dict(cursor.fetchone())
+    sender_id = str(current.get("id") or uuid.uuid4())
+    if current:
+        cursor.execute(
+            """
+            UPDATE outreach_sender_accounts
+            SET owner_user_id = COALESCE(%s, owner_user_id),
+                sender_identity = %s, display_name = %s,
+                auth_data_encrypted = %s, status = 'connected',
+                capabilities_json = %s, outreach_enabled = FALSE,
+                permission_changed_by = %s, permission_changed_at = NOW(),
+                reply_sync_error = NULL, updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (
+                owner_user_id, user_id, verification.get("display_name"),
+                encrypted, Json(capabilities), owner_user_id, sender_id,
+            ),
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO outreach_sender_accounts (
+                id, scope_type, business_id, owner_user_id, channel,
+                sender_identity, display_name, auth_data_encrypted,
+                status, capabilities_json, outreach_enabled,
+                permission_changed_by, permission_changed_at,
+                created_at, updated_at
+            ) VALUES (
+                %s, %s, %s, %s, 'vk', %s, %s, %s,
+                'connected', %s, FALSE, %s, NOW(), NOW(), NOW()
+            )
+            RETURNING *
+            """,
+            (
+                sender_id, scope_type, business_id, owner_user_id,
+                user_id, verification.get("display_name"), encrypted,
+                Json(capabilities), owner_user_id,
+            ),
+        )
+    cursor.fetchone()
+    _record_sender_event(
+        cursor,
+        sender_account_id=sender_id,
+        event_type="connected",
+        actor_id=owner_user_id,
+        payload={
+            "channel": "vk",
+            "sender_identity": user_id,
+            "scope_type": scope_type,
+            "business_id": business_id,
+            "outreach_enabled": False,
+            "reply_sync_enabled": True,
+            "reconnected": bool(current),
+        },
+    )
+    _record_sender_event(
+        cursor,
+        sender_account_id=sender_id,
+        event_type="preflight_succeeded",
+        actor_id=owner_user_id,
+        payload={"direct_send": True, "reply_sync": True, "messages_sent": 0},
+    )
+    _record_sender_recovery(
+        cursor, sender_id, actor_id=owner_user_id, provider_code="vk_user_api",
+    )
+    return safe_sender_payload(load_sender_account(cursor, sender_id))
+
+
+def connect_vk_community_sender(
+    cursor: Any,
+    *,
+    scope_type: str,
+    business_id: str | None,
+    owner_user_id: str | None,
+    community_reference: str,
+    access_token: str,
+) -> dict[str, Any]:
+    verification = verify_vk_community_access(access_token, community_reference)
+    group_id = str(verification.get("group_id") or "").strip()
+    if not group_id:
+        raise ValueError("vk_group_identity_missing")
+    sender_identity = f"community:{group_id}"
+    config = {
+        "access_token": str(access_token or "").strip(),
+        "account_kind": "community",
+        "group_id": group_id,
+        "screen_name": verification.get("screen_name"),
+        "connected_at": verification.get("verified_at"),
+    }
+    encrypted = encrypt_vk_outreach_config(config)
+    capabilities = verification.get("capabilities") or {}
+    cursor.execute(
+        """
+        SELECT * FROM outreach_sender_accounts
+        WHERE scope_type = %s
+          AND COALESCE(business_id, '') = COALESCE(%s, '')
+          AND channel = 'vk'
+          AND sender_identity = %s
+        FOR UPDATE
+        """,
+        (scope_type, business_id, sender_identity),
+    )
+    current = _dict(cursor.fetchone())
+    sender_id = str(current.get("id") or uuid.uuid4())
+    if current:
+        cursor.execute(
+            """
+            UPDATE outreach_sender_accounts
+            SET owner_user_id = COALESCE(%s, owner_user_id),
+                display_name = %s, auth_data_encrypted = %s,
+                status = 'connected', capabilities_json = %s,
+                outreach_enabled = FALSE, permission_changed_by = %s,
+                permission_changed_at = NOW(), reply_sync_error = NULL,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (
+                owner_user_id, verification.get("display_name"), encrypted,
+                Json(capabilities), owner_user_id, sender_id,
+            ),
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO outreach_sender_accounts (
+                id, scope_type, business_id, owner_user_id, channel,
+                sender_identity, display_name, auth_data_encrypted,
+                status, capabilities_json, outreach_enabled,
+                permission_changed_by, permission_changed_at,
+                created_at, updated_at
+            ) VALUES (
+                %s, %s, %s, %s, 'vk', %s, %s, %s,
+                'connected', %s, FALSE, %s, NOW(), NOW(), NOW()
+            )
+            RETURNING *
+            """,
+            (
+                sender_id, scope_type, business_id, owner_user_id,
+                sender_identity, verification.get("display_name"), encrypted,
+                Json(capabilities), owner_user_id,
+            ),
+        )
+    cursor.fetchone()
+    _record_sender_event(
+        cursor,
+        sender_account_id=sender_id,
+        event_type="connected",
+        actor_id=owner_user_id,
+        payload={
+            "channel": "vk",
+            "account_kind": "community",
+            "group_id": group_id,
+            "profile_url": verification.get("profile_url"),
+            "display_name": verification.get("display_name"),
+            "scope_type": scope_type,
+            "business_id": business_id,
+            "outreach_enabled": False,
+            "reply_sync_enabled": True,
+            "reconnected": bool(current),
+        },
+    )
+    _record_sender_event(
+        cursor,
+        sender_account_id=sender_id,
+        event_type="preflight_succeeded",
+        actor_id=owner_user_id,
+        payload={"direct_send": True, "reply_sync": True, "messages_sent": 0},
+    )
+    _record_sender_recovery(
+        cursor, sender_id, actor_id=owner_user_id, provider_code="vk_community_api",
+    )
+    return safe_sender_payload(load_sender_account(cursor, sender_id))
+
+
 def preflight_email_sender(cursor: Any, sender_account_id: str, *, actor_id: str | None) -> dict[str, Any]:
     sender = load_sender_account(cursor, sender_account_id)
     if not sender or sender.get("channel") != "email":
@@ -289,6 +515,50 @@ def preflight_email_sender(cursor: Any, sender_account_id: str, *, actor_id: str
         payload={"direct_send": True, "reply_sync": True},
     )
     _record_sender_recovery(cursor, sender_account_id, actor_id=actor_id)
+    return result
+
+
+def preflight_vk_sender_account(cursor: Any, sender_account_id: str, *, actor_id: str | None) -> dict[str, Any]:
+    sender = load_sender_account(cursor, sender_account_id)
+    if not sender or sender.get("channel") != "vk":
+        raise LookupError("VK sender not found")
+    try:
+        _config, refreshed_encrypted = ensure_vk_outreach_config(sender)
+        if refreshed_encrypted:
+            cursor.execute(
+                """
+                UPDATE outreach_sender_accounts
+                SET auth_data_encrypted = %s, updated_at = NOW()
+                WHERE id = %s
+                """,
+                (refreshed_encrypted, sender_account_id),
+            )
+            sender["auth_data_encrypted"] = refreshed_encrypted
+        result = preflight_vk_sender(sender)
+    except Exception as exc:
+        _record_sender_event(
+            cursor,
+            sender_account_id=sender_account_id,
+            event_type="preflight_failed",
+            actor_id=actor_id,
+            payload={"error_code": getattr(exc, "code", "vk_preflight_failed")},
+        )
+        raise
+    _record_sender_event(
+        cursor,
+        sender_account_id=sender_account_id,
+        event_type="preflight_succeeded",
+        actor_id=actor_id,
+        payload={"direct_send": True, "reply_sync": True, "messages_sent": 0},
+    )
+    capabilities = sender.get("capabilities_json") or {}
+    provider_code = capabilities.get("provider") if isinstance(capabilities, dict) else None
+    _record_sender_recovery(
+        cursor,
+        sender_account_id,
+        actor_id=actor_id,
+        provider_code=str(provider_code or "vk_user_api"),
+    )
     return result
 
 
@@ -346,7 +616,7 @@ def disconnect_sender(cursor: Any, sender_account_id: str, *, actor_id: str | No
         """
         UPDATE outreach_sender_accounts
         SET status = 'disabled', outreach_enabled = FALSE,
-            auth_data_encrypted = CASE WHEN channel = 'email' THEN NULL ELSE auth_data_encrypted END,
+            auth_data_encrypted = CASE WHEN channel IN ('email', 'vk') THEN NULL ELSE auth_data_encrypted END,
             permission_changed_by = %s, permission_changed_at = NOW(),
             updated_at = NOW()
         WHERE id = %s

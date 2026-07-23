@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
+import hmac
 from typing import Any
 
 from flask import Blueprint, jsonify, request
@@ -25,10 +26,16 @@ from services.outreach_campaign_service import (
     resolve_sender_mode,
 )
 from services.outreach_safety_service import (
+    classify_inbound_event,
     learning_stat_metrics,
     normalized_contact_hash,
     recipient_key,
     run_dispatch_preflight,
+)
+from services.outreach_relationship_service import (
+    approve_room_invitation,
+    build_relationship_delta,
+    build_room_preview,
 )
 from services.contact_intelligence_service import enqueue_enrichment_job
 from services.outreach_personalization_ai import generation_contract_current
@@ -40,14 +47,50 @@ from services.outreach_email_adapter import (
 from services.outreach_sender_service import (
     change_sender_permission,
     connect_email_sender,
+    connect_vk_community_sender,
+    connect_vk_sender,
     disconnect_sender,
     list_sender_accounts,
     load_sender_account,
     preflight_email_sender,
+    preflight_vk_sender_account,
+)
+from services.outreach_vk_adapter import (
+    VK_OUTREACH_SCOPES,
+    VkOutreachAdapterError,
+    verify_vk_outreach_access,
+)
+from services.vk_oauth_service import (
+    VkOAuthError,
+    build_vk_authorization_url,
+    decode_vk_oauth_state,
+    encode_vk_oauth_state,
+    exchange_vk_authorization_code,
+    validate_vk_pkce_value,
+    vk_pkce_challenge,
 )
 
 
 outreach_campaign_bp = Blueprint("outreach_campaigns", __name__)
+
+
+def _outreach_sandbox_enabled() -> bool:
+    return str(os.getenv("OUTREACH_SANDBOX_ENABLED") or "true").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+
+
+def _room_preview_for_outreach(preview: dict[str, Any]) -> dict[str, Any]:
+    lead = preview.get("lead") if isinstance(preview.get("lead"), dict) else {}
+    return build_room_preview(
+        preview,
+        {
+            "lead_name": lead.get("name"),
+            "city": lead.get("city"),
+            "category": lead.get("category"),
+            "source_url": lead.get("source_url"),
+        },
+    )
 
 
 def _learning_tokens(value: Any) -> set[str]:
@@ -176,6 +219,48 @@ def _campaign_payload(cursor: Any, campaign_id: str) -> dict[str, Any] | None:
         (campaign_id,),
     )
     campaign["events"] = [dict(item) for item in cursor.fetchall()]
+    cursor.execute(
+        """
+        SELECT id, campaign_id, touch_id, sender_account_id, channel,
+               provider_event_id, event_type, classification, is_human,
+               stops_campaign, confidence, raw_payload_json, classified_by,
+               occurred_at, created_at
+        FROM outreach_inbound_events
+        WHERE campaign_id = %s
+        ORDER BY occurred_at, created_at
+        """,
+        (campaign_id,),
+    )
+    campaign["inbound_events"] = [dict(item) for item in cursor.fetchall()]
+    cursor.execute(
+        """
+        SELECT queue.id, queue.campaign_touch_id AS touch_id, queue.channel,
+               queue.delivery_status, queue.provider_message_id, queue.error_text,
+               queue.scheduled_at, queue.sent_at, queue.created_at, queue.updated_at
+        FROM outreachsendqueue queue
+        JOIN outreach_campaign_touches touch ON touch.id = queue.campaign_touch_id
+        WHERE touch.campaign_id = %s
+        ORDER BY queue.created_at
+        """,
+        (campaign_id,),
+    )
+    campaign["deliveries"] = [dict(item) for item in cursor.fetchall()]
+    cursor.execute(
+        """
+        SELECT id, slug, status, visibility, room_json, updated_at
+        FROM sales_rooms
+        WHERE id = %s
+        """,
+        (campaign.get("room_id"),),
+    )
+    room = cursor.fetchone()
+    campaign["room"] = dict(room) if room else None
+    cursor.execute(
+        "SELECT * FROM lead_relationship_states WHERE workstream_id = %s",
+        (campaign.get("workstream_id"),),
+    )
+    relationship = cursor.fetchone()
+    campaign["relationship"] = dict(relationship) if relationship else None
     return campaign
 
 
@@ -288,6 +373,165 @@ def connect_email_sender_account():
         conn.close()
 
 
+@outreach_campaign_bp.post("/api/outreach/sender-accounts/vk/oauth/start")
+def start_vk_outreach_oauth():
+    user_data, error = _require_auth()
+    if error:
+        return error
+    payload = request.get_json(silent=True) or {}
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        scope = _sender_scope(
+            cursor,
+            user_data,
+            scope_type=str(payload.get("scope_type") or "business"),
+            requested_business_id=str(payload.get("business_id") or "").strip() or None,
+        )
+        if not scope:
+            return jsonify({"success": False, "error": "Sender scope access denied"}), 403
+        code_challenge = validate_vk_pkce_value(payload.get("code_challenge"), "code_challenge")
+        client_state = str(payload.get("client_state") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{20,160}", client_state):
+            return jsonify({"success": False, "error": "Не удалось начать безопасное подключение VK."}), 400
+        return_to = "/dashboard/settings/integrations?focus=outreach_vk"
+        if scope[0] == "platform":
+            return_to += "&sender_scope=platform"
+        state = encode_vk_oauth_state({
+            "purpose": "outreach_sender",
+            "user_id": str(user_data.get("user_id") or ""),
+            "scope_type": scope[0],
+            "business_id": scope[1],
+            "code_challenge": code_challenge,
+            "client_state": client_state,
+            "return_to": return_to,
+        })
+        return jsonify({
+            "success": True,
+            "auth_url": build_vk_authorization_url(
+                state=state,
+                code_challenge=code_challenge,
+                scopes=VK_OUTREACH_SCOPES,
+            ),
+            "messages_sent": 0,
+        })
+    except (VkOAuthError, ValueError) as exc:
+        return jsonify({
+            "success": False,
+            "error": str(exc),
+            "reason_code": getattr(exc, "code", "vk_oauth_start_failed"),
+            "messages_sent": 0,
+        }), 422
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/sender-accounts/vk/community/connect")
+def connect_vk_outreach_community():
+    user_data, error = _require_auth()
+    if error:
+        return error
+    payload = request.get_json(silent=True) or {}
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        scope = _sender_scope(
+            cursor,
+            user_data,
+            scope_type=str(payload.get("scope_type") or "business"),
+            requested_business_id=str(payload.get("business_id") or "").strip() or None,
+        )
+        if not scope:
+            return jsonify({"success": False, "error": "Sender scope access denied"}), 403
+        sender = connect_vk_community_sender(
+            cursor,
+            scope_type=scope[0],
+            business_id=scope[1],
+            owner_user_id=str(user_data.get("user_id") or "") or None,
+            community_reference=str(payload.get("community_url") or payload.get("community_id") or ""),
+            access_token=str(payload.get("access_token") or ""),
+        )
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "sender_account": sender,
+            "message": "Сообщество VK подключено без права отправки. Получатель увидит фактическое имя сообщества.",
+            "messages_sent": 0,
+        }), 201
+    except (VkOutreachAdapterError, ValueError) as exc:
+        conn.rollback()
+        return jsonify({
+            "success": False,
+            "error": str(exc),
+            "reason_code": getattr(exc, "code", "vk_community_connect_failed"),
+            "messages_sent": 0,
+        }), 422
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/sender-accounts/vk/oauth/complete")
+def complete_vk_outreach_oauth():
+    user_data, error = _require_auth()
+    if error:
+        return error
+    payload = request.get_json(silent=True) or {}
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        state_payload = decode_vk_oauth_state(payload.get("state"))
+        if str(state_payload.get("purpose") or "") != "outreach_sender":
+            return jsonify({"success": False, "error": "Это подключение VK предназначено для другой функции."}), 409
+        if str(state_payload.get("user_id") or "") != str(user_data.get("user_id") or ""):
+            return jsonify({"success": False, "error": "Это подключение VK относится к другому пользователю."}), 403
+        scope = _sender_scope(
+            cursor,
+            user_data,
+            scope_type=str(state_payload.get("scope_type") or "business"),
+            requested_business_id=str(state_payload.get("business_id") or "").strip() or None,
+        )
+        if not scope or scope[0] != state_payload.get("scope_type") or scope[1] != state_payload.get("business_id"):
+            return jsonify({"success": False, "error": "Контур VK-подключения изменился. Начните ещё раз."}), 403
+        code_verifier = validate_vk_pkce_value(payload.get("code_verifier"), "code_verifier")
+        if not hmac.compare_digest(
+            vk_pkce_challenge(code_verifier),
+            str(state_payload.get("code_challenge") or ""),
+        ):
+            return jsonify({"success": False, "error": "Не удалось проверить подключение VK. Начните ещё раз."}), 400
+        token_payload = exchange_vk_authorization_code(
+            code=str(payload.get("code") or ""),
+            device_id=str(payload.get("device_id") or ""),
+            code_verifier=code_verifier,
+        )
+        verification = verify_vk_outreach_access(str(token_payload.get("access_token") or ""))
+        sender = connect_vk_sender(
+            cursor,
+            scope_type=scope[0],
+            business_id=scope[1],
+            owner_user_id=str(user_data.get("user_id") or "") or None,
+            token_payload=token_payload,
+            device_id=str(payload.get("device_id") or ""),
+            verification=verification,
+        )
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "sender_account": sender,
+            "message": "VK подключён без права отправки. Разрешение включается отдельно.",
+            "messages_sent": 0,
+        }), 201
+    except (VkOAuthError, VkOutreachAdapterError, ValueError) as exc:
+        conn.rollback()
+        return jsonify({
+            "success": False,
+            "error": str(exc),
+            "reason_code": getattr(exc, "code", "vk_oauth_complete_failed"),
+            "messages_sent": 0,
+        }), 422
+    finally:
+        conn.close()
+
+
 @outreach_campaign_bp.post("/api/outreach/sender-accounts/<sender_account_id>/preflight")
 def preflight_existing_sender_account(sender_account_id: str):
     user_data, error = _require_auth()
@@ -299,16 +543,23 @@ def preflight_existing_sender_account(sender_account_id: str):
         sender = _authorized_sender_account(cursor, sender_account_id, user_data)
         if not sender:
             return jsonify({"success": False, "error": "Sender account not found or access denied"}), 404
-        if sender.get("channel") != "email":
+        if sender.get("channel") not in {"email", "vk"}:
             return jsonify({"success": False, "error": "Channel preflight is not available here"}), 409
-        result = preflight_email_sender(
-            cursor,
-            sender_account_id,
-            actor_id=str(user_data.get("user_id") or "") or None,
-        )
+        if sender.get("channel") == "vk":
+            result = preflight_vk_sender_account(
+                cursor,
+                sender_account_id,
+                actor_id=str(user_data.get("user_id") or "") or None,
+            )
+        else:
+            result = preflight_email_sender(
+                cursor,
+                sender_account_id,
+                actor_id=str(user_data.get("user_id") or "") or None,
+            )
         conn.commit()
         return jsonify({"success": True, "preflight": result, "messages_sent": 0})
-    except (LookupError, ValueError, EmailAdapterError) as exc:
+    except (LookupError, ValueError, EmailAdapterError, VkOutreachAdapterError) as exc:
         conn.commit()
         return jsonify({
             "success": False,
@@ -391,6 +642,8 @@ def preview_campaign(workstream_id: str):
             workstream_id,
             sequence=sequence,
             sender_mode=sender_mode,
+            offer_id=str(payload.get("offer_id") or "").strip() or None,
+            trust_strategy=str(payload.get("trust_strategy") or "").strip() or None,
         )
         campaign = None
         if bool(payload.get("save")) and preview.get("status") in {"ready", "needs_channel_setup"}:
@@ -413,6 +666,183 @@ def preview_campaign(workstream_id: str):
         conn.rollback()
         return jsonify({"success": False, "error": str(exc), "reason_code": "sender_mode_forbidden"}), 403
     finally:
+        conn.close()
+
+
+@outreach_campaign_bp.get("/api/outreach/sandbox/workstreams")
+def list_outreach_sandbox_workstreams():
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not _outreach_sandbox_enabled():
+        return jsonify({"success": False, "error": "Outreach sandbox is disabled"}), 404
+    requested_business_id = str(request.args.get("business_id") or "").strip()
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        if user_data.get("is_superadmin"):
+            if requested_business_id:
+                cursor.execute(
+                    """
+                    SELECT ws.id, ws.lead_id, ws.workstream_type, ws.client_business_id,
+                           ws.lifecycle_status, lead.name AS lead_name,
+                           business.name AS business_name
+                    FROM lead_workstreams ws
+                    JOIN prospectingleads lead ON lead.id = ws.lead_id
+                    LEFT JOIN businesses business ON business.id = ws.client_business_id
+                    WHERE ws.client_business_id = %s
+                    ORDER BY ws.updated_at DESC
+                    LIMIT 250
+                    """,
+                    (requested_business_id,),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT ws.id, ws.lead_id, ws.workstream_type, ws.client_business_id,
+                           ws.lifecycle_status, lead.name AS lead_name,
+                           business.name AS business_name
+                    FROM lead_workstreams ws
+                    JOIN prospectingleads lead ON lead.id = ws.lead_id
+                    LEFT JOIN businesses business ON business.id = ws.client_business_id
+                    ORDER BY ws.updated_at DESC
+                    LIMIT 250
+                    """
+                )
+        else:
+            business_id = _resolve_business_for_user(cursor, user_data, requested_business_id or None)
+            if not business_id:
+                return jsonify({"success": False, "error": "Business access denied"}), 403
+            cursor.execute(
+                """
+                SELECT ws.id, ws.lead_id, ws.workstream_type, ws.client_business_id,
+                       ws.lifecycle_status, lead.name AS lead_name,
+                       business.name AS business_name
+                FROM lead_workstreams ws
+                JOIN prospectingleads lead ON lead.id = ws.lead_id
+                LEFT JOIN businesses business ON business.id = ws.client_business_id
+                WHERE ws.workstream_type = 'client_partnership'
+                  AND ws.client_business_id = %s
+                ORDER BY ws.updated_at DESC
+                LIMIT 250
+                """,
+                (business_id,),
+            )
+        workstreams = []
+        for row in cursor.fetchall():
+            item = dict(row)
+            if item.get("workstream_type") == "localos_sales":
+                item["allowed_sender_modes"] = ["localos"]
+            elif user_data.get("is_superadmin"):
+                item["allowed_sender_modes"] = ["partner_business", "localos_for_partner"]
+            else:
+                item["allowed_sender_modes"] = ["partner_business"]
+            workstreams.append(item)
+        return jsonify({"success": True, "workstreams": workstreams})
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/sandbox/preview")
+def outreach_sandbox_preview():
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not _outreach_sandbox_enabled():
+        return jsonify({"success": False, "error": "Outreach sandbox is disabled"}), 404
+    payload = request.get_json(silent=True) or {}
+    workstream_id = str(payload.get("workstream_id") or "").strip()
+    if not workstream_id:
+        return jsonify({"success": False, "error": "workstream_id is required"}), 400
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        workstream = _authorized_workstream(cursor, workstream_id, user_data)
+        if not workstream:
+            return jsonify({"success": False, "error": "Workstream not found or access denied"}), 404
+        sender_mode = _authorized_sender_mode(workstream, payload.get("sender_mode"), user_data)
+        preview = build_preview(
+            cursor,
+            workstream_id,
+            sequence=payload.get("sequence") if isinstance(payload.get("sequence"), list) else None,
+            sender_mode=sender_mode,
+            offer_id=str(payload.get("offer_id") or "").strip() or None,
+            trust_strategy=str(payload.get("trust_strategy") or "").strip() or None,
+            generate_ai=False,
+        )
+        return jsonify({
+            "success": True,
+            "dry_run": True,
+            "external_dispatch_performed": False,
+            "preview": preview,
+            "room_preview": _room_preview_for_outreach(preview),
+        })
+    except (LookupError, ValueError) as exc:
+        return jsonify({"success": False, "error": str(exc), "reason_code": "sandbox_preview_blocked"}), 422
+    except PermissionError as exc:
+        return jsonify({"success": False, "error": str(exc), "reason_code": "sender_mode_forbidden"}), 403
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/sandbox/simulate-reply")
+def outreach_sandbox_simulate_reply():
+    user_data, error = _require_auth()
+    if error:
+        return error
+    if not _outreach_sandbox_enabled():
+        return jsonify({"success": False, "error": "Outreach sandbox is disabled"}), 404
+    payload = request.get_json(silent=True) or {}
+    workstream_id = str(payload.get("workstream_id") or "").strip()
+    raw_reply = str(payload.get("reply") or payload.get("raw_reply") or "").strip()
+    if not workstream_id or not raw_reply:
+        return jsonify({"success": False, "error": "workstream_id and reply are required"}), 400
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        workstream = _authorized_workstream(cursor, workstream_id, user_data)
+        if not workstream:
+            return jsonify({"success": False, "error": "Workstream not found or access denied"}), 404
+        sender_mode = _authorized_sender_mode(workstream, payload.get("sender_mode"), user_data)
+        preview = build_preview(
+            cursor,
+            workstream_id,
+            sender_mode=sender_mode,
+            offer_id=str(payload.get("offer_id") or "").strip() or None,
+            trust_strategy=str(payload.get("trust_strategy") or "").strip() or None,
+            generate_ai=False,
+        )
+        classification = classify_inbound_event({"raw_reply": raw_reply})
+        relationship_delta = build_relationship_delta(raw_reply, classification["classification"])
+        room_preview = _room_preview_for_outreach(preview)
+        if classification.get("classification") in {"interested", "question"}:
+            room_preview["status"] = "engaged"
+            room_preview["visibility"] = "ready_to_share"
+            room_preview["next_step"] = "Проверить приглашение в комнату"
+            room_preview["invitation_draft"] = {
+                "status": "draft",
+                "approval_required": True,
+                "text": "Спасибо за ответ. Подготовил приватную комнату с идеей, основаниями matching и следующим шагом.",
+            }
+        return jsonify({
+            "success": True,
+            "dry_run": True,
+            "external_dispatch_performed": False,
+            "production_records_created": 0,
+            "classification": classification,
+            "future_touches_stopped": bool(classification.get("stops_campaign")),
+            "relationship_memory_preview": relationship_delta,
+            "decision": preview.get("decision") or {},
+            "room_preview": room_preview,
+        })
+    except (LookupError, ValueError) as exc:
+        return jsonify({"success": False, "error": str(exc), "reason_code": "sandbox_reply_blocked"}), 422
+    except PermissionError as exc:
+        return jsonify({"success": False, "error": str(exc), "reason_code": "sender_mode_forbidden"}), 403
+    finally:
+        conn.rollback()
         conn.close()
 
 
@@ -471,6 +901,36 @@ def approve_campaign_route(campaign_id: str):
     except ValueError as exc:
         conn.rollback()
         return jsonify({"success": False, "error": str(exc), "reason_code": "campaign_preflight_failed"}), 409
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/campaigns/<campaign_id>/room-invitation/approve")
+def approve_campaign_room_invitation(campaign_id: str):
+    """Explicitly publish an already prepared room invitation; it does not send it."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        if not _authorized_campaign(cursor, campaign_id, user_data):
+            return jsonify({"success": False, "error": "Campaign not found or access denied"}), 404
+        room = approve_room_invitation(
+            cursor,
+            campaign_id=campaign_id,
+            actor_id=str(user_data.get("user_id") or ""),
+        )
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "room": room,
+            "invitation_sent": False,
+            "external_dispatch_performed": False,
+        })
+    except (LookupError, ValueError) as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
     finally:
         conn.close()
 
@@ -614,7 +1074,7 @@ def pilot_campaign_preflight(campaign_id: str):
             queue.get("id")
             and queue.get("delivery_status") == "queued"
             and campaign.get("status") in {"approved", "active"}
-            and first_touch.get("channel") in {"telegram", "email"}
+            and first_touch.get("channel") in {"telegram", "email", "vk"}
             and not global_dispatcher_enabled
         ):
             dispatch_preflight = run_dispatch_preflight(cursor, str(queue["id"]))
@@ -680,7 +1140,7 @@ def pilot_dispatch_first_touch(campaign_id: str):
             }), 409
         if int(first_touch.get("sequence_index") or 0) != 0:
             return jsonify({"success": False, "error": "First touch sequence is invalid"}), 409
-        if first_touch.get("channel") not in {"telegram", "email"}:
+        if first_touch.get("channel") not in {"telegram", "email", "vk"}:
             return jsonify({
                 "success": False,
                 "error": "The first pilot touch is manual and must be marked by the user",
@@ -724,17 +1184,25 @@ def pilot_dispatch_first_touch(campaign_id: str):
     from api.admin_prospecting import _sync_telegram_app_replies
     from services.outreach_dispatch_service import dispatch_due_outreach_queue
     from services.outreach_email_reply_service import sync_email_replies
+    from services.outreach_vk_reply_service import sync_vk_replies
 
     if first_touch.get("channel") == "telegram":
         reply_sync = _sync_telegram_app_replies(
             limit=50,
             sender_account_id=sender_account_id,
         )
-    else:
+    elif first_touch.get("channel") == "email":
         reply_sync = sync_email_replies(
             sender_limit=1,
             per_sender_limit=100,
             sender_account_id=sender_account_id,
+        )
+    else:
+        reply_sync = sync_vk_replies(
+            sender_limit=1,
+            per_conversation_limit=50,
+            sender_account_id=sender_account_id,
+            campaign_id=campaign_id,
         )
     reply_sync_failed = int(reply_sync.get("failed") or 0)
     if reply_sync_failed > 0:
@@ -821,7 +1289,7 @@ def pilot_reply_sync(campaign_id: str):
                 "reason_code": "pilot_reply_sync_before_send",
             }), 409
         channel = str(sent_touch.get("channel") or "")
-        if channel not in {"telegram", "email"}:
+        if channel not in {"telegram", "email", "vk"}:
             return jsonify({
                 "success": False,
                 "error": "Reply sync is unavailable for this channel",
@@ -848,12 +1316,21 @@ def pilot_reply_sync(campaign_id: str):
             limit=25,
             sender_account_id=sender_account_id,
         )
-    else:
+    elif channel == "email":
         from services.outreach_email_reply_service import sync_email_replies
 
         sync_result = sync_email_replies(
             sender_limit=1,
             per_sender_limit=100,
+            sender_account_id=sender_account_id,
+            campaign_id=campaign_id,
+        )
+    else:
+        from services.outreach_vk_reply_service import sync_vk_replies
+
+        sync_result = sync_vk_replies(
+            sender_limit=1,
+            per_conversation_limit=50,
             sender_account_id=sender_account_id,
             campaign_id=campaign_id,
         )

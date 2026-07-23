@@ -57,7 +57,7 @@ try:
 except ImportError:
     from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
 from services.sales_room_helpers import (
@@ -1647,6 +1647,25 @@ def _extract_sales_room_offer_text(offer_draft_json: dict[str, Any] | None) -> s
             return cleaned
     return ""
 
+def _extract_reviewed_sales_room_offer_text(
+    offer_draft_json: dict[str, Any] | None,
+) -> str:
+    if not isinstance(offer_draft_json, dict):
+        return ""
+    candidates: list[Any] = [
+        offer_draft_json.get("approved_text"),
+        offer_draft_json.get("edited_text"),
+    ]
+    for key in ("draft", "offer", "payload"):
+        nested = offer_draft_json.get(key)
+        if isinstance(nested, dict):
+            candidates.extend([nested.get("approved_text"), nested.get("edited_text")])
+    for candidate in candidates:
+        cleaned = _clean_sales_room_offer_text(str(candidate or ""))
+        if cleaned:
+            return cleaned
+    return ""
+
 def _fallback_sales_room_offer_text(*, mode: str, business_name: str, lead_name: str) -> str:
     if mode == SALES_ROOM_MODE_PARTNER:
         return (
@@ -1664,12 +1683,178 @@ def _fallback_sales_room_offer_text(*, mode: str, business_name: str, lead_name:
         "— согласовать следующий шаг без лишней подготовки."
     )
 
+def _build_audited_localos_offer_text(*, lead_name: str, audit_json: dict[str, Any]) -> str:
+    facts: list[str] = []
+    findings = audit_json.get("findings")
+    if isinstance(findings, list):
+        for item in findings:
+            if isinstance(item, dict):
+                fact = str(
+                    item.get("description")
+                    or item.get("fact")
+                    or item.get("text")
+                    or item.get("body")
+                    or item.get("title")
+                    or ""
+                ).strip()
+            else:
+                fact = str(item or "").strip()
+            if fact and fact not in facts:
+                facts.append(fact)
+            if len(facts) >= 3:
+                break
+    if not facts:
+        summary = str(audit_json.get("summary_text") or "").strip()
+        if summary:
+            facts.append(summary)
+    if not facts:
+        return ""
+    fact_block = "\n".join(f"— {fact.rstrip(' .')}" for fact in facts)
+    return (
+        f"По аудиту карточки {lead_name} видно, что её можно усилить:\n{fact_block}.\n\n"
+        "LocalOS может помочь улучшить карточку и локальное продвижение, "
+        "чтобы больше потенциальных клиентов находили бизнес в онлайн-поиске "
+        "и приходили в офлайн-точку.\n\n"
+        "Предлагаем начать с короткого разбора приоритетных изменений и выбрать первые действия."
+    )
+
+def _is_residential_complex_lead(
+    lead: dict[str, Any],
+    audit_json: dict[str, Any] | None = None,
+) -> bool:
+    safe_audit = audit_json if isinstance(audit_json, dict) else {}
+    combined = " ".join(
+        str(value or "").strip().lower()
+        for value in (
+            lead.get("name"),
+            lead.get("category"),
+            lead.get("partner_kind"),
+            safe_audit.get("audit_profile"),
+        )
+        if str(value or "").strip()
+    )
+    return any(
+        token in combined
+        for token in (
+            "residential_complex",
+            "residential complex",
+            "жилой комплекс",
+            "жилой комплекс / апартаменты",
+            "жилкомплекс",
+        )
+    ) or combined.startswith("жк ")
+
+def _is_beauty_sender_profile(
+    business_profile: dict[str, Any] | None,
+) -> bool:
+    if not isinstance(business_profile, dict):
+        return False
+    categories = business_profile.get("categories")
+    category_text = " ".join(
+        str(item or "").strip().lower()
+        for item in categories
+    ) if isinstance(categories, list) else str(categories or "").strip().lower()
+    combined = " ".join(
+        str(value or "").strip().lower()
+        for value in (
+            business_profile.get("business_type"),
+            business_profile.get("industry"),
+            category_text,
+        )
+        if str(value or "").strip()
+    )
+    return any(
+        token in combined
+        for token in (
+            "beauty_salon",
+            "beauty salon",
+            "салон красоты",
+            "парикмахер",
+            "детский салон",
+        )
+    )
+
+def _has_confirmed_beauty_residential_formats(
+    *,
+    business_name: str,
+    business_profile: dict[str, Any] | None,
+) -> bool:
+    return (
+        str(business_name or "").strip().lower() == "оливер"
+        and _is_beauty_sender_profile(business_profile)
+    )
+
+def _is_veselaya_rascheska_business(business_name: str) -> bool:
+    normalized = str(business_name or "").strip().lower().replace("ё", "е")
+    return normalized == "веселая расческа"
+
+def _build_veselaya_residential_partner_offer_text(
+    *,
+    business_name: str,
+    lead_name: str,
+) -> str:
+    audience = (
+        f"семей гостей и жителей {lead_name}"
+        if str(lead_name or "").strip().lower() == "yes apart"
+        else f"жителей {lead_name}"
+    )
+    return (
+        f"Мы ваши соседи - {business_name}.\n\n"
+        f"Предлагаем особые условия на детские стрижки для {audience}. "
+        "Формат информирования можно согласовать с управляющей компанией: "
+        "каналы ЖК, листовки или объявления в общих зонах.\n\n"
+        "Конкретные условия и формат публикации согласуем отдельно до запуска. "
+        "Дополнительно можно пригласить семьи на небольшой мастер-класс для детей."
+    )
+
+def _build_beauty_residential_partner_offer_text(
+    *,
+    business_name: str,
+    lead_name: str,
+) -> str:
+    return (
+        f"Мы ваши соседи - {business_name}.\n\n"
+        f"Для жителей {lead_name} предлагаем два простых формата:\n"
+        "- разместить наши листовки в разрешённых местах комплекса;\n"
+        "- приглашать жителей на открытые мастер-классы в салоне.\n\n"
+        "Материалы и анонсы подготовим сами и заранее согласуем с управляющей компанией.\n\n"
+        "Подскажите, с кем можно обсудить правила размещения листовок и анонсов мероприятий?"
+    )
+
+def _build_residential_partner_offer_text(
+    *,
+    business_name: str,
+    lead_name: str,
+) -> str:
+    return (
+        f"Мы ваши соседи - {business_name}.\n\n"
+        "Хотели бы пригласить ваших жителей к нам.\n\n"
+        "Готовы подготовить понятное предложение для жителей и материалы для размещения. "
+        "Конкретный формат и условия предложим отдельно с учётом услуг бизнеса и правил комплекса.\n\n"
+        "Все материалы заранее согласуем с управляющей компанией.\n\n"
+        "Подскажите, с кем можно обсудить предложение для жителей и правила его размещения?"
+    )
+
 def _build_organika_partner_offer_text(
     *,
     business_name: str,
     lead_name: str,
     audit_json: dict[str, Any],
+    lead: dict[str, Any] | None = None,
+    business_profile: dict[str, Any] | None = None,
 ) -> str:
+    safe_lead = lead if isinstance(lead, dict) else {"name": lead_name}
+    if _is_residential_complex_lead(safe_lead, audit_json):
+        if _is_veselaya_rascheska_business(business_name):
+            builder = _build_veselaya_residential_partner_offer_text
+        elif _has_confirmed_beauty_residential_formats(
+                business_name=business_name,
+                business_profile=business_profile,
+        ):
+            builder = _build_beauty_residential_partner_offer_text
+        else:
+            builder = _build_residential_partner_offer_text
+        return builder(business_name=business_name, lead_name=lead_name)
     profile = str(audit_json.get("audit_profile") or "default_local_business").strip().lower()
     profile_angles = {
         "shopping_center": (
@@ -1729,11 +1914,11 @@ def _build_organika_partner_offer_text(
         ),
     )
     return (
-        f"У {business_name} и {lead_name} есть пересечение по локальной аудитории: {audience}.\n\n"
-        "Предлагаем начать без интеграции и автоматической рассылки: "
-        f"подготовить {test_format}.\n\n"
-        "Следующий шаг — 20-минутный разговор: сверить интерес и выбрать один безопасный тест. "
-        "Скидки, передача клиентов и любые рекомендации обсуждаются отдельно и заранее не обещаются."
+        "Кажется, у компаний есть общая аудитория.\n\n"
+        f"{business_name} и {lead_name} могут быть полезны одной локальной аудитории: {audience}.\n\n"
+        f"Предлагаем начать с простого формата — подготовить {test_format}, "
+        "а затем оценить результат.\n\n"
+        "Возможные форматы сотрудничества уже собраны ниже."
     )
 
 def _build_sales_room_proposal(
@@ -1745,22 +1930,66 @@ def _build_sales_room_proposal(
     audit_json: dict[str, Any] | None = None,
     match_json: dict[str, Any] | None = None,
     offer_draft_json: dict[str, Any] | None = None,
+    business_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     lead_name = str(lead.get("name") or "компания").strip() or "компания"
-    body_text = _extract_sales_room_offer_text(offer_draft_json)
+    residential_recipient = (
+        mode == SALES_ROOM_MODE_PARTNER
+        and _is_residential_complex_lead(lead, audit_json)
+    )
+    beauty_residential = residential_recipient and _has_confirmed_beauty_residential_formats(
+        business_name=business_name,
+        business_profile=business_profile,
+    )
+    veselaya_residential = residential_recipient and _is_veselaya_rascheska_business(
+        business_name
+    )
+    body_text = (
+        _extract_reviewed_sales_room_offer_text(offer_draft_json)
+        if residential_recipient
+        else _extract_sales_room_offer_text(offer_draft_json)
+    )
     if not body_text:
-        body_text = _fallback_sales_room_offer_text(mode=mode, business_name=business_name, lead_name=lead_name)
+        safe_audit = audit_json if isinstance(audit_json, dict) else {}
+        if residential_recipient:
+            if veselaya_residential:
+                builder = _build_veselaya_residential_partner_offer_text
+            elif beauty_residential:
+                builder = _build_beauty_residential_partner_offer_text
+            else:
+                builder = _build_residential_partner_offer_text
+            body_text = builder(business_name=business_name, lead_name=lead_name)
+        elif mode == SALES_ROOM_MODE_CLIENT and data_mode == SALES_ROOM_DATA_AUDITED:
+            body_text = _build_audited_localos_offer_text(
+                lead_name=lead_name,
+                audit_json=safe_audit,
+            )
+        if not body_text:
+            body_text = _fallback_sales_room_offer_text(
+                mode=mode,
+                business_name=business_name,
+                lead_name=lead_name,
+            )
     research = lead.get("research") if isinstance(lead.get("research"), dict) else {}
     opener = str(research.get("suggested_opener") or "").strip()
     if opener and opener not in body_text:
         body_text = f"{opener}\n\n{body_text}"
     if mode == SALES_ROOM_MODE_PARTNER:
         return {
-            "title": "Предложение",
+            "title": "Идея сотрудничества" if residential_recipient else "Предложение",
             "summary": "",
             "body_text": body_text,
             "bullets": [],
-            "next_step": "Обсудить детали и согласовать первый тест.",
+            "next_step": (
+                "Уточнить, кто отвечает за предложения для жителей, и согласовать особые условия и размещение."
+                if veselaya_residential
+                else
+                "Уточнить правила размещения листовок и анонсов мероприятий."
+                if beauty_residential
+                else "Обсудить предложение для жителей и согласовать формат."
+                if residential_recipient
+                else "Обсудить детали и согласовать первый тест."
+            ),
             "data_mode": data_mode,
         }
 

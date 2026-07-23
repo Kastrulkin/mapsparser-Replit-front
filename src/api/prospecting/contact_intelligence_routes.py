@@ -17,6 +17,7 @@ from services.contact_intelligence_service import (
 )
 from services.discovered_telegram_source_service import (
     parse_telegram_reference,
+    source_attribution_for_lead,
     sync_discovered_telegram_sources,
 )
 from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
@@ -50,7 +51,9 @@ def _load_workstream(cursor, *, lead_id: str, workstream_id: str, client_busines
         params.append(client_business_id)
     cursor.execute(
         f"""
-        SELECT ws.*, lead.name AS lead_name, lead.business_id AS lead_business_id,
+        SELECT ws.*, lead.name AS lead_name, lead.category AS lead_category,
+               lead.city AS lead_city, lead.address AS lead_address,
+               lead.business_id AS lead_business_id,
                client.name AS client_business_name
         FROM lead_workstreams ws
         JOIN prospectingleads lead ON lead.id = ws.lead_id
@@ -93,6 +96,8 @@ def _save_manual_lead_contact(
                 {
                     "id": str(workstream.get("lead_id") or ""),
                     "name": str(workstream.get("lead_name") or "Telegram"),
+                    "category": str(workstream.get("lead_category") or ""),
+                    "city": str(workstream.get("lead_city") or ""),
                 },
                 [normalized_value],
                 discovery_origin="manual_lead_contact",
@@ -214,7 +219,12 @@ def _sender_profile_suggestions(cursor, business_id: str) -> dict[str, Any]:
     }
 
 
-def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
+def _load_intelligence(
+    cursor,
+    workstream: dict[str, Any],
+    *,
+    sender_mode: str | None = None,
+) -> dict[str, Any]:
     cursor.execute(
         """
         SELECT * FROM lead_contact_points
@@ -242,6 +252,16 @@ def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
         """,
         (workstream.get("id"),),
     )
+    source_attribution = source_attribution_for_lead({
+        "name": workstream.get("lead_name"),
+        "category": workstream.get("lead_category"),
+    })
+    source_owner_name = str(workstream.get("lead_name") or "Получатель").strip() or "Получатель"
+    source_owner_label = (
+        f"ЖК «{source_owner_name}»"
+        if source_attribution["source_owner_type"] == "residential_complex"
+        else source_owner_name
+    )
     telegram_sources = []
     for row in cursor.fetchall() or []:
         source = dict(row)
@@ -258,6 +278,10 @@ def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
             "signal_source_eligible": metadata.get("signal_source_eligible"),
             "recipient_eligible": metadata.get("recipient_eligible"),
             "permission_reason": metadata.get("permission_reason"),
+            "source_owner_type": source_attribution["source_owner_type"],
+            "source_owner_name": source_owner_name,
+            "source_owner_label": source_owner_label,
+            "sender_business_is_owner": False,
             "documents_count": int(source.get("documents_count") or 0),
             "last_collected_at": source.get("last_collected_at"),
             "error": source.get("last_sync_error"),
@@ -300,8 +324,57 @@ def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
         """,
         (workstream.get("workstream_type"), workstream.get("client_business_id")),
     )
-    sender_row = cursor.fetchone()
-    sender_profile = dict(sender_row) if sender_row else None
+    business_sender_row = cursor.fetchone()
+    business_sender_profile = dict(business_sender_row) if business_sender_row else None
+    cursor.execute(
+        """
+        SELECT id, display_name, role_title, company_name, competence_story,
+               proof_points_json, verified_cases_json, signature_text, confirmed_at,
+               outreach_context_json, allowed_offers_json, forbidden_claims_json,
+               voice_examples_json
+        FROM outreach_sender_profiles
+        WHERE workstream_type = 'localos_sales'
+          AND client_business_id IS NULL
+          AND is_active = TRUE
+        ORDER BY confirmed_at DESC NULLS LAST, updated_at DESC
+        LIMIT 1
+        """
+    )
+    platform_sender_row = cursor.fetchone()
+    platform_sender_profile = dict(platform_sender_row) if platform_sender_row else None
+    normalized_sender_mode = str(sender_mode or "").strip()
+    if workstream.get("workstream_type") == "localos_sales":
+        normalized_sender_mode = "localos"
+    elif normalized_sender_mode not in {"partner_business", "localos_for_partner"}:
+        cursor.execute(
+            """
+            SELECT COALESCE(NULLIF(sender_mode, ''), policy_json ->> 'sender_mode') AS sender_mode
+            FROM outreach_campaigns
+            WHERE workstream_id = %s
+            ORDER BY version DESC, created_at DESC
+            LIMIT 1
+            """,
+            (workstream.get("id"),),
+        )
+        campaign_row = cursor.fetchone()
+        saved_sender_mode = str(
+            campaign_row.get("sender_mode") if campaign_row else ""
+        ).strip()
+        normalized_sender_mode = (
+            saved_sender_mode
+            if saved_sender_mode in {"partner_business", "localos_for_partner"}
+            else "partner_business"
+        )
+    sender_profile_scope = (
+        "platform"
+        if normalized_sender_mode in {"localos", "localos_for_partner"}
+        else "business"
+    )
+    sender_profile = (
+        platform_sender_profile
+        if sender_profile_scope == "platform"
+        else business_sender_profile
+    )
     business_service_count = None
     if workstream.get("workstream_type") == "client_partnership":
         cursor.execute(
@@ -318,8 +391,13 @@ def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
         )
     profile_completeness = evaluate_sender_profile_completeness(
         sender_profile,
-        workstream_type=str(workstream.get("workstream_type") or ""),
-        business_service_count=business_service_count,
+        workstream_type=(
+            "localos_sales" if sender_profile_scope == "platform"
+            else str(workstream.get("workstream_type") or "")
+        ),
+        business_service_count=(
+            business_service_count if sender_profile_scope == "business" else None
+        ),
     )
     draft_payload = dict(draft_row) if draft_row else None
     if draft_payload is not None:
@@ -341,7 +419,11 @@ def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
         None,
     )
     sender_profile_suggestions = None
-    if workstream.get("workstream_type") == "client_partnership" and workstream.get("client_business_id"):
+    if (
+        sender_profile_scope == "business"
+        and workstream.get("workstream_type") == "client_partnership"
+        and workstream.get("client_business_id")
+    ):
         sender_profile_suggestions = _sender_profile_suggestions(
             cursor,
             str(workstream.get("client_business_id")),
@@ -362,6 +444,10 @@ def _load_intelligence(cursor, workstream: dict[str, Any]) -> dict[str, Any]:
         "selected_recipient": selected,
         "job": _serialize_job(dict(job_row) if job_row else None),
         "sender_profile": sender_profile,
+        "sender_profile_scope": sender_profile_scope,
+        "sender_mode": normalized_sender_mode,
+        "platform_sender_profile": platform_sender_profile,
+        "business_sender_profile": business_sender_profile,
         "sender_profile_suggestions": sender_profile_suggestions,
         "sender_profile_completeness": profile_completeness,
         "first_message": first_message,
@@ -544,7 +630,14 @@ def admin_get_contact_intelligence(lead_id: str):
         workstream = _load_workstream(cursor, lead_id=lead_id, workstream_id=workstream_id)
         if not workstream:
             return jsonify({"error": "Lead workstream not found"}), 404
-        return jsonify({"success": True, **_load_intelligence(cursor, workstream)})
+        return jsonify({
+            "success": True,
+            **_load_intelligence(
+                cursor,
+                workstream,
+                sender_mode=str(request.args.get("sender_mode") or "").strip() or None,
+            ),
+        })
     finally:
         conn.close()
 
@@ -635,8 +728,14 @@ def admin_sender_profiles():
         data = request.get_json(silent=True) or {}
         workstream_type = str(data.get("workstream_type") or "localos_sales").strip()
         client_business_id = str(data.get("client_business_id") or "").strip() or None
+        sender_mode = str(data.get("sender_mode") or "").strip()
+        if sender_mode == "localos_for_partner":
+            workstream_type = "localos_sales"
+            client_business_id = None
         if workstream_type not in {"localos_sales", "client_partnership"}:
             return jsonify({"error": "Unsupported workstream_type"}), 400
+        if workstream_type == "localos_sales":
+            client_business_id = None
         if workstream_type == "client_partnership" and not client_business_id:
             return jsonify({"error": "client_business_id is required"}), 400
         profile = _save_sender_profile(
@@ -701,7 +800,10 @@ def partnership_contact_intelligence(lead_id: str):
             )
             conn.commit()
             return jsonify({"success": True, "job": _serialize_job(job), "reused": bool(job.get("reused"))}), 202
-        return jsonify({"success": True, **_load_intelligence(cursor, workstream)})
+        return jsonify({
+            "success": True,
+            **_load_intelligence(cursor, workstream, sender_mode="partner_business"),
+        })
     finally:
         conn.close()
 

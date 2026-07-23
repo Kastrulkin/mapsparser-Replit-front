@@ -141,8 +141,10 @@ def build_vk_authorization_url(
     *,
     state: str,
     code_challenge: str,
+    scopes: tuple[str, ...] | None = None,
 ) -> str:
     challenge = validate_vk_pkce_value(code_challenge, "code_challenge")
+    requested_scopes = scopes or VK_OAUTH_SCOPES
     query = urllib.parse.urlencode(
         {
             "response_type": "code",
@@ -150,7 +152,7 @@ def build_vk_authorization_url(
             "code_challenge": challenge,
             "code_challenge_method": "S256",
             "redirect_uri": vk_oauth_redirect_uri(),
-            "scope": " ".join(VK_OAUTH_SCOPES),
+            "scope": " ".join(requested_scopes),
             "state": state,
             "prompt": "consent",
             "provider": "vkid",
@@ -206,7 +208,12 @@ def exchange_vk_authorization_code(
     )
 
 
-def refresh_vk_oauth_tokens(*, refresh_token: str, device_id: str) -> dict[str, Any]:
+def refresh_vk_oauth_tokens(
+    *,
+    refresh_token: str,
+    device_id: str,
+    scopes: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
     clean_refresh_token = str(refresh_token or "").strip()
     clean_device_id = str(device_id or "").strip()
     if not clean_refresh_token or not clean_device_id:
@@ -217,7 +224,7 @@ def refresh_vk_oauth_tokens(*, refresh_token: str, device_id: str) -> dict[str, 
             "client_id": vk_oauth_client_id(),
             "refresh_token": clean_refresh_token,
             "device_id": clean_device_id,
-            "scope": " ".join(VK_OAUTH_SCOPES),
+            "scope": " ".join(scopes or VK_OAUTH_SCOPES),
         }
     )
 

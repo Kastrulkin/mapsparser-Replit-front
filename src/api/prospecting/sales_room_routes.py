@@ -57,7 +57,7 @@ try:
 except ImportError:
     from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
-from services.gigachat_client import analyze_text_with_gigachat
+from services.llm import analyze_text_with_gigachat
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
 from services.lead_workstream_service import resolve_workstream, update_workstream

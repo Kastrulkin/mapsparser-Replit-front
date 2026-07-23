@@ -229,6 +229,28 @@ def test_official_page_collects_multiple_channels_without_collapsing_them():
     assert ("website_form", "https://example.ru/request") in typed_values
 
 
+def test_booking_provider_contacts_are_not_attributed_to_the_salon():
+    contacts = extract_contacts_from_html(
+        """
+        <html><body>
+          <a href="tel:+7 812 555-01-47">Телефон 047 Beauty Zone</a>
+          <a href="mailto:beauty047@gmail.com">Почта салона</a>
+          <section class="dikidi-booking-widget">
+            <a href="mailto:info@dikidi.net">Поддержка сервиса записи</a>
+            <a href="https://t.me/dikidi_business">Telegram сервиса Dikidi</a>
+          </section>
+        </body></html>
+        """,
+        "https://047beauty.example/contacts",
+    )
+
+    typed_values = {(item["contact_type"], item["normalized_value"]) for item in contacts}
+    assert ("phone", "+78125550147") in typed_values
+    assert ("email", "beauty047@gmail.com") in typed_values
+    assert ("email", "info@dikidi.net") not in typed_values
+    assert ("telegram", "https://t.me/dikidi_business") not in typed_values
+
+
 def test_messenger_contact_drops_prefilled_message_query():
     assert normalize_contact_value(
         "whatsapp",
@@ -644,7 +666,7 @@ def test_localos_sales_stops_when_role_signal_and_proof_are_missing():
     assert brief["pain"] == ""
 
 
-def test_partnership_readiness_names_sender_and_relationship_facts_separately():
+def test_partnership_readiness_does_not_require_business_profile_before_sender_mode_selection():
     _brief, readiness = build_message_brief(
         {"name": "Plastica", "category": "школа танцев"},
         {
@@ -664,7 +686,6 @@ def test_partnership_readiness_names_sender_and_relationship_facts_separately():
     assert readiness["code"] == "needs_evidence"
     assert readiness["label"] == "Нужны факты"
     assert readiness["missing_items"] == [
-        {"code": "sender_profile", "label": "Добавьте факты об отправителе"},
         {
             "code": "partner_compatibility",
             "label": "Подтвердите, чем бизнес отправителя и потенциальный партнёр полезны друг другу",

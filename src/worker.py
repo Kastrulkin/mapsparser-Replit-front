@@ -1440,6 +1440,7 @@ def _dispatch_outreach_queue_if_due() -> None:
     try:
         from api.admin_prospecting import _sync_telegram_app_replies
         from services.outreach_email_reply_service import sync_email_replies
+        from services.outreach_vk_reply_service import sync_vk_replies
 
         reply_sync_limit = max(1, min(int(os.getenv("OUTREACH_REPLY_SYNC_BATCH_SIZE", "50")), 200))
         telegram_reply_sync = _sync_telegram_app_replies(limit=reply_sync_limit)
@@ -1447,9 +1448,14 @@ def _dispatch_outreach_queue_if_due() -> None:
             sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_SENDER_LIMIT", "25")), 200)),
             per_sender_limit=max(1, min(int(os.getenv("OUTREACH_EMAIL_SYNC_MESSAGE_LIMIT", "100")), 500)),
         )
+        vk_reply_sync = sync_vk_replies(
+            sender_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_SENDER_LIMIT", "25")), 200)),
+            per_conversation_limit=max(1, min(int(os.getenv("OUTREACH_VK_SYNC_MESSAGE_LIMIT", "50")), 200)),
+        )
         reply_sync_failed = (
             int(telegram_reply_sync.get("failed") or 0)
             + int(email_reply_sync.get("failed") or 0)
+            + int(vk_reply_sync.get("failed") or 0)
         )
         if reply_sync_failed > 0:
             print(
@@ -1458,6 +1464,8 @@ def _dispatch_outreach_queue_if_due() -> None:
                 f"telegram_imported={int(telegram_reply_sync.get('imported') or 0)} "
                 f"email_picked={int(email_reply_sync.get('picked') or 0)} "
                 f"email_imported={int(email_reply_sync.get('imported') or 0)} "
+                f"vk_picked={int(vk_reply_sync.get('picked') or 0)} "
+                f"vk_imported={int(vk_reply_sync.get('imported') or 0)} "
                 f"failed={reply_sync_failed}",
                 flush=True,
             )
@@ -1756,7 +1764,7 @@ def _prepare_contact_intelligence_room(details: dict[str, Any]) -> dict[str, Any
     workstream_id = str(details.get("workstream_id") or "").strip()
     actor_id = str(details.get("actor_id") or "").strip()
     channel = str(details.get("selected_channel") or "manual").strip().lower()
-    if channel not in {"telegram", "whatsapp", "max", "email", "manual"}:
+    if channel not in {"telegram", "whatsapp", "max", "email", "vk", "manual"}:
         channel = "manual"
     if not lead_id or not workstream_id or not actor_id:
         return {"status": "not_prepared", "reason": "sender_profile_required"}

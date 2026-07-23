@@ -48,7 +48,7 @@ def test_telegram_ui_passes_explicit_scope_through_connection_and_permissions():
     assert "Telegram для продаж LocalOS" in integrations_page
     assert "не будет доступен партнёрским кампаниям" in integrations_page
     assert "Вернуться к выбранному лиду" in integrations_page
-    assert "LocalOS представляет бизнес" in admin_registry
+    assert "От имени бизнеса через LocalOS" in admin_registry
     assert "sender_mode: senderMode" in admin_registry
     assert "selectedSenderScope" in admin_registry
 

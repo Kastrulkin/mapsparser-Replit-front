@@ -12,6 +12,7 @@ from services.outreach_campaign_service import (
     _review_record,
     _quality_gate,
     _recipient_contact_eligible,
+    _represented_business_opening,
     build_evidence_ledger,
     build_pilot_readiness,
     build_personalization_candidates,
@@ -166,9 +167,10 @@ def test_only_superadmin_can_choose_localos_for_partner():
         raise AssertionError("Business user must not use the LocalOS platform identity")
 
 
-def test_localos_representative_uses_localos_identity_and_partner_offer():
+def test_localos_representative_uses_business_identity_and_partner_offer():
     combined = _localos_representative_profile({
         "business_service_count": 4,
+        "represented_business_name": "Весёлая расчёска",
         "platform_sender_profile": {
             "id": "localos-profile",
             "display_name": "Алексей",
@@ -194,10 +196,22 @@ def test_localos_representative_uses_localos_identity_and_partner_offer():
     })
 
     assert combined["id"] == "localos-profile"
-    assert combined["company_name"] == "LocalOS"
+    assert combined["company_name"] == "Весёлая расчёска"
+    assert combined["display_name"] == ""
     assert combined["allowed_offers_json"] == ["Совместный день открытых дверей"]
     assert combined["outreach_context_json"]["audience"] == "Семьи с детьми"
     assert combined["_represented_profile_id"] == "partner-profile"
+
+
+def test_represented_business_opening_describes_the_neighbour_company():
+    opening = _represented_business_opening({
+        "represented_business_name": "Весёлая расчёска",
+        "client_business_categories": ["Детский салон-парикмахерская"],
+        "client_business_network_id": "network-1",
+        "business_sender_profile": {},
+    })
+
+    assert opening == "Мы ваши соседи - сеть детских парикмахерских Весёлая расчёска."
 
 
 def test_localos_representative_does_not_require_a_partner_founder_profile():
@@ -224,8 +238,8 @@ def test_localos_representative_does_not_require_a_partner_founder_profile():
     })
 
     assert combined["confirmed_at"] == "2026-07-20T12:00:00Z"
-    assert combined["allowed_offers_json"] == ["Короткий безопасный тест"]
-    assert combined["outreach_context_json"]["audience"] == "Владельцы локального бизнеса"
+    assert combined["allowed_offers_json"] == []
+    assert "audience" not in combined["outreach_context_json"]
     assert combined["outreach_context_json"]["desired_partner_types"] == [
         "Спортивный клуб, секция",
         "школа танцев",
@@ -255,13 +269,13 @@ def test_localos_representative_never_uses_unconfirmed_partner_claims():
         },
     })
 
-    assert combined["allowed_offers_json"] == ["Безопасный тест LocalOS"]
+    assert combined["allowed_offers_json"] == []
     assert combined["forbidden_claims_json"] == ["Не обещать рост"]
-    assert combined["outreach_context_json"]["audience"] == "Локальный бизнес"
+    assert "audience" not in combined["outreach_context_json"]
     assert combined["outreach_context_json"]["desired_partner_types"] == ["Кафе"]
 
 
-def test_localos_for_partner_message_discloses_representation():
+def test_localos_for_partner_message_uses_represented_business_voice():
     message = _message_for_angle(
         "signal",
         {
@@ -273,17 +287,83 @@ def test_localos_for_partner_message_discloses_representation():
             "bridge": "У аудиторий есть реальное пересечение",
             "founder_story": "Мы проверяем совместимость локальных услуг",
             "next_step": "короткий вариант партнёрского теста",
-            "representation_disclosure": (
-                'Я пишу от LocalOS и представляю бизнес "Шансик" '
-                "в этом партнёрском предложении."
-            ),
+            "sender_mode": "localos_for_partner",
+            "represented_business": "Шансик",
+            "represented_business_opening": "Мы ваши соседи - Шансик.",
+            "representation_disclosure": "",
         },
         {"story": "Мы проверяем совместимость локальных услуг"},
         [],
     )
 
-    assert "пишу от LocalOS" in message
-    assert 'представляю бизнес "Шансик"' in message
+    assert message.startswith("Здравствуйте!\n\nМы ваши соседи - Шансик.")
+    assert "LocalOS" not in message
+    assert "Алексей" not in message
+    assert message.endswith("Мы собрали несколько простых идей для небольшого совместного пилота. Прислать?")
+
+
+def test_residential_message_invites_residents_instead_of_selling_generic_pilot():
+    message = _message_for_angle(
+        "signal",
+        {
+            "recipient": "ЖК Новые кварталы",
+            "recipient_type": "residential_complex",
+            "sender": "",
+            "sender_role": "",
+            "sender_company": "",
+            "observed_fact": "ЖК находится в том же районе, что и Новамед",
+            "bridge": "Жителям может быть полезна медицинская клиника рядом с домом",
+            "founder_story": "",
+            "next_step": "Пригласить жителей ЖК Новые кварталы в Новамед",
+            "sender_mode": "localos_for_partner",
+            "represented_business": "Новамед",
+            "represented_business_opening": "Мы ваши соседи - Новамед.",
+            "representation_disclosure": "",
+        },
+        None,
+        [],
+    )
+
+    assert message.startswith("Здравствуйте!\n\nМы ваши соседи - Новамед.")
+    assert "Хотели бы пригласить ваших жителей к нам." in message
+    assert "Конкретный формат и условия предложим отдельно" in message
+    assert "скид" not in message.lower()
+    assert "мастер-класс" not in message.lower()
+    assert message.count("?") == 1
+
+
+def test_respectful_close_quality_does_not_require_repeating_the_observation():
+    candidate = {
+        "recipient": "ЖК Новые кварталы",
+        "observed_fact": 'В публичной карточке указана категория "Жилой комплекс".',
+        "bridge": "Можно обсудить предложение непосредственно для жителей комплекса",
+        "founder_story": "",
+        "founder_proof": "",
+        "trust_statement": "Совпадает локальная география",
+        "source_url": "https://example.test/maps/residential",
+        "evidence_status": "observed",
+        "freshness": "current_snapshot",
+        "next_step": "Вернуться к предложению позже",
+        "evidence_kind": "residential_context",
+    }
+    text = (
+        "Здравствуйте! Коротко закроем тему по ЖК Новые кварталы. "
+        "Можно обсудить предложение непосредственно для жителей комплекса. "
+        "Если сейчас неактуально, больше писать не будем. Вернуться к этому позже?"
+    )
+
+    gate = _quality_gate(
+        text,
+        candidate,
+        None,
+        channel="vk",
+        channel_status="manual",
+        suppressed=False,
+        angle="respectful_close",
+    )
+
+    assert gate["passed"] is True
+    assert "DECORATIVE_PERSONALIZATION" not in gate["reason_codes"]
 
 
 def test_partner_compatibility_is_valid_evidence_without_invented_problem():
@@ -317,6 +397,32 @@ def test_partner_compatibility_is_valid_evidence_without_invented_problem():
             "relevance": "Есть основание проверить один безопасный партнёрский тест.",
         }
     ]
+
+
+def test_residential_evidence_uses_recipient_type_instead_of_placeholder_services():
+    evidence = build_evidence_ledger({
+        "workstream_type": "client_partnership",
+        "lead_name": "ЖК Новые кварталы",
+        "category": "Жилой комплекс",
+        "city": "Москва",
+        "source_url": "https://example.test/maps/residential",
+        "updated_at": "2026-07-22T10:00:00Z",
+        "research": {},
+        "partnership_match": {
+            "match_score": 80,
+            "recipient_observation": (
+                "В публичной карточке указана категория Жилой комплекс; "
+                "указаны услуги: Общее описание без структуры, Нет цены или формата."
+            ),
+            "relevance_bridge": "Есть основание обсудить предложение для жителей.",
+        },
+    })
+
+    assert evidence[0]["kind"] == "residential_context"
+    assert evidence[0]["fact"] == (
+        'В публичной карточке ЖК Новые кварталы указана категория "Жилой комплекс".'
+    )
+    assert "Общее описание без структуры" not in evidence[0]["fact"]
 
 
 def test_internal_partner_match_explanation_is_never_promoted_to_observed_evidence():

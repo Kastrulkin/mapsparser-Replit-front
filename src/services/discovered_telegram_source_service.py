@@ -14,6 +14,12 @@ from services.knowledge_graph_service import upsert_source
 
 
 TELEGRAM_HOSTS = {"t.me", "telegram.me"}
+SHARED_SERVICE_TELEGRAM_SOURCES = {
+    "dikidi_business": {
+        "owner": "dikidi",
+        "title": "Telegram · Dikidi",
+    },
+}
 RESERVED_PATHS = {
     "addemoji",
     "addlist",
@@ -53,6 +59,34 @@ SIGNAL_MARKERS = (
     "open",
     "schedule",
 )
+
+
+def source_attribution_for_lead(lead: dict[str, Any]) -> dict[str, Any]:
+    combined = " ".join(
+        str(value or "").strip().lower()
+        for value in (
+            lead.get("name"),
+            lead.get("category"),
+            lead.get("partner_kind"),
+        )
+        if str(value or "").strip()
+    )
+    residential = any(
+        token in combined
+        for token in (
+            "residential_complex",
+            "residential complex",
+            "жилой комплекс",
+            "жилкомплекс",
+        )
+    ) or combined.startswith("жк ")
+    return {
+        "source_owner_type": "residential_complex" if residential else "prospecting_recipient",
+        "source_owner_role": "outreach_recipient",
+        "source_owner_scope": "lead_signal_links",
+        "sender_business_is_owner": False,
+        "lead_attribution": "recipient_signal_source",
+    }
 
 
 def _row_dict(row: Any, cursor: Any | None = None) -> dict[str, Any]:
@@ -195,13 +229,35 @@ def sync_discovered_telegram_sources(
             )
             for reference in references.values():
                 external_scope = scope["business_id"] or "platform"
+                shared_service = SHARED_SERVICE_TELEGRAM_SOURCES.get(
+                    reference["username"].lower()
+                )
+                attribution = (
+                    {
+                        "source_owner": shared_service.get("owner"),
+                        "source_owner_type": "external_service",
+                        "source_owner_role": "service_provider",
+                        "source_owner_scope": "shared_service",
+                        "sender_business_is_owner": False,
+                        "lead_attribution": "shared_service",
+                    }
+                    if shared_service
+                    else source_attribution_for_lead(lead)
+                )
+                residential_source = attribution.get("source_owner_type") == "residential_complex"
                 source = upsert_source(
                     conn,
                     source_type="telegram",
                     external_key=f"lead-parse:{scope['scope_type']}:{external_scope}:{reference['username'].lower()}",
-                    title=f"Telegram · {str(lead.get('name') or reference['username']).strip()}",
+                    title=(
+                        str(shared_service["title"])
+                        if shared_service
+                        else f"Telegram ЖК · @{reference['username']}"
+                        if residential_source
+                        else f"Telegram · {str(lead.get('name') or reference['username']).strip()}"
+                    ),
                     canonical_url=reference["canonical_url"],
-                    source_role="service",
+                    source_role="service" if shared_service else "community",
                     visibility="public",
                     sensitivity_class="public",
                     allowed_uses=["market", "outreach"],
@@ -213,6 +269,7 @@ def sync_discovered_telegram_sources(
                         "telegram_username": reference["username"],
                         "telegram_reference_type": "public_reference_unverified",
                         "permission_reason": permission_reason,
+                        **attribution,
                     },
                     business_id=scope["business_id"],
                     account_id=scope["account_id"],
@@ -220,11 +277,19 @@ def sync_discovered_telegram_sources(
                     sync_status="queued" if scope["radar_enabled"] else "needs_account",
                     backfill_days=180,
                 )
+                source_metadata = source.get("metadata_json") if isinstance(source.get("metadata_json"), dict) else {}
+                verified_signal_source = bool(
+                    source_metadata.get("classification_method") == "telegram_entity_api"
+                    and source_metadata.get("signal_source_eligible") is True
+                )
                 cursor.execute(
                     """
                     UPDATE knowledge_sources
-                    SET account_id = COALESCE(%s, account_id),
+                    SET status = CASE WHEN %s THEN 'active' ELSE status END,
+                        account_id = COALESCE(%s, account_id),
                         sync_status = CASE
+                            WHEN %s AND %s THEN 'ready'
+                            WHEN %s THEN 'idle'
                             WHEN status = 'candidate' AND %s THEN 'queued'
                             WHEN status = 'candidate' THEN 'needs_account'
                             ELSE sync_status
@@ -235,23 +300,28 @@ def sync_discovered_telegram_sources(
                     WHERE id = %s
                     """,
                     (
+                        verified_signal_source,
                         scope["account_id"],
+                        verified_signal_source,
+                        scope["radar_enabled"],
+                        verified_signal_source,
                         scope["radar_enabled"],
                         scope["radar_enabled"],
                         Json({"permission_reason": permission_reason}),
                         source["id"],
                     ),
                 )
-                cursor.execute(
-                    """
-                    INSERT INTO lead_signal_links (
-                        id, workstream_id, source_type, source_id, status, created_at, updated_at
-                    ) VALUES (%s, %s, 'telegram_knowledge_source', %s, 'selected', NOW(), NOW())
-                    ON CONFLICT (workstream_id, source_type, source_id)
-                    DO UPDATE SET updated_at = NOW()
-                    """,
-                    (str(uuid.uuid4()), workstream["id"], str(source["id"])),
-                )
+                if not shared_service:
+                    cursor.execute(
+                        """
+                        INSERT INTO lead_signal_links (
+                            id, workstream_id, source_type, source_id, status, created_at, updated_at
+                        ) VALUES (%s, %s, 'telegram_knowledge_source', %s, 'selected', NOW(), NOW())
+                        ON CONFLICT (workstream_id, source_type, source_id)
+                        DO UPDATE SET updated_at = NOW()
+                        """,
+                        (str(uuid.uuid4()), workstream["id"], str(source["id"])),
+                    )
                 sources_saved += 1
                 queued += 1 if scope["radar_enabled"] else 0
         return {"references": len(references), "sources": sources_saved, "queued": queued}
@@ -410,6 +480,7 @@ def discovered_telegram_signals(
     limit: int = 3,
 ) -> list[dict[str, Any]]:
     """Return fresh, specific, permission-scoped posts linked to this exact lead."""
+    attribution = source_attribution_for_lead(lead)
     cursor.execute(
         """
         SELECT document.content_text AS message_text,
@@ -480,6 +551,9 @@ def discovered_telegram_signals(
             "relevance_score": min(score, 95),
             "auto_discovered": bool(source_metadata.get("auto_discovered", True)),
             "discovery_origin": str(source_metadata.get("discovery_origin") or "map_parse"),
+            "source_owner_type": attribution["source_owner_type"],
+            "source_owner_name": str(lead.get("name") or "").strip(),
+            "sender_business_is_owner": False,
         }))
     ranked.sort(key=lambda item: (item[0], item[1].get("message_date") or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
     return [item[1] for item in ranked[: max(1, min(limit, 10))]]

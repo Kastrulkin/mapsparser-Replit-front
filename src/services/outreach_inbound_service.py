@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Any
 
 from psycopg2.extras import Json
 
 from services.outreach_safety_service import recipient_key, record_learning_event
+from services.outreach_relationship_service import (
+    ROOM_INVITATION_CLASSIFICATIONS,
+    mark_room_ready_after_positive_reply,
+    mirror_inbound_to_room,
+    upsert_relationship_from_reply,
+)
 
 
 def record_campaign_inbound_reaction(
@@ -56,6 +63,7 @@ def record_campaign_inbound_reaction(
             %s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()), NOW()
         )
         ON CONFLICT DO NOTHING
+        RETURNING id
         """,
         (
             str(uuid.uuid4()), campaign_id, touch_id, queue_payload["lead_id"],
@@ -73,6 +81,8 @@ def record_campaign_inbound_reaction(
             classifier_source, reply_created_at,
         ),
     )
+    if not cursor.fetchone():
+        return
     if inbound_classification["creates_suppression"]:
         cursor.execute(
             """
@@ -121,6 +131,51 @@ def record_campaign_inbound_reaction(
             """,
             (classification, queue_payload.get("workstream_id")),
         )
+    room_sync_enabled = str(os.getenv("OUTREACH_ROOM_SYNC_ENABLED") or "true").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    if inbound_classification.get("is_human"):
+        upsert_relationship_from_reply(
+            cursor,
+            workstream_id=str(queue_payload.get("workstream_id") or touch.get("workstream_id")),
+            lead_id=str(queue_payload.get("lead_id") or ""),
+            scope_type=str(touch.get("scope_type") or "business"),
+            business_id=str(touch.get("business_id") or "") or None,
+            raw_reply=raw_reply,
+            classification=classification,
+            provider_event_id=provider_message_id,
+        )
+        if room_sync_enabled:
+            mirror_inbound_to_room(
+                cursor,
+                campaign_id=campaign_id,
+                touch_id=str(touch_id),
+                channel=str(touch.get("channel") or ""),
+                provider_event_id=provider_message_id,
+                raw_reply=raw_reply,
+                occurred_at=reply_created_at,
+            )
+        if room_sync_enabled and classification in ROOM_INVITATION_CLASSIFICATIONS:
+            cursor.execute(
+                """
+                SELECT business.name
+                FROM outreach_campaigns campaign
+                LEFT JOIN businesses business ON business.id = campaign.business_id
+                WHERE campaign.id = %s
+                """,
+                (campaign_id,),
+            )
+            business_row = cursor.fetchone()
+            represented_business_name = (
+                business_row.get("name")
+                if business_row and hasattr(business_row, "get")
+                else business_row[0] if business_row else None
+            )
+            mark_room_ready_after_positive_reply(
+                cursor,
+                campaign_id=campaign_id,
+                represented_business_name=represented_business_name,
+            )
     _record_learning(
         cursor,
         campaign_id=campaign_id,

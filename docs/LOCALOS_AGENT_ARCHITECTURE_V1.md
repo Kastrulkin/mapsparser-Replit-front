@@ -253,12 +253,13 @@ Compiler v1 доступен через `compile_agent_blueprint(description, ca
 
 ### Compile-Time AI, Deterministic Runtime
 
-GigaChat может использоваться на этапе создания или изменения агента, но не
-является runtime truth:
+LLM task router может использовать DeepSeek на этапе создания или изменения
+агента. GigaChat остается основным маршрутом для русских пользовательских текстов.
+Ни одна модель не является runtime truth:
 
 ```text
 human description
-  -> GigaChat intent extraction
+  -> task-routed LLM intent extraction
   -> LocalOS deterministic validation against provider/capability registry
   -> compiled blueprint/version
   -> runtime executes saved steps_json
@@ -276,7 +277,9 @@ provider bindings, capability allowlist, approval policy, limits, output schema
 
 Implementation markers:
 
-- `services/agent_compiler_llm.py` извлекает design-time intent через GigaChat.
+- `services/llm/` выбирает provider по task key, cohort и data policy; неизвестные tasks fail closed.
+- `services/agent_compiler_llm.py` извлекает design-time intent через task `agent_compiler`.
+- DeepSeek получает только public/redacted business context; PII, sensitive finance и credentials блокируются до вызова.
 - `compile_agent_blueprint(..., use_ai=True)` сохраняет `llm_intent` в
   metadata.
 - Compiled source/destination workflows включают

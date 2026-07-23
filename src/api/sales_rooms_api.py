@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from flask import Blueprint
 
+from core.ai_learning import record_ai_learning_event
+
 from services.sales_room_public_service import (
     AUDIT_OFFER_REQUESTABLE_STATUSES,
     CONSENT_VERSION,
@@ -83,6 +85,10 @@ def public_sales_room(slug):
             row = _load_sales_room_by_slug(cur, normalized_slug)
             if not row:
                 return jsonify({"error": "Sales room not found"}), 404
+            visibility = str(row.get("visibility") or "shared").strip().lower()
+            can_edit = _can_edit_sales_room(cur, row, user_data)
+            if visibility != "shared" and not can_edit:
+                return jsonify({"error": "Sales room not found"}), 404
             _record_sales_room_event(conn, slug=normalized_slug, event_type="view", metadata={"source": "public_page"})
             conn.commit()
             room_json = row.get("room_json") if isinstance(row.get("room_json"), dict) else {}
@@ -90,7 +96,7 @@ def public_sales_room(slug):
             room_json["slug"] = normalized_slug
             room_json["public_url"] = _make_sales_room_url(normalized_slug)
             room_json["permissions"] = {
-                "can_edit_welcome": _can_edit_sales_room(cur, row, user_data),
+                "can_edit_welcome": can_edit,
             }
             room_id = str(row.get("id") or "")
             proposal = room_json.get("proposal") if isinstance(room_json.get("proposal"), dict) else {}
@@ -659,6 +665,29 @@ def public_sales_room_proposal_suggestion_resolve(slug, suggestion_id):
                 event_type="proposal_suggestion_resolved",
                 metadata={"suggestion_id": normalized_suggestion_id, "action": action},
             )
+            if action == "accept" and next_text != current_text:
+                record_ai_learning_event(
+                    capability="outreach.room_proposal",
+                    event_type="edited_and_accepted",
+                    intent="partnership_outreach",
+                    business_id=str(row.get("business_id") or "") or None,
+                    accepted=True,
+                    rejected=False,
+                    edited_before_accept=True,
+                    outcome="human_copy_preference",
+                    action_id=room_id,
+                    prompt_key="partnership_room_proposal",
+                    draft_text=current_text[:3000],
+                    final_text=next_text[:3000],
+                    metadata={
+                        "room_id": room_id,
+                        "room_slug": normalized_slug,
+                        "suggestion_id": normalized_suggestion_id,
+                        "suggestion_comment": str(suggestion.get("comment_text") or "")[:1000],
+                        "learning_scope": "copy_quality_not_business_outcome",
+                    },
+                    conn=conn,
+                )
             conn.commit()
             return jsonify(
                 {
