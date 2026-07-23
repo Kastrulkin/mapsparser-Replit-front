@@ -120,6 +120,8 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     level=logging.INFO,
 )
+# HTTPX logs Telegram API URLs verbatim; those URLs contain the bot token.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Токен бота и базовый URL API из переменных окружения
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
