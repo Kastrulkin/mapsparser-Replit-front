@@ -385,7 +385,10 @@ services:
     command: ["python", "src/worker.py"]
 
   telegram-bot:
-    image: seo-app-app
+    image: seo-app-telegram-bot
+    build:
+      context: .
+      dockerfile: Dockerfile.telegram
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
