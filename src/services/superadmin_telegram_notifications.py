@@ -350,7 +350,10 @@ def collect_pending_outreach_reply_notifications(conn: Any, limit: int = 20) -> 
         WHERE inbound.event_type = 'reply'
           AND inbound.is_human IS TRUE
           AND inbound.created_at >= NOW() - INTERVAL '24 hours'
-          AND NOT (COALESCE(inbound.raw_payload_json, '{}'::jsonb) ? 'superadmin_notified_at')
+          AND NOT jsonb_exists(
+              COALESCE(inbound.raw_payload_json, '{}'::jsonb),
+              'superadmin_notified_at'
+          )
         ORDER BY inbound.created_at
         LIMIT %s
         """,

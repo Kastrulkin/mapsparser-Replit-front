@@ -295,3 +295,19 @@ def test_reply_notification_contains_original_touch_reply_and_stop_status():
     assert "Хотим предложить особые условия" in text
     assert "Да, пришлите подробности" in text
     assert "Следующие касания остановлены" in text
+
+
+def test_reply_notification_query_does_not_use_question_mark_json_operator():
+    class _Cursor:
+        def execute(self, query, params=None):
+            assert "?" not in str(query)
+            assert params == (20,)
+
+        def fetchall(self):
+            return []
+
+    class _Conn:
+        def cursor(self):
+            return _Cursor()
+
+    assert superadmin_telegram_notifications.collect_pending_outreach_reply_notifications(_Conn()) == []
