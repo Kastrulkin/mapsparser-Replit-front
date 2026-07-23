@@ -448,6 +448,10 @@ def google_sheets_oauth_callback():
     try:
         auth = GoogleSheetsAuth()
         credentials = auth.get_credentials_from_code(code)
+        account_identity = auth.get_account_identity(credentials)
+        account_email = str(account_identity.get("email") or "").strip().lower() or None
+        account_name = str(account_identity.get("name") or "").strip()
+        account_display_name = account_email or account_name or "Google Таблицы"
         encrypted_creds = encrypt_auth_data(json.dumps(auth.credentials_to_dict(credentials)))
         db = DatabaseManager()
         cursor = db.conn.cursor()
@@ -461,17 +465,17 @@ def google_sheets_oauth_callback():
             account_id = str(_row_value(existing, "id", 0) or "")
             cursor.execute(
                 "UPDATE externalbusinessaccounts SET " + auth_column + " = %s, display_name = %s, "
-                "is_active = TRUE, last_sync_at = CURRENT_TIMESTAMP, last_error = NULL, updated_at = CURRENT_TIMESTAMP "
+                "external_id = %s, is_active = TRUE, last_sync_at = CURRENT_TIMESTAMP, last_error = NULL, updated_at = CURRENT_TIMESTAMP "
                 "WHERE id = %s AND business_id = %s AND source = 'google_sheets'",
-                (encrypted_creds, 'Google Таблицы', account_id, business_id),
+                (encrypted_creds, account_display_name, account_email, account_id, business_id),
             )
         else:
             account_id = str(uuid.uuid4())
             cursor.execute(
                 "INSERT INTO externalbusinessaccounts "
                 "(id, business_id, source, external_id, display_name, " + auth_column + ", is_active, created_at, updated_at) "
-                "VALUES (%s, %s, 'google_sheets', NULL, %s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-                (account_id, business_id, 'Google Таблицы', encrypted_creds),
+                "VALUES (%s, %s, 'google_sheets', %s, %s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                (account_id, business_id, account_email, account_display_name, encrypted_creds),
             )
         rebound_count = _sync_google_sheets_agent_auth_refs(cursor, business_id, account_id)
         db.conn.commit()
@@ -517,6 +521,7 @@ def google_sheets_status(business_id):
             },
             "account": {
                 "id": account.get("id"),
+                "external_id": account.get("external_id"),
                 "display_name": account.get("display_name"),
                 "last_sync_at": account.get("last_sync_at"),
                 "last_error": account.get("last_error"),

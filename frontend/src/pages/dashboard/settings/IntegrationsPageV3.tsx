@@ -352,6 +352,11 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
 
   const selectedService = services.find((service) => service.id === activeServiceId) || null;
   const googleSheetsAccount = findAccount(loadState.externalAccounts, ['google_sheets']);
+  const googleSheetsIdentity = String(
+    googleSheetsAccount?.external_id
+    || (googleSheetsAccount?.display_name !== 'Google Таблицы' ? googleSheetsAccount?.display_name : '')
+    || '',
+  ).trim();
   const googleBusinessAccount = findAccount(loadState.externalAccounts, ['google_business']);
   const vkAccount = findAccount(loadState.externalAccounts, ['vk', 'vk_group', 'vk_business']);
   const metaAccount = findAccount(loadState.externalAccounts, ['meta', 'facebook', 'instagram']);
@@ -785,8 +790,26 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
           title="Google Таблицы"
           description="Можно читать и изменять таблицы. Перед записью LocalOS покажет изменения и попросит подтверждение."
         >
+          {googleSheetsAccount ? (
+            <div className="grid grid-cols-[40px_minmax(0,1fr)] gap-3 rounded-2xl bg-emerald-50 px-4 py-3 text-emerald-900 ring-1 ring-emerald-100">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                <CheckCircle2 className="h-5 w-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">Подключён Google-аккаунт</span>
+                <span className="block break-all text-base font-semibold">
+                  {googleSheetsIdentity || 'Доступ активен, адрес аккаунта пока не определён'}
+                </span>
+                {!googleSheetsIdentity ? (
+                  <span className="mt-1 block text-sm leading-5 text-emerald-800">
+                    Переподключите доступ один раз, чтобы LocalOS сохранил подтверждённый адрес.
+                  </span>
+                ) : null}
+              </span>
+            </div>
+          ) : null}
           <Button onClick={() => handleGoogleConnect('google_sheets')} disabled={googleBusy || !currentBusinessId} className="min-h-10 bg-slate-900 text-white hover:bg-slate-800">
-            {googleSheetsAccount ? 'Переподключить Google Таблицы' : 'Подключить Google Таблицы'}
+            {googleSheetsAccount ? 'Сменить Google-аккаунт' : 'Подключить Google Таблицы'}
           </Button>
           <p className="text-sm text-slate-600">Google попросит выбрать аккаунт с доступом к данным. Конкретную таблицу вы укажете отдельно в настройке каждого агента.</p>
           <p className="text-sm text-slate-600">Google Документы пока не подключаются.</p>

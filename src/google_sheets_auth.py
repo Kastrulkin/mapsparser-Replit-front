@@ -3,12 +3,16 @@
 import os
 from typing import Any, Dict
 
+import requests
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 
 
 GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
+GOOGLE_ACCOUNT_EMAIL_SCOPE = "https://www.googleapis.com/auth/userinfo.email"
+GOOGLE_OPENID_SCOPE = "openid"
+GOOGLE_ACCOUNT_INFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 
 
 class GoogleSheetsAuth:
@@ -19,7 +23,11 @@ class GoogleSheetsAuth:
             "GOOGLE_SHEETS_REDIRECT_URI",
             "http://localhost:8000/api/google/sheets/oauth/callback",
         )
-        self.scopes = [GOOGLE_SHEETS_SCOPE]
+        self.scopes = [
+            GOOGLE_SHEETS_SCOPE,
+            GOOGLE_ACCOUNT_EMAIL_SCOPE,
+            GOOGLE_OPENID_SCOPE,
+        ]
 
     def _create_flow(self) -> Flow:
         if not self.client_id or not self.client_secret:
@@ -58,6 +66,29 @@ class GoogleSheetsAuth:
         if credentials.expired and credentials.refresh_token:
             credentials.refresh(Request())
         return credentials
+
+    def get_account_identity(self, credentials: Credentials) -> Dict[str, str]:
+        token = str(credentials.token or "").strip()
+        if not token:
+            return {}
+        try:
+            response = requests.get(
+                GOOGLE_ACCOUNT_INFO_URL,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10,
+            )
+            if response.status_code != 200:
+                return {}
+            payload = response.json()
+        except (requests.RequestException, ValueError):
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        email = str(payload.get("email") or "").strip().lower()
+        if not email or payload.get("email_verified") is not True:
+            return {}
+        name = str(payload.get("name") or "").strip()
+        return {"email": email, "name": name}
 
     def credentials_to_dict(self, credentials: Credentials) -> Dict[str, Any]:
         return {

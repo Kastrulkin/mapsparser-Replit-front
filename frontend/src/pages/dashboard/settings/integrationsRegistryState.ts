@@ -122,6 +122,11 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
   const googleSheetsAccount = findAccount(accounts, ['google_sheets']);
   const googleBusinessAccount = findAccount(accounts, ['google_business']);
   const googleSheetsConnected = Boolean(googleSheetsAccount);
+  const googleSheetsIdentity = String(
+    googleSheetsAccount?.external_id
+    || (googleSheetsAccount?.display_name !== 'Google Таблицы' ? googleSheetsAccount?.display_name : '')
+    || '',
+  ).trim();
   const googleBusinessConnected = Boolean(googleBusinessAccount && hasText(googleBusinessAccount.external_id));
   const vkAccount = findAccount(accounts, ['vk', 'vk_group', 'vk_business']);
   const vkOauthConnected = vkAccount?.connection_mode === 'vk_id_oauth';
@@ -234,8 +239,12 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
       description: 'Чтение строк и подтверждаемые изменения таблиц агентами.',
       connectionType: 'oauth',
       status: googleSheetsConnected ? 'connected' : 'not_connected',
-      nextAction: googleSheetsConnected ? 'Можно читать таблицы; запись всегда требует подтверждения.' : 'Подключите отдельный доступ к Google Таблицам.',
-      primaryAction: { label: googleSheetsConnected ? 'Переподключить' : 'Подключить', type: 'drawer', target: 'google_sheets' },
+      nextAction: googleSheetsConnected
+        ? googleSheetsIdentity
+          ? `Подключён аккаунт: ${googleSheetsIdentity}.`
+          : 'Доступ активен; адрес аккаунта ещё не определён.'
+        : 'Подключите отдельный доступ к Google Таблицам.',
+      primaryAction: { label: googleSheetsConnected ? 'Открыть' : 'Подключить', type: 'drawer', target: 'google_sheets' },
       hasLogs: true,
       hasHelp: true,
     },
