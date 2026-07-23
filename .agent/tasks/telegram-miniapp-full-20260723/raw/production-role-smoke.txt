@@ -1,0 +1,9 @@
+superadmin platform Вся платформа 0
+  cards read_only 200 escaped 0
+  content read_only 100 escaped 0
+  services read_only 200 escaped 0
+  finance read_only 200 escaped 0
+  partnerships read_only 200 escaped 0
+  agents read_only 200 escaped 0
+single_owner unavailable in current dataset; covered by unit resolver tests
+roles_smoked superadmin

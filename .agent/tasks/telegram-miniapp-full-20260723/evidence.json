@@ -1,0 +1,34 @@
+{
+  "task_id": "telegram-miniapp-full-20260723",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {"id": "AC1", "text": "Scope security", "status": "PASS", "proof": ["production-role-smoke", "scope unit tests"], "gaps": []},
+    {"id": "AC2", "text": "Core workspaces", "status": "PASS", "proof": ["operator regression", "workspace implementation"], "gaps": []},
+    {"id": "AC3", "text": "Governed reviews", "status": "PASS", "proof": ["mobile action tests", "review workflow build"], "gaps": []},
+    {"id": "AC4", "text": "Cards content services", "status": "PASS", "proof": ["module tests", "production owner smoke"], "gaps": []},
+    {"id": "AC5", "text": "Finance partnerships", "status": "PASS", "proof": ["scope-filtered finance and partnership projections"], "gaps": []},
+    {"id": "AC6", "text": "AI employees", "status": "PASS", "proof": ["blueprint/latest-run projection; unsafe launch hidden"], "gaps": []},
+    {"id": "AC7", "text": "Settings diagnostics", "status": "PASS", "proof": ["notification preference test", "platform diagnostics guard"], "gaps": []},
+    {"id": "AC8", "text": "Capability gates", "status": "PASS", "proof": ["server manifest and client deep-link gate"], "gaps": []},
+    {"id": "AC9", "text": "Telegram integration", "status": "PASS", "proof": ["existing Telegram regression and protected live endpoint"], "gaps": []},
+    {"id": "AC10", "text": "Mobile UX", "status": "PASS", "proof": ["frontend build", "responsive mobile implementation audit"], "gaps": []},
+    {"id": "AC11", "text": "Test coverage", "status": "PASS", "proof": ["13 targeted tests", "159 regression tests", "three-role smoke"], "gaps": []},
+    {"id": "AC12", "text": "Release", "status": "PASS", "proof": ["dual push", "partial deploy", "live hashes and curl"], "gaps": []}
+  ],
+  "changed_files": [
+    "frontend/src/pages/TelegramControlPage.tsx",
+    "src/api/operator_api.py",
+    "src/services/operator_mobile_modules.py",
+    "src/services/telegram_control_scope.py",
+    "tests/test_operator_mobile_modules.py",
+    "tests/test_telegram_notification_preferences.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "arch -arm64 python3 -m pytest -q tests/test_operator_*.py tests/test_telegram_control_scope.py tests/test_telegram_notification_preferences.py tests/test_review_reply_output.py tests/test_review_response_utils.py",
+    "npm --prefix frontend run build",
+    "scripts/proof_loop.sh validate telegram-miniapp-full-20260723"
+  ],
+  "known_gaps": [
+    "Provider writes and paid retry remain intentionally unavailable without governed adapters."
+  ]
+}

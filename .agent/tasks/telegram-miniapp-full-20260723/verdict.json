@@ -1,0 +1,21 @@
+{
+  "task_id": "telegram-miniapp-full-20260723",
+  "overall_verdict": "PASS",
+  "release_commit": "d2731712",
+  "criteria": [
+    {"id": "AC1", "status": "PASS", "reason": "Resolver and production role smoke prevent scope target substitution."},
+    {"id": "AC2", "status": "PASS", "reason": "Core workspaces use real domain queues and persisted history."},
+    {"id": "AC3", "status": "PASS", "reason": "Reviews support filters, list/count parity and governed draft actions."},
+    {"id": "AC4", "status": "PASS", "reason": "Cards, content and services are native and honest about read-only capabilities."},
+    {"id": "AC5", "status": "PASS", "reason": "Finance and partnerships expose real scope-filtered queues without unsafe sends or payments."},
+    {"id": "AC6", "status": "PASS", "reason": "AI employee and latest run state are visible; ungoverned paid launch is not exposed."},
+    {"id": "AC7", "status": "PASS", "reason": "Settings persist per scope; diagnostics requires platform resolution."},
+    {"id": "AC8", "status": "PASS", "reason": "Manifest and deep-link gates hide unsupported modules."},
+    {"id": "AC9", "status": "PASS", "reason": "Telegram remains Mini-App-first with server-validated deep links."},
+    {"id": "AC10", "status": "PASS", "reason": "Responsive mobile UX and frontend build checks pass."},
+    {"id": "AC11", "status": "PASS", "reason": "13 targeted and 159 regression tests pass, plus three-role production smoke."},
+    {"id": "AC12", "status": "PASS", "reason": "GitHub/GitVerse push, partial deploy and live smoke succeeded."}
+  ],
+  "commands_run": ["frontend build", "targeted pytest", "operator regression pytest", "production role smoke", "production compose/log/curl/hash smoke"],
+  "artifacts_used": ["raw/build-final.txt", "raw/test-unit-final.txt", "raw/test-regression.txt", "raw/production-role-smoke.txt", "raw/production-owner-smoke.txt"]
+}

@@ -1,0 +1,15 @@
+network_owner network MVPilates 4 can_switch True
+  cards 4 escaped 0
+  content 2 escaped 0
+  services 82 escaped 0
+  finance 0 escaped 0
+  partnerships 4 escaped 0
+  agents 10 escaped 0
+single_owner business Test 1 can_switch False
+  cards 0 escaped 0
+  content 0 escaped 0
+  services 0 escaped 0
+  finance 0 escaped 0
+  partnerships 0 escaped 0
+  agents 10 escaped 0
+roles_smoked network_owner,single_owner
