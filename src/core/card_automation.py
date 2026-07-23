@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import uuid
 from datetime import date, datetime, time as dt_time, timedelta, timezone
 from typing import Any
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from core.ai_learning import record_ai_learning_event
@@ -43,6 +45,7 @@ ACTION_COLUMN_PREFIX = {
 
 DEFAULT_TIMEZONE = "Europe/Moscow"
 DEFAULT_DIGEST_TIME = "08:00"
+TELEGRAM_MINI_APP_URL = os.getenv("TELEGRAM_MINI_APP_URL", "https://localos.pro/telegram/control")
 WEEKDAY_NAME_MAP = {
     1: "пн",
     2: "вт",
@@ -1763,7 +1766,8 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
         if not bool(bucket.get("is_superadmin")):
             text += "\n\n" + "\n\n".join(business_sections)
         if bool(bucket.get("is_superadmin")):
-            reply_markup = {}
+            platform_link = f"{TELEGRAM_MINI_APP_URL}?{urlencode({'screen': 'tasks', 'scope_type': 'platform'})}"
+            reply_markup = {"inline_keyboard": [[{"text": "Открыть inbox LocalOS", "web_app": {"url": platform_link}}]]}
             operations_block = build_superadmin_morning_operations_block(conn, sent_date)
             text += f"\n\n{operations_block}"
             completed_sections = [
@@ -1784,6 +1788,7 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
                 text += f"\n\n{monthly_block}"
                 reply_markup = {
                     "inline_keyboard": [
+                        [{"text": "Открыть inbox LocalOS", "web_app": {"url": platform_link}}],
                         [{"text": "Показать предложения", "callback_data": "industry_patterns_show"}],
                         [{"text": "Применить только после review", "callback_data": "industry_patterns_policy"}],
                     ]
@@ -1793,12 +1798,18 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
                 text += f"\n\n{impact_block}"
                 reply_markup = {
                     "inline_keyboard": [
+                        [{"text": "Открыть inbox LocalOS", "web_app": {"url": platform_link}}],
                         [{"text": "Impact report", "callback_data": "industry_patterns_impact"}],
                         [{"text": "Health active-паттернов", "callback_data": "industry_patterns_health"}],
                     ]
                 }
         else:
-            reply_markup = {}
+            first_business = bucket["businesses"][0] if bucket.get("businesses") else {}
+            network_id = str(first_business.get("network_id") or "")
+            scope_kind = "network" if network_id else "business"
+            scope_id = network_id or str(first_business.get("business_id") or "")
+            deep_link = f"{TELEGRAM_MINI_APP_URL}?{urlencode({'screen': 'today', 'scope_type': scope_kind, 'scope_id': scope_id})}"
+            reply_markup = {"inline_keyboard": [[{"text": "Открыть работу в LocalOS", "web_app": {"url": deep_link}}]]}
         messages.append(
             {
                 "owner_id": bucket["owner_id"],

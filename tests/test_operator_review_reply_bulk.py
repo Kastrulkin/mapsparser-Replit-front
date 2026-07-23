@@ -119,8 +119,11 @@ class FakeCursor:
     def fetchall(self):
         if "from externalbusinessreviews" in self.last_query:
             review_id = self.last_params[1] if len(self.last_params) > 1 else None
+            review_ids = self.last_params[3] if len(self.last_params) > 3 else None
             if review_id:
                 return [item for item in self.reviews if item.get("id") == review_id]
+            if review_ids:
+                return [item for item in self.reviews if item.get("id") in review_ids]
             return self.reviews
         return []
 
@@ -176,6 +179,22 @@ def test_generate_review_reply_targets_exact_review() -> None:
     assert result["reviews_found"] == 1
     assert result["drafts"][0]["review_id"] == "review-2"
     assert result["charged_credits"] == 1
+
+
+def test_generate_review_reply_targets_selected_reviews_only() -> None:
+    cursor = FakeCursor(balance=100)
+
+    result = generate_review_reply_drafts_for_unanswered_reviews(
+        cursor,
+        business_id="biz-1",
+        user_id="user-1",
+        review_ids=["review-2"],
+        reply_generator=fake_reply_generator,
+    )
+
+    assert result["status"] == "completed"
+    assert result["reviews_found"] == 1
+    assert [item["review_id"] for item in result["drafts"]] == ["review-2"]
 
 
 def test_generate_review_reply_drafts_blocks_when_credits_are_missing() -> None:

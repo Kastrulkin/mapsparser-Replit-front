@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
-import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
@@ -33,6 +32,7 @@ from services.operator_intent_ai_router import classify_operator_intent_with_ai,
 from services.operator_inbox import build_operator_inbox
 from services.operator_manual_review import process_operator_chat_message
 from services.operator_manual_publish import mark_review_reply_draft_manual_published
+from services.operator_mobile_actions import confirm_mobile_action, create_mobile_action_preview
 from services.operator_news_generation import classify_news_generate_intent, generate_news_draft_from_operator
 from services.operator_paid_executor import build_paid_action_execution_attempt
 from services.operator_paid_preflight import build_paid_action_preflight
@@ -65,21 +65,50 @@ operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
 def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
     kind = str(scope.get("kind") or "business")
     items = [
-        {"key": "today", "label": "Сегодня", "group": "primary"},
-        {"key": "tasks", "label": "Задачи", "group": "primary"},
-        {"key": "reviews", "label": "Отзывы", "group": "primary"},
-        {"key": "operator", "label": "Оператор", "group": "primary"},
-        {"key": "cards", "label": "Карточки", "group": "more"},
-        {"key": "content", "label": "Контент", "group": "more"},
-        {"key": "services", "label": "Услуги", "group": "more"},
-        {"key": "finance", "label": "Финансы", "group": "more"},
-        {"key": "partnerships", "label": "Партнёрства", "group": "more"},
-        {"key": "agents", "label": "ИИ-сотрудники", "group": "more"},
-        {"key": "settings", "label": "Настройки", "group": "more"},
+        {"key": "today", "label": "Сегодня", "group": "primary", "status": "available"},
+        {"key": "tasks", "label": "Задачи", "group": "primary", "status": "available"},
+        {"key": "reviews", "label": "Отзывы", "group": "primary", "status": "available"},
+        {"key": "operator", "label": "Оператор", "group": "primary", "status": "available"},
+        {"key": "cards", "label": "Карточки", "group": "more", "status": "hidden"},
+        {"key": "content", "label": "Контент", "group": "more", "status": "hidden"},
+        {"key": "services", "label": "Услуги", "group": "more", "status": "hidden"},
+        {"key": "finance", "label": "Финансы", "group": "more", "status": "hidden"},
+        {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "hidden"},
+        {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "hidden"},
+        {"key": "settings", "label": "Настройки", "group": "more", "status": "hidden"},
     ]
     if kind == "platform" and is_superadmin:
-        items.append({"key": "diagnostics", "label": "Диагностика", "group": "more"})
+        items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "hidden"})
     return items
+
+
+def _mobile_task_item(item: dict) -> dict:
+    value = dict(item)
+    status = str(value.get("status") or "needs_attention")
+    if status in {"draft", "generated", "pending_review", "approval_required"}:
+        status = "needs_attention"
+    elif status in {"queued", "running", "processing", "in_progress"}:
+        status = "in_progress"
+    elif status in {"completed", "manual_published", "done"}:
+        status = "completed"
+    value["status"] = status
+    value["kind"] = str(value.get("kind") or value.get("id") or "operator_task")
+    value["progress"] = value.get("progress") if value.get("progress") is not None else (100 if status == "completed" else None)
+    value["available_actions"] = value.get("available_actions") or [value.get("primary_action") or "open"]
+    return value
+
+
+def _operator_mobile_route(result: dict) -> dict:
+    intent = str(result.get("intent") or result.get("capability") or "").lower()
+    if "review" in intent:
+        return {"screen": "reviews", "filters": {"status": "drafts" if result.get("draft") or result.get("drafts") else "unanswered"}, "capability": result.get("capability") or intent}
+    if "service" in intent:
+        return {"screen": "services", "filters": {}, "capability": result.get("capability") or intent}
+    if "news" in intent or "content" in intent or "social" in intent:
+        return {"screen": "content", "filters": {}, "capability": result.get("capability") or intent}
+    if "partnership" in intent or "outreach" in intent:
+        return {"screen": "partnerships", "filters": {}, "capability": result.get("capability") or intent}
+    return {"screen": "tasks", "filters": {}, "capability": result.get("capability") or intent or None}
 
 
 def _scope_request_values(payload: dict | None = None) -> tuple[str, str | None]:
@@ -170,7 +199,13 @@ def operator_scopes():
     try:
         cursor = db.conn.cursor()
         catalog = list_control_scopes(cursor, user_id=user_id, search_query=query, business_limit=100)
-        selected = resolve_control_scope(cursor, user_id=user_id)
+        requested_kind, requested_id = _scope_request_values(payload)
+        selected = resolve_control_scope(
+            cursor,
+            user_id=user_id,
+            requested_kind=requested_kind,
+            requested_id=requested_id,
+        )
         return jsonify({"success": True, "catalog": catalog, "selected_scope": selected})
     finally:
         db.close()
@@ -237,6 +272,8 @@ def operator_telegram_bootstrap():
                 "selected_scope": selected,
                 "summary": summary,
                 "preferences": preferences,
+                "notification_preferences": preferences.get("notifications") if isinstance(preferences, dict) else {},
+                "deep_link_targets": [item["key"] for item in _mobile_navigation(selected or {}, bool(user.get("is_superadmin"))) if item.get("status") != "hidden"],
                 "web_session_token": web_session_token,
                 "mini_app_v2_enabled": str(os.getenv("TELEGRAM_MINI_APP_V2_ENABLED", "true")).lower() in {"1", "true", "yes", "on"},
                 "navigation": _mobile_navigation(selected or {}, bool(user.get("is_superadmin"))),
@@ -756,6 +793,7 @@ def operator_chat():
             manual_review_handler=process_operator_chat_message,
         )
         result["conversation_id"] = conversation_id
+        result["mobile_route"] = _operator_mobile_route(result)
         approval = result.get("approval") if isinstance(result.get("approval"), dict) else {}
         approval_envelope = approval.get("envelope") if isinstance(approval.get("envelope"), dict) else {}
         if result.get("status") == "approval_required" and approval_envelope:
@@ -1713,18 +1751,26 @@ def operator_mobile_workspace():
         if scope.get("kind") == "business":
             inbox = build_operator_inbox(cursor, business_id=str(scope.get("id") or ""), user_id=user_id)
             items = list(inbox.get("items") or [])
+        items = [_mobile_task_item(item) for item in items]
+        attention_count = len([item for item in items if item.get("status") == "needs_attention"])
+        working_count = len([item for item in items if item.get("status") == "in_progress"])
+        completed_count = len([item for item in items if item.get("status") == "completed"])
         return jsonify({
             "success": True,
             "scope": scope,
             "items": items,
             "counts": {
-                "attention": len([item for item in items if str(item.get("status") or "needs_attention") != "completed"]),
+                "attention": attention_count,
+                "working": working_count,
+                "completed": completed_count,
                 "total": len(items),
             },
             "cursor": None,
             "as_of": datetime.now(timezone.utc).isoformat(),
             "data_warnings": summary.get("data_warnings") or [],
             "available_actions": summary.get("available_actions") or [],
+            "filters": {"statuses": ["needs_attention", "in_progress", "completed"]},
+            "freshness": summary.get("freshness") or {"status": "live"},
             "summary": summary,
             "navigation": _mobile_navigation(scope, bool(user_data.get("is_superadmin"))),
         })
@@ -1746,6 +1792,7 @@ def operator_mobile_reviews():
         status = str(request.args.get("status") or "unanswered").strip().lower()
         source = str(request.args.get("source") or "").strip().lower()
         location_id = str(request.args.get("location_id") or "").strip()
+        review_id = str(request.args.get("review_id") or "").strip()
         rating = str(request.args.get("rating") or "").strip()
         try:
             limit = max(1, min(int(request.args.get("limit") or 20), 50))
@@ -1773,11 +1820,7 @@ def operator_mobile_reviews():
                 return jsonify({"success": False, "error": "Некорректный рейтинг"}), 400
             conditions.append("r.rating = %s")
             params.append(rating_value)
-        if status == "unanswered":
-            conditions.append("COALESCE(TRIM(r.response_text), '') = ''")
-        elif status == "drafts":
-            conditions.append("d.id IS NOT NULL AND d.status IN ('draft','generated','pending_review','edited')")
-        where_sql = " AND ".join(conditions)
+        base_where_sql = " AND ".join(conditions)
         cursor.execute(
             f"""
             SELECT COUNT(DISTINCT r.id) AS total,
@@ -1785,20 +1828,42 @@ def operator_mobile_reviews():
                    COUNT(DISTINCT r.id) FILTER (WHERE d.id IS NOT NULL AND d.status IN ('draft','generated','pending_review','edited')) AS drafts
             FROM externalbusinessreviews r
             LEFT JOIN reviewreplydrafts d ON d.review_id = r.id
-            WHERE {where_sql}
+            WHERE {base_where_sql}
             """,
             tuple(params),
         )
         counts = dict(cursor.fetchone() or {})
+        list_conditions = list(conditions)
+        if review_id:
+            list_conditions.append("r.id = %s")
+            params.append(review_id)
+        if status == "unanswered":
+            list_conditions.append("COALESCE(TRIM(r.response_text), '') = ''")
+        elif status == "drafts":
+            list_conditions.append("d.id IS NOT NULL AND d.status IN ('draft','generated','pending_review','edited')")
+        elif status == "answered":
+            list_conditions.append("COALESCE(TRIM(r.response_text), '') <> ''")
+        where_sql = " AND ".join(list_conditions)
+        cursor.execute(
+            f"""
+            SELECT COUNT(DISTINCT r.id) AS total
+            FROM externalbusinessreviews r
+            LEFT JOIN reviewreplydrafts d ON d.review_id = r.id
+            WHERE {where_sql}
+            """,
+            tuple(params),
+        )
+        filtered_total = int(dict(cursor.fetchone() or {}).get("total") or 0)
         cursor.execute(
             f"""
             SELECT r.id, r.business_id, r.source, r.rating, r.author_name, r.text,
-                   r.response_text, r.published_at, b.name AS location_name,
-                   d.id AS reply_draft_id, d.generated_text AS reply_draft_text, d.status AS reply_draft_status
+                   r.response_text, r.response_at, r.published_at, r.updated_at, b.name AS location_name,
+                   d.id AS reply_draft_id, d.generated_text AS reply_draft_text,
+                   d.status AS reply_draft_status, d.updated_at AS reply_draft_updated_at
             FROM externalbusinessreviews r
             LEFT JOIN businesses b ON b.id = r.business_id
             LEFT JOIN LATERAL (
-                SELECT id, COALESCE(edited_text, generated_text) AS generated_text, status FROM reviewreplydrafts
+                SELECT id, COALESCE(edited_text, generated_text) AS generated_text, status, updated_at FROM reviewreplydrafts
                 WHERE review_id = r.id ORDER BY updated_at DESC LIMIT 1
             ) d ON TRUE
             WHERE {where_sql}
@@ -1809,15 +1874,35 @@ def operator_mobile_reviews():
         )
         items = [dict(row) for row in cursor.fetchall() or []]
         total = int(counts.get("total") or 0)
+        cursor.execute(
+            """
+            SELECT DISTINCT r.source FROM externalbusinessreviews r
+            WHERE (%s OR r.business_id = ANY(%s)) AND COALESCE(TRIM(r.source), '') <> ''
+            ORDER BY r.source
+            """,
+            (scope.get("kind") == "platform", business_ids),
+        )
+        sources = [str(dict(row).get("source") or "") for row in (cursor.fetchall() or [])]
+        cursor.execute(
+            """
+            SELECT id, name FROM businesses
+            WHERE (%s OR id = ANY(%s))
+            ORDER BY name
+            LIMIT 200
+            """,
+            (scope.get("kind") == "platform", business_ids),
+        )
+        locations = [dict(row) for row in (cursor.fetchall() or [])]
         return jsonify({
             "success": True,
             "scope": scope,
             "items": items,
             "counts": {"total": total, "unanswered": int(counts.get("unanswered") or 0), "drafts": int(counts.get("drafts") or 0)},
-            "cursor": str(offset + limit) if offset + len(items) < total else None,
+            "cursor": str(offset + limit) if offset + len(items) < filtered_total else None,
             "as_of": datetime.now(timezone.utc).isoformat(),
             "data_warnings": [],
             "available_actions": [{"key": "generate", "label": "Подготовить ответы"}],
+            "filters": {"statuses": ["unanswered", "drafts", "answered", "all"], "sources": sources, "ratings": [1, 2, 3, 4, 5], "locations": locations},
         })
     finally:
         db.close()
@@ -1836,19 +1921,89 @@ def operator_mobile_action_preview():
         scope = resolve_control_scope(cursor, user_id=user_id, requested_kind=str(payload.get("scope_type") or ""), requested_id=str(payload.get("scope_id") or "") or None)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
-        action_key = str(payload.get("action_key") or "").strip()
-        targets = list(scope.get("business_ids") or [])
-        return jsonify({"success": True, "preview": {
-            "action_key": action_key,
-            "scope": scope,
-            "business_ids": targets,
-            "changes": payload.get("changes") or [],
-            "estimated_credits": max(0, int(payload.get("estimated_credits") or 0)),
-            "external_effects": action_key in {"publish", "send", "payment", "delete"},
-            "confirmation_required": True,
-            "idempotency_key": f"mobile:{user_id}:{action_key}:{uuid.uuid4().hex}",
-            "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat(),
-        }})
+        capability = str(payload.get("capability") or payload.get("action_key") or "").strip()
+        input_payload = payload.get("input") if isinstance(payload.get("input"), dict) else payload
+        preview = create_mobile_action_preview(
+            cursor,
+            user_id=user_id,
+            scope=scope,
+            capability=capability,
+            input_payload=input_payload,
+        )
+        if preview.get("status") == "blocked":
+            return jsonify({"success": False, "error": "Действие недоступно", "preview": preview}), 400
+        db.conn.commit()
+        return jsonify({"success": True, "preview": preview})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/actions/<action_id>/confirm", methods=["POST"])
+def operator_mobile_action_confirm(action_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        def scope_resolver(kind: str, scope_id: str | None):
+            return resolve_control_scope(cursor, user_id=user_id, requested_kind=kind, requested_id=scope_id)
+
+        def generate_executor(envelope: dict, targets: list[str], _scope: dict):
+            review_ids = [str(item) for item in envelope.get("review_ids") or []]
+            drafts: list[dict] = []
+            charged_credits = 0
+            blocked_reasons: list[str] = []
+            for business_id in targets:
+                cursor.execute(
+                    "SELECT id FROM externalbusinessreviews WHERE business_id = %s AND id = ANY(%s)",
+                    (business_id, review_ids),
+                )
+                scoped_review_ids = [str(dict(item).get("id") or "") for item in (cursor.fetchall() or [])]
+                if not scoped_review_ids:
+                    continue
+                generated = generate_review_reply_drafts_for_unanswered_reviews(
+                    cursor,
+                    business_id=business_id,
+                    user_id=user_id,
+                    limit=len(scoped_review_ids),
+                    review_ids=scoped_review_ids,
+                    channel="telegram_mini_app",
+                )
+                if str(generated.get("status") or "") != "completed":
+                    blocked_reasons.extend(str(item) for item in generated.get("blocked_reasons") or ["generation_failed"])
+                drafts.extend(generated.get("drafts") or [])
+                charged_credits += int(generated.get("charged_credits") or 0)
+            if blocked_reasons:
+                return {"status": "blocked", "blocked_reasons": list(dict.fromkeys(blocked_reasons))}
+            return {
+                "status": "completed",
+                "capability": "review_replies.generate",
+                "drafts": drafts,
+                "charged_credits": charged_credits,
+                "manual_publication_only": True,
+                "external_writes_performed": False,
+            }
+
+        result, idempotent = confirm_mobile_action(
+            cursor,
+            action_id=action_id,
+            user_id=user_id,
+            scope_resolver=scope_resolver,
+            executors={"review_replies.generate": generate_executor},
+        )
+        if result.get("status") == "blocked":
+            db.conn.rollback()
+            return jsonify({"success": False, "error": "Действие не выполнено", "operator_result": result}), 400
+        db.conn.commit()
+        return jsonify({"success": True, "idempotent": idempotent, "operator_result": result})
+    except Exception:
+        db.conn.rollback()
+        raise
     finally:
         db.close()
 
@@ -1865,9 +2020,18 @@ def operator_mobile_review_draft_update(draft_id: str):
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        scope = resolve_control_scope(
+            cursor,
+            user_id=user_id,
+            requested_kind=str(payload.get("scope_type") or ""),
+            requested_id=str(payload.get("scope_id") or "") or None,
+        )
         cursor.execute("SELECT business_id FROM reviewreplydrafts WHERE id = %s", (draft_id,))
         row = cursor.fetchone()
         business_id = str((dict(row) if row else {}).get("business_id") or "")
+        if not scope or (scope.get("kind") != "platform" and business_id not in [str(item) for item in scope.get("business_ids") or []]):
+            return jsonify({"success": False, "error": "Черновик недоступен"}), 403
         has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not has_access:
             return jsonify({"success": False, "error": "Нет доступа" if owner_id else "Черновик не найден"}), 403 if owner_id else 404
@@ -1886,6 +2050,92 @@ def operator_mobile_review_draft_update(draft_id: str):
     except Exception:
         db.conn.rollback()
         raise
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/review-drafts/<draft_id>/mark-manual-published", methods=["POST"])
+def operator_mobile_review_draft_manual_publish(draft_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        scope = resolve_control_scope(
+            cursor,
+            user_id=user_id,
+            requested_kind=str(payload.get("scope_type") or ""),
+            requested_id=str(payload.get("scope_id") or "") or None,
+        )
+        cursor.execute("SELECT business_id FROM reviewreplydrafts WHERE id = %s", (draft_id,))
+        row = cursor.fetchone()
+        business_id = str((dict(row) if row else {}).get("business_id") or "")
+        if not scope or (scope.get("kind") != "platform" and business_id not in [str(item) for item in scope.get("business_ids") or []]):
+            return jsonify({"success": False, "error": "Черновик недоступен"}), 403
+        has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            return jsonify({"success": False, "error": "Черновик недоступен"}), 403
+        result = mark_review_reply_draft_manual_published(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            draft_id=draft_id,
+        )
+        if result.get("status") != "completed":
+            db.conn.rollback()
+            return jsonify({"success": False, "error": "Не удалось отметить публикацию", "manual_publish": result}), 400
+        db.conn.commit()
+        return jsonify({"success": True, "manual_publish": result})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/operator/history", methods=["GET"])
+def operator_mobile_history():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        if scope.get("kind") != "business":
+            return jsonify({"success": True, "scope": scope, "conversation": None, "items": [], "requires_business_selection": True})
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        business_id = str(scope.get("id") or "")
+        conversation = find_latest_operator_conversation(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            channel="telegram_mini_app",
+        )
+        conversation_id = str(conversation.get("id") or "")
+        items = list_operator_messages(
+            cursor,
+            conversation_id=conversation_id,
+            business_id=business_id,
+            limit=request.args.get("limit") or 100,
+        ) if conversation_id else []
+        return jsonify({
+            "success": True,
+            "scope": scope,
+            "conversation": conversation or None,
+            "items": items,
+            "counts": {"total": len(items)},
+            "cursor": None,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "freshness": {"status": "live"},
+            "data_warnings": [],
+            "available_actions": [{"key": "send_message", "label": "Поручить LocalOS"}],
+        })
     finally:
         db.close()
 
