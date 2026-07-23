@@ -4,6 +4,7 @@ import sys
 
 from flask import Blueprint, jsonify, request
 
+from auth_system import create_session
 from core.auth_helpers import require_auth_from_request, verify_business_access
 from database_manager import DatabaseManager
 from services.operator_audit import list_operator_events, record_operator_event
@@ -16,6 +17,14 @@ from services.operator_capabilities import (
 from services.operator_consent_policy import list_consent_policies, upsert_consent_policy
 from services.operator_content_history import list_operator_content_history
 from services.operator_attention import build_attention_brief
+from services.operator_scope_summary import build_operator_scope_summary
+from services.telegram_control_scope import (
+    list_control_scopes,
+    load_control_preferences,
+    resolve_control_scope,
+    toggle_favorite_control_scope,
+)
+from services.telegram_webapp_auth import load_localos_user_for_telegram, validate_telegram_webapp_init_data
 from services.operator_fresh_reviews import classify_fresh_reviews_intent, refresh_reviews_from_operator
 from services.operator_intent_ai_router import classify_operator_intent_with_ai, should_use_ai_intent_router
 from services.operator_inbox import build_operator_inbox
@@ -48,6 +57,23 @@ from services.operator_conversations import (
 
 
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
+
+
+def _scope_request_values(payload: dict | None = None) -> tuple[str, str | None]:
+    source = payload if isinstance(payload, dict) else request.args
+    kind = str(source.get("scope_type") or source.get("kind") or "").strip().lower()
+    scope_id = str(source.get("scope_id") or source.get("id") or "").strip() or None
+    return kind, scope_id
+
+
+def _telegram_control_actor(cursor, payload: dict):
+    verified = validate_telegram_webapp_init_data(payload.get("init_data"))
+    if not verified:
+        return None, None
+    user = load_localos_user_for_telegram(cursor, str(verified.get("telegram_id") or ""))
+    if not user:
+        return None, None
+    return verified, user
 
 
 def _attach_ai_router(result: dict, ai_router: dict) -> dict:
@@ -108,6 +134,155 @@ def _has_explicit_manual_review_text(message: str) -> bool:
     if "добав" in text and "отзыв" in text and ":" in text:
         return True
     return False
+
+
+@operator_bp.route("/scopes", methods=["GET"])
+def operator_scopes():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+    query = str(request.args.get("q") or "").strip()
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        catalog = list_control_scopes(cursor, user_id=user_id, search_query=query, business_limit=100)
+        selected = resolve_control_scope(cursor, user_id=user_id)
+        return jsonify({"success": True, "catalog": catalog, "selected_scope": selected})
+    finally:
+        db.close()
+
+
+@operator_bp.route("/summary", methods=["GET"])
+def operator_scope_summary():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+    kind, scope_id = _scope_request_values()
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        scope = resolve_control_scope(
+            cursor,
+            user_id=user_id,
+            requested_kind=kind,
+            requested_id=scope_id,
+        )
+        if not scope:
+            return jsonify({"success": False, "error": "Контекст не найден или недоступен"}), 403
+        summary = build_operator_scope_summary(cursor, scope=scope, user_id=user_id)
+        return jsonify({"success": True, "summary": summary})
+    finally:
+        db.close()
+
+
+@operator_bp.route("/telegram/bootstrap", methods=["POST"])
+def operator_telegram_bootstrap():
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({"success": False, "error": "Некорректный запрос"}), 400
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        verified, user = _telegram_control_actor(cursor, payload)
+        if not verified or not user:
+            return jsonify({"success": False, "error": "Telegram-сессия недействительна"}), 401
+        user_id = str(user.get("id") or "")
+        query = str(payload.get("q") or "").strip()
+        catalog = list_control_scopes(cursor, user_id=user_id, search_query=query, business_limit=100)
+        selected = resolve_control_scope(cursor, user_id=user_id)
+        summary = build_operator_scope_summary(cursor, scope=selected, user_id=user_id) if selected else None
+        preferences = load_control_preferences(cursor, user_id)
+        web_session_token = None
+        if not query:
+            web_session_token = create_session(
+                user_id,
+                ip_address=request.headers.get("X-Forwarded-For") or request.remote_addr,
+                user_agent="localos-telegram-mini-app",
+                expires_days=1,
+            )
+        return jsonify(
+            {
+                "success": True,
+                "user": {
+                    "id": user_id,
+                    "name": str(user.get("name") or verified.get("first_name") or ""),
+                    "is_superadmin": bool(user.get("is_superadmin")),
+                },
+                "catalog": catalog,
+                "selected_scope": selected,
+                "summary": summary,
+                "preferences": preferences,
+                "web_session_token": web_session_token,
+            }
+        )
+    finally:
+        db.close()
+
+
+@operator_bp.route("/telegram/scope", methods=["POST"])
+def operator_telegram_select_scope():
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({"success": False, "error": "Некорректный запрос"}), 400
+    kind, scope_id = _scope_request_values(payload)
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        verified, user = _telegram_control_actor(cursor, payload)
+        if not verified or not user:
+            return jsonify({"success": False, "error": "Telegram-сессия недействительна"}), 401
+        user_id = str(user.get("id") or "")
+        scope = resolve_control_scope(
+            cursor,
+            user_id=user_id,
+            requested_kind=kind,
+            requested_id=scope_id,
+            persist=True,
+            telegram_id=str(verified.get("telegram_id") or ""),
+        )
+        if not scope:
+            db.conn.rollback()
+            return jsonify({"success": False, "error": "Контекст не найден или недоступен"}), 403
+        db.conn.commit()
+        summary = build_operator_scope_summary(cursor, scope=scope, user_id=user_id)
+        return jsonify({"success": True, "selected_scope": scope, "summary": summary})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@operator_bp.route("/telegram/favorite", methods=["POST"])
+def operator_telegram_toggle_favorite():
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({"success": False, "error": "Некорректный запрос"}), 400
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        verified, user = _telegram_control_actor(cursor, payload)
+        if not verified or not user:
+            return jsonify({"success": False, "error": "Telegram-сессия недействительна"}), 401
+        user_id = str(user.get("id") or "")
+        scope = resolve_control_scope(cursor, user_id=user_id)
+        if not scope:
+            return jsonify({"success": False, "error": "Рабочий раздел не найден"}), 404
+        favorite = toggle_favorite_control_scope(
+            cursor,
+            user_id=user_id,
+            telegram_id=str(verified.get("telegram_id") or ""),
+            scope=scope,
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "favorite": favorite, "preferences": load_control_preferences(cursor, user_id)})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
 
 
 @operator_bp.route("/attention-brief", methods=["GET"])

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import {
+  AlertTriangle,
   Bot,
   CheckCircle2,
   ChevronDown,
@@ -197,6 +198,26 @@ type ChatMessage = {
   result?: OperatorChatResult | RefreshResult;
 };
 
+type ScopeSummary = {
+  as_of?: string;
+  metrics?: Array<{
+    key?: string;
+    label?: string;
+    value?: string | number | null;
+    source?: string;
+    source_label?: string;
+    updated_at?: string | null;
+  }>;
+  attention_items?: Array<{
+    id?: string;
+    title?: string;
+    description?: string;
+    count?: number;
+    severity?: string;
+  }>;
+  data_warnings?: string[];
+};
+
 const exampleCommands = [
   'Что ты умеешь?',
   'Измени цену услуги Маникюр на 1500',
@@ -250,6 +271,29 @@ export const OperatorPage = () => {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null);
+  const [scopeSummary, setScopeSummary] = useState<ScopeSummary | null>(null);
+  const [scopeSummaryLoading, setScopeSummaryLoading] = useState(false);
+
+  useEffect(() => {
+    if (!currentBusinessId) {
+      setScopeSummary(null);
+      return;
+    }
+    let cancelled = false;
+    setScopeSummaryLoading(true);
+    api.get('/operator/summary', {
+      params: { scope_type: 'business', scope_id: currentBusinessId },
+    }).then((response) => {
+      if (!cancelled) setScopeSummary(response.data.summary || null);
+    }).catch(() => {
+      if (!cancelled) setScopeSummary(null);
+    }).finally(() => {
+      if (!cancelled) setScopeSummaryLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentBusinessId]);
 
   useEffect(() => {
     if (!currentBusinessId) {
@@ -528,6 +572,51 @@ export const OperatorPage = () => {
         description="Напишите задачу обычным языком. Оператор выполнит её, уточнит недостающее или безопасно передаст в нужный раздел."
         icon={Bot}
       />
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Что важно сейчас">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-950">Что важно сейчас</div>
+            <div className="mt-1 text-sm text-slate-500">
+              Это же саммари показывает Telegram для выбранного бизнеса.
+            </div>
+          </div>
+          {scopeSummaryLoading ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" /> : null}
+        </div>
+        {scopeSummary?.attention_items?.length ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {scopeSummary.attention_items.slice(0, 3).map((item) => (
+              <div key={item.id || item.title} className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                <div className="flex items-start gap-2">
+                  {item.severity === 'low'
+                    ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                    : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />}
+                  <div className="min-w-0">
+                    <div className="font-medium text-slate-950">{item.title || 'Задача'}{item.count ? ` · ${item.count}` : ''}</div>
+                    {item.description ? <div className="mt-1 text-xs leading-5 text-slate-600">{item.description}</div> : null}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {scopeSummary?.metrics?.length ? (
+          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
+            {scopeSummary.metrics.slice(0, 4).map((metric) => (
+              <span key={metric.key || metric.label} className="tabular-nums">
+                <strong className="font-semibold text-slate-800">{metric.label}: {metric.value ?? '—'}</strong>
+                {' · '}{metric.source_label || metric.source || 'LocalOS'}
+                {metric.updated_at ? ` · ${new Date(metric.updated_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {scopeSummary?.data_warnings?.length ? (
+          <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-200">
+            {scopeSummary.data_warnings[0]}
+          </div>
+        ) : null}
+      </section>
 
       <BetaFeedbackBanner
         area="operator"

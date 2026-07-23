@@ -167,6 +167,7 @@ const PublicSalesRoomPage = lazy(() => import("./pages/PublicSalesRoomPage"));
 const DemoEntryPage = lazy(() => import("./pages/DemoEntryPage"));
 const VeselayaRascheskaOfferPage = lazy(() => import("./pages/VeselayaRascheskaOfferPage"));
 const CheckoutReturn = lazy(() => import("./pages/CheckoutReturn"));
+const TelegramControlPage = lazy(() => import("./pages/TelegramControlPage"));
 const IndustryPatternsE2EPage = import.meta.env.DEV
   ? lazy(() => import("./pages/dev/IndustryPatternsE2EPage"))
   : null;
@@ -223,6 +224,10 @@ const shouldRenderHeader = (pathname: string) => {
     return false;
   }
 
+  if (pathname === "/telegram/control") {
+    return false;
+  }
+
   if (pathname === "/veselaya-rascheska-hit") {
     return false;
   }
@@ -255,6 +260,7 @@ const AppShell = () => {
           <Route path="/docs/:section" element={<DocsPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/demo" element={<DemoEntryPage />} />
+          <Route path="/telegram/control" element={<TelegramControlPage />} />
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/articles/:slug" element={<ArticleDetailPage />} />
           <Route path="/documents" element={<DocumentsPage />} />

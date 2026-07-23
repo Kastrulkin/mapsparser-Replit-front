@@ -384,6 +384,56 @@ services:
         condition: service_healthy
     command: ["python", "src/worker.py"]
 
+  telegram-bot:
+    build:
+      context: .
+      network: host
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
+      PYTHONPATH: /app:/app/src
+      API_BASE_URL: http://app:8000
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-https://localos.pro}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://localos.pro}
+      TELEGRAM_MINI_APP_URL: ${TELEGRAM_MINI_APP_URL:-https://localos.pro/telegram/control}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_HTTP_PROXY: ${TELEGRAM_HTTP_PROXY:-}
+      OUTBOUND_HTTP_PROXY: ${OUTBOUND_HTTP_PROXY:-}
+      OPENCLAW_BASE_URL: ${OPENCLAW_BASE_URL:-}
+      OPENCLAW_LOCALOS_TOKEN: ${OPENCLAW_LOCALOS_TOKEN:-}
+      OPENCLAW_TOKEN: ${OPENCLAW_TOKEN:-}
+      GIGACHAT_KEYS: ${GIGACHAT_KEYS:-}
+      GIGACHAT_CLIENT_ID: ${GIGACHAT_CLIENT_ID:-}
+      GIGACHAT_CLIENT_SECRET: ${GIGACHAT_CLIENT_SECRET:-}
+      GIGACHAT_SSL_VERIFY: ${GIGACHAT_SSL_VERIFY:-true}
+      GIGACHAT_CA_BUNDLE: ${GIGACHAT_CA_BUNDLE:-/app/src/certs/russian_trusted_root_ca_pem.crt}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL_REASONING: ${DEEPSEEK_MODEL_REASONING:-deepseek-v4-pro}
+      DEEPSEEK_MODEL_FAST: ${DEEPSEEK_MODEL_FAST:-deepseek-v4-flash}
+      LLM_ROUTER_ENABLED: ${LLM_ROUTER_ENABLED:-false}
+      CRYPTO_PAY_API_TOKEN: ${CRYPTO_PAY_API_TOKEN:-}
+      CRYPTO_PAY_API_BASE: ${CRYPTO_PAY_API_BASE:-}
+    volumes:
+      - ./src:/app/src:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      app:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "test -z \"$$TELEGRAM_BOT_TOKEN\" || python -c \"from pathlib import Path; raise SystemExit(0 if b'telegram_bot.py' in Path('/proc/1/cmdline').read_bytes() else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    command:
+      - /bin/sh
+      - -c
+      - if [ -z "$$TELEGRAM_BOT_TOKEN" ]; then echo "Telegram owner-bot is disabled because TELEGRAM_BOT_TOKEN is empty"; exec sleep infinity; else exec python src/telegram_bot.py; fi
+
 volumes:
   pgdata:
 

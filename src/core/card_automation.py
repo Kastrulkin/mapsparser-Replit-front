@@ -8,7 +8,6 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from core.ai_learning import record_ai_learning_event
-from core.agent_api_security import build_agent_activity_digest
 from core.industry_patterns import detect_industry_key, format_industry_pattern_prompt
 from core.industry_pattern_recalibration import (
     build_pattern_impact_metrics,
@@ -21,7 +20,9 @@ from core.industry_pattern_recalibration import (
 )
 from core.learning_patterns import format_learning_candidates_for_digest, get_service_optimization_learning_candidates
 from services.llm import analyze_text_with_gigachat
+from services.operator_scope_summary import build_operator_scope_summary, format_scope_summary_for_telegram
 from services.superadmin_telegram_notifications import build_superadmin_morning_operations_block
+from services.telegram_control_scope import resolve_control_scope
 
 
 ACTION_NEWS = "news"
@@ -1633,6 +1634,8 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
             b.name AS business_name,
             {business_timezone_select}
             b.subscription_tier,
+            b.network_id,
+            n.name AS network_name,
             b.owner_id,
             u.telegram_id,
             u.name AS owner_name,
@@ -1640,6 +1643,7 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
         FROM businesscardautomationsettings s
         JOIN businesses b ON b.id = s.business_id
         JOIN users u ON u.id = b.owner_id
+        LEFT JOIN networks n ON n.id = b.network_id
         LEFT JOIN subscriptions sub ON sub.business_id = b.id AND sub.status = 'active'
         WHERE s.digest_enabled = TRUE
           AND COALESCE(b.is_active, TRUE) = TRUE
@@ -1705,6 +1709,8 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
             {
                 "business_id": business_id,
                 "business_name": str(rd.get("business_name") or "Бизнес").strip() or "Бизнес",
+                "network_id": str(rd.get("network_id") or "").strip() or None,
+                "network_name": str(rd.get("network_name") or "").strip() or None,
                 "planned_lines": planned_lines,
                 "completed_lines": completed_today,
                 "local_today": now_local.date(),
@@ -1719,16 +1725,41 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
         for item in bucket["businesses"]:
             sent_business_ids.append(item["business_id"])
             sent_date = item["local_today"]
-            planned_block = "\n".join(item["planned_lines"]) if item["planned_lines"] else "• На сегодня действий не запланировано"
-            completed_block = "\n".join(item["completed_lines"]) if item["completed_lines"] else "• Сегодня ещё ничего не выполнено"
-            business_sections.append(
-                f"🏢 {item['business_name']}\n"
-                f"План на сегодня:\n{planned_block}\n\n"
-                f"Что уже сделано:\n{completed_block}"
-            )
-        if not business_sections or not sent_date:
+        if not bool(bucket.get("is_superadmin")):
+            cursor = conn.cursor()
+            rendered_networks: set[str] = set()
+            for item in bucket["businesses"]:
+                network_id = str(item.get("network_id") or "")
+                if network_id:
+                    if network_id in rendered_networks:
+                        continue
+                    rendered_networks.add(network_id)
+                    scope = resolve_control_scope(
+                        cursor,
+                        user_id=str(bucket.get("owner_id") or ""),
+                        requested_kind="network",
+                        requested_id=network_id,
+                    )
+                else:
+                    scope = resolve_control_scope(
+                        cursor,
+                        user_id=str(bucket.get("owner_id") or ""),
+                        requested_kind="business",
+                        requested_id=str(item.get("business_id") or ""),
+                    )
+                if not scope:
+                    continue
+                summary = build_operator_scope_summary(
+                    cursor,
+                    scope=scope,
+                    user_id=str(bucket.get("owner_id") or ""),
+                )
+                business_sections.append(format_scope_summary_for_telegram(summary))
+        if not sent_date:
             continue
-        text = f"Доброе утро. План LocalOS на {sent_date.strftime('%d.%m.%Y')}."
+        if not bool(bucket.get("is_superadmin")) and not business_sections:
+            continue
+        text = f"Доброе утро. LocalOS собрал реальные задачи на {sent_date.strftime('%d.%m.%Y')}."
         if not bool(bucket.get("is_superadmin")):
             text += "\n\n" + "\n\n".join(business_sections)
         if bool(bucket.get("is_superadmin")):
@@ -1745,9 +1776,9 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
             learning_block = _superadmin_learning_digest_block(conn)
             if learning_block:
                 text += f"\n\n{learning_block}"
-            agent_activity_block = _superadmin_agent_activity_block(conn)
-            if agent_activity_block:
-                text += f"\n\n{agent_activity_block}"
+            operator_block = _superadmin_operator_summary_block(conn, str(bucket.get("owner_id") or ""))
+            if operator_block:
+                text += f"\n\n{operator_block}"
             monthly_block = _superadmin_monthly_recalibration_block(conn, sent_date)
             if monthly_block:
                 text += f"\n\n{monthly_block}"
@@ -1849,17 +1880,29 @@ def _superadmin_outreach_followup_block(conn, local_today: date) -> str:
         return ""
 
 
-def _superadmin_agent_activity_block(conn) -> str:
+def _superadmin_operator_summary_block(conn, owner_id: str) -> str:
     try:
-        return build_agent_activity_digest(conn, hours=24)
+        summary = build_operator_scope_summary(
+            conn.cursor(),
+            scope={
+                "kind": "platform",
+                "id": None,
+                "name": "Вся платформа",
+                "business_ids": [],
+                "can_switch": True,
+                "parent_scope": None,
+            },
+            user_id=owner_id,
+        )
+        return format_scope_summary_for_telegram(summary)
     except Exception:
         try:
             conn.rollback()
         except Exception:
             pass
         return (
-            "🤖 ИИ-агенты\n"
-            "Не удалось собрать статистику docs/API. Проверь миграцию agent security."
+            "LocalOS · Вся платформа\n"
+            "Не удалось собрать операционное саммари. Откройте Operator для проверки."
         )
 
 

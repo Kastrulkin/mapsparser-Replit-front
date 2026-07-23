@@ -18,7 +18,7 @@ import sys
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.request import HTTPXRequest
 from database_manager import get_db_connection
@@ -77,6 +77,13 @@ from services.operator_review_reply_bulk import (
     generate_review_reply_drafts_for_unanswered_reviews,
 )
 from services.operator_core import confirm_pending_operator_action, should_route_operator_message
+from services.operator_scope_summary import build_operator_scope_summary, format_scope_summary_for_telegram
+from services.telegram_control_scope import (
+    list_control_scopes,
+    load_control_preferences,
+    resolve_control_scope,
+    toggle_favorite_control_scope,
+)
 from services.telegram_compare_flow import build_guest_compare_result
 from services.telegram_lead_intake import parse_map_links_from_text
 from services.telegram_response_router import classify_client_intent, classify_guest_intent
@@ -117,6 +124,7 @@ logging.basicConfig(
 # Токен бота и базовый URL API из переменных окружения
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
 API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8000')
+TELEGRAM_MINI_APP_URL = os.getenv('TELEGRAM_MINI_APP_URL', 'https://localos.pro/telegram/control')
 logger = logging.getLogger(__name__)
 
 # Словарь для хранения состояния пользователей (telegram_id -> state)
@@ -1679,7 +1687,118 @@ def _build_tariff_detail_menu(tier_key: str, back_callback: str = "guest_tariffs
     )
 
 
-def _build_client_main_menu() -> InlineKeyboardMarkup:
+def _resolve_telegram_control_scope(
+    telegram_id: str,
+    *,
+    requested_kind: str = "",
+    requested_id: str | None = None,
+    persist: bool = False,
+) -> dict[str, Any] | None:
+    db_user_id = get_user_id_from_telegram(telegram_id)
+    if not db_user_id:
+        return None
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        scope = resolve_control_scope(
+            cursor,
+            user_id=str(db_user_id),
+            requested_kind=requested_kind,
+            requested_id=requested_id,
+            persist=persist,
+            telegram_id=str(telegram_id),
+        )
+        if persist:
+            conn.commit()
+        return scope
+    except Exception:
+        if persist:
+            conn.rollback()
+        logger.exception("Failed to resolve Telegram control scope")
+        return None
+    finally:
+        conn.close()
+
+
+def _build_telegram_control_summary(telegram_id: str, scope: dict[str, Any]) -> dict[str, Any]:
+    db_user_id = get_user_id_from_telegram(telegram_id)
+    if not db_user_id:
+        return {}
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        return build_operator_scope_summary(cursor, scope=scope, user_id=str(db_user_id))
+    finally:
+        conn.close()
+
+
+def _control_scope_business_context(telegram_id: str, scope: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    selected = scope or _resolve_telegram_control_scope(telegram_id)
+    if not selected or selected.get("kind") != "business" or not selected.get("id"):
+        return None
+    db_user_id = get_user_id_from_telegram(telegram_id)
+    return {
+        "user_id": db_user_id,
+        "business_id": str(selected.get("id") or ""),
+        "business_name": str(selected.get("name") or "Бизнес"),
+        "business_count": 1,
+        "telegram_id": str(telegram_id),
+    }
+
+
+def _build_control_main_menu(scope: dict[str, Any] | None) -> InlineKeyboardMarkup:
+    selected = scope or {}
+    kind = str(selected.get("kind") or "business")
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton("📍 Сегодня", callback_data="client_today")],
+    ]
+    if kind == "business":
+        rows.extend(
+            [
+                [
+                    InlineKeyboardButton("💬 Отзывы", callback_data="client_reviews"),
+                    InlineKeyboardButton("🗺 Карточка", callback_data="client_card"),
+                ],
+                [
+                    InlineKeyboardButton("📰 Контент", callback_data="client_growth"),
+                    InlineKeyboardButton("🧩 Услуги", callback_data="client_services_audit"),
+                ],
+                [
+                    InlineKeyboardButton("✅ Подтверждения", callback_data="openclaw_pending_approvals"),
+                    InlineKeyboardButton("🧠 Спросить", callback_data="client_ask"),
+                ],
+            ]
+        )
+    elif kind == "network":
+        rows.extend(
+            [
+                [InlineKeyboardButton("🏢 Выбрать точку", callback_data="control_locations")],
+                [
+                    InlineKeyboardButton("✅ Подтверждения", url="https://localos.pro/dashboard/operator"),
+                    InlineKeyboardButton("📊 Сеть в кабинете", url="https://localos.pro/dashboard/network"),
+                ],
+            ]
+        )
+    else:
+        rows.extend(
+            [
+                [InlineKeyboardButton("🏢 Найти бизнес", callback_data="control_search")],
+                [
+                    InlineKeyboardButton("✅ Подтверждения", url="https://localos.pro/dashboard/operator"),
+                    InlineKeyboardButton("📨 Аутрич", url="https://localos.pro/dashboard/bazich?tab=prospecting"),
+                ],
+                [InlineKeyboardButton("🛠 Диагностика", callback_data="menu_diagnostics")],
+            ]
+        )
+    if bool(selected.get("can_switch")):
+        rows.append([InlineKeyboardButton("🔄 Сменить", callback_data="control_switch")])
+    rows.append([InlineKeyboardButton("📱 Открыть LocalOS", web_app=WebAppInfo(url=TELEGRAM_MINI_APP_URL))])
+    return InlineKeyboardMarkup(rows)
+
+
+def _build_client_main_menu(scope: dict[str, Any] | None = None) -> InlineKeyboardMarkup:
+    if scope:
+        return _build_control_main_menu(scope)
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("📍 Что важно сегодня", callback_data="client_today")],
@@ -1711,6 +1830,142 @@ def _build_client_more_menu() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
         ]
     )
+
+
+def _control_scope_catalog(telegram_id: str, search_query: str = "") -> tuple[dict[str, Any], dict[str, Any]]:
+    db_user_id = get_user_id_from_telegram(telegram_id)
+    if not db_user_id:
+        return {}, {}
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        catalog = list_control_scopes(
+            cursor,
+            user_id=str(db_user_id),
+            search_query=search_query,
+            business_limit=12 if search_query else 8,
+        )
+        preferences = load_control_preferences(cursor, str(db_user_id))
+        return catalog, preferences
+    finally:
+        conn.close()
+
+
+def _toggle_current_control_favorite(telegram_id: str) -> bool | None:
+    db_user_id = get_user_id_from_telegram(telegram_id)
+    scope = _resolve_telegram_control_scope(telegram_id)
+    if not db_user_id or not scope:
+        return None
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        favorite = toggle_favorite_control_scope(
+            cursor,
+            user_id=str(db_user_id),
+            telegram_id=str(telegram_id),
+            scope=scope,
+        )
+        conn.commit()
+        return favorite
+    except Exception:
+        conn.rollback()
+        logger.exception("Failed to toggle Telegram control favorite")
+        return None
+    finally:
+        conn.close()
+
+
+def _build_control_switcher(
+    telegram_id: str,
+    *,
+    search_query: str = "",
+) -> tuple[str, InlineKeyboardMarkup]:
+    catalog, preferences = _control_scope_catalog(telegram_id, search_query)
+    current = _resolve_telegram_control_scope(telegram_id) or {}
+    rows: list[list[InlineKeyboardButton]] = []
+    current_label = str(current.get("name") or "Не выбран")
+    lines = ["Сменить рабочий раздел", f"Сейчас: {current_label}", ""]
+    platform = catalog.get("platform") if isinstance(catalog.get("platform"), dict) else None
+    if platform:
+        marker = "✓ " if current.get("kind") == "platform" else ""
+        rows.append([InlineKeyboardButton(f"{marker}Вся платформа", callback_data="cs:p")])
+    favorites = preferences.get("favorite_scopes_json") if isinstance(preferences.get("favorite_scopes_json"), list) else []
+    valid_favorites = [item for item in favorites if isinstance(item, dict)][:5]
+    if valid_favorites and not search_query:
+        lines.append("Избранные доступны первыми.")
+        for item in valid_favorites:
+            kind = str(item.get("kind") or "")
+            scope_id = str(item.get("id") or "")
+            selector = "p" if kind == "platform" else "n" if kind == "network" else "b"
+            callback = "cs:p" if selector == "p" else f"cs:{selector}:{scope_id}"
+            rows.append([InlineKeyboardButton(f"★ {str(item.get('name') or 'Избранное')[:46]}", callback_data=callback)])
+    recent = preferences.get("recent_scopes_json") if isinstance(preferences.get("recent_scopes_json"), list) else []
+    valid_recent = [item for item in recent if isinstance(item, dict)][:3]
+    if valid_recent and not search_query:
+        lines.append("Недавние доступны первыми.")
+        for item in valid_recent:
+            kind = str(item.get("kind") or "")
+            scope_id = str(item.get("id") or "")
+            if kind == "platform":
+                continue
+            prefix = "n" if kind == "network" else "b"
+            rows.append([InlineKeyboardButton(f"↩ {str(item.get('name') or 'Контекст')[:48]}", callback_data=f"cs:{prefix}:{scope_id}")])
+    if not search_query:
+        for network in (catalog.get("networks") or [])[:8]:
+            marker = "✓ " if current.get("kind") == "network" and current.get("id") == network.get("id") else ""
+            label = f"{marker}Сеть · {network.get('name')} · {int(network.get('locations_count') or 0)}"
+            rows.append([InlineKeyboardButton(label[:58], callback_data=f"cs:n:{network.get('id')}")])
+    businesses = catalog.get("businesses") or []
+    for business in businesses:
+        marker = "✓ " if current.get("kind") == "business" and current.get("id") == business.get("id") else ""
+        network_prefix = "↳ " if business.get("network_id") else ""
+        label = f"{marker}{network_prefix}{business.get('name') or 'Бизнес'}"
+        rows.append([InlineKeyboardButton(label[:58], callback_data=f"cs:b:{business.get('id')}")])
+    if search_query:
+        lines.append(f"Результаты по запросу «{search_query}»: {len(businesses)}")
+        if not businesses:
+            lines.append("Ничего не найдено. Попробуйте часть названия, города или адреса.")
+    rows.append([InlineKeyboardButton("🔎 Найти бизнес", callback_data="control_search")])
+    current_is_favorite = any(
+        isinstance(item, dict)
+        and item.get("kind") == current.get("kind")
+        and (str(item.get("id") or "") or None) == (str(current.get("id") or "") or None)
+        for item in favorites
+    )
+    favorite_label = "★ Убрать из избранного" if current_is_favorite else "☆ Добавить в избранное"
+    rows.append([InlineKeyboardButton(favorite_label, callback_data="control_favorite")])
+    rows.append([InlineKeyboardButton("← Назад", callback_data="back_to_menu")])
+    return "\n".join(lines), InlineKeyboardMarkup(rows)
+
+
+def _build_network_locations_switcher(telegram_id: str, network_id: str) -> tuple[str, InlineKeyboardMarkup]:
+    scope = _resolve_telegram_control_scope(
+        telegram_id,
+        requested_kind="network",
+        requested_id=network_id,
+    )
+    if not scope:
+        return "Сеть не найдена или недоступна.", InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="control_switch")]])
+    business_ids = [str(item) for item in (scope.get("business_ids") or []) if str(item)]
+    rows: list[list[InlineKeyboardButton]] = []
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        if business_ids:
+            cursor.execute(
+                "SELECT id, name, COALESCE(address, '') AS address FROM businesses WHERE id = ANY(%s) ORDER BY name LIMIT 30",
+                (business_ids,),
+            )
+            for raw in cursor.fetchall() or []:
+                business_id = str(_row_get(raw, "id", 0) or "")
+                business_name = str(_row_get(raw, "name", 1) or "Точка")
+                rows.append([InlineKeyboardButton(business_name[:58], callback_data=f"cs:b:{business_id}")])
+    finally:
+        conn.close()
+    rows.append([InlineKeyboardButton("📊 Саммари сети", callback_data=f"cs:n:{network_id}")])
+    rows.append([InlineKeyboardButton("← К выбору", callback_data="control_switch")])
+    text = f"Сеть «{scope.get('name') or 'Сеть'}»\nВыберите точку · показано {max(0, len(rows) - 2)} из {len(business_ids)}"
+    return text, InlineKeyboardMarkup(rows)
 
 
 def _build_card_menu() -> InlineKeyboardMarkup:
@@ -2273,13 +2528,17 @@ def get_openclaw_runtime():
 
 
 async def _require_bound_business(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    preferred = " ".join(context.args or []).strip()
-    ctx = resolve_business_context(str(update.effective_user.id), preferred)
-    if not ctx:
+    telegram_id = str(update.effective_user.id)
+    if not _is_bound_user(telegram_id):
         await update.message.reply_text("❌ Аккаунт не привязан. Используйте /start <код_привязки>.")
         return None
-    if not ctx.get("business_id"):
-        await update.message.reply_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+    scope = _resolve_telegram_control_scope(telegram_id)
+    ctx = _control_scope_business_context(telegram_id, scope)
+    if not ctx:
+        await update.message.reply_text(
+            "Выберите конкретный бизнес или точку сети перед выполнением команды.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Выбрать", callback_data="control_switch")]]),
+        )
         return None
     return ctx
 
@@ -3178,27 +3437,13 @@ async def industry_patterns_impact_command(update: Update, context: ContextTypes
 
 
 async def businesses_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать список бизнесов и текущий активный tenant."""
+    """Показать единый переключатель платформы, сетей и бизнесов."""
     telegram_id = str(update.effective_user.id)
-    items = list_user_businesses(telegram_id)
-    if not items:
+    if not _is_bound_user(telegram_id):
         await update.message.reply_text("❌ Бизнесы не найдены или аккаунт не привязан.")
         return
-
-    current_ctx = resolve_business_context(telegram_id)
-    current_id = str((current_ctx or {}).get("business_id") or "")
-    lines = ["🏢 Ваши бизнесы:"]
-    for item in items:
-        marker = "✅" if item["id"] == current_id else "•"
-        lines.append(f"{marker} {item['name']} — {item['id']}")
-    lines.extend(
-        [
-            "",
-            "Для переключения:",
-            "/use_business <id или часть названия>",
-        ]
-    )
-    await update.message.reply_text("\n".join(lines))
+    text, markup = _build_control_switcher(telegram_id)
+    await update.message.reply_text(text, reply_markup=markup)
 
 
 async def use_business_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3207,15 +3452,34 @@ async def use_business_command(update: Update, context: ContextTypes.DEFAULT_TYP
     if not query:
         await update.message.reply_text("❌ Укажите business_id или часть названия: /use_business <значение>")
         return
-    ctx = resolve_business_context(str(update.effective_user.id), query)
-    if not ctx or not ctx.get("business_id"):
-        await update.message.reply_text("❌ Не удалось найти бизнес по этому значению.")
+    telegram_id = str(update.effective_user.id)
+    catalog, _preferences = _control_scope_catalog(telegram_id, query)
+    items = catalog.get("businesses") or []
+    exact = [
+        item
+        for item in items
+        if str(item.get("id") or "").lower() == query.lower()
+        or str(item.get("name") or "").lower() == query.lower()
+    ]
+    selected_item = exact[0] if len(exact) == 1 else items[0] if len(items) == 1 else None
+    if not selected_item:
+        text, markup = _build_control_switcher(telegram_id, search_query=query)
+        await update.message.reply_text(text, reply_markup=markup)
         return
-    panel_text, reply_markup = _compose_openclaw_panel(
-        str(update.effective_user.id),
-        f"✅ Активный бизнес переключён:\n{ctx['business_name']}\n{ctx['business_id']}",
+    scope = _resolve_telegram_control_scope(
+        telegram_id,
+        requested_kind="business",
+        requested_id=str(selected_item.get("id") or ""),
+        persist=True,
     )
-    await update.message.reply_text(panel_text, reply_markup=reply_markup)
+    if not scope:
+        await update.message.reply_text("❌ Не удалось переключить бизнес.")
+        return
+    summary = _build_telegram_control_summary(telegram_id, scope)
+    await update.message.reply_text(
+        format_scope_summary_for_telegram(summary),
+        reply_markup=_build_control_main_menu(scope),
+    )
 
 
 async def support_export_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3518,10 +3782,14 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, tel
             await update.message.reply_text("❌ Аккаунт не привязан. Используйте /start <код_привязки>")
             return
 
-    ctx = resolve_business_context(telegram_id)
-    business_name = str((ctx or {}).get("business_name") or "Бизнес не выбран")
-    text = client_welcome_text(business_name)
-    reply_markup = _build_client_main_menu()
+    scope = _resolve_telegram_control_scope(telegram_id)
+    if not scope:
+        text = "LocalOS\n\nДля аккаунта не найден доступный бизнес или сеть. Добавьте бизнес в кабинете."
+        reply_markup = _build_client_more_menu()
+    else:
+        summary = _build_telegram_control_summary(telegram_id, scope)
+        text = format_scope_summary_for_telegram(summary)
+        reply_markup = _build_control_main_menu(scope)
 
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
@@ -3727,7 +3995,142 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if business_ctx:
         business_ctx = {**business_ctx, "telegram_id": user_id, "telegram_name": update.effective_user.full_name}
 
+    control_scope = _resolve_telegram_control_scope(user_id)
+    if data == "control_switch":
+        text, markup = _build_control_switcher(user_id)
+        await query.edit_message_text(text, reply_markup=markup)
+        return
+    if data == "control_favorite":
+        favorite = _toggle_current_control_favorite(user_id)
+        text, markup = _build_control_switcher(user_id)
+        if favorite is True:
+            text = "★ Добавлено в избранное.\n\n" + text
+        elif favorite is False:
+            text = "Избранное обновлено.\n\n" + text
+        else:
+            text = "Не удалось обновить избранное.\n\n" + text
+        await query.edit_message_text(text, reply_markup=markup)
+        return
+    if data == "control_search":
+        state_ref = user_states.setdefault(user_id, {})
+        state_ref["state"] = "waiting_control_scope_search"
+        await query.edit_message_text(
+            "Найдите бизнес\n\nПришлите часть названия, города или адреса одним сообщением.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Отмена", callback_data="control_switch")]]),
+        )
+        return
+    if data == "control_locations":
+        network_id = ""
+        if control_scope and control_scope.get("kind") == "network":
+            network_id = str(control_scope.get("id") or "")
+        elif control_scope and isinstance(control_scope.get("parent_scope"), dict):
+            network_id = str(control_scope.get("parent_scope", {}).get("id") or "")
+        if not network_id:
+            await query.edit_message_text(
+                "Сначала выберите сеть.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Сменить", callback_data="control_switch")]]),
+            )
+            return
+        text, markup = _build_network_locations_switcher(user_id, network_id)
+        await query.edit_message_text(text, reply_markup=markup)
+        return
+    if data.startswith("cs:"):
+        parts = data.split(":", 2)
+        selector = parts[1] if len(parts) > 1 else ""
+        requested_id = parts[2] if len(parts) > 2 else None
+        requested_kind = {"p": "platform", "n": "network", "b": "business"}.get(selector, "")
+        selected = _resolve_telegram_control_scope(
+            user_id,
+            requested_kind=requested_kind,
+            requested_id=requested_id,
+            persist=True,
+        )
+        if not selected:
+            await query.edit_message_text(
+                "Этот раздел недоступен. Возможно, права изменились.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("К выбору", callback_data="control_switch")]]),
+            )
+            return
+        user_states.setdefault(user_id, {})["state"] = "idle"
+        if selected.get("kind") == "business":
+            user_states.setdefault(user_id, {})["active_business_id"] = str(selected.get("id") or "")
+        summary = _build_telegram_control_summary(user_id, selected)
+        await query.edit_message_text(
+            format_scope_summary_for_telegram(summary),
+            reply_markup=_build_control_main_menu(selected),
+        )
+        return
+
+    protected_business_prefixes = (
+        "operator_confirm:",
+        "approval_approved_",
+        "approval_rejected_",
+        "approval_status_",
+        "openclaw_review_tone_",
+        "svc_regen_go:",
+        "crypto_pay_",
+        "crypto_check_",
+        "optimizepick_",
+        "optmode_openclaw_",
+        "optmode_legacy_",
+        "business_",
+        "setting_",
+    )
+    protected_business_callbacks = {
+        "menu_transaction",
+        "menu_optimize",
+        "menu_settings",
+        "menu_partnerships",
+        "menu_openclaw",
+        "menu_stats",
+        "openclaw_status",
+        "openclaw_review_start",
+        "openclaw_service_optimize_start",
+        "openclaw_news_generate_start",
+        "openclaw_pending_approvals",
+        "openclaw_actions",
+        "openclaw_review_cancel",
+        "openclaw_support_export",
+        "openclaw_recovery_report",
+    }
+    business_scope_required = data.startswith(protected_business_prefixes) or data in protected_business_callbacks
+    if business_scope_required and (not control_scope or control_scope.get("kind") != "business"):
+        await query.edit_message_text(
+            "Сначала выберите конкретный бизнес. LocalOS не применяет действие к сети или платформе неявно.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Выбрать бизнес", callback_data="control_switch")]]),
+        )
+        return
+
+    if data.startswith("openclaw_use_"):
+        await query.edit_message_text(
+            "Выберите бизнес через единый переключатель — так LocalOS повторно проверит доступ.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Выбрать", callback_data="control_switch")]]),
+        )
+        return
+
+    selected_business_id = str((control_scope or {}).get("id") or "")
+    callback_business_id = ""
+    if data.startswith("optimizepick_"):
+        callback_business_id = data.replace("optimizepick_", "", 1)
+    elif data.startswith("optmode_openclaw_"):
+        callback_business_id = data.replace("optmode_openclaw_", "", 1)
+    elif data.startswith("optmode_legacy_"):
+        callback_business_id = data.replace("optmode_legacy_", "", 1)
+    elif data.startswith("business_"):
+        callback_parts = data.split("_")
+        callback_business_id = "_".join(callback_parts[2:]) if len(callback_parts) >= 3 else ""
+    elif data.startswith("setting_"):
+        callback_parts = data.split("_")
+        callback_business_id = "_".join(callback_parts[2:]) if len(callback_parts) >= 3 else ""
+    if callback_business_id and callback_business_id != selected_business_id:
+        await query.edit_message_text(
+            "Цель действия не совпадает с выбранным бизнесом. Действие отменено.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("К главной", callback_data="back_to_menu")]]),
+        )
+        return
+
     if data.startswith("operator_confirm:"):
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден активный бизнес.", reply_markup=_build_client_more_menu())
             return
@@ -3756,7 +4159,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             conn.close()
         return
 
-    if data.startswith("client_") and (not business_ctx or not business_ctx.get("business_id")):
+    if data.startswith("client_") and not control_scope:
         await query.edit_message_text(
             "❌ Для аккаунта пока не найден активный бизнес. Сначала добавьте бизнес в кабинете LocalOS.",
             reply_markup=_build_client_more_menu(),
@@ -3764,8 +4167,39 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "client_today":
-        await _show_client_section(update, build_today_text(business_ctx), _build_client_main_menu())
-    elif data == "client_refresh_jobs":
+        summary = _build_telegram_control_summary(user_id, control_scope)
+        await _show_client_section(
+            update,
+            format_scope_summary_for_telegram(summary),
+            _build_control_main_menu(control_scope),
+        )
+        return
+
+    business_only_callbacks = {
+        "client_card",
+        "client_reviews",
+        "client_growth",
+        "client_automation",
+        "client_subscription",
+        "client_ask",
+        "client_services_audit",
+        "client_services_regenerate_problematic",
+        "client_refresh_jobs",
+    }
+    if data in business_only_callbacks and (not control_scope or control_scope.get("kind") != "business"):
+        await query.edit_message_text(
+            "Выберите конкретный бизнес или точку сети — действие нельзя применить к агрегату неявно.",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [InlineKeyboardButton("Выбрать", callback_data="control_locations" if control_scope and control_scope.get("kind") == "network" else "control_switch")],
+                    [InlineKeyboardButton("← Назад", callback_data="back_to_menu")],
+                ]
+            ),
+        )
+        return
+
+    business_ctx = _control_scope_business_context(user_id, control_scope) or business_ctx
+    if data == "client_refresh_jobs":
         await _show_client_section(update, build_refresh_jobs_text(business_ctx), _build_reviews_menu())
     elif data.startswith("crypto_pay_"):
         tier_key = data.replace("crypto_pay_", "", 1)
@@ -3841,21 +4275,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "client_card":
         await _show_client_section(update, build_card_text(business_ctx), _build_card_menu())
     elif data == "client_services_audit":
-        audit_ctx = resolve_business_context(user_id)
+        audit_ctx = _control_scope_business_context(user_id, control_scope)
         if not audit_ctx or not audit_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
         _ok, text = _build_services_audit_text(audit_ctx)
         await query.edit_message_text(text, reply_markup=_build_card_menu())
     elif data == "client_services_regenerate_problematic":
-        regen_ctx = resolve_business_context(user_id)
+        regen_ctx = _control_scope_business_context(user_id, control_scope)
         if not regen_ctx or not regen_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
         _ok, text, markup = _start_services_problem_regeneration_from_telegram(user_id, regen_ctx)
         await query.edit_message_text(text, reply_markup=markup or _build_card_menu())
     elif data.startswith("svc_regen_go:"):
-        regen_ctx = resolve_business_context(user_id)
+        regen_ctx = _control_scope_business_context(user_id, control_scope)
         if not regen_ctx or not regen_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -3937,7 +4371,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=_build_diagnostics_menu(),
         )
     elif data == "menu_stats":
-        business_ctx = resolve_business_context(user_id)
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -3950,7 +4384,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         panel_text, reply_markup = _compose_openclaw_panel(user_id, status_text)
         await query.edit_message_text(panel_text, reply_markup=reply_markup)
     elif data == "openclaw_status":
-        business_ctx = resolve_business_context(user_id)
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -3961,7 +4395,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup,
         )
     elif data == "openclaw_review_start":
-        business_ctx = resolve_business_context(user_id)
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -3977,7 +4411,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "💬 Отправьте текст отзыва следующим сообщением. Затем выберете тон и я сгенерирую ответ."
         )
     elif data == "openclaw_service_optimize_start":
-        business_ctx = resolve_business_context(user_id)
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -3995,7 +4429,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Можно отправить только название."
         )
     elif data == "openclaw_news_generate_start":
-        business_ctx = resolve_business_context(user_id)
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -4011,7 +4445,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📰 Отправьте тему или исходную информацию для новости следующим сообщением."
         )
     elif data == "openclaw_pending_approvals":
-        business_ctx = resolve_business_context(user_id)
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -4391,7 +4825,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ),
         )
     elif data == "openclaw_actions":
-        business_ctx = resolve_business_context(user_id)
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -4406,7 +4840,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     elif data.startswith("approval_approved_"):
         action_id = data.replace("approval_approved_", "", 1)
-        business_ctx = resolve_business_context(user_id)
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -4424,7 +4858,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(panel_text, reply_markup=reply_markup)
     elif data.startswith("approval_rejected_"):
         action_id = data.replace("approval_rejected_", "", 1)
-        business_ctx = resolve_business_context(user_id)
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -4442,7 +4876,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(panel_text, reply_markup=reply_markup)
     elif data.startswith("approval_status_"):
         action_id = data.replace("approval_status_", "", 1)
-        business_ctx = resolve_business_context(user_id)
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -4468,7 +4902,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("openclaw_review_tone_"):
         state_ref = user_states.setdefault(user_id, {})
         review_text = str(state_ref.get("pending_review_text") or "").strip()
-        business_ctx = resolve_business_context(user_id)
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -4493,7 +4927,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup,
         )
     elif data == "openclaw_support_export":
-        business_ctx = resolve_business_context(user_id)
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -4504,7 +4938,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup,
         )
     elif data == "openclaw_recovery_report":
-        business_ctx = resolve_business_context(user_id)
+        business_ctx = _control_scope_business_context(user_id, control_scope)
         if not business_ctx or not business_ctx.get("business_id"):
             await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
             return
@@ -5028,6 +5462,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     state = user_states[user_id].get('state', '')
 
+    if state == "waiting_control_scope_search":
+        if not _is_bound_user(user_id):
+            user_states[user_id] = {"state": "idle"}
+            await update.message.reply_text("Сначала привяжите аккаунт LocalOS.", reply_markup=_build_guest_menu())
+            return
+        user_states[user_id]["state"] = "idle"
+        switcher_text, switcher_markup = _build_control_switcher(user_id, search_query=text)
+        await update.message.reply_text(switcher_text, reply_markup=switcher_markup)
+        return
+
     if state in {'', 'idle'}:
         if not _is_bound_user(user_id):
             ok, response_text = _request_public_report_from_telegram(user_id, text)
@@ -5066,15 +5510,33 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(guest_fallback_text(), reply_markup=_build_guest_menu())
             return
 
-        business_ctx = resolve_business_context(user_id)
-        if business_ctx and business_ctx.get("business_id"):
-            business_ctx = {**business_ctx, "telegram_id": user_id, "telegram_name": update.effective_user.full_name}
-        else:
+        control_scope = _resolve_telegram_control_scope(user_id)
+        if not control_scope:
             await update.message.reply_text(
-                "Для аккаунта пока не найден активный бизнес. Добавьте бизнес в кабинете LocalOS.",
+                "Для аккаунта пока не найден доступный бизнес или сеть. Добавьте бизнес в кабинете LocalOS.",
                 reply_markup=_build_client_more_menu(),
             )
             return
+        early_client_intent = classify_client_intent(text)
+        if early_client_intent == "today":
+            summary = _build_telegram_control_summary(user_id, control_scope)
+            await update.message.reply_text(
+                format_scope_summary_for_telegram(summary),
+                reply_markup=_build_control_main_menu(control_scope),
+            )
+            return
+        if early_client_intent == "businesses":
+            switcher_text, switcher_markup = _build_control_switcher(user_id)
+            await update.message.reply_text(switcher_text, reply_markup=switcher_markup)
+            return
+        business_ctx = _control_scope_business_context(user_id, control_scope)
+        if not business_ctx:
+            await update.message.reply_text(
+                "Сейчас открыт агрегированный раздел. Для изменения данных выберите конкретный бизнес или точку сети.",
+                reply_markup=_build_control_main_menu(control_scope),
+            )
+            return
+        business_ctx = {**business_ctx, "telegram_name": update.effective_user.full_name}
         if should_route_operator_message(text):
             operator_payload = build_operator_chat_payload(business_ctx, text)
             await update.message.reply_text(
@@ -5783,62 +6245,18 @@ async def handle_setting_text(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /help"""
-    help_text = """
-🤖 *LocalOS Telegram-бот*
+    help_text = """*LocalOS в Telegram*
 
-Это не просто бот, а помощник для малого бизнеса в кармане.
+Здесь можно увидеть, что требует внимания, переключиться между сетью и точками, подготовить ответы и контент, проверить задачи и подтвердить безопасные действия.
 
-Он умеет:
-- подсказывать, что важно сегодня,
-- помогать с карточкой, отзывами, новостями и ростом,
-- показывать статус подписки,
-- подтверждать подготовленные действия,
-- принимать быстрые запросы на автоматизацию.
+*Главные команды*
+/start — открыть текущее саммари
+/businesses — сменить платформу, сеть или бизнес
+/help — эта справка
+/cancel — отменить текущий шаг
 
-*Команды:*
-/start - Главное меню
-/control - Панель быстрых действий
-/industry_patterns - Калибровка паттернов
-/industry_patterns_recalibrate - Запустить калибровку паттернов
-/industry_patterns_impact - Impact report по active-паттернам
-/help - Справка
-/cancel - Отменить текущую операцию
-/businesses - Показать ваши бизнесы
-/use_business - Выбрать активный бизнес
-/status - Статус автоматизации
-/reply_review - Сгенерировать ответ на отзыв
-/optimize_service - Оптимизировать одну услугу
-/generate_news - Сгенерировать новость
-/partnerships - Краткий статус партнёрского потока
-/feature_request - Запросить новую автоматизацию
-/actions - Последние действия системы
-/action_status - Статус конкретного action
-/pending_approvals - Очередь на подтверждение
-/approve_action - Подтвердить action по ID
-/reject_action - Отклонить action по ID
-/support_export - Отправить отчёт для поддержки суперадмину
-/recovery_report - Выполнить восстановление callback-очереди
-
-*Для новых пользователей:*
-- можно просто прислать ссылку на карточку и получить быстрый аудит,
-- можно спросить про возможности LocalOS и тарифы.
-
-*Для клиентов:*
-- используйте разделы `Сегодня`, `Карточка`, `Отзывы`, `Рост`, `Автоматизация`,
-- или просто напишите вопрос: `что делать сегодня?`, `где аудит?`, `как оплатить подписку?`
-
-*Подключение аккаунта:*
-1. В LocalOS откройте *Профиль / Интеграции*.
-2. Сгенерируйте код привязки владельца.
-3. Отправьте `/start <код>`.
-4. Данные бизнеса лучше редактировать в личном кабинете, а не в боте.
-
-*Оплата:*
-Сейчас подписка оплачивается через кабинет LocalOS. Бот подскажет текущий статус и даст переход в оплату.
-
-*Поддержка:*
-Если возникли проблемы, обратитесь в поддержку через личный кабинет на сайте.
-    """
+Можно просто написать: «что важно сегодня?», «покажи отзывы» или «подготовь новость». Если открыт агрегат сети или платформы, LocalOS сначала попросит выбрать конкретный бизнес перед изменением данных.
+"""
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
 
@@ -5852,16 +6270,7 @@ async def _configure_bot_commands(application: Application):
     await application.bot.set_my_commands(
         [
             BotCommand("start", "Главное меню"),
-            BotCommand("control", "Панель быстрых действий"),
-            BotCommand("industry_patterns", "Калибровка паттернов"),
-            BotCommand("industry_patterns_recalibrate", "Запустить калибровку"),
-            BotCommand("industry_patterns_impact", "Impact report паттернов"),
-            BotCommand("services_audit", "Аудит услуг"),
-            BotCommand("status", "Статус автоматизации"),
-            BotCommand("reply_review", "Ответ на отзыв"),
-            BotCommand("optimize_service", "Оптимизировать услугу"),
-            BotCommand("generate_news", "Сгенерировать новость"),
-            BotCommand("pending_approvals", "Ожидают подтверждения"),
+            BotCommand("businesses", "Сменить бизнес или сеть"),
             BotCommand("help", "Справка"),
             BotCommand("cancel", "Отменить операцию"),
         ]
