@@ -801,7 +801,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
             title="Google Таблицы"
             description="Можно читать и изменять таблицы. Перед записью LocalOS покажет изменения и попросит подтверждение."
             status={googleSheetsReady ? 'Доступ есть' : 'Нужно подключить'}
-            detail="Google попросит выбрать аккаунт с доступом к нужной таблице. Google Документы: позже."
+            detail="Google попросит выбрать аккаунт с доступом к данным. Конкретную таблицу вы укажете в настройке агента. Google Документы: позже."
             actionLabel={googleSheetsReady ? 'Переподключить' : 'Подключить Google Таблицы'}
             icon={<Database className="h-5 w-5" />}
             tone={googleSheetsReady ? 'ready' : 'attention'}

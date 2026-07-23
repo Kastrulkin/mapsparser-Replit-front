@@ -788,7 +788,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
           <Button onClick={() => handleGoogleConnect('google_sheets')} disabled={googleBusy || !currentBusinessId} className="min-h-10 bg-slate-900 text-white hover:bg-slate-800">
             {googleSheetsAccount ? 'Переподключить Google Таблицы' : 'Подключить Google Таблицы'}
           </Button>
-          <p className="text-sm text-slate-600">Google попросит выбрать аккаунт. Выберите тот, у которого есть доступ к нужной таблице.</p>
+          <p className="text-sm text-slate-600">Google попросит выбрать аккаунт с доступом к данным. Конкретную таблицу вы укажете отдельно в настройке каждого агента.</p>
           <p className="text-sm text-slate-600">Google Документы пока не подключаются.</p>
         </SetupPanel>
       );
