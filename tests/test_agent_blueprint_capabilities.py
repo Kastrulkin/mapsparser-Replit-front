@@ -929,6 +929,7 @@ def test_google_sheets_read_rows_capability_uses_native_provider(monkeypatch):
                 "spreadsheet_id": "spreadsheet-1",
                 "sheet_name": "Payments",
                 "limit": 10,
+                "rows": [{"amount": "preview-placeholder"}],
             },
         },
         {"user_id": "user-1"},

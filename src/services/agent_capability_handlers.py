@@ -1182,7 +1182,9 @@ def _handle_google_sheets_read_rows(envelope: Dict[str, Any], user_data: Dict[st
     spreadsheet_id = str(payload.get("spreadsheet_id") or payload.get("google_spreadsheet_id") or "").strip()
     sheet_name = str(payload.get("sheet_name") or payload.get("tab") or "Sheet1").strip()
     limit = max(1, min(int(payload.get("limit") or 100), 500))
-    if rows:
+    # A configured connection is the source of truth even in preview. Inline
+    # rows are only a legacy fallback for workflows without a bound sheet.
+    if rows and not integration_id and not spreadsheet_id:
         rows = rows[:limit]
         return _result(
             "read_completed",
