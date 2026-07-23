@@ -63,6 +63,7 @@ LocalOS помогает владельцам и управляющим лока
 ### Operator и Telegram control surface
 - `/dashboard/operator` собирает в одну очередь действия по отзывам, новостям, услугам, партнёрствам, refresh jobs, approvals и billing visibility.
 - Operator доступен через web dashboard и Telegram owner-bot как разные поверхности одного governed core.
+- Утренняя сводка суперадмина показывает конкретные публикации и касания аутрича на день, разделяет реально поставленные в автоматическую очередь действия и ручные шаги и даёт прямые ссылки в рабочие разделы. Человеческий ответ на касание создаёт отдельное оперативное уведомление с исходным сообщением и текстом ответа; stop-on-reply применяется до уведомления.
 - Поддерживаются cached briefs, генерация черновиков, map refresh requests, retry/recovery visibility, manual publication helpers и Telegram follow-ups.
 - Telegram owner-bot работает в guest/client mode: аудит карточки по ссылке, статусы, партнёрства, feature requests, approvals и уведомления.
 - Telegram и внешние social API используют единый Grimbird proxy на OpenClaw после успешной сетевой проверки.

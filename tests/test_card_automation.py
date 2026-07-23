@@ -1,5 +1,6 @@
 from core import card_automation
 from datetime import date
+from services import superadmin_telegram_notifications
 
 
 class _FakeConn:
@@ -216,3 +217,81 @@ def test_digest_plan_lines_ask_concierge_for_new_photos_on_monday():
     lines = card_automation._digest_plan_lines_for_weekday(date(2026, 5, 4), "concierge", False)
     assert "• Прислать новые фото для карточек: интерьер, работы, товары или команда" in lines
     assert "• Добавить свежие фото в карточку: без фото новости и услуги работают слабее" not in lines
+
+
+def test_superadmin_morning_digest_names_posts_and_separates_manual_actions():
+    text = superadmin_telegram_notifications.format_superadmin_morning_operations(
+        [
+            {
+                "business_name": "Весёлая расчёска",
+                "title": "Летние стрижки",
+                "platform": "telegram",
+                "publish_mode": "api",
+                "status": "queued",
+                "approved_at": "2026-07-23T07:00:00Z",
+            },
+            {
+                "business_name": "Весёлая расчёска",
+                "title": "Летние стрижки",
+                "platform": "vk",
+                "publish_mode": "api",
+                "status": "needs_review",
+                "approved_at": None,
+            },
+        ],
+        [],
+    )
+
+    assert "«Летние стрижки» → Telegram: выйдет автоматически" in text
+    assert "«Летние стрижки» → VK: проверить и подтвердить текст" in text
+    assert superadmin_telegram_notifications.CONTENT_URL in text
+    assert "Автоматических касаний на сегодня нет" in text
+
+
+def test_superadmin_morning_digest_explains_automatic_and_manual_outreach():
+    text = superadmin_telegram_notifications.format_superadmin_morning_operations(
+        [],
+        [
+            {
+                "business_name": "LocalOS",
+                "lead_name": "047 Beauty Zone",
+                "channel": "email",
+                "local_time": "10:00",
+                "touch_status": "scheduled",
+                "campaign_status": "approved",
+                "queue_status": "queued",
+            },
+            {
+                "business_name": "Оливер",
+                "lead_name": "Legenda",
+                "channel": "max",
+                "local_time": "12:00",
+                "touch_status": "awaiting_manual_send",
+                "campaign_status": "approved",
+                "queue_status": None,
+            },
+        ],
+    )
+
+    assert "LocalOS → 047 Beauty Zone · Email в 10:00: уйдёт автоматически" in text
+    assert "Оливер → Legenda · MAX в 12:00: отправить вручную" in text
+    assert superadmin_telegram_notifications.OUTREACH_URL in text
+
+
+def test_reply_notification_contains_original_touch_reply_and_stop_status():
+    text = superadmin_telegram_notifications.format_outreach_reply_notification(
+        {
+            "business_name": "Весёлая расчёска",
+            "lead_name": "Yes Apart",
+            "channel": "telegram",
+            "classification": "interested",
+            "stops_campaign": True,
+            "outbound_text": "Хотим предложить особые условия для ваших жителей.",
+            "raw_payload_json": {"raw_reply": "Да, пришлите подробности"},
+        }
+    )
+
+    assert "Весёлая расчёска → Yes Apart · Telegram" in text
+    assert "Хотим предложить особые условия" in text
+    assert "Да, пришлите подробности" in text
+    assert "Следующие касания остановлены" in text

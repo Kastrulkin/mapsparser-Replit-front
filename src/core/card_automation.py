@@ -21,6 +21,7 @@ from core.industry_pattern_recalibration import (
 )
 from core.learning_patterns import format_learning_candidates_for_digest, get_service_optimization_learning_candidates
 from services.llm import analyze_text_with_gigachat
+from services.superadmin_telegram_notifications import build_superadmin_morning_operations_block
 
 
 ACTION_NEWS = "news"
@@ -1677,7 +1678,7 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
 
         owner_is_superadmin = _owner_is_superadmin(conn, owner_id)
         tier = _normalize_digest_tier(rd.get("subscription_tier"), rd.get("subscription_tariff_id"))
-        planned_lines = _digest_plan_lines_for_weekday(now_local.date(), tier, owner_is_superadmin)
+        planned_lines = [] if owner_is_superadmin else _digest_plan_lines_for_weekday(now_local.date(), tier, False)
 
         recent_events = _recent_events(conn, business_id, limit=20)
         completed_today = []
@@ -1727,15 +1728,20 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
             )
         if not business_sections or not sent_date:
             continue
-        text = (
-            f"Доброе утро. План LocalOS на {sent_date.strftime('%d.%m.%Y')}.\n\n"
-            + "\n\n".join(business_sections)
-        )
+        text = f"Доброе утро. План LocalOS на {sent_date.strftime('%d.%m.%Y')}."
+        if not bool(bucket.get("is_superadmin")):
+            text += "\n\n" + "\n\n".join(business_sections)
         if bool(bucket.get("is_superadmin")):
             reply_markup = {}
-            outreach_followup_block = _superadmin_outreach_followup_block(conn, sent_date)
-            if outreach_followup_block:
-                text += f"\n\n{outreach_followup_block}"
+            operations_block = build_superadmin_morning_operations_block(conn, sent_date)
+            text += f"\n\n{operations_block}"
+            completed_sections = [
+                f"🏢 {item['business_name']}\n" + "\n".join(item["completed_lines"])
+                for item in bucket["businesses"]
+                if item.get("completed_lines")
+            ]
+            if completed_sections:
+                text += "\n\n✅ Что LocalOS уже сделал\n" + "\n\n".join(completed_sections)
             learning_block = _superadmin_learning_digest_block(conn)
             if learning_block:
                 text += f"\n\n{learning_block}"
