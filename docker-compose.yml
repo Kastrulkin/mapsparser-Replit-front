@@ -421,6 +421,7 @@ services:
       CRYPTO_PAY_API_BASE: ${CRYPTO_PAY_API_BASE:-}
     volumes:
       - ./src:/app/src:ro
+      - ./alembic_migrations:/app/alembic_migrations:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
