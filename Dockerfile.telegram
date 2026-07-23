@@ -1,3 +1,8 @@
 FROM seo-app-app
 
-RUN pip install --no-cache-dir "python-telegram-bot[socks]==20.8"
+RUN PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=30 \
+    pip install --no-cache-dir --retries 3 \
+    --index-url https://mirrors.aliyun.com/pypi/simple \
+    --extra-index-url https://pypi.org/simple \
+    "python-telegram-bot[socks]==20.8"
