@@ -45,7 +45,7 @@ class GoogleSheetsAuth:
             access_type="offline",
             include_granted_scopes="true",
             state=state,
-            prompt="consent",
+            prompt="consent select_account",
         )
         return authorization_url
 
