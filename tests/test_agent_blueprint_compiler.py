@@ -108,6 +108,40 @@ def test_agent_compiler_creates_custom_telegram_to_sheets_blueprint():
     assert payload["side_effects_performed"] is False
 
 
+def test_agent_compiler_creates_direct_confirmed_sheets_append_without_ai_classification(monkeypatch):
+    from services import agent_blueprint_draft_builder
+
+    def fail_ai_classifier(*args, **kwargs):
+        raise AssertionError("Direct Google Sheets writes must compile deterministically")
+
+    monkeypatch.setattr(agent_blueprint_draft_builder, "infer_agent_workflow_intent", fail_ai_classifier)
+    draft = agent_blueprint_draft_builder.compile_agent_blueprint(
+        "В Google Таблице 1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCkyIqY на листе «Тех лист» "
+        "добавь после моего подтверждения одну строку: LOCALOS_SHEETS_CANARY, 2026-07-23, preview-approved. "
+        "Ничего не удаляй и не меняй структуру таблицы.",
+        use_ai=True,
+    )
+    payload = draft["version_payload"]
+
+    assert draft["category"] == "custom"
+    assert draft["metadata"]["compiler_source"] == "deterministic_google_sheets_write"
+    assert payload["trigger"] == "manual.run"
+    assert payload["capability_allowlist"] == ["sheets.append_row_request"]
+    assert [item["provider"] for item in payload["required_integration_bindings"]] == ["google_sheets"]
+    assert payload["required_integration_bindings"][0]["direction"] == "external_write"
+    assert payload["inputs_schema"]["required"] == ["row_values"]
+    assert payload["inputs_schema"]["properties"]["row_values"]["default"] == [
+        "LOCALOS_SHEETS_CANARY",
+        "2026-07-23",
+        "preview-approved",
+    ]
+    draft_step = next(step for step in payload["steps"] if step.get("artifact_type") == "sheet_row_draft")
+    request_step = next(step for step in payload["steps"] if step.get("capability") == "sheets.append_row_request")
+    assert draft_step["payload"]["sheet_name"] == "Тех лист"
+    assert request_step["payload"]["sheet_name"] == "Тех лист"
+    assert request_step["required_approval_type"] == "sheet_update"
+
+
 def test_agent_compiler_creates_source_destination_blueprint_for_sheets_to_finance():
     from services.agent_blueprint_draft_builder import compile_agent_blueprint
 

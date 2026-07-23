@@ -1635,6 +1635,34 @@ def test_runner_propagates_google_sheets_run_rows_into_output_artifact(monkeypat
     assert payload["external_dispatch_performed"] is False
 
 
+def test_runner_uses_current_run_values_in_sheet_write_preview():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    run = {
+        "id": "run-sheet-write",
+        "input_json": {
+            "row_values": ["new value", "2026-07-24"],
+            "sheet_name": "Canary",
+        },
+    }
+    payload = AgentBlueprintRunner(FakeCursor())._build_artifact_payload(
+        run,
+        {
+            "artifact_type": "sheet_row_draft",
+            "payload": {
+                "operation": "append_row",
+                "sheet_name": "Old tab",
+                "row_values": ["old value"],
+                "provider_write_performed": False,
+            },
+        },
+    )
+
+    assert payload["sheet_name"] == "Canary"
+    assert payload["row_values"] == ["new value", "2026-07-24"]
+    assert payload["provider_write_performed"] is False
+
+
 def test_agents_page_normal_result_panel_does_not_dump_raw_artifact_payload():
     source = read_agent_blueprints_frontend_source()
 

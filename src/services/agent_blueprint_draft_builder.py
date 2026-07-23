@@ -195,6 +195,13 @@ def compile_agent_blueprint(
     category = _normalized_category(preferred_category) or infer_blueprint_category(request_text)
     if category == "communications":
         return _communications_compilation(request_text)
+    direct_sheets_write = _direct_google_sheets_append_intent(request_text)
+    if direct_sheets_write:
+        draft = _source_destination_compilation(request_text, direct_sheets_write)
+        metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+        metadata["compiler_source"] = "deterministic_google_sheets_write"
+        draft["metadata"] = metadata
+        return draft
     ai_result = {}
     content_analytics_request = _is_telegram_content_analytics_request(request_text)
     rich_localos_workflow_request = _is_rich_localos_workflow_request(request_text)
@@ -824,6 +831,66 @@ def _infer_integration_intent(description: str) -> Dict[str, Any]:
         "trigger": trigger,
         "schedule": schedule,
     }
+
+
+def _direct_google_sheets_append_intent(description: str) -> Dict[str, Any]:
+    lowered = description.lower()
+    if _contains_any(lowered, ["telegram", "телеграм", "бот", "webhook"]):
+        return {}
+    mentions_sheets = _contains_any(
+        lowered,
+        ["google sheets", "google-таблиц", "google таблиц", "гугл таблиц", "spreadsheet", "docs.google"],
+    )
+    requests_append = _contains_any(lowered, ["добав", "append", "вставь строк", "запиши строк", "записать строк"])
+    mentions_row = _contains_any(lowered, ["строк", "row"])
+    if not mentions_sheets or not requests_append or not mentions_row:
+        return {}
+
+    sheet_name = _extract_google_sheet_name(description)
+    row_values = _extract_google_sheet_row_values(description)
+    destination = dict(_spec_by_key("google_sheets", DESTINATION_SPECS))
+    default_config = dict(destination.get("default_config") or {})
+    if sheet_name:
+        default_config["sheet_name"] = sheet_name
+    destination["default_config"] = default_config
+    if row_values:
+        destination["default_row_values"] = row_values
+    source = {
+        "key": "manual_context",
+        "binding_key": "manual_context",
+        "provider": "business_profile",
+        "direction": "local_context",
+        "default_capability": "",
+        "default_config": {},
+        "required_config": [],
+    }
+    return {
+        "source": source,
+        "destination": destination,
+        "trigger": "manual.run",
+        "schedule": {},
+        "compiled_template_key": "manual_to_google_sheets_append",
+    }
+
+
+def _extract_google_sheet_name(description: str) -> str:
+    patterns = [
+        r"(?:на\s+)?лист(?:е|а)?\s*[«\"']([^\u00bb\"']{1,100})[»\"']",
+        r"sheet\s*[«\"']([^\u00bb\"']{1,100})[»\"']",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, description, flags=re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return ""
+
+
+def _extract_google_sheet_row_values(description: str) -> List[str]:
+    match = re.search(r"(?:строку|row)\s*:\s*(.+)", description, flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        return []
+    raw_values = re.split(r"\.\s*(?:ничего|не\s+удал|не\s+меня|без\s+измен)", match.group(1), maxsplit=1, flags=re.IGNORECASE)[0]
+    return [item.strip(" \t\n\r«»\"'") for item in raw_values.split(",") if item.strip(" \t\n\r«»\"'")]
 
 
 def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[str, Any]:
@@ -1485,7 +1552,11 @@ def _transform_step(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict
                 "localos_write_performed": False,
             },
         }
-    if source.get("key") == "telegram" and destination.get("key") == "google_sheets":
+    if source.get("key") in {"manual_context", "telegram"} and destination.get("key") == "google_sheets":
+        default_config = destination.get("default_config") if isinstance(destination.get("default_config"), dict) else {}
+        default_row_values = destination.get("default_row_values") if isinstance(destination.get("default_row_values"), list) else []
+        if not default_row_values:
+            default_row_values = ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"]
         return {
             "key": "prepare_sheet_row",
             "type": "artifact",
@@ -1495,9 +1566,9 @@ def _transform_step(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict
                 "status": "draft",
                 "operation": "append_row",
                 "integration_binding": str(destination.get("binding_key") or "google_sheets_append"),
-                "sheet_name": "Leads",
-                "columns": ["received_at", "telegram_username", "message_text"],
-                "row_values": ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"],
+                "sheet_name": str(default_config.get("sheet_name") or "Leads"),
+                "columns": [f"Значение {index + 1}" for index in range(len(default_row_values))],
+                "row_values": list(default_row_values),
                 "provider_write_performed": False,
             },
         }
@@ -1570,9 +1641,13 @@ def _destination_capability_step(source: Dict[str, Any], destination: Dict[str, 
             }
         ]
     if destination_key == "google_sheets":
+        default_config = destination.get("default_config") if isinstance(destination.get("default_config"), dict) else {}
+        default_row_values = destination.get("default_row_values") if isinstance(destination.get("default_row_values"), list) else []
+        if not default_row_values:
+            default_row_values = ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"]
         payload["operation"] = "append_row"
-        payload["sheet_name"] = "Leads"
-        payload["row_values"] = ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"]
+        payload["sheet_name"] = str(default_config.get("sheet_name") or "Leads")
+        payload["row_values"] = list(default_row_values)
         payload["daily_append_cap"] = int((destination.get("default_limits") or {}).get("daily_append_cap") or 50)
     if destination_key == "telegram":
         payload["message_type"] = "telegram_post_draft"
@@ -1631,6 +1706,7 @@ def _source_destination_compilation(description: str, intent: Dict[str, Any]) ->
     schedule = intent.get("schedule") if isinstance(intent.get("schedule"), dict) else {}
     source_binding = _source_binding(source, trigger)
     destination_binding = _destination_binding(destination)
+    required_bindings = [destination_binding] if source.get("key") == "manual_context" else [source_binding, destination_binding]
     steps = [
         _source_step(source, trigger),
         _transform_step(source, destination),
@@ -1661,8 +1737,20 @@ def _source_destination_compilation(description: str, intent: Dict[str, Any]) ->
                 "spreadsheet_id": {"type": "string"},
                 "sheet_name": {"type": "string"},
                 "rows": {"type": "array"},
+                "row_values": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "title": "Значения новой строки",
+                    "description": "По одному значению на строку. Перед записью LocalOS покажет итоговую строку.",
+                    **({"default": list(destination.get("default_row_values") or [])} if destination.get("default_row_values") else {}),
+                },
                 "request": {"type": "string"},
             },
+            **(
+                {"required": ["row_values"]}
+                if source.get("key") == "manual_context" and destination.get("key") == "google_sheets"
+                else {}
+            ),
         },
         "steps": steps,
         "capability_allowlist": capability_allowlist,
@@ -1673,7 +1761,7 @@ def _source_destination_compilation(description: str, intent: Dict[str, Any]) ->
             "ambiguous_data": "manual_approval_required",
             "mode": "approved_request_only",
         },
-        "required_integration_bindings": [source_binding, destination_binding],
+        "required_integration_bindings": required_bindings,
         "limits": limits,
         "output_schema": {
             "type": "object",
@@ -1702,7 +1790,7 @@ def _source_destination_compilation(description: str, intent: Dict[str, Any]) ->
     }
     metadata["compiled_process"] = {
         "schema": "compiled_source_destination_workflow_v1",
-        "source_binding": str(source_binding.get("key") or ""),
+        "source_binding": "" if source.get("key") == "manual_context" else str(source_binding.get("key") or ""),
         "destination_binding": str(destination_binding.get("key") or ""),
         "runtime_truth": "agent_blueprint_versions.steps_json",
         "approval_boundary": approval_type,

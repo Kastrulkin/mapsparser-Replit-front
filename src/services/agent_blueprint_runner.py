@@ -444,6 +444,17 @@ class AgentBlueprintRunner:
     def _build_artifact_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
         base_payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
         artifact_type = str(step.get("artifact_type") or "").strip()
+        if artifact_type == "sheet_row_draft":
+            run_input = self._run_input(run)
+            return {
+                **base_payload,
+                **{
+                    key: run_input[key]
+                    for key in ("spreadsheet_id", "sheet_name", "row_values", "range", "values", "expected_values")
+                    if run_input.get(key) not in (None, "", [])
+                },
+                "provider_write_performed": False,
+            }
         if artifact_type == "lead_source_plan":
             return self._build_lead_source_payload(run, base_payload)
         if artifact_type == "lead_shortlist":
