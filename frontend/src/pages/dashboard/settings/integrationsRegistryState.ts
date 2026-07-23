@@ -35,11 +35,17 @@ export type OutreachSenderAccountSummary = {
   id: string;
   channel?: string;
   sender_identity?: string | null;
+  display_name?: string | null;
   status?: string;
   outreach_enabled?: boolean;
   reply_sync_enabled?: boolean;
   reply_sync_error?: string | null;
   health_status?: string | null;
+  capabilities?: {
+    manual_handoff?: boolean;
+    direct_send?: boolean;
+    reply_sync?: boolean;
+  };
 };
 
 export type IntegrationsRegistryRawState = {
@@ -122,6 +128,7 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
   const matonAccount = findAccount(accounts, ['maton']);
   const emailSender = outreachSenders.find((sender) => sender.channel === 'email' && sender.status === 'connected') || null;
   const vkOutreachSender = outreachSenders.find((sender) => sender.channel === 'vk' && sender.status === 'connected') || null;
+  const maxOutreachSender = outreachSenders.find((sender) => sender.channel === 'max' && sender.status === 'connected') || null;
   const emailReady = Boolean(
     emailSender
     && emailSender.outreach_enabled
@@ -202,6 +209,20 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
           ? 'Разрешите отправку или восстановите проверку ответов.'
           : 'Подключите VK-сообщество ключом с правом на сообщения.',
       primaryAction: { label: vkOutreachReady ? 'Проверить' : 'Настроить', type: 'drawer', target: 'outreach_vk' },
+      hasLogs: true,
+      hasHelp: true,
+    },
+    {
+      id: 'outreach_max',
+      name: 'MAX для аутрича',
+      tag: 'Коммуникации',
+      description: 'Ручная отправка из личного MAX-аккаунта с черновиками и историей в LocalOS.',
+      connectionType: 'manual',
+      status: maxOutreachSender ? 'manual' : 'not_connected',
+      nextAction: maxOutreachSender
+        ? `Ручной канал добавлен: ${maxOutreachSender.sender_identity || 'MAX'}.`
+        : 'Добавьте номер MAX для ручных касаний.',
+      primaryAction: { label: maxOutreachSender ? 'Проверить' : 'Настроить', type: 'drawer', target: 'outreach_max' },
       hasLogs: true,
       hasHelp: true,
     },

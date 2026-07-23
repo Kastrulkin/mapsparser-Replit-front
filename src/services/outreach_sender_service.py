@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 
@@ -178,6 +179,117 @@ def _pause_sender_work(cursor: Any, sender_account_id: str, reason_code: str) ->
         """,
         (reason_code, reason_code, sender_account_id),
     )
+
+
+def normalize_manual_max_phone(value: Any) -> str:
+    digits = re.sub(r"\D", "", str(value or ""))
+    if len(digits) == 11 and digits.startswith("8"):
+        digits = f"7{digits[1:]}"
+    if len(digits) != 11 or not digits.startswith("7"):
+        raise ValueError("Укажите российский номер MAX в формате +7XXXXXXXXXX")
+    return f"+{digits}"
+
+
+def connect_manual_max_sender(
+    cursor: Any,
+    *,
+    scope_type: str,
+    business_id: str | None,
+    owner_user_id: str | None,
+    phone: Any,
+    display_name: str | None = None,
+) -> dict[str, Any]:
+    normalized_phone = normalize_manual_max_phone(phone)
+    normalized_name = str(display_name or "").strip() or "MAX"
+    capabilities = {
+        "provider": "manual_max",
+        "account_kind": "personal_account_manual",
+        "direct_send": False,
+        "reply_sync": False,
+        "manual_handoff": True,
+        "recipient_requires_max_url_or_manual_contact": True,
+    }
+    cursor.execute(
+        """
+        SELECT * FROM outreach_sender_accounts
+        WHERE scope_type = %s
+          AND COALESCE(business_id, '') = COALESCE(%s, '')
+          AND channel = 'max'
+          AND sender_identity = %s
+        FOR UPDATE
+        """,
+        (scope_type, business_id, normalized_phone),
+    )
+    current = _dict(cursor.fetchone())
+    sender_id = str(current.get("id") or uuid.uuid4())
+    if current:
+        cursor.execute(
+            """
+            UPDATE outreach_sender_accounts
+            SET owner_user_id = COALESCE(%s, owner_user_id),
+                display_name = %s, auth_data_encrypted = NULL,
+                status = 'connected', capabilities_json = %s,
+                outreach_enabled = FALSE, permission_changed_by = %s,
+                permission_changed_at = NOW(), reply_sync_error = NULL,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (owner_user_id, normalized_name, Json(capabilities), owner_user_id, sender_id),
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO outreach_sender_accounts (
+                id, scope_type, business_id, owner_user_id, channel,
+                sender_identity, display_name, auth_data_encrypted,
+                status, capabilities_json, outreach_enabled,
+                permission_changed_by, permission_changed_at,
+                created_at, updated_at
+            ) VALUES (
+                %s, %s, %s, %s, 'max', %s, %s, NULL,
+                'connected', %s, FALSE, %s, NOW(), NOW(), NOW()
+            )
+            RETURNING *
+            """,
+            (
+                sender_id, scope_type, business_id, owner_user_id,
+                normalized_phone, normalized_name, Json(capabilities), owner_user_id,
+            ),
+        )
+    cursor.fetchone()
+    _record_sender_event(
+        cursor,
+        sender_account_id=sender_id,
+        event_type="connected",
+        actor_id=owner_user_id,
+        payload={
+            "channel": "max",
+            "sender_identity": normalized_phone,
+            "scope_type": scope_type,
+            "business_id": business_id,
+            "outreach_enabled": False,
+            "reply_sync_enabled": False,
+            "manual_handoff": True,
+            "reconnected": bool(current),
+        },
+    )
+    _record_sender_event(
+        cursor,
+        sender_account_id=sender_id,
+        event_type="preflight_succeeded",
+        actor_id=owner_user_id,
+        payload={
+            "direct_send": False,
+            "reply_sync": False,
+            "manual_handoff": True,
+            "messages_sent": 0,
+        },
+    )
+    _record_sender_recovery(
+        cursor, sender_id, actor_id=owner_user_id, provider_code="manual_max",
+    )
+    return safe_sender_payload(load_sender_account(cursor, sender_id))
 
 
 def connect_email_sender(

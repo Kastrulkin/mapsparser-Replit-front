@@ -66,7 +66,9 @@ LocalOS supports lead import, geo-search, lead parsing, audit, service/audience 
 
 The sender is explicit: the business may speak for itself after completing its sender profile, or LocalOS may transparently represent the business through `localos_for_partner`. Matching still works when the business sender profile is incomplete; only the `partner_business` campaign is blocked.
 
-Telegram and email are automatic only when a scoped sender account, permission, direct-send capability and reply sync are ready. WhatsApp, MAX, VK, SMS and other channels are manual until verified adapters exist.
+Telegram, email and a VK community can be automatic only when a scoped sender account, permission, direct-send capability and reply sync are ready. VK outreach uses a community key with `messages`; the recipient sees the actual community name and avatar. A personal MAX number can be registered as a scoped manual sender, but the operator still sends and records replies manually. WhatsApp, SMS and other channels are manual until verified adapters exist.
+
+VK community posting is a separate supervised beta flow with `wall` permission. The current product stores wall publishing and outreach messaging as separate bindings even if the same community key has both permissions. Connecting one does not enable the other, and both external actions require their own approval.
 
 See [LocalOS Outreach System](OUTREACH_SYSTEM.md).
 

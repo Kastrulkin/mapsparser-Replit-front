@@ -1,5 +1,15 @@
 # Documentation Changelog
 
+## 2026-07-23
+
+- Added a scoped manual MAX sender binding: LocalOS stores the account phone, prepares MAX touches and records operator-confirmed delivery/reply states without direct send or access to personal chats.
+- Documented that the official MAX integration surface is a moderated Bot API, not a personal-account API by phone; a future bot connection is an inbound/opt-in channel rather than a cold-outreach substitute.
+- Documented the production VK community sender: encrypted community key, actual sender name/avatar, separate outreach permission, campaign-scoped reply sync and no-send connection preflight.
+- Corrected outdated statements that treated VK as a manual-only outreach channel or recommended personal-profile VK ID OAuth for outreach.
+- Documented the two current VK beta bindings: `outreach_sender_accounts` with `messages` and `externalbusinessaccounts` with `wall`.
+- Marked one shared VK connection with independent publishing/outreach permissions as the target model and an explicit current gap.
+- Added the messaging rule that useful community content may support trust but cannot replace lead-specific evidence or disguise an unrelated sender name.
+
 ## 2026-07-22
 
 - Added the canonical `OUTREACH_SYSTEM.md` lifecycle from lead search and public contact enrichment through evidence, sender identity, versioned multichannel drafts, approval, stop-on-reply and outcome learning.

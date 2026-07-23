@@ -57,7 +57,7 @@ Confirmed areas:
 - Google Business Profile OAuth, sync, location binding, and publish endpoints;
 - Yandex and 2GIS sync/admin endpoints.
 - AI-agent builder/cockpit, compiled workflow runtime, connector route selection, run observability, approval queues, and billing ledgers.
-- supervised outreach through shared lead workstreams, sourced evidence, explicit sender identity, versioned multichannel approval, runtime preflight, inbound reply stops, and attributable outcomes.
+- supervised outreach through shared lead workstreams, sourced evidence, explicit sender identity, versioned multichannel approval, Telegram/email/VK community adapters, runtime preflight, inbound reply stops, and attributable outcomes.
 - parser reliability controls including proxy health gating, captcha retry caps, TTL/DLQ handling, and failure taxonomy.
 
 Not confirmed as a public contract:
@@ -74,7 +74,8 @@ The last three months of development shifted LocalOS from a card-audit tool towa
 - agent workflows now use a compiled plan model with explicit capabilities, provider routes, connection preflight, versioning, preview runs, run journals, and approval queues;
 - OpenClaw is treated as the execution boundary, while LocalOS owns policy, human approval, billing, audit, support export, and recovery flows;
 - Google Business Profile support now covers OAuth, status, location selection, sync, review-reply publishing, and post publishing. A repeat Basic API Access application for project `localos-gbp` was submitted on 18 July 2026 using the verified managed client profile «Веселая расческа»; the integration remains `beta / Google review pending` until approval and a live publish proof;
-- outreach now includes lead sourcing/import, map and website contact enrichment, Telegram channel/user classification, public signal evidence, sender profiles, founder-led personalization, versioned multichannel drafts, approval, reply-aware delivery and strategy/outcome learning;
+- outreach now includes lead sourcing/import, map and website contact enrichment, Telegram channel/user classification, public signal evidence, sender profiles, founder-led personalization, versioned multichannel drafts, approval, reply-aware Telegram/email/VK community delivery and strategy/outcome learning;
+- VK currently has separate supervised bindings for community messages (`messages`) and approved wall posts (`wall`); one shared connection with independent permissions remains a product gap rather than a completed capability;
 - content planning gained network modes, weekly/location filters, bulk actions, learning metrics, and quality signal prioritization;
 - finance gained onboarding analytics, KPI history, partial-data handling, CRM adapter scaffolding, average-ticket/upsell views, and approved apply flows for agents;
 - Telegram gained guest/client control flows, production proxy routing, refresh/retry commands, approvals, and agent binding guardrails;

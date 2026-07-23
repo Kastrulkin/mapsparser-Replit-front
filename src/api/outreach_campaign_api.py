@@ -47,6 +47,7 @@ from services.outreach_email_adapter import (
 from services.outreach_sender_service import (
     change_sender_permission,
     connect_email_sender,
+    connect_manual_max_sender,
     connect_vk_community_sender,
     connect_vk_sender,
     disconnect_sender,
@@ -368,6 +369,53 @@ def connect_email_sender_account():
             "success": False,
             "error": str(exc),
             "reason_code": getattr(exc, "code", str(exc)),
+        }), 422
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/sender-accounts/max/manual")
+def connect_manual_max_sender_account():
+    user_data, error = _require_auth()
+    if error:
+        return error
+    payload = request.get_json(silent=True) or {}
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        scope = _sender_scope(
+            cursor,
+            user_data,
+            scope_type=str(payload.get("scope_type") or "business"),
+            requested_business_id=str(payload.get("business_id") or "").strip() or None,
+        )
+        if not scope:
+            return jsonify({"success": False, "error": "Sender scope access denied"}), 403
+        sender = connect_manual_max_sender(
+            cursor,
+            scope_type=scope[0],
+            business_id=scope[1],
+            owner_user_id=str(user_data.get("user_id") or "") or None,
+            phone=payload.get("phone"),
+            display_name=str(payload.get("display_name") or "").strip() or None,
+        )
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "sender_account": sender,
+            "message": (
+                "MAX добавлен в ручном режиме. LocalOS подготовит текст, "
+                "а отправку и ответ нужно отметить вручную."
+            ),
+            "messages_sent": 0,
+        }), 201
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({
+            "success": False,
+            "error": str(exc),
+            "reason_code": "max_manual_connect_failed",
+            "messages_sent": 0,
         }), 422
     finally:
         conn.close()

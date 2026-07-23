@@ -23,6 +23,7 @@ import TelegramConnection from '@/components/TelegramConnection';
 import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
 import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
 import { OutreachEmailSetup } from '@/components/OutreachEmailSetup';
+import { OutreachMaxSetup } from '@/components/OutreachMaxSetup';
 import { OutreachVkSetup } from '@/components/OutreachVkSetup';
 import WhatsAppConnection from '@/components/WhatsAppConnection';
 import { WABACredentials } from '@/components/WABACredentials';
@@ -134,6 +135,7 @@ const serviceDescriptions: Record<string, string> = {
   whatsapp: 'Сохраните номер и WABA-доступ, когда канал готов к отправке сообщений клиентам.',
   outreach_email: 'Один mailbox используется для отправки одобренных писем и обязательной проверки ответов.',
   outreach_vk: 'VK-сообщество используется только для одобренных сообщений и проверки ответов по кампаниям LocalOS.',
+  outreach_max: 'LocalOS готовит MAX-сообщения, а владелец аккаунта отправляет их и отмечает ответы вручную.',
   google_sheets: 'Этот доступ нужен агентам для чтения Google Таблиц. Он не публикует ничего наружу.',
   google_business: 'Выберите карточку компании для отзывов, статистики и согласованных постов Google.',
   vk: 'Укажите ID и ключ сообщества. Текстовые публикации всё равно идут только после вашего подтверждения.',
@@ -150,6 +152,7 @@ const serviceHelp: Record<string, string[]> = {
   whatsapp: ['Добавьте номер бизнеса.', 'Заполните WABA Phone ID и access token.', 'Проверьте статус перед отправкой сообщений.'],
   outreach_email: ['Возьмите SMTP, IMAP и пароль приложения у почтового провайдера.', 'Проверьте подключение без отправки письма.', 'Отдельно разрешите отправку; проверка ответов включится вместе с ней.'],
   outreach_vk: ['Создайте в VK-сообществе ключ доступа с правом на сообщения.', 'LocalOS покажет фактическое имя отправителя и проверит доступ без отправки.', 'Отдельно разрешите отправку; проверка ответов включится вместе с ней.'],
+  outreach_max: ['Укажите номер личного MAX-аккаунта.', 'LocalOS добавит MAX в доступные ручные каналы и подготовит текст.', 'После отправки отметьте касание или ответ в LocalOS.'],
   google_sheets: ['Нажмите подключение Google.', 'Выберите аккаунт, где есть нужная таблица.', 'Вернитесь к агенту и запустите безопасный тест.'],
   google_business: ['Подключите Google-доступ.', 'Загрузите список карточек.', 'Выберите карточку компании и синхронизируйте данные.'],
   vk: ['Укажите числовой ID сообщества.', 'Добавьте ключ сообщества с доступом к стене.', 'LocalOS проверит готовность текстовых публикаций.'],
@@ -169,7 +172,7 @@ const serviceGroups: Array<{ key: ServiceGroupKey; title: string; description: s
 
 const serviceGroup = (serviceId: string): ServiceGroupKey => {
   if (serviceId === 'telegram') return 'owner';
-  if (['whatsapp', 'outreach_email', 'outreach_vk', 'google_business', 'vk', 'meta', 'yandex_maps', '2gis'].includes(serviceId)) return 'publishing';
+  if (['whatsapp', 'outreach_email', 'outreach_vk', 'outreach_max', 'google_business', 'vk', 'meta', 'yandex_maps', '2gis'].includes(serviceId)) return 'publishing';
   return 'data';
 };
 
@@ -208,6 +211,7 @@ const serviceIcon = (id: string) => {
   if (id === 'whatsapp') return MessageCircle;
   if (id === 'outreach_email') return Mail;
   if (id === 'outreach_vk') return MessageCircle;
+  if (id === 'outreach_max') return MessageCircle;
   if (id === 'google_sheets') return Database;
   if (id === 'google_business') return Building2;
   if (id === 'vk') return MessageCircle;
@@ -760,6 +764,17 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       );
     }
 
+    if (service.id === 'outreach_max') {
+      return (
+        <OutreachMaxSetup
+          businessId={senderScope === 'business' ? currentBusinessId : null}
+          scopeType={senderScope}
+          compact
+          onChanged={refresh}
+        />
+      );
+    }
+
     if (service.id === 'google_sheets') {
       return (
         <SetupPanel
@@ -1061,6 +1076,8 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       ? loadState.outreachSenders.filter((sender) => sender.channel === 'email')
       : service.id === 'outreach_vk'
         ? loadState.outreachSenders.filter((sender) => sender.channel === 'vk')
+      : service.id === 'outreach_max'
+        ? loadState.outreachSenders.filter((sender) => sender.channel === 'max')
       : service.id === 'telegram'
         ? loadState.outreachSenders.filter((sender) => sender.channel === 'telegram')
         : [];
