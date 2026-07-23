@@ -77,7 +77,7 @@ LocalOS помогает владельцам и управляющим лока
 - Результат нормализован в `business_result`/`result_state`; approval показывается только для текущего run перед реальным внешним действием. Старые ожидания решения supersede-ятся.
 - Сертифицированные beta-capabilities охватывают read/draft/safe internal write: Google Sheets read, drafts для отзывов/новостей/услуг, content-plan draft, appointments read, support export и партнёрский analysis/draft. Request-only writes не активируются как beta workflow.
 - OpenClaw / ActionOrchestrator остаётся execution boundary для policy, approval, billing, audit, callbacks и recovery. Provider не является пользовательской моделью агента.
-- Production остаётся cohort beta: async runtime ограничен `AGENT_BETA_BUSINESS_IDS`; scheduler включён для двух безопасных read-only canary Riderra. Первый независимый цикл обоих расписаний подтверждён 20 июля 2026 года, семидневный gate ещё продолжается. Массовый self-service запуск пока не заявляется.
+- Production остаётся cohort beta: async runtime ограничен `AGENT_BETA_BUSINESS_IDS`; scheduler включён для двух безопасных read-only canary Riderra. Четыре последовательных реальных дня обоих расписаний подтверждены 20–23 июля 2026 года; семидневный gate продолжается до 26 июля. Массовый self-service запуск пока не заявляется.
 
 ### Интеграции и внешние write-действия
 - Google Business Profile подключается через OAuth; production-доступ зависит от статуса Google API approval и конкретного включённого capability.
