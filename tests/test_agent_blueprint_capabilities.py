@@ -756,6 +756,46 @@ def test_google_sheets_adapter_read_rows_uses_google_sheets_values_api(monkeypat
     assert calls[0]["headers"]["Authorization"] == "Bearer access-token"
 
 
+def test_google_sheets_adapter_filters_rows_before_limit(monkeypatch):
+    from services import agent_google_sheets_adapter
+
+    class FakeResponse:
+        status_code = 200
+        content = b"{}"
+        text = "{}"
+
+        def json(self):
+            return {
+                "range": "Trips!A1:C4",
+                "values": [
+                    ["Дата", "Откуда", "Куда"],
+                    ["01.04.22 9:00", "Helsinki", "Airport"],
+                    ["02.04.22 9:00", "Tallinn", "Airport"],
+                    ["20.04.22 15:30", "Tallinn", "Tartu"],
+                ],
+            }
+
+    monkeypatch.setattr(agent_google_sheets_adapter.requests, "get", lambda *_args, **_kwargs: FakeResponse())
+    adapter = agent_google_sheets_adapter.GoogleSheetsAppendAdapter(
+        {"token": "access-token", "scopes": [agent_google_sheets_adapter.SHEETS_SCOPE]}
+    )
+
+    result = adapter.read_rows(
+        {
+            "spreadsheet_id": "spreadsheet-1",
+            "sheet_name": "Trips",
+            "limit": 1,
+            "search_terms": ["20.04.22"],
+        }
+    )
+
+    assert result["search_applied"] is True
+    assert result["row_count"] == 1
+    assert result["rows"][0]["row_number"] == 4
+    assert result["rows"][0]["Откуда"] == "Tallinn"
+    assert result["rows"][0]["Куда"] == "Tartu"
+
+
 def test_google_sheets_adapter_read_rows_falls_back_from_default_sheet1_to_first_tab(monkeypatch):
     from services import agent_google_sheets_adapter
 
@@ -900,8 +940,11 @@ def test_google_sheets_adapter_read_rows_refreshes_expired_access_token(monkeypa
 def test_google_sheets_read_rows_capability_uses_native_provider(monkeypatch):
     from services import agent_capability_handlers
 
+    captured_request = {}
+
     class FakeReadAdapter:
         def read_rows(self, request):
+            captured_request.update(request)
             return {
                 "success": True,
                 "range": "Payments!A1:C3",
@@ -930,6 +973,7 @@ def test_google_sheets_read_rows_capability_uses_native_provider(monkeypatch):
                 "sheet_name": "Payments",
                 "limit": 10,
                 "rows": [{"amount": "preview-placeholder"}],
+                "request": "Найди поездку 20 апреля 2022 года",
             },
         },
         {"user_id": "user-1"},
@@ -942,6 +986,7 @@ def test_google_sheets_read_rows_capability_uses_native_provider(monkeypatch):
     assert payload["sheet_name"] == "Actual tab"
     assert payload["count"] == 1
     assert payload["rows"][0]["amount"] == "12000"
+    assert "20.04.22" in captured_request["search_terms"]
 
 
 def test_google_sheets_invalid_grant_marks_saved_account_for_reconnect(monkeypatch):

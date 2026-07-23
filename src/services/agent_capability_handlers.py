@@ -1174,6 +1174,47 @@ def _extract_inline_rows(payload: Dict[str, Any]) -> list[Dict[str, Any]]:
     return rows
 
 
+_RUSSIAN_MONTH_NUMBERS = {
+    "января": 1,
+    "февраля": 2,
+    "марта": 3,
+    "апреля": 4,
+    "мая": 5,
+    "июня": 6,
+    "июля": 7,
+    "августа": 8,
+    "сентября": 9,
+    "октября": 10,
+    "ноября": 11,
+    "декабря": 12,
+}
+
+
+def _google_sheets_search_terms(payload: Dict[str, Any]) -> list[str]:
+    explicit = payload.get("search_terms")
+    terms = [str(item or "").strip() for item in explicit] if isinstance(explicit, list) else []
+    context = " ".join(
+        str(payload.get(key) or "")
+        for key in ("query", "request", "goal", "filter_text")
+    ).lower()
+    for match in re.finditer(
+        r"(?<!\d)(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+(\d{4})(?:\s+года)?",
+        context,
+    ):
+        day = int(match.group(1))
+        month = _RUSSIAN_MONTH_NUMBERS[match.group(2)]
+        year = int(match.group(3))
+        terms.extend(
+            [
+                f"{day:02d}.{month:02d}.{year % 100:02d}",
+                f"{day:02d}.{month:02d}.{year:04d}",
+                f"{year:04d}-{month:02d}-{day:02d}",
+                f"{day:02d}/{month:02d}/{year:04d}",
+            ]
+        )
+    return list(dict.fromkeys(term for term in terms if term))
+
+
 def _handle_google_sheets_read_rows(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
     payload = _payload(envelope)
     tenant_id = str(envelope.get("tenant_id") or "").strip()
@@ -1215,6 +1256,7 @@ def _handle_google_sheets_read_rows(envelope: Dict[str, Any], user_data: Dict[st
                     "sheet_name": sheet_name,
                     "range": payload.get("range") or payload.get("range_name"),
                     "limit": limit,
+                    "search_terms": _google_sheets_search_terms(payload),
                 }
             )
         except GoogleSheetsAdapterError as exc:

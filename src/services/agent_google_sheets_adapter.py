@@ -175,13 +175,26 @@ class GoogleSheetsAppendAdapter:
         payload = response.json() if response.content else {}
         values = payload.get("values") if isinstance(payload.get("values"), list) else []
         headers = _normalize_headers(values[0]) if values else []
-        rows = []
+        all_rows = []
         raw_rows = values[1:] if headers else values
-        for index, values_row in enumerate(raw_rows[:limit], start=2 if headers else 1):
+        for index, values_row in enumerate(raw_rows, start=2 if headers else 1):
             if headers:
-                rows.append(_values_to_row(headers, values_row, index))
+                all_rows.append(_values_to_row(headers, values_row, index))
             else:
-                rows.append({"row_number": index, "values": values_row if isinstance(values_row, list) else []})
+                all_rows.append({"row_number": index, "values": values_row if isinstance(values_row, list) else []})
+        search_terms = [
+            str(item or "").strip().casefold()
+            for item in request.get("search_terms", [])
+            if str(item or "").strip()
+        ] if isinstance(request.get("search_terms"), list) else []
+        matched_rows = all_rows
+        if search_terms:
+            matched_rows = [
+                row
+                for row in all_rows
+                if any(term in json.dumps(row, ensure_ascii=False).casefold() for term in search_terms)
+            ]
+        rows = matched_rows[:limit]
         return {
             "success": True,
             "spreadsheet_id": spreadsheet_id,
@@ -190,6 +203,7 @@ class GoogleSheetsAppendAdapter:
             "headers": headers,
             "rows": rows,
             "row_count": len(rows),
+            "search_applied": bool(search_terms),
         }
 
     def _load_first_sheet_name(
