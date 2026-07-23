@@ -24,6 +24,11 @@ def _contains_any(text: str, words: List[str]) -> bool:
     return any(word in lowered for word in words)
 
 
+def _mentions_reviews(text: str) -> bool:
+    lowered = text.lower()
+    return "отзыв" in lowered or bool(re.search(r"\breviews?\b", lowered))
+
+
 def _extract_requested_date(description: str) -> str:
     iso_match = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", description)
     if iso_match:
@@ -150,7 +155,7 @@ def infer_blueprint_category(description: str) -> str:
         return "documents"
     if _is_email_authoring_request(text):
         return "email"
-    if _contains_any(text, ["отзыв", "review"]):
+    if _mentions_reviews(text):
         return "reviews"
     if _contains_any(text, ["услуг", "сервис", "пустые описан", "названия", "отсутствующие цены"]):
         return "services"
@@ -1069,7 +1074,7 @@ def _source_only_compilation(description: str, intent: Dict[str, Any]) -> Dict[s
 
 
 def _review_telegram_delivery_intent(lowered: str) -> Dict[str, Any]:
-    if not _contains_any(lowered, ["отзыв", "review"]):
+    if not _mentions_reviews(lowered):
         return {}
     if not _contains_any(lowered, ["telegram", "телеграм"]):
         return {}
@@ -1220,7 +1225,7 @@ def _is_partner_replies_request(text: str) -> bool:
 
 
 def _is_review_location_analysis_request(text: str) -> bool:
-    if not _contains_any(text, ["отзыв", "review"]):
+    if not _mentions_reviews(text):
         return False
     if _contains_any(text, ["выруч", "расход", "финанс"]) and _contains_any(text, ["запис", "рекомендац", "следующую неделю"]):
         return False
@@ -1228,7 +1233,7 @@ def _is_review_location_analysis_request(text: str) -> bool:
 
 
 def _is_review_based_content_request(text: str) -> bool:
-    if not _contains_any(text, ["отзыв", "review"]):
+    if not _mentions_reviews(text):
         return False
     return _contains_any(
         text,

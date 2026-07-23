@@ -262,7 +262,7 @@ def _build_preview(
 
 def _missing_questions(description: str, category: str) -> List[Dict[str, str]]:
     text = description.lower()
-    if _is_self_contained_telegram_delivery(text):
+    if _is_self_contained_telegram_delivery(text) or _is_self_contained_google_sheets_write(text):
         return []
     library = QUESTION_LIBRARY.get(category) or QUESTION_LIBRARY["custom"]
     questions = []
@@ -287,6 +287,15 @@ def _is_self_contained_telegram_delivery(text: str) -> bool:
     if not any(marker in text for marker in ["каждый", "каждое", "каждую", "ежеднев", "утро", "день", "вечер"]):
         return False
     return any(marker in text for marker in ["сообщ", "текст", "привет", "напомин"])
+
+
+def _is_self_contained_google_sheets_write(text: str) -> bool:
+    mentions_sheets = any(marker in text for marker in ["google sheets", "google таблиц", "google-таблиц", "гугл таблиц", "spreadsheet"])
+    requests_row = any(marker in text for marker in ["добав", "append", "вставь строк", "запиши строк", "записать строк"])
+    identifies_target = "лист" in text or "sheet" in text
+    has_values = bool(re.search(r"(?:строку|row)\s*:\s*\S+", text))
+    has_control = any(marker in text for marker in ["подтвержд", "approval", "после моего решения"])
+    return mentions_sheets and requests_row and identifies_target and has_values and has_control
 
 
 def _compiler_questions(draft: Dict[str, Any], description: str = "") -> List[Dict[str, str]]:

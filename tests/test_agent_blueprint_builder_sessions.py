@@ -64,6 +64,38 @@ def test_agent_builder_session_does_not_repeat_review_draft_question_after_answe
     assert all(item["key"] != "output" for item in clarified["missing_questions"])
 
 
+def test_agent_builder_session_does_not_treat_sheets_preview_as_review_task():
+    from services.agent_builder_session import build_agent_builder_state
+
+    state = build_agent_builder_state(
+        [
+            {
+                "role": "user",
+                "content": (
+                    "В Google Таблице 1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCkyIqY на листе «Тех лист» "
+                    "добавь после моего подтверждения одну строку: QA, 2026-07-23, preview-only. "
+                    "Ничего не удаляй и не меняй структуру таблицы."
+                ),
+            }
+        ],
+        connected_integrations=[
+            {
+                "id": "sheets-1",
+                "provider": "google_sheets",
+                "status": "active",
+                "display_name": "Riderra sheet",
+                "config": {"spreadsheet_id": "sheet-1", "sheet_name": "Тех лист"},
+            }
+        ],
+        business_id="biz1",
+        user_id="user1",
+    )
+
+    assert state["category"] == "custom"
+    assert state["preview"]["category"] != "reviews"
+    assert not any("стиль ответа" in item["question"].lower() for item in state["missing_questions"])
+
+
 def test_agent_builder_session_presents_internal_business_summary_from_compiled_workflow():
     from services.agent_builder_session import build_agent_builder_state, preview_to_setup
 
