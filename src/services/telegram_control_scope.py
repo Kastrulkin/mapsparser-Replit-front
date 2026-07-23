@@ -110,7 +110,7 @@ def _load_businesses(
           AND {access_filter}
           AND NOT (b.network_id IS NOT NULL AND b.id = b.network_id)
           {search_filter}
-        ORDER BY b.name, b.address
+        ORDER BY b.name, COALESCE(b.address, '')
         LIMIT %s
         """,
         tuple(params),

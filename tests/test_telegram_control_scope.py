@@ -24,6 +24,7 @@ class ScopeCursor:
         elif "from networks n" in normalized:
             self.rows = self.networks
         elif "select distinct" in normalized and "from businesses b" in normalized:
+            assert "order by b.name, coalesce(b.address, '')" in normalized
             self.rows = self.businesses
         elif "count(*) as cnt from businesses" in normalized:
             self.rows = [{"cnt": len(self.businesses)}]
