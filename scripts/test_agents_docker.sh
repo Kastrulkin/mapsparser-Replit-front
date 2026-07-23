@@ -16,6 +16,15 @@ fi
 tests=("${agent_tests[@]}" tests/test_agent_api_security.py tests/test_prospecting_research.py)
 
 docker compose run --rm --no-deps \
-  --entrypoint python \
+  --entrypoint sh \
+  --env GIGACHAT_KEYS= \
+  --env GIGACHAT_CLIENT_ID= \
+  --env GIGACHAT_CLIENT_SECRET= \
+  --env DEEPSEEK_API_KEY= \
   --volume "${repo_dir}:/app" \
-  app -m pytest "${tests[@]}" -q "$@"
+  app -lc '
+    python -m pip install --disable-pip-version-check -q \
+      -r requirements.txt \
+      -r requirements.test.txt
+    exec python -m pytest "$@"
+  ' sh "${tests[@]}" -q "$@"
