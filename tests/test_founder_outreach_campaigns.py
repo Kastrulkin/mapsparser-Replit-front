@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
 from flask import Flask
 
 from services.outreach_campaign_service import (
@@ -952,6 +953,39 @@ def test_campaign_builder_explains_facts_hypotheses_and_quality_scores():
     assert "QUALITY_REASON_LABELS" in ui
     assert "outreachQualityCriterionLabels" in admin_ui
     assert "outreachQualityReasonLabels" in admin_ui
+
+
+def test_outreach_preview_accepts_only_future_timezone_aware_start_dates():
+    from api.outreach_campaign_api import _parse_campaign_start_at
+
+    parsed = _parse_campaign_start_at("2099-07-24T10:30:00+03:00")
+
+    assert parsed == datetime(2099, 7, 24, 7, 30, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="timezone"):
+        _parse_campaign_start_at("2099-07-24T10:30:00")
+    with pytest.raises(ValueError, match="past"):
+        _parse_campaign_start_at("2020-01-01T10:30:00+03:00")
+
+
+def test_outreach_ui_shows_calendar_channel_time_and_message_before_approval():
+    calendar_ui = (ROOT / "frontend/src/components/prospecting/OutreachScheduleCalendar.tsx").read_text()
+    partner_ui = (ROOT / "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx").read_text()
+    admin_ui = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    api_source = (ROOT / "src/api/outreach_campaign_api.py").read_text()
+
+    assert "Календарь касаний" in calendar_ui
+    assert "Когда, через какой канал и какое сообщение" in calendar_ui
+    assert "Дата уже прошла" in calendar_ui
+    assert "touchText(item.touch)" in calendar_ui
+    assert "Дата и время первого касания" in partner_ui
+    assert "Дата и время первого касания" in admin_ui
+    assert "OutreachScheduleCalendar" in partner_ui
+    assert "OutreachScheduleCalendar" in admin_ui
+    assert 'const scheduleStart = outreachStartIso(startAt)' in partner_ui
+    assert 'const scheduleStart = outreachStartIso(sequenceStartAt)' in admin_ui
+    assert 'start_at: scheduleStart' in partner_ui
+    assert 'start_at: scheduleStart' in admin_ui
+    assert 'start_at=_parse_campaign_start_at(payload.get("start_at"))' in api_source
 
 
 def test_frontend_chunking_does_not_split_radix_from_its_vendor_dependents():

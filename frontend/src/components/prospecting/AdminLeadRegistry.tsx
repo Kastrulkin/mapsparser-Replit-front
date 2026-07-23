@@ -28,6 +28,12 @@ import { OutreachEmailSetup } from '../OutreachEmailSetup';
 import { OutreachLearningInsights } from './OutreachLearningInsights';
 import { OutreachSuppressionManager } from './OutreachSuppressionManager';
 import {
+  buildProjectedOutreachTouches,
+  defaultOutreachStartValue,
+  OutreachScheduleCalendar,
+  outreachStartIso,
+} from './OutreachScheduleCalendar';
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -233,6 +239,7 @@ interface OutreachTouchPreview {
   observation?: string | null;
   problem_hypothesis?: string | null;
   relevance_bridge?: string | null;
+  scheduled_at?: string | null;
 }
 
 interface OutreachPreview {
@@ -716,6 +723,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [pilotReadiness, setPilotReadiness] = useState<PilotReadiness | null>(null);
   const [sequenceChannels, setSequenceChannels] = useState(['telegram', 'email', 'max', 'vk']);
   const [sequenceDays, setSequenceDays] = useState([0, 3, 7, 12]);
+  const [sequenceStartAt, setSequenceStartAt] = useState(defaultOutreachStartValue);
   const [sequenceSenders, setSequenceSenders] = useState<Record<number, string>>({});
   const [senderMode, setSenderMode] = useState<SenderMode>('localos');
 
@@ -860,11 +868,15 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         observation: touch.message_brief_json?.observation,
         problem_hypothesis: touch.message_brief_json?.problem_hypothesis,
         relevance_bridge: touch.message_brief_json?.relevance_bridge,
+        scheduled_at: touch.scheduled_at,
       };
     });
   const displayedOutreachTouches = (outreachPreview?.touches || []).length > 0
     ? outreachPreview?.touches || []
     : savedCampaignDisplayTouches;
+  const outreachCalendarTouches = displayedOutreachTouches.length > 0
+    ? displayedOutreachTouches
+    : buildProjectedOutreachTouches(sequenceChannels, sequenceDays, sequenceStartAt);
   const savedConversationTouches = [...(savedOutreachCampaign?.touches || [])]
     .sort((left, right) => Number(left.sequence_index || 0) - Number(right.sequence_index || 0));
   const humanReplyEvents = (savedOutreachCampaign?.inbound_events || [])
@@ -1027,6 +1039,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setSenderFactsOpen(false);
     setSequenceChannels(['telegram', 'email', 'max', 'vk']);
     setSequenceDays([0, 3, 7, 12]);
+    setSequenceStartAt(defaultOutreachStartValue());
     setSequenceSenders({});
     setSenderMode(
       selectedWorkstream?.workstream_type === 'localos_sales'
@@ -1308,13 +1321,23 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
   const prepareOutreachCampaign = async (save: boolean) => {
     if (!selectedWorkstream?.id) return;
+    const scheduleStart = outreachStartIso(sequenceStartAt);
+    if (!scheduleStart) {
+      setNotice('Выберите корректные дату и время первого касания.');
+      return;
+    }
     setPilotReadiness(null);
     setBusyAction(save ? 'save-campaign' : 'preview-campaign');
     setNotice('');
     try {
       const payload = await newAuth.makeRequest(`/outreach/workstreams/${encodeURIComponent(selectedWorkstream.id)}/preview`, {
         method: 'POST',
-        body: JSON.stringify({ sequence: campaignSequence(), save, sender_mode: senderMode }),
+        body: JSON.stringify({
+          sequence: campaignSequence(),
+          start_at: scheduleStart,
+          save,
+          sender_mode: senderMode,
+        }),
       });
       setOutreachPreview(payload?.preview || null);
       if (payload?.campaign) {
@@ -2438,6 +2461,24 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </div>
                 ) : null}
 
+                <label className="mt-3 block rounded-md bg-white p-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_1px_2px_-1px_rgba(15,23,42,0.06)]">
+                  <span className="text-sm font-semibold text-slate-950">Дата и время первого касания</span>
+                  <span className="mt-1 block text-pretty text-xs leading-5 text-slate-600">Это начало новой версии. Остальные даты рассчитываются по интервалам и сразу видны в календаре.</span>
+                  <Input
+                    aria-label="Дата и время первого касания"
+                    type="datetime-local"
+                    required
+                    value={sequenceStartAt}
+                    onChange={(event) => {
+                      setSequenceStartAt(event.target.value);
+                      setOutreachPreview(null);
+                      setSavedOutreachCampaign(null);
+                      setPilotReadiness(null);
+                    }}
+                    className="mt-2 h-11 max-w-xs bg-white tabular-nums"
+                  />
+                </label>
+
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {[0, 1, 2, 3].map((index) => (
                     <div key={index} className="rounded-md bg-white p-3 text-xs font-semibold text-slate-600">
@@ -2471,6 +2512,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       <div className="mt-1 text-[11px] font-medium text-slate-400">День <span className="tabular-nums">{sequenceDays[index]}</span> от старта</div>
                     </div>
                   ))}
+                </div>
+
+                <div className="mt-3">
+                  <OutreachScheduleCalendar
+                    touches={outreachCalendarTouches}
+                    modeLabel={savedOutreachCampaign ? `Сохранённая версия ${savedOutreachCampaign.version || 1}` : 'Новая версия'}
+                  />
                 </div>
 
                 {['max', 'vk', 'whatsapp', 'sms', 'manual'].includes(sequenceChannels[0]) ? (
@@ -2641,11 +2689,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 ) : null}
 
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <Button variant="outline" onClick={() => void prepareOutreachCampaign(false)} disabled={busyAction === 'preview-campaign'} className="min-h-11 bg-white">
+                  <Button variant="outline" onClick={() => void prepareOutreachCampaign(false)} disabled={busyAction === 'preview-campaign' || !outreachStartIso(sequenceStartAt)} className="min-h-11 bg-white">
                     {busyAction === 'preview-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                     {savedOutreachCampaign ? 'Подготовить новую версию' : 'Подготовить цепочку'}
                   </Button>
-                  <Button variant="outline" onClick={() => void prepareOutreachCampaign(true)} disabled={busyAction === 'save-campaign' || !['ready', 'needs_channel_setup'].includes(String(outreachPreview?.status || ''))} className="min-h-11 bg-white">
+                  <Button variant="outline" onClick={() => void prepareOutreachCampaign(true)} disabled={busyAction === 'save-campaign' || !outreachStartIso(sequenceStartAt) || !['ready', 'needs_channel_setup'].includes(String(outreachPreview?.status || ''))} className="min-h-11 bg-white">
                     {busyAction === 'save-campaign' && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
                     {outreachPreview?.status === 'needs_channel_setup' ? 'Сохранить черновик версии' : 'Сохранить новую версию'}
                   </Button>

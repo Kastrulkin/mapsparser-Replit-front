@@ -17,6 +17,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { newAuth } from '@/lib/auth_new';
+import {
+  buildProjectedOutreachTouches,
+  defaultOutreachStartValue,
+  OutreachScheduleCalendar,
+  outreachStartIso,
+} from '@/components/prospecting/OutreachScheduleCalendar';
 
 type ChannelStatus =
   | 'ready'
@@ -56,6 +62,7 @@ type TouchPreview = {
   status?: string;
   generated_text?: string;
   approved_text?: string | null;
+  scheduled_at?: string | null;
 };
 
 type CampaignTouch = TouchPreview & {
@@ -221,6 +228,8 @@ export function OutreachCampaignBuilder({
 }: OutreachCampaignBuilderProps) {
   const [channels, setChannels] = useState(DEFAULT_CHANNELS);
   const [days, setDays] = useState(DEFAULT_DAYS);
+  const [startAt, setStartAt] = useState(defaultOutreachStartValue);
+  const [scheduleDirty, setScheduleDirty] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState('');
@@ -292,6 +301,8 @@ export function OutreachCampaignBuilder({
   useEffect(() => {
     setChannels(DEFAULT_CHANNELS);
     setDays(DEFAULT_DAYS);
+    setStartAt(defaultOutreachStartValue());
+    setScheduleDirty(false);
     setPreview(null);
     setSenderSelections({});
     setOutcomeNote('');
@@ -307,6 +318,14 @@ export function OutreachCampaignBuilder({
     [campaigns, selectedCampaignId],
   );
 
+  const projectedScheduleTouches = useMemo(() => {
+    const sourceTouches = preview?.touches || (scheduleDirty ? [] : selectedCampaign?.touches || []);
+    if (!scheduleDirty && !preview?.touches?.length && selectedCampaign?.touches?.some((touch) => touch.scheduled_at)) {
+      return selectedCampaign.touches;
+    }
+    return buildProjectedOutreachTouches(channels, days, startAt, sourceTouches);
+  }, [channels, days, preview?.touches, scheduleDirty, selectedCampaign?.touches, startAt]);
+
   const sequence = () => ANGLES.map((angle, index) => ({
     channel: channels[index],
     day_offset: days[index],
@@ -315,6 +334,7 @@ export function OutreachCampaignBuilder({
   }));
 
   const invalidateDraft = () => {
+    setScheduleDirty(true);
     setPreview(null);
     setPilotReadiness(null);
     setNotice('Порядок изменён. Обновите preview; прежний approval не будет перенесён.');
@@ -322,16 +342,22 @@ export function OutreachCampaignBuilder({
 
   const prepare = async (save: boolean) => {
     if (!workstreamId) return;
+    const scheduleStart = outreachStartIso(startAt);
+    if (!scheduleStart) {
+      setError('Выберите корректные дату и время первого касания.');
+      return;
+    }
     setBusy(save ? 'save' : 'preview');
     setError('');
     setNotice('');
     try {
       const payload = await newAuth.makeRequest(`/outreach/workstreams/${encodeURIComponent(workstreamId)}/preview`, {
         method: 'POST',
-        body: JSON.stringify({ sequence: sequence(), save }),
+        body: JSON.stringify({ sequence: sequence(), start_at: scheduleStart, save }),
       });
       setPreview(payload?.preview || null);
       if (payload?.campaign) {
+        setScheduleDirty(false);
         setNotice(`Версия ${payload.campaign.version} сохранена как черновик. Проверьте всю цепочку.`);
         await loadCampaigns();
         setSelectedCampaignId(String(payload.campaign.id || ''));
@@ -609,6 +635,22 @@ export function OutreachCampaignBuilder({
         </label>
       ) : null}
 
+      <label className="block rounded-xl bg-white p-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_1px_2px_-1px_rgba(15,23,42,0.06)]">
+        <span className="text-sm font-semibold text-slate-950">Дата и время первого касания</span>
+        <span className="mt-1 block text-pretty text-xs leading-5 text-slate-600">Остальные сообщения появятся в календаре по выбранным интервалам. Изменение создаёт новую версию и требует повторного подтверждения.</span>
+        <Input
+          aria-label="Дата и время первого касания"
+          type="datetime-local"
+          required
+          value={startAt}
+          onChange={(event) => {
+            setStartAt(event.target.value);
+            invalidateDraft();
+          }}
+          className="mt-2 h-11 max-w-xs bg-white tabular-nums"
+        />
+      </label>
+
       <div className="grid gap-2 sm:grid-cols-2">
         {ANGLES.map((angle, index) => (
           <div key={angle} className="rounded-xl border border-slate-200 bg-white p-3">
@@ -647,6 +689,11 @@ export function OutreachCampaignBuilder({
           </div>
         ))}
       </div>
+
+      <OutreachScheduleCalendar
+        touches={projectedScheduleTouches}
+        modeLabel={scheduleDirty || preview?.touches?.length ? 'Новая версия' : selectedCampaign ? `Сохранённая версия ${selectedCampaign.version || 1}` : 'Новая версия'}
+      />
 
       {manualFirst ? (
         <div className="flex gap-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm leading-6 text-sky-950">
@@ -913,11 +960,11 @@ export function OutreachCampaignBuilder({
       {error ? <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-950"><AlertTriangle className="h-4 w-4 shrink-0" />{error}</div> : null}
 
       <div className="grid gap-2 sm:grid-cols-2">
-        <Button variant="outline" onClick={() => void prepare(false)} disabled={Boolean(busy)} className="min-h-11 bg-white">
+        <Button variant="outline" onClick={() => void prepare(false)} disabled={Boolean(busy) || !outreachStartIso(startAt)} className="min-h-11 bg-white">
           {busy === 'preview' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
           Показать всю цепочку
         </Button>
-        <Button variant="outline" onClick={() => void prepare(true)} disabled={Boolean(busy) || preview?.status !== 'ready'} className="min-h-11 bg-white">
+        <Button variant="outline" onClick={() => void prepare(true)} disabled={Boolean(busy) || !outreachStartIso(startAt) || preview?.status !== 'ready'} className="min-h-11 bg-white">
           {busy === 'save' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
           Сохранить новую версию
         </Button>

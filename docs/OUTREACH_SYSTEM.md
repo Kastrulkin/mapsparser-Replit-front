@@ -36,6 +36,12 @@ PostgreSQL LocalOS является единственным CRM/source of truth
 
 Скрытое переключение между sender mode запрещено. Изменение sender mode, текста, порядка каналов или интервалов создаёт новую версию и требует нового approval.
 
+## Календарь касаний
+
+До сохранения и подтверждения цепочки карточка лида показывает единый календарь: абсолютную дату и время каждого касания, канал, текст и текущий статус. Полная история сообщений остаётся на том же экране. Пользователь задаёт дату первого касания, а следующие даты рассчитываются по интервалам цепочки. Прошедшая дата помечается предупреждением и не принимается backend при подготовке новой версии.
+
+Календарь доступен и для продаж LocalOS, и для партнёрского аутрича. Изменение даты начала, интервала, порядка каналов или текста сбрасывает preview и требует сохранить и подтвердить новую versioned campaign. Само редактирование календаря ничего не отправляет и не ставит в очередь.
+
 ## Поиск лидов
 
 ### Клиенты LocalOS
@@ -256,6 +262,7 @@ Outcomes хранятся раздельно: `sent`, `delivered`, `replied`, `p
 | Telegram entity classification и public radar storage | `available` |
 | Evidence ledger, sender profile и founder-led personalization | `beta` |
 | Versioned multichannel preview/drafts и quality gate | `beta` |
+| Календарь дат, каналов, текстов и статусов касаний до approval | `available` |
 | Telegram/email/VK controlled dispatch | `beta`, только после approval/preflight; VK использует community key с правом `messages`, отдельный outreach permission и campaign-scoped reply sync; global dispatcher может быть выключен |
 | VK text publishing | `beta`, отдельный business-scoped binding с правом `wall`; публикация только после review/approval |
 | Единое VK-подключение для wall и messages | `gap/planned`; сейчас два независимых binding и две проверки прав |

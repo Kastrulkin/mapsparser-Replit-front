@@ -4,6 +4,7 @@ import os
 import re
 import uuid
 import hmac
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from flask import Blueprint, jsonify, request
@@ -73,6 +74,23 @@ from services.vk_oauth_service import (
 
 
 outreach_campaign_bp = Blueprint("outreach_campaigns", __name__)
+
+
+def _parse_campaign_start_at(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    normalized = f"{raw[:-1]}+00:00" if raw.endswith("Z") else raw
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise ValueError("start_at must be a valid ISO-8601 date-time") from exc
+    if parsed.tzinfo is None:
+        raise ValueError("start_at must include a timezone")
+    utc_value = parsed.astimezone(timezone.utc)
+    if utc_value < datetime.now(timezone.utc) - timedelta(minutes=5):
+        raise ValueError("start_at must not be in the past")
+    return utc_value
 
 
 def _outreach_sandbox_enabled() -> bool:
@@ -689,6 +707,7 @@ def preview_campaign(workstream_id: str):
             cursor,
             workstream_id,
             sequence=sequence,
+            start_at=_parse_campaign_start_at(payload.get("start_at")),
             sender_mode=sender_mode,
             offer_id=str(payload.get("offer_id") or "").strip() or None,
             trust_strategy=str(payload.get("trust_strategy") or "").strip() or None,
