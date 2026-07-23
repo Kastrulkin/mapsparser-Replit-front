@@ -91,6 +91,8 @@ type ReviewResult = {
 
 type OperatorMessage = { id?: string; role: 'user' | 'operator'; text: string; status?: string; capability?: string; created_at?: string; screen?: string };
 type ActionPreview = { action_id: string; estimated_credits?: number; is_mass_action?: boolean; external_effects?: boolean; target_businesses?: Array<{ id: string; name: string }>; objects?: Array<{ id?: string; author_name?: string; business_name?: string }> };
+type ModuleItem = { id?: string; kind?: string; title?: string; subtitle?: string; business_name?: string; status?: string; rating?: number; reviews_count?: number; seo_score?: number; price?: string; category?: string; updated_at?: string };
+type ModuleData = { items?: ModuleItem[]; counts?: { total?: number }; as_of?: string; data_warnings?: string[]; status?: string };
 type Tab = 'today' | 'tasks' | 'reviews' | 'operator' | 'more';
 
 type TelegramWebApp = {
@@ -177,6 +179,8 @@ export const TelegramControlPage = () => {
   const [reviewActionBusy, setReviewActionBusy] = useState('');
   const [messages, setMessages] = useState<OperatorMessage[]>([]);
   const [historyLoadedFor, setHistoryLoadedFor] = useState('');
+  const [moduleData, setModuleData] = useState<ModuleData>({});
+  const [moduleLoading, setModuleLoading] = useState(false);
 
   const scope = bootstrap?.selected_scope || bootstrap?.summary?.scope;
   const summary = workspace?.summary || bootstrap?.summary;
@@ -273,6 +277,17 @@ export const TelegramControlPage = () => {
   };
 
   useEffect(() => { if (tab === 'operator') void loadOperatorHistory(); }, [tab, scope?.kind, scope?.id]);
+
+  useEffect(() => {
+    if (!module || preview) return;
+    setModuleLoading(true);
+    const params = scopeQuery(scope);
+    void fetch(`/api/operator/mobile/modules/${module}?${params.toString()}`, { headers: authHeaders() })
+      .then(readJson<ModuleData>)
+      .then((result) => { setModuleData(result); setError(''); })
+      .catch((requestError) => setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить раздел.'))
+      .finally(() => setModuleLoading(false));
+  }, [module, scope?.kind, scope?.id]);
 
   useEffect(() => {
     if (!bootstrap) return;
@@ -385,7 +400,7 @@ export const TelegramControlPage = () => {
             {!picker && tab === 'reviews' ? <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
             {!picker && tab === 'operator' ? <Operator messages={messages} busy={operatorBusy} command={command} setCommand={setCommand} ask={askOperator} openScreen={(screen) => { if (isTab(screen) && screen !== 'more') setTab(screen); }} /> : null}
             {!picker && tab === 'more' && !module ? <More navigation={moreNavigation} onOpen={setModule} /> : null}
-            {!picker && tab === 'more' && module ? <ModuleScreen module={module} tasks={tasks} back={() => setModule('')} /> : null}
+            {!picker && tab === 'more' && module ? <ModuleScreen module={module} data={moduleData} loading={moduleLoading} back={() => setModule('')} /> : null}
           </motion.div>
         </AnimatePresence>
         <AnimatePresence initial={false}>{actionPreview ? <ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirm={() => void confirmSelectedReviews()} cancel={() => setActionPreview(null)} /> : null}</AnimatePresence>
@@ -470,7 +485,9 @@ const moduleNames: Record<string, [string, string]> = {
   finance: ['Финансы', 'KPI, импорты и финансовые предупреждения.'], partnerships: ['Партнёрства', 'Лиды, черновики, ответы и контроль отправок.'], agents: ['ИИ-сотрудники', 'Состояние, история и результаты фоновой работы.'], settings: ['Настройки', 'Уведомления, подключения, тариф и доступ.'], diagnostics: ['Диагностика', 'Технические очереди и ошибки — только для суперадмина.'],
 };
 
-const ModuleScreen = ({ module, tasks, back }: { module: string; tasks: AttentionItem[]; back: () => void }) => { const content = moduleNames[module] || ['Раздел', 'Рабочая очередь LocalOS.']; return <Screen title={content[0]} subtitle={content[1]} action={<button onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07]"><ArrowLeft className="h-4 w-4" /></button>}><div className="rounded-[24px] bg-white/[0.04] p-5 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-center gap-2 text-xs text-zinc-500"><Sparkles className="h-4 w-4 text-primary" />LocalOS проверил этот раздел</div><h3 className="mt-3 text-xl font-semibold">{tasks.length ? `${tasks.length} задач в общей очереди` : 'Новых задач нет'}</h3><p className="mt-2 text-sm leading-6 text-zinc-500">Опасные, массовые и внешние изменения появятся здесь с предпросмотром до подтверждения.</p></div></Screen>; };
+const ModuleScreen = ({ module, data, loading, back }: { module: string; data: ModuleData; loading: boolean; back: () => void }) => { const content = moduleNames[module] || ['Раздел', 'Рабочая очередь LocalOS.']; return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>{loading ? <ReviewSkeleton /> : data.items?.length ? <div className="space-y-2">{data.items.map((item) => <article key={item.id} className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><b className="block text-sm leading-5">{item.title || 'Без названия'}</b><small className="mt-1 block truncate text-zinc-600">{[item.business_name, item.category].filter(Boolean).join(' · ')}</small></div><StatusPill value={item.status} /></div>{item.subtitle ? <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{item.subtitle}</p> : null}<div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-600">{item.rating !== undefined ? <span>Рейтинг <b className="tabular-nums text-zinc-300">{item.rating}</b></span> : null}{item.reviews_count !== undefined ? <span>Отзывы <b className="tabular-nums text-zinc-300">{item.reviews_count}</b></span> : null}{item.seo_score !== undefined ? <span>SEO <b className="tabular-nums text-zinc-300">{item.seo_score}</b></span> : null}{item.price ? <span className="text-zinc-300">{item.price}</span> : null}</div></article>)}</div> : <Empty icon={moduleIcons[module] || CircleEllipsis} title="Пока пусто" text="Когда LocalOS получит реальные данные, они появятся здесь. Ничего выдуманного не показываем." />}</Screen>; };
+
+const StatusPill = ({ value }: { value?: string }) => <span className="shrink-0 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] text-zinc-500 ring-1 ring-inset ring-white/[0.06]">{value === 'active' ? 'Активна' : value === 'archived' ? 'Архив' : value === 'approved' ? 'Готово' : value === 'draft' ? 'Черновик' : value === 'fresh' ? 'Актуально' : value || 'Данные'}</span>;
 
 const ScopePicker = ({ catalog, search, setSearch, choose }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина LocalOS" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${item.locations_count || 0} точек`} onClick={() => void choose('network', item.id)} />)}{catalog?.businesses?.map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ')} onClick={() => void choose('business', item.id)} />)}</div></Screen>;
 

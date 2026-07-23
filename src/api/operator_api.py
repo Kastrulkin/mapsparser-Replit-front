@@ -33,6 +33,7 @@ from services.operator_inbox import build_operator_inbox
 from services.operator_manual_review import process_operator_chat_message
 from services.operator_manual_publish import mark_review_reply_draft_manual_published
 from services.operator_mobile_actions import confirm_mobile_action, create_mobile_action_preview
+from services.operator_mobile_modules import list_operator_mobile_module
 from services.operator_news_generation import classify_news_generate_intent, generate_news_draft_from_operator
 from services.operator_paid_executor import build_paid_action_execution_attempt
 from services.operator_paid_preflight import build_paid_action_preflight
@@ -69,9 +70,9 @@ def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
         {"key": "tasks", "label": "Задачи", "group": "primary", "status": "available"},
         {"key": "reviews", "label": "Отзывы", "group": "primary", "status": "available"},
         {"key": "operator", "label": "Оператор", "group": "primary", "status": "available"},
-        {"key": "cards", "label": "Карточки", "group": "more", "status": "hidden"},
-        {"key": "content", "label": "Контент", "group": "more", "status": "hidden"},
-        {"key": "services", "label": "Услуги", "group": "more", "status": "hidden"},
+        {"key": "cards", "label": "Карточки", "group": "more", "status": "read_only"},
+        {"key": "content", "label": "Контент", "group": "more", "status": "read_only"},
+        {"key": "services", "label": "Услуги", "group": "more", "status": "read_only"},
         {"key": "finance", "label": "Финансы", "group": "more", "status": "hidden"},
         {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "hidden"},
         {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "hidden"},
@@ -1774,6 +1775,24 @@ def operator_mobile_workspace():
             "summary": summary,
             "navigation": _mobile_navigation(scope, bool(user_data.get("is_superadmin"))),
         })
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/modules/<module>", methods=["GET"])
+def operator_mobile_module(module: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    if module not in {"cards", "content", "services"}:
+        return jsonify({"success": False, "error": "Раздел пока недоступен"}), 404
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        return jsonify({"success": True, **list_operator_mobile_module(cursor, module=module, scope=scope)})
     finally:
         db.close()
 
