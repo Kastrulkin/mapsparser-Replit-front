@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
 import sys
+import uuid
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, jsonify, request
 
@@ -57,6 +60,26 @@ from services.operator_conversations import (
 
 
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
+
+
+def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
+    kind = str(scope.get("kind") or "business")
+    items = [
+        {"key": "today", "label": "Сегодня", "group": "primary"},
+        {"key": "tasks", "label": "Задачи", "group": "primary"},
+        {"key": "reviews", "label": "Отзывы", "group": "primary"},
+        {"key": "operator", "label": "Оператор", "group": "primary"},
+        {"key": "cards", "label": "Карточки", "group": "more"},
+        {"key": "content", "label": "Контент", "group": "more"},
+        {"key": "services", "label": "Услуги", "group": "more"},
+        {"key": "finance", "label": "Финансы", "group": "more"},
+        {"key": "partnerships", "label": "Партнёрства", "group": "more"},
+        {"key": "agents", "label": "ИИ-сотрудники", "group": "more"},
+        {"key": "settings", "label": "Настройки", "group": "more"},
+    ]
+    if kind == "platform" and is_superadmin:
+        items.append({"key": "diagnostics", "label": "Диагностика", "group": "more"})
+    return items
 
 
 def _scope_request_values(payload: dict | None = None) -> tuple[str, str | None]:
@@ -215,6 +238,8 @@ def operator_telegram_bootstrap():
                 "summary": summary,
                 "preferences": preferences,
                 "web_session_token": web_session_token,
+                "mini_app_v2_enabled": str(os.getenv("TELEGRAM_MINI_APP_V2_ENABLED", "true")).lower() in {"1", "true", "yes", "on"},
+                "navigation": _mobile_navigation(selected or {}, bool(user.get("is_superadmin"))),
             }
         )
     finally:
@@ -979,6 +1004,7 @@ def operator_review_replies_generate():
             business_id=business_id,
             user_id=user_id,
             limit=payload.get("limit") or 5,
+            review_id=payload.get("review_id"),
             channel="web",
         )
         status = str(result.get("status") or "blocked")
@@ -1655,6 +1681,266 @@ def operator_review_reply_draft_mark_manual_published(draft_id: str):
     except Exception:
         db.conn.rollback()
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+def _resolve_mobile_scope(cursor, user_data: dict) -> dict | None:
+    user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+    kind, scope_id = _scope_request_values()
+    return resolve_control_scope(
+        cursor,
+        user_id=user_id,
+        requested_kind=kind,
+        requested_id=scope_id,
+    )
+
+
+@operator_bp.route("/mobile/workspace", methods=["GET"])
+def operator_mobile_workspace():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        summary = build_operator_scope_summary(cursor, scope=scope, user_id=user_id)
+        items = list(summary.get("attention_items") or [])
+        if scope.get("kind") == "business":
+            inbox = build_operator_inbox(cursor, business_id=str(scope.get("id") or ""), user_id=user_id)
+            items = list(inbox.get("items") or [])
+        return jsonify({
+            "success": True,
+            "scope": scope,
+            "items": items,
+            "counts": {
+                "attention": len([item for item in items if str(item.get("status") or "needs_attention") != "completed"]),
+                "total": len(items),
+            },
+            "cursor": None,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "data_warnings": summary.get("data_warnings") or [],
+            "available_actions": summary.get("available_actions") or [],
+            "summary": summary,
+            "navigation": _mobile_navigation(scope, bool(user_data.get("is_superadmin"))),
+        })
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/reviews", methods=["GET"])
+def operator_mobile_reviews():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        status = str(request.args.get("status") or "unanswered").strip().lower()
+        source = str(request.args.get("source") or "").strip().lower()
+        location_id = str(request.args.get("location_id") or "").strip()
+        rating = str(request.args.get("rating") or "").strip()
+        try:
+            limit = max(1, min(int(request.args.get("limit") or 20), 50))
+            offset = max(0, int(request.args.get("cursor") or 0))
+        except ValueError:
+            return jsonify({"success": False, "error": "Некорректная пагинация"}), 400
+        conditions = ["COALESCE(TRIM(r.text), '') <> ''"]
+        params: list = []
+        business_ids = [str(item) for item in scope.get("business_ids") or [] if str(item)]
+        if scope.get("kind") != "platform":
+            conditions.append("r.business_id = ANY(%s)")
+            params.append(business_ids)
+        if location_id:
+            if scope.get("kind") != "platform" and location_id not in business_ids:
+                return jsonify({"success": False, "error": "Точка недоступна"}), 403
+            conditions.append("r.business_id = %s")
+            params.append(location_id)
+        if source:
+            conditions.append("LOWER(r.source) = %s")
+            params.append(source)
+        if rating:
+            try:
+                rating_value = max(1, min(int(rating), 5))
+            except ValueError:
+                return jsonify({"success": False, "error": "Некорректный рейтинг"}), 400
+            conditions.append("r.rating = %s")
+            params.append(rating_value)
+        if status == "unanswered":
+            conditions.append("COALESCE(TRIM(r.response_text), '') = ''")
+        elif status == "drafts":
+            conditions.append("d.id IS NOT NULL AND d.status IN ('draft','generated','pending_review','edited')")
+        where_sql = " AND ".join(conditions)
+        cursor.execute(
+            f"""
+            SELECT COUNT(DISTINCT r.id) AS total,
+                   COUNT(DISTINCT r.id) FILTER (WHERE COALESCE(TRIM(r.response_text), '') = '') AS unanswered,
+                   COUNT(DISTINCT r.id) FILTER (WHERE d.id IS NOT NULL AND d.status IN ('draft','generated','pending_review','edited')) AS drafts
+            FROM externalbusinessreviews r
+            LEFT JOIN reviewreplydrafts d ON d.review_id = r.id
+            WHERE {where_sql}
+            """,
+            tuple(params),
+        )
+        counts = dict(cursor.fetchone() or {})
+        cursor.execute(
+            f"""
+            SELECT r.id, r.business_id, r.source, r.rating, r.author_name, r.text,
+                   r.response_text, r.published_at, b.name AS location_name,
+                   d.id AS reply_draft_id, d.generated_text AS reply_draft_text, d.status AS reply_draft_status
+            FROM externalbusinessreviews r
+            LEFT JOIN businesses b ON b.id = r.business_id
+            LEFT JOIN LATERAL (
+                SELECT id, COALESCE(edited_text, generated_text) AS generated_text, status FROM reviewreplydrafts
+                WHERE review_id = r.id ORDER BY updated_at DESC LIMIT 1
+            ) d ON TRUE
+            WHERE {where_sql}
+            ORDER BY COALESCE(r.published_at, r.created_at) DESC
+            LIMIT %s OFFSET %s
+            """,
+            tuple([*params, limit, offset]),
+        )
+        items = [dict(row) for row in cursor.fetchall() or []]
+        total = int(counts.get("total") or 0)
+        return jsonify({
+            "success": True,
+            "scope": scope,
+            "items": items,
+            "counts": {"total": total, "unanswered": int(counts.get("unanswered") or 0), "drafts": int(counts.get("drafts") or 0)},
+            "cursor": str(offset + limit) if offset + len(items) < total else None,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "data_warnings": [],
+            "available_actions": [{"key": "generate", "label": "Подготовить ответы"}],
+        })
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/actions/preview", methods=["POST"])
+def operator_mobile_action_preview():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        scope = resolve_control_scope(cursor, user_id=user_id, requested_kind=str(payload.get("scope_type") or ""), requested_id=str(payload.get("scope_id") or "") or None)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        action_key = str(payload.get("action_key") or "").strip()
+        targets = list(scope.get("business_ids") or [])
+        return jsonify({"success": True, "preview": {
+            "action_key": action_key,
+            "scope": scope,
+            "business_ids": targets,
+            "changes": payload.get("changes") or [],
+            "estimated_credits": max(0, int(payload.get("estimated_credits") or 0)),
+            "external_effects": action_key in {"publish", "send", "payment", "delete"},
+            "confirmation_required": True,
+            "idempotency_key": f"mobile:{user_id}:{action_key}:{uuid.uuid4().hex}",
+            "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat(),
+        }})
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/review-drafts/<draft_id>", methods=["PUT"])
+def operator_mobile_review_draft_update(draft_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    reply_text = str(payload.get("reply_text") or "").strip()
+    if not reply_text:
+        return jsonify({"success": False, "error": "Текст ответа не может быть пустым"}), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT business_id FROM reviewreplydrafts WHERE id = %s", (draft_id,))
+        row = cursor.fetchone()
+        business_id = str((dict(row) if row else {}).get("business_id") or "")
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            return jsonify({"success": False, "error": "Нет доступа" if owner_id else "Черновик не найден"}), 403 if owner_id else 404
+        cursor.execute(
+            """
+            UPDATE reviewreplydrafts
+            SET edited_text = %s, status = 'edited', updated_at = NOW()
+            WHERE id = %s AND business_id = %s
+            RETURNING id, review_id, edited_text, status, updated_at
+            """,
+            (reply_text, draft_id, business_id),
+        )
+        updated = dict(cursor.fetchone() or {})
+        db.conn.commit()
+        return jsonify({"success": True, "draft": updated})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/reviews/<review_id>/generate", methods=["POST"])
+def operator_mobile_review_reply_generate(review_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        scope = resolve_control_scope(
+            cursor,
+            user_id=user_id,
+            requested_kind=str(payload.get("scope_type") or ""),
+            requested_id=str(payload.get("scope_id") or "") or None,
+        )
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        cursor.execute("SELECT business_id FROM externalbusinessreviews WHERE id = %s", (review_id,))
+        row = cursor.fetchone()
+        business_id = str((dict(row) if row else {}).get("business_id") or "")
+        targets = [str(item) for item in scope.get("business_ids") or []]
+        if scope.get("kind") != "platform" and business_id not in targets:
+            return jsonify({"success": False, "error": "Отзыв недоступен"}), 403
+        has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            return jsonify({"success": False, "error": "Отзыв недоступен"}), 403
+        if not bool(payload.get("confirmed")):
+            return jsonify({"success": True, "preview": {
+                "action_key": "review_reply_generate",
+                "scope": scope,
+                "business_ids": [business_id],
+                "changes": [{"review_id": review_id, "operation": "create_reply_draft"}],
+                "estimated_credits": 1,
+                "external_effects": False,
+                "confirmation_required": True,
+                "idempotency_key": f"mobile:{user_id}:review_reply_generate:{review_id}",
+            }})
+        result = generate_review_reply_drafts_for_unanswered_reviews(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            limit=1,
+            review_id=review_id,
+            channel="telegram_mini_app",
+        )
+        db.conn.commit()
+        return jsonify({"success": str(result.get("status") or "") == "completed", "operator_result": result})
+    except Exception:
+        db.conn.rollback()
+        raise
     finally:
         db.close()
 

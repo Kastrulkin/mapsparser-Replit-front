@@ -18,7 +18,8 @@ import sys
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, WebAppInfo
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, MenuButtonWebApp, WebAppInfo
+from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.request import HTTPXRequest
 from database_manager import get_db_connection
@@ -77,7 +78,7 @@ from services.operator_review_reply_bulk import (
     generate_review_reply_drafts_for_unanswered_reviews,
 )
 from services.operator_core import confirm_pending_operator_action, should_route_operator_message
-from services.operator_scope_summary import build_operator_scope_summary, format_scope_summary_for_telegram
+from services.operator_scope_summary import build_operator_scope_summary
 from services.telegram_control_scope import (
     list_control_scopes,
     load_control_preferences,
@@ -1750,52 +1751,39 @@ def _control_scope_business_context(telegram_id: str, scope: dict[str, Any] | No
 
 def _build_control_main_menu(scope: dict[str, Any] | None) -> InlineKeyboardMarkup:
     selected = scope or {}
-    kind = str(selected.get("kind") or "business")
     rows: list[list[InlineKeyboardButton]] = [
-        [InlineKeyboardButton("📍 Сегодня", callback_data="client_today")],
+        [InlineKeyboardButton("Открыть работу в LocalOS", web_app=WebAppInfo(url=TELEGRAM_MINI_APP_URL))],
     ]
-    if kind == "business":
-        rows.extend(
-            [
-                [
-                    InlineKeyboardButton("💬 Отзывы", callback_data="client_reviews"),
-                    InlineKeyboardButton("🗺 Карточка", callback_data="client_card"),
-                ],
-                [
-                    InlineKeyboardButton("📰 Контент", callback_data="client_growth"),
-                    InlineKeyboardButton("🧩 Услуги", callback_data="client_services_audit"),
-                ],
-                [
-                    InlineKeyboardButton("✅ Подтверждения", callback_data="openclaw_pending_approvals"),
-                    InlineKeyboardButton("🧠 Спросить", callback_data="client_ask"),
-                ],
-            ]
-        )
-    elif kind == "network":
-        rows.extend(
-            [
-                [InlineKeyboardButton("🏢 Выбрать точку", callback_data="control_locations")],
-                [
-                    InlineKeyboardButton("✅ Подтверждения", url="https://localos.pro/dashboard/operator"),
-                    InlineKeyboardButton("📊 Сеть в кабинете", url="https://localos.pro/dashboard/network"),
-                ],
-            ]
-        )
-    else:
-        rows.extend(
-            [
-                [InlineKeyboardButton("🏢 Найти бизнес", callback_data="control_search")],
-                [
-                    InlineKeyboardButton("✅ Подтверждения", url="https://localos.pro/dashboard/operator"),
-                    InlineKeyboardButton("📨 Аутрич", url="https://localos.pro/dashboard/bazich?tab=prospecting"),
-                ],
-                [InlineKeyboardButton("🛠 Диагностика", callback_data="menu_diagnostics")],
-            ]
-        )
     if bool(selected.get("can_switch")):
-        rows.append([InlineKeyboardButton("🔄 Сменить", callback_data="control_switch")])
-    rows.append([InlineKeyboardButton("📱 Открыть LocalOS", web_app=WebAppInfo(url=TELEGRAM_MINI_APP_URL))])
+        rows.append([InlineKeyboardButton("Сменить бизнес", callback_data="control_switch")])
     return InlineKeyboardMarkup(rows)
+
+
+def _format_control_start(summary: dict[str, Any]) -> str:
+    scope = summary.get("scope") if isinstance(summary.get("scope"), dict) else {}
+    kind = str(scope.get("kind") or "business")
+    if kind == "network":
+        header = f"LocalOS · Сеть «{scope.get('name') or 'Сеть'}»"
+    elif kind == "platform":
+        header = "LocalOS · Вся платформа"
+    else:
+        header = f"LocalOS · {scope.get('name') or 'Бизнес'}"
+    primary = next(iter(summary.get("attention_items") or []), None)
+    if not primary:
+        return f"{header}\n\nВсё под контролем. LocalOS продолжает следить за задачами."
+    count = int(primary.get("count") or 0)
+    count_text = f" · {count}" if count else ""
+    description = str(primary.get("description") or "").strip()
+    body = f"{primary.get('title') or 'Нужно ваше решение'}{count_text}"
+    return f"{header}\n\n{body}" + (f"\n{description}" if description else "")
+
+
+async def _safe_edit_message(query, text: str, reply_markup: InlineKeyboardMarkup | None = None, parse_mode: str | None = None):
+    try:
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+    except BadRequest as error:
+        if "message is not modified" not in str(error).lower():
+            raise
 
 
 def _build_client_main_menu(scope: dict[str, Any] | None = None) -> InlineKeyboardMarkup:
@@ -3479,7 +3467,7 @@ async def use_business_command(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     summary = _build_telegram_control_summary(telegram_id, scope)
     await update.message.reply_text(
-        format_scope_summary_for_telegram(summary),
+        _format_control_start(summary),
         reply_markup=_build_control_main_menu(scope),
     )
 
@@ -3790,18 +3778,18 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, tel
         reply_markup = _build_client_more_menu()
     else:
         summary = _build_telegram_control_summary(telegram_id, scope)
-        text = format_scope_summary_for_telegram(summary)
+        text = _format_control_start(summary)
         reply_markup = _build_control_main_menu(scope)
 
     if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+        await _safe_edit_message(update.callback_query, text, reply_markup=reply_markup)
     else:
-        await _reply_effective_message(update, text, reply_markup=reply_markup, parse_mode='Markdown')
+        await _reply_effective_message(update, text, reply_markup=reply_markup)
 
 
 async def _show_client_section(update: Update, text: str, reply_markup: InlineKeyboardMarkup):
     if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+        await _safe_edit_message(update.callback_query, text, reply_markup=reply_markup)
     else:
         await _reply_effective_message(update, text, reply_markup=reply_markup)
 
@@ -4057,8 +4045,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if selected.get("kind") == "business":
             user_states.setdefault(user_id, {})["active_business_id"] = str(selected.get("id") or "")
         summary = _build_telegram_control_summary(user_id, selected)
-        await query.edit_message_text(
-            format_scope_summary_for_telegram(summary),
+        await _safe_edit_message(
+            query,
+            _format_control_start(summary),
             reply_markup=_build_control_main_menu(selected),
         )
         return
@@ -4172,7 +4161,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         summary = _build_telegram_control_summary(user_id, control_scope)
         await _show_client_section(
             update,
-            format_scope_summary_for_telegram(summary),
+            _format_control_start(summary),
             _build_control_main_menu(control_scope),
         )
         return
@@ -5523,7 +5512,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if early_client_intent == "today":
             summary = _build_telegram_control_summary(user_id, control_scope)
             await update.message.reply_text(
-                format_scope_summary_for_telegram(summary),
+                _format_control_start(summary),
                 reply_markup=_build_control_main_menu(control_scope),
             )
             return
@@ -6276,6 +6265,12 @@ async def _configure_bot_commands(application: Application):
             BotCommand("help", "Справка"),
             BotCommand("cancel", "Отменить операцию"),
         ]
+    )
+    await application.bot.set_chat_menu_button(
+        menu_button=MenuButtonWebApp(
+            text="LocalOS",
+            web_app=WebAppInfo(url=TELEGRAM_MINI_APP_URL),
+        )
     )
 
 

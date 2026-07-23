@@ -3,13 +3,40 @@ from services.telegram_static_answers import guest_welcome_text, tariff_detail_t
 from services import telegram_dashboard
 from services.telegram_response_router import classify_client_intent
 from telegram_bot import (
+    _build_control_main_menu,
     _build_guest_audit_result_menu,
     _build_guest_compare_result_menu,
     _build_guest_more_menu,
     _request_public_report_from_telegram,
     _build_subscription_menu,
     _suggested_upgrade_tier,
+    _format_control_start,
 )
+
+
+def test_control_start_has_one_real_priority_without_technical_metrics() -> None:
+    text = _format_control_start({
+        "scope": {"kind": "business", "name": "Весёлая расчёска"},
+        "attention_items": [
+            {"title": "Отзывы без ответа", "count": 50},
+            {"title": "Ошибки автоматизаций", "count": 3},
+        ],
+        "metrics": [{"label": "API hits", "value": 99}],
+    })
+
+    assert "Отзывы без ответа" in text
+    assert "Ошибки автоматизаций" not in text
+    assert "API hits" not in text
+
+
+def test_control_menu_is_mini_app_first_and_has_no_desktop_links() -> None:
+    markup = _build_control_main_menu({"kind": "network", "can_switch": True})
+    buttons = [button for row in markup.inline_keyboard for button in row]
+
+    assert buttons[0].web_app is not None
+    assert buttons[0].text == "Открыть работу в LocalOS"
+    assert len(buttons) == 2
+    assert not any(button.url for button in buttons)
 
 
 def test_subscription_upgrade_prompt_for_trial_mentions_starter() -> None:

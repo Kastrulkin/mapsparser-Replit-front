@@ -48,7 +48,7 @@ def _table_exists(cursor: Any, table_name: str) -> bool:
     return bool(row.get("to_regclass") or row.get("table_ref"))
 
 
-def _load_unanswered_reviews(cursor: Any, *, business_id: str, limit: int) -> list[dict[str, Any]]:
+def _load_unanswered_reviews(cursor: Any, *, business_id: str, limit: int, review_id: str | None = None) -> list[dict[str, Any]]:
     if not _table_exists(cursor, "externalbusinessreviews"):
         return []
     if not _table_exists(cursor, "reviewreplydrafts"):
@@ -58,6 +58,7 @@ def _load_unanswered_reviews(cursor: Any, *, business_id: str, limit: int) -> li
         SELECT id, business_id, source, external_review_id, rating, author_name, text, published_at
         FROM externalbusinessreviews reviews
         WHERE reviews.business_id = %s
+          AND (%s IS NULL OR reviews.id = %s)
           AND COALESCE(reviews.text, '') <> ''
           AND COALESCE(reviews.response_text, '') = ''
           AND NOT EXISTS (
@@ -69,7 +70,7 @@ def _load_unanswered_reviews(cursor: Any, *, business_id: str, limit: int) -> li
         ORDER BY reviews.published_at DESC NULLS LAST, reviews.created_at DESC
         LIMIT %s
         """,
-        (business_id, limit),
+        (business_id, review_id, review_id, limit),
     )
     reviews: list[dict[str, Any]] = []
     for row in cursor.fetchall() or []:
@@ -85,11 +86,12 @@ def generate_review_reply_drafts_for_unanswered_reviews(
     business_id: str,
     user_id: str,
     limit: Any = BULK_REVIEW_REPLY_MAX_LIMIT,
+    review_id: str | None = None,
     channel: str = "web",
     reply_generator: Callable[..., str] | None = None,
 ) -> dict[str, Any]:
     clean_limit = _positive_limit(limit)
-    reviews = _load_unanswered_reviews(cursor, business_id=business_id, limit=clean_limit)
+    reviews = _load_unanswered_reviews(cursor, business_id=business_id, limit=clean_limit, review_id=_clean_text(review_id) or None)
     if not reviews:
         return {
             "status": "completed",
