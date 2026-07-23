@@ -385,7 +385,7 @@ def save_control_scope(
         )
         VALUES (%s, %s, %s, %s, %s, %s, NOW())
         ON CONFLICT (user_id) DO UPDATE SET
-            telegram_id = EXCLUDED.telegram_id,
+            telegram_id = COALESCE(NULLIF(EXCLUDED.telegram_id, ''), telegramcontrolpreferences.telegram_id),
             scope_type = EXCLUDED.scope_type,
             scope_id = EXCLUDED.scope_id,
             recent_scopes_json = EXCLUDED.recent_scopes_json,
@@ -399,6 +399,38 @@ def save_control_scope(
 
 def load_control_preferences(cursor: Any, user_id: str) -> dict[str, Any]:
     return _load_preference(cursor, user_id)
+
+
+def save_scope_notification_preferences(
+    cursor: Any,
+    *,
+    user_id: str,
+    telegram_id: str,
+    scope: dict[str, Any],
+    notifications: dict[str, bool],
+) -> dict[str, bool]:
+    kind = str(scope.get("kind") or "").strip().lower()
+    scope_id = str(scope.get("id") or "").strip() or None
+    if kind not in SCOPE_TYPES:
+        raise ValueError("unsupported_control_scope")
+    allowed_keys = {"daily_digest", "reviews", "tasks", "errors", "agent_results"}
+    clean = {key: bool(value) for key, value in notifications.items() if key in allowed_keys}
+    current = _load_preference(cursor, user_id)
+    all_preferences = dict(current.get("notification_preferences_json") or {})
+    preference_key = f"{kind}:{scope_id or 'all'}"
+    all_preferences[preference_key] = clean
+    cursor.execute(
+        """
+        INSERT INTO telegramcontrolpreferences (user_id, telegram_id, notification_preferences_json, updated_at)
+        VALUES (%s, %s, %s, NOW())
+        ON CONFLICT (user_id) DO UPDATE SET
+            telegram_id = COALESCE(NULLIF(EXCLUDED.telegram_id, ''), telegramcontrolpreferences.telegram_id),
+            notification_preferences_json = EXCLUDED.notification_preferences_json,
+            updated_at = NOW()
+        """,
+        (user_id, telegram_id, Json(all_preferences)),
+    )
+    return clean
 
 
 def toggle_favorite_control_scope(

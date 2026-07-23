@@ -24,6 +24,7 @@ from services.telegram_control_scope import (
     list_control_scopes,
     load_control_preferences,
     resolve_control_scope,
+    save_scope_notification_preferences,
     toggle_favorite_control_scope,
 )
 from services.telegram_webapp_auth import load_localos_user_for_telegram, validate_telegram_webapp_init_data
@@ -73,13 +74,13 @@ def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
         {"key": "cards", "label": "Карточки", "group": "more", "status": "read_only"},
         {"key": "content", "label": "Контент", "group": "more", "status": "read_only"},
         {"key": "services", "label": "Услуги", "group": "more", "status": "read_only"},
-        {"key": "finance", "label": "Финансы", "group": "more", "status": "hidden"},
-        {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "hidden"},
-        {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "hidden"},
-        {"key": "settings", "label": "Настройки", "group": "more", "status": "hidden"},
+        {"key": "finance", "label": "Финансы", "group": "more", "status": "read_only"},
+        {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "read_only"},
+        {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "read_only"},
+        {"key": "settings", "label": "Настройки", "group": "more", "status": "available"},
     ]
     if kind == "platform" and is_superadmin:
-        items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "hidden"})
+        items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "read_only"})
     return items
 
 
@@ -97,6 +98,52 @@ def _mobile_task_item(item: dict) -> dict:
     value["progress"] = value.get("progress") if value.get("progress") is not None else (100 if status == "completed" else None)
     value["available_actions"] = value.get("available_actions") or [value.get("primary_action") or "open"]
     return value
+
+
+def _mobile_background_tasks(cursor, scope: dict) -> list[dict]:
+    platform = scope.get("kind") == "platform"
+    business_ids = [str(item) for item in scope.get("business_ids") or []]
+    cursor.execute(
+        """
+        SELECT q.id, q.business_id, b.name AS business_name, q.status, q.task_type,
+               q.error_message, q.retry_after, q.created_at, q.updated_at
+        FROM parsequeue q
+        LEFT JOIN businesses b ON b.id = q.business_id
+        WHERE (%s OR q.business_id = ANY(%s))
+          AND q.status IN ('pending', 'processing', 'completed', 'failed', 'error', 'captcha_required')
+        ORDER BY q.updated_at DESC
+        LIMIT 25
+        """,
+        (platform, business_ids),
+    )
+    tasks = []
+    for value in cursor.fetchall() or []:
+        row = dict(value)
+        raw_status = str(row.get("status") or "")
+        if raw_status in {"pending", "processing"}:
+            status, progress, severity = "in_progress", 25 if raw_status == "pending" else 65, "low"
+            description = "LocalOS собирает read-only данные. Экран можно закрыть."
+        elif raw_status == "completed":
+            status, progress, severity = "completed", 100, "low"
+            description = "Данные собраны и готовы к просмотру."
+        else:
+            status, progress, severity = "needs_attention", None, "high"
+            description = str(row.get("error_message") or "Обновление не завершилось. Повтор доступен только через отдельное подтверждение стоимости.")
+        tasks.append({
+            "id": f"refresh:{row.get('id')}",
+            "object_id": row.get("id"),
+            "kind": "map_refresh",
+            "title": f"{'Обновление карточки'} · {row.get('business_name') or 'точка'}",
+            "description": description,
+            "status": status,
+            "progress": progress,
+            "severity": severity,
+            "updated_at": row.get("updated_at"),
+            "target_scope": {"kind": "business", "id": row.get("business_id")},
+            "available_actions": ["open"] if status != "needs_attention" else [],
+            "action_unavailable_reason": "Повтор платный и появится после preview" if status == "needs_attention" else None,
+        })
+    return tasks
 
 
 def _operator_mobile_route(result: dict) -> dict:
@@ -1752,6 +1799,7 @@ def operator_mobile_workspace():
         if scope.get("kind") == "business":
             inbox = build_operator_inbox(cursor, business_id=str(scope.get("id") or ""), user_id=user_id)
             items = list(inbox.get("items") or [])
+        items.extend(_mobile_background_tasks(cursor, scope))
         items = [_mobile_task_item(item) for item in items]
         attention_count = len([item for item in items if item.get("status") == "needs_attention"])
         working_count = len([item for item in items if item.get("status") == "in_progress"])
@@ -1784,7 +1832,8 @@ def operator_mobile_module(module: str):
     user_data = require_auth_from_request()
     if not user_data:
         return jsonify({"success": False, "error": "Требуется авторизация"}), 401
-    if module not in {"cards", "content", "services"}:
+    allowed_modules = {"cards", "content", "services", "finance", "partnerships", "agents", "settings", "diagnostics"}
+    if module not in allowed_modules or module in {"today", "tasks", "reviews", "operator"}:
         return jsonify({"success": False, "error": "Раздел пока недоступен"}), 404
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -1792,7 +1841,60 @@ def operator_mobile_module(module: str):
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        if module == "settings":
+            user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+            preferences = load_control_preferences(cursor, user_id)
+            notifications = preferences.get("notification_preferences_json") if isinstance(preferences, dict) else {}
+            preference_key = f"{scope.get('kind')}:{scope.get('id') or 'all'}"
+            return jsonify({
+                "success": True,
+                "status": "available",
+                "scope": scope,
+                "items": [{"id": "notifications", "kind": "settings", "title": "Уведомления", "subtitle": "Настройки для выбранного масштаба", "status": "active"}],
+                "counts": {"total": 1},
+                "cursor": None,
+                "as_of": datetime.now(timezone.utc).isoformat(),
+                "freshness": {"status": "live"},
+                "data_warnings": [],
+                "available_actions": [{"key": "notifications.update", "label": "Сохранить"}],
+                "filters": {},
+                "preferences": (notifications or {}).get(preference_key, {}),
+            })
+        if module == "diagnostics" and scope.get("kind") != "platform":
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
         return jsonify({"success": True, **list_operator_mobile_module(cursor, module=module, scope=scope)})
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/settings/notifications", methods=["PUT"])
+def operator_mobile_notification_settings_update():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    notifications = payload.get("notifications") if isinstance(payload.get("notifications"), dict) else None
+    if notifications is None:
+        return jsonify({"success": False, "error": "Настройки не переданы"}), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        saved = save_scope_notification_preferences(
+            cursor,
+            user_id=user_id,
+            telegram_id=str(user_data.get("telegram_id") or ""),
+            scope=scope,
+            notifications=notifications,
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "scope": scope, "preferences": saved})
+    except Exception:
+        db.conn.rollback()
+        raise
     finally:
         db.close()
 

@@ -22,6 +22,8 @@ type AttentionItem = {
   count?: number;
   status?: string;
   severity?: string;
+  progress?: number | null;
+  action_unavailable_reason?: string;
   target_scope?: { id?: string };
 };
 
@@ -91,8 +93,9 @@ type ReviewResult = {
 
 type OperatorMessage = { id?: string; role: 'user' | 'operator'; text: string; status?: string; capability?: string; created_at?: string; screen?: string };
 type ActionPreview = { action_id: string; estimated_credits?: number; is_mass_action?: boolean; external_effects?: boolean; target_businesses?: Array<{ id: string; name: string }>; objects?: Array<{ id?: string; author_name?: string; business_name?: string }> };
-type ModuleItem = { id?: string; kind?: string; title?: string; subtitle?: string; business_name?: string; status?: string; rating?: number; reviews_count?: number; seo_score?: number; price?: string; category?: string; updated_at?: string };
-type ModuleData = { items?: ModuleItem[]; counts?: { total?: number }; as_of?: string; data_warnings?: string[]; status?: string };
+type ModuleItem = { id?: string; kind?: string; title?: string; subtitle?: string; business_name?: string; status?: string; rating?: number; reviews_count?: number; seo_score?: number; price?: string; category?: string; updated_at?: string; amount?: string | number; transaction_type?: string; selected_channel?: string; run_id?: string; run_status?: string; error_text?: string };
+type NotificationPreferences = { daily_digest?: boolean; reviews?: boolean; tasks?: boolean; errors?: boolean; agent_results?: boolean };
+type ModuleData = { items?: ModuleItem[]; counts?: { total?: number }; as_of?: string; data_warnings?: string[]; status?: string; preferences?: NotificationPreferences };
 type Tab = 'today' | 'tasks' | 'reviews' | 'operator' | 'more';
 
 type TelegramWebApp = {
@@ -181,6 +184,7 @@ export const TelegramControlPage = () => {
   const [historyLoadedFor, setHistoryLoadedFor] = useState('');
   const [moduleData, setModuleData] = useState<ModuleData>({});
   const [moduleLoading, setModuleLoading] = useState(false);
+  const [moduleSaving, setModuleSaving] = useState(false);
 
   const scope = bootstrap?.selected_scope || bootstrap?.summary?.scope;
   const summary = workspace?.summary || bootstrap?.summary;
@@ -295,6 +299,7 @@ export const TelegramControlPage = () => {
     const requested = params.get('screen');
     const allowed = new Set((bootstrap.navigation || []).filter((item) => item.status !== 'hidden').map((item) => item.key));
     if (isTab(requested) && allowed.has(requested)) setTab(requested);
+    if (requested && allowed.has(requested) && !isTab(requested)) { setTab('more'); setModule(requested); }
     if (requested === 'reviews') {
       const status = params.get('status');
       const rating = params.get('rating');
@@ -383,6 +388,19 @@ export const TelegramControlPage = () => {
     finally { setReviewActionBusy(''); }
   };
 
+  const saveNotifications = async (preferences: NotificationPreferences) => {
+    if (preview) { setModuleData((current) => ({ ...current, preferences })); return; }
+    setModuleSaving(true);
+    try {
+      const result = await fetch('/api/operator/mobile/settings/notifications', {
+        method: 'PUT', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null, notifications: preferences }),
+      }).then(readJson<{ preferences?: NotificationPreferences } >);
+      setModuleData((current) => ({ ...current, preferences: result.preferences || preferences }));
+      setError('');
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить настройки.'); }
+    finally { setModuleSaving(false); }
+  };
+
   if (!initData && !preview) return <TelegramGate />;
   if (loading && !bootstrap) return <LoadingScreen slow={slowLoading} />;
 
@@ -400,7 +418,7 @@ export const TelegramControlPage = () => {
             {!picker && tab === 'reviews' ? <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
             {!picker && tab === 'operator' ? <Operator messages={messages} busy={operatorBusy} command={command} setCommand={setCommand} ask={askOperator} openScreen={(screen) => { if (isTab(screen) && screen !== 'more') setTab(screen); }} /> : null}
             {!picker && tab === 'more' && !module ? <More navigation={moreNavigation} onOpen={setModule} /> : null}
-            {!picker && tab === 'more' && module ? <ModuleScreen module={module} data={moduleData} loading={moduleLoading} back={() => setModule('')} /> : null}
+            {!picker && tab === 'more' && module ? <ModuleScreen module={module} data={moduleData} loading={moduleLoading} saving={moduleSaving} saveNotifications={saveNotifications} back={() => setModule('')} /> : null}
           </motion.div>
         </AnimatePresence>
         <AnimatePresence initial={false}>{actionPreview ? <ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirm={() => void confirmSelectedReviews()} cancel={() => setActionPreview(null)} /> : null}</AnimatePresence>
@@ -485,9 +503,21 @@ const moduleNames: Record<string, [string, string]> = {
   finance: ['Финансы', 'KPI, импорты и финансовые предупреждения.'], partnerships: ['Партнёрства', 'Лиды, черновики, ответы и контроль отправок.'], agents: ['ИИ-сотрудники', 'Состояние, история и результаты фоновой работы.'], settings: ['Настройки', 'Уведомления, подключения, тариф и доступ.'], diagnostics: ['Диагностика', 'Технические очереди и ошибки — только для суперадмина.'],
 };
 
-const ModuleScreen = ({ module, data, loading, back }: { module: string; data: ModuleData; loading: boolean; back: () => void }) => { const content = moduleNames[module] || ['Раздел', 'Рабочая очередь LocalOS.']; return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>{loading ? <ReviewSkeleton /> : data.items?.length ? <div className="space-y-2">{data.items.map((item) => <article key={item.id} className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><b className="block text-sm leading-5">{item.title || 'Без названия'}</b><small className="mt-1 block truncate text-zinc-600">{[item.business_name, item.category].filter(Boolean).join(' · ')}</small></div><StatusPill value={item.status} /></div>{item.subtitle ? <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{item.subtitle}</p> : null}<div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-600">{item.rating !== undefined ? <span>Рейтинг <b className="tabular-nums text-zinc-300">{item.rating}</b></span> : null}{item.reviews_count !== undefined ? <span>Отзывы <b className="tabular-nums text-zinc-300">{item.reviews_count}</b></span> : null}{item.seo_score !== undefined ? <span>SEO <b className="tabular-nums text-zinc-300">{item.seo_score}</b></span> : null}{item.price ? <span className="text-zinc-300">{item.price}</span> : null}</div></article>)}</div> : <Empty icon={moduleIcons[module] || CircleEllipsis} title="Пока пусто" text="Когда LocalOS получит реальные данные, они появятся здесь. Ничего выдуманного не показываем." />}</Screen>; };
+const ModuleScreen = ({ module, data, loading, saving, saveNotifications, back }: { module: string; data: ModuleData; loading: boolean; saving: boolean; saveNotifications: (preferences: NotificationPreferences) => Promise<void>; back: () => void }) => {
+  const content = moduleNames[module] || ['Раздел', 'Рабочая очередь LocalOS.'];
+  return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
+    {loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : data.items?.length ? <div className="space-y-2">{data.items.map((item) => <article key={item.id} className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><b className="block text-sm leading-5">{item.title || 'Без названия'}</b><small className="mt-1 block truncate text-zinc-600">{[item.business_name, item.category].filter(Boolean).join(' · ')}</small></div><StatusPill value={item.run_status || item.status} /></div>{item.subtitle ? <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{item.subtitle}</p> : null}{item.error_text ? <p className="mt-3 rounded-[14px] bg-rose-500/10 p-3 text-xs leading-5 text-rose-200">{item.error_text}</p> : null}<div className="mt-3 flex flex-wrap gap-3 text-[11px] text-zinc-600">{item.rating !== undefined ? <span>Рейтинг <b className="tabular-nums text-zinc-300">{item.rating}</b></span> : null}{item.reviews_count !== undefined ? <span>Отзывы <b className="tabular-nums text-zinc-300">{item.reviews_count}</b></span> : null}{item.seo_score !== undefined ? <span>SEO <b className="tabular-nums text-zinc-300">{item.seo_score}</b></span> : null}{item.amount !== undefined ? <span className={`tabular-nums ${item.transaction_type === 'income' ? 'text-emerald-300' : 'text-zinc-300'}`}>{item.transaction_type === 'income' ? '+' : '−'}{item.amount} ₽</span> : null}{item.price ? <span className="text-zinc-300">{item.price}</span> : null}{item.selected_channel ? <span>Канал: <b className="text-zinc-300">{item.selected_channel}</b></span> : null}</div></article>)}</div> : <Empty icon={moduleIcons[module] || CircleEllipsis} title="Пока пусто" text="Когда LocalOS получит реальные данные, они появятся здесь. Ничего выдуманного не показываем." />}
+  </Screen>;
+};
 
-const StatusPill = ({ value }: { value?: string }) => <span className="shrink-0 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] text-zinc-500 ring-1 ring-inset ring-white/[0.06]">{value === 'active' ? 'Активна' : value === 'archived' ? 'Архив' : value === 'approved' ? 'Готово' : value === 'draft' ? 'Черновик' : value === 'fresh' ? 'Актуально' : value || 'Данные'}</span>;
+const NotificationSettings = ({ preferences, saving, save }: { preferences: NotificationPreferences; saving: boolean; save: (preferences: NotificationPreferences) => Promise<void> }) => {
+  const [value, setValue] = useState<NotificationPreferences>(preferences);
+  useEffect(() => setValue(preferences), [preferences]);
+  const rows: Array<[keyof NotificationPreferences, string, string]> = [['daily_digest', 'Утреннее саммари', 'Только реальные задачи'], ['reviews', 'Новые отзывы', 'Когда нужен ответ'], ['tasks', 'Решения', 'Черновики и подтверждения'], ['errors', 'Ошибки', 'Точка или интеграция требует внимания'], ['agent_results', 'ИИ-сотрудники', 'Результат готов к review']];
+  return <div><div className="space-y-2">{rows.map(([key, title, description]) => <label key={key} className="flex min-h-16 items-center gap-3 rounded-[20px] bg-white/[0.04] px-4 ring-1 ring-inset ring-white/[0.07]"><span className="min-w-0 flex-1"><b className="block text-sm">{title}</b><small className="mt-1 block text-zinc-600">{description}</small></span><input type="checkbox" checked={Boolean(value[key])} onChange={(event) => setValue((current) => ({ ...current, [key]: event.target.checked }))} className="h-6 w-6 accent-primary" /></label>)}</div><button disabled={saving} onClick={() => void save(value)} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold active:scale-[0.96] disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}{saving ? 'Сохраняем…' : 'Сохранить'}</button></div>;
+};
+
+const StatusPill = ({ value }: { value?: string }) => <span className="shrink-0 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] text-zinc-500 ring-1 ring-inset ring-white/[0.06]">{value === 'active' ? 'Активна' : value === 'archived' ? 'Архив' : value === 'approved' || value === 'completed' ? 'Готово' : value === 'draft' ? 'Черновик' : value === 'fresh' ? 'Актуально' : value === 'running' || value === 'processing' ? 'В работе' : value === 'failed' || value === 'error' ? 'Ошибка' : value || 'Данные'}</span>;
 
 const ScopePicker = ({ catalog, search, setSearch, choose }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина LocalOS" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${item.locations_count || 0} точек`} onClick={() => void choose('network', item.id)} />)}{catalog?.businesses?.map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ')} onClick={() => void choose('business', item.id)} />)}</div></Screen>;
 
@@ -495,7 +525,7 @@ const BottomNav = ({ current, showMore, setCurrent }: { current: Tab; showMore: 
 
 const Screen = ({ title, subtitle, children, action }: { title: string; subtitle: string; children: React.ReactNode; action?: React.ReactNode }) => <section className="px-4"><div className="mb-5 flex items-start gap-3"><div className="min-w-0 flex-1"><h1 className="text-balance text-2xl font-semibold tracking-[-0.04em]">{title}</h1><p className="mt-1 text-pretty text-sm leading-6 text-zinc-500">{subtitle}</p></div>{action}</div>{children}</section>;
 const PrimaryButton = ({ children, onClick }: { children: React.ReactNode; onClick: () => void }) => <button onClick={onClick} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.24)] transition-[filter,transform] active:scale-[0.96]">{children}<ChevronRight className="h-4 w-4" /></button>;
-const TaskRow = ({ item, onClick }: { item: AttentionItem; onClick: () => void }) => <button onClick={onClick} className="mt-2 flex min-h-16 w-full items-center gap-3 rounded-[20px] bg-white/[0.035] px-4 py-3 text-left ring-1 ring-inset ring-white/[0.06] active:scale-[0.98]"><span className={`h-2.5 w-2.5 rounded-full ${item.severity === 'high' ? 'bg-rose-400' : item.severity === 'medium' ? 'bg-amber-400' : 'bg-emerald-400'}`} /><span className="min-w-0 flex-1"><b className="block truncate text-sm">{item.title || 'Задача'}</b><small className="mt-1 block truncate text-zinc-600">{item.description}</small></span>{item.count ? <b className="tabular-nums text-zinc-400">{item.count}</b> : null}<ChevronRight className="h-4 w-4 text-zinc-700" /></button>;
+const TaskRow = ({ item, onClick }: { item: AttentionItem; onClick: () => void }) => <button onClick={onClick} className="mt-2 flex min-h-16 w-full items-center gap-3 rounded-[20px] bg-white/[0.035] px-4 py-3 text-left ring-1 ring-inset ring-white/[0.06] active:scale-[0.98]"><span className={`h-2.5 w-2.5 rounded-full ${item.severity === 'high' ? 'bg-rose-400' : item.severity === 'medium' ? 'bg-amber-400' : 'bg-emerald-400'}`} /><span className="min-w-0 flex-1"><b className="block truncate text-sm">{item.title || 'Задача'}</b><small className="mt-1 block truncate text-zinc-600">{item.description}</small>{item.progress !== undefined && item.progress !== null ? <span className="mt-2 block h-1 overflow-hidden rounded-full bg-white/[0.06]"><i className="block h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(item.progress, 100))}%` }} /></span> : item.action_unavailable_reason ? <small className="mt-1 block truncate text-amber-300/70">{item.action_unavailable_reason}</small> : null}</span>{item.count ? <b className="tabular-nums text-zinc-400">{item.count}</b> : null}<ChevronRight className="h-4 w-4 text-zinc-700" /></button>;
 const Segments = ({ value, setValue, options }: { value: string; setValue: (value: string) => void; options: string[][] }) => <div className="mb-4 flex gap-1 overflow-x-auto rounded-[18px] bg-white/[0.035] p-1 ring-1 ring-inset ring-white/[0.06]">{options.map(([key, label]) => <button key={key} onClick={() => setValue(key)} className={`min-h-11 flex-1 whitespace-nowrap rounded-[14px] px-3 text-xs font-semibold transition-[background-color,color,transform] active:scale-[0.96] ${value === key ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-600'}`}>{label}</button>)}</div>;
 const ScopeRow = ({ icon: Icon, label, meta, onClick }: { icon: typeof Star; label: string; meta: string; onClick: () => void }) => <button onClick={onClick} className="flex min-h-16 w-full items-center gap-3 rounded-[20px] bg-white/[0.04] px-3 text-left ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><span className="grid h-10 w-10 place-items-center rounded-[14px] bg-primary/12 text-primary"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><b className="block truncate text-sm">{label}</b><small className="block truncate text-zinc-600">{meta}</small></span><ChevronRight className="h-4 w-4 text-zinc-700" /></button>;
 const Empty = ({ icon: Icon, title, text }: { icon: typeof Star; title: string; text: string }) => <div className="mt-4 rounded-[24px] bg-white/[0.025] px-6 py-10 text-center ring-1 ring-inset ring-white/[0.06]"><Icon className="mx-auto h-7 w-7 text-zinc-700" /><h3 className="mt-3 font-semibold">{title}</h3><p className="mx-auto mt-2 max-w-xs text-pretty text-sm leading-6 text-zinc-600">{text}</p></div>;
