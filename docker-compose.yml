@@ -385,9 +385,7 @@ services:
     command: ["python", "src/worker.py"]
 
   telegram-bot:
-    build:
-      context: .
-      network: host
+    image: seo-app-app
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
