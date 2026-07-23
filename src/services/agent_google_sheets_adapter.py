@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
@@ -36,6 +37,10 @@ class GoogleSheetsAppendAdapter:
         row_values = request.get("row_values") if isinstance(request.get("row_values"), list) else []
         if not row_values:
             raise GoogleSheetsAdapterError("row_values are required for Google Sheets append.")
+        if len(row_values) > 100:
+            raise GoogleSheetsAdapterError("Google Sheets changes are limited to 100 cells per approval.")
+        if _contains_formula(row_values):
+            raise GoogleSheetsAdapterError("Writing formulas is not allowed.")
         range_name = quote(f"{sheet_name}!A1", safe="")
         url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(spreadsheet_id, safe='')}/values/{range_name}:append"
         request_kwargs = {
@@ -56,7 +61,84 @@ class GoogleSheetsAppendAdapter:
             "updated_range": payload.get("updates", {}).get("updatedRange"),
             "updated_rows": payload.get("updates", {}).get("updatedRows"),
             "updated_cells": payload.get("updates", {}).get("updatedCells"),
+            "operation_hash": _operation_hash(request),
         }
+
+    def preview_update_cells(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        spreadsheet_id = _normalize_spreadsheet_id(str(request.get("spreadsheet_id") or "").strip())
+        range_value = str(request.get("range") or request.get("range_name") or "").strip()
+        values = request.get("values") if isinstance(request.get("values"), list) else []
+        expected_values = request.get("expected_values") if isinstance(request.get("expected_values"), list) else []
+        if not spreadsheet_id or not range_value:
+            raise GoogleSheetsAdapterError("spreadsheet_id and range are required for Google Sheets update.")
+        cell_count = _cell_count(values)
+        if cell_count < 1 or cell_count > 100:
+            raise GoogleSheetsAdapterError("Google Sheets changes must contain between 1 and 100 cells.")
+        if _contains_formula(values):
+            raise GoogleSheetsAdapterError("Writing formulas is not allowed.")
+        current_values = self.read_range_values(spreadsheet_id, range_value)
+        if _contains_formula(current_values):
+            raise GoogleSheetsAdapterError("Existing formulas cannot be overwritten.")
+        if expected_values and _normalized_matrix(current_values) != _normalized_matrix(expected_values):
+            raise GoogleSheetsAdapterError("GOOGLE_SHEETS_VALUES_CHANGED")
+        return {
+            "success": True,
+            "spreadsheet_id": spreadsheet_id,
+            "range": range_value,
+            "before": current_values,
+            "after": values,
+            "cell_count": cell_count,
+            "operation_hash": _operation_hash(request),
+        }
+
+    def update_cells(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(request.get("expected_values"), list):
+            raise GoogleSheetsAdapterError("expected_values are required for conflict-safe Google Sheets update.")
+        preview = self.preview_update_cells(request)
+        credentials = _refresh_credentials_if_needed(dict(self.credentials))
+        token = str(credentials.get("token") or "").strip()
+        if not token:
+            raise GoogleSheetsAdapterError("Google Sheets credentials do not include access token.")
+        spreadsheet_id = str(preview.get("spreadsheet_id") or "")
+        range_value = str(preview.get("range") or "")
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(spreadsheet_id, safe='')}/values/{quote(range_value, safe='')}"
+        request_kwargs = {
+            "params": {"valueInputOption": "USER_ENTERED"},
+            "headers": {"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            "json": {"range": range_value, "majorDimension": "ROWS", "values": request.get("values")},
+            "timeout": self.timeout_seconds,
+        }
+        response = requests.put(url, **request_kwargs)
+        response = self._retry_with_refreshed_token_on_unauthorized("put", url, request_kwargs, response, credentials)
+        if response.status_code >= 400:
+            raise GoogleSheetsAdapterError(f"Google Sheets update failed with HTTP {response.status_code}: {_response_excerpt(response)}")
+        payload = response.json() if response.content else {}
+        return {
+            **preview,
+            "success": True,
+            "updated_range": payload.get("updatedRange") or range_value,
+            "updated_rows": payload.get("updatedRows"),
+            "updated_cells": payload.get("updatedCells"),
+        }
+
+    def read_range_values(self, spreadsheet_id: str, range_value: str) -> list[list[Any]]:
+        credentials = _refresh_credentials_if_needed(dict(self.credentials))
+        token = str(credentials.get("token") or "").strip()
+        if not token:
+            raise GoogleSheetsAdapterError("Google Sheets credentials do not include access token.")
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(spreadsheet_id, safe='')}/values/{quote(range_value, safe='')}"
+        request_kwargs = {
+            "params": {"majorDimension": "ROWS", "valueRenderOption": "FORMULA"},
+            "headers": {"Authorization": f"Bearer {token}"},
+            "timeout": self.timeout_seconds,
+        }
+        response = requests.get(url, **request_kwargs)
+        response = self._retry_with_refreshed_token_on_unauthorized("get", url, request_kwargs, response, credentials)
+        if response.status_code >= 400:
+            raise GoogleSheetsAdapterError(f"Google Sheets read failed with HTTP {response.status_code}: {_response_excerpt(response)}")
+        payload = response.json() if response.content else {}
+        values = payload.get("values") if isinstance(payload.get("values"), list) else []
+        return [row if isinstance(row, list) else [] for row in values]
 
     def read_rows(self, request: Dict[str, Any]) -> Dict[str, Any]:
         credentials = _refresh_credentials_if_needed(dict(self.credentials))
@@ -158,6 +240,8 @@ class GoogleSheetsAppendAdapter:
         refreshed_kwargs["headers"] = refreshed_headers
         if method == "post":
             return requests.post(url, **refreshed_kwargs)
+        if method == "put":
+            return requests.put(url, **refreshed_kwargs)
         return requests.get(url, **refreshed_kwargs)
 
 
@@ -183,6 +267,44 @@ def _normalize_spreadsheet_id(value: str) -> str:
     if match:
         return match.group(1)
     return clean
+
+
+def _cell_count(values: Any) -> int:
+    if not isinstance(values, list):
+        return 0
+    return sum(len(row) if isinstance(row, list) else 0 for row in values)
+
+
+def _contains_formula(values: Any) -> bool:
+    if not isinstance(values, list):
+        return False
+    for item in values:
+        if isinstance(item, list):
+            if _contains_formula(item):
+                return True
+        elif isinstance(item, str) and item.lstrip().startswith("="):
+            return True
+    return False
+
+
+def _normalized_matrix(values: Any) -> list[list[Any]]:
+    if not isinstance(values, list):
+        return []
+    return [list(row) if isinstance(row, list) else [row] for row in values]
+
+
+def _operation_hash(request: Dict[str, Any]) -> str:
+    payload = {
+        "spreadsheet_id": _normalize_spreadsheet_id(str(request.get("spreadsheet_id") or "")),
+        "sheet_name": str(request.get("sheet_name") or ""),
+        "range": str(request.get("range") or request.get("range_name") or ""),
+        "operation": str(request.get("operation") or "append_row"),
+        "row_values": request.get("row_values") if isinstance(request.get("row_values"), list) else [],
+        "values": request.get("values") if isinstance(request.get("values"), list) else [],
+        "expected_values": request.get("expected_values") if isinstance(request.get("expected_values"), list) else [],
+    }
+    serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def _normalize_headers(values: Any) -> list[str]:
@@ -253,7 +375,7 @@ def _load_google_sheets_external_account_integration(
         WHERE business_id = %s
           AND is_active = TRUE
           AND source IN ('google_sheets', 'google_business')
-        ORDER BY updated_at DESC
+        ORDER BY CASE WHEN source = 'google_sheets' THEN 0 ELSE 1 END, updated_at DESC
         LIMIT 1
     """
     params: tuple[Any, ...] = (business_id,)
@@ -282,7 +404,7 @@ def _load_google_sheets_external_account_integration(
                 WHERE business_id = %s
                   AND is_active = TRUE
                   AND source IN ('google_sheets', 'google_business')
-                ORDER BY updated_at DESC
+                ORDER BY CASE WHEN source = 'google_sheets' THEN 0 ELSE 1 END, updated_at DESC
                 LIMIT 1
                 """,
                 (business_id,),
@@ -333,6 +455,9 @@ def _load_external_account_credentials(cursor: Any, *, business_id: str, auth_re
     if not row:
         raise GoogleSheetsAdapterError("Referenced external credentials were not found or are inactive.")
     data = _row_to_dict(row, ["id", "business_id", "source", encrypted_column, "is_active"])
+    source = str(data.get("source") or "").strip()
+    if source not in GOOGLE_SHEETS_EXTERNAL_ACCOUNT_SOURCES:
+        raise GoogleSheetsAdapterError("Referenced credentials are not a Google Sheets connection.")
     encrypted_auth = str(data.get(encrypted_column) or "").strip()
     if not encrypted_auth:
         raise GoogleSheetsAdapterError("Referenced external credentials are empty.")

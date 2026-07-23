@@ -12,6 +12,9 @@ class SheetAppendAdapter(Protocol):
     def append_row(self, request: Dict[str, Any]) -> Dict[str, Any]:
         ...
 
+    def update_cells(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        ...
+
 
 def execute_queued_sheet_provider_requests(
     cursor: Any,
@@ -42,7 +45,10 @@ def execute_queued_sheet_provider_requests(
                 items.append(_mark_provider_unavailable(cursor, row, request, user_id, str(sys.exc_info()[1] or "")))
                 continue
         try:
-            result = active_adapter.append_row(request)
+            if str(request.get("operation") or "append_row") == "update_cells":
+                result = active_adapter.update_cells(request)
+            else:
+                result = active_adapter.append_row(request)
         except Exception:
             items.append(_mark_provider_failed(cursor, row, request, user_id, str(sys.exc_info()[1] or "")))
             continue
@@ -81,6 +87,7 @@ def _load_queued_sheet_requests(cursor: Any, business_id: str, limit: int) -> Li
 
 
 def _request_payload(row: Dict[str, Any]) -> Dict[str, Any]:
+    mapping = _decode_json(row.get("mapping_json"), {})
     return {
         "request_id": row.get("id"),
         "action_id": row.get("action_id"),
@@ -91,7 +98,10 @@ def _request_payload(row: Dict[str, Any]) -> Dict[str, Any]:
         "sheet_name": row.get("sheet_name") or "Sheet1",
         "operation": row.get("operation") or "append_row",
         "row_values": _decode_json(row.get("row_values_json"), []),
-        "mapping": _decode_json(row.get("mapping_json"), {}),
+        "mapping": mapping,
+        "range": mapping.get("range") if isinstance(mapping, dict) else "",
+        "values": mapping.get("values") if isinstance(mapping, dict) else [],
+        "expected_values": mapping.get("expected_values") if isinstance(mapping, dict) else [],
         "source_event": _decode_json(row.get("source_event_json"), {}),
         "limits": _decode_json(row.get("limits_json"), {}),
     }

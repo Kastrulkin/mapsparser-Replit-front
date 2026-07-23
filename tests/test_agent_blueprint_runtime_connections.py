@@ -1670,14 +1670,38 @@ def test_google_sheets_integration_config_preserves_read_write_operation():
     assert invalid_config["operation"] == "read_write"
 
 
-def test_google_oauth_requests_sheets_scope_for_agent_runtime():
+def test_google_oauth_separates_business_and_sheets_scopes():
     from pathlib import Path
 
     from services.agent_google_sheets_adapter import SHEETS_SCOPE
 
-    source = Path("src/google_business_auth.py").read_text(encoding="utf-8")
-    assert SHEETS_SCOPE in source
-    assert "autogenerate_code_verifier=False" in source
+    business_source = Path("src/google_business_auth.py").read_text(encoding="utf-8")
+    sheets_source = Path("src/google_sheets_auth.py").read_text(encoding="utf-8")
+    assert SHEETS_SCOPE not in business_source
+    assert SHEETS_SCOPE in sheets_source
+    assert "business.manage" in business_source
+    assert "business.manage" not in sheets_source
+    assert "autogenerate_code_verifier=False" in business_source
+    assert "autogenerate_code_verifier=False" in sheets_source
+
+
+def test_google_oauth_state_is_signed_scoped_and_rejects_tampering(monkeypatch):
+    from api import google_business_api
+
+    monkeypatch.setenv("GOOGLE_OAUTH_STATE_SECRET", "test-secret-that-is-long-enough")
+    state = google_business_api._encode_google_oauth_state(
+        "user-1",
+        "business-1",
+        "/dashboard/agents",
+        "google_sheets",
+    )
+
+    payload = google_business_api._decode_google_oauth_state(state, "google_sheets")
+    assert payload["user_id"] == "user-1"
+    assert payload["business_id"] == "business-1"
+    assert payload["purpose"] == "google_sheets"
+    assert google_business_api._decode_google_oauth_state(state, "google_business") == {}
+    assert google_business_api._decode_google_oauth_state(state + "tampered", "google_sheets") == {}
 
 
 def test_google_sheets_integration_auto_binds_google_business_auth_ref():
@@ -1717,7 +1741,9 @@ def test_google_oauth_callback_syncs_google_sheets_runtime_auth_ref():
     assert "def _sync_google_sheets_agent_auth_refs" in source
     assert "UPDATE agent_integrations" in source
     assert "provider = 'google_sheets'" in source
-    assert "COALESCE(auth_ref, '') = ''" in source
+    assert "COALESCE(integration.auth_ref, '') = ''" in source
+    assert "source = 'google_business'" in source
+    assert "source = 'google_sheets'" in source
     assert "_sync_google_sheets_agent_auth_refs(cursor, business_id, account_id)" in source
 
 

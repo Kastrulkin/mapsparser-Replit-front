@@ -15,8 +15,7 @@ class GoogleBusinessAuth:
         self.client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
         self.redirect_uri = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:8000/api/google/oauth/callback')
         self.scopes = [
-            'https://www.googleapis.com/auth/business.manage',
-            'https://www.googleapis.com/auth/spreadsheets'
+            'https://www.googleapis.com/auth/business.manage'
         ]
     
     def _create_flow(self) -> Flow:

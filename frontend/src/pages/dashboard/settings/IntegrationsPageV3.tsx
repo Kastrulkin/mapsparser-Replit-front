@@ -136,7 +136,7 @@ const serviceDescriptions: Record<string, string> = {
   outreach_email: 'Один mailbox используется для отправки одобренных писем и обязательной проверки ответов.',
   outreach_vk: 'VK-сообщество используется только для одобренных сообщений и проверки ответов по кампаниям LocalOS.',
   outreach_max: 'LocalOS готовит MAX-сообщения, а владелец аккаунта отправляет их и отмечает ответы вручную.',
-  google_sheets: 'Этот доступ нужен агентам для чтения Google Таблиц. Он не публикует ничего наружу.',
+  google_sheets: 'Агенты могут читать таблицы и готовить изменения. Запись выполняется только после вашего подтверждения.',
   google_business: 'Выберите карточку компании для отзывов, статистики и согласованных постов Google.',
   vk: 'Укажите ID и ключ сообщества. Текстовые публикации всё равно идут только после вашего подтверждения.',
   meta: 'Войдите через Meta, выберите Facebook Page и связанный Instagram Professional account.',
@@ -351,7 +351,8 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
   }), [currentBusiness, loadState]);
 
   const selectedService = services.find((service) => service.id === activeServiceId) || null;
-  const googleAccount = findAccount(loadState.externalAccounts, ['google_business']);
+  const googleSheetsAccount = findAccount(loadState.externalAccounts, ['google_sheets']);
+  const googleBusinessAccount = findAccount(loadState.externalAccounts, ['google_business']);
   const vkAccount = findAccount(loadState.externalAccounts, ['vk', 'vk_group', 'vk_business']);
   const metaAccount = findAccount(loadState.externalAccounts, ['meta', 'facebook', 'instagram']);
   const matonAccount = findAccount(loadState.externalAccounts, ['maton']);
@@ -378,16 +379,19 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
     setVkOwnerId(String(vkAccount.external_id).replace(/^-/, ''));
   }, [vkAccount?.external_id, vkOwnerId]);
 
-  const handleGoogleConnect = async () => {
+  const handleGoogleConnect = async (purpose: 'google_sheets' | 'google_business') => {
     if (!currentBusinessId) return;
     setGoogleBusy(true);
     try {
       const token = newAuth.getToken();
       if (!token) return;
       const oauthParams = new URLSearchParams({ business_id: currentBusinessId });
-      const fallbackReturnTo = `/dashboard/settings/integrations?focus=${encodeURIComponent(activeServiceId || normalizedFocus || 'google_sheets')}`;
+      const fallbackReturnTo = `/dashboard/settings/integrations?focus=${encodeURIComponent(purpose)}`;
       oauthParams.set('return_to', safeDashboardReturnTo(returnTo) || fallbackReturnTo);
-      const response = await fetch(`/api/google/oauth/authorize?${oauthParams.toString()}`, {
+      const oauthEndpoint = purpose === 'google_sheets'
+        ? '/api/google/sheets/oauth/authorize'
+        : '/api/google/oauth/authorize';
+      const response = await fetch(`${oauthEndpoint}?${oauthParams.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
@@ -447,7 +451,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          account_id: googleAccount?.id,
+          account_id: googleBusinessAccount?.id,
           location_name: selectedGoogleLocation,
           display_name: location?.title || 'Google Business Profile',
         }),
@@ -481,7 +485,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ account_id: googleAccount?.id }),
+        body: JSON.stringify({ account_id: googleBusinessAccount?.id }),
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
@@ -779,11 +783,12 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       return (
         <SetupPanel
           title="Google Таблицы"
-          description="Один Google-доступ нужен агентам для чтения строк таблиц. Он не публикует ничего наружу."
+          description="Можно читать и изменять таблицы. Перед записью LocalOS покажет изменения и попросит подтверждение."
         >
-          <Button onClick={handleGoogleConnect} disabled={googleBusy || !currentBusinessId} className="min-h-10 bg-slate-900 text-white hover:bg-slate-800">
-            {googleAccount ? 'Переподключить Google-доступ' : 'Подключить Google-доступ'}
+          <Button onClick={() => handleGoogleConnect('google_sheets')} disabled={googleBusy || !currentBusinessId} className="min-h-10 bg-slate-900 text-white hover:bg-slate-800">
+            {googleSheetsAccount ? 'Переподключить Google Таблицы' : 'Подключить Google Таблицы'}
           </Button>
+          <p className="text-sm text-slate-600">Google Документы пока не подключаются.</p>
         </SetupPanel>
       );
     }
@@ -792,16 +797,16 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
       return (
         <SetupPanel
           title="Google Business"
-          description="Сначала нужен Google-доступ, затем выбор карточки компании."
+          description="Ждём согласования Google. Это не мешает Google Таблицам."
         >
-          {!googleAccount ? (
-            <Button onClick={handleGoogleConnect} disabled={googleBusy || !currentBusinessId} className="min-h-10 bg-slate-900 text-white hover:bg-slate-800">
-              Подключить Google
+          {!googleBusinessAccount ? (
+            <Button onClick={() => handleGoogleConnect('google_business')} disabled={googleBusy || !currentBusinessId} className="min-h-10 bg-slate-900 text-white hover:bg-slate-800">
+              Подключить Google Business
             </Button>
-          ) : googleAccount.external_id ? (
+          ) : googleBusinessAccount.external_id ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 ring-1 ring-emerald-100">
-                {googleAccount.display_name || 'Карточка Google выбрана'}
+                {googleBusinessAccount.display_name || 'Карточка Google выбрана'}
               </div>
               <Button variant="outline" onClick={handleSyncGoogle} disabled={googleBusy}>
                 Синхронизировать
@@ -1322,7 +1327,8 @@ const SafetyRow = ({
 );
 
 const accountsForService = (serviceId: string, accounts: RegistryExternalAccount[]) => {
-  if (serviceId === 'google_sheets' || serviceId === 'google_business') return accounts.filter((account) => account.source === 'google_business');
+  if (serviceId === 'google_sheets') return accounts.filter((account) => account.source === 'google_sheets');
+  if (serviceId === 'google_business') return accounts.filter((account) => account.source === 'google_business');
   if (serviceId === 'vk') return accounts.filter((account) => ['vk', 'vk_group', 'vk_business'].includes(String(account.source || '')));
   if (serviceId === 'meta') return accounts.filter((account) => ['meta', 'instagram', 'facebook'].includes(String(account.source || '')));
   if (serviceId === 'maton') return accounts.filter((account) => account.source === 'maton');

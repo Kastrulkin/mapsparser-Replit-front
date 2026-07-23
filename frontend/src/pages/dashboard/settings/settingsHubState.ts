@@ -144,12 +144,13 @@ export const mapSettingsState = (rawState: SettingsHubRawState): SettingsHubStat
   const phoneAdded = hasText(business.whatsapp_phone);
   const wabaConnected = hasText(business.waba_phone_id) && hasText(business.waba_access_token);
 
-  const googleAccount = findAccount(externalAccounts, ['google_business']);
+  const googleSheetsAccount = findAccount(externalAccounts, ['google_sheets']);
+  const googleBusinessAccount = findAccount(externalAccounts, ['google_business']);
   const vkAccount = findAccount(externalAccounts, ['vk', 'vk_group', 'vk_business']);
   const metaAccount = findAccount(externalAccounts, ['meta', 'instagram', 'facebook']);
   const matonAccount = findAccount(externalAccounts, ['maton']);
-  const googleSheetsReady = Boolean(googleAccount);
-  const googleReady = Boolean(googleAccount && hasText(googleAccount.external_id));
+  const googleSheetsReady = Boolean(googleSheetsAccount);
+  const googleReady = Boolean(googleBusinessAccount && hasText(googleBusinessAccount.external_id));
   const vkReady = Boolean(vkAccount);
   const matonReady = Boolean(matonAccount);
 

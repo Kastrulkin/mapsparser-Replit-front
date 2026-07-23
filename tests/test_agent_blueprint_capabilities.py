@@ -635,6 +635,80 @@ def test_google_sheets_adapter_append_row_uses_google_sheets_api(monkeypatch):
     assert calls[0]["json"]["values"][0] == ["2026-06-09T10:00:00Z", "anna", "Новая заявка"]
 
 
+def test_google_sheets_adapter_update_cells_rechecks_before_write(monkeypatch):
+    from services import agent_google_sheets_adapter
+
+    calls = []
+
+    class FakeResponse:
+        status_code = 200
+        content = b"{}"
+        text = "{}"
+
+        def __init__(self, payload):
+            self.payload = payload
+
+        def json(self):
+            return self.payload
+
+    def fake_get(url, **kwargs):
+        calls.append({"method": "get", "url": url, **kwargs})
+        return FakeResponse({"range": "Trips!B2:C2", "values": [["old", "10"]]})
+
+    def fake_put(url, **kwargs):
+        calls.append({"method": "put", "url": url, **kwargs})
+        return FakeResponse({"updatedRange": "Trips!B2:C2", "updatedCells": 2})
+
+    monkeypatch.setattr(agent_google_sheets_adapter.requests, "get", fake_get)
+    monkeypatch.setattr(agent_google_sheets_adapter.requests, "put", fake_put)
+    adapter = agent_google_sheets_adapter.GoogleSheetsAppendAdapter(
+        {"token": "access-token", "scopes": [agent_google_sheets_adapter.SHEETS_SCOPE]}
+    )
+
+    result = adapter.update_cells({
+        "operation": "update_cells",
+        "spreadsheet_id": "spreadsheet-1",
+        "range": "Trips!B2:C2",
+        "expected_values": [["old", "10"]],
+        "values": [["new", "20"]],
+    })
+
+    assert result["before"] == [["old", "10"]]
+    assert result["after"] == [["new", "20"]]
+    assert result["updated_cells"] == 2
+    assert [call["method"] for call in calls] == ["get", "put"]
+    assert calls[0]["params"]["valueRenderOption"] == "FORMULA"
+
+
+def test_google_sheets_adapter_blocks_conflict_formula_and_cell_overflow(monkeypatch):
+    from services import agent_google_sheets_adapter
+
+    class FakeResponse:
+        status_code = 200
+        content = b"{}"
+        text = "{}"
+
+        def json(self):
+            return {"values": [["changed"]]}
+
+    monkeypatch.setattr(agent_google_sheets_adapter.requests, "get", lambda url, **kwargs: FakeResponse())
+    adapter = agent_google_sheets_adapter.GoogleSheetsAppendAdapter(
+        {"token": "access-token", "scopes": [agent_google_sheets_adapter.SHEETS_SCOPE]}
+    )
+
+    with pytest.raises(agent_google_sheets_adapter.GoogleSheetsAdapterError, match="VALUES_CHANGED"):
+        adapter.update_cells({
+            "spreadsheet_id": "sheet-1",
+            "range": "Data!A1",
+            "expected_values": [["old"]],
+            "values": [["new"]],
+        })
+    with pytest.raises(agent_google_sheets_adapter.GoogleSheetsAdapterError, match="formulas"):
+        adapter.append_row({"spreadsheet_id": "sheet-1", "row_values": ["=SUM(A1:A2)"]})
+    with pytest.raises(agent_google_sheets_adapter.GoogleSheetsAdapterError, match="100 cells"):
+        adapter.append_row({"spreadsheet_id": "sheet-1", "row_values": list(range(101))})
+
+
 def test_google_sheets_adapter_read_rows_uses_google_sheets_values_api(monkeypatch):
     from services import agent_google_sheets_adapter
 

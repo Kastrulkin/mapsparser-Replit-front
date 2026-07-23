@@ -200,6 +200,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const { toast } = useToast();
   const { t, language } = useLanguage();
   const matonAccount = accounts.find((acc) => acc.source === 'maton');
+  const googleSheetsAccount = accounts.find((acc) => acc.source === 'google_sheets');
   const googleAccount = accounts.find((acc) => acc.source === 'google_business');
   const vkAccount = accounts.find((acc) => acc.source === 'vk' || acc.source === 'vk_group' || acc.source === 'vk_business');
   const vkReadiness = socialReadiness.find((channel) => channel.platform === 'vk') || null;
@@ -210,7 +211,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
   const isVkFocused = normalizedFocusedPlatform === 'vk';
   const isMetaFocused = normalizedFocusedPlatform === 'meta' || normalizedFocusedPlatform === 'instagram' || normalizedFocusedPlatform === 'facebook';
   const isCrmFocused = normalizedFocusedPlatform === 'crm' || normalizedFocusedPlatform === 'maton';
-  const googleSheetsReady = Boolean(googleAccount);
+  const googleSheetsReady = Boolean(googleSheetsAccount);
   const googleBusinessReady = Boolean(googleAccount?.external_id);
   const apiReadyCount = Number(socialReadinessSummary.api_ready || 0);
   const channelAttentionCount = Number(socialReadinessSummary.api_needs_attention || 0);
@@ -390,7 +391,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
     }
   };
 
-  const handleGoogleConnect = async () => {
+  const handleGoogleConnect = async (purpose: 'google_sheets' | 'google_business' = 'google_business') => {
     if (!currentBusinessId) {
       toast({
         title: t.error,
@@ -408,7 +409,10 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
       if (returnTo.startsWith('/dashboard/')) {
         oauthParams.set('return_to', returnTo);
       }
-      const res = await fetch(`/api/google/oauth/authorize?${oauthParams.toString()}`, {
+      const oauthEndpoint = purpose === 'google_sheets'
+        ? '/api/google/sheets/oauth/authorize'
+        : '/api/google/oauth/authorize';
+      const res = await fetch(`${oauthEndpoint}?${oauthParams.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -788,36 +792,36 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
           className="rounded-3xl bg-slate-50 px-4 py-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]"
         >
           <div className="max-w-3xl text-sm leading-6 text-slate-700">
-            Сначала подключите Google-доступ для агентов. Если агент читает таблицу, ему нужен именно доступ к Google Таблицам, а не выбор карточки Google Business.
+            Google Таблицы и Google Business подключаются независимо. Доступ к таблицам не требует выбранной карточки компании.
           </div>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
           <AccessCard
             title="Google Таблицы"
-            description="Этот доступ нужен агентам для чтения Google Таблиц. Он не публикует ничего наружу."
+            description="Можно читать и изменять таблицы. Перед записью LocalOS покажет изменения и попросит подтверждение."
             status={googleSheetsReady ? 'Доступ есть' : 'Нужно подключить'}
             detail="Google Документы: позже, когда появится отдельный Drive/Docs scope."
-            actionLabel={googleSheetsReady ? 'Переподключить' : 'Подключить Google-доступ'}
+            actionLabel={googleSheetsReady ? 'Переподключить' : 'Подключить Google Таблицы'}
             icon={<Database className="h-5 w-5" />}
             tone={googleSheetsReady ? 'ready' : 'attention'}
             focused={isGoogleSheetsFocused}
             disabled={googleBusy || !currentBusinessId}
-            onAction={handleGoogleConnect}
+            onAction={() => handleGoogleConnect('google_sheets')}
           />
           <AccessCard
             title="Google Business"
-            description="Карточка компании, отзывы и посты Google. Это отдельный шаг после Google-доступа."
-            status={googleBusinessReady ? 'Карточка выбрана' : googleSheetsReady ? 'Выберите карточку' : 'Нужно подключить'}
-            detail={googleSheetsReady ? 'Google-доступ уже есть: можно выбрать карточку или синхронизировать данные.' : 'Сначала войдите в Google аккаунт владельца или менеджера.'}
-            actionLabel={!googleSheetsReady ? 'Подключить Google' : googleBusinessReady ? 'Синхронизировать' : 'Выбрать карточку'}
+            description="Карточка компании, отзывы и посты Google. Ждём отдельного согласования Google."
+            status={googleBusinessReady ? 'Карточка выбрана' : googleAccount ? 'Выберите карточку' : 'Ждём согласования'}
+            detail="Google Business подключается отдельно и не влияет на работу Google Таблиц."
+            actionLabel={!googleAccount ? 'Подключить Google Business' : googleBusinessReady ? 'Синхронизировать' : 'Выбрать карточку'}
             icon={<Building2 className="h-5 w-5" />}
             tone={googleBusinessReady ? 'ready' : 'attention'}
             focused={isGoogleFocused}
             disabled={googleBusy || !currentBusinessId}
             onAction={() => {
-              if (!googleSheetsReady) {
-                handleGoogleConnect();
+              if (!googleAccount) {
+                handleGoogleConnect('google_business');
                 return;
               }
               if (googleBusinessReady) {
@@ -1133,7 +1137,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-slate-600">Войдите в Google аккаунт владельца или менеджера карточки.</p>
               <Button
-                onClick={handleGoogleConnect}
+                onClick={() => handleGoogleConnect('google_business')}
                 disabled={googleBusy || !currentBusinessId}
                 className="bg-slate-900 text-white hover:bg-slate-800 sm:min-w-[190px]"
               >

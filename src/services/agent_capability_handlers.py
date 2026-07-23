@@ -85,7 +85,12 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
     },
     "sheets.append_row_request": {
         "risk": "external_spreadsheet_write_request",
-        "side_effects": "creates a Google Sheets append-row request only",
+        "side_effects": "appends values only after an explicit human approval",
+        "approval_required": True,
+    },
+    "google_sheets.update_cells": {
+        "risk": "external_spreadsheet_write_request",
+        "side_effects": "updates up to 100 ordinary cells after conflict check and explicit human approval",
         "approval_required": True,
     },
     "google_sheets.read_rows": {
@@ -143,7 +148,8 @@ CAPABILITY_RUNTIME_STATUS = {
     "appointments.create_request": ("request_only", False),
     "communications.send_reminder": ("request_only", False),
     "communications.send_offer": ("request_only", False),
-    "sheets.append_row_request": ("request_only", False),
+    "sheets.append_row_request": ("production_external_write", True),
+    "google_sheets.update_cells": ("production_external_write", True),
     "finance.transaction.create": ("request_only", False),
     "billing.reserve": ("manual_only", False),
     "billing.settle": ("manual_only", False),
@@ -221,6 +227,7 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "communications.send_offer": _handle_communications_send_offer,
         "support.export": _handle_support_export,
         "sheets.append_row_request": _handle_sheets_append_row_request,
+        "google_sheets.update_cells": _handle_sheets_append_row_request,
         "google_sheets.read_rows": _handle_google_sheets_read_rows,
         "finance.transaction.create": _handle_finance_transaction_create,
         "partnership.audit_card": _handle_partnership_audit_card,
@@ -1628,6 +1635,8 @@ def _handle_partnership_draft_offer(envelope: Dict[str, Any], user_data: Dict[st
 
 def _handle_sheets_append_row_request(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
     payload = _payload(envelope)
+    capability = str(envelope.get("capability") or "sheets.append_row_request").strip()
+    operation = "update_cells" if capability == "google_sheets.update_cells" or payload.get("operation") == "update_cells" else "append_row"
     tenant_id = str(envelope.get("tenant_id") or "").strip()
     integration_id = str(payload.get("integration_id") or payload.get("google_sheets_integration_id") or "").strip()
     spreadsheet_id = str(payload.get("spreadsheet_id") or payload.get("google_spreadsheet_id") or "").strip()
@@ -1642,7 +1651,10 @@ def _handle_sheets_append_row_request(envelope: Dict[str, Any], user_data: Dict[
             apply_state="not_applied",
             provider_write_performed=False,
         )
-    if not row_values and not mapping:
+    range_value = str(payload.get("range") or payload.get("range_name") or "").strip()
+    values = payload.get("values") if isinstance(payload.get("values"), list) else []
+    expected_values = payload.get("expected_values") if isinstance(payload.get("expected_values"), list) else []
+    if operation == "append_row" and not row_values and not mapping:
         return _result(
             "validation_error",
             error_code="ROW_VALUES_REQUIRED",
@@ -1650,7 +1662,15 @@ def _handle_sheets_append_row_request(envelope: Dict[str, Any], user_data: Dict[
             apply_state="not_applied",
             provider_write_performed=False,
         )
-    action_id = str(envelope.get("action_id") or _stable_id("sheets.append_row_request", tenant_id, payload))
+    if operation == "update_cells" and (not range_value or not values or not isinstance(payload.get("expected_values"), list)):
+        return _result(
+            "validation_error",
+            error_code="RANGE_VALUES_AND_EXPECTED_VALUES_REQUIRED",
+            dispatch_state="not_created",
+            apply_state="not_applied",
+            provider_write_performed=False,
+        )
+    action_id = str(envelope.get("action_id") or _stable_id(capability, tenant_id, payload))
     request_id = _stable_id("agent_sheet_operation_request", action_id)
     user_id = _actor_user_id(envelope, user_data)
     source_event = payload.get("source_event") if isinstance(payload.get("source_event"), dict) else {}
@@ -1660,6 +1680,7 @@ def _handle_sheets_append_row_request(envelope: Dict[str, Any], user_data: Dict[
     cursor = db.conn.cursor()
     try:
         _ensure_sheet_operation_request_table(cursor)
+        operation_sql = "update_cells" if operation == "update_cells" else "append_row"
         cursor.execute(
             """
             INSERT INTO agent_sheet_operation_requests (
@@ -1668,7 +1689,7 @@ def _handle_sheets_append_row_request(envelope: Dict[str, Any], user_data: Dict[
                 row_values_json, mapping_json, source_event_json, limits_json,
                 provider_write_performed
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 'append_row', 'request_created',
+            VALUES (%s, %s, %s, %s, %s, %s, %s, '""" + operation_sql + """', 'request_created',
                     'pending_human', 'not_applied', %s, %s, %s, %s, FALSE)
             ON CONFLICT (action_id) DO UPDATE SET
                 row_values_json = EXCLUDED.row_values_json,
@@ -1687,7 +1708,12 @@ def _handle_sheets_append_row_request(envelope: Dict[str, Any], user_data: Dict[
                 spreadsheet_id or None,
                 sheet_name,
                 _json_dumps(row_values),
-                _json_dumps(mapping),
+                _json_dumps({
+                    **mapping,
+                    "range": range_value,
+                    "values": values,
+                    "expected_values": expected_values,
+                }),
                 _json_dumps(source_event),
                 _json_dumps(
                     {
@@ -1708,12 +1734,15 @@ def _handle_sheets_append_row_request(envelope: Dict[str, Any], user_data: Dict[
     return _result(
         "sheet_append_request_created",
         request_id=request_id,
-        operation="append_row",
+        operation=operation,
         integration_id=integration_id,
         spreadsheet_id=spreadsheet_id,
         sheet_name=sheet_name,
         row_values=row_values,
         mapping=mapping,
+        range=range_value,
+        values=values,
+        expected_values=expected_values,
         approval_state="pending_human",
         apply_state="not_applied",
         provider_write_performed=False,

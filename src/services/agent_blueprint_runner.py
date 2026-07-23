@@ -7,6 +7,7 @@ from core.channel_router import dispatch_with_routing, load_business_channel_con
 from services.agent_capability_handlers import build_capability_handlers
 from services.agent_run_billing import finalize_agent_run_credits
 from services.agent_domain_request_executors import execute_approved_domain_requests
+from services.agent_sheet_provider_executor import execute_queued_sheet_provider_requests
 from services.agent_blueprint_workspace import build_generic_artifact_payload
 from services.agent_integration_preflight import (
     build_agent_integration_preflight,
@@ -1111,6 +1112,17 @@ class AgentBlueprintRunner:
             user_data=user_data,
             apply_finance=capability != "finance.transaction.create",
         )
+        if capability in {"sheets.append_row_request", "google_sheets.append_row", "google_sheets.update_cells"}:
+            provider_executor = execute_queued_sheet_provider_requests(
+                self.cursor,
+                business_id=str(run.get("business_id") or ""),
+                user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
+            )
+            approved_executor = {
+                **approved_executor,
+                "provider_executor": provider_executor,
+                "provider_writes_performed": bool(provider_executor.get("provider_writes_performed")),
+            }
         runtime_contract = self._production_action_runtime_contract(
             run,
             step,
@@ -3173,6 +3185,8 @@ class AgentBlueprintRunner:
     def _capability_requires_approval(self, capability: str, step: Dict[str, Any]) -> bool:
         if bool(step.get("requires_approval")):
             return True
+        if capability in {"sheets.append_row_request", "google_sheets.append_row", "google_sheets.update_cells"}:
+            return True
         lowered = capability.lower()
         return any(word in lowered for word in DANGEROUS_CAPABILITY_WORDS)
 
@@ -3188,6 +3202,8 @@ class AgentBlueprintRunner:
             artifact_type = "agent_output_draft"
         if approval_type == "telegram_post_approval":
             artifact_type = "telegram_post_draft"
+        if approval_type == "sheet_update":
+            artifact_type = "sheet_row_draft"
         if not artifact_type:
             return dict(payload)
         artifact_payload = self._latest_artifact_payload(str(run.get("id") or ""), artifact_type)

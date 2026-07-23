@@ -5,11 +5,12 @@ API эндпоинты для Google Business Profile интеграции
 import os
 import json
 import uuid
-import base64
 from flask import Blueprint, request, jsonify, redirect
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from database_manager import DatabaseManager
 from auth_system import verify_session
 from google_business_auth import GoogleBusinessAuth
+from google_sheets_auth import GOOGLE_SHEETS_SCOPE, GoogleSheetsAuth
 from google_business_api import GoogleBusinessAPIError
 from google_business_sync_worker import GoogleBusinessSyncWorker
 from auth_encryption import encrypt_auth_data, decrypt_auth_data
@@ -17,7 +18,9 @@ from core.helpers import get_business_owner_id
 
 google_business_bp = Blueprint('google_business', __name__)
 
-DEFAULT_GOOGLE_RETURN_PATH = "/dashboard/settings/integrations?focus=google_sheets"
+DEFAULT_GOOGLE_RETURN_PATH = "/dashboard/settings/integrations?focus=google_business"
+DEFAULT_GOOGLE_SHEETS_RETURN_PATH = "/dashboard/settings/integrations?focus=google_sheets"
+GOOGLE_OAUTH_STATE_MAX_AGE_SECONDS = 600
 
 def _row_value(row, key: str, index: int = 0):
     if row is None:
@@ -70,46 +73,59 @@ def _safe_google_return_path(value: str | None) -> str:
     return clean[:500]
 
 
-def _append_google_auth_status(path: str, status: str) -> str:
+def _append_google_auth_status(path: str, status: str, purpose: str = "google_business") -> str:
     safe_path = _safe_google_return_path(path)
     separator = "&" if "?" in safe_path else "?"
-    return f"{safe_path}{separator}google_auth={status}"
+    return f"{safe_path}{separator}google_auth={status}&google_auth_purpose={purpose}"
 
 
-def _encode_google_oauth_state(user_id: str, business_id: str, return_to: str | None) -> str:
+def _google_oauth_state_serializer() -> URLSafeTimedSerializer:
+    secret = str(
+        os.getenv("GOOGLE_OAUTH_STATE_SECRET")
+        or os.getenv("EXTERNAL_AUTH_SECRET_KEY")
+        or ""
+    ).strip()
+    if not secret:
+        raise RuntimeError("GOOGLE_OAUTH_STATE_SECRET or EXTERNAL_AUTH_SECRET_KEY must be configured")
+    return URLSafeTimedSerializer(secret, salt="localos-google-oauth-state-v3")
+
+
+def _encode_google_oauth_state(
+    user_id: str,
+    business_id: str,
+    return_to: str | None,
+    purpose: str = "google_business",
+) -> str:
     payload = {
         "user_id": str(user_id or ""),
         "business_id": str(business_id or ""),
         "return_to": _safe_google_return_path(return_to),
+        "purpose": str(purpose or "google_business"),
     }
-    encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8")).decode("ascii")
-    return f"v2:{encoded.rstrip('=')}"
+    return "v3:" + _google_oauth_state_serializer().dumps(payload)
 
 
-def _decode_google_oauth_state(state: str | None) -> dict:
+def _decode_google_oauth_state(state: str | None, expected_purpose: str = "google_business") -> dict:
     raw = str(state or "").strip()
-    if raw.startswith("v2:"):
-        encoded = raw[3:]
-        padded = encoded + ("=" * (-len(encoded) % 4))
-        try:
-            payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
-        except Exception:
-            return {}
-        if not isinstance(payload, dict):
-            return {}
-        return {
-            "user_id": str(payload.get("user_id") or ""),
-            "business_id": str(payload.get("business_id") or ""),
-            "return_to": _safe_google_return_path(str(payload.get("return_to") or "")),
-        }
+    if not raw.startswith("v3:"):
+        return {}
     try:
-        user_id, business_id = raw.split('_', 1)
-    except ValueError:
+        payload = _google_oauth_state_serializer().loads(
+            raw[3:],
+            max_age=GOOGLE_OAUTH_STATE_MAX_AGE_SECONDS,
+        )
+    except (BadSignature, SignatureExpired):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    purpose = str(payload.get("purpose") or "")
+    if purpose != expected_purpose:
         return {}
     return {
-        "user_id": user_id,
-        "business_id": business_id,
-        "return_to": DEFAULT_GOOGLE_RETURN_PATH,
+        "user_id": str(payload.get("user_id") or ""),
+        "business_id": str(payload.get("business_id") or ""),
+        "return_to": _safe_google_return_path(str(payload.get("return_to") or "")),
+        "purpose": purpose,
     }
 
 def _public_location(location: dict) -> dict:
@@ -181,6 +197,41 @@ def _get_google_account(cursor, business_id: str, account_id: str = None) -> dic
     return dict(account_row) if account_row else None
 
 
+def _get_google_sheets_account(cursor, business_id: str) -> dict | None:
+    cursor.execute(
+        """
+        SELECT * FROM externalbusinessaccounts
+        WHERE business_id = %s AND source = 'google_sheets' AND is_active = TRUE
+        ORDER BY updated_at DESC
+        LIMIT 1
+        """,
+        (business_id,),
+    )
+    account_row = cursor.fetchone()
+    return dict(account_row) if account_row else None
+
+
+def _credentials_payload(cursor, account: dict) -> dict:
+    auth_column = _auth_data_column(cursor)
+    encrypted_auth = str(account.get(auth_column) or "")
+    if not encrypted_auth:
+        return {}
+    try:
+        payload = json.loads(decrypt_auth_data(encrypted_auth) or "{}")
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _get_legacy_sheets_account(cursor, business_id: str) -> dict | None:
+    account = _get_google_account(cursor, business_id)
+    if not account:
+        return None
+    credentials = _credentials_payload(cursor, account)
+    scopes = credentials.get("scopes") if isinstance(credentials.get("scopes"), list) else []
+    return account if GOOGLE_SHEETS_SCOPE in [str(scope) for scope in scopes] else None
+
+
 def _sync_google_sheets_agent_auth_refs(cursor, business_id: str, auth_ref: str) -> int:
     normalized_business_id = str(business_id or "").strip()
     normalized_auth_ref = str(auth_ref or "").strip()
@@ -188,12 +239,21 @@ def _sync_google_sheets_agent_auth_refs(cursor, business_id: str, auth_ref: str)
         return 0
     cursor.execute(
         """
-        UPDATE agent_integrations
+        UPDATE agent_integrations integration
         SET auth_ref = %s, updated_at = CURRENT_TIMESTAMP
-        WHERE business_id = %s
-          AND provider = 'google_sheets'
-          AND status = 'active'
-          AND COALESCE(auth_ref, '') = ''
+        WHERE integration.business_id = %s
+          AND integration.provider = 'google_sheets'
+          AND integration.status = 'active'
+          AND (
+            COALESCE(integration.auth_ref, '') = ''
+            OR EXISTS (
+                SELECT 1
+                FROM externalbusinessaccounts account
+                WHERE account.id = integration.auth_ref
+                  AND account.business_id = integration.business_id
+                  AND (account.is_active = FALSE OR account.source = 'google_business')
+            )
+          )
         """,
         (normalized_auth_ref, normalized_business_id),
     )
@@ -244,6 +304,7 @@ def google_oauth_authorize():
             str(user_data['user_id']),
             str(business_id),
             request.args.get("return_to"),
+            "google_business",
         )
         
         auth = GoogleBusinessAuth()
@@ -277,7 +338,7 @@ def google_oauth_callback():
     
     frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
     
-    state_payload = _decode_google_oauth_state(state)
+    state_payload = _decode_google_oauth_state(state, "google_business")
     return_to = str(state_payload.get("return_to") or DEFAULT_GOOGLE_RETURN_PATH)
 
     if error:
@@ -331,8 +392,6 @@ def google_oauth_callback():
                 (id, business_id, source, external_id, display_name, """ + auth_column + """, is_active, created_at, updated_at)
                 VALUES (%s, %s, 'google_business', %s, %s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """, (account_id, business_id, None, 'Google Business', encrypted_creds))
-        _sync_google_sheets_agent_auth_refs(cursor, business_id, account_id)
-        
         db.conn.commit()
         db.close()
         
@@ -344,6 +403,136 @@ def google_oauth_callback():
         import traceback
         traceback.print_exc()
         return redirect(f"{frontend_url}{_append_google_auth_status(return_to, 'error')}")
+
+
+@google_business_bp.route('/api/google/sheets/oauth/authorize', methods=['GET', 'OPTIONS'])
+def google_sheets_oauth_authorize():
+    """Start the dedicated Google Sheets OAuth flow."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    business_id = str(request.args.get('business_id') or '').strip()
+    if not business_id:
+        return jsonify({"error": "business_id обязателен"}), 400
+    user_data, db = _verify_auth_and_access(business_id)
+    if not user_data:
+        return jsonify({"error": "Требуется авторизация или нет доступа к бизнесу"}), 401
+    db.close()
+    try:
+        return_to = request.args.get("return_to") or DEFAULT_GOOGLE_SHEETS_RETURN_PATH
+        state = _encode_google_oauth_state(
+            str(user_data.get('user_id') or ''),
+            business_id,
+            return_to,
+            "google_sheets",
+        )
+        auth_url = GoogleSheetsAuth().get_authorization_url(state)
+        return jsonify({"success": True, "auth_url": auth_url, "scope": GOOGLE_SHEETS_SCOPE})
+    except Exception as error:
+        return jsonify({"error": str(error)}), 500
+
+
+@google_business_bp.route('/api/google/sheets/oauth/callback', methods=['GET'])
+def google_sheets_oauth_callback():
+    """Store a Sheets-only credential independently from Google Business."""
+    code = request.args.get('code')
+    state_payload = _decode_google_oauth_state(request.args.get('state'), "google_sheets")
+    return_to = str(state_payload.get("return_to") or DEFAULT_GOOGLE_SHEETS_RETURN_PATH)
+    frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+    if request.args.get('error') or not code:
+        return redirect(f"{frontend_url}{_append_google_auth_status(return_to, 'error', 'google_sheets')}")
+    business_id = str(state_payload.get("business_id") or "")
+    user_id = str(state_payload.get("user_id") or "")
+    if not business_id or not user_id:
+        return redirect(f"{frontend_url}{_append_google_auth_status(return_to, 'error', 'google_sheets')}")
+    db = None
+    try:
+        auth = GoogleSheetsAuth()
+        credentials = auth.get_credentials_from_code(code)
+        encrypted_creds = encrypt_auth_data(json.dumps(auth.credentials_to_dict(credentials)))
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            "SELECT id FROM externalbusinessaccounts WHERE business_id = %s AND source = 'google_sheets'",
+            (business_id,),
+        )
+        existing = cursor.fetchone()
+        auth_column = _auth_data_column(cursor)
+        if existing:
+            account_id = str(_row_value(existing, "id", 0) or "")
+            cursor.execute(
+                "UPDATE externalbusinessaccounts SET " + auth_column + " = %s, display_name = %s, "
+                "is_active = TRUE, last_sync_at = CURRENT_TIMESTAMP, last_error = NULL, updated_at = CURRENT_TIMESTAMP "
+                "WHERE id = %s AND business_id = %s AND source = 'google_sheets'",
+                (encrypted_creds, 'Google Таблицы', account_id, business_id),
+            )
+        else:
+            account_id = str(uuid.uuid4())
+            cursor.execute(
+                "INSERT INTO externalbusinessaccounts "
+                "(id, business_id, source, external_id, display_name, " + auth_column + ", is_active, created_at, updated_at) "
+                "VALUES (%s, %s, 'google_sheets', NULL, %s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                (account_id, business_id, 'Google Таблицы', encrypted_creds),
+            )
+        rebound_count = _sync_google_sheets_agent_auth_refs(cursor, business_id, account_id)
+        db.conn.commit()
+        return redirect(
+            f"{frontend_url}{_append_google_auth_status(return_to, 'success', 'google_sheets')}&rebound={rebound_count}"
+        )
+    except Exception as error:
+        if db:
+            db.conn.rollback()
+        print(f"Google Sheets OAuth callback failed: {error}")
+        return redirect(f"{frontend_url}{_append_google_auth_status(return_to, 'error', 'google_sheets')}")
+    finally:
+        if db:
+            db.close()
+
+
+@google_business_bp.route('/api/business/<business_id>/google-sheets/status', methods=['GET', 'OPTIONS'])
+def google_sheets_status(business_id):
+    """Return dedicated Sheets status without conflating it with GBP."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    user_data, db = _verify_auth_and_access(business_id)
+    if not user_data:
+        return jsonify({"error": "Требуется авторизация или нет доступа к бизнесу"}), 401
+    try:
+        cursor = db.conn.cursor()
+        account = _get_google_sheets_account(cursor, business_id)
+        legacy_account = _get_legacy_sheets_account(cursor, business_id) if not account else None
+        credentials = _credentials_payload(cursor, account) if account else {}
+        scopes = credentials.get("scopes") if isinstance(credentials.get("scopes"), list) else []
+        scope_values = [str(scope) for scope in scopes]
+        token_ready = bool(credentials.get("token") or credentials.get("refresh_token"))
+        connected = bool(account and GOOGLE_SHEETS_SCOPE in scope_values and token_ready)
+        return jsonify({
+            "success": True,
+            "connected": connected,
+            "needs_auth": not connected,
+            "scopes": scope_values,
+            "read_check": {
+                "status": "credentials_ready" if connected else "not_connected",
+                "checked_at": account.get("last_sync_at") if account else None,
+                "last_error": account.get("last_error") if account else None,
+            },
+            "account": {
+                "id": account.get("id"),
+                "display_name": account.get("display_name"),
+                "last_sync_at": account.get("last_sync_at"),
+                "last_error": account.get("last_error"),
+            } if account else None,
+            "legacy_token": bool(legacy_account),
+            "legacy_account_id": legacy_account.get("id") if legacy_account else None,
+            "needs_separate_reconnect": bool(legacy_account and not connected),
+            "capabilities": {
+                "read_rows": connected,
+                "append_rows_with_approval": connected,
+                "update_cells_with_approval": connected,
+            },
+            "approval_required_for_writes": True,
+        })
+    finally:
+        db.close()
 
 @google_business_bp.route('/api/business/<business_id>/google/status', methods=['GET', 'OPTIONS'])
 def google_status(business_id):

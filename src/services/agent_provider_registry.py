@@ -103,6 +103,10 @@ CAPABILITY_PROVIDER_MAP: Dict[str, List[Dict[str, Any]]] = {
         {"provider": "composio", "state": "planned", "role": "future_google_sheets_connector"},
         {"provider": "manual", "state": "available", "role": "fallback"},
     ],
+    "google_sheets.update_cells": [
+        {"provider": "native_localos", "state": "available", "role": "approved_conflict_safe_google_sheets_executor"},
+        {"provider": "manual", "state": "available", "role": "fallback"},
+    ],
     "google_sheets.read_rows": [
         {"provider": "openclaw", "state": "available", "role": "planner_or_connector"},
         {"provider": "composio", "state": "planned", "role": "future_google_sheets_reader"},
@@ -151,7 +155,7 @@ INTEGRATION_PROVIDER_CATALOG: Dict[str, Dict[str, Any]] = {
         "default_limits": {"daily_append_cap": 50, "frequency_cap_minutes": 0},
         "status": "available",
         "provider_candidates": ["native_localos", "composio", "manual"],
-        "capabilities": ["sheets.append_row_request", "google_sheets.read_rows"],
+        "capabilities": ["google_sheets.read_rows", "sheets.append_row_request", "google_sheets.update_cells"],
     },
     "telegram": {
         "title": "Telegram",

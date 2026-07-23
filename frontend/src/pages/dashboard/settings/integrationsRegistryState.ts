@@ -119,9 +119,10 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
   const phoneAdded = hasText(business.whatsapp_phone);
   const wabaConnected = hasText(business.waba_phone_id) && hasText(business.waba_access_token);
 
-  const googleAccount = findAccount(accounts, ['google_business']);
-  const googleSheetsConnected = Boolean(googleAccount);
-  const googleBusinessConnected = Boolean(googleAccount && hasText(googleAccount.external_id));
+  const googleSheetsAccount = findAccount(accounts, ['google_sheets']);
+  const googleBusinessAccount = findAccount(accounts, ['google_business']);
+  const googleSheetsConnected = Boolean(googleSheetsAccount);
+  const googleBusinessConnected = Boolean(googleBusinessAccount && hasText(googleBusinessAccount.external_id));
   const vkAccount = findAccount(accounts, ['vk', 'vk_group', 'vk_business']);
   const vkOauthConnected = vkAccount?.connection_mode === 'vk_id_oauth';
   const metaAccount = findAccount(accounts, ['meta', 'instagram', 'facebook']);
@@ -228,12 +229,12 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
     },
     {
       id: 'google_sheets',
-      name: 'Google Sheets',
+      name: 'Google Таблицы',
       tag: 'Данные',
-      description: 'Доступ агентам к строкам Google Таблиц.',
+      description: 'Чтение строк и подтверждаемые изменения таблиц агентами.',
       connectionType: 'oauth',
       status: googleSheetsConnected ? 'connected' : 'not_connected',
-      nextAction: googleSheetsConnected ? 'Google-доступ подключён.' : 'Подключите Google-доступ для таблиц.',
+      nextAction: googleSheetsConnected ? 'Можно читать таблицы; запись всегда требует подтверждения.' : 'Подключите отдельный доступ к Google Таблицам.',
       primaryAction: { label: googleSheetsConnected ? 'Переподключить' : 'Подключить', type: 'drawer', target: 'google_sheets' },
       hasLogs: true,
       hasHelp: true,
@@ -244,8 +245,8 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
       tag: 'Публикации',
       description: 'Карточка компании, отзывы и посты Google.',
       connectionType: 'oauth',
-      status: googleBusinessConnected ? 'connected' : googleSheetsConnected ? 'action_required' : 'not_connected',
-      nextAction: googleBusinessConnected ? 'Карточка выбрана.' : googleSheetsConnected ? 'Выберите карточку компании.' : 'Сначала подключите Google-доступ.',
+      status: googleBusinessConnected ? 'connected' : googleBusinessAccount ? 'action_required' : 'not_connected',
+      nextAction: googleBusinessConnected ? 'Карточка выбрана.' : 'Ждём согласования Google. Это не мешает Google Таблицам.',
       primaryAction: { label: googleBusinessConnected ? 'Синхронизировать' : 'Настроить', type: 'drawer', target: 'google_business' },
       hasLogs: true,
       hasHelp: true,

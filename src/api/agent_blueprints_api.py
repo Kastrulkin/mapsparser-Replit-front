@@ -1049,10 +1049,10 @@ def _agent_integration_execution_boundary(provider: str) -> dict:
         return boundary
     if provider == "google_sheets":
         return {
-            "capabilities": ["sheets.append_row_request", "google_sheets.append_row"],
+            "capabilities": ["google_sheets.read_rows", "sheets.append_row_request", "google_sheets.append_row", "google_sheets.update_cells"],
             "approval_required": True,
             "executor": "agent_sheet_provider_executor_v1",
-            "external_write": "approved_append_row",
+            "external_write": "approved_append_or_update_up_to_100_cells",
         }
     if provider == "browser_use":
         return {
@@ -1777,8 +1777,8 @@ def _load_agent_external_auth_options(cursor, business_id: str) -> list[dict]:
             FROM externalbusinessaccounts
             WHERE business_id = %s
               AND is_active = TRUE
-              AND source IN ('google_business', 'telegram_app', 'maton')
-            ORDER BY updated_at DESC
+              AND source IN ('google_sheets', 'google_business', 'telegram_app', 'maton')
+            ORDER BY CASE WHEN source = 'google_sheets' THEN 0 ELSE 1 END, updated_at DESC
             LIMIT 50
             """,
             (business_id,),
@@ -1801,7 +1801,7 @@ def _sanitize_agent_integration_config(provider: str, payload: dict) -> dict:
     source = payload.get("config") if isinstance(payload.get("config"), dict) else payload
     if provider == "google_sheets":
         operation = str(source.get("operation") or payload.get("operation") or "read_write").strip()
-        if operation not in {"read_rows", "append_row", "read_write"}:
+        if operation not in {"read_rows", "append_row", "update_cells", "read_write"}:
             operation = "read_write"
         return {
             "spreadsheet_id": str(source.get("spreadsheet_id") or source.get("google_spreadsheet_id") or "").strip(),
@@ -1944,6 +1944,8 @@ def _apply_custom_process_to_version_payload(version_payload: dict, custom_proce
         if next_step.get("key") == "prepare_sheet_row":
             step_payload = {
                 **step_payload,
+                "spreadsheet_id": str(google_sheets.get("spreadsheet_id") or "").strip(),
+                "sheet_name": sheet_name,
                 "columns": columns,
                 "row_values": row_values,
             }
@@ -2516,6 +2518,8 @@ def _execution_step_title(step: dict) -> str:
     step_key = str(step.get("key") or step.get("id") or "").strip()
     known = {
         "google_sheets.read_rows": "Прочитать строки Google Таблицы",
+        "sheets.append_row_request": "Добавить строку после подтверждения",
+        "google_sheets.update_cells": "Изменить ячейки после подтверждения",
         "content_plan.item.create_draft": "Сохранить черновик в контент-план",
         "reviews.reply.draft": "Подготовить черновик ответа",
         "news.generate": "Подготовить публикацию",

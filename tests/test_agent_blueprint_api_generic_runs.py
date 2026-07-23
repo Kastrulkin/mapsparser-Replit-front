@@ -1676,7 +1676,8 @@ def test_settings_integrations_first_layer_separates_google_sheets_from_google_b
 
     assert 'data-testid="settings-integrations-scenario"' in external
     assert "Google Таблицы" in external
-    assert "Этот доступ нужен агентам для чтения Google Таблиц. Он не публикует ничего наружу." in external
+    assert "Можно читать и изменять таблицы" in external
+    assert "попросит подтверждение" in external
     assert "Google Документы: позже" in external
     assert "Google-доступ" in external
     assert "Карточка" in external
