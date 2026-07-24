@@ -2201,6 +2201,12 @@ def _normalize_finance_transaction_date(value: object) -> str:
     text = str(value or "").strip()
     if not text:
         return datetime.now(timezone.utc).date().isoformat()
+    for date_format in ("%d.%m", "%d/%m", "%d-%m"):
+        try:
+            parsed = datetime.strptime(text, date_format).date()
+            return parsed.replace(year=datetime.now(timezone.utc).year).isoformat()
+        except ValueError:
+            continue
     for date_format in ("%Y-%m-%d", "%d.%m.%Y", "%d.%m.%y", "%d/%m/%Y", "%d-%m-%Y"):
         try:
             return datetime.strptime(text, date_format).date().isoformat()
@@ -2223,7 +2229,8 @@ def operator_mobile_finance_recognize():
             return error_response
     finally:
         db.close()
-    prompt = """Извлеки продажи из данных. Для каждой строки определи sale_type: service — основная услуга, upsell — допродажа к основной услуге, cross_sell — отдельный товар или кросс-продажа. Верни только JSON: {\"transactions\":[{\"transaction_date\":\"YYYY-MM-DD\",\"amount\":0,\"title\":\"название\",\"sale_type\":\"service|upsell|cross_sell\",\"notes\":\"\"}]}"""
+    today = datetime.now(timezone.utc).date()
+    prompt = f"""Извлеки продажи из данных. Для каждой строки определи sale_type: service — основная услуга, upsell — допродажа к основной услуге, cross_sell — отдельный товар или кросс-продажа. Сегодня {today.isoformat()}. Если в дате не указан год, используй {today.year}. Не превращай день месяца в год. Верни только JSON: {{\"transactions\":[{{\"transaction_date\":\"YYYY-MM-DD\",\"amount\":0,\"title\":\"название\",\"sale_type\":\"service|upsell|cross_sell\",\"notes\":\"\"}}]}}"""
     uploaded = request.files.get("file") or request.files.get("photo")
     try:
         if uploaded and str(uploaded.mimetype or "").startswith("image/"):
