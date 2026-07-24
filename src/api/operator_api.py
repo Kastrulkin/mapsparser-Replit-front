@@ -89,6 +89,7 @@ def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
         {"key": "content", "label": "Контент", "group": "more", "status": "available"},
         {"key": "services", "label": "Услуги", "group": "more", "status": "available"},
         {"key": "finance", "label": "Финансы", "group": "more", "status": "available"},
+        {"key": "analytics", "label": "Аналитика", "group": "more", "status": "read_only"},
         {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "read_only"},
         {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "read_only"},
         {"key": "settings", "label": "Настройки", "group": "more", "status": "available"},
@@ -1846,7 +1847,7 @@ def operator_mobile_module(module: str):
     user_data = require_auth_from_request()
     if not user_data:
         return jsonify({"success": False, "error": "Требуется авторизация"}), 401
-    allowed_modules = {"cards", "content", "services", "finance", "partnerships", "agents", "settings", "diagnostics"}
+    allowed_modules = {"cards", "content", "services", "finance", "analytics", "partnerships", "agents", "settings", "diagnostics"}
     if module not in allowed_modules or module in {"today", "tasks", "reviews", "operator"}:
         return jsonify({"success": False, "error": "Раздел пока недоступен"}), 404
     db = DatabaseManager()

@@ -184,6 +184,110 @@ def _finance(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
     return [{**_row(cursor, item), "kind": "finance_transaction"} for item in cursor.fetchall() or []]
 
 
+def _analytics(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
+    if not _table_exists(cursor, "financialtransactions"):
+        return []
+    platform, business_ids = _business_filter(scope)
+    cursor.execute(
+        """
+        SELECT
+            COALESCE(SUM(t.amount) FILTER (
+                WHERE t.transaction_type = 'income'
+                  AND COALESCE(t.transaction_date, t.created_at::date) >= CURRENT_DATE - INTERVAL '29 days'
+            ), 0) AS revenue,
+            COUNT(*) FILTER (
+                WHERE t.transaction_type = 'income'
+                  AND COALESCE(t.transaction_date, t.created_at::date) >= CURRENT_DATE - INTERVAL '29 days'
+            ) AS orders_count,
+            COALESCE(AVG(t.amount) FILTER (
+                WHERE t.transaction_type = 'income'
+                  AND COALESCE(t.transaction_date, t.created_at::date) >= CURRENT_DATE - INTERVAL '29 days'
+            ), 0) AS average_ticket,
+            COALESCE(SUM(t.amount) FILTER (
+                WHERE t.transaction_type = 'income'
+                  AND COALESCE(t.transaction_date, t.created_at::date) BETWEEN CURRENT_DATE - INTERVAL '59 days' AND CURRENT_DATE - INTERVAL '30 days'
+            ), 0) AS previous_revenue,
+            COUNT(*) FILTER (
+                WHERE t.transaction_type = 'income'
+                  AND COALESCE(t.transaction_date, t.created_at::date) BETWEEN CURRENT_DATE - INTERVAL '59 days' AND CURRENT_DATE - INTERVAL '30 days'
+            ) AS previous_orders_count
+        FROM financialtransactions t
+        WHERE (%s OR t.business_id = ANY(%s))
+        """,
+        (platform, business_ids),
+    )
+    summary = _row(cursor, cursor.fetchone() or {})
+    revenue = float(summary.get("revenue") or 0)
+    orders_count = int(summary.get("orders_count") or 0)
+    average_ticket = float(summary.get("average_ticket") or 0)
+    previous_revenue = float(summary.get("previous_revenue") or 0)
+    previous_orders_count = int(summary.get("previous_orders_count") or 0)
+    items: list[dict[str, Any]] = [
+        {
+            "id": "analytics-revenue",
+            "kind": "analytics_metric",
+            "metric_key": "revenue",
+            "title": "Выручка",
+            "amount": revenue,
+            "previous_amount": previous_revenue,
+            "unit": "₽",
+            "period_label": "Последние 30 дней",
+        },
+        {
+            "id": "analytics-orders",
+            "kind": "analytics_metric",
+            "metric_key": "orders",
+            "title": "Заказы",
+            "amount": orders_count,
+            "previous_amount": previous_orders_count,
+            "unit": "",
+            "period_label": "Последние 30 дней",
+        },
+        {
+            "id": "analytics-average-ticket",
+            "kind": "analytics_metric",
+            "metric_key": "average_ticket",
+            "title": "Средний чек",
+            "amount": average_ticket,
+            "previous_amount": previous_revenue / previous_orders_count if previous_orders_count else 0,
+            "unit": "₽",
+            "period_label": "Последние 30 дней",
+        },
+    ]
+    cursor.execute(
+        """
+        WITH days AS (
+            SELECT generate_series(CURRENT_DATE - INTERVAL '13 days', CURRENT_DATE, INTERVAL '1 day')::date AS day
+        ), totals AS (
+            SELECT COALESCE(t.transaction_date, t.created_at::date) AS day,
+                   SUM(t.amount) AS revenue,
+                   COUNT(*) AS orders_count
+            FROM financialtransactions t
+            WHERE t.transaction_type = 'income'
+              AND COALESCE(t.transaction_date, t.created_at::date) >= CURRENT_DATE - INTERVAL '13 days'
+              AND (%s OR t.business_id = ANY(%s))
+            GROUP BY COALESCE(t.transaction_date, t.created_at::date)
+        )
+        SELECT days.day, COALESCE(totals.revenue, 0) AS revenue, COALESCE(totals.orders_count, 0) AS orders_count
+        FROM days LEFT JOIN totals ON totals.day = days.day
+        ORDER BY days.day
+        """,
+        (platform, business_ids),
+    )
+    for value in cursor.fetchall() or []:
+        point = _row(cursor, value)
+        items.append(
+            {
+                "id": f"analytics-day-{_iso_value(point.get('day'))}",
+                "kind": "analytics_day",
+                "day": _iso_value(point.get("day")),
+                "amount": float(point.get("revenue") or 0),
+                "orders_count": int(point.get("orders_count") or 0),
+            }
+        )
+    return items
+
+
 def _partnerships(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
     if not _table_exists(cursor, "prospectingleads"):
         return []
@@ -251,6 +355,7 @@ LOADERS = {
     "content": _content,
     "services": _services,
     "finance": _finance,
+    "analytics": _analytics,
     "partnerships": _partnerships,
     "agents": _agents,
     "diagnostics": _diagnostics,

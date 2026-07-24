@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Area,
   AreaChart,
@@ -242,7 +243,6 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
   const [dashboard, setDashboard] = useState<FinanceDashboard | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [savingActionKey, setSavingActionKey] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [historyMonths, setHistoryMonths] = useState(6);
   const [history, setHistory] = useState<FinanceHistoryPoint[]>([]);
@@ -484,8 +484,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
     return items;
   }, [dashboard?.recommendations, hasFinanceData, quality?.missing]);
   const primaryAction = getPrimaryFinanceAction(dataState, quality?.missing || []);
-  const actionPlanRecommendations = (dashboard?.recommendations || []).slice(0, 3);
-  const hiddenActionPlanCount = Math.max((dashboard?.recommendations || []).length - actionPlanRecommendations.length, 0);
+  const nextRecommendation = (dashboard?.recommendations || [])[0];
 
   const fillDemoSalon = () => {
     setEntry({
@@ -526,56 +525,6 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
     });
     setActiveInputStep('entry');
     setMessage('Заполнил пример салона в формах. Можно посмотреть структуру данных или сохранить блоки по очереди.');
-  };
-
-  const completedActions = useMemo(() => {
-    const done = new Set<string>();
-    for (const item of dashboard?.action_logs || []) {
-      if (item.status === 'completed') done.add(item.action_key);
-    }
-    return done;
-  }, [dashboard?.action_logs]);
-
-  const toggleAction = async (
-    recommendation: FinanceRecommendation,
-    bucket: string,
-    actionText: string,
-    completed: boolean,
-  ) => {
-    if (!currentBusinessId) return;
-    const actionKey = buildActionKey(recommendation.code, bucket, actionText);
-    setSavingActionKey(actionKey);
-    setMessage(null);
-    try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/finance/actions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          business_id: currentBusinessId,
-          recommendation_code: recommendation.code,
-          action_key: actionKey,
-          action_bucket: bucket,
-          action_text: actionText,
-          status: completed ? 'completed' : 'pending',
-          period_start: period.start,
-          period_end: period.end,
-        }),
-      });
-      const data = await response.json();
-      if (!data.success) {
-        setMessage(data.error || 'Не удалось сохранить действие');
-        return;
-      }
-      setDashboard((current) => current ? { ...current, action_logs: data.actions || [] } : current);
-    } catch (error) {
-      setMessage('Ошибка соединения с сервером');
-    } finally {
-      setSavingActionKey(null);
-    }
   };
 
   const runPrimaryAction = () => {
@@ -661,36 +610,35 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
             <ImpactPanel impact={impact} />
             <div id="finance-next-action">
               <DashboardSection
-                title="Что сделать дальше"
-                description="Начните с первого пункта. LocalOS показывает только ближайшие действия, которые влияют на деньги."
+                title="Ближайший шаг"
+                description="Здесь — только короткая подсказка. Полный план действий и отметки выполнения находятся в «Прогрессе»."
+                actions={(
+                  <Button asChild variant="outline" className="gap-2">
+                    <Link to="/dashboard/progress">
+                      Открыть прогресс
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                )}
               >
-                {actionPlanRecommendations.length > 0 ? (
-                  <div className="space-y-3">
-                    {hiddenActionPlanCount > 0 ? (
-                      <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200">
-                        Показаны 3 главных действия. Ещё {hiddenActionPlanCount} появятся после выполнения приоритетных шагов.
-                      </div>
-                    ) : null}
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {actionPlanRecommendations.map((item) => (
-                        <RecommendationCard
-                          key={item.code}
-                          item={item}
-                          completedActions={completedActions}
-                          savingActionKey={savingActionKey}
-                          onToggleAction={toggleAction}
-                        />
-                      ))}
+                {nextRecommendation ? (
+                  <div className="flex flex-col gap-4 rounded-2xl bg-slate-50 p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08)] sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold uppercase tracking-[0.12em] text-orange-700">Сейчас важнее всего</div>
+                      <div className="mt-2 text-balance font-semibold text-slate-950">{nextRecommendation.title}</div>
+                      <p className="mt-1 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{nextRecommendation.text}</p>
                     </div>
+                    <Button asChild className="min-h-11 shrink-0 gap-2 transition-transform active:scale-[0.96]">
+                      <Link to="/dashboard/progress">
+                        Перейти к действиям
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
                   </div>
                 ) : (
-                  <FinanceEmptyState
-                    missing={quality?.missing || []}
-                    onAddData={() => {
-                      setActiveFinanceTab('data');
-                      document.getElementById('finance-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }}
-                  />
+                  <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900 shadow-[0_0_0_1px_rgba(16,185,129,0.18)]">
+                    Срочных финансовых действий нет. Общий прогресс бизнеса и следующие шаги доступны во вкладке «Прогресс».
+                  </div>
                 )}
               </DashboardSection>
             </div>

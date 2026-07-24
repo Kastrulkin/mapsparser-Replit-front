@@ -79,6 +79,57 @@ def test_finance_module_is_scope_filtered_and_real():
     assert result["available_actions"] == [{"key": "finance.sales_import", "label": "Загрузить продажи"}]
 
 
+class AnalyticsCursor:
+    def __init__(self):
+        self.rows = []
+        self.query = ""
+
+    def execute(self, query, params=()):
+        normalized = " ".join(str(query).lower().split())
+        self.query = normalized
+        if "to_regclass" in normalized:
+            self.rows = [{"table_ref": "public.financialtransactions"}]
+        elif "generate_series" in normalized:
+            self.rows = [
+                {"day": date(2026, 7, 23), "revenue": 0, "orders_count": 0},
+                {"day": date(2026, 7, 24), "revenue": 1000, "orders_count": 1},
+            ]
+        else:
+            self.rows = [{
+                "revenue": 1000,
+                "orders_count": 1,
+                "average_ticket": 1000,
+                "previous_revenue": 500,
+                "previous_orders_count": 1,
+            }]
+
+    def fetchone(self):
+        return self.rows[0] if self.rows else None
+
+    def fetchall(self):
+        return list(self.rows)
+
+
+def test_analytics_module_returns_real_period_metrics_and_daily_series():
+    result = list_operator_mobile_module(
+        AnalyticsCursor(),
+        module="analytics",
+        scope={"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+    )
+
+    assert result["status"] == "read_only"
+    assert result["items"][0]["metric_key"] == "revenue"
+    assert result["items"][0]["amount"] == 1000
+    assert result["items"][0]["previous_amount"] == 500
+    assert result["items"][-1] == {
+        "id": "analytics-day-2026-07-24",
+        "kind": "analytics_day",
+        "day": "2026-07-24",
+        "amount": 1000.0,
+        "orders_count": 1,
+    }
+
+
 def test_content_module_only_loads_the_latest_plan_for_each_business():
     cursor = ModuleCursor(
         "contentplanitems",
