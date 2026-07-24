@@ -102,6 +102,21 @@
   }
 }
 
+@keyframes guided-tour-target-pulse {
+  0%,
+  28%,
+  56%,
+  100% {
+    box-shadow: 0 0 0 5px rgba(249, 115, 22, 0.16);
+  }
+
+  12%,
+  40%,
+  68% {
+    box-shadow: 0 0 0 11px rgba(249, 115, 22, 0.42);
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

@@ -389,39 +389,21 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     <>
       {children}
       {targetRect && open ? (
-        <motion.div
+        <div
           key={`${currentStep.key}-${targetEmphasisKey}`}
+          data-tour-highlight="true"
           className="pointer-events-none fixed z-[65] rounded-lg border-2 border-orange-500 transition-[top,left,width,height] duration-200 motion-reduce:transition-none"
           style={{
             top: Math.max(4, targetRect.top - 5),
             left: Math.max(4, targetRect.left - 5),
             width: targetRect.width + 10,
             height: targetRect.height + 10,
-          }}
-          initial={targetEmphasisKey > 0 && !prefersReducedMotion
-            ? { boxShadow: '0 0 0 5px rgba(249,115,22,0.16)' }
-            : false}
-          animate={targetEmphasisKey > 0
-            ? prefersReducedMotion
-              ? { boxShadow: '0 0 0 8px rgba(249,115,22,0.32)' }
-              : {
-                boxShadow: [
-                  '0 0 0 5px rgba(249,115,22,0.16)',
-                  '0 0 0 11px rgba(249,115,22,0.42)',
-                  '0 0 0 5px rgba(249,115,22,0.16)',
-                  '0 0 0 11px rgba(249,115,22,0.42)',
-                  '0 0 0 5px rgba(249,115,22,0.16)',
-                  '0 0 0 11px rgba(249,115,22,0.42)',
-                  '0 0 0 5px rgba(249,115,22,0.16)',
-                ],
-              }
-            : { boxShadow: '0 0 0 5px rgba(249,115,22,0.16)' }}
-          transition={{
-            boxShadow: {
-              duration: prefersReducedMotion ? 0 : 1.35,
-              times: [0, 0.12, 0.28, 0.4, 0.56, 0.68, 1],
-              ease: 'easeInOut',
-            },
+            boxShadow: targetEmphasisKey > 0 && prefersReducedMotion
+              ? '0 0 0 8px rgba(249,115,22,0.32)'
+              : '0 0 0 5px rgba(249,115,22,0.16)',
+            animation: targetEmphasisKey > 0 && !prefersReducedMotion
+              ? 'guided-tour-target-pulse 1.35s ease-in-out'
+              : undefined,
           }}
           aria-hidden="true"
         />
