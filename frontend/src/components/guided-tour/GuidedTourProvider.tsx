@@ -381,20 +381,20 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             role="dialog"
             aria-modal="true"
             aria-labelledby="demo-welcome-title"
-            className="my-auto w-full max-w-3xl overflow-hidden rounded-lg bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28),0_3px_14px_rgba(15,23,42,0.12)]"
+            className="my-auto w-full max-w-4xl overflow-hidden rounded-lg bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28),0_3px_14px_rgba(15,23,42,0.12)]"
             tabIndex={-1}
           >
-            <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_160px] lg:gap-10 lg:p-10">
+            <div className="grid gap-5 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_132px] lg:gap-8 lg:p-8">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-orange-700">Интерактивное демо LocalOS</p>
                 <h1 id="demo-welcome-title" className="mt-3 text-balance text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
                   Получайте больше клиентов из карт, отзывов и соцсетей — без ручной рутины
                 </h1>
-                <p className="mt-4 text-pretty text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
+                <p className="mt-3 text-pretty text-sm leading-6 text-slate-600 sm:text-base">
                   LocalOS помогает владельцу малого бизнеса вести Яндекс Карты, 2ГИС и Google, отвечать на отзывы, готовить посты и новости, смотреть конкурентов рядом и понимать, что влияет на заявки, выручку и средний чек.
                 </p>
 
-                <div className="mt-6">
+                <div className="mt-4">
                   <h2 className="text-base font-semibold text-slate-950">Что можно сделать в LocalOS</h2>
                   <ul className="mt-3 grid gap-x-6 gap-y-2 text-sm leading-6 text-slate-700 sm:grid-cols-2">
                     {[
@@ -414,7 +414,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                   </ul>
                 </div>
 
-                <div className="mt-6 border-l-2 border-orange-400 pl-4">
+                <div className="mt-4 border-l-2 border-orange-400 pl-4">
                   <h2 className="font-semibold text-slate-950">Я помогу освоиться</h2>
                   <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">
                     За 8–10 минут мы посмотрим состояние сети, карточку на картах, контент и партнёрство. Вы можете свободно исследовать кабинет и в любой момент вернуться к маршруту.
@@ -429,7 +429,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
 
                 <Button
                   type="button"
-                  className="mt-6 min-h-12 w-full gap-2 sm:w-auto sm:min-w-56"
+                  className="mt-4 min-h-12 w-full gap-2 sm:w-auto sm:min-w-56"
                   onClick={() => void startFromWelcome()}
                 >
                   Начать знакомство
@@ -438,11 +438,11 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
               </div>
 
               <div className="order-first flex items-center justify-center lg:order-none lg:items-start">
-                <div className="relative h-28 w-28 overflow-hidden rounded-full bg-white shadow-[0_10px_32px_rgba(15,23,42,0.15)] ring-1 ring-black/10 lg:h-36 lg:w-36">
+                <div className="relative h-24 w-24 overflow-hidden rounded-full bg-white shadow-[0_10px_32px_rgba(15,23,42,0.15)] ring-1 ring-black/10 lg:h-32 lg:w-32">
                   <img
                     src={logo}
                     alt="Робот LocalOS"
-                    className="h-44 w-44 -translate-x-8 -translate-y-2 scale-125 object-cover object-top lg:h-52 lg:w-52 lg:-translate-x-9"
+                    className="h-40 w-40 -translate-x-7 -translate-y-2 scale-125 object-cover object-top lg:h-48 lg:w-48 lg:-translate-x-8"
                   />
                 </div>
               </div>
