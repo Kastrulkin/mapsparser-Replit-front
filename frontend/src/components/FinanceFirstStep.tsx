@@ -145,6 +145,15 @@ const percent = (value: KpiValue) => {
 
 const formatFinanceTableCell = (key: string, value: KpiValue | string) => {
   if (value == null || value === '') return 'н/д';
+  if (key === 'status') {
+    const labels: Record<string, string> = {
+      star: 'Лидер',
+      stable: 'Стабильно',
+      underperformer: 'Требует внимания',
+      no_finance_data: 'Нет продаж за период',
+    };
+    return labels[String(value)] || String(value);
+  }
   if (key.indexOf('margin') !== -1 || key.indexOf('rate') !== -1 || key === 'occupancy') return percent(value);
   if (key === 'idle_hours') return `${numberValue(value)} ч`;
   if (key.indexOf('hour') !== -1 || key === 'revenue' || key === 'gross_profit') return rub(value);
@@ -458,6 +467,15 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
   const analyzableItems = (quality?.can_analyze && quality.can_analyze.length > 0)
     ? quality.can_analyze
     : (quality?.precise || []);
+  const selectFinanceService = (serviceName: string) => {
+    const selected = (dashboard?.services || []).find((item) => String(item.service_name || '') === serviceName);
+    setService((current) => ({
+      ...current,
+      service_name: serviceName,
+      category: String(selected?.category || ''),
+      avg_price: selected?.catalog_price == null ? current.avg_price : String(selected.catalog_price),
+    }));
+  };
   const hasFinanceData = Boolean(
     (Number(kpis.revenue || 0) > 0)
     || (dashboard?.services || []).length
@@ -700,8 +718,21 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
                     </TabsContent>
 
                     <TabsContent value="service" className="space-y-4 pt-0">
+                      <p className="text-sm text-slate-600">Выберите услугу из карточки бизнеса. Финансы дополняют её показателями за период и не создают отдельный список.</p>
                       <div className="grid gap-3 md:grid-cols-4">
-                        <TextField label="Услуга" value={service.service_name} onChange={(value) => setService({ ...service, service_name: value })} />
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Услуга из карточки</Label>
+                          <Select value={service.service_name} onValueChange={selectFinanceService}>
+                            <SelectTrigger><SelectValue placeholder="Выберите услугу" /></SelectTrigger>
+                            <SelectContent>
+                              {(dashboard?.services || []).map((item, index) => (
+                                <SelectItem key={`${item.service_id || item.service_name}-${index}`} value={String(item.service_name || '')}>
+                                  {String(item.service_name || 'Услуга')}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <TextField label="Категория" value={service.category} onChange={(value) => setService({ ...service, category: value })} />
                         <MoneyField label="Выручка" value={service.revenue} onChange={(value) => setService({ ...service, revenue: value })} />
                         <NumberField label="Продаж" value={service.visits_count} onChange={(value) => setService({ ...service, visits_count: value })} />
@@ -710,7 +741,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
                         <MoneyField label="Материалы" value={service.material_cost} onChange={(value) => setService({ ...service, material_cost: value })} />
                         <MoneyField label="Выплата мастеру" value={service.staff_payout} onChange={(value) => setService({ ...service, staff_payout: value })} />
                       </div>
-                      <SaveButton disabled={saving} onClick={() => saveManualData('service')} />
+                      <SaveButton disabled={saving || !service.service_name} onClick={() => saveManualData('service')} />
                     </TabsContent>
 
                     <TabsContent value="staff" className="space-y-4 pt-0">
@@ -758,10 +789,10 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
 
           <TabsContent value="services" className="pt-5">
             <FinanceTable
-              title="Прибыльность услуг"
+              title="Услуги из карточки"
               icon={Scissors}
               rows={dashboard?.services || []}
-              description="Что приносит деньги, занимает время и требует дозаполнения себестоимости."
+              description="Тот же список, что в «Работе с картами». Здесь к нему добавлены продажи, выручка и маржа за выбранный период."
               columns={[
                 ['service_name', 'Услуга'],
                 ['revenue', 'Выручка'],

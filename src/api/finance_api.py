@@ -184,6 +184,113 @@ def _finance_prorate_count(value, ratio):
     return raw_value * ratio
 
 
+def _normalize_finance_service_name(value):
+    return " ".join(str(value or "").strip().casefold().split())
+
+
+def _load_finance_service_catalog(cursor, business_id):
+    """Load the same active service catalog used by the map-card workspace."""
+    user_columns = _table_columns(cursor, "userservices")
+    user_fields = ["id", "name", "category", "price", "updated_at"]
+    if "source" in user_columns:
+        user_fields.append("source")
+    cursor.execute(
+        f"""
+        SELECT {', '.join(user_fields)}
+        FROM userservices
+        WHERE business_id = %s AND (is_active IS TRUE OR is_active IS NULL)
+        ORDER BY category NULLS LAST, name NULLS LAST, updated_at DESC NULLS LAST
+        """,
+        (business_id,),
+    )
+    catalog = [_row_to_dict(cursor, row) for row in cursor.fetchall() or []]
+
+    cursor.execute("SELECT to_regclass('public.externalbusinessservices')")
+    table_row = cursor.fetchone()
+    if not _finance_row_value(table_row, "to_regclass", 0):
+        return catalog
+
+    external_columns = _table_columns(cursor, "externalbusinessservices")
+    external_fields = ["id", "name", "category", "price"]
+    if "updated_at" in external_columns:
+        external_fields.append("updated_at")
+    elif "created_at" in external_columns:
+        external_fields.append("created_at")
+    if "source" in external_columns:
+        external_fields.append("source")
+    cursor.execute(
+        f"""
+        SELECT {', '.join(external_fields)}
+        FROM externalbusinessservices
+        WHERE business_id = %s
+        ORDER BY category NULLS LAST, name NULLS LAST
+        """,
+        (business_id,),
+    )
+    for row in cursor.fetchall() or []:
+        item = _row_to_dict(cursor, row)
+        item["is_external"] = True
+        item["source"] = item.get("source") or "external"
+        if "created_at" in item and "updated_at" not in item:
+            item["updated_at"] = item.get("created_at")
+        catalog.append(item)
+    return catalog
+
+
+def _finance_catalog_rows(catalog, finance_metrics):
+    """Overlay period metrics on the canonical card-service list without creating a second catalog."""
+    grouped = {}
+    for item in finance_metrics or []:
+        key = _normalize_finance_service_name(item.get("service_name"))
+        if not key:
+            continue
+        group = grouped.setdefault(key, [])
+        group.append(item)
+
+    merged = []
+    metadata = []
+    for service in catalog or []:
+        service_name = service.get("name") or "Услуга"
+        matched = grouped.get(_normalize_finance_service_name(service_name), [])
+        visits = sum(float(item.get("visits_count") or 0) for item in matched)
+        weighted_price = sum(
+            float(item.get("avg_price") or 0) * float(item.get("visits_count") or 0)
+            for item in matched
+        )
+        catalog_price = service.get("price")
+        try:
+            fallback_price = float(catalog_price or 0)
+        except (TypeError, ValueError):
+            fallback_price = 0
+        merged.append({
+            "service_name": service_name,
+            "category": service.get("category") or "",
+            "revenue": sum(float(item.get("revenue") or 0) for item in matched),
+            "visits_count": visits,
+            "avg_price": weighted_price / visits if visits > 0 else fallback_price,
+            "duration_minutes": max([int(item.get("duration_minutes") or 0) for item in matched] or [0]),
+            "material_cost": sum(float(item.get("material_cost") or 0) for item in matched),
+            "staff_payout": sum(float(item.get("staff_payout") or 0) for item in matched),
+        })
+        metadata.append({
+            "service_id": service.get("id"),
+            "catalog_price": catalog_price,
+            "source": service.get("source") or "localos",
+            "updated_at": service.get("updated_at"),
+            "is_external": bool(service.get("is_external")),
+            "has_finance_data": bool(matched),
+        })
+
+    if not merged:
+        return []
+    calculated = calculate_finance_snapshot({"services": merged}).get("services") or []
+    for index, row in enumerate(calculated):
+        row.update(metadata[index])
+        if not metadata[index]["has_finance_data"]:
+            row["status"] = "no_finance_data"
+    return calculated
+
+
 def _load_finance_payload(cursor, business_id, start_date, end_date):
     cursor.execute(
         """
@@ -884,6 +991,8 @@ def get_finance_dashboard():
         else:
             start_date, end_date = _finance_period_from_request()
         payload, thresholds, snapshot = _finance_snapshot_for_period(cursor, business_id, start_date, end_date)
+        service_catalog = _load_finance_service_catalog(cursor, business_id)
+        snapshot["services"] = _finance_catalog_rows(service_catalog, payload.get("services") or [])
         action_logs = _load_finance_action_logs(cursor, business_id, start_date, end_date)
         action_impact = _build_finance_impact(cursor, business_id, start_date, end_date)
         period_history = _build_finance_history(cursor, business_id, 6)
