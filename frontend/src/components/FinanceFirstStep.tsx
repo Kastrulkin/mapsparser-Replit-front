@@ -612,14 +612,6 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
               <DashboardSection
                 title="Ближайший шаг"
                 description="Здесь — только короткая подсказка. Полный план действий и отметки выполнения находятся в «Прогрессе»."
-                actions={(
-                  <Button asChild variant="outline" className="gap-2">
-                    <Link to="/dashboard/progress">
-                      Открыть прогресс
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                )}
               >
                 {nextRecommendation ? (
                   <div className="flex flex-col gap-4 rounded-2xl bg-slate-50 p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08)] sm:flex-row sm:items-center sm:justify-between">
