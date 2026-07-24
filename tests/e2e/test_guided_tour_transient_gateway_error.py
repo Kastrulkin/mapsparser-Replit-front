@@ -102,14 +102,14 @@ def test_guided_tour_keeps_the_current_step_when_progress_save_gets_502():
         expect(start_button).to_be_visible()
         start_button.click()
 
-        step_indicator = page.get_by_text("Шаг 1 из 15", exact=True)
+        step_indicator = page.get_by_text("Шаг 2 из 15", exact=True)
         expect(step_indicator).to_be_visible()
         page.get_by_role("button", name="Дальше").click()
 
         page.wait_for_timeout(100)
         rendered_step = page.get_by_text(re.compile(r"^Шаг \d+ из 15$"))
         assert not page_errors, f"Unexpected unhandled errors: {page_errors}"
-        expect(rendered_step).to_have_text("Шаг 1 из 15")
+        expect(rendered_step).to_have_text("Шаг 2 из 15")
         expect(page.get_by_text("Не удалось сохранить прогресс. Попробуйте ещё раз.", exact=True)).to_be_visible()
 
         context.close()

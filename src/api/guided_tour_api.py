@@ -64,6 +64,13 @@ DEMO_DENIED_PATH_PARTS = (
     "/api/agent-api",
     "/api/admin/knowledge",
 )
+DEMO_BUSINESS_SCOPE_KEYS = {
+    "business_id",
+    "businessId",
+    "current_business_id",
+    "scope_business_id",
+    "parent_business_id",
+}
 
 _rate_lock = threading.Lock()
 _rate_hits: dict[str, deque[float]] = defaultdict(deque)
@@ -130,6 +137,20 @@ def _require_demo_session():
     return session, None
 
 
+def _requested_business_ids() -> set[str]:
+    requested_ids: set[str] = set()
+    view_args = request.view_args if isinstance(request.view_args, dict) else {}
+    for key in DEMO_BUSINESS_SCOPE_KEYS:
+        values = request.args.getlist(key)
+        if key in view_args:
+            values.append(view_args[key])
+        for value in values:
+            normalized = str(value or "").strip()
+            if normalized:
+                requested_ids.add(normalized)
+    return requested_ids
+
+
 def _serialize_progress(row: Any, *, tour_key: str, business_id: str) -> dict[str, Any]:
     if not row:
         return {
@@ -192,6 +213,10 @@ def enforce_demo_session_policy():
         return jsonify({"success": False, "error": "demo_route_not_allowed"}), 403
     if not any(path.startswith(prefix) for prefix in DEMO_READ_PATH_PREFIXES):
         return jsonify({"success": False, "error": "demo_route_not_allowed"}), 403
+    scope_business_id = str(session.get("scope_business_id") or "").strip()
+    requested_business_ids = _requested_business_ids()
+    if requested_business_ids and requested_business_ids != {scope_business_id}:
+        return jsonify({"success": False, "error": "demo_business_scope_violation"}), 403
     return None
 
 

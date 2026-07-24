@@ -73,7 +73,8 @@ def get_user_info():
             return jsonify({"error": "Не удалось определить ID пользователя"}), 500
 
         print(f"🔍 DEBUG get_user_info: user_id = {user_id}")
-        is_superadmin = db.is_superadmin(user_id)
+        session_kind = str(_safe_get(user_data, "session_kind", "standard") or "standard")
+        is_superadmin = db.is_superadmin(user_id) and session_kind != "demo"
         if is_superadmin:
             businesses = db.get_all_businesses()
         elif db.is_network_owner(user_id):
@@ -81,7 +82,6 @@ def get_user_info():
         else:
             businesses = db.get_businesses_by_owner(user_id)
 
-        session_kind = str(_safe_get(user_data, "session_kind", "standard") or "standard")
         scope_business_id = _safe_get(user_data, "scope_business_id")
         if session_kind == "demo":
             businesses = _filter_demo_businesses(businesses, scope_business_id)

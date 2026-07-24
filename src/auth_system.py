@@ -511,15 +511,20 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
                 session_kind = session[8] if len(session) > 8 else 'standard'
                 scope_business_id = session[9] if len(session) > 9 else None
             
+            normalized_session_kind = str(session_kind or "standard")
             return {
                 "user_id": user_id,
                 "email": email,
                 "name": name,
                 "phone": phone,
                 "is_active": bool(is_active_val) if is_active_val is not None else True,
-                "is_superadmin": bool(is_superadmin_val) if is_superadmin_val is not None else False,
+                "is_superadmin": (
+                    False
+                    if normalized_session_kind == "demo"
+                    else bool(is_superadmin_val) if is_superadmin_val is not None else False
+                ),
                 "session_id": session_id,
-                "session_kind": str(session_kind or "standard"),
+                "session_kind": normalized_session_kind,
                 "scope_business_id": scope_business_id,
             }
         except Exception as e:

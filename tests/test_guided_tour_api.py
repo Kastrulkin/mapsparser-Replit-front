@@ -52,6 +52,14 @@ def build_app():
     def demo_business_route():
         return jsonify({"success": True})
 
+    @app.route("/api/business/<business_id>/details", methods=["GET"])
+    def scoped_business_route(business_id):
+        return jsonify({"success": True, "business_id": business_id})
+
+    @app.route("/api/services", methods=["GET"])
+    def scoped_services_route():
+        return jsonify({"success": True})
+
     app.register_blueprint(guided_tour_api.guided_tour_bp)
     return app
 
@@ -142,6 +150,22 @@ def test_demo_policy_blocks_mutations_and_sensitive_reads(monkeypatch):
     assert secrets.status_code == 403
     assert secrets.get_json()["error"] == "demo_route_not_allowed"
     assert allowed_read.status_code == 200
+
+
+def test_demo_policy_rejects_business_ids_outside_session_scope(monkeypatch):
+    monkeypatch.setattr(guided_tour_api, "verify_session", lambda token: demo_session(token))
+    client = build_app().test_client()
+    headers = {"Authorization": "Bearer demo_token"}
+
+    path_scope = client.get("/api/business/another-business/details", headers=headers)
+    query_scope = client.get("/api/services?business_id=another-business", headers=headers)
+    allowed_scope = client.get("/api/business/demo-business/details", headers=headers)
+
+    assert path_scope.status_code == 403
+    assert path_scope.get_json()["error"] == "demo_business_scope_violation"
+    assert query_scope.status_code == 403
+    assert query_scope.get_json()["error"] == "demo_business_scope_violation"
+    assert allowed_scope.status_code == 200
 
 
 def test_standard_session_keeps_existing_mutation_behavior(monkeypatch):

@@ -243,6 +243,32 @@ def test_verify_session_returns_kind_and_scope(monkeypatch):
     assert session["scope_business_id"] == "business-1"
 
 
+def test_verify_session_never_exposes_superadmin_through_demo_session(monkeypatch):
+    cursor = FakeCursor(
+        [
+            (
+                "user-1",
+                "2099-01-01T00:00:00",
+                "demo@example.com",
+                "Demo",
+                None,
+                True,
+                True,
+                "session-1",
+                "demo",
+                "business-1",
+            )
+        ]
+    )
+    connection = FakeConnection(cursor)
+    monkeypatch.setattr(auth_system, "get_db_connection", lambda: connection)
+
+    session = auth_system.verify_session("demo-token")
+
+    assert session["session_kind"] == "demo"
+    assert session["is_superadmin"] is False
+
+
 def test_verify_session_falls_back_for_legacy_session_schema(monkeypatch):
     class MissingColumnCursor(FakeCursor):
         def execute(self, query, params=None):
