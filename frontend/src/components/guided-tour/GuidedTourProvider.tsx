@@ -380,8 +380,8 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
           data-tour-highlight="true"
           className="pointer-events-none fixed z-[65] rounded-lg border-2 border-orange-500 transition-[top,left,width,height] duration-200 motion-reduce:transition-none"
           style={{
-            top: Math.max(4, targetRect.top - 5),
-            left: Math.max(4, targetRect.left - 5),
+            top: targetRect.top - 5,
+            left: targetRect.left - 5,
             width: targetRect.width + 10,
             height: targetRect.height + 10,
             boxShadow: targetEmphasisKey > 0 && prefersReducedMotion
