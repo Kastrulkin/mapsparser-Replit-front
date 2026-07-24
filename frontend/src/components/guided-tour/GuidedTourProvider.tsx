@@ -403,13 +403,12 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                 </div>
 
                 <div className="order-first flex justify-center sm:order-none sm:justify-end">
-                  <div className="relative h-16 w-16 overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-200 sm:h-[72px] sm:w-[72px]">
+                  <div className="relative h-16 w-16 overflow-hidden sm:h-[72px] sm:w-[72px]">
                     <img
                       src={logo}
                       alt="Робот LocalOS"
-                      className="absolute left-1/2 top-0 h-auto w-[135%] max-w-none -translate-x-1/2 -translate-y-[10%] object-contain"
+                      className="absolute left-1/2 top-0 h-auto w-[175%] max-w-none -translate-x-1/2 -translate-y-[10%] object-contain mix-blend-multiply"
                     />
-                    <span className="absolute inset-x-0 bottom-0 h-[22%] bg-white" aria-hidden="true" />
                   </div>
                 </div>
 
