@@ -25,42 +25,67 @@ def _business_filter(scope: dict[str, Any]) -> tuple[bool, list[str]]:
 
 
 def _cards(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
-    if not _table_exists(cursor, "cards"):
+    if not _table_exists(cursor, "businesses"):
         return []
     platform, business_ids = _business_filter(scope)
     cursor.execute(
         """
-        SELECT DISTINCT ON (c.business_id) c.id, c.business_id, b.name AS business_name,
+        SELECT b.id, b.id AS business_id, b.name AS business_name,
                COALESCE(c.title, b.name) AS title, COALESCE(c.address, b.address) AS subtitle,
-               c.rating, c.reviews_count, c.seo_score, c.updated_at
-        FROM cards c JOIN businesses b ON b.id = c.business_id
-        WHERE (%s OR c.business_id = ANY(%s))
-        ORDER BY c.business_id, c.is_latest DESC NULLS LAST, c.updated_at DESC
+               c.rating, c.reviews_count, c.seo_score,
+               COALESCE(q.updated_at, c.updated_at, links.updated_at) AS updated_at,
+               COALESCE(links.provider_sources, '[]'::jsonb) AS provider_sources,
+               q.status AS parse_status, q.source AS parse_source, q.updated_at AS parse_updated_at
+        FROM businesses b
+        LEFT JOIN LATERAL (
+            SELECT title, address, rating, reviews_count, seo_score, updated_at
+            FROM cards WHERE business_id = b.id
+            ORDER BY is_latest DESC NULLS LAST, updated_at DESC LIMIT 1
+        ) c ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT jsonb_agg(DISTINCT LOWER(COALESCE(map_type, ''))) AS provider_sources,
+                   MAX(created_at) AS updated_at
+            FROM businessmaplinks WHERE business_id = b.id
+        ) links ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT status, source, updated_at FROM parsequeue
+            WHERE business_id = b.id ORDER BY updated_at DESC LIMIT 1
+        ) q ON TRUE
+        WHERE (%s OR b.id = ANY(%s))
+        ORDER BY COALESCE(q.updated_at, c.updated_at, links.updated_at) DESC NULLS LAST, b.name
         LIMIT 200
         """,
         (platform, business_ids),
     )
-    return [{**_row(cursor, item), "kind": "card", "status": "fresh"} for item in cursor.fetchall() or []]
+    items = []
+    for value in cursor.fetchall() or []:
+        item = _row(cursor, value)
+        parse_status = str(item.get("parse_status") or "").lower()
+        status = "running" if parse_status in {"pending", "processing"} else "error" if parse_status in {"failed", "error", "captcha_required"} else "fresh"
+        items.append({**item, "kind": "card", "status": status})
+    return items
 
 
 def _content(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
-    if not _table_exists(cursor, "usernews"):
+    if not _table_exists(cursor, "contentplans") or not _table_exists(cursor, "contentplanitems"):
         return []
     platform, business_ids = _business_filter(scope)
     cursor.execute(
         """
-        SELECT n.id, n.business_id, b.name AS business_name,
-               COALESCE(NULLIF(TRIM(n.source_text), ''), 'Черновик публикации') AS title,
-               n.generated_text AS subtitle,
-               CASE WHEN COALESCE(n.approved, 0) = 1 THEN 'approved' ELSE 'draft' END AS status,
-               n.created_at AS updated_at
-        FROM usernews n LEFT JOIN businesses b ON b.id = n.business_id
-        WHERE (%s OR n.business_id = ANY(%s))
-        ORDER BY n.created_at DESC LIMIT 100
+        SELECT i.id, i.business_id, b.name AS business_name,
+               COALESCE(NULLIF(TRIM(i.theme), ''), 'Элемент контент-плана') AS title,
+               COALESCE(NULLIF(TRIM(i.draft_text), ''), NULLIF(TRIM(i.goal), ''), 'Черновик ещё не подготовлен') AS subtitle,
+               i.status, i.updated_at, i.plan_id, p.title AS plan_title,
+               i.scheduled_for, i.content_type, i.draft_text
+        FROM contentplanitems i
+        JOIN contentplans p ON p.id = i.plan_id
+        JOIN businesses b ON b.id = i.business_id
+        WHERE (%s OR i.business_id = ANY(%s))
+        ORDER BY i.scheduled_for ASC, i.updated_at DESC LIMIT 200
         """,
         (platform, business_ids),
     )
-    return [{**_row(cursor, item), "kind": "content"} for item in cursor.fetchall() or []]
+    return [{**_row(cursor, item), "kind": "content_plan_item"} for item in cursor.fetchall() or []]
 
 
 def _services(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
@@ -180,8 +205,15 @@ def list_operator_mobile_module(cursor: Any, *, module: str, scope: dict[str, An
     if not loader:
         return {"status": "hidden", "items": []}
     items = loader(cursor, scope)
+    available_actions = {
+        "content": [
+            {"key": "content.item.generate_draft", "label": "Подготовить черновик"},
+            {"key": "content.item.update", "label": "Редактировать"},
+        ],
+        "services": [{"key": "services.update", "label": "Изменить услугу"}],
+    }.get(module, [])
     return {
-        "status": "read_only",
+        "status": "available" if available_actions else "read_only",
         "scope": scope,
         "items": items,
         "counts": {"total": len(items)},
@@ -189,6 +221,6 @@ def list_operator_mobile_module(cursor: Any, *, module: str, scope: dict[str, An
         "as_of": datetime.now(timezone.utc).isoformat(),
         "freshness": {"status": "live"},
         "data_warnings": [],
-        "available_actions": [],
+        "available_actions": available_actions,
         "filters": {},
     }

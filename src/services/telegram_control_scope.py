@@ -173,6 +173,13 @@ def list_control_scopes(
         return {"actor": {}, "platform": None, "networks": [], "businesses": [], "total_choices": 0}
     is_superadmin = bool(actor.get("is_superadmin"))
     networks = _load_networks(cursor, user_id, is_superadmin)
+    normalized_query = " ".join(str(search_query or "").strip().lower().split())
+    if normalized_query:
+        networks = [
+            item
+            for item in networks
+            if normalized_query in " ".join(str(item.get("name") or "").lower().split())
+        ]
     businesses = _load_businesses(
         cursor,
         user_id,
@@ -181,7 +188,7 @@ def list_control_scopes(
         limit=business_limit,
     )
     platform = None
-    if is_superadmin:
+    if is_superadmin and not normalized_query:
         cursor.execute(f"SELECT COUNT(*) AS cnt FROM businesses b WHERE {_active_business_clause('b')}")
         total_businesses = int(_row_to_dict(cursor, cursor.fetchone()).get("cnt") or 0)
         platform = _scope_payload(

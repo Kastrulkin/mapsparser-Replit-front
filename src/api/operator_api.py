@@ -59,6 +59,7 @@ from services.operator_conversations import (
     list_operator_messages,
     set_operator_pending_context,
 )
+from services.content_plan_service import generate_draft_for_plan_item, update_content_plan_item
 
 
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
@@ -72,8 +73,8 @@ def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
         {"key": "reviews", "label": "Отзывы", "group": "primary", "status": "available"},
         {"key": "operator", "label": "Оператор", "group": "primary", "status": "available"},
         {"key": "cards", "label": "Карточки", "group": "more", "status": "read_only"},
-        {"key": "content", "label": "Контент", "group": "more", "status": "read_only"},
-        {"key": "services", "label": "Услуги", "group": "more", "status": "read_only"},
+        {"key": "content", "label": "Контент", "group": "more", "status": "available"},
+        {"key": "services", "label": "Услуги", "group": "more", "status": "available"},
         {"key": "finance", "label": "Финансы", "group": "more", "status": "read_only"},
         {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "read_only"},
         {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "read_only"},
@@ -1865,6 +1866,127 @@ def operator_mobile_module(module: str):
         return jsonify({"success": True, **list_operator_mobile_module(cursor, module=module, scope=scope)})
     finally:
         db.close()
+
+
+def _mobile_scope_allows_business(scope: dict, business_id: str) -> bool:
+    if scope.get("kind") == "platform":
+        return True
+    return business_id in {str(item) for item in scope.get("business_ids") or []}
+
+
+@operator_bp.route("/mobile/services/<service_id>", methods=["PUT"])
+def operator_mobile_service_update(service_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        cursor.execute("SELECT business_id FROM userservices WHERE id = %s", (service_id,))
+        row = cursor.fetchone()
+        business_id = str((dict(row) if row else {}).get("business_id") or "")
+        if not business_id:
+            return jsonify({"success": False, "error": "Услуга не найдена"}), 404
+        if not scope or not _mobile_scope_allows_business(scope, business_id):
+            return jsonify({"success": False, "error": "Услуга недоступна"}), 403
+        updates = []
+        params = []
+        for field in ("name", "description", "price", "category"):
+            if field not in payload:
+                continue
+            value = str(payload.get(field) or "").strip()
+            if field == "name" and not value:
+                return jsonify({"success": False, "error": "Название не может быть пустым"}), 400
+            updates.append(f"{field} = %s")
+            params.append(value)
+        if not updates:
+            return jsonify({"success": False, "error": "Нет изменений"}), 400
+        params.extend([service_id, business_id])
+        cursor.execute(
+            f"""
+            UPDATE userservices
+            SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s AND business_id = %s
+            RETURNING id, business_id, name AS title, description AS subtitle,
+                      price, category, updated_at,
+                      CASE WHEN COALESCE(is_active, TRUE) THEN 'active' ELSE 'archived' END AS status
+            """,
+            tuple(params),
+        )
+        updated = dict(cursor.fetchone() or {})
+        db.conn.commit()
+        return jsonify({"success": True, "scope": scope, "item": updated})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def _mobile_content_item_scope(cursor, user_data: dict, item_id: str):
+    scope = _resolve_mobile_scope(cursor, user_data)
+    cursor.execute("SELECT business_id FROM contentplanitems WHERE id = %s", (item_id,))
+    row = cursor.fetchone()
+    business_id = str((dict(row) if row else {}).get("business_id") or "")
+    if not business_id:
+        return scope, business_id, (jsonify({"success": False, "error": "Элемент плана не найден"}), 404)
+    if not scope or not _mobile_scope_allows_business(scope, business_id):
+        return scope, business_id, (jsonify({"success": False, "error": "Элемент плана недоступен"}), 403)
+    return scope, business_id, None
+
+
+@operator_bp.route("/mobile/content/items/<item_id>", methods=["PUT"])
+def operator_mobile_content_item_update(item_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    allowed_payload = {
+        key: payload.get(key)
+        for key in ("theme", "goal", "draft_text", "scheduled_for")
+        if key in payload
+    }
+    if not allowed_payload:
+        return jsonify({"success": False, "error": "Нет изменений"}), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope, _business_id, error_response = _mobile_content_item_scope(cursor, user_data, item_id)
+        if error_response:
+            return error_response
+    finally:
+        db.close()
+    try:
+        plan = update_content_plan_item(str(user_data.get("user_id") or user_data.get("id") or ""), item_id, allowed_payload)
+        return jsonify({"success": True, "scope": scope, "plan": plan})
+    except PermissionError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+
+
+@operator_bp.route("/mobile/content/items/<item_id>/generate-draft", methods=["POST"])
+def operator_mobile_content_item_generate_draft(item_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope, _business_id, error_response = _mobile_content_item_scope(cursor, user_data, item_id)
+        if error_response:
+            return error_response
+    finally:
+        db.close()
+    try:
+        result = generate_draft_for_plan_item(str(user_data.get("user_id") or user_data.get("id") or ""), item_id)
+        return jsonify({"success": True, "scope": scope, **result})
+    except PermissionError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
 
 
 @operator_bp.route("/mobile/settings/notifications", methods=["PUT"])

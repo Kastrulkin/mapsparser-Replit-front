@@ -3,8 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertCircle, ArrowLeft, Bot, Building2, Check, ChevronRight, CircleEllipsis,
   ClipboardCheck, Copy, CreditCard, FileText, LayoutGrid, Loader2, MapPinned,
-  MessageCircle, Network, Search, Send, Settings, ShieldCheck, Sparkles, Star,
-  Users, WandSparkles,
+  MessageCircle, Network, Pencil, RefreshCw, Search, Send, Settings, ShieldCheck,
+  Sparkles, Star, Users, WandSparkles,
 } from 'lucide-react';
 
 type Scope = {
@@ -93,7 +93,7 @@ type ReviewResult = {
 
 type OperatorMessage = { id?: string; role: 'user' | 'operator'; text: string; status?: string; capability?: string; created_at?: string; screen?: string };
 type ActionPreview = { action_id: string; estimated_credits?: number; is_mass_action?: boolean; external_effects?: boolean; target_businesses?: Array<{ id: string; name: string }>; objects?: Array<{ id?: string; author_name?: string; business_name?: string }> };
-type ModuleItem = { id?: string; kind?: string; title?: string; subtitle?: string; business_name?: string; status?: string; rating?: number; reviews_count?: number; seo_score?: number; price?: string; category?: string; updated_at?: string; amount?: string | number; transaction_type?: string; selected_channel?: string; run_id?: string; run_status?: string; error_text?: string };
+type ModuleItem = { id?: string; kind?: string; title?: string; subtitle?: string; business_name?: string; status?: string; rating?: number; reviews_count?: number; seo_score?: number; price?: string; category?: string; updated_at?: string; amount?: string | number; transaction_type?: string; selected_channel?: string; run_id?: string; run_status?: string; error_text?: string; provider_sources?: string[]; parse_status?: string; parse_source?: string; parse_updated_at?: string; plan_id?: string; plan_title?: string; scheduled_for?: string; content_type?: string; draft_text?: string };
 type NotificationPreferences = { daily_digest?: boolean; reviews?: boolean; tasks?: boolean; errors?: boolean; agent_results?: boolean };
 type ModuleData = { items?: ModuleItem[]; counts?: { total?: number }; as_of?: string; data_warnings?: string[]; status?: string; preferences?: NotificationPreferences };
 type Tab = 'today' | 'tasks' | 'reviews' | 'operator' | 'more';
@@ -128,6 +128,15 @@ const previewBootstrap: Bootstrap = {
     networks: [{ id: 'network', name: 'Сеть «Весёлая расчёска»', locations_count: 2 }],
     businesses: [{ id: 'preview', name: 'Весёлая расчёска', address: 'Москва, Тверская, 7' }], total_choices: 3,
   },
+  navigation: [
+    { key: 'today', label: 'Сегодня', group: 'primary', status: 'available' },
+    { key: 'tasks', label: 'Задачи', group: 'primary', status: 'available' },
+    { key: 'reviews', label: 'Отзывы', group: 'primary', status: 'available' },
+    { key: 'operator', label: 'Оператор', group: 'primary', status: 'available' },
+    { key: 'cards', label: 'Карточки', group: 'more', status: 'read_only' },
+    { key: 'content', label: 'Контент', group: 'more', status: 'available' },
+    { key: 'services', label: 'Услуги', group: 'more', status: 'available' },
+  ],
 };
 
 const previewReviews: Review[] = [
@@ -135,12 +144,23 @@ const previewReviews: Review[] = [
   { id: '2', business_id: 'preview', location_name: 'Весёлая расчёска', source: '2ГИС', rating: 3, author_name: 'Игорь', text: 'Пришлось ждать почти 20 минут, но результат хороший.', published_at: new Date().toISOString(), reply_draft_text: 'Игорь, спасибо, что поделились. Извините за ожидание.', reply_draft_id: 'd2' },
 ];
 
+const previewModules: Record<string, ModuleData> = {
+  cards: { items: [{ id: 'preview', title: 'Весёлая расчёска', subtitle: 'Москва, Тверская, 7', status: 'fresh', provider_sources: ['yandex', '2gis'], rating: 4.8, reviews_count: 296, seo_score: 82, parse_updated_at: new Date().toISOString() }] },
+  content: { items: [{ id: 'content-1', title: 'Как выбрать уход после окрашивания', subtitle: 'Черновик ещё не подготовлен', business_name: 'Весёлая расчёска', status: 'planned', plan_title: 'Контент-план · август', scheduled_for: '2026-08-02', content_type: 'news', draft_text: '' }, { id: 'content-2', title: 'Летнее восстановление волос', subtitle: 'После солнца волосам особенно нужен бережный уход. Подготовили несколько рекомендаций от мастеров.', business_name: 'Весёлая расчёска', status: 'draft_generated', plan_title: 'Контент-план · август', scheduled_for: '2026-08-05', content_type: 'news', draft_text: 'После солнца волосам особенно нужен бережный уход. Подготовили несколько рекомендаций от мастеров.' }] },
+  services: { items: [{ id: 'service-1', title: 'Женская стрижка', subtitle: 'Стрижка с консультацией мастера и укладкой.', business_name: 'Весёлая расчёска', status: 'active', price: 'от 2 900 ₽', category: 'Стрижки' }] },
+};
+
 const spring = { type: 'spring', duration: 0.3, bounce: 0 };
 const webApp = () => window.Telegram?.WebApp;
 const isPreview = () => ['localhost', '127.0.0.1'].includes(window.location.hostname) && new URLSearchParams(window.location.search).get('preview') === '1';
 
 const readJson = async <T,>(response: Response): Promise<T> => {
-  const payload = await response.json();
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error('Сервис временно вернул некорректный ответ. Попробуйте ещё раз.');
+  }
   if (!response.ok || payload?.success === false) throw new Error(payload?.error || 'Не удалось выполнить запрос.');
   return payload;
 };
@@ -185,6 +205,7 @@ export const TelegramControlPage = () => {
   const [moduleData, setModuleData] = useState<ModuleData>({});
   const [moduleLoading, setModuleLoading] = useState(false);
   const [moduleSaving, setModuleSaving] = useState(false);
+  const [moduleActionBusy, setModuleActionBusy] = useState('');
 
   const scope = bootstrap?.selected_scope || bootstrap?.summary?.scope;
   const summary = workspace?.summary || bootstrap?.summary;
@@ -222,7 +243,7 @@ export const TelegramControlPage = () => {
 
   useEffect(() => { webApp()?.ready?.(); webApp()?.expand?.(); void loadBootstrap(); }, []);
   useEffect(() => {
-    if (!picker || !initData || !search.trim()) return;
+    if (!picker || !initData) return;
     const timer = window.setTimeout(() => void loadBootstrap(search.trim()), 250);
     return () => window.clearTimeout(timer);
   }, [picker, search]);
@@ -282,16 +303,58 @@ export const TelegramControlPage = () => {
 
   useEffect(() => { if (tab === 'operator') void loadOperatorHistory(); }, [tab, scope?.kind, scope?.id]);
 
-  useEffect(() => {
-    if (!module || preview) return;
+  const loadModule = async (moduleKey = module) => {
+    if (!moduleKey || preview) return;
     setModuleLoading(true);
     const params = scopeQuery(scope);
-    void fetch(`/api/operator/mobile/modules/${module}?${params.toString()}`, { headers: authHeaders() })
+    await fetch(`/api/operator/mobile/modules/${moduleKey}?${params.toString()}`, { headers: authHeaders() })
       .then(readJson<ModuleData>)
       .then((result) => { setModuleData(result); setError(''); })
       .catch((requestError) => setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить раздел.'))
       .finally(() => setModuleLoading(false));
+  };
+
+  useEffect(() => {
+    if (!module) return;
+    if (preview) { setModuleData(previewModules[module] || {}); return; }
+    void loadModule(module);
   }, [module, scope?.kind, scope?.id]);
+
+  const updateService = async (item: ModuleItem, values: { name: string; description: string; price: string; category: string }) => {
+    if (!item.id || preview) return;
+    setModuleActionBusy(item.id);
+    try {
+      await fetch(`/api/operator/mobile/services/${item.id}`, {
+        method: 'PUT', headers: authHeaders(), body: JSON.stringify({ ...values, scope_type: scope?.kind, scope_id: scope?.id || null }),
+      }).then(readJson<{ item?: ModuleItem }>);
+      await loadModule('services'); setError('');
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить услугу.'); }
+    finally { setModuleActionBusy(''); }
+  };
+
+  const generateContentDraft = async (item: ModuleItem) => {
+    if (!item.id || preview) return;
+    setModuleActionBusy(item.id);
+    try {
+      await fetch(`/api/operator/mobile/content/items/${item.id}/generate-draft`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null }),
+      }).then(readJson<{ plan?: unknown }>);
+      await loadModule('content'); setError('');
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось подготовить черновик.'); }
+    finally { setModuleActionBusy(''); }
+  };
+
+  const updateContentItem = async (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string }) => {
+    if (!item.id || preview) return;
+    setModuleActionBusy(item.id);
+    try {
+      await fetch(`/api/operator/mobile/content/items/${item.id}`, {
+        method: 'PUT', headers: authHeaders(), body: JSON.stringify({ ...values, scope_type: scope?.kind, scope_id: scope?.id || null }),
+      }).then(readJson<{ plan?: unknown }>);
+      await loadModule('content'); setError('');
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить контент.'); }
+    finally { setModuleActionBusy(''); }
+  };
 
   useEffect(() => {
     if (!bootstrap) return;
@@ -418,7 +481,7 @@ export const TelegramControlPage = () => {
             {!picker && tab === 'reviews' ? <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
             {!picker && tab === 'operator' ? <Operator messages={messages} busy={operatorBusy} command={command} setCommand={setCommand} ask={askOperator} openScreen={(screen) => { if (isTab(screen) && screen !== 'more') setTab(screen); }} /> : null}
             {!picker && tab === 'more' && !module ? <More navigation={moreNavigation} onOpen={setModule} /> : null}
-            {!picker && tab === 'more' && module ? <ModuleScreen module={module} data={moduleData} loading={moduleLoading} saving={moduleSaving} saveNotifications={saveNotifications} back={() => setModule('')} /> : null}
+            {!picker && tab === 'more' && module ? <ModuleScreen module={module} data={moduleData} loading={moduleLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} back={() => setModule('')} /> : null}
           </motion.div>
         </AnimatePresence>
         <AnimatePresence initial={false}>{actionPreview ? <ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirm={() => void confirmSelectedReviews()} cancel={() => setActionPreview(null)} /> : null}</AnimatePresence>
@@ -441,7 +504,7 @@ const Today = ({ summary, tasks, command, setCommand, ask, openTask }: { summary
   const primary = tasks[0];
   return <div className="px-4">
     <section className="rounded-[28px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)] ring-1 ring-inset ring-white/[0.08]"><div className="flex items-center gap-2 text-xs text-zinc-500"><Sparkles className="h-4 w-4 text-primary" />LocalOS уже разобрался</div><div className="mt-4 flex items-start gap-4"><div className="min-w-0 flex-1"><h1 className="text-balance text-[26px] font-semibold leading-8 tracking-[-0.045em]">{primary?.title || 'Всё под контролем'}</h1><p className="mt-2 text-pretty text-sm leading-6 text-zinc-400">{primary?.description || 'Новых решений от вас сейчас не требуется.'}</p></div>{primary?.count ? <b className="rounded-2xl bg-primary/15 px-3 py-2 text-xl tabular-nums text-primary">{primary.count}</b> : <Check className="h-8 w-8 text-emerald-400" />}</div>{primary ? <PrimaryButton onClick={() => openTask(primary)}>Перейти к решению</PrimaryButton> : null}</section>
-    <form onSubmit={ask} className="mt-3 rounded-[22px] bg-white/[0.04] p-3 ring-1 ring-inset ring-white/[0.07]"><label className="px-1 text-xs font-medium text-zinc-500">Что сделать?</label><div className="mt-2 flex gap-2"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Например: подготовь ответы" className="min-h-12 min-w-0 flex-1 rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] placeholder:text-zinc-700 focus:ring-primary/50" /><button aria-label="Отправить" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-white transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button></div><p className="px-1 pt-2 text-[11px] leading-4 text-zinc-600">DeepSeek поймёт задачу. Внешние действия всегда попросят подтверждение.</p></form>
+    <form onSubmit={ask} className="mt-3 rounded-[22px] bg-white/[0.04] p-3 ring-1 ring-inset ring-white/[0.07]"><label className="px-1 text-xs font-medium text-zinc-500">Что сделать?</label><div className="mt-2 flex gap-2"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Например: подготовь ответы" className="min-h-12 min-w-0 flex-1 rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] placeholder:text-zinc-700 focus:ring-primary/50" /><button aria-label="Отправить" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-white transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button></div><p className="px-1 pt-2 text-[11px] leading-4 text-zinc-600">Опишите задачу. Внешние действия всегда попросят подтверждение.</p></form>
     {tasks.slice(1, 3).map((item) => <TaskRow key={item.id || item.title} item={item} onClick={() => openTask(item)} />)}
     <section className="mt-6"><h2 className="text-lg font-semibold tracking-[-0.025em]">Что уже сделано</h2><div className="mt-3 grid grid-cols-2 gap-2">{(summary?.metrics || []).slice(0, 4).map((metric) => <div key={metric.key} className="rounded-[20px] bg-white/[0.035] p-4 ring-1 ring-inset ring-white/[0.06]"><small className="text-zinc-600">{metric.label}</small><b className="mt-1 block text-2xl tabular-nums">{metric.value ?? '—'}</b><span className="mt-1 block truncate text-[10px] text-zinc-700">{metric.source_label || metric.source || 'LocalOS'}</span></div>)}</div></section>
   </div>;
@@ -503,12 +566,57 @@ const moduleNames: Record<string, [string, string]> = {
   finance: ['Финансы', 'KPI, импорты и финансовые предупреждения.'], partnerships: ['Партнёрства', 'Лиды, черновики, ответы и контроль отправок.'], agents: ['ИИ-сотрудники', 'Состояние, история и результаты фоновой работы.'], settings: ['Настройки', 'Уведомления, подключения, тариф и доступ.'], diagnostics: ['Диагностика', 'Технические очереди и ошибки — только для суперадмина.'],
 };
 
-const ModuleScreen = ({ module, data, loading, saving, saveNotifications, back }: { module: string; data: ModuleData; loading: boolean; saving: boolean; saveNotifications: (preferences: NotificationPreferences) => Promise<void>; back: () => void }) => {
+type ModuleScreenProps = {
+  module: string; data: ModuleData; loading: boolean; saving: boolean; actionBusy: string;
+  saveNotifications: (preferences: NotificationPreferences) => Promise<void>;
+  updateService: (item: ModuleItem, values: { name: string; description: string; price: string; category: string }) => Promise<void>;
+  generateContentDraft: (item: ModuleItem) => Promise<void>;
+  updateContentItem: (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string }) => Promise<void>;
+  back: () => void;
+};
+
+const ModuleScreen = ({ module, data, loading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, back }: ModuleScreenProps) => {
   const content = moduleNames[module] || ['Раздел', 'Рабочая очередь LocalOS.'];
   return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
-    {loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : data.items?.length ? <div className="space-y-2">{data.items.map((item) => <article key={item.id} className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><b className="block text-sm leading-5">{item.title || 'Без названия'}</b><small className="mt-1 block truncate text-zinc-600">{[item.business_name, item.category].filter(Boolean).join(' · ')}</small></div><StatusPill value={item.run_status || item.status} /></div>{item.subtitle ? <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{item.subtitle}</p> : null}{item.error_text ? <p className="mt-3 rounded-[14px] bg-rose-500/10 p-3 text-xs leading-5 text-rose-200">{item.error_text}</p> : null}<div className="mt-3 flex flex-wrap gap-3 text-[11px] text-zinc-600">{item.rating !== undefined ? <span>Рейтинг <b className="tabular-nums text-zinc-300">{item.rating}</b></span> : null}{item.reviews_count !== undefined ? <span>Отзывы <b className="tabular-nums text-zinc-300">{item.reviews_count}</b></span> : null}{item.seo_score !== undefined ? <span>SEO <b className="tabular-nums text-zinc-300">{item.seo_score}</b></span> : null}{item.amount !== undefined ? <span className={`tabular-nums ${item.transaction_type === 'income' ? 'text-emerald-300' : 'text-zinc-300'}`}>{item.transaction_type === 'income' ? '+' : '−'}{item.amount} ₽</span> : null}{item.price ? <span className="text-zinc-300">{item.price}</span> : null}{item.selected_channel ? <span>Канал: <b className="text-zinc-300">{item.selected_channel}</b></span> : null}</div></article>)}</div> : <Empty icon={moduleIcons[module] || CircleEllipsis} title="Пока пусто" text="Когда LocalOS получит реальные данные, они появятся здесь. Ничего выдуманного не показываем." />}
+    {loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule items={data.items || []} /> : module === 'content' ? <ContentModule items={data.items || []} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} /> : module === 'services' ? <ServicesModule items={data.items || []} busy={actionBusy} update={updateService} /> : <GenericModule module={module} items={data.items || []} />}
   </Screen>;
 };
+
+const providerName = (value: string) => value.includes('2gis') || value.includes('two') || value.includes('2_gis') ? '2ГИС' : value.includes('yandex') ? 'Яндекс' : value;
+const dateLabel = (value?: string) => value ? new Date(value).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'ещё не обновлялась';
+
+const CardsModule = ({ items }: { items: ModuleItem[] }) => <div>
+  <div className="mb-4 rounded-[22px] bg-primary/[0.08] p-4 ring-1 ring-inset ring-primary/15"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-[14px] bg-primary/15 text-primary"><RefreshCw className="h-5 w-5" /></span><div><b className="block text-sm">LocalOS обновляет карточки</b><p className="mt-1 text-xs leading-5 text-zinc-500">Собираем актуальные данные клиентов из Яндекса и 2ГИС.</p></div></div></div>
+  {items.length ? <div className="space-y-2">{items.map((item) => <article key={item.id} className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><b className="block text-sm leading-5">{item.title || item.business_name}</b><small className="mt-1 block truncate text-zinc-600">{item.subtitle || item.business_name}</small></div><StatusPill value={item.status} /></div><div className="mt-4 flex flex-wrap gap-2">{(item.provider_sources || []).filter(Boolean).map((source) => <span key={source} className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-semibold text-zinc-300 ring-1 ring-inset ring-white/[0.07]">{providerName(source)}</span>)}</div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><MetricMini label="Рейтинг" value={item.rating} /><MetricMini label="Отзывы" value={item.reviews_count} /><MetricMini label="SEO" value={item.seo_score} /></div><p className="mt-3 text-[11px] text-zinc-600">Последняя проверка: {dateLabel(item.parse_updated_at || item.updated_at)}</p></article>)}</div> : <Empty icon={MapPinned} title="Карточки не подключены" text="Добавьте ссылки на Яндекс и 2ГИС в настройках бизнеса — после этого LocalOS начнёт следить за обновлениями." />}
+</div>;
+
+const ContentModule = ({ items, busy, generate, update }: { items: ModuleItem[]; busy: string; generate: (item: ModuleItem) => Promise<void>; update: (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string }) => Promise<void> }) => {
+  const [editing, setEditing] = useState('');
+  const planTitle = items.find((item) => item.plan_title)?.plan_title;
+  return <div>{planTitle ? <div className="mb-4 rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><small className="text-zinc-600">Текущий контент-план</small><b className="mt-1 block text-base">{planTitle}</b><p className="mt-2 text-xs text-zinc-500">{items.length} публикаций запланировано</p></div> : null}{items.length ? <div className="space-y-2">{items.map((item) => <ContentItemCard key={item.id} item={item} editing={editing === item.id} busy={busy === item.id} setEditing={() => setEditing(editing === item.id ? '' : item.id || '')} generate={generate} update={async (values) => { await update(item, values); setEditing(''); }} />)}</div> : <Empty icon={FileText} title="Контент-плана пока нет" text="Попросите Оператора: «Составь контент-план на месяц». LocalOS подготовит темы и даты для проверки." />}</div>;
+};
+
+const ContentItemCard = ({ item, editing, busy, setEditing, generate, update }: { item: ModuleItem; editing: boolean; busy: boolean; setEditing: () => void; generate: (item: ModuleItem) => Promise<void>; update: (values: { theme: string; draft_text: string; scheduled_for: string }) => Promise<void> }) => {
+  const [theme, setTheme] = useState(item.title || '');
+  const [draft, setDraft] = useState(item.draft_text || '');
+  const [scheduled, setScheduled] = useState(item.scheduled_for ? item.scheduled_for.slice(0, 10) : '');
+  return <article className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><small className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary">{item.scheduled_for ? new Date(item.scheduled_for).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : 'Без даты'} · {item.content_type || 'публикация'}</small><b className="mt-1 block text-sm leading-5">{item.title}</b><small className="mt-1 block truncate text-zinc-600">{item.business_name}</small></div><StatusPill value={item.status} /></div>{editing ? <div className="mt-4 space-y-2"><input value={theme} onChange={(event) => setTheme(event.target.value)} aria-label="Тема публикации" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><input type="date" value={scheduled} onChange={(event) => setScheduled(event.target.value)} aria-label="Дата публикации" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm text-zinc-300 outline-none ring-1 ring-inset ring-white/[0.07]" /><textarea value={draft} onChange={(event) => setDraft(event.target.value)} aria-label="Текст публикации" rows={6} className="w-full rounded-[14px] bg-black/20 p-3 text-sm leading-6 outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><button type="button" disabled={busy} onClick={() => void update({ theme, draft_text: draft, scheduled_for: scheduled })} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-primary text-xs font-semibold active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}Сохранить</button></div> : <><p className="mt-3 line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{item.draft_text || item.subtitle}</p><button type="button" disabled={busy} onClick={item.draft_text ? setEditing : () => void generate(item)} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-white/[0.055] text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : item.draft_text ? <Pencil className="h-4 w-4" /> : <WandSparkles className="h-4 w-4" />}{item.draft_text ? 'Редактировать' : 'Подготовить черновик'}</button></>}</article>;
+};
+
+const ServicesModule = ({ items, busy, update }: { items: ModuleItem[]; busy: string; update: (item: ModuleItem, values: { name: string; description: string; price: string; category: string }) => Promise<void> }) => {
+  const [editing, setEditing] = useState('');
+  return items.length ? <div className="space-y-2">{items.map((item) => <ServiceItemCard key={item.id} item={item} editing={editing === item.id} busy={busy === item.id} setEditing={() => setEditing(editing === item.id ? '' : item.id || '')} update={async (values) => { await update(item, values); setEditing(''); }} />)}</div> : <Empty icon={LayoutGrid} title="Услуги не добавлены" text="Добавьте первую услугу через Оператора, чтобы LocalOS мог проверить название, описание и цену." />;
+};
+
+const ServiceItemCard = ({ item, editing, busy, setEditing, update }: { item: ModuleItem; editing: boolean; busy: boolean; setEditing: () => void; update: (values: { name: string; description: string; price: string; category: string }) => Promise<void> }) => {
+  const [name, setName] = useState(item.title || '');
+  const [description, setDescription] = useState(item.subtitle || '');
+  const [price, setPrice] = useState(item.price || '');
+  const [category, setCategory] = useState(item.category || '');
+  return <article className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><b className="block text-sm leading-5">{item.title}</b><small className="mt-1 block truncate text-zinc-600">{[item.business_name, item.category].filter(Boolean).join(' · ')}</small></div><StatusPill value={item.status} /></div>{editing ? <div className="mt-4 space-y-2"><input value={name} onChange={(event) => setName(event.target.value)} aria-label="Название услуги" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><div className="grid grid-cols-2 gap-2"><input value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Категория услуги" placeholder="Категория" className="min-h-11 min-w-0 rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07]" /><input value={price} onChange={(event) => setPrice(event.target.value)} aria-label="Цена услуги" placeholder="Цена" className="min-h-11 min-w-0 rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07]" /></div><textarea value={description} onChange={(event) => setDescription(event.target.value)} aria-label="Описание услуги" rows={4} className="w-full rounded-[14px] bg-black/20 p-3 text-sm leading-6 outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><button type="button" disabled={busy} onClick={() => void update({ name, description, price, category })} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-primary text-xs font-semibold active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}Сохранить изменения</button></div> : <><p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{item.subtitle}</p><div className="mt-3 flex items-center justify-between"><b className="text-sm tabular-nums text-zinc-200">{item.price || 'Цена не указана'}</b><button type="button" onClick={setEditing} className="flex min-h-11 items-center gap-2 rounded-[14px] bg-white/[0.055] px-4 text-xs font-semibold ring-1 ring-inset ring-white/[0.08] active:scale-[0.96]"><Pencil className="h-4 w-4" />Изменить</button></div></>}</article>;
+};
+
+const GenericModule = ({ module, items }: { module: string; items: ModuleItem[] }) => items.length ? <div className="space-y-2">{items.map((item) => <article key={item.id} className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><b className="block text-sm leading-5">{item.title || 'Без названия'}</b><small className="mt-1 block truncate text-zinc-600">{[item.business_name, item.category].filter(Boolean).join(' · ')}</small></div><StatusPill value={item.run_status || item.status} /></div>{item.subtitle ? <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{item.subtitle}</p> : null}{item.error_text ? <p className="mt-3 rounded-[14px] bg-rose-500/10 p-3 text-xs leading-5 text-rose-200">{item.error_text}</p> : null}<div className="mt-3 flex flex-wrap gap-3 text-[11px] text-zinc-600">{item.amount !== undefined ? <span className={`tabular-nums ${item.transaction_type === 'income' ? 'text-emerald-300' : 'text-zinc-300'}`}>{item.transaction_type === 'income' ? '+' : '−'}{item.amount} ₽</span> : null}{item.selected_channel ? <span>Канал: <b className="text-zinc-300">{item.selected_channel}</b></span> : null}</div></article>)}</div> : <Empty icon={moduleIcons[module] || CircleEllipsis} title="Пока пусто" text="Когда LocalOS получит реальные данные, они появятся здесь. Ничего выдуманного не показываем." />;
 
 const NotificationSettings = ({ preferences, saving, save }: { preferences: NotificationPreferences; saving: boolean; save: (preferences: NotificationPreferences) => Promise<void> }) => {
   const [value, setValue] = useState<NotificationPreferences>(preferences);
@@ -517,7 +625,7 @@ const NotificationSettings = ({ preferences, saving, save }: { preferences: Noti
   return <div><div className="space-y-2">{rows.map(([key, title, description]) => <label key={key} className="flex min-h-16 items-center gap-3 rounded-[20px] bg-white/[0.04] px-4 ring-1 ring-inset ring-white/[0.07]"><span className="min-w-0 flex-1"><b className="block text-sm">{title}</b><small className="mt-1 block text-zinc-600">{description}</small></span><input type="checkbox" checked={Boolean(value[key])} onChange={(event) => setValue((current) => ({ ...current, [key]: event.target.checked }))} className="h-6 w-6 accent-primary" /></label>)}</div><button disabled={saving} onClick={() => void save(value)} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold active:scale-[0.96] disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}{saving ? 'Сохраняем…' : 'Сохранить'}</button></div>;
 };
 
-const StatusPill = ({ value }: { value?: string }) => <span className="shrink-0 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] text-zinc-500 ring-1 ring-inset ring-white/[0.06]">{value === 'active' ? 'Активна' : value === 'archived' ? 'Архив' : value === 'approved' || value === 'completed' ? 'Готово' : value === 'draft' ? 'Черновик' : value === 'fresh' ? 'Актуально' : value === 'running' || value === 'processing' ? 'В работе' : value === 'failed' || value === 'error' ? 'Ошибка' : value || 'Данные'}</span>;
+const StatusPill = ({ value }: { value?: string }) => <span className="shrink-0 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] text-zinc-500 ring-1 ring-inset ring-white/[0.06]">{value === 'active' ? 'Активна' : value === 'archived' ? 'Архив' : value === 'approved' || value === 'completed' ? 'Готово' : value === 'draft' || value === 'draft_generated' || value === 'edited' ? 'Черновик' : value === 'planned' ? 'Запланировано' : value === 'fresh' ? 'Актуально' : value === 'running' || value === 'processing' ? 'В работе' : value === 'failed' || value === 'error' ? 'Ошибка' : value || 'Данные'}</span>;
 
 const ScopePicker = ({ catalog, search, setSearch, choose }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина LocalOS" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${item.locations_count || 0} точек`} onClick={() => void choose('network', item.id)} />)}{catalog?.businesses?.map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ')} onClick={() => void choose('business', item.id)} />)}</div></Screen>;
 

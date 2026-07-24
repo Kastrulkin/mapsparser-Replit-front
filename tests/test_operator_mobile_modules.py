@@ -37,9 +37,10 @@ def test_services_module_only_returns_scope_businesses():
         scope={"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
     )
 
-    assert result["status"] == "read_only"
+    assert result["status"] == "available"
     assert result["counts"]["total"] == 1
     assert result["items"][0]["title"] == "Стрижка"
+    assert result["available_actions"][0]["key"] == "services.update"
 
 
 def test_unknown_module_does_not_query_or_return_placeholder_data():

@@ -5,7 +5,7 @@ import time
 from urllib.parse import urlencode
 
 from services.operator_scope_summary import format_scope_summary_for_telegram
-from services.telegram_control_scope import resolve_control_scope, toggle_favorite_control_scope
+from services.telegram_control_scope import list_control_scopes, resolve_control_scope, toggle_favorite_control_scope
 from services.telegram_webapp_auth import validate_telegram_webapp_init_data
 
 
@@ -92,6 +92,30 @@ def test_superadmin_opens_platform_by_default():
     assert scope["kind"] == "platform"
     assert scope["id"] is None
     assert scope["name"] == "Вся платформа"
+
+
+def test_scope_search_hides_unmatched_navigation_rows():
+    cursor = ScopeCursor(
+        actor={"id": "admin", "name": "Admin", "is_superadmin": True},
+        networks=[
+            {"id": "net-1", "name": "MVPilates", "locations_count": 4},
+            {"id": "net-2", "name": "Весёлая расчёска", "locations_count": 2},
+        ],
+        businesses=[
+            {
+                "id": "biz-1",
+                "name": "Intellectum Space and School",
+                "address": "Москва",
+                "network_id": None,
+            }
+        ],
+    )
+
+    catalog = list_control_scopes(cursor, user_id="admin", search_query="Intellectum")
+
+    assert catalog["platform"] is None
+    assert catalog["networks"] == []
+    assert [item["name"] for item in catalog["businesses"]] == ["Intellectum Space and School"]
 
 
 def test_telegram_webapp_signature_and_age_are_verified():
