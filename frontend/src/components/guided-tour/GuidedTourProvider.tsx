@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, ExternalLink, Pause, Play, RotateCcw, Sparkles, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ExternalLink, Pause, Play, RotateCcw, Sparkles, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import logo from '@/assets/images/logo.png';
@@ -381,35 +381,37 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             role="dialog"
             aria-modal="true"
             aria-labelledby="demo-welcome-title"
-            className="my-auto flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28),0_3px_14px_rgba(15,23,42,0.12)]"
+            className="my-auto flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-[0_24px_80px_rgba(15,23,42,0.24),0_3px_14px_rgba(15,23,42,0.1)] ring-1 ring-black/10 focus:outline-none"
             tabIndex={-1}
           >
-            <div className="grid min-h-0 gap-5 overflow-y-auto p-5 pb-3 sm:p-7 sm:pb-3 lg:grid-cols-[minmax(0,1fr)_112px] lg:gap-x-8 lg:gap-y-4 lg:p-8 lg:pb-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-orange-700">Интерактивное демо LocalOS</p>
-                <h1 id="demo-welcome-title" className="mt-3 text-balance text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
-                  Получайте больше клиентов из карт, отзывов и соцсетей — без ручной рутины
-                </h1>
-              </div>
-
-              <div className="order-first flex items-center justify-center lg:order-none lg:items-start">
-                <div className="relative h-24 w-24 overflow-hidden rounded-full bg-white shadow-[0_10px_32px_rgba(15,23,42,0.15)] ring-1 ring-black/10 lg:h-28 lg:w-28">
-                  <img
-                    src={logo}
-                    alt="Робот LocalOS"
-                    className="absolute left-1/2 top-0 h-auto w-[135%] max-w-none -translate-x-1/2 -translate-y-[10%] object-contain"
-                  />
-                  <span className="absolute inset-x-0 bottom-0 h-[22%] bg-white" aria-hidden="true" />
+            <div className="min-h-0 overflow-y-auto p-5 sm:p-8">
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_72px] sm:items-start sm:gap-x-8">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-slate-500">Интерактивное демо LocalOS</p>
+                  <h1 id="demo-welcome-title" className="mt-2 text-balance text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                    Получайте больше клиентов из карт, отзывов и соцсетей — без ручной рутины
+                  </h1>
                 </div>
+
+                <div className="order-first flex justify-center sm:order-none sm:justify-end">
+                  <div className="relative h-16 w-16 overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-200 sm:h-[72px] sm:w-[72px]">
+                    <img
+                      src={logo}
+                      alt="Робот LocalOS"
+                      className="absolute left-1/2 top-0 h-auto w-[135%] max-w-none -translate-x-1/2 -translate-y-[10%] object-contain"
+                    />
+                    <span className="absolute inset-x-0 bottom-0 h-[22%] bg-white" aria-hidden="true" />
+                  </div>
+                </div>
+
+                <p className="text-pretty text-base leading-7 text-slate-600 sm:col-span-2 sm:max-w-2xl">
+                  LocalOS помогает владельцу малого бизнеса вести Яндекс Карты, 2ГИС и Google, отвечать на отзывы, готовить посты и новости, смотреть конкурентов рядом и понимать, что влияет на заявки, выручку и средний чек.
+                </p>
               </div>
 
-              <p className="text-pretty text-base leading-7 text-slate-600 lg:col-span-2 lg:max-w-3xl">
-                LocalOS помогает владельцу малого бизнеса вести Яндекс Карты, 2ГИС и Google, отвечать на отзывы, готовить посты и новости, смотреть конкурентов рядом и понимать, что влияет на заявки, выручку и средний чек.
-              </p>
-
-              <div className="lg:col-span-2">
+              <div className="mt-6 border-t border-slate-200 pt-5">
                 <h2 className="text-sm font-semibold text-slate-950">Что можно сделать в LocalOS</h2>
-                <ul className="mt-2 grid gap-x-5 gap-y-2 text-sm leading-5 text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
+                <ul className="mt-3 grid gap-x-8 gap-y-2.5 text-sm leading-5 text-slate-700 sm:grid-cols-2">
                   {[
                     'Понять, что исправить в карточке бизнеса',
                     'Улучшить услуги, описания, фото и новости для карт',
@@ -419,28 +421,28 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                     'Находить партнёров со схожей аудиторией',
                     'Поручать повторяющиеся задачи обычным языком',
                   ].map((item) => (
-                    <li key={item} className="grid grid-cols-[12px_minmax(0,1fr)] gap-1.5">
-                      <span className="mt-2 h-1.5 w-1.5 rounded-full bg-orange-500" aria-hidden="true" />
+                    <li key={item} className="grid grid-cols-[18px_minmax(0,1fr)] gap-2">
+                      <Check className="mt-0.5 h-4 w-4 text-orange-600" aria-hidden="true" />
                       <span>{item}</span>
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="border-l-2 border-orange-400 pl-4 lg:col-span-2">
+              <div className="mt-6 grid gap-1 border-t border-slate-200 pt-5 sm:grid-cols-[150px_minmax(0,1fr)] sm:gap-6">
                 <h2 className="font-semibold text-slate-950">Я помогу освоиться</h2>
-                <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">
+                <p className="text-pretty text-sm leading-6 text-slate-600">
                   За 8–10 минут мы посмотрим состояние сети, карточку на картах, контент и партнёрство. Вы можете свободно исследовать кабинет и в любой момент вернуться к маршруту.
                 </p>
               </div>
 
               {progressError ? (
-                <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm leading-5 text-red-800 lg:col-span-2">
+                <p role="alert" className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm leading-5 text-red-800">
                   {progressError}
                 </p>
               ) : null}
             </div>
-            <div className="shrink-0 border-t border-slate-100 bg-white px-5 py-3 sm:px-7 lg:px-8">
+            <div className="shrink-0 border-t border-slate-200 bg-slate-50/80 px-5 py-3 sm:px-8">
               <Button
                 type="button"
                 className="min-h-12 w-full gap-2 sm:w-auto sm:min-w-56"
