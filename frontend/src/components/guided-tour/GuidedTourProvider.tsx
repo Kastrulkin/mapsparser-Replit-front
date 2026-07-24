@@ -381,7 +381,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             role="dialog"
             aria-modal="true"
             aria-labelledby="demo-welcome-title"
-            className="my-auto flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-[0_24px_80px_rgba(15,23,42,0.24),0_3px_14px_rgba(15,23,42,0.1)] ring-1 ring-black/10 focus:outline-none"
+            className="my-auto flex max-h-[calc(100vh-2rem)] w-full max-w-[860px] flex-col overflow-hidden rounded-lg bg-white shadow-[0_24px_80px_rgba(15,23,42,0.24),0_3px_14px_rgba(15,23,42,0.1)] ring-1 ring-black/10 focus:outline-none"
             tabIndex={-1}
           >
             <div className="min-h-0 overflow-y-auto p-5 sm:p-8">
@@ -404,7 +404,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                   </div>
                 </div>
 
-                <p className="text-pretty text-base leading-7 text-slate-600 sm:col-span-2 sm:max-w-2xl">
+                <p className="text-pretty text-base leading-7 text-slate-600 sm:col-span-2 sm:max-w-3xl">
                   LocalOS помогает владельцу малого бизнеса вести Яндекс Карты, 2ГИС и Google, отвечать на отзывы, готовить посты и новости, смотреть конкурентов рядом и понимать, что влияет на заявки, выручку и средний чек.
                 </p>
               </div>
@@ -429,7 +429,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                 </ul>
               </div>
 
-              <div className="mt-6 grid gap-1 border-t border-slate-200 pt-5 sm:grid-cols-[150px_minmax(0,1fr)] sm:gap-6">
+              <div className="mt-6 grid gap-1 border-t border-slate-200 pt-5 sm:grid-cols-[170px_minmax(0,1fr)] sm:gap-6">
                 <h2 className="font-semibold text-slate-950">Я помогу освоиться</h2>
                 <p className="text-pretty text-sm leading-6 text-slate-600">
                   За 8–10 минут мы посмотрим состояние сети, карточку на картах, контент и партнёрство. Вы можете свободно исследовать кабинет и в любой момент вернуться к маршруту.
