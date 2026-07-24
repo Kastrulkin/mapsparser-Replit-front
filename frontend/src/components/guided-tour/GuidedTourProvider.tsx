@@ -58,6 +58,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
   const [targetMissing, setTargetMissing] = useState(false);
   const [progressError, setProgressError] = useState<string | null>(null);
+  const [welcomeTransitioning, setWelcomeTransitioning] = useState(false);
   const missingEventStepRef = useRef<string | null>(null);
   const initialRouteSyncedRef = useRef(false);
   const panelRef = useRef<HTMLElement | null>(null);
@@ -257,17 +258,23 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   };
 
   const startFromWelcome = async () => {
+    if (welcomeTransitioning) return;
     const nextIndex = Math.min(1, GUIDED_TOUR_STEPS.length - 1);
     const nextStep = GUIDED_TOUR_STEPS[nextIndex];
     const nextCompletedSteps = [currentStep.key];
     const saved = await persistProgressSafely('active', nextStep, nextCompletedSteps);
     if (!saved) return;
+    setWelcomeTransitioning(true);
+    if (!prefersReducedMotion) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 140));
+    }
     setStatus('active');
     setCurrentIndex(nextIndex);
     setCompletedSteps(nextCompletedSteps);
     await recordEvent('started', currentStep);
     await recordEvent('step_viewed', nextStep);
     showStep(nextStep);
+    window.setTimeout(() => setWelcomeTransitioning(false), prefersReducedMotion ? 0 : 650);
   };
 
   const moveTo = async (nextIndex: number, nextCompletedSteps: string[], nextStatus: TourStatus = 'active') => {
@@ -410,7 +417,11 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             className="my-auto flex max-h-[calc(100vh-2rem)] w-full max-w-[860px] flex-col overflow-hidden rounded-lg bg-white shadow-[0_24px_80px_rgba(15,23,42,0.24),0_3px_14px_rgba(15,23,42,0.1)] ring-1 ring-black/10 focus:outline-none"
             tabIndex={-1}
           >
-            <div className="min-h-0 overflow-y-auto p-5 sm:p-8">
+            <motion.div
+              className="min-h-0 overflow-y-auto p-5 sm:p-8"
+              animate={{ opacity: welcomeTransitioning ? 0 : 1 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.12 }}
+            >
               <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_72px] sm:items-start sm:gap-x-8">
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-slate-500">Интерактивное демо LocalOS</p>
@@ -466,17 +477,22 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                   {progressError}
                 </p>
               ) : null}
-            </div>
-            <div className="shrink-0 border-t border-slate-200 bg-slate-50/80 px-5 py-3 sm:px-8">
+            </motion.div>
+            <motion.div
+              className="shrink-0 border-t border-slate-200 bg-slate-50/80 px-5 py-3 sm:px-8"
+              animate={{ opacity: welcomeTransitioning ? 0 : 1 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.12 }}
+            >
               <Button
                 type="button"
                 className="min-h-12 w-full gap-2 sm:w-auto sm:min-w-56"
                 onClick={() => void startFromWelcome()}
+                disabled={welcomeTransitioning}
               >
                 Начать знакомство
                 <ArrowRight className="h-4 w-4" />
               </Button>
-            </div>
+            </motion.div>
               </motion.section>
             </motion.div>
           ) : null}
@@ -485,14 +501,10 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             <motion.section
               key="guided-tour-step"
               layoutId="guided-tour-panel"
-              initial={prefersReducedMotion ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
               transition={{
                 layout: prefersReducedMotion
                   ? { duration: 0 }
                   : { type: 'spring', duration: 0.55, bounce: 0 },
-                opacity: { duration: prefersReducedMotion ? 0 : 0.2 },
               }}
               ref={panelRef}
               className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[70] mx-auto max-h-[calc(100vh-1.5rem)] max-w-md overflow-y-auto rounded-lg border border-slate-200 bg-white p-4 shadow-2xl focus:outline-none sm:inset-x-auto sm:right-5 sm:w-[390px]"
@@ -500,6 +512,14 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
               aria-label="Интерактивное обучение LocalOS"
               tabIndex={-1}
             >
+          <motion.div
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              delay: prefersReducedMotion ? 0 : 0.34,
+              duration: prefersReducedMotion ? 0 : 0.18,
+            }}
+          >
           <div className="flex items-start gap-3">
             <div className="relative h-14 w-14 shrink-0">
               <div className="absolute inset-0 overflow-hidden">
@@ -597,6 +617,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
               </button>
             </>
           )}
+          </motion.div>
             </motion.section>
           ) : null}
         </AnimatePresence>
