@@ -266,7 +266,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     if (!saved) return;
     setWelcomeTransitioning(true);
     if (!prefersReducedMotion) {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 140));
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 180));
     }
     setStatus('active');
     setCurrentIndex(nextIndex);
@@ -420,7 +420,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             <motion.div
               className="min-h-0 overflow-y-auto p-5 sm:p-8"
               animate={{ opacity: welcomeTransitioning ? 0 : 1 }}
-              transition={{ duration: prefersReducedMotion ? 0 : 0.12 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.16 }}
             >
               <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_72px] sm:items-start sm:gap-x-8">
                 <div className="min-w-0">
@@ -481,7 +481,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             <motion.div
               className="shrink-0 border-t border-slate-200 bg-slate-50/80 px-5 py-3 sm:px-8"
               animate={{ opacity: welcomeTransitioning ? 0 : 1 }}
-              transition={{ duration: prefersReducedMotion ? 0 : 0.12 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.16 }}
             >
               <Button
                 type="button"
@@ -512,11 +512,28 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
               aria-label="Интерактивное обучение LocalOS"
               tabIndex={-1}
             >
+          {!prefersReducedMotion ? (
+            <motion.div
+              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white"
+              initial={{ opacity: 1 }}
+              animate={{ opacity: 0 }}
+              transition={{ delay: 0.3, duration: 0.14 }}
+              aria-hidden="true"
+            >
+              <div className="relative h-14 w-14 overflow-hidden">
+                <img
+                  src={logo}
+                  alt=""
+                  className="absolute left-1/2 top-0 h-auto w-[175%] max-w-none -translate-x-1/2 -translate-y-[10%] object-contain mix-blend-multiply"
+                />
+              </div>
+            </motion.div>
+          ) : null}
           <motion.div
             initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{
-              delay: prefersReducedMotion ? 0 : 0.34,
+              delay: prefersReducedMotion ? 0 : 0.36,
               duration: prefersReducedMotion ? 0 : 0.18,
             }}
           >
