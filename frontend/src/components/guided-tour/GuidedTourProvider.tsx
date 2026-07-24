@@ -384,53 +384,16 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             className="my-auto flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28),0_3px_14px_rgba(15,23,42,0.12)]"
             tabIndex={-1}
           >
-            <div className="grid min-h-0 gap-5 overflow-y-auto p-5 pb-3 sm:p-7 sm:pb-3 lg:grid-cols-[minmax(0,1fr)_132px] lg:gap-8 lg:p-8 lg:pb-3">
+            <div className="grid min-h-0 gap-5 overflow-y-auto p-5 pb-3 sm:p-7 sm:pb-3 lg:grid-cols-[minmax(0,1fr)_112px] lg:gap-x-8 lg:gap-y-4 lg:p-8 lg:pb-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-orange-700">Интерактивное демо LocalOS</p>
                 <h1 id="demo-welcome-title" className="mt-3 text-balance text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
                   Получайте больше клиентов из карт, отзывов и соцсетей — без ручной рутины
                 </h1>
-                <p className="mt-3 text-pretty text-sm leading-6 text-slate-600 sm:text-base">
-                  LocalOS помогает владельцу малого бизнеса вести Яндекс Карты, 2ГИС и Google, отвечать на отзывы, готовить посты и новости, смотреть конкурентов рядом и понимать, что влияет на заявки, выручку и средний чек.
-                </p>
-
-                <div className="mt-4">
-                  <h2 className="text-base font-semibold text-slate-950">Что можно сделать в LocalOS</h2>
-                  <ul className="mt-3 grid gap-x-6 gap-y-2 text-sm leading-6 text-slate-700 sm:grid-cols-2">
-                    {[
-                      'Понять, что исправить в карточке бизнеса',
-                      'Улучшить услуги, описания, фото и новости для карт',
-                      'Отвечать на отзывы и повышать рейтинг',
-                      'Готовить посты для соцсетей без вопроса «что выкладывать?»',
-                      'Смотреть, что делают конкуренты рядом',
-                      'Находить партнёров со схожей аудиторией',
-                      'Поручать повторяющиеся задачи обычным языком',
-                    ].map((item) => (
-                      <li key={item} className="grid grid-cols-[20px_minmax(0,1fr)] gap-2">
-                        <span className="mt-2 h-1.5 w-1.5 rounded-full bg-orange-500" aria-hidden="true" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="mt-4 border-l-2 border-orange-400 pl-4">
-                  <h2 className="font-semibold text-slate-950">Я помогу освоиться</h2>
-                  <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">
-                    За 8–10 минут мы посмотрим состояние сети, карточку на картах, контент и партнёрство. Вы можете свободно исследовать кабинет и в любой момент вернуться к маршруту.
-                  </p>
-                </div>
-
-                {progressError ? (
-                  <p role="alert" className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm leading-5 text-red-800">
-                    {progressError}
-                  </p>
-                ) : null}
-
               </div>
 
               <div className="order-first flex items-center justify-center lg:order-none lg:items-start">
-                <div className="relative h-24 w-24 overflow-hidden rounded-full bg-white shadow-[0_10px_32px_rgba(15,23,42,0.15)] ring-1 ring-black/10 lg:h-32 lg:w-32">
+                <div className="relative h-24 w-24 overflow-hidden rounded-full bg-white shadow-[0_10px_32px_rgba(15,23,42,0.15)] ring-1 ring-black/10 lg:h-28 lg:w-28">
                   <img
                     src={logo}
                     alt="Робот LocalOS"
@@ -439,6 +402,43 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                   <span className="absolute inset-x-0 bottom-0 h-[22%] bg-white" aria-hidden="true" />
                 </div>
               </div>
+
+              <p className="text-pretty text-base leading-7 text-slate-600 lg:col-span-2 lg:max-w-3xl">
+                LocalOS помогает владельцу малого бизнеса вести Яндекс Карты, 2ГИС и Google, отвечать на отзывы, готовить посты и новости, смотреть конкурентов рядом и понимать, что влияет на заявки, выручку и средний чек.
+              </p>
+
+              <div className="lg:col-span-2">
+                <h2 className="text-sm font-semibold text-slate-950">Что можно сделать в LocalOS</h2>
+                <ul className="mt-2 grid gap-x-5 gap-y-2 text-sm leading-5 text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    'Понять, что исправить в карточке бизнеса',
+                    'Улучшить услуги, описания, фото и новости для карт',
+                    'Отвечать на отзывы и повышать рейтинг',
+                    'Готовить посты для соцсетей без вопроса «что выкладывать?»',
+                    'Смотреть, что делают конкуренты рядом',
+                    'Находить партнёров со схожей аудиторией',
+                    'Поручать повторяющиеся задачи обычным языком',
+                  ].map((item) => (
+                    <li key={item} className="grid grid-cols-[12px_minmax(0,1fr)] gap-1.5">
+                      <span className="mt-2 h-1.5 w-1.5 rounded-full bg-orange-500" aria-hidden="true" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="border-l-2 border-orange-400 pl-4 lg:col-span-2">
+                <h2 className="font-semibold text-slate-950">Я помогу освоиться</h2>
+                <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">
+                  За 8–10 минут мы посмотрим состояние сети, карточку на картах, контент и партнёрство. Вы можете свободно исследовать кабинет и в любой момент вернуться к маршруту.
+                </p>
+              </div>
+
+              {progressError ? (
+                <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm leading-5 text-red-800 lg:col-span-2">
+                  {progressError}
+                </p>
+              ) : null}
             </div>
             <div className="shrink-0 border-t border-slate-100 bg-white px-5 py-3 sm:px-7 lg:px-8">
               <Button
