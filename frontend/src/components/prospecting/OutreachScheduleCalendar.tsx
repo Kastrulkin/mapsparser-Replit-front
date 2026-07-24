@@ -75,10 +75,6 @@ const endOfCalendarWeek = (date: Date) => {
   return result;
 };
 
-const touchText = (touch: OutreachScheduleTouch) => String(
-  touch.text || touch.approved_text || touch.generated_text || 'Текст появится после подготовки новой версии.',
-).trim();
-
 const touchDate = (touch: OutreachScheduleTouch) => {
   const date = new Date(String(touch.scheduled_at || ''));
   return Number.isNaN(date.getTime()) ? null : date;
@@ -165,7 +161,7 @@ export function OutreachScheduleCalendar({
           </span>
           <div>
             <h4 className="text-balance text-sm font-semibold text-slate-950">Календарь касаний</h4>
-            <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">Выберите дату начала и подготовьте цепочку — здесь появятся даты, каналы и сообщения.</p>
+            <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">Выберите дату начала и подготовьте цепочку — здесь появятся шаги, даты и каналы.</p>
           </div>
         </div>
       </section>
@@ -190,7 +186,7 @@ export function OutreachScheduleCalendar({
   });
   const now = new Date();
 
-  const renderEvent = (item: typeof scheduledTouches[number], compact = false) => {
+  const renderEvent = (item: typeof scheduledTouches[number]) => {
     if (!item.date) return null;
     const channel = String(item.touch.channel || 'manual');
     const isPast = item.date.getTime() < now.getTime()
@@ -202,9 +198,10 @@ export function OutreachScheduleCalendar({
         className={`rounded-lg p-2.5 ring-1 ring-inset ${isPast ? 'bg-rose-50 text-rose-950 ring-rose-200' : CHANNEL_TONES[channel] || CHANNEL_TONES.manual}`}
       >
         <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] font-semibold">
-          <span>{label}</span>
+          <span>Шаг {Number(item.touch.sequence_index || 0) + 1}</span>
           <span className="inline-flex items-center gap-1 tabular-nums"><Clock3 className="h-3 w-3" />{formatTime(item.date)}</span>
         </div>
+        <div className="mt-1.5 text-xs font-semibold">{label}</div>
         {isPast ? (
           <div className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.05em] text-rose-700">
             <AlertTriangle className="h-3 w-3" /> Дата уже прошла
@@ -214,8 +211,6 @@ export function OutreachScheduleCalendar({
             {STATUS_LABELS[String(item.touch.status)] || item.touch.status}
           </div>
         ) : null}
-        {item.touch.subject ? <div className="mt-2 text-xs font-semibold">{item.touch.subject}</div> : null}
-        <p className={`${compact ? 'line-clamp-3' : ''} mt-1.5 whitespace-pre-wrap text-xs leading-5`}>{touchText(item.touch)}</p>
       </article>
     );
   };
@@ -229,7 +224,7 @@ export function OutreachScheduleCalendar({
           </span>
           <div className="min-w-0">
             <h4 id="outreach-calendar-title" className="text-balance text-sm font-semibold text-slate-950">Календарь касаний</h4>
-            <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">Когда, через какой канал и какое сообщение получит компания.</p>
+            <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">Когда и через какой канал пройдёт каждый шаг цепочки.</p>
           </div>
         </div>
         <div className="text-right">
@@ -261,7 +256,7 @@ export function OutreachScheduleCalendar({
                   <div className={`text-xs font-semibold capitalize tabular-nums ${isToday ? 'text-orange-700' : 'text-slate-500'}`}>
                     {new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(day)}
                   </div>
-                  <div className="mt-2 space-y-1.5">{dayTouches.map((item) => renderEvent(item, true))}</div>
+                  <div className="mt-2 space-y-1.5">{dayTouches.map((item) => renderEvent(item))}</div>
                 </div>
               );
             })}

@@ -12,7 +12,9 @@ from urllib.parse import urlparse
 from psycopg2.extras import Json
 
 from services.outreach_personalization_ai import (
+    PROMPT_VERSION,
     QUALITY_CRITERIA,
+    REVIEW_PROMPT_VERSION,
     ai_personalization_enabled,
     generation_contract_current,
     generate_personalized_sequence,
@@ -1688,16 +1690,51 @@ def _email_subject(angle: str, candidate: dict[str, Any]) -> str:
     return f"{recipient} - {labels.get(angle, 'короткий вопрос')}"[:200]
 
 
+def _normalize_touch_overrides(
+    touch_overrides: list[dict[str, Any]] | None,
+) -> dict[int, dict[str, Any]]:
+    normalized: dict[int, dict[str, Any]] = {}
+    for item in touch_overrides or []:
+        if not isinstance(item, dict):
+            raise ValueError("touch_overrides must contain objects")
+        try:
+            override_index = int(item.get("sequence_index"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("touch override sequence_index must be an integer") from exc
+        if override_index < 0 or override_index > 20 or override_index in normalized:
+            raise ValueError("touch override sequence_index is invalid or duplicated")
+        override_text = _text(item.get("text"))
+        override_subject = _text(item.get("subject"))
+        original_text = _text(item.get("original_text"))
+        original_subject = _text(item.get("original_subject"))
+        if not override_text:
+            raise ValueError("touch override text is required")
+        if len(override_text) > 3000:
+            raise ValueError("touch override text is too long")
+        if len(override_subject) > 200:
+            raise ValueError("touch override subject is too long")
+        normalized[override_index] = {
+            "text": override_text,
+            "subject": override_subject,
+            "original_text": original_text[:3000],
+            "original_subject": original_subject[:200],
+            "human_edited": item.get("human_edited") is True,
+        }
+    return normalized
+
+
 def build_preview(
     cursor: Any,
     workstream_id: str,
     *,
     sequence: list[dict[str, Any]] | None = None,
+    touch_overrides: list[dict[str, Any]] | None = None,
     start_at: datetime | None = None,
     sender_mode: str | None = None,
     offer_id: str | None = None,
     trust_strategy: str | None = None,
     generate_ai: bool | None = None,
+    manual_reviewer_role: str | None = None,
 ) -> dict[str, Any]:
     context = _apply_sender_mode(_load_context(cursor, workstream_id), sender_mode)
     ledger = build_evidence_ledger(context)
@@ -1828,6 +1865,7 @@ def build_preview(
         (candidate for candidate in candidates if candidate.get("id") == selected_candidate_id),
         candidates[0],
     )
+    override_by_index = _normalize_touch_overrides(touch_overrides)
     for index, item in enumerate(selected_sequence):
         requested_channel = _text(item.get("channel")).lower()
         if requested_channel == "next":
@@ -1907,7 +1945,9 @@ def build_preview(
         })
         previous_angles.append(angle)
         previous_offset = day_offset
-    ai_enabled = ai_personalization_enabled() if generate_ai is None else bool(generate_ai)
+    ai_enabled = (
+        ai_personalization_enabled() if generate_ai is None else bool(generate_ai)
+    ) and not override_by_index
     generation: dict[str, Any] = {
         "schema_version": "1.0",
         "status": "disabled",
@@ -2005,6 +2045,53 @@ def build_preview(
                 gate["reason_codes"] = reason_codes
                 gate["canonical_reason_codes"] = reason_codes
                 touch["quality_gate"] = gate
+    if override_by_index:
+        expected_indexes = {int(touch["sequence_index"]) for touch in touches}
+        if set(override_by_index) != expected_indexes:
+            raise ValueError("touch_overrides must include every campaign touch")
+        reviewer_role = _text(manual_reviewer_role) or "authorized_user"
+        for touch in touches:
+            index = int(touch["sequence_index"])
+            override = override_by_index[index]
+            touch["text"] = override["text"]
+            if touch["channel"] == "email" and override["subject"]:
+                touch["subject"] = override["subject"]
+            touch["generation_source"] = "manual_product_correction"
+            touch["generation_prompt_version"] = PROMPT_VERSION
+            touch["semantic_review_prompt_version"] = REVIEW_PROMPT_VERSION
+            touch["human_edited"] = bool(override["human_edited"])
+            touch["original_generated_text"] = override["original_text"] or None
+            touch["original_generated_subject"] = override["original_subject"] or None
+            gate = _quality_gate(
+                touch["text"],
+                primary_candidate,
+                story,
+                channel=touch["channel"],
+                channel_status=touch["channel_status"],
+                suppressed=suppression["suppressed"],
+                angle=touch["angle"],
+            )
+            gate["manual_review"] = {
+                "passed": bool(gate.get("passed")),
+                "review_version": REVIEW_PROMPT_VERSION,
+                "reviewer_role": reviewer_role,
+                "source": "inline_campaign_editor",
+            }
+            touch["quality_gate"] = gate
+            strategy = dict(touch.get("strategy") or {})
+            strategy["human_edited"] = bool(override["human_edited"])
+            strategy["content_source"] = "inline_campaign_editor"
+            touch["strategy"] = strategy
+            touch["strategy_fingerprint"] = strategy_fingerprint(strategy)
+        generation = {
+            "schema_version": "1.0",
+            "status": "ready",
+            "source": "manual_product_correction",
+            "prompt_version": PROMPT_VERSION,
+            "review_prompt_version": REVIEW_PROMPT_VERSION,
+            "error_code": None,
+            "error": None,
+        }
     missing = sorted({
         f"{touch['channel']}:{touch['channel_status']}"
         for touch in touches
@@ -2139,6 +2226,9 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
                     "generation_source": touch.get("generation_source") or "deterministic",
                     "generation_prompt_version": touch.get("generation_prompt_version"),
                     "semantic_review_prompt_version": touch.get("semantic_review_prompt_version"),
+                    "human_edited": bool(touch.get("human_edited")),
+                    "original_generated_text": touch.get("original_generated_text"),
+                    "original_generated_subject": touch.get("original_generated_subject"),
                 }),
                 Json(touch["quality_gate"]),
                 touch.get("strategy_fingerprint"), Json(touch.get("strategy") or {}),
@@ -2154,6 +2244,11 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
             "touch_count": len(preview["touches"]),
             "sender_mode": preview.get("sender_mode"),
             "represented_business_id": preview.get("represented_business_id"),
+            "human_edited_touch_indexes": [
+                int(touch["sequence_index"])
+                for touch in preview["touches"]
+                if touch.get("human_edited")
+            ],
         },
     )
     cursor.execute(

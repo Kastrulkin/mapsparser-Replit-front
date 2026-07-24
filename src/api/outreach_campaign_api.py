@@ -696,6 +696,13 @@ def preview_campaign(workstream_id: str):
         return error
     payload = request.get_json(silent=True) or {}
     sequence = payload.get("sequence") if isinstance(payload.get("sequence"), list) else None
+    if "touch_overrides" in payload and not isinstance(payload.get("touch_overrides"), list):
+        return jsonify({"error": "touch_overrides must be a list"}), 400
+    touch_overrides = (
+        payload.get("touch_overrides")
+        if isinstance(payload.get("touch_overrides"), list)
+        else None
+    )
     conn = get_db_connection()
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -707,10 +714,14 @@ def preview_campaign(workstream_id: str):
             cursor,
             workstream_id,
             sequence=sequence,
+            touch_overrides=touch_overrides,
             start_at=_parse_campaign_start_at(payload.get("start_at")),
             sender_mode=sender_mode,
             offer_id=str(payload.get("offer_id") or "").strip() or None,
             trust_strategy=str(payload.get("trust_strategy") or "").strip() or None,
+            manual_reviewer_role=(
+                "superadmin" if user_data.get("is_superadmin") else "business_user"
+            ),
         )
         campaign = None
         if bool(payload.get("save")) and preview.get("status") in {"ready", "needs_channel_setup"}:

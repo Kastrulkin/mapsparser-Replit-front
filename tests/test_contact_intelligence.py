@@ -1336,3 +1336,48 @@ def test_contact_routes_are_registered():
 
 def test_contact_normalization_deduplicates_url_shape():
     assert normalize_contact_value("telegram", "t.me/example/") == "https://t.me/example"
+
+
+def test_manual_contact_uses_schema_allowed_unverified_status(monkeypatch):
+    from api.prospecting import contact_intelligence_routes as routes
+
+    captured = {}
+
+    def capture_contact_points(_cursor, lead_id, contacts):
+        captured["lead_id"] = lead_id
+        captured["contacts"] = contacts
+        return len(contacts)
+
+    class Cursor:
+        def execute(self, _query, _params=None):
+            return None
+
+        def fetchone(self):
+            return {
+                "id": "contact-1",
+                "lead_id": "lead-1",
+                "contact_type": "email",
+                "value": "pr@yesapart.com",
+                "normalized_value": "pr@yesapart.com",
+                "owner_type": "company",
+                "verification_status": "found",
+            }
+
+    monkeypatch.setattr(routes, "upsert_contact_points", capture_contact_points)
+
+    result = routes._save_manual_lead_contact(
+        None,
+        Cursor(),
+        workstream={"lead_id": "lead-1"},
+        data={
+            "contact_type": "email",
+            "value": "pr@yesapart.com",
+            "owner_type": "company",
+        },
+        actor_id="user-1",
+    )
+
+    assert result["entry_kind"] == "contact"
+    assert captured["lead_id"] == "lead-1"
+    assert captured["contacts"][0]["source_type"] == "manual"
+    assert captured["contacts"][0]["verification_status"] == "found"

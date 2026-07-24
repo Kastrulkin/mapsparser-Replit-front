@@ -125,7 +125,7 @@ def _save_manual_lead_contact(
         "source_type": "manual",
         "provider": "manual_entry",
         "confidence": 0.7,
-        "verification_status": "manually_added",
+        "verification_status": "found",
         "metadata": {
             "entry_method": "manual",
             "added_by": actor_id,

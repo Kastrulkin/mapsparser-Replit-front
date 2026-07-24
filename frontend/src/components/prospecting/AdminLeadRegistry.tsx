@@ -34,6 +34,14 @@ import {
   outreachStartIso,
 } from './OutreachScheduleCalendar';
 import {
+  OutreachTouchMessageEditor,
+} from './OutreachTouchMessageEditor';
+import {
+  OutreachTouchMessageDraft,
+  outreachTouchMessageDraft,
+  outreachTouchMessageText,
+} from './outreachTouchMessage';
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -726,6 +734,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [sequenceStartAt, setSequenceStartAt] = useState(defaultOutreachStartValue);
   const [sequenceSenders, setSequenceSenders] = useState<Record<number, string>>({});
   const [senderMode, setSenderMode] = useState<SenderMode>('localos');
+  const [touchEdits, setTouchEdits] = useState<Record<number, OutreachTouchMessageDraft>>({});
+  const [editingTouchIndex, setEditingTouchIndex] = useState<number | null>(null);
+  const [touchEditsValidated, setTouchEditsValidated] = useState(false);
 
   const loadLeads = useCallback(async () => {
     setLoading(true);
@@ -874,6 +885,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const displayedOutreachTouches = (outreachPreview?.touches || []).length > 0
     ? outreachPreview?.touches || []
     : savedCampaignDisplayTouches;
+  const hasTouchEdits = Object.values(touchEdits).some((draft) => draft.humanEdited);
   const outreachCalendarTouches = displayedOutreachTouches.length > 0
     ? displayedOutreachTouches
     : buildProjectedOutreachTouches(sequenceChannels, sequenceDays, sequenceStartAt);
@@ -1041,6 +1053,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setSequenceDays([0, 3, 7, 12]);
     setSequenceStartAt(defaultOutreachStartValue());
     setSequenceSenders({});
+    setTouchEdits({});
+    setEditingTouchIndex(null);
+    setTouchEditsValidated(false);
     setSenderMode(
       selectedWorkstream?.workstream_type === 'localos_sales'
         ? 'localos'
@@ -1170,16 +1185,25 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
   const selectRecipient = async (contact: ContactPoint) => {
     if (!selectedLead || !selectedWorkstream?.id) return;
+    if (drawerRecipient?.id === contact.id) {
+      setNotice('Этот контакт уже выбран. Чтобы изменить получателя, выберите другой контакт.');
+      return;
+    }
     setBusyAction(`recipient-${contact.id}`);
     setNotice('');
     try {
-      await newAuth.makeRequest(`/admin/prospecting/leads/${selectedLead.id}/recipient`, {
+      const selection = await newAuth.makeRequest(`/admin/prospecting/leads/${selectedLead.id}/recipient`, {
         method: 'POST',
         body: JSON.stringify({
           workstream_id: selectedWorkstream.id,
           contact_point_id: contact.id,
         }),
       });
+      setContactIntelligence((current) => ({
+        ...(current || {}),
+        selected_recipient: contact,
+        job: selection?.job || current?.job || null,
+      }));
       const channel = ['email', 'telegram', 'whatsapp'].includes(String(contact.type || ''))
         ? String(contact.type)
         : 'manual';
@@ -1311,6 +1335,40 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     { channel: sequenceChannels[3], day_offset: sequenceDays[3], angle: 'respectful_close', sender_account_id: sequenceSenders[3] || undefined },
   ];
 
+  const campaignTouchOverrides = () => displayedOutreachTouches.map((touch) => {
+    const draft = touchEdits[touch.sequence_index];
+    const currentText = draft?.text.trim() || outreachTouchMessageText(touch);
+    const currentSubject = draft?.subject.trim() || String(touch.subject || '').trim();
+    return {
+      sequence_index: touch.sequence_index,
+      subject: currentSubject,
+      text: currentText,
+      original_subject: draft?.originalSubject || String(touch.subject || '').trim(),
+      original_text: draft?.originalText || outreachTouchMessageText(touch),
+      human_edited: Boolean(draft?.humanEdited),
+    };
+  });
+
+  const startTouchEdit = (touch: OutreachTouchPreview) => {
+    setTouchEdits((current) => ({
+      ...current,
+      [touch.sequence_index]: current[touch.sequence_index] || outreachTouchMessageDraft(touch),
+    }));
+    setEditingTouchIndex(touch.sequence_index);
+  };
+
+  const resetTouchEdit = (touchIndex: number) => {
+    setTouchEdits((current) => {
+      const next = { ...current };
+      delete next[touchIndex];
+      return next;
+    });
+    setEditingTouchIndex((current) => current === touchIndex ? null : current);
+    setTouchEditsValidated(false);
+    setOutreachPreview(null);
+    setPilotReadiness(null);
+  };
+
   const reloadLatestOutreachCampaign = async () => {
     const workstreamId = String(selectedWorkstream?.id || '');
     if (!workstreamId) return;
@@ -1334,14 +1392,19 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         method: 'POST',
         body: JSON.stringify({
           sequence: campaignSequence(),
+          touch_overrides: hasTouchEdits ? campaignTouchOverrides() : undefined,
           start_at: scheduleStart,
           save,
           sender_mode: senderMode,
         }),
       });
       setOutreachPreview(payload?.preview || null);
+      setTouchEditsValidated(hasTouchEdits);
       if (payload?.campaign) {
         setSavedOutreachCampaign(payload.campaign);
+        setTouchEdits({});
+        setEditingTouchIndex(null);
+        setTouchEditsValidated(false);
         setNotice(`Версия ${payload.campaign.version} сохранена как черновик. Проверьте всю цепочку перед approval.`);
         await reloadLatestOutreachCampaign();
       }
@@ -1906,7 +1969,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         const delivery = touch.id ? deliveryByTouchId.get(touch.id) : undefined;
                         const replyEvents = humanReplyEvents.filter((event) => event.touch_id === touch.id);
                         const status = String(delivery?.delivery_status || touch.status || 'draft');
-                        const messageText = String(touch.approved_text || touch.generated_text || '');
+                        const touchIndex = Number(touch.sequence_index || 0);
+                        const editableTouch = savedCampaignDisplayTouches.find((item) => item.sequence_index === touchIndex);
+                        const touchDraft = touchEdits[touchIndex];
                         const sentMoment = formatOutreachMoment(delivery?.sent_at);
                         const scheduledMoment = formatOutreachMoment(delivery?.scheduled_at || touch.scheduled_at);
                         return (
@@ -1921,10 +1986,30 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                               </Badge>
                             </div>
                             <div className="px-4 pb-4">
-                              {touch.subject ? <div className="mt-3 text-sm font-semibold text-slate-950">Тема: {touch.subject}</div> : null}
-                              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-800">
-                                {messageText || 'Текст сообщения ещё не подготовлен.'}
-                              </p>
+                              {editableTouch ? (
+                                <OutreachTouchMessageEditor
+                                  touch={editableTouch}
+                                  draft={touchDraft}
+                                  editing={editingTouchIndex === touchIndex}
+                                  disabled={Boolean(busyAction)}
+                                  onStart={() => startTouchEdit(editableTouch)}
+                                  onChange={(nextDraft) => {
+                                    setTouchEdits((current) => ({ ...current, [touchIndex]: nextDraft }));
+                                    setTouchEditsValidated(false);
+                                    setPilotReadiness(null);
+                                  }}
+                                  onFinish={() => {
+                                    setEditingTouchIndex(null);
+                                    setNotice('Правка применена. Проверьте всю цепочку и сохраните новую версию.');
+                                  }}
+                                  onCancel={() => resetTouchEdit(touchIndex)}
+                                  onReset={() => resetTouchEdit(touchIndex)}
+                                />
+                              ) : (
+                                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-800">
+                                  {String(touch.approved_text || touch.generated_text || 'Текст сообщения ещё не подготовлен.')}
+                                </p>
+                              )}
                               {sentMoment || scheduledMoment ? (
                                 <div className="mt-3 text-xs text-slate-500 tabular-nums">
                                   {sentMoment ? `Отправлено ${sentMoment}` : `Запланировано ${scheduledMoment}`}
@@ -1968,6 +2053,36 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                           <p className="mt-2 whitespace-pre-wrap leading-6">{inboundMessageText(event) || 'Текст ответа не сохранён провайдером.'}</p>
                         </div>
                       ))}
+                      {hasTouchEdits ? (
+                        <div className="rounded-xl bg-orange-50 p-4 ring-1 ring-inset ring-orange-200">
+                          <div className="text-sm font-semibold text-orange-950">В цепочке есть ручные правки</div>
+                          <p className="mt-1 text-pretty text-xs leading-5 text-orange-900">
+                            Сначала проверьте всю цепочку. После проверки сохраните её как новую черновую версию — текущая версия останется в истории.
+                          </p>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => void prepareOutreachCampaign(false)}
+                              disabled={busyAction === 'preview-campaign' || !outreachStartIso(sequenceStartAt)}
+                              className="min-h-10 bg-white transition-transform active:scale-[0.96]"
+                            >
+                              {busyAction === 'preview-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                              Проверить правки
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => void prepareOutreachCampaign(true)}
+                              disabled={busyAction === 'save-campaign' || !touchEditsValidated || !['ready', 'needs_channel_setup'].includes(String(outreachPreview?.status || ''))}
+                              className="min-h-10 bg-white transition-transform active:scale-[0.96]"
+                            >
+                              {busyAction === 'save-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
+                              Сохранить новую версию
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="mt-4 rounded-xl bg-white px-4 py-5 text-pretty text-sm leading-6 text-slate-600 shadow-sm shadow-slate-900/5">
@@ -2115,13 +2230,16 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   {drawerContacts.map((contact) => {
                     const selected = drawerRecipient?.id === contact.id;
                     const invalid = contact.verification_status === 'invalid';
+                    const selecting = busyAction === `recipient-${contact.id}`;
                     return (
                       <button
                         key={contact.id}
                         type="button"
                         onClick={() => selectRecipient(contact)}
-                        disabled={invalid || busyAction === `recipient-${contact.id}`}
-                        className={`flex min-h-14 w-full items-center gap-3 rounded-md px-3 text-left transition-colors active:scale-[0.96] ${selected ? 'bg-white shadow-sm ring-2 ring-emerald-200' : 'bg-white hover:bg-slate-100'} disabled:cursor-not-allowed disabled:opacity-50`}
+                        aria-pressed={selected}
+                        aria-busy={selecting}
+                        disabled={invalid || selecting}
+                        className={`flex min-h-14 w-full items-center gap-3 rounded-md px-3 text-left transition-[background-color,box-shadow,transform] duration-150 ease-out active:scale-[0.96] ${selected ? 'bg-white shadow-sm ring-2 ring-emerald-200' : 'bg-white hover:bg-slate-100'} ${invalid ? 'cursor-not-allowed opacity-50' : selecting ? 'cursor-wait' : ''}`}
                       >
                         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${selected ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                           {contact.owner_type === 'person' ? <UserRound className="h-4 w-4" /> : <MessageCircle className="h-4 w-4" />}
@@ -2640,7 +2758,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                           <span>День {touch.day_offset} · {touch.channel}</span>
                           <span className={touch.quality_gate?.passed ? 'text-emerald-700' : 'text-amber-700'}>{touch.quality_gate?.passed ? 'Факты проверены' : 'Нужна проверка'}</span>
                         </div>
-                        {touch.subject ? <div className="mt-2 text-sm font-semibold text-slate-950">Тема: {touch.subject}</div> : null}
                         {touch.observation || touch.problem_hypothesis || touch.relevance_bridge ? (
                           <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
                             {touch.observation ? <p><span className="font-semibold text-slate-900">Факт:</span> {touch.observation}</p> : null}
@@ -2648,7 +2765,24 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                             {touch.relevance_bridge ? <p><span className="font-semibold text-slate-900">Почему это связано:</span> {touch.relevance_bridge}</p> : null}
                           </div>
                         ) : null}
-                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">{touch.text}</p>
+                        <OutreachTouchMessageEditor
+                          touch={touch}
+                          draft={touchEdits[touch.sequence_index]}
+                          editing={editingTouchIndex === touch.sequence_index}
+                          disabled={Boolean(busyAction)}
+                          onStart={() => startTouchEdit(touch)}
+                          onChange={(draft) => {
+                            setTouchEdits((current) => ({ ...current, [touch.sequence_index]: draft }));
+                            setTouchEditsValidated(false);
+                            setPilotReadiness(null);
+                          }}
+                          onFinish={() => {
+                            setEditingTouchIndex(null);
+                            setNotice('Правка применена в этом предпросмотре. Нажмите «Проверить правки».');
+                          }}
+                          onCancel={() => resetTouchEdit(touch.sequence_index)}
+                          onReset={() => resetTouchEdit(touch.sequence_index)}
+                        />
                         {touch.source_url ? <a href={touch.source_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-9 items-center gap-1 text-xs font-semibold text-sky-700">Источник <ExternalLink className="h-3.5 w-3.5" /></a> : null}
                         {touch.quality_gate ? (
                           <details open={!touch.quality_gate.passed} className="mt-3 rounded-md bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-200">
@@ -2691,9 +2825,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <Button variant="outline" onClick={() => void prepareOutreachCampaign(false)} disabled={busyAction === 'preview-campaign' || !outreachStartIso(sequenceStartAt)} className="min-h-11 bg-white">
                     {busyAction === 'preview-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                    {savedOutreachCampaign ? 'Подготовить новую версию' : 'Подготовить цепочку'}
+                    {hasTouchEdits ? 'Проверить правки' : savedOutreachCampaign ? 'Подготовить новую версию' : 'Подготовить цепочку'}
                   </Button>
-                  <Button variant="outline" onClick={() => void prepareOutreachCampaign(true)} disabled={busyAction === 'save-campaign' || !outreachStartIso(sequenceStartAt) || !['ready', 'needs_channel_setup'].includes(String(outreachPreview?.status || ''))} className="min-h-11 bg-white">
+                  <Button variant="outline" onClick={() => void prepareOutreachCampaign(true)} disabled={busyAction === 'save-campaign' || !outreachStartIso(sequenceStartAt) || (hasTouchEdits && !touchEditsValidated) || !['ready', 'needs_channel_setup'].includes(String(outreachPreview?.status || ''))} className="min-h-11 bg-white">
                     {busyAction === 'save-campaign' && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
                     {outreachPreview?.status === 'needs_channel_setup' ? 'Сохранить черновик версии' : 'Сохранить новую версию'}
                   </Button>

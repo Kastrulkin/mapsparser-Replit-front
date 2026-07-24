@@ -18,6 +18,7 @@ from services.outreach_campaign_service import (
     build_pilot_readiness,
     build_personalization_candidates,
     _localos_representative_profile,
+    _normalize_touch_overrides,
     resolve_sender_mode,
 )
 from scripts.backfill_partnership_match_artifacts import _skip_reason
@@ -967,16 +968,59 @@ def test_outreach_preview_accepts_only_future_timezone_aware_start_dates():
         _parse_campaign_start_at("2020-01-01T10:30:00+03:00")
 
 
-def test_outreach_ui_shows_calendar_channel_time_and_message_before_approval():
+def test_manual_touch_overrides_preserve_original_copy_and_reject_invalid_payloads():
+    normalized = _normalize_touch_overrides([
+        {
+            "sequence_index": 1,
+            "subject": "Короткий вопрос",
+            "text": "Здравствуйте! Подскажете, с кем обсудить партнёрство?",
+            "original_subject": "Старое предложение",
+            "original_text": "Старый текст",
+            "human_edited": True,
+        },
+    ])
+
+    assert normalized[1]["text"] == "Здравствуйте! Подскажете, с кем обсудить партнёрство?"
+    assert normalized[1]["original_text"] == "Старый текст"
+    assert normalized[1]["human_edited"] is True
+    with pytest.raises(ValueError, match="required"):
+        _normalize_touch_overrides([{"sequence_index": 0, "text": ""}])
+    with pytest.raises(ValueError, match="duplicated"):
+        _normalize_touch_overrides([
+            {"sequence_index": 0, "text": "Первое"},
+            {"sequence_index": 0, "text": "Второе"},
+        ])
+
+
+def test_outreach_ui_shows_compact_calendar_and_edits_messages_outside_it():
     calendar_ui = (ROOT / "frontend/src/components/prospecting/OutreachScheduleCalendar.tsx").read_text()
     partner_ui = (ROOT / "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx").read_text()
     admin_ui = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
     api_source = (ROOT / "src/api/outreach_campaign_api.py").read_text()
+    editor_ui = (ROOT / "frontend/src/components/prospecting/OutreachTouchMessageEditor.tsx").read_text()
 
     assert "Календарь касаний" in calendar_ui
-    assert "Когда, через какой канал и какое сообщение" in calendar_ui
+    assert "Когда и через какой канал пройдёт каждый шаг цепочки" in calendar_ui
     assert "Дата уже прошла" in calendar_ui
-    assert "touchText(item.touch)" in calendar_ui
+    assert "Шаг {Number(item.touch.sequence_index || 0) + 1}" in calendar_ui
+    assert "touchText(item.touch)" not in calendar_ui
+    assert "item.touch.subject" not in calendar_ui
+    assert "Редактировать" in editor_ui
+    assert "Применить правку" in editor_ui
+    assert "Вернуть исходный текст" in editor_ui
+    assert "touch_overrides" in partner_ui
+    assert "touch_overrides" in admin_ui
+    history_start = admin_ui.index('История сообщений')
+    history_end = admin_ui.index('Контакты и получатель', history_start)
+    history_block = admin_ui[history_start:history_end]
+    assert "OutreachTouchMessageEditor" in history_block
+    assert "В цепочке есть ручные правки" in history_block
+    assert "Проверить правки" in history_block
+    assert "Сохранить новую версию" in history_block
+    campaign_source = (ROOT / "src/services/outreach_campaign_service.py").read_text()
+    assert ") and not override_by_index" in campaign_source
+    assert 'touch["generation_source"] = "manual_product_correction"' in campaign_source
+    assert 'touch["original_generated_text"] = override["original_text"] or None' in campaign_source
     assert "Дата и время первого касания" in partner_ui
     assert "Дата и время первого касания" in admin_ui
     assert "OutreachScheduleCalendar" in partner_ui
@@ -1262,3 +1306,19 @@ def test_telegram_ui_exposes_two_independent_permissions():
     assert "radar_enabled" in component
     assert "outreach_enabled" in component
     assert "stop-on-reply" in component
+
+
+def test_recipient_selection_updates_drawer_without_grey_stale_state():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    select_start = source.index("const selectRecipient")
+    select_end = source.index("\n\n  const saveSenderProfile", select_start)
+    select_block = source[select_start:select_end]
+    contacts_start = source.index("{drawerContacts.map")
+    contacts_end = source.index("{!contactIntelligenceLoading", contacts_start)
+    contacts_block = source[contacts_start:contacts_end]
+
+    assert "if (drawerRecipient?.id === contact.id)" in select_block
+    assert "selected_recipient: contact" in select_block
+    assert "aria-pressed={selected}" in contacts_block
+    assert "disabled:opacity-50" not in contacts_block

@@ -23,6 +23,14 @@ import {
   OutreachScheduleCalendar,
   outreachStartIso,
 } from '@/components/prospecting/OutreachScheduleCalendar';
+import {
+  OutreachTouchMessageEditor,
+} from '@/components/prospecting/OutreachTouchMessageEditor';
+import {
+  OutreachTouchMessageDraft,
+  outreachTouchMessageDraft,
+  outreachTouchMessageText,
+} from '@/components/prospecting/outreachTouchMessage';
 
 type ChannelStatus =
   | 'ready'
@@ -241,6 +249,10 @@ export function OutreachCampaignBuilder({
   const [recommendations, setRecommendations] = useState<StrategyRecommendation[]>([]);
   const [senderSelections, setSenderSelections] = useState<Record<number, string>>({});
   const [pilotReadiness, setPilotReadiness] = useState<PilotReadiness | null>(null);
+  const [touchEdits, setTouchEdits] = useState<Record<number, OutreachTouchMessageDraft>>({});
+  const [editingTouchIndex, setEditingTouchIndex] = useState<number | null>(null);
+  const [touchEditsValidated, setTouchEditsValidated] = useState(false);
+  const hasTouchEdits = Object.values(touchEdits).some((draft) => draft.humanEdited);
 
   const loadCampaigns = useCallback(async () => {
     if (!workstreamId) {
@@ -309,6 +321,9 @@ export function OutreachCampaignBuilder({
     setNotice('');
     setError('');
     setPilotReadiness(null);
+    setTouchEdits({});
+    setEditingTouchIndex(null);
+    setTouchEditsValidated(false);
     void loadCampaigns();
     void loadRecommendations();
   }, [loadCampaigns, loadRecommendations]);
@@ -340,6 +355,38 @@ export function OutreachCampaignBuilder({
     setNotice('Порядок изменён. Обновите preview; прежний approval не будет перенесён.');
   };
 
+  const touchOverrides = () => visibleTouches.map((touch) => {
+    const draft = touchEdits[touch.sequence_index];
+    return {
+      sequence_index: touch.sequence_index,
+      subject: draft?.subject.trim() || String(touch.subject || '').trim(),
+      text: draft?.text.trim() || outreachTouchMessageText(touch),
+      original_subject: draft?.originalSubject || String(touch.subject || '').trim(),
+      original_text: draft?.originalText || outreachTouchMessageText(touch),
+      human_edited: Boolean(draft?.humanEdited),
+    };
+  });
+
+  const startTouchEdit = (touch: TouchPreview) => {
+    setTouchEdits((current) => ({
+      ...current,
+      [touch.sequence_index]: current[touch.sequence_index] || outreachTouchMessageDraft(touch),
+    }));
+    setEditingTouchIndex(touch.sequence_index);
+  };
+
+  const resetTouchEdit = (touchIndex: number) => {
+    setTouchEdits((current) => {
+      const next = { ...current };
+      delete next[touchIndex];
+      return next;
+    });
+    setEditingTouchIndex((current) => current === touchIndex ? null : current);
+    setTouchEditsValidated(false);
+    setPreview(null);
+    setPilotReadiness(null);
+  };
+
   const prepare = async (save: boolean) => {
     if (!workstreamId) return;
     const scheduleStart = outreachStartIso(startAt);
@@ -353,11 +400,20 @@ export function OutreachCampaignBuilder({
     try {
       const payload = await newAuth.makeRequest(`/outreach/workstreams/${encodeURIComponent(workstreamId)}/preview`, {
         method: 'POST',
-        body: JSON.stringify({ sequence: sequence(), start_at: scheduleStart, save }),
+        body: JSON.stringify({
+          sequence: sequence(),
+          touch_overrides: hasTouchEdits ? touchOverrides() : undefined,
+          start_at: scheduleStart,
+          save,
+        }),
       });
       setPreview(payload?.preview || null);
+      setTouchEditsValidated(hasTouchEdits);
       if (payload?.campaign) {
         setScheduleDirty(false);
+        setTouchEdits({});
+        setEditingTouchIndex(null);
+        setTouchEditsValidated(false);
         setNotice(`Версия ${payload.campaign.version} сохранена как черновик. Проверьте всю цепочку.`);
         await loadCampaigns();
         setSelectedCampaignId(String(payload.campaign.id || ''));
@@ -817,7 +873,8 @@ export function OutreachCampaignBuilder({
       {visibleTouches.length > 0 ? (
         <div className="space-y-3">
           {visibleTouches.map((touch) => {
-            const text = touch.text || touch.approved_text || touch.generated_text || '';
+            const draft = touchEdits[touch.sequence_index];
+            const text = draft?.text || touch.text || touch.approved_text || touch.generated_text || '';
             const isManual = MANUAL_CHANNELS.has(touch.channel);
             const canRecordManual = isManual && ['awaiting_manual_send', 'needs_attention', 'manual_expired', 'manual_sent', 'sent', 'delivered'].includes(String(touch.status || ''));
             return (
@@ -828,7 +885,6 @@ export function OutreachCampaignBuilder({
                     {touch.quality_gate?.passed ? 'Факты проверены' : touch.status || 'Нужна проверка'}
                   </span>
                 </div>
-                {touch.subject ? <div className="mt-2 text-sm font-semibold text-slate-950">Тема: {touch.subject}</div> : null}
                 {touch.observation || touch.problem_hypothesis || touch.relevance_bridge ? (
                   <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
                     {touch.observation ? <p><span className="font-semibold text-slate-900">Факт:</span> {touch.observation}</p> : null}
@@ -836,7 +892,24 @@ export function OutreachCampaignBuilder({
                     {touch.relevance_bridge ? <p><span className="font-semibold text-slate-900">Почему это связано:</span> {touch.relevance_bridge}</p> : null}
                   </div>
                 ) : null}
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">{text}</p>
+                <OutreachTouchMessageEditor
+                  touch={touch}
+                  draft={draft}
+                  editing={editingTouchIndex === touch.sequence_index}
+                  disabled={Boolean(busy)}
+                  onStart={() => startTouchEdit(touch)}
+                  onChange={(nextDraft) => {
+                    setTouchEdits((current) => ({ ...current, [touch.sequence_index]: nextDraft }));
+                    setTouchEditsValidated(false);
+                    setPilotReadiness(null);
+                  }}
+                  onFinish={() => {
+                    setEditingTouchIndex(null);
+                    setNotice('Правка применена в предпросмотре. Теперь проверьте всю цепочку.');
+                  }}
+                  onCancel={() => resetTouchEdit(touch.sequence_index)}
+                  onReset={() => resetTouchEdit(touch.sequence_index)}
+                />
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {text ? (
                     <Button type="button" variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(text)}>
@@ -962,9 +1035,9 @@ export function OutreachCampaignBuilder({
       <div className="grid gap-2 sm:grid-cols-2">
         <Button variant="outline" onClick={() => void prepare(false)} disabled={Boolean(busy) || !outreachStartIso(startAt)} className="min-h-11 bg-white">
           {busy === 'preview' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-          Показать всю цепочку
+          {hasTouchEdits ? 'Проверить правки' : 'Показать всю цепочку'}
         </Button>
-        <Button variant="outline" onClick={() => void prepare(true)} disabled={Boolean(busy) || !outreachStartIso(startAt) || preview?.status !== 'ready'} className="min-h-11 bg-white">
+        <Button variant="outline" onClick={() => void prepare(true)} disabled={Boolean(busy) || !outreachStartIso(startAt) || (hasTouchEdits && !touchEditsValidated) || preview?.status !== 'ready'} className="min-h-11 bg-white">
           {busy === 'save' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
           Сохранить новую версию
         </Button>
