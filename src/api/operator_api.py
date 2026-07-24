@@ -63,13 +63,14 @@ from services.operator_conversations import (
     list_operator_messages,
     set_operator_pending_context,
 )
-from services.content_plan_service import create_generated_content_plan, generate_draft_for_plan_item, update_content_plan_item
+from services.content_plan_service import create_generated_content_plan, delete_content_plan, generate_draft_for_plan_item, update_content_plan_item
 from core.card_automation import get_card_automation_snapshot, save_card_automation_settings
 from core.service_catalog_compression import build_service_catalog_compression_draft
 from services.gigachat_client import analyze_screenshot_with_gigachat
 from services.agent_source_ingestion import build_agent_source_from_upload
 from services.llm import analyze_text_with_gigachat
 from services.operator_map_refresh import DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS
+from services.operator_review_canonicalization import CANONICAL_REVIEWS_CTE
 from services.operator_services_optimization import SERVICES_OPTIMIZE_CREDITS_PER_SERVICE
 
 
@@ -1971,6 +1972,34 @@ def operator_mobile_content_plan_generate():
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
 
 
+@operator_bp.route("/mobile/content/plans/<plan_id>", methods=["DELETE"])
+def operator_mobile_content_plan_delete(plan_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        if error_response:
+            return error_response
+        cursor.execute("SELECT business_id FROM contentplans WHERE id = %s", (plan_id,))
+        plan_row = cursor.fetchone()
+        plan_business_id = str(dict(plan_row or {}).get("business_id") or "")
+        if not plan_row or plan_business_id != business_id:
+            return jsonify({"success": False, "error": "Контент-план не найден в выбранном бизнесе"}), 404
+    finally:
+        db.close()
+    try:
+        delete_content_plan(str(user_data.get("user_id") or user_data.get("id") or ""), plan_id)
+        return jsonify({"success": True, "scope": scope, "deleted_plan_id": plan_id})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 404
+
+
 @operator_bp.route("/mobile/services/analyze", methods=["POST"])
 def operator_mobile_services_analyze():
     user_data = require_auth_from_request()
@@ -2399,10 +2428,11 @@ def operator_mobile_reviews():
         base_where_sql = " AND ".join(conditions)
         cursor.execute(
             f"""
+            {CANONICAL_REVIEWS_CTE}
             SELECT COUNT(DISTINCT r.id) AS total,
                    COUNT(DISTINCT r.id) FILTER (WHERE COALESCE(TRIM(r.response_text), '') = '') AS unanswered,
                    COUNT(DISTINCT r.id) FILTER (WHERE d.id IS NOT NULL AND d.status IN ('draft','generated','pending_review','edited')) AS drafts
-            FROM externalbusinessreviews r
+            FROM canonical_reviews r
             LEFT JOIN reviewreplydrafts d ON d.review_id = r.id
             WHERE {base_where_sql}
             """,
@@ -2422,8 +2452,9 @@ def operator_mobile_reviews():
         where_sql = " AND ".join(list_conditions)
         cursor.execute(
             f"""
+            {CANONICAL_REVIEWS_CTE}
             SELECT COUNT(DISTINCT r.id) AS total
-            FROM externalbusinessreviews r
+            FROM canonical_reviews r
             LEFT JOIN reviewreplydrafts d ON d.review_id = r.id
             WHERE {where_sql}
             """,
@@ -2432,12 +2463,13 @@ def operator_mobile_reviews():
         filtered_total = int(dict(cursor.fetchone() or {}).get("total") or 0)
         cursor.execute(
             f"""
+            {CANONICAL_REVIEWS_CTE}
             SELECT r.id, r.business_id, r.source, r.rating, r.author_name, r.text,
                    r.response_text, r.response_at, COALESCE(r.published_at, r.created_at) AS published_at,
                    r.created_at AS loaded_at, r.updated_at, b.name AS location_name,
                    d.id AS reply_draft_id, d.generated_text AS reply_draft_text,
                    d.status AS reply_draft_status, d.updated_at AS reply_draft_updated_at
-            FROM externalbusinessreviews r
+            FROM canonical_reviews r
             LEFT JOIN businesses b ON b.id = r.business_id
             LEFT JOIN LATERAL (
                 SELECT id, COALESCE(edited_text, generated_text) AS generated_text, status, updated_at FROM reviewreplydrafts

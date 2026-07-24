@@ -94,15 +94,23 @@ def _content(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
     platform, business_ids = _business_filter(scope)
     cursor.execute(
         """
+        WITH current_plans AS (
+            SELECT id, business_id, title,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY business_id
+                       ORDER BY created_at DESC, updated_at DESC, id
+                   ) AS plan_rank
+            FROM contentplans
+            WHERE (%s OR business_id = ANY(%s))
+        )
         SELECT i.id, i.business_id, b.name AS business_name,
                COALESCE(NULLIF(TRIM(i.theme), ''), 'Элемент контент-плана') AS title,
                COALESCE(NULLIF(TRIM(i.draft_text), ''), NULLIF(TRIM(i.goal), ''), 'Черновик ещё не подготовлен') AS subtitle,
                i.status, i.updated_at, i.plan_id, p.title AS plan_title,
                i.scheduled_for, i.content_type, i.draft_text
         FROM contentplanitems i
-        JOIN contentplans p ON p.id = i.plan_id
+        JOIN current_plans p ON p.id = i.plan_id AND p.plan_rank = 1
         JOIN businesses b ON b.id = i.business_id
-        WHERE (%s OR i.business_id = ANY(%s))
         ORDER BY i.scheduled_for ASC, i.updated_at DESC LIMIT 200
         """,
         (platform, business_ids),
