@@ -144,6 +144,15 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     };
   }, [isDemo]);
 
+  useEffect(() => {
+    if (!open || !isWelcome) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isWelcome, open]);
+
   const locateTarget = useCallback((step: GuidedTourStep, scrollIntoView: boolean) => {
     if (!step.target) {
       setTargetRect(null);
@@ -375,7 +384,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
       ) : null}
 
       {open && isWelcome ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-hidden bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
           <section
             ref={panelRef}
             role="dialog"
@@ -404,7 +413,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                   </div>
                 </div>
 
-                <p className="text-pretty text-base leading-7 text-slate-600 sm:col-span-2 sm:max-w-3xl">
+                <p className="text-pretty text-sm leading-6 text-slate-600 sm:col-span-2 sm:max-w-3xl sm:text-base sm:leading-7">
                   LocalOS помогает владельцу малого бизнеса вести Яндекс Карты, 2ГИС и Google, отвечать на отзывы, готовить посты и новости, смотреть конкурентов рядом и понимать, что влияет на заявки, выручку и средний чек.
                 </p>
               </div>
