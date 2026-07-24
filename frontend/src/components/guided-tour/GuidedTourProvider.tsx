@@ -62,6 +62,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   const [targetEmphasisKey, setTargetEmphasisKey] = useState(0);
   const missingEventStepRef = useRef<string | null>(null);
   const initialRouteSyncedRef = useRef(false);
+  const emphasisTimeoutRef = useRef<number | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const launcherRef = useRef<HTMLButtonElement | null>(null);
   const currentStep = GUIDED_TOUR_STEPS[currentIndex] || GUIDED_TOUR_STEPS[0];
@@ -199,8 +200,20 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
 
   const emphasizeCurrentTarget = () => {
     showStep(currentStep);
-    setTargetEmphasisKey((value) => value + 1);
+    if (emphasisTimeoutRef.current !== null) {
+      window.clearTimeout(emphasisTimeoutRef.current);
+    }
+    emphasisTimeoutRef.current = window.setTimeout(() => {
+      setTargetEmphasisKey((value) => value + 1);
+      emphasisTimeoutRef.current = null;
+    }, prefersReducedMotion ? 0 : 260);
   };
+
+  useEffect(() => () => {
+    if (emphasisTimeoutRef.current !== null) {
+      window.clearTimeout(emphasisTimeoutRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isDemo || !loaded || !open) {
@@ -288,6 +301,10 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     const nextStep = GUIDED_TOUR_STEPS[boundedIndex];
     const saved = await persistProgressSafely(nextStatus, nextStep, nextCompletedSteps);
     if (!saved) return;
+    if (emphasisTimeoutRef.current !== null) {
+      window.clearTimeout(emphasisTimeoutRef.current);
+      emphasisTimeoutRef.current = null;
+    }
     setTargetEmphasisKey(0);
     setCurrentIndex(boundedIndex);
     setCompletedSteps(nextCompletedSteps);
