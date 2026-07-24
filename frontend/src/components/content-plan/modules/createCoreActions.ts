@@ -11,7 +11,7 @@ export const createCoreActions = (scope) => {
     selectedKnowledgeAssertionId, setDraftEdits, setThemeEdits, setDateEdits,
     setBusyItemId, setBulkBusyAction, setActionSummary, selectedItemFilter, setSelectedItemFilter, selectedSignalFilter, selectedPlanTargetKey, selectedItemLocationKey,
     selectedWeekKey, setSelectedWeekKey, dateFromFilter, setDateFromFilter, dateToFilter, setDateToFilter, sortMode, setSortMode,
-    selectedViewPreset, setSelectedViewPreset, lastFocusLocationKey, setLastFocusLocationKey, lastFocusWeekKey, setLastFocusWeekKey, setRecentGeneratedItemId, setSocialPostsByItem,
+    selectedViewPreset, setSelectedViewPreset, lastFocusLocationKey, setLastFocusLocationKey, lastFocusWeekKey, setLastFocusWeekKey, setRecentGeneratedItemId, setDraftGeneratingItemId, setSocialPostsByItem,
     setSocialSummary, setSocialQueueGroups, setSocialChannelReadiness, setSocialApiPreflight, setSocialOpenClawReadiness, setSocialRecommendation, setSocialGoalProgress, setSocialFirstApiProofDossier,
     setSocialRecommendationApproved, setSocialDispatchPreview, setSocialDispatchExecutionReport, socialLaunchPreflight, setSocialLaunchPreflight, setSocialTelegramPublishTargetProbe, setSocialRuntimeStatus, setSocialPostsLoading,
     socialTextEdits, manualPublishRefs, setManualPublishRefs, setSocialPublishRehearsals, setSocialBulkPublishRehearsal, setSocialPreparePreview, socialApprovalPreview, setSocialApprovalPreview,
@@ -462,7 +462,9 @@ export const createCoreActions = (scope) => {
   };
 
   const generateDraft = async (itemId: string) => {
+    const startedAt = Date.now();
     setBusyItemId(itemId);
+    setDraftGeneratingItemId(itemId);
     setError('');
     setActionSummary(null);
     try {
@@ -470,6 +472,8 @@ export const createCoreActions = (scope) => {
         method: 'POST',
         body: JSON.stringify({ language: contentLanguage }),
       });
+      const remaining = Math.max(0, 3800 - (Date.now() - startedAt));
+      if (remaining) await new Promise((resolve) => window.setTimeout(resolve, remaining));
       setCurrentPlan(response.plan || null);
       setDraftEdits((prev) => _removeRecordKeys(prev, [itemId]));
       setRecentGeneratedItemId(itemId);
@@ -479,10 +483,12 @@ export const createCoreActions = (scope) => {
         text_ru: 'Черновик сгенерирован для выбранной публикации.',
         text_en: 'Draft generated for the selected item.',
       });
+      await new Promise((resolve) => window.setTimeout(resolve, 700));
     } catch (draftError) {
       const message = draftError instanceof Error ? draftError.message : (isRu ? 'Не удалось сгенерировать черновик' : 'Could not generate draft');
       setError(message);
     } finally {
+      setDraftGeneratingItemId('');
       setBusyItemId('');
     }
   };

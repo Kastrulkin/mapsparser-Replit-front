@@ -237,6 +237,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [bulkNewsReview, setBulkNewsReview] = useState<BulkNewsReview | null>(null);
   const [bulkActionReview, setBulkActionReview] = useState<BulkActionReview | null>(null);
   const [recentGeneratedItemId, setRecentGeneratedItemId] = useState('');
+  const [draftGeneratingItemId, setDraftGeneratingItemId] = useState('');
   const [socialPostsByItem, setSocialPostsByItem] = useState<Record<string, SocialPost[]>>({});
   const [socialSummary, setSocialSummary] = useState<SocialPostsSummary | null>(null);
   const [socialQueueGroups, setSocialQueueGroups] = useState<SocialQueueGroup[]>([]);
@@ -1730,7 +1731,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     sortMode, setSortMode, selectedViewPreset, setSelectedViewPreset, lastFocusLocationKey, setLastFocusLocationKey, lastFocusWeekKey, setLastFocusWeekKey,
     showAdvancedControls, setShowAdvancedControls, showPlanSetupDetails, setShowPlanSetupDetails, showLearningDetails, setShowLearningDetails, showContextDetails, setShowContextDetails,
     bulkTargetDate, setBulkTargetDate, expandedDuplicateItemId, setExpandedDuplicateItemId, duplicateTargetSelections, setDuplicateTargetSelections, duplicateDateOverrides, setDuplicateDateOverrides,
-    bulkNewsReview, setBulkNewsReview, bulkActionReview, setBulkActionReview, recentGeneratedItemId, setRecentGeneratedItemId, socialPostsByItem, setSocialPostsByItem,
+    bulkNewsReview, setBulkNewsReview, bulkActionReview, setBulkActionReview, recentGeneratedItemId, setRecentGeneratedItemId, draftGeneratingItemId, setDraftGeneratingItemId, socialPostsByItem, setSocialPostsByItem,
     socialSummary, setSocialSummary, socialQueueGroups, setSocialQueueGroups, socialChannelReadiness, setSocialChannelReadiness, socialApiPreflight, setSocialApiPreflight,
     socialOpenClawReadiness, setSocialOpenClawReadiness, socialRecommendation, setSocialRecommendation, socialGoalProgress, setSocialGoalProgress, socialFirstApiProofDossier, setSocialFirstApiProofDossier,
     socialRecommendationApproved, setSocialRecommendationApproved, socialDispatchPreview, setSocialDispatchPreview, socialDispatchExecutionReport, setSocialDispatchExecutionReport, socialMetricsLearningPacket, setSocialMetricsLearningPacket,
@@ -1801,7 +1802,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     selectedNewsCandidates, selectedSocialPosts, selectedSocialNeedsReview, selectedSocialDirtyReviewPosts, selectedSocialCanQueue, selectedSocialCanMarkPublished, selectedSocialQueueApiWarnings, clearSelectedItems,
     rehearseSelectedSocialPosts, prepareSelectedSocialPosts, approveSelectedSocialPosts, queueSelectedSocialPosts, markSelectedSocialPostsPublished, recordSelectedSocialPostAttribution, runSelectedGenerateDrafts, runSelectedCreateNews,
     draftEdits, setDraftEdits, themeEdits, setThemeEdits, dateEdits, setDateEdits, expandedDuplicateItemId, setExpandedDuplicateItemId,
-    duplicateTargetSelections, duplicateDateOverrides, setDuplicateDateOverrides, recentGeneratedItemId, socialPostsByItem, socialTextEdits, setSocialTextEdits, manualPublishRefs,
+    duplicateTargetSelections, duplicateDateOverrides, setDuplicateDateOverrides, recentGeneratedItemId, draftGeneratingItemId, socialPostsByItem, socialTextEdits, setSocialTextEdits, manualPublishRefs,
     setManualPublishRefs, socialPublishRehearsals, setSelectedQueueItemId, setEditorItemId, showSelectedItemDetails, setShowSelectedItemDetails, selectedItemIds, selectedQueueItem,
     editorItem, availableItemLocations, toggleSelectedItem, saveItem, generateDraft, createNews, prepareSocialPosts, approveSocialPostItem,
     saveSocialPostText, queueSocialPostItem, markSocialPostPublished, rehearseSocialPostPublish, markSupervisedPostBlocked, createSupervisedPostTask, copySocialPostText, recordSocialPostAttribution,

@@ -1,15 +1,35 @@
 import React from 'react';
+import { AnimatePresence, motion, type Transition } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
-import { CheckSquare, Globe, MapPinned, MoreHorizontal, Sparkles } from 'lucide-react';
+import { Check, CheckSquare, Globe, MapPinned, MoreHorizontal, Sparkles } from 'lucide-react';
 import { _isSupervisedPlatform, _isSocialPostTextLocked, _socialSupervisedPayload, _socialOpenClawCapabilityLine, _socialSupervisedHandoffStateLabel, _socialSupervisedSafetySummary, _socialPlatformLabel, _socialPublishModeLabel, _socialStatusLabel, _socialStatusClassName, _socialPublishEvidenceClassName, _socialProofQualityLabel, _socialNextActionLabel, _socialItemQueueSummary, _contentTypeLabel, _itemLocationLabel, _planItemStatus, _humanizePlanTitle, _humanizePlanGoal, _sourceKindLabel, _seoViewsLabel, _inputDateValue, _formatPlanItemDate } from './helpers';
+
+const draftSpring: Transition = { type: 'spring', duration: 0.3, bounce: 0 };
+
+const DraftWorkIndicator = ({ isRu, ready }) => {
+  const [progress, setProgress] = React.useState(12);
+  React.useEffect(() => {
+    if (ready) { setProgress(100); return; }
+    const interval = window.setInterval(() => setProgress((value) => Math.min(92, value + 4)), 220);
+    return () => window.clearInterval(interval);
+  }, [ready]);
+  const stage = progress < 38
+    ? (isRu ? 'Изучаем тему и данные бизнеса' : 'Studying the topic and business data')
+    : progress < 72
+      ? (isRu ? 'Собираем полезный текст' : 'Building useful copy')
+      : progress < 100
+        ? (isRu ? 'Проверяем тон и факты' : 'Checking tone and facts')
+        : (isRu ? 'Текст готов к вашей проверке' : 'Copy is ready for your review');
+  return <motion.div aria-live="polite" initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} transition={draftSpring} className={`mt-3 rounded-2xl px-4 py-3 shadow-[0_0_0_1px_rgba(148,163,184,0.16),0_12px_32px_rgba(15,23,42,0.06)] transition-[background-color,box-shadow] ${ready ? 'bg-emerald-50' : 'bg-orange-50'}`}><div className="flex items-center gap-3"><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${ready ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}><AnimatePresence initial={false} mode="popLayout">{ready ? <motion.span key="done" initial={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }} exit={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} transition={draftSpring}><Check className="h-5 w-5" /></motion.span> : <motion.span key="work" initial={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }} exit={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} transition={draftSpring}><Sparkles className="h-5 w-5" /></motion.span>}</AnimatePresence></span><div className="min-w-0 flex-1"><div className="text-sm font-semibold text-slate-950">{ready ? (isRu ? 'Готово — можно редактировать' : 'Ready to edit') : (isRu ? 'LocalOS готовит черновик' : 'LocalOS is preparing the draft')}</div><div className="mt-1 text-xs text-slate-600">{stage}</div></div><b className={`tabular-nums text-xs ${ready ? 'text-emerald-700' : 'text-orange-700'}`}>{progress}%</b></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/80"><motion.div className={`h-full rounded-full ${ready ? 'bg-emerald-500' : 'bg-orange-500'}`} animate={{ width: `${progress}%` }} transition={draftSpring} /></div></motion.div>;
+};
 
 export const QueueItems = ({ scope }) => {
   const {
     isRu, draftEdits, setDraftEdits, themeEdits, setThemeEdits, dateEdits, setDateEdits, busyItemId,
-    expandedDuplicateItemId, setExpandedDuplicateItemId, duplicateTargetSelections, duplicateDateOverrides, setDuplicateDateOverrides, recentGeneratedItemId, socialPostsByItem, socialTextEdits,
+    expandedDuplicateItemId, setExpandedDuplicateItemId, duplicateTargetSelections, duplicateDateOverrides, setDuplicateDateOverrides, recentGeneratedItemId, draftGeneratingItemId, socialPostsByItem, socialTextEdits,
     setSocialTextEdits, manualPublishRefs, setManualPublishRefs, socialPublishRehearsals, socialBusyAction, setSelectedQueueItemId, setEditorItemId, showSelectedItemDetails,
     setShowSelectedItemDetails, selectedItemIds, readiness, isNetworkMode, visibleItems, selectedQueueItem, editorItem, availableItemLocations,
     toggleSelectedItem, saveItem, generateDraft, createNews, prepareSocialPosts, approveSocialPostItem, saveSocialPostText, queueSocialPostItem,
@@ -160,7 +180,9 @@ export const QueueItems = ({ scope }) => {
                           <h5 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">
                             {_humanizePlanTitle(item, isRu)}
                           </h5>
-                          {recentGeneratedItemId === item.id ? (
+                          {draftGeneratingItemId === item.id ? (
+                            <DraftWorkIndicator isRu={isRu} ready={recentGeneratedItemId === item.id && hasDraft} />
+                          ) : recentGeneratedItemId === item.id ? (
                             <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
                               {isRu
                                 ? 'Черновик сгенерирован именно для этой темы.'

@@ -308,15 +308,15 @@ export const TelegramControlPage = () => {
 
   useEffect(() => { if (tab === 'operator') void loadOperatorHistory(); }, [tab, scope?.kind, scope?.id]);
 
-  const loadModule = async (moduleKey = module) => {
+  const loadModule = async (moduleKey = module, quietly = false) => {
     if (!moduleKey || preview) return;
-    setModuleLoading(true);
+    if (!quietly) setModuleLoading(true);
     const params = scopeQuery(scope);
     await fetch(`/api/operator/mobile/modules/${moduleKey}?${params.toString()}`, { headers: authHeaders() })
       .then(readJson<ModuleData>)
       .then((result) => { setModuleData(result); setError(''); })
       .catch((requestError) => setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить раздел.'))
-      .finally(() => setModuleLoading(false));
+      .finally(() => { if (!quietly) setModuleLoading(false); });
   };
 
   useEffect(() => {
@@ -339,12 +339,17 @@ export const TelegramControlPage = () => {
 
   const generateContentDraft = async (item: ModuleItem) => {
     if (!item.id || preview) return;
+    const startedAt = Date.now();
     setModuleActionBusy(item.id);
     try {
       await fetch(`/api/operator/mobile/content/items/${item.id}/generate-draft`, {
         method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null }),
       }).then(readJson<{ plan?: unknown }>);
-      await loadModule('content'); setError('');
+      const remaining = Math.max(0, 3800 - (Date.now() - startedAt));
+      if (remaining) await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
+      await loadModule('content', true);
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 700));
+      setError('');
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось подготовить черновик.'); }
     finally { setModuleActionBusy(''); }
   };
@@ -356,7 +361,7 @@ export const TelegramControlPage = () => {
       await fetch(`/api/operator/mobile/content/items/${item.id}`, {
         method: 'PUT', headers: authHeaders(), body: JSON.stringify({ ...values, scope_type: scope?.kind, scope_id: scope?.id || null }),
       }).then(readJson<{ plan?: unknown }>);
-      await loadModule('content'); setError('');
+      await loadModule('content', true); setError('');
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить контент.'); }
     finally { setModuleActionBusy(''); }
   };
@@ -686,12 +691,23 @@ const ContentCalendar = ({ items, open }: { items: ModuleItem[]; open: (id: stri
   return <div className="space-y-3">{Object.entries(groups).map(([date, dayItems]) => <section key={date} className="rounded-[22px] bg-white/[0.035] p-3 ring-1 ring-inset ring-white/[0.06]"><div className="flex items-center gap-2 px-1 pb-2"><CalendarDays className="h-4 w-4 text-primary" /><b className="text-balance text-sm capitalize">{contentDateLabel(date, true)}</b></div>{dayItems.map((item) => <button type="button" key={item.id} onClick={() => open(item.id || '')} className="mt-1 flex min-h-14 w-full items-center gap-3 rounded-[16px] bg-black/20 px-3 text-left transition-transform active:scale-[0.96]"><span className={`h-2.5 w-2.5 rounded-full ${item.draft_text ? 'bg-emerald-400' : 'bg-amber-400'}`} /><span className="min-w-0 flex-1"><b className="block truncate text-xs">{item.title}</b><small className="block truncate text-zinc-600">{item.draft_text ? 'Черновик готов' : 'Нужно подготовить текст'}</small></span><ChevronRight className="h-4 w-4 text-zinc-700" /></button>)}</section>)}</div>;
 };
 
+const ContentDraftProgress = ({ ready }: { ready: boolean }) => {
+  const [progress, setProgress] = useState(14);
+  useEffect(() => {
+    if (ready) { setProgress(100); return; }
+    const interval = window.setInterval(() => setProgress((value) => Math.min(92, value + 4)), 220);
+    return () => window.clearInterval(interval);
+  }, [ready]);
+  const stage = progress < 38 ? 'Изучаем тему и услуги' : progress < 72 ? 'Собираем полезный текст' : progress < 100 ? 'Проверяем тон и факты' : 'Черновик готов';
+  return <motion.div aria-live="polite" initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} transition={spring} className={`rounded-[18px] p-4 ring-1 ring-inset transition-[background-color,box-shadow] ${ready ? 'bg-emerald-500/[0.08] ring-emerald-400/15' : 'bg-primary/[0.08] ring-primary/20'}`}><div className="flex items-center gap-3"><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-[14px] ${ready ? 'bg-emerald-400/15 text-emerald-300' : 'bg-primary/15 text-primary'}`}><AnimatePresence initial={false} mode="popLayout">{ready ? <motion.span key="done" initial={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }} exit={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} transition={spring}><Check className="h-5 w-5" /></motion.span> : <motion.span key="work" initial={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }} exit={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} transition={spring}><Sparkles className="h-5 w-5" /></motion.span>}</AnimatePresence></span><div className="min-w-0 flex-1"><b className="block text-balance text-sm">{ready ? 'Готово — осталось проверить' : 'LocalOS готовит черновик'}</b><small className="mt-1 block text-pretty text-zinc-500">{stage}</small></div><b className={`tabular-nums text-xs ${ready ? 'text-emerald-300' : 'text-primary'}`}>{progress}%</b></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-black/20"><motion.div className={`h-full rounded-full ${ready ? 'bg-emerald-400' : 'bg-primary'}`} animate={{ width: `${progress}%` }} transition={spring} /></div></motion.div>;
+};
+
 const ContentItemCard = ({ item, editing, busy, setEditing, generate, update }: { item: ModuleItem; editing: boolean; busy: boolean; setEditing: () => void; generate: (item: ModuleItem) => Promise<void>; update: (values: { theme: string; draft_text: string; scheduled_for: string }) => Promise<void> }) => {
   const [theme, setTheme] = useState(item.title || '');
   const [draft, setDraft] = useState(item.draft_text || '');
   const [scheduled, setScheduled] = useState(contentDateKey(item.scheduled_for));
   useEffect(() => { setTheme(item.title || ''); setDraft(item.draft_text || ''); setScheduled(contentDateKey(item.scheduled_for)); }, [item.title, item.draft_text, item.scheduled_for]);
-  return <article className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><small className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary">{contentDateLabel(item.scheduled_for)} · {item.content_type || 'публикация'}</small><b className="mt-1 block text-sm leading-5">{item.title}</b><small className="mt-1 block truncate text-zinc-600">{item.business_name}</small></div><StatusPill value={item.status} /></div>{editing ? <div className="mt-4 space-y-2"><input value={theme} onChange={(event) => setTheme(event.target.value)} aria-label="Тема публикации" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><input type="date" value={scheduled} onChange={(event) => setScheduled(event.target.value)} aria-label="Дата публикации" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm text-zinc-300 outline-none ring-1 ring-inset ring-white/[0.07]" /><textarea value={draft} onChange={(event) => setDraft(event.target.value)} aria-label="Текст публикации" rows={6} className="w-full rounded-[14px] bg-black/20 p-3 text-sm leading-6 outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" />{draft.trim() ? null : <button type="button" disabled={busy} onClick={() => void generate(item)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-primary/15 px-3 text-sm font-semibold text-primary ring-1 ring-inset ring-primary/20 transition-transform active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <WandSparkles className="h-4 w-4" />}{busy ? 'Готовим черновик…' : 'Создать черновик'}</button>}<button type="button" disabled={busy} onClick={() => void update({ theme, draft_text: draft, scheduled_for: scheduled })} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-primary text-xs font-semibold transition-transform active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}Сохранить</button></div> : <><p className="mt-3 line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{item.draft_text || item.subtitle}</p>{item.draft_text ? <button type="button" disabled={busy} onClick={setEditing} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-white/[0.055] text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] transition-transform active:scale-[0.96] disabled:opacity-50"><Pencil className="h-4 w-4" />Редактировать</button> : <div className="mt-4 grid grid-cols-2 gap-2"><button type="button" disabled={busy} onClick={setEditing} className="flex min-h-11 items-center justify-center gap-2 rounded-[14px] bg-white/[0.05] px-3 text-xs font-semibold text-zinc-300 ring-1 ring-inset ring-white/[0.07] transition-transform active:scale-[0.96] disabled:opacity-50"><Pencil className="h-4 w-4" />Изменить</button><button type="button" disabled={busy} onClick={() => void generate(item)} className="flex min-h-11 items-center justify-center gap-2 rounded-[14px] bg-primary/15 px-3 text-xs font-semibold text-primary ring-1 ring-inset ring-primary/20 transition-transform active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <WandSparkles className="h-4 w-4" />}Черновик</button></div>}</>}</article>;
+  return <article className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><small className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary">{contentDateLabel(item.scheduled_for)} · {item.content_type || 'публикация'}</small><b className="mt-1 block text-sm leading-5">{item.title}</b><small className="mt-1 block truncate text-zinc-600">{item.business_name}</small></div><StatusPill value={item.status} /></div>{editing ? <div className="mt-4 space-y-2"><input value={theme} onChange={(event) => setTheme(event.target.value)} aria-label="Тема публикации" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><input type="date" value={scheduled} onChange={(event) => setScheduled(event.target.value)} aria-label="Дата публикации" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm text-zinc-300 outline-none ring-1 ring-inset ring-white/[0.07]" /><textarea value={draft} onChange={(event) => setDraft(event.target.value)} aria-label="Текст публикации" rows={6} className="w-full rounded-[14px] bg-black/20 p-3 text-sm leading-6 outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" />{busy ? <ContentDraftProgress ready={Boolean(draft.trim())} /> : draft.trim() ? null : <button type="button" onClick={() => void generate(item)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-primary/15 px-3 text-sm font-semibold text-primary ring-1 ring-inset ring-primary/20 transition-transform active:scale-[0.96]"><WandSparkles className="h-4 w-4" />Создать черновик</button>}<button type="button" disabled={busy} onClick={() => void update({ theme, draft_text: draft, scheduled_for: scheduled })} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-primary text-xs font-semibold transition-transform active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}Сохранить</button></div> : <><p className="mt-3 line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{item.draft_text || item.subtitle}</p>{item.draft_text ? <button type="button" disabled={busy} onClick={setEditing} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-white/[0.055] text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.08] transition-transform active:scale-[0.96] disabled:opacity-50"><Pencil className="h-4 w-4" />Редактировать</button> : <div className="mt-4 grid grid-cols-2 gap-2"><button type="button" disabled={busy} onClick={setEditing} className="flex min-h-11 items-center justify-center gap-2 rounded-[14px] bg-white/[0.05] px-3 text-xs font-semibold text-zinc-300 ring-1 ring-inset ring-white/[0.07] transition-transform active:scale-[0.96] disabled:opacity-50"><Pencil className="h-4 w-4" />Изменить</button><button type="button" disabled={busy} onClick={() => { setEditing(); void generate(item); }} className="flex min-h-11 items-center justify-center gap-2 rounded-[14px] bg-primary/15 px-3 text-xs font-semibold text-primary ring-1 ring-inset ring-primary/20 transition-transform active:scale-[0.96] disabled:opacity-50"><WandSparkles className="h-4 w-4" />Черновик</button></div>}</>}</article>;
 };
 
 const ServicesModule = ({ scope, items, busy, update, reload }: { scope?: Scope; items: ModuleItem[]; busy: string; update: (item: ModuleItem, values: { name: string; description: string; price: string; category: string }) => Promise<void>; reload: () => Promise<void> }) => {
