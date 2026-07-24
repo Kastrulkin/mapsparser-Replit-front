@@ -8,4 +8,5 @@ def test_mobile_reviews_merge_parser_duplicates_and_keep_existing_response():
     assert "lower(btrim(coalesce(source_reviews.text, '')))" in normalized
     assert "coalesce(source_reviews.published_at::date, source_reviews.created_at::date)" in normalized
     assert "first_value(nullif(btrim(source_reviews.response_text), ''))" in normalized
+    assert "not like 'html_%%'" in normalized
     assert "where canonical_rank = 1" in normalized

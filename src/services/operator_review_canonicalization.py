@@ -27,7 +27,7 @@ WITH review_candidates AS (
                             source_reviews.rating,
                             LOWER(BTRIM(COALESCE(source_reviews.text, ''))),
                             COALESCE(source_reviews.published_at::date, source_reviews.created_at::date)
-               ORDER BY CASE WHEN COALESCE(source_reviews.external_review_id, '') NOT LIKE 'html_%' THEN 0 ELSE 1 END,
+               ORDER BY CASE WHEN COALESCE(source_reviews.external_review_id, '') NOT LIKE 'html_%%' THEN 0 ELSE 1 END,
                         CASE WHEN LOWER(COALESCE(source_reviews.author_name, '')) NOT IN ('', 'анонимный пользователь', 'anon') THEN 0 ELSE 1 END,
                         source_reviews.updated_at DESC NULLS LAST,
                         source_reviews.id
