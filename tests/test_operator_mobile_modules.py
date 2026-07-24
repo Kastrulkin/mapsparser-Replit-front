@@ -79,6 +79,27 @@ def test_finance_module_is_scope_filtered_and_real():
     assert result["available_actions"] == [{"key": "finance.sales_import", "label": "Загрузить продажи"}]
 
 
+def test_partnerships_module_exposes_mobile_work_actions():
+    cursor = ModuleCursor("prospectingleads", [
+        {"id": "lead-1", "business_id": "b-1", "title": "Партнёр", "status": "in_progress"},
+        {"id": "lead-2", "business_id": "b-2", "title": "Чужой партнёр", "status": "in_progress"},
+    ])
+
+    result = list_operator_mobile_module(
+        cursor,
+        module="partnerships",
+        scope={"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+    )
+
+    assert result["status"] == "available"
+    assert result["counts"]["total"] == 1
+    assert [item["key"] for item in result["available_actions"]] == [
+        "partnerships.search",
+        "partnerships.draft",
+        "partnerships.send_preview",
+    ]
+
+
 class AnalyticsCursor:
     def __init__(self):
         self.rows = []

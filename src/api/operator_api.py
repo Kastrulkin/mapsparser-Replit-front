@@ -90,7 +90,7 @@ def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
         {"key": "services", "label": "Услуги", "group": "more", "status": "available"},
         {"key": "finance", "label": "Финансы", "group": "more", "status": "available"},
         {"key": "analytics", "label": "Аналитика", "group": "more", "status": "read_only"},
-        {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "read_only"},
+        {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "available"},
         {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "read_only"},
         {"key": "settings", "label": "Настройки", "group": "more", "status": "available"},
     ]

@@ -7,6 +7,7 @@ import {
   Sparkles, Star, Trash2, TrendingDown, TrendingUp, Upload, Users, WandSparkles,
 } from 'lucide-react';
 import localOsLogo from '@/assets/images/logo.png';
+import { PartnershipsMobileModule } from '@/components/telegram/PartnershipsMobileModule';
 
 type Scope = {
   kind: 'platform' | 'network' | 'business';
@@ -626,7 +627,7 @@ type ModuleScreenProps = {
 const ModuleScreen = ({ module, scope, data, loading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTasks, openSettings, back }: ModuleScreenProps) => {
   const content = moduleNames[module] || ['Раздел', 'Рабочая очередь LocalOS.'];
   return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
-    {loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'finance' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} openSettings={openSettings} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <GenericModule module={module} items={data.items || []} />}
+    {loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'finance' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} openSettings={openSettings} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <GenericModule module={module} items={data.items || []} />}
   </Screen>;
 };
 

@@ -379,6 +379,11 @@ def list_operator_mobile_module(cursor: Any, *, module: str, scope: dict[str, An
         ],
         "cards": [{"key": "cards.schedule.update", "label": "Настроить график"}],
         "finance": [{"key": "finance.sales_import", "label": "Загрузить продажи"}],
+        "partnerships": [
+            {"key": "partnerships.search", "label": "Найти кандидатов"},
+            {"key": "partnerships.draft", "label": "Подготовить предложение"},
+            {"key": "partnerships.send_preview", "label": "Проверить отправку"},
+        ],
     }.get(module, [])
     return {
         "status": "available" if available_actions else "read_only",
