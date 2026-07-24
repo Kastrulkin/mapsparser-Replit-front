@@ -54,9 +54,9 @@ export const GUIDED_TOUR_STEPS: GuidedTourStep[] = [
     key: 'progress-nav',
     chapter: 'network-pulse',
     chapterTitle: 'Скрепка LocalOS',
-    title: 'Прогресс собирает результаты',
-    body: 'Тут видно, что уже сделано, где есть риск и какое действие даст наибольший эффект.',
-    route: '/dashboard/operator',
+    title: 'Прогресс бизнеса',
+    body: 'Здесь LocalOS собирает картину развития бизнеса: состояние карт и репутации, контента, партнёрств, автоматизации и допродаж. По каждому направлению видно, какие ступени уже пройдены, где есть проблема и какой следующий шаг даст практический результат.',
+    route: '/dashboard/progress',
     target: 'nav-progress',
   },
   {
