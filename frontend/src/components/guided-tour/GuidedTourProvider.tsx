@@ -59,6 +59,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   const [targetMissing, setTargetMissing] = useState(false);
   const [progressError, setProgressError] = useState<string | null>(null);
   const [welcomeTransitioning, setWelcomeTransitioning] = useState(false);
+  const [targetEmphasisKey, setTargetEmphasisKey] = useState(0);
   const missingEventStepRef = useRef<string | null>(null);
   const initialRouteSyncedRef = useRef(false);
   const panelRef = useRef<HTMLElement | null>(null);
@@ -196,6 +197,11 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     window.setTimeout(() => locateTarget(step, scrollIntoView), 80);
   }, [locateTarget, location.pathname, location.search, navigate]);
 
+  const emphasizeCurrentTarget = () => {
+    showStep(currentStep);
+    setTargetEmphasisKey((value) => value + 1);
+  };
+
   useEffect(() => {
     if (!isDemo || !loaded || !open) {
       setTargetRect(null);
@@ -282,6 +288,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     const nextStep = GUIDED_TOUR_STEPS[boundedIndex];
     const saved = await persistProgressSafely(nextStatus, nextStep, nextCompletedSteps);
     if (!saved) return;
+    setTargetEmphasisKey(0);
     setCurrentIndex(boundedIndex);
     setCompletedSteps(nextCompletedSteps);
     setStatus(nextStatus);
@@ -365,13 +372,37 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     <>
       {children}
       {targetRect && open ? (
-        <div
-          className="pointer-events-none fixed z-[65] rounded-lg border-2 border-orange-500 shadow-[0_0_0_5px_rgba(249,115,22,0.16)] transition-[top,left,width,height] duration-200 motion-reduce:transition-none"
+        <motion.div
+          key={`${currentStep.key}-${targetEmphasisKey}`}
+          className="pointer-events-none fixed z-[65] rounded-lg border-2 border-orange-500 transition-[top,left,width,height] duration-200 motion-reduce:transition-none"
           style={{
             top: Math.max(4, targetRect.top - 5),
             left: Math.max(4, targetRect.left - 5),
             width: targetRect.width + 10,
             height: targetRect.height + 10,
+          }}
+          initial={false}
+          animate={targetEmphasisKey > 0
+            ? prefersReducedMotion
+              ? { boxShadow: '0 0 0 8px rgba(249,115,22,0.32)' }
+              : {
+                boxShadow: [
+                  '0 0 0 5px rgba(249,115,22,0.16)',
+                  '0 0 0 11px rgba(249,115,22,0.42)',
+                  '0 0 0 5px rgba(249,115,22,0.16)',
+                  '0 0 0 11px rgba(249,115,22,0.42)',
+                  '0 0 0 5px rgba(249,115,22,0.16)',
+                  '0 0 0 11px rgba(249,115,22,0.42)',
+                  '0 0 0 5px rgba(249,115,22,0.16)',
+                ],
+              }
+            : { boxShadow: '0 0 0 5px rgba(249,115,22,0.16)' }}
+          transition={{
+            boxShadow: {
+              duration: prefersReducedMotion ? 0 : 1.35,
+              times: [0, 0.12, 0.28, 0.4, 0.56, 0.68, 1],
+              ease: 'easeInOut',
+            },
           }}
           aria-hidden="true"
         />
@@ -612,9 +643,9 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
           ) : (
             <>
               {currentStep.target ? (
-                <Button type="button" variant="outline" className="mt-4 w-full gap-2" onClick={() => showStep(currentStep)}>
+                <Button type="button" variant="outline" className="mt-4 w-full gap-2" onClick={emphasizeCurrentTarget}>
                   <Sparkles className="h-4 w-4" />
-                  Показать на странице
+                  Подсветить на странице
                 </Button>
               ) : null}
               <div className="mt-3 flex gap-2">
