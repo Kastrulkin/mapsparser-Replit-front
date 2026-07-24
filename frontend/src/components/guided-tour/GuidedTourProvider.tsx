@@ -381,7 +381,9 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             width: targetRect.width + 10,
             height: targetRect.height + 10,
           }}
-          initial={false}
+          initial={targetEmphasisKey > 0 && !prefersReducedMotion
+            ? { boxShadow: '0 0 0 5px rgba(249,115,22,0.16)' }
+            : false}
           animate={targetEmphasisKey > 0
             ? prefersReducedMotion
               ? { boxShadow: '0 0 0 8px rgba(249,115,22,0.32)' }
