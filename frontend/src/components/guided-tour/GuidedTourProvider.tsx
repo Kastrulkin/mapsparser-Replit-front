@@ -199,7 +199,11 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   }, [locateTarget, location.pathname, location.search, navigate]);
 
   const emphasizeCurrentTarget = () => {
-    showStep(currentStep);
+    const targetLocated = locateTarget(currentStep, true);
+    if (!targetLocated) {
+      showStep(currentStep);
+      return;
+    }
     if (emphasisTimeoutRef.current !== null) {
       window.clearTimeout(emphasisTimeoutRef.current);
     }
