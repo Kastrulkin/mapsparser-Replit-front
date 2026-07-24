@@ -84,6 +84,26 @@ REVIEW_SIGNAL_SCHEMA: dict[str, Any] = {
     },
     "required": ["signals", "themes"],
 }
+FINANCE_SALES_RECOGNITION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "transactions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "transaction_date": {"type": "string"},
+                    "amount": {"type": "number"},
+                    "title": {"type": "string"},
+                    "sale_type": {"type": "string"},
+                    "notes": {"type": "string"},
+                },
+                "required": ["transaction_date", "amount", "title", "sale_type"],
+            },
+        },
+    },
+    "required": ["transactions"],
+}
 LEAD_AUDIT_ENRICHMENT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -171,6 +191,17 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
     "average_ticket_matrix": _task(
         "average_ticket_matrix", data_class="financial_sensitive", allow_text_fallback=True,
         fallback_data_class="financial_aggregated", pipeline_stage="copy",
+    ),
+    "finance_sales_recognition": _task(
+        "finance_sales_recognition",
+        data_class="financial_sensitive",
+        response_kind="json",
+        schema=FINANCE_SALES_RECOGNITION_SCHEMA,
+        max_tokens=2500,
+        temperature=0.0,
+        timeout=45,
+        prompt_version="finance_sales_recognition_v1",
+        pipeline_stage="analysis",
     ),
     "average_ticket_analysis": _task(
         "average_ticket_analysis", provider="deepseek", profile="deepseek_reasoning",

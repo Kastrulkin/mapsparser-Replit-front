@@ -57,6 +57,7 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
         "agent_custom_message_draft",
         "knowledge_semantic_analysis",
         "average_ticket_matrix",
+        "finance_sales_recognition",
         "generic_russian_analysis",
         *deepseek_tasks,
     }
@@ -65,6 +66,16 @@ def test_registry_has_an_explicit_provider_for_every_supported_task():
     assert set(definitions) == expected_tasks
     assert {key for key, item in definitions.items() if item.primary_provider == "deepseek"} == deepseek_tasks
     assert all(item.primary_provider in {"gigachat", "deepseek"} for item in definitions.values())
+
+
+def test_finance_sales_recognition_is_registered_as_sensitive_json():
+    definition = get_task_definition("finance_sales_recognition")
+
+    assert definition is not None
+    assert definition.primary_provider == "gigachat"
+    assert definition.data_class == "financial_sensitive"
+    assert definition.response_kind == "json"
+    assert definition.response_schema["required"] == ["transactions"]
 
 
 def test_all_gigachat_tasks_default_to_max(monkeypatch):
