@@ -172,6 +172,7 @@ const AreaRow = ({
     <div className="border-b border-slate-200 last:border-b-0">
       <button
         type="button"
+        data-tour-target={`progress-area-${area.key}`}
         onClick={onToggle}
         aria-expanded={expanded}
         className="grid w-full gap-4 px-4 py-5 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-inset md:grid-cols-[minmax(220px,0.9fr)_minmax(260px,1.4fr)_minmax(180px,0.7fr)_44px] md:items-center md:px-6"
@@ -508,7 +509,7 @@ export const ProgressPage = () => {
       ) : null}
 
       <section className="grid gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.55fr)] lg:p-6">
-        <div>
+        <div data-tour-target="progress-summary">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Подтверждённый путь</div>
           <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-2">
             <div className="text-3xl font-semibold tabular-nums text-slate-950">
@@ -526,7 +527,7 @@ export const ProgressPage = () => {
           </div>
         </div>
 
-        <div className="border-t border-slate-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+        <div className="border-t border-slate-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0" data-tour-target="progress-focus-action">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Сейчас важнее всего</div>
           <h2 className="mt-2 text-xl font-semibold text-slate-950">{overview.focus_action?.title || 'Продолжайте работу'}</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">{overview.focus_action?.reason}</p>
@@ -550,7 +551,7 @@ export const ProgressPage = () => {
       </section>
 
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-4 py-4 md:px-6">
+        <div className="border-b border-slate-200 px-4 py-4 md:px-6" data-tour-target="progress-areas">
           <h2 className="text-lg font-semibold text-slate-950">Направления роста</h2>
           <p className="mt-1 text-sm text-slate-600">Откройте направление, чтобы увидеть сделанное и следующий шаг.</p>
         </div>
@@ -670,7 +671,7 @@ export const ProgressPage = () => {
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-6" data-tour-target="progress-recent-results">
         <div className="flex items-center gap-2">
           <Clock3 className="h-5 w-5 text-slate-500" />
           <h2 className="text-lg font-semibold text-slate-950">Недавние результаты</h2>
