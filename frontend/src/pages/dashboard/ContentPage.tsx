@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
+import { AnimatePresence, motion, type Transition } from 'framer-motion';
 import {
   AlertCircle,
   CalendarDays,
@@ -562,6 +563,19 @@ const placementTargetUrl = (post: SocialPost) => String(
   || '',
 ).trim();
 
+const draftFeedbackSpring: Transition = { type: 'spring', duration: 0.3, bounce: 0 };
+
+const DraftGenerationFeedback = ({ ready }: { ready: boolean }) => {
+  const [progress, setProgress] = useState(12);
+  useEffect(() => {
+    if (ready) { setProgress(100); return; }
+    const interval = window.setInterval(() => setProgress((value) => Math.min(92, value + 4)), 220);
+    return () => window.clearInterval(interval);
+  }, [ready]);
+  const stage = progress < 38 ? 'Изучаем тему и данные бизнеса' : progress < 72 ? 'Собираем полезный текст' : progress < 100 ? 'Проверяем тон и факты' : 'Текст готов к вашей проверке';
+  return <motion.div aria-live="polite" initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} transition={draftFeedbackSpring} className={`rounded-2xl px-4 py-3 shadow-[0_0_0_1px_rgba(148,163,184,0.16),0_12px_32px_rgba(15,23,42,0.06)] transition-[background-color,box-shadow] ${ready ? 'bg-emerald-50' : 'bg-orange-50'}`}><div className="flex items-center gap-3"><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${ready ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}><AnimatePresence initial={false} mode="popLayout">{ready ? <motion.span key="done" initial={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }} exit={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} transition={draftFeedbackSpring}><Check className="h-5 w-5" /></motion.span> : <motion.span key="work" initial={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }} exit={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }} transition={draftFeedbackSpring}><Sparkles className="h-5 w-5" /></motion.span>}</AnimatePresence></span><div className="min-w-0 flex-1"><div className="text-sm font-semibold text-slate-950">{ready ? 'Готово — можно редактировать' : 'LocalOS готовит черновик'}</div><div className="mt-1 text-xs text-slate-600">{stage}</div></div><b className={`tabular-nums text-xs ${ready ? 'text-emerald-700' : 'text-orange-700'}`}>{progress}%</b></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/80"><motion.div className={`h-full rounded-full ${ready ? 'bg-emerald-500' : 'bg-orange-500'}`} animate={{ width: `${progress}%` }} transition={draftFeedbackSpring} /></div></motion.div>;
+};
+
 export function ContentPage() {
   const navigate = useNavigate();
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardOutletContext>();
@@ -572,6 +586,7 @@ export function ContentPage() {
   const [socialSummary, setSocialSummary] = useState<SocialSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [busyAction, setBusyAction] = useState('');
+  const [draftGenerationReady, setDraftGenerationReady] = useState(false);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
   const [view, setView] = useState<CalendarView>(() => {
@@ -975,7 +990,9 @@ export function ContentPage() {
 
   const generateSelectedDraft = async () => {
     if (!selectedItem) return;
+    const startedAt = Date.now();
     setBusyAction('generate-draft');
+    setDraftGenerationReady(false);
     setError('');
     setActionMessage('');
     try {
@@ -983,6 +1000,8 @@ export function ContentPage() {
         method: 'POST',
         body: JSON.stringify({ language: 'ru' }),
       });
+      const remaining = Math.max(0, 3800 - (Date.now() - startedAt));
+      if (remaining) await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
       const plan = response.plan || null;
       setCurrentPlan(plan);
       if (plan?.id) await loadSocialPosts(plan.id);
@@ -998,12 +1017,15 @@ export function ContentPage() {
         setActionMessage('');
         setError(String(generation.message || 'Не удалось написать текст. Попробуйте ещё раз.'));
       } else {
+        setDraftGenerationReady(true);
         setActionMessage(String(generation.message || 'Текст готов. Проверьте его и утвердите публикацию.'));
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 700));
       }
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : 'Не удалось сгенерировать текст');
     } finally {
       setBusyAction('');
+      setDraftGenerationReady(false);
     }
   };
 
@@ -2090,6 +2112,7 @@ export function ContentPage() {
                       )}
                     </Button>
                   </div>
+                  {busyAction === 'generate-draft' ? <DraftGenerationFeedback ready={draftGenerationReady} /> : null}
                   <Textarea
                     value={draftEdits[item.id] ?? item.draft_text ?? ''}
                     onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraftEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
