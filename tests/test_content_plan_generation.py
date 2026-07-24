@@ -1628,6 +1628,48 @@ def test_content_plan_generator_skips_foreign_brand_keywords_and_keeps_views():
     assert plan["items"][0]["seo_views"] == 1200
 
 
+def test_school_content_plan_rejects_beauty_demand_and_test_sales_signal():
+    context = {
+        "business": {
+            "name": "Intellectum Space and School",
+            "city": "Батуми",
+            "business_type": "school",
+            "categories": '["дополнительное образование"]',
+        },
+        "services": [
+            {"id": "svc-robotics", "name": "Робототехника для детей", "category": "Обучение"},
+        ],
+        "seo_keywords": [
+            {"keyword": "основы ухода за кожей", "views": 2390, "category": "other"},
+            {"keyword": "стиль афро", "views": 1095, "category": "other"},
+        ],
+        "sales_signals": [
+            {"title": "smoke", "transaction_id": "tx-smoke"},
+        ],
+        "audit_signals": [],
+    }
+
+    plan = build_content_plan_skeleton(
+        context,
+        period_days=30,
+        density="standard",
+        content_mix={
+            "templates": False,
+            "services": True,
+            "seo": True,
+            "sales": True,
+            "audit": False,
+            "seasonal": True,
+        },
+    )
+
+    generated_text = " ".join(str(item.get("theme") or "").lower() for item in plan["items"])
+    assert "ухода за кожей" not in generated_text
+    assert "стиль афро" not in generated_text
+    assert "smoke" not in generated_text
+    assert "робототехника для детей" in generated_text
+
+
 def test_content_plan_generator_prioritizes_weak_audit_search_zone():
     context = {
         "business": {"name": "LocalOS Beauty", "city": "Кудрово"},

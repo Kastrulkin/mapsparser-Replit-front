@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from core.content_plan_templates import build_template_candidates, get_content_plan_template_profile
+from core.seo_keywords import BEAUTY_BUSINESS_TYPES, is_beauty_keyword
 
 
 _CONTENT_TYPE_TITLES = {
@@ -171,6 +172,19 @@ def _is_foreign_brand_keyword(keyword_text: str, business_name: str) -> bool:
     if normalized_business and (normalized_keyword in normalized_business or normalized_business in normalized_keyword):
         return False
     return normalized_keyword in {_normalize_keyword_text(item) for item in _COMPETITOR_BRAND_KEYWORDS}
+
+
+def _is_incompatible_vertical_keyword(keyword_text: str, category: str, business: dict[str, Any]) -> bool:
+    """Reject an obviously foreign vertical even when upstream ranking is stale."""
+    business_type = _normalize_keyword_text(business.get("business_type"))
+    if not business_type or business_type in BEAUTY_BUSINESS_TYPES:
+        return False
+    return is_beauty_keyword(keyword_text, category)
+
+
+def _is_test_sales_signal(value: Any) -> bool:
+    normalized = _normalize_keyword_text(value)
+    return normalized in {"smoke", "smoke test", "test", "test sale", "тест", "тестовая продажа"}
 
 
 def _sales_goal(sale_name: str) -> str:
@@ -670,6 +684,8 @@ def build_content_plan_skeleton(
                 continue
             if _is_foreign_brand_keyword(keyword_text, business_name):
                 continue
+            if _is_incompatible_vertical_keyword(keyword_text, _safe_text(keyword.get("category")), business):
+                continue
             theme_suffix = f" в {city}" if city else ""
             keyword_views = int(keyword.get("views") or 0)
             base_score = _seo_strength(keyword)
@@ -696,6 +712,8 @@ def build_content_plan_skeleton(
         for sale in sales_signals[:8]:
             sale_name = _safe_text(sale.get("title") or sale.get("label") or sale.get("service_name"))
             if not sale_name:
+                continue
+            if _is_test_sales_signal(sale_name):
                 continue
             base_score = _sales_strength(sale)
             coverage_score = _undercovered_bonus(sale_name, recent_blob)
