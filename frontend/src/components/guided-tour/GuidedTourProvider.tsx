@@ -434,8 +434,9 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                   <img
                     src={logo}
                     alt="Робот LocalOS"
-                    className="h-40 w-40 -translate-x-7 -translate-y-2 scale-125 object-cover object-top lg:h-48 lg:w-48 lg:-translate-x-8"
+                    className="absolute left-1/2 top-0 h-auto w-[135%] max-w-none -translate-x-1/2 -translate-y-[10%] object-contain"
                   />
+                  <span className="absolute inset-x-0 bottom-0 h-[22%] bg-white" aria-hidden="true" />
                 </div>
               </div>
             </div>
@@ -471,8 +472,9 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
               <img
                 src={logo}
                 alt={robotState === 'success' ? 'Робот LocalOS завершил обучение' : 'Робот LocalOS'}
-                className="h-20 w-20 -translate-x-3 -translate-y-1 scale-125 object-cover object-top"
+                className="absolute left-1/2 top-0 h-auto w-[135%] max-w-none -translate-x-1/2 -translate-y-[10%] object-contain"
               />
+              <span className="absolute inset-x-0 bottom-0 h-[22%] bg-white" aria-hidden="true" />
               <span className={cn(
                 'absolute bottom-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded-full text-white shadow-sm',
                 robotState === 'waiting' && 'bg-slate-500',
