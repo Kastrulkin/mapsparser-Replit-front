@@ -76,6 +76,67 @@ if [[ "${missing_assets}" -ne 0 ]]; then
   exit 1
 fi
 
+python3 - "${dist_dir}" "${js_file}" <<'PY'
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+
+dist_dir = Path(sys.argv[1]).resolve()
+entry_file = Path(sys.argv[2]).resolve()
+asset_reference_pattern = re.compile(
+    r'''["']((?:\.{1,2}/|/|assets/)[^"'?#]+\.(?:js|css|png|jpe?g|gif|ico|svg|webp|woff2?|ttf))["']'''
+)
+pending = [entry_file]
+visited: set[Path] = set()
+missing: set[Path] = set()
+
+
+def resolve_reference(source_file: Path, reference: str) -> Path:
+    if reference.startswith("/"):
+        return (dist_dir / reference.removeprefix("/")).resolve()
+    if reference.startswith("assets/"):
+        return (dist_dir / reference).resolve()
+    return (source_file.parent / reference).resolve()
+
+
+while pending:
+    source_file = pending.pop()
+    if source_file in visited:
+        continue
+    visited.add(source_file)
+    if not source_file.is_file():
+        missing.add(source_file)
+        continue
+
+    try:
+        source_text = source_file.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        continue
+
+    for reference in asset_reference_pattern.findall(source_text):
+        referenced_file = resolve_reference(source_file, reference)
+        try:
+            referenced_file.relative_to(dist_dir)
+        except ValueError:
+            missing.add(referenced_file)
+            continue
+        if not referenced_file.is_file():
+            missing.add(referenced_file)
+            continue
+        if referenced_file.suffix == ".js":
+            pending.append(referenced_file)
+
+if missing:
+    for missing_file in sorted(missing):
+        print(f"Referenced dynamic asset not found: {missing_file}", file=sys.stderr)
+    raise SystemExit(1)
+
+print(f"Reachable dynamic assets checked: {len(visited)} JS files")
+PY
+
 echo "OK: frontend/dist integrity check passed"
 echo "JS: ${js_asset}"
 echo "CSS: ${css_asset}"

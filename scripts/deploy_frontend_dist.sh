@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 frontend_dir="${repo_root}/frontend"
 dist_dir="${frontend_dir}/dist"
 public_dist_dir="${frontend_dir}/public-dist"
+snapshot_root=""
 
 server_host="${DEPLOY_HOST:-root@80.78.242.105}"
 ssh_options=(
@@ -50,6 +51,14 @@ done
 
 cd "${repo_root}"
 
+cleanup_snapshot() {
+  if [[ -n "${snapshot_root}" && -d "${snapshot_root}" ]]; then
+    rm -rf "${snapshot_root}"
+  fi
+}
+
+trap cleanup_snapshot EXIT
+
 if [[ "${build_dist}" -eq 1 ]]; then
   (
     cd "${frontend_dir}"
@@ -57,8 +66,15 @@ if [[ "${build_dist}" -eq 1 ]]; then
   )
 fi
 
-"${repo_root}/scripts/verify_frontend_dist_integrity.sh" "${dist_dir}"
-"${repo_root}/scripts/verify_frontend_dist_integrity.sh" "${public_dist_dir}" "${public_dist_dir}/public-audit/index.html"
+snapshot_root="$(mktemp -d "${TMPDIR:-/tmp}/localos_frontend_snapshot.XXXXXX")"
+snapshot_dist_dir="${snapshot_root}/dist"
+snapshot_public_dist_dir="${snapshot_root}/public-dist"
+mkdir -p "${snapshot_dist_dir}" "${snapshot_public_dist_dir}"
+cp -R "${dist_dir}/." "${snapshot_dist_dir}/"
+cp -R "${public_dist_dir}/." "${snapshot_public_dist_dir}/"
+
+"${repo_root}/scripts/verify_frontend_dist_integrity.sh" "${snapshot_dist_dir}"
+"${repo_root}/scripts/verify_frontend_dist_integrity.sh" "${snapshot_public_dist_dir}" "${snapshot_public_dist_dir}/public-audit/index.html"
 
 if [[ "${skip_remote}" -eq 1 ]]; then
   echo "Local integrity check passed. Remote deploy skipped."
@@ -106,8 +122,9 @@ echo "Deploying frontend dist to ${server_host}:${server_project_dir}"
 echo "Keeping previous asset files in place to avoid breaking open tabs that still reference older lazy chunks."
 
 retry_command "remote temp dir prepare" remote_exec "rm -rf ${remote_tmp} ${remote_tmp}-public && mkdir -p ${remote_tmp} ${remote_tmp}-public"
-retry_command "upload frontend dist" "${server_scp_prefix[@]}" -r "${dist_dir}/." "${server_host}:${remote_tmp}/"
-retry_command "upload public dist" "${server_scp_prefix[@]}" -r "${public_dist_dir}/." "${server_host}:${remote_tmp}-public/"
+retry_command "upload frontend dist" "${server_scp_prefix[@]}" -r "${snapshot_dist_dir}/." "${server_host}:${remote_tmp}/"
+retry_command "upload public dist" "${server_scp_prefix[@]}" -r "${snapshot_public_dist_dir}/." "${server_host}:${remote_tmp}-public/"
+retry_command "upload integrity verifier" "${server_scp_prefix[@]}" "${repo_root}/scripts/verify_frontend_dist_integrity.sh" "${server_host}:${remote_tmp}/verify_frontend_dist_integrity.sh"
 retry_command "ensure app service is running" remote_ensure_app_running
 
 retry_command "sync frontend dist into server runtime" remote_exec "\
@@ -129,6 +146,8 @@ retry_command "localhost health check" remote_exec "curl -I http://localhost:800
 echo "4) targeted frontend checks"
 retry_command "runtime index check" remote_exec "docker compose exec -T app sh -lc 'grep -n \"/assets/index-\" /app/frontend/dist/index.html'"
 retry_command "public-audit index check" remote_exec "docker compose exec -T app sh -lc 'grep -n \"/public-audit/assets/index-\" /app/frontend/public-dist/public-audit/index.html'"
+retry_command "deployed runtime asset integrity" remote_exec "bash ${remote_tmp}/verify_frontend_dist_integrity.sh frontend/dist"
+retry_command "deployed public asset integrity" remote_exec "bash ${remote_tmp}/verify_frontend_dist_integrity.sh frontend/public-dist frontend/public-dist/public-audit/index.html"
 retry_command "live html check" remote_exec "curl -s ${public_domain}/ | grep -n \"/assets/index-\" | head -n 1"
 
 echo "Frontend dist deployed to ${server_project_dir}/frontend/dist and ${server_project_dir}/frontend/public-dist"
