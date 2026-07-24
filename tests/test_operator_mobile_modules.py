@@ -67,6 +67,7 @@ def test_finance_module_is_scope_filtered_and_real():
         scope={"kind": "network", "id": "n-1", "business_ids": ["b-1"]},
     )
 
-    assert result["status"] == "read_only"
+    assert result["status"] == "available"
     assert result["counts"]["total"] == 1
     assert result["items"][0]["amount"] == 1500
+    assert result["available_actions"] == [{"key": "finance.sales_import", "label": "Загрузить продажи"}]

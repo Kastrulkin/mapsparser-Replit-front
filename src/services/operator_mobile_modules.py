@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 from typing import Any
 
 
@@ -28,11 +29,25 @@ def _cards(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
     if not _table_exists(cursor, "businesses"):
         return []
     platform, business_ids = _business_filter(scope)
+    has_schedule = _table_exists(cursor, "businesscardautomationsettings")
+    schedule_select = """
+               automation.review_sync_enabled, automation.review_sync_interval_hours,
+               automation.review_sync_schedule_mode, automation.review_sync_schedule_days,
+               automation.review_sync_schedule_time, automation.review_sync_next_run_at,
+               automation.review_sync_last_run_at, automation.review_sync_last_status,
+    """ if has_schedule else """
+               FALSE AS review_sync_enabled, 24 AS review_sync_interval_hours,
+               'interval' AS review_sync_schedule_mode, NULL AS review_sync_schedule_days,
+               NULL AS review_sync_schedule_time, NULL AS review_sync_next_run_at,
+               NULL AS review_sync_last_run_at, NULL AS review_sync_last_status,
+    """
+    schedule_join = "LEFT JOIN businesscardautomationsettings automation ON automation.business_id = b.id" if has_schedule else ""
     cursor.execute(
-        """
+        f"""
         SELECT b.id, b.id AS business_id, b.name AS business_name,
                COALESCE(c.title, b.name) AS title, COALESCE(c.address, b.address) AS subtitle,
                c.rating, c.reviews_count, c.seo_score,
+               {schedule_select}
                COALESCE(q.updated_at, c.updated_at, links.updated_at) AS updated_at,
                COALESCE(links.provider_sources, '[]'::jsonb) AS provider_sources,
                q.status AS parse_status, q.source AS parse_source, q.updated_at AS parse_updated_at
@@ -51,6 +66,7 @@ def _cards(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
             SELECT status, source, updated_at FROM parsequeue
             WHERE business_id = b.id ORDER BY updated_at DESC LIMIT 1
         ) q ON TRUE
+        {schedule_join}
         WHERE (%s OR b.id = ANY(%s))
         ORDER BY COALESCE(q.updated_at, c.updated_at, links.updated_at) DESC NULLS LAST, b.name
         LIMIT 200
@@ -62,7 +78,13 @@ def _cards(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
         item = _row(cursor, value)
         parse_status = str(item.get("parse_status") or "").lower()
         status = "running" if parse_status in {"pending", "processing"} else "error" if parse_status in {"failed", "error", "captcha_required"} else "fresh"
-        items.append({**item, "kind": "card", "status": status})
+        items.append({
+            **item,
+            "kind": "card",
+            "status": status,
+            "refresh_cost_credits": int(os.getenv("OPERATOR_MAP_REFRESH_ESTIMATED_CREDITS", "10") or "10"),
+            "scheduled_refresh_cost_credits": 0,
+        })
     return items
 
 
@@ -92,12 +114,24 @@ def _services(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
     if not _table_exists(cursor, "userservices"):
         return []
     platform, business_ids = _business_filter(scope)
+    columns: set[str] = set()
+    try:
+        cursor.execute(
+            """
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'userservices'
+            """
+        )
+        columns = {str(_row(cursor, value).get("column_name") or "") for value in cursor.fetchall() or []}
+    except (TypeError, ValueError):
+        columns = set()
+    source_select = "s.source" if "source" in columns else "NULL::text AS source"
     cursor.execute(
-        """
+        f"""
         SELECT s.id, s.business_id, b.name AS business_name, s.name AS title,
                COALESCE(NULLIF(TRIM(s.description), ''), s.category, 'Без описания') AS subtitle,
                s.price, s.category, CASE WHEN COALESCE(s.is_active, TRUE) THEN 'active' ELSE 'archived' END AS status,
-               s.updated_at
+               s.updated_at, {source_select}
         FROM userservices s JOIN businesses b ON b.id = s.business_id
         WHERE (%s OR s.business_id = ANY(%s))
         ORDER BY COALESCE(s.is_active, TRUE) DESC, s.updated_at DESC LIMIT 200
@@ -210,7 +244,13 @@ def list_operator_mobile_module(cursor: Any, *, module: str, scope: dict[str, An
             {"key": "content.item.generate_draft", "label": "Подготовить черновик"},
             {"key": "content.item.update", "label": "Редактировать"},
         ],
-        "services": [{"key": "services.update", "label": "Изменить услугу"}],
+        "services": [
+            {"key": "services.update", "label": "Изменить услугу"},
+            {"key": "services.optimize", "label": "Улучшить услуги"},
+            {"key": "services.compress", "label": "Сократить меню"},
+        ],
+        "cards": [{"key": "cards.schedule.update", "label": "Настроить график"}],
+        "finance": [{"key": "finance.sales_import", "label": "Загрузить продажи"}],
     }.get(module, [])
     return {
         "status": "available" if available_actions else "read_only",

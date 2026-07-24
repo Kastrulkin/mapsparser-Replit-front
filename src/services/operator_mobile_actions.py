@@ -11,6 +11,7 @@ MOBILE_ACTION_TTL_MINUTES = 15
 MOBILE_ACTIONS = {
     "review_replies.generate": {"estimated_credits_per_item": 1, "external_effects": False},
     "review_replies.mark_manual_published": {"estimated_credits_per_item": 0, "external_effects": False},
+    "finance.sales_import": {"estimated_credits_per_item": 0, "external_effects": False},
 }
 
 
@@ -73,12 +74,51 @@ def create_mobile_action_preview(
     if not spec:
         return {"status": "blocked", "blocked_reasons": ["unsupported_mobile_action"]}
     review_ids = input_payload.get("review_ids") if isinstance(input_payload.get("review_ids"), list) else []
-    targets, objects = _resolve_review_targets(cursor, scope, review_ids)
+    envelope: dict[str, Any]
+    if capability == "finance.sales_import":
+        requested_business_id = str(input_payload.get("business_id") or "").strip()
+        allowed = {str(item) for item in scope.get("business_ids") or []}
+        if scope.get("kind") == "business":
+            requested_business_id = str(scope.get("id") or "")
+        if not requested_business_id or (scope.get("kind") != "platform" and requested_business_id not in allowed):
+            return {"status": "blocked", "blocked_reasons": ["business_selection_required"]}
+        cursor.execute("SELECT id, name FROM businesses WHERE id = %s", (requested_business_id,))
+        business = _row(cursor, cursor.fetchone())
+        raw_transactions = input_payload.get("transactions") if isinstance(input_payload.get("transactions"), list) else []
+        transactions = []
+        for item in raw_transactions[:100]:
+            if not isinstance(item, dict):
+                continue
+            try:
+                amount = float(item.get("amount") or 0)
+            except (TypeError, ValueError):
+                amount = 0
+            if amount <= 0:
+                continue
+            sale_type = str(item.get("sale_type") or "service").strip().lower()
+            if sale_type not in {"service", "upsell", "cross_sell"}:
+                sale_type = "service"
+            transactions.append({
+                "id": str(item.get("id") or uuid.uuid4()),
+                "transaction_date": str(item.get("transaction_date") or "").strip(),
+                "amount": amount,
+                "sale_type": sale_type,
+                "title": str(item.get("title") or item.get("service") or "Продажа").strip() or "Продажа",
+                "notes": str(item.get("notes") or "").strip(),
+            })
+        if not business or not transactions:
+            return {"status": "blocked", "blocked_reasons": ["transactions_not_found_or_forbidden"]}
+        targets = [requested_business_id]
+        objects = transactions
+        envelope = {"transactions": transactions, "business_id": requested_business_id}
+    else:
+        targets, objects = _resolve_review_targets(cursor, scope, review_ids)
+        envelope = {"review_ids": [str(item.get("id") or "") for item in objects]}
     if not objects:
         return {"status": "blocked", "blocked_reasons": ["objects_not_found_or_forbidden"]}
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=MOBILE_ACTION_TTL_MINUTES)
     stable_input = json.dumps(
-        {"scope_type": scope.get("kind"), "scope_id": scope.get("id"), "capability": capability, "review_ids": review_ids},
+        {"scope_type": scope.get("kind"), "scope_id": scope.get("id"), "capability": capability, "input": envelope},
         ensure_ascii=False,
         sort_keys=True,
     )
@@ -88,9 +128,9 @@ def create_mobile_action_preview(
     preview = {
         "capability": capability,
         "scope": scope,
-        "target_businesses": [{"id": item, "name": next((str(row.get("business_name") or "") for row in objects if str(row.get("business_id")) == item), "")} for item in targets],
+        "target_businesses": [{"id": item, "name": str(business.get("name") or "") if capability == "finance.sales_import" else next((str(row.get("business_name") or "") for row in objects if str(row.get("business_id")) == item), "")} for item in targets],
         "objects": objects,
-        "changes": [{"review_id": item.get("id"), "operation": capability} for item in objects],
+        "changes": [{"object_id": item.get("id"), "operation": capability} for item in objects],
         "estimated_credits": estimated,
         "external_effects": bool(spec.get("external_effects")),
         "is_mass_action": len(objects) > 1 or len(targets) > 1,
@@ -115,7 +155,7 @@ def create_mobile_action_preview(
             user_id,
             capability,
             idempotency_key,
-            json.dumps({"review_ids": [str(item.get("id") or "") for item in objects]}, ensure_ascii=False),
+            json.dumps(envelope, ensure_ascii=False),
             str(scope.get("kind") or "business"),
             str(scope.get("id") or "") or None,
             json.dumps(targets),

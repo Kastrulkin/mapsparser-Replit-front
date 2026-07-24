@@ -20,6 +20,8 @@ class ActionCursor:
                 {"id": "r-2", "business_id": "b-2", "business_name": "Вторая", "author_name": "Игорь", "rating": 2, "source": "2gis"},
             ]
             self.rows = [item for item in source if item["id"] in requested]
+        elif self.query.startswith("select id, name from businesses"):
+            self.rows = [{"id": "b-1", "name": "Первая"}] if params[0] == "b-1" else []
         elif self.query.startswith("insert into operatoractions"):
             if not self.action:
                 self.action = {
@@ -118,3 +120,25 @@ def test_expired_preview_does_not_execute():
     assert result["status"] == "blocked"
     assert result["blocked_reasons"] == ["preview_expired"]
     assert idempotent is False
+
+
+def test_finance_preview_keeps_reviewed_sales_and_business_target():
+    cursor = ActionCursor()
+    preview = create_mobile_action_preview(
+        cursor,
+        user_id="u-1",
+        scope={"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+        capability="finance.sales_import",
+        input_payload={
+            "business_id": "b-1",
+            "transactions": [
+                {"transaction_date": "2026-07-24", "amount": 2900, "title": "Стрижка", "sale_type": "service"},
+                {"transaction_date": "2026-07-24", "amount": 850, "title": "Шампунь", "sale_type": "cross_sell"},
+            ],
+        },
+    )
+
+    assert preview["status"] == "preview"
+    assert preview["estimated_credits"] == 0
+    assert preview["target_businesses"] == [{"id": "b-1", "name": "Первая"}]
+    assert [item["sale_type"] for item in preview["objects"]] == ["service", "cross_sell"]

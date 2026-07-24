@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import datetime, timezone
+import base64
+import json
+import re
+import uuid
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, jsonify, request
 
@@ -59,7 +63,14 @@ from services.operator_conversations import (
     list_operator_messages,
     set_operator_pending_context,
 )
-from services.content_plan_service import generate_draft_for_plan_item, update_content_plan_item
+from services.content_plan_service import create_generated_content_plan, generate_draft_for_plan_item, update_content_plan_item
+from core.card_automation import get_card_automation_snapshot, save_card_automation_settings
+from core.service_catalog_compression import build_service_catalog_compression_draft
+from services.gigachat_client import analyze_screenshot_with_gigachat
+from services.agent_source_ingestion import build_agent_source_from_upload
+from services.llm import analyze_text_with_gigachat
+from services.operator_map_refresh import DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS
+from services.operator_services_optimization import SERVICES_OPTIMIZE_CREDITS_PER_SERVICE
 
 
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
@@ -72,10 +83,10 @@ def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
         {"key": "tasks", "label": "Задачи", "group": "primary", "status": "available"},
         {"key": "reviews", "label": "Отзывы", "group": "primary", "status": "available"},
         {"key": "operator", "label": "Оператор", "group": "primary", "status": "available"},
-        {"key": "cards", "label": "Карточки", "group": "more", "status": "read_only"},
+        {"key": "cards", "label": "Карточки", "group": "more", "status": "available"},
         {"key": "content", "label": "Контент", "group": "more", "status": "available"},
         {"key": "services", "label": "Услуги", "group": "more", "status": "available"},
-        {"key": "finance", "label": "Финансы", "group": "more", "status": "read_only"},
+        {"key": "finance", "label": "Финансы", "group": "more", "status": "available"},
         {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "read_only"},
         {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "read_only"},
         {"key": "settings", "label": "Настройки", "group": "more", "status": "available"},
@@ -1874,6 +1885,328 @@ def _mobile_scope_allows_business(scope: dict, business_id: str) -> bool:
     return business_id in {str(item) for item in scope.get("business_ids") or []}
 
 
+def _mobile_business_from_payload(cursor, user_data: dict, payload: dict) -> tuple[dict | None, str, tuple | None]:
+    user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+    kind, scope_id = _scope_request_values(payload)
+    scope = resolve_control_scope(cursor, user_id=user_id, requested_kind=kind, requested_id=scope_id)
+    business_id = str(payload.get("business_id") or (scope or {}).get("id") or "").strip()
+    if not scope:
+        return None, business_id, (jsonify({"success": False, "error": "Раздел недоступен"}), 403)
+    if scope.get("kind") != "business" and not payload.get("business_id"):
+        return scope, "", (jsonify({"success": False, "error": "Сначала выберите точку"}), 400)
+    if not business_id or not _mobile_scope_allows_business(scope, business_id):
+        return scope, business_id, (jsonify({"success": False, "error": "Точка недоступна"}), 403)
+    has_access, _owner_id = verify_business_access(cursor, business_id, user_data)
+    if not has_access:
+        return scope, business_id, (jsonify({"success": False, "error": "Точка недоступна"}), 403)
+    return scope, business_id, None
+
+
+@operator_bp.route("/mobile/cards/schedule", methods=["PUT"])
+def operator_mobile_card_schedule_update():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        if error_response:
+            return error_response
+        current = get_card_automation_snapshot(db.conn, business_id).get("settings") or {}
+        merged = dict(current)
+        merged.update({
+            "review_sync_enabled": bool(payload.get("enabled")),
+            "review_sync_interval_hours": int(payload.get("interval_hours") or 24),
+            "review_sync_schedule_mode": "interval",
+            "review_sync_schedule_days": [],
+            "review_sync_schedule_time": None,
+        })
+        snapshot = save_card_automation_settings(
+            db.conn,
+            business_id,
+            str(user_data.get("user_id") or user_data.get("id") or ""),
+            merged,
+        )
+        return jsonify({
+            "success": True,
+            "scope": scope,
+            **snapshot,
+            "cost_per_run_credits": DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS,
+        })
+    except (TypeError, ValueError):
+        db.conn.rollback()
+        return jsonify({"success": False, "error": "Выберите корректный интервал"}), 400
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/content/plans/generate", methods=["POST"])
+def operator_mobile_content_plan_generate():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        if error_response:
+            return error_response
+    finally:
+        db.close()
+    try:
+        plan = create_generated_content_plan(
+            str(user_data.get("user_id") or user_data.get("id") or ""),
+            business_id,
+            scope_type="single_business",
+            scope_target_id=business_id,
+            period_days=int(payload.get("period_days") or 30),
+            density=str(payload.get("density") or "standard"),
+            content_mix=payload.get("content_mix") if isinstance(payload.get("content_mix"), dict) else {},
+        )
+        return jsonify({"success": True, "scope": scope, "plan": plan})
+    except (PermissionError, ValueError):
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 400
+
+
+@operator_bp.route("/mobile/services/analyze", methods=["POST"])
+def operator_mobile_services_analyze():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    mode = str(payload.get("mode") or "optimize").strip()
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        if error_response:
+            return error_response
+        cursor.execute(
+            "SELECT id, name, description, category, price FROM userservices WHERE business_id = %s AND COALESCE(is_active, TRUE) ORDER BY category, name LIMIT 100",
+            (business_id,),
+        )
+        services = [dict(item) for item in cursor.fetchall() or []]
+        if not services:
+            return jsonify({"success": False, "error": "Сначала добавьте услуги"}), 400
+        service_ids = [str(item.get("id") or "") for item in services]
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        action_id = str(payload.get("action_id") or "").strip()
+        action = {}
+        if bool(payload.get("confirmed")):
+            cursor.execute("SELECT * FROM operatoractions WHERE id = %s AND user_id = %s FOR UPDATE", (action_id, user_id))
+            action = dict(cursor.fetchone() or {})
+            if not action or str(action.get("capability") or "") != f"services.{mode}":
+                return jsonify({"success": False, "error": "Проверка устарела. Подготовьте её заново."}), 400
+            if str(action.get("status") or "") == "completed":
+                stored_result = action.get("result_json") if isinstance(action.get("result_json"), dict) else json.loads(str(action.get("result_json") or "{}"))
+                return jsonify({"success": True, "scope": scope, "mode": mode, "result": stored_result, "idempotent": True})
+            if action.get("expires_at") and action.get("expires_at") < datetime.now(timezone.utc):
+                return jsonify({"success": False, "error": "Проверка устарела. Подготовьте её заново."}), 400
+            envelope = action.get("envelope_json") if isinstance(action.get("envelope_json"), dict) else json.loads(str(action.get("envelope_json") or "{}"))
+            if str(envelope.get("business_id") or "") != business_id or envelope.get("service_ids") != service_ids:
+                return jsonify({"success": False, "error": "Список услуг изменился. Проверьте действие заново."}), 409
+
+        def store_service_preview(preview_payload: dict) -> str:
+            preview_action_id = str(uuid.uuid4())
+            idempotency_key = f"mobile:{user_id}:services.{mode}:{preview_action_id}"
+            expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+            cursor.execute(
+                """
+                INSERT INTO operatoractions (
+                    id, conversation_id, business_id, user_id, capability, idempotency_key,
+                    envelope_json, scope_type, scope_id, target_business_ids_json, preview_json,
+                    estimated_credits, external_effects, is_mass_action, expires_at
+                ) VALUES (%s, NULL, %s, %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s::jsonb, %s, FALSE, TRUE, %s)
+                ON CONFLICT (user_id, idempotency_key)
+                DO UPDATE SET preview_json = EXCLUDED.preview_json, envelope_json = EXCLUDED.envelope_json,
+                              expires_at = EXCLUDED.expires_at, updated_at = NOW()
+                RETURNING id
+                """,
+                (
+                    preview_action_id,
+                    business_id,
+                    user_id,
+                    f"services.{mode}",
+                    idempotency_key,
+                    json.dumps({"business_id": business_id, "service_ids": service_ids}, ensure_ascii=False),
+                    str(scope.get("kind") or "business"),
+                    str(scope.get("id") or "") or None,
+                    json.dumps([business_id]),
+                    json.dumps(preview_payload, ensure_ascii=False, default=str),
+                    int(preview_payload.get("estimated_credits") or 0),
+                    expires_at,
+                ),
+            )
+            stored_id = str(dict(cursor.fetchone() or {}).get("id") or preview_action_id)
+            db.conn.commit()
+            return stored_id
+
+        def complete_service_action(result_payload: dict) -> None:
+            cursor.execute(
+                """
+                UPDATE operatoractions SET status = 'completed', confirmed_at = COALESCE(confirmed_at, NOW()),
+                    executed_at = COALESCE(executed_at, NOW()), result_json = %s::jsonb, updated_at = NOW()
+                WHERE id = %s AND user_id = %s
+                """,
+                (json.dumps(result_payload, ensure_ascii=False, default=str), action_id, user_id),
+            )
+        if mode == "compress":
+            analysis = build_service_catalog_compression_draft(services)
+            if bool(payload.get("confirmed")):
+                created_service_ids = []
+                archived_service_ids = []
+                for group in analysis.get("groups") or []:
+                    if str(group.get("action") or "") not in {"apply", "promotion"}:
+                        continue
+                    source_ids = [str(item) for item in group.get("source_service_ids") or [] if str(item)]
+                    if not source_ids:
+                        continue
+                    cursor.execute(
+                        "SELECT id FROM userservices WHERE business_id = %s AND id = ANY(%s) AND COALESCE(is_active, TRUE)",
+                        (business_id, source_ids),
+                    )
+                    found_ids = [str(dict(item).get("id") or "") for item in cursor.fetchall() or []]
+                    if not found_ids:
+                        continue
+                    if str(group.get("action") or "") == "apply":
+                        target = group.get("target") if isinstance(group.get("target"), dict) else {}
+                        created_id = str(uuid.uuid4())
+                        cursor.execute(
+                            """
+                            INSERT INTO userservices (
+                                id, user_id, business_id, category, name, description,
+                                keywords, price, is_active, created_at, updated_at
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW(), NOW())
+                            """,
+                            (
+                                created_id,
+                                str(user_data.get("user_id") or user_data.get("id") or ""),
+                                business_id,
+                                str(target.get("category") or "Общие услуги"),
+                                str(target.get("name") or group.get("title") or "Объединённая услуга"),
+                                str(target.get("description") or ""),
+                                json.dumps(target.get("keywords") or [], ensure_ascii=False),
+                                str(target.get("price") or ""),
+                            ),
+                        )
+                        created_service_ids.append(created_id)
+                    cursor.execute(
+                        "UPDATE userservices SET is_active = FALSE, updated_at = NOW() WHERE business_id = %s AND id = ANY(%s)",
+                        (business_id, found_ids),
+                    )
+                    archived_service_ids.extend(found_ids)
+                result_payload = {
+                    "status": "completed",
+                    "created_count": len(created_service_ids),
+                    "archived_count": len(set(archived_service_ids)),
+                    "provider_write_performed": False,
+                }
+                complete_service_action(result_payload)
+                db.conn.commit()
+                return jsonify({
+                    "success": True,
+                    "scope": scope,
+                    "mode": mode,
+                    "result": result_payload,
+                })
+            preview_payload = {"mode": mode, "analysis": analysis, "confirmation_required": True, "estimated_credits": 0}
+            return jsonify({"success": True, "scope": scope, **preview_payload, "action_id": store_service_preview(preview_payload)})
+        if bool(payload.get("confirmed")):
+            result = optimize_services_from_operator(
+                cursor,
+                business_id=business_id,
+                user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
+                limit=len(services),
+                channel="telegram_mini_app",
+            )
+            if str(result.get("status") or "") != "completed":
+                db.conn.rollback()
+                return jsonify({"success": False, "error": result.get("chat_response") or "Не удалось улучшить услуги", "result": result}), 400
+            complete_service_action(result)
+            db.conn.commit()
+            return jsonify({"success": True, "scope": scope, "mode": "optimize", "result": result})
+        preview_payload = {
+            "success": True,
+            "scope": scope,
+            "mode": "optimize",
+            "service_count": len(services),
+            "estimated_credits": len(services) * SERVICES_OPTIMIZE_CREDITS_PER_SERVICE,
+            "confirmation_required": True,
+            "changes": [{"id": item.get("id"), "name": item.get("name")} for item in services],
+        }
+        preview_payload["action_id"] = store_service_preview(preview_payload)
+        return jsonify(preview_payload)
+    finally:
+        db.close()
+
+
+def _operator_json_object(value: object) -> dict:
+    text = str(value or "").strip()
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.IGNORECASE)
+    try:
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        start, end = text.find("{"), text.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                parsed = json.loads(text[start:end + 1])
+                return parsed if isinstance(parsed, dict) else {}
+            except Exception:
+                return {}
+    return {}
+
+
+@operator_bp.route("/mobile/finance/recognize", methods=["POST"])
+def operator_mobile_finance_recognize():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.form.to_dict() if request.files else (request.get_json(silent=True) or {})
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope, business_id, error_response = _mobile_business_from_payload(cursor, user_data, payload)
+        if error_response:
+            return error_response
+    finally:
+        db.close()
+    prompt = """Извлеки продажи из данных. Для каждой строки определи sale_type: service — основная услуга, upsell — допродажа к основной услуге, cross_sell — отдельный товар или кросс-продажа. Верни только JSON: {\"transactions\":[{\"transaction_date\":\"YYYY-MM-DD\",\"amount\":0,\"title\":\"название\",\"sale_type\":\"service|upsell|cross_sell\",\"notes\":\"\"}]}"""
+    uploaded = request.files.get("file") or request.files.get("photo")
+    try:
+        if uploaded and str(uploaded.mimetype or "").startswith("image/"):
+            raw_result = analyze_screenshot_with_gigachat(
+                base64.b64encode(uploaded.read()).decode("utf-8"),
+                prompt,
+                task_type="finance_sales_recognition",
+                business_id=business_id,
+                user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
+            )
+        else:
+            source_text = str(payload.get("text") or "").strip()
+            if uploaded:
+                source, extraction_error = build_agent_source_from_upload(uploaded)
+                if extraction_error:
+                    return jsonify({"success": False, "error": extraction_error.get("message") or "Не удалось прочитать документ"}), 400
+                source_text = str(source.get("content_text") or "").strip()
+            if not source_text:
+                return jsonify({"success": False, "error": "Добавьте текст, фото или документ с продажами"}), 400
+            raw_result = analyze_text_with_gigachat(
+                f"{prompt}\n\nДанные:\n{source_text}",
+                task_type="finance_sales_recognition",
+                business_id=business_id,
+                user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
+            )
+        recognized = _operator_json_object(raw_result)
+        transactions = recognized.get("transactions") if isinstance(recognized.get("transactions"), list) else []
+        return jsonify({"success": True, "scope": scope, "business_id": business_id, "transactions": transactions, "confirmation_required": True})
+    except Exception:
+        return jsonify({"success": False, "error": f"Не удалось распознать продажи: {sys.exc_info()[1]}"}), 400
+
+
 @operator_bp.route("/mobile/services/<service_id>", methods=["PUT"])
 def operator_mobile_service_update(service_id: str):
     user_data = require_auth_from_request()
@@ -2100,7 +2433,8 @@ def operator_mobile_reviews():
         cursor.execute(
             f"""
             SELECT r.id, r.business_id, r.source, r.rating, r.author_name, r.text,
-                   r.response_text, r.response_at, r.published_at, r.updated_at, b.name AS location_name,
+                   r.response_text, r.response_at, COALESCE(r.published_at, r.created_at) AS published_at,
+                   r.created_at AS loaded_at, r.updated_at, b.name AS location_name,
                    d.id AS reply_draft_id, d.generated_text AS reply_draft_text,
                    d.status AS reply_draft_status, d.updated_at AS reply_draft_updated_at
             FROM externalbusinessreviews r
@@ -2232,12 +2566,68 @@ def operator_mobile_action_confirm(action_id: str):
                 "external_writes_performed": False,
             }
 
+        def finance_sales_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            transactions = envelope.get("transactions") if isinstance(envelope.get("transactions"), list) else []
+            if len(targets) != 1 or business_id != targets[0] or not transactions:
+                return {"status": "blocked", "blocked_reasons": ["finance_preview_changed"]}
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'financialtransactions'"
+            )
+            columns = {str(dict(item).get("column_name") or "") for item in cursor.fetchall() or []}
+            created = []
+            for item in transactions:
+                transaction_id = str(uuid.uuid4())
+                sale_type = str(item.get("sale_type") or "service")
+                title = str(item.get("title") or "Продажа")
+                notes = str(item.get("notes") or "")
+                description = f"{title} · {sale_type}" + (f" · {notes}" if notes else "")
+                fields = ["id", "business_id", "amount"]
+                values = [transaction_id, business_id, item.get("amount")]
+                if "user_id" in columns:
+                    fields.append("user_id")
+                    values.append(user_id)
+                if "transaction_date" in columns:
+                    fields.append("transaction_date")
+                    values.append(str(item.get("transaction_date") or datetime.now(timezone.utc).date().isoformat()))
+                if "transaction_type" in columns:
+                    fields.append("transaction_type")
+                    values.append("income")
+                if "description" in columns:
+                    fields.append("description")
+                    values.append(description)
+                if "client_type" in columns:
+                    fields.append("client_type")
+                    values.append("returning")
+                if "services" in columns:
+                    fields.append("services")
+                    values.append(json.dumps([{"name": title, "sale_type": sale_type}], ensure_ascii=False))
+                if "notes" in columns:
+                    fields.append("notes")
+                    values.append(description)
+                placeholders = ", ".join(["%s"] * len(fields))
+                cursor.execute(
+                    f"INSERT INTO financialtransactions ({', '.join(fields)}) VALUES ({placeholders})",
+                    tuple(values),
+                )
+                created.append({"id": transaction_id, **item})
+            return {
+                "status": "completed",
+                "capability": "finance.sales_import",
+                "transactions": created,
+                "created_count": len(created),
+                "external_writes_performed": False,
+            }
+
         result, idempotent = confirm_mobile_action(
             cursor,
             action_id=action_id,
             user_id=user_id,
             scope_resolver=scope_resolver,
-            executors={"review_replies.generate": generate_executor},
+            executors={
+                "review_replies.generate": generate_executor,
+                "finance.sales_import": finance_sales_executor,
+            },
         )
         if result.get("status") == "blocked":
             db.conn.rollback()
