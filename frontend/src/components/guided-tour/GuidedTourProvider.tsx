@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check, ExternalLink, Pause, Play, RotateCcw, Sparkles, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -48,6 +49,7 @@ const routePathname = (route: string) => route.split('?', 1)[0];
 export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const prefersReducedMotion = useReducedMotion();
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<TourStatus>('not_started');
@@ -226,7 +228,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     if (!loaded) return;
     const focusTarget = open ? panelRef.current : launcherRef.current;
     window.setTimeout(() => focusTarget?.focus(), 0);
-  }, [loaded, open]);
+  }, [currentIndex, loaded, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -383,9 +385,24 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
         </button>
       ) : null}
 
-      {open && isWelcome ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-hidden bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
-          <section
+      <LayoutGroup id="guided-tour-panel">
+        <AnimatePresence initial={false}>
+          {open && isWelcome ? (
+            <motion.div
+              key="guided-tour-welcome"
+              className="fixed inset-0 z-[70] flex items-center justify-center overflow-hidden px-4 py-6"
+              initial={false}
+              animate={{ backgroundColor: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)' }}
+              exit={{ backgroundColor: 'rgba(15, 23, 42, 0)', backdropFilter: 'blur(0px)' }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.35 }}
+            >
+              <motion.section
+                layoutId="guided-tour-panel"
+                transition={{
+                  layout: prefersReducedMotion
+                    ? { duration: 0 }
+                    : { type: 'spring', duration: 0.55, bounce: 0 },
+                }}
             ref={panelRef}
             role="dialog"
             aria-modal="true"
@@ -460,31 +477,38 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
-          </section>
-        </div>
-      ) : null}
+              </motion.section>
+            </motion.div>
+          ) : null}
 
-      {open && !isWelcome ? (
-        <section
-          ref={panelRef}
-          className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[70] mx-auto max-h-[calc(100vh-1.5rem)] max-w-md overflow-y-auto rounded-lg border border-slate-200 bg-white p-4 shadow-2xl sm:inset-x-auto sm:right-5 sm:w-[390px]"
-          aria-live="polite"
-          aria-label="Интерактивное обучение LocalOS"
-          tabIndex={-1}
-        >
+          {open && !isWelcome ? (
+            <motion.section
+              key="guided-tour-step"
+              layoutId="guided-tour-panel"
+              initial={prefersReducedMotion ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{
+                layout: prefersReducedMotion
+                  ? { duration: 0 }
+                  : { type: 'spring', duration: 0.55, bounce: 0 },
+                opacity: { duration: prefersReducedMotion ? 0 : 0.2 },
+              }}
+              ref={panelRef}
+              className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[70] mx-auto max-h-[calc(100vh-1.5rem)] max-w-md overflow-y-auto rounded-lg border border-slate-200 bg-white p-4 shadow-2xl focus:outline-none sm:inset-x-auto sm:right-5 sm:w-[390px]"
+              aria-live="polite"
+              aria-label="Интерактивное обучение LocalOS"
+              tabIndex={-1}
+            >
           <div className="flex items-start gap-3">
-            <div className={cn(
-              'relative h-14 w-14 shrink-0 overflow-hidden rounded-full border bg-white',
-              robotState === 'waiting' && 'border-slate-200',
-              robotState === 'explaining' && 'border-orange-200',
-              robotState === 'success' && 'border-emerald-200',
-            )}>
-              <img
-                src={logo}
-                alt={robotState === 'success' ? 'Робот LocalOS завершил обучение' : 'Робот LocalOS'}
-                className="absolute left-1/2 top-0 h-auto w-[135%] max-w-none -translate-x-1/2 -translate-y-[10%] object-contain"
-              />
-              <span className="absolute inset-x-0 bottom-0 h-[22%] bg-white" aria-hidden="true" />
+            <div className="relative h-14 w-14 shrink-0">
+              <div className="absolute inset-0 overflow-hidden">
+                <img
+                  src={logo}
+                  alt={robotState === 'success' ? 'Робот LocalOS завершил обучение' : 'Робот LocalOS'}
+                  className="absolute left-1/2 top-0 h-auto w-[175%] max-w-none -translate-x-1/2 -translate-y-[10%] object-contain mix-blend-multiply"
+                />
+              </div>
               <span className={cn(
                 'absolute bottom-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded-full text-white shadow-sm',
                 robotState === 'waiting' && 'bg-slate-500',
@@ -573,8 +597,10 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
               </button>
             </>
           )}
-        </section>
-      ) : null}
+            </motion.section>
+          ) : null}
+        </AnimatePresence>
+      </LayoutGroup>
     </>
   );
 }

@@ -28,7 +28,7 @@ export const GUIDED_TOUR_STEPS: GuidedTourStep[] = [
     chapter: 'network-pulse',
     chapterTitle: 'Скрепка LocalOS',
     title: 'Оператор — управление через чат',
-    body: 'Здесь можно управлять LocalOS обычными сообщениями вместо переходов по разделам. Тот же способ управления доступен в Telegram-боте.',
+    body: 'Здесь можно управлять LocalOS обычными сообщениями. Например: создать пост, найти отзывы без ответа, изменить услугу или подготовить финансовый отчёт. Такой же интерфейс доступен в Telegram.',
     route: '/dashboard/operator',
     target: 'nav-operator',
   },
