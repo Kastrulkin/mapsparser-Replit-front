@@ -1,3 +1,5 @@
+from datetime import date
+
 from services.operator_mobile_modules import list_operator_mobile_module
 
 
@@ -80,7 +82,7 @@ def test_finance_module_is_scope_filtered_and_real():
 def test_content_module_only_loads_the_latest_plan_for_each_business():
     cursor = ModuleCursor(
         "contentplanitems",
-        [{"id": "item-1", "business_id": "b-1", "title": "Тема", "plan_id": "plan-new"}],
+        [{"id": "item-1", "business_id": "b-1", "title": "Тема", "plan_id": "plan-new", "scheduled_for": date(2026, 7, 24)}],
         existing_tables={"contentplans", "contentplanitems"},
     )
 
@@ -91,5 +93,6 @@ def test_content_module_only_loads_the_latest_plan_for_each_business():
     )
 
     assert result["counts"]["total"] == 1
+    assert result["items"][0]["scheduled_for"] == "2026-07-24"
     assert "row_number() over" in cursor.query
     assert "p.plan_rank = 1" in cursor.query

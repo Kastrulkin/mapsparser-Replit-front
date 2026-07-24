@@ -72,6 +72,7 @@ from services.llm import analyze_text_with_gigachat
 from services.operator_map_refresh import DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS
 from services.operator_review_canonicalization import CANONICAL_REVIEWS_CTE
 from services.operator_services_optimization import SERVICES_OPTIMIZE_CREDITS_PER_SERVICE
+from subscription_manager import get_allowed_content_plan_horizons
 
 
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
@@ -1875,7 +1876,13 @@ def operator_mobile_module(module: str):
             })
         if module == "diagnostics" and scope.get("kind") != "platform":
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
-        return jsonify({"success": True, **list_operator_mobile_module(cursor, module=module, scope=scope)})
+        result = list_operator_mobile_module(cursor, module=module, scope=scope)
+        if module == "content" and scope.get("kind") == "business" and scope.get("id"):
+            filters = result.get("filters") if isinstance(result.get("filters"), dict) else {}
+            filters["period_days"] = get_allowed_content_plan_horizons(str(scope.get("id")))
+            filters["density"] = ["light", "standard", "active"]
+            result["filters"] = filters
+        return jsonify({"success": True, **result})
     finally:
         db.close()
 

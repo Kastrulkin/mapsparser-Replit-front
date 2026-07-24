@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import os
 from typing import Any
 
@@ -23,6 +23,12 @@ def _table_exists(cursor: Any, table_name: str) -> bool:
 
 def _business_filter(scope: dict[str, Any]) -> tuple[bool, list[str]]:
     return scope.get("kind") == "platform", [str(item) for item in scope.get("business_ids") or []]
+
+
+def _iso_value(value: Any) -> Any:
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    return value
 
 
 def _cards(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
@@ -95,7 +101,7 @@ def _content(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
     cursor.execute(
         """
         WITH current_plans AS (
-            SELECT id, business_id, title,
+            SELECT id, business_id, title, period_days,
                    ROW_NUMBER() OVER (
                        PARTITION BY business_id
                        ORDER BY created_at DESC, updated_at DESC, id
@@ -106,7 +112,7 @@ def _content(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
         SELECT i.id, i.business_id, b.name AS business_name,
                COALESCE(NULLIF(TRIM(i.theme), ''), 'Элемент контент-плана') AS title,
                COALESCE(NULLIF(TRIM(i.draft_text), ''), NULLIF(TRIM(i.goal), ''), 'Черновик ещё не подготовлен') AS subtitle,
-               i.status, i.updated_at, i.plan_id, p.title AS plan_title,
+               i.status, i.updated_at, i.plan_id, p.title AS plan_title, p.period_days AS plan_period_days,
                i.scheduled_for, i.content_type, i.draft_text
         FROM contentplanitems i
         JOIN current_plans p ON p.id = i.plan_id AND p.plan_rank = 1
@@ -115,7 +121,16 @@ def _content(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
         """,
         (platform, business_ids),
     )
-    return [{**_row(cursor, item), "kind": "content_plan_item"} for item in cursor.fetchall() or []]
+    items = []
+    for value in cursor.fetchall() or []:
+        item = _row(cursor, value)
+        items.append({
+            **item,
+            "scheduled_for": _iso_value(item.get("scheduled_for")),
+            "updated_at": _iso_value(item.get("updated_at")),
+            "kind": "content_plan_item",
+        })
+    return items
 
 
 def _services(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
