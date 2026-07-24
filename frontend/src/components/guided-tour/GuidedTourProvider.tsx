@@ -381,10 +381,10 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             role="dialog"
             aria-modal="true"
             aria-labelledby="demo-welcome-title"
-            className="my-auto w-full max-w-4xl overflow-hidden rounded-lg bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28),0_3px_14px_rgba(15,23,42,0.12)]"
+            className="my-auto flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28),0_3px_14px_rgba(15,23,42,0.12)]"
             tabIndex={-1}
           >
-            <div className="grid gap-5 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_132px] lg:gap-8 lg:p-8">
+            <div className="grid min-h-0 gap-5 overflow-y-auto p-5 pb-3 sm:p-7 sm:pb-3 lg:grid-cols-[minmax(0,1fr)_132px] lg:gap-8 lg:p-8 lg:pb-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-orange-700">Интерактивное демо LocalOS</p>
                 <h1 id="demo-welcome-title" className="mt-3 text-balance text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
@@ -427,14 +427,6 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                   </p>
                 ) : null}
 
-                <Button
-                  type="button"
-                  className="mt-4 min-h-12 w-full gap-2 sm:w-auto sm:min-w-56"
-                  onClick={() => void startFromWelcome()}
-                >
-                  Начать знакомство
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
               </div>
 
               <div className="order-first flex items-center justify-center lg:order-none lg:items-start">
@@ -446,6 +438,16 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                   />
                 </div>
               </div>
+            </div>
+            <div className="shrink-0 border-t border-slate-100 bg-white px-5 py-3 sm:px-7 lg:px-8">
+              <Button
+                type="button"
+                className="min-h-12 w-full gap-2 sm:w-auto sm:min-w-56"
+                onClick={() => void startFromWelcome()}
+              >
+                Начать знакомство
+                <ArrowRight className="h-4 w-4" />
+              </Button>
             </div>
           </section>
         </div>
