@@ -2189,6 +2189,18 @@ def _operator_json_object(value: object) -> dict:
     return {}
 
 
+def _normalize_finance_transaction_date(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return datetime.now(timezone.utc).date().isoformat()
+    for date_format in ("%Y-%m-%d", "%d.%m.%Y", "%d.%m.%y", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(text, date_format).date().isoformat()
+        except ValueError:
+            continue
+    return text
+
+
 @operator_bp.route("/mobile/finance/recognize", methods=["POST"])
 def operator_mobile_finance_recognize():
     user_data = require_auth_from_request()
@@ -2231,6 +2243,14 @@ def operator_mobile_finance_recognize():
             )
         recognized = _operator_json_object(raw_result)
         transactions = recognized.get("transactions") if isinstance(recognized.get("transactions"), list) else []
+        transactions = [
+            {
+                **item,
+                "transaction_date": _normalize_finance_transaction_date(item.get("transaction_date")),
+            }
+            for item in transactions
+            if isinstance(item, dict)
+        ]
         return jsonify({"success": True, "scope": scope, "business_id": business_id, "transactions": transactions, "confirmation_required": True})
     except Exception:
         return jsonify({"success": False, "error": f"Не удалось распознать продажи: {sys.exc_info()[1]}"}), 400
