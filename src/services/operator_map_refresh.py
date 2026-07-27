@@ -103,23 +103,56 @@ def enqueue_operator_map_refresh(
         return plan
 
     clean_queue_id = _clean_text(queue_id) or str(uuid.uuid4())
-    cursor.execute(
-        """
-        INSERT INTO parsequeue (
-            id, url, user_id, business_id, status, task_type, source, created_at, updated_at
+    registry_dual_write = str(os.getenv("COMPANY_PARSER_DUAL_WRITE_ENABLED", "false")).strip().lower() in {"1", "true", "yes", "on"}
+    if registry_dual_write:
+        cursor.execute(
+            """
+            SELECT link.company_location_id, profile.id AS external_profile_id
+            FROM business_company_links link
+            LEFT JOIN company_external_profiles profile
+              ON profile.company_location_id = link.company_location_id
+             AND profile.status = 'active'
+             AND (profile.canonical_url = %s OR profile.canonical_url IS NULL)
+            WHERE link.business_id = %s
+            ORDER BY link.is_primary DESC, (profile.canonical_url = %s) DESC NULLS LAST
+            LIMIT 1
+            """,
+            (plan["url"], business_id, plan["url"]),
         )
-        VALUES (%s, %s, %s, %s, 'pending', %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        RETURNING id, status, source, task_type
-        """,
-        (
-            clean_queue_id,
-            plan["url"],
-            user_id,
-            business_id,
-            plan["task_type"],
-            plan["source"],
-        ),
-    )
+        registry_target = _row_to_dict(cursor, cursor.fetchone()) or {}
+        cursor.execute(
+            """
+            INSERT INTO parsequeue (
+                id, url, user_id, business_id, company_location_id, external_profile_id,
+                requested_by_business_id, force_refresh,
+                status, task_type, source, created_at, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, 'pending', %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id, status, source, task_type
+            """,
+            (
+                clean_queue_id,
+                plan["url"],
+                user_id,
+                business_id,
+                registry_target.get("company_location_id"),
+                registry_target.get("external_profile_id"),
+                business_id,
+                plan["task_type"],
+                plan["source"],
+            ),
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO parsequeue (
+                id, url, user_id, business_id, status, task_type, source, created_at, updated_at
+            )
+            VALUES (%s, %s, %s, %s, 'pending', %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id, status, source, task_type
+            """,
+            (clean_queue_id, plan["url"], user_id, business_id, plan["task_type"], plan["source"]),
+        )
     row = _row_to_dict(cursor, cursor.fetchone()) or {}
     result = dict(plan)
     result.update(

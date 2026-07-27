@@ -96,7 +96,11 @@ def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
         {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "read_only"},
         {"key": "settings", "label": "Настройки", "group": "more", "status": "available"},
     ]
-    if kind == "platform" and is_superadmin:
+    company_registry_miniapp_enabled = str(os.getenv("COMPANY_REGISTRY_MINIAPP_ENABLED", "false")).lower() in {"1", "true", "yes", "on"}
+    if kind == "business" and company_registry_miniapp_enabled:
+        items.append({"key": "company", "label": "Моя компания", "group": "more", "status": "available"})
+    if kind == "platform" and is_superadmin and company_registry_miniapp_enabled:
+        items.append({"key": "companies", "label": "Компании", "group": "more", "status": "available"})
         items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "read_only"})
     return items
 

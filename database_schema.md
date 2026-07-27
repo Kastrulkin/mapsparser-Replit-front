@@ -13,6 +13,10 @@ This document serves as the source of truth for the BeautyBot database schema. I
 - **businesses**, **users**, **userservices** — бизнесы, пользователи, услуги.
 - **subscriptions**, **credit_ledger**, **billing_attempts**, **yookassa_webhook_events** — подписки/кредиты/попытки списаний/идемпотентность webhook YooKassa.
 - **businessmetricshistory** — история метрик (рейтинг, отзывы по датам); **externalbusinessstats**, **externalbusinessreviews** — агрегаты и отзывы из внешних источников.
+- **companies**, **company_locations** — каноническая публичная компания и её точки; клиентский tenant остаётся в **businesses**.
+- **company_external_profiles**, **company_identity_keys**, **company_contact_points**, **company_observations**, **company_public_services** — карты, сильные ключи дедупликации, публичные контакты, факты и услуги с provenance. Публичные услуги не перезаписывают `userservices`.
+- **business_company_links**, **company_relationships** — связи tenant-бизнеса с компанией и контекстные партнёры/конкуренты. Роли лида вычисляются из **prospectingleads** + **lead_workstreams**.
+- **knowledge_sources**, **knowledge_documents**, **knowledge_source_subscriptions** — глобальные публичные источники без дублей и tenant-подписки. Публичные Telegram-документы и embeddings создаются один раз на канал.
 
 Таблицы **MapParseResults** и **ParseQueue** в CamelCase — legacy для SQLite; в PG не используются.
 
@@ -64,6 +68,13 @@ Represents individual beauty salons or service providers.
     - **Integrations**: `telegram_bot_connected`, `telegram_username`, `stripe_customer_id`, `stripe_subscription_id`
     - **Subscription**: `trial_ends_at`, `subscription_ends_at`
     - **Moderation**: `moderation_status`, `moderation_notes`
+
+### Companies and locations
+`companies` не заменяет `businesses`: она объединяет публичную идентичность клиентов, лидов, партнёров и наблюдаемых организаций.
+- `companies.id` (UUID, PK), `canonical_name`, `primary_category`, `status`, `first_seen_source`, `merged_into_company_id`.
+- `company_locations`: адрес, география, timezone и primary-location.
+- Автослияние допустимо только по provider ID, каноническому URL карты, phone+address или domain+geo. Название само по себе не сливает записи.
+- Merge не удаляет исходную компанию: она получает `status=merged`, ссылку на target и audit event.
 
 ### UserSessions
 Active user sessions / JWT tokens.

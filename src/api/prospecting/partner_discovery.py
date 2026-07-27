@@ -471,6 +471,8 @@ def _import_search_results_into_leads(
 
         imported_count = 0
         merged_count = 0
+        observed_count = 0
+        registry_enabled = str(os.getenv("COMPANY_REGISTRY_ENABLED", "false")).strip().lower() in {"1", "true", "yes", "on"}
         for item in results:
             if not isinstance(item, dict):
                 continue
@@ -483,6 +485,34 @@ def _import_search_results_into_leads(
             external_source_id = str(
                 item.get("source_external_id") or item.get("google_id") or _extract_yandex_org_id_from_url(source_url) or ""
             ).strip() or None
+            if registry_enabled:
+                from services.company_registry_service import observe_company_candidate
+
+                observation = dict(item)
+                observation["source_url"] = source_url
+                observation["source_external_id"] = external_source_id
+                observation["source"] = source
+                observed = observe_company_candidate(conn, observation, source="partnership_search")
+                item["company_id"] = observed.get("company_id")
+                item["company_location_id"] = observed.get("company_location_id")
+                cur.execute(
+                    """
+                    INSERT INTO company_relationships (
+                        subject_company_id, object_company_id, context_business_id,
+                        relationship_type, status, source_url, confidence
+                    )
+                    SELECT owner_link.company_id, %s, %s, 'partner', 'observed', %s, 0.8
+                    FROM business_company_links owner_link
+                    WHERE owner_link.business_id = %s
+                      AND owner_link.company_id <> %s
+                    ORDER BY owner_link.is_primary DESC, owner_link.created_at ASC
+                    LIMIT 1
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (observed.get("company_id"), business_id, source_url, business_id, observed.get("company_id")),
+                )
+                observed_count += 1
+                continue
             lead_id, created = _insert_partnership_lead_if_new(
                 cur,
                 business_id=business_id,
@@ -519,6 +549,7 @@ def _import_search_results_into_leads(
         return {
             "imported_count": imported_count,
             "merged_count": merged_count,
+            "observed_count": observed_count,
             "business_id": business_id,
         }
     except Exception:
@@ -891,6 +922,9 @@ def _insert_partnership_lead_if_new(
             business_id=business_id,
             created_by=created_by,
         )
+        from services.company_registry_service import sync_company_registry_for_lead
+
+        sync_company_registry_for_lead(cur.connection, existing_id, source="partnership_import")
         return existing_id, False
 
     lead_id = str(uuid.uuid4())
@@ -948,6 +982,9 @@ def _insert_partnership_lead_if_new(
         business_id=business_id,
         created_by=created_by,
     )
+    from services.company_registry_service import sync_company_registry_for_lead
+
+    sync_company_registry_for_lead(cur.connection, lead_id, source="partnership_import")
     return lead_id, True
 
 
@@ -1428,6 +1465,7 @@ def _refresh_search_job_from_apify(row: dict[str, Any]) -> dict[str, Any]:
                 refreshed_row["results_json"] = refreshed_row["results_json"]
             refreshed_row["imported_count"] = int(import_meta.get("imported_count") or 0)
             refreshed_row["merged_count"] = int(import_meta.get("merged_count") or 0)
+            refreshed_row["observed_count"] = int(import_meta.get("observed_count") or 0)
             refreshed_row["import_business_id"] = import_meta.get("business_id")
             return refreshed_row
         elif run_status in {"FAILED", "ABORTED", "TIMED-OUT"}:

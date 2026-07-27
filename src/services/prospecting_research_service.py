@@ -558,6 +558,9 @@ def _insert_lead(cursor, candidate, workstream_type, client_business_id):
             Json(candidate["sources"]),
         ),
     )
+    from services.company_registry_service import sync_company_registry_for_lead
+
+    sync_company_registry_for_lead(cursor.connection, lead_id, source="public_research")
     return lead_id
 
 

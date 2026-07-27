@@ -2839,6 +2839,67 @@ def get_db_connection():
     return _get_pg_connection()
 
 
+def _sync_company_public_services(cursor: Any, queue_item: dict[str, Any], card_data: dict[str, Any]) -> int:
+    company_location_id = str(queue_item.get("company_location_id") or "").strip()
+    if not company_location_id:
+        return 0
+    raw_services = card_data.get("products") or card_data.get("services") or []
+    if not isinstance(raw_services, list):
+        return 0
+    saved = 0
+    for raw_service in raw_services[:500]:
+        if not isinstance(raw_service, dict):
+            continue
+        name = str(raw_service.get("name") or raw_service.get("title") or "").strip()
+        if not name:
+            continue
+        external_id = str(raw_service.get("id") or raw_service.get("external_id") or "").strip() or None
+        description = str(raw_service.get("description") or raw_service.get("text") or "").strip() or None
+        category = str(raw_service.get("category") or raw_service.get("group") or "").strip() or None
+        price_text = str(raw_service.get("price") or raw_service.get("price_text") or "").strip() or None
+        cursor.execute(
+            """
+            SELECT id
+            FROM company_public_services
+            WHERE company_location_id = %s
+              AND LOWER(name) = LOWER(%s)
+              AND COALESCE(external_id, '') = COALESCE(%s, '')
+              AND invalidated_at IS NULL
+            ORDER BY observed_at DESC
+            LIMIT 1
+            """,
+            (company_location_id, name, external_id),
+        )
+        existing = cursor.fetchone()
+        if existing:
+            service_id = existing.get("id") if hasattr(existing, "get") else existing[0]
+            cursor.execute(
+                """
+                UPDATE company_public_services
+                SET description = %s, category = %s, price_text = %s,
+                    source_url = %s, external_profile_id = %s,
+                    observed_at = NOW(), updated_at = NOW()
+                WHERE id = %s
+                """,
+                (description, category, price_text, queue_item.get("url"), queue_item.get("external_profile_id"), service_id),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO company_public_services (
+                    company_location_id, external_profile_id, external_id, name,
+                    description, category, price_text, source_url
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    company_location_id, queue_item.get("external_profile_id"), external_id,
+                    name, description, category, price_text, queue_item.get("url"),
+                ),
+            )
+        saved += 1
+    return saved
+
+
 def _finalize_failed_operator_refresh(cursor: Any, queue_id: str, commit_func: Any = None) -> Dict[str, Any]:
     """Release a failed paid refresh reservation and notify the owner when possible."""
     clean_queue_id = str(queue_id or "").strip()
@@ -5128,6 +5189,34 @@ def process_queue():
                             # "нет рекомендаций" от "поле отсутствует"
                             recommendations=analysis_data.get('recommendations', []),
                         )
+                        if queue_dict.get("company_location_id"):
+                            registry_cursor = db_manager.conn.cursor()
+                            registry_cursor.execute(
+                                """
+                                UPDATE cards
+                                SET company_location_id = %s,
+                                    external_profile_id = %s
+                                WHERE id = %s
+                                """,
+                                (
+                                    queue_dict.get("company_location_id"),
+                                    queue_dict.get("external_profile_id"),
+                                    saved_card_id,
+                                ),
+                            )
+                            if queue_dict.get("external_profile_id"):
+                                registry_cursor.execute(
+                                    """
+                                    UPDATE company_external_profiles
+                                    SET last_collected_at = NOW(),
+                                        sync_status = 'completed',
+                                        last_sync_error = NULL,
+                                        updated_at = NOW()
+                                    WHERE id = %s
+                                    """,
+                                    (queue_dict.get("external_profile_id"),),
+                                )
+                            registry_cursor.close()
                         _record_external_card_change_if_enabled(
                             db_manager,
                             business_id=business_id,
@@ -5517,6 +5606,30 @@ def process_queue():
                     json.dumps(card_data.get("hours_full", [])),
                     datetime.now().isoformat()
                 ))
+                company_location_id = queue_dict.get("company_location_id")
+                external_profile_id = queue_dict.get("external_profile_id")
+                if company_location_id:
+                    cursor.execute(
+                        """
+                        UPDATE cards
+                        SET company_location_id = %s,
+                            external_profile_id = %s
+                        WHERE id = %s
+                        """,
+                        (company_location_id, external_profile_id, card_id),
+                    )
+                    if external_profile_id:
+                        cursor.execute(
+                            """
+                            UPDATE company_external_profiles
+                            SET last_collected_at = NOW(),
+                                sync_status = 'completed',
+                                last_sync_error = NULL,
+                                updated_at = NOW()
+                            WHERE id = %s
+                            """,
+                            (external_profile_id,),
+                        )
                 
                 # Попытка синхронизации сервисов даже для старой схемы (если есть owner_id)
                 # Но у нас нет business_id здесь, поэтому пропускаем
@@ -5560,6 +5673,15 @@ def process_queue():
                         print(f"Ошибка при ИИ-анализе карточки {card_id}: {analysis_error}")
                 else:
                     print("⏭️ ИИ-анализ карточки пропущен (WORKER_ENABLE_AI_ANALYSIS=false)", flush=True)
+
+            if queue_dict.get("company_location_id"):
+                public_services_saved = _sync_company_public_services(cursor, queue_dict, card_data)
+                if public_services_saved:
+                    print(
+                        f"[COMPANY_REGISTRY] public_services_saved={public_services_saved} "
+                        f"company_location_id={queue_dict.get('company_location_id')}",
+                        flush=True,
+                    )
             
             # Обновляем статус на "completed" (чтобы задача осталась в списке)
             warning_parts = []

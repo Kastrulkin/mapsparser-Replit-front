@@ -127,10 +127,11 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
     cursor.execute(
         """
         SELECT source.* FROM knowledge_sources source
-        JOIN telegram_account_permissions permission
+        LEFT JOIN telegram_account_permissions permission
           ON permission.account_id = source.account_id
          AND permission.radar_enabled = TRUE
         WHERE source.source_type = 'telegram'
+          AND (source.sync_mode = 'public_preview' OR permission.radar_enabled = TRUE)
           AND (
                 source.status = 'active'
                 OR (

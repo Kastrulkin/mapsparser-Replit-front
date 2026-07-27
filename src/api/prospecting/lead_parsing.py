@@ -852,7 +852,40 @@ def _create_shadow_business_for_lead(lead: dict[str, Any], user_id: str) -> dict
     finally:
         conn.close()
 
+def _ensure_company_registry_for_parse(lead: dict[str, Any]) -> dict[str, Any]:
+    if str(os.getenv("COMPANY_REGISTRY_ENABLED", "true")).strip().lower() not in {"1", "true", "yes", "on"}:
+        return lead
+    lead_id = str(lead.get("id") or "").strip()
+    if not lead_id:
+        return lead
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'prospectingleads'
+              AND column_name = 'company_id'
+            """
+        )
+        if not cur.fetchone():
+            return lead
+        from services.company_registry_service import ensure_company_for_lead
+
+        resolved = ensure_company_for_lead(conn, lead_id, lead, source="lead_parse")
+        conn.commit()
+        enriched = dict(lead)
+        enriched.update(resolved)
+        return enriched
+    except Exception:
+        conn.rollback()
+        return lead
+    finally:
+        conn.close()
+
 def _ensure_parse_business_for_lead(lead: dict[str, Any], user_id: str) -> tuple[dict[str, Any], bool]:
+    lead = _ensure_company_registry_for_parse(lead)
     existing = _find_existing_business_for_lead(lead)
     if existing:
         return existing, False
@@ -861,7 +894,7 @@ def _ensure_parse_business_for_lead(lead: dict[str, Any], user_id: str) -> tuple
 
 def _ensure_parse_business_for_partnership_lead(lead: dict[str, Any], user_id: str) -> tuple[dict[str, Any], bool]:
     """Resolve shadow business for partnership parse without binding to tenant business_id."""
-    detached = dict(lead)
+    detached = _ensure_company_registry_for_parse(dict(lead))
     detached["business_id"] = None
     existing = _find_existing_business_for_lead(detached)
     if existing:
@@ -1139,16 +1172,88 @@ def _enqueue_parse_task_for_business(business_id: str, user_id: str, source_url:
         elif is_google_map_url(normalized_url):
             source_hint = "google_maps"
         parse_source = resolve_map_source_for_queue(source_hint, bool(get_use_apify_map_parsing(conn)))
-        cur.execute(
-            """
-            INSERT INTO parsequeue (
-                id, business_id, task_type, source, status, user_id, url, created_at, updated_at
+        company_location_id = None
+        external_profile_id = None
+        registry_dual_write = str(os.getenv("COMPANY_PARSER_DUAL_WRITE_ENABLED", "false")).strip().lower() in {"1", "true", "yes", "on"}
+        if registry_dual_write:
+            cur.execute(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'parsequeue'
+                  AND column_name = 'company_location_id'
+                """
             )
-            VALUES (%s, %s, 'parse_card', %s, 'pending', %s, %s, NOW(), NOW())
-            RETURNING id, status, task_type, source, updated_at, retry_after
-            """,
-            (task_id, business_id, parse_source, user_id, source_url),
-        )
+            if cur.fetchone():
+                cur.execute(
+                    """
+                    SELECT lead.company_location_id, lead.business_id AS requested_by_business_id
+                    FROM prospectingleads lead
+                    WHERE lead.company_location_id IS NOT NULL
+                      AND (
+                        lead.parse_business_id = %s
+                        OR (%s <> '' AND lead.source_url = %s)
+                      )
+                    ORDER BY lead.updated_at DESC
+                    LIMIT 1
+                    """,
+                    (business_id, source_url, source_url),
+                )
+                location_row = cur.fetchone()
+                company_location_id = (
+                    location_row.get("company_location_id")
+                    if location_row and hasattr(location_row, "get")
+                    else (location_row[0] if location_row else None)
+                )
+                requested_by_business_id = (
+                    location_row.get("requested_by_business_id")
+                    if location_row and hasattr(location_row, "get")
+                    else (location_row[1] if location_row and len(location_row) > 1 else None)
+                )
+                if company_location_id:
+                    cur.execute(
+                        """
+                        SELECT id
+                        FROM company_external_profiles
+                        WHERE company_location_id = %s
+                          AND (canonical_url = %s OR canonical_url IS NULL)
+                          AND status = 'active'
+                        ORDER BY (canonical_url = %s) DESC, created_at ASC
+                        LIMIT 1
+                        """,
+                        (company_location_id, source_url, source_url),
+                    )
+                    profile_row = cur.fetchone()
+                    external_profile_id = (
+                        profile_row.get("id")
+                        if profile_row and hasattr(profile_row, "get")
+                        else (profile_row[0] if profile_row else None)
+                    )
+        if company_location_id:
+            cur.execute(
+                """
+                INSERT INTO parsequeue (
+                    id, business_id, company_location_id, external_profile_id,
+                    requested_by_business_id, force_refresh,
+                    task_type, source, status, user_id, url, created_at, updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, TRUE, 'parse_card', %s, 'pending', %s, %s, NOW(), NOW())
+                RETURNING id, status, task_type, source, updated_at, retry_after,
+                          company_location_id, external_profile_id
+                """,
+                (task_id, business_id, company_location_id, external_profile_id, requested_by_business_id, parse_source, user_id, source_url),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO parsequeue (
+                    id, business_id, task_type, source, status, user_id, url, created_at, updated_at
+                )
+                VALUES (%s, %s, 'parse_card', %s, 'pending', %s, %s, NOW(), NOW())
+                RETURNING id, status, task_type, source, updated_at, retry_after
+                """,
+                (task_id, business_id, parse_source, user_id, source_url),
+            )
         created = dict(cur.fetchone())
         created["existing"] = False
         conn.commit()

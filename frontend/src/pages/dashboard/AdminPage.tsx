@@ -37,8 +37,11 @@ const IndustryPatternsManagement = lazy(() =>
 const KnowledgeMarketOverview = lazy(() =>
   import('../../components/KnowledgeMarketOverview').then((module) => ({ default: module.KnowledgeMarketOverview })),
 );
+const CompanyRegistry = lazy(() =>
+  import('../../components/companies/CompanyRegistry').then((module) => ({ default: module.CompanyRegistry })),
+);
 
-type AdminTabId = 'businesses' | 'subscriptions' | 'agents' | 'agentApi' | 'tokens' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting' | 'telegramRadar' | 'knowledge';
+type AdminTabId = 'businesses' | 'companies' | 'subscriptions' | 'agents' | 'agentApi' | 'tokens' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting' | 'telegramRadar' | 'knowledge';
 interface Business {
   id: string;
   name: string;
@@ -353,6 +356,7 @@ const LOCALOS_RADAR_BUSINESS_ID = '__localos__';
 
 const adminTabs: AdminTabConfig[] = [
   { id: 'businesses', label: 'Пользователи и бизнесы', icon: User },
+  { id: 'companies', label: 'Компании', icon: Building2 },
   { id: 'subscriptions', label: 'Подписки', icon: CreditCard },
   { id: 'agents', label: 'Агенты пользователей', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
@@ -368,6 +372,7 @@ const adminTabs: AdminTabConfig[] = [
 
 const primaryAdminTabs: AdminTabConfig[] = [
   { id: 'businesses', label: 'Пользователи', icon: User },
+  { id: 'companies', label: 'Компании', icon: Building2 },
   { id: 'subscriptions', label: 'Подписки', icon: CreditCard },
   { id: 'agents', label: 'Агенты', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
@@ -1888,6 +1893,14 @@ export const AdminPage: React.FC = () => {
             contentClassName="p-0"
           >
             <ParsingManagement />
+          </DashboardSection>
+        ) : activeTab === 'companies' ? (
+          <DashboardSection
+            title={activeTabConfig.label}
+            description="Единая публичная история клиентов, лидов, партнёров и компаний, попавших в поле зрения LocalOS."
+            contentClassName="p-0"
+          >
+            <CompanyRegistry />
           </DashboardSection>
         ) : activeTab === 'prospecting' ? (
           <DashboardSection

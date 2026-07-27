@@ -68,6 +68,7 @@ type TodayMobileV2Props = {
   ask: (event: FormEvent) => void;
   openTarget: (screen?: string, targetScope?: { kind?: string; id?: string }) => void;
   openProgress: () => void;
+  openSources?: () => void;
   track: (eventName: string, target?: string) => void;
 };
 
@@ -128,9 +129,9 @@ const ActivityRow = ({
   return <button type="button" onClick={onClick} className="flex min-h-16 w-full items-start gap-3 py-3 text-left transition-transform active:scale-[0.96]">{content}</button>;
 };
 
-const Section = ({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) => (
+const Section = ({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode }) => (
   <section className="mt-7">
-    <h2 className="text-balance text-lg font-semibold tracking-[-0.025em]">{title}</h2>
+    <div className="flex min-h-11 items-center justify-between gap-3"><h2 className="text-balance text-lg font-semibold tracking-[-0.025em]">{title}</h2>{action}</div>
     {subtitle ? <p className="mt-1 text-pretty text-xs leading-5 text-zinc-600">{subtitle}</p> : null}
     <div className="mt-3 divide-y divide-white/[0.055]">{children}</div>
   </section>
@@ -145,6 +146,7 @@ export const TodayMobileV2 = ({
   ask,
   openTarget,
   openProgress,
+  openSources,
   track,
 }: TodayMobileV2Props) => {
   const [delegateOpen, setDelegateOpen] = useState(false);
@@ -259,9 +261,9 @@ export const TodayMobileV2 = ({
         )}
       </Section>
 
-      {pulse.length ? (
-        <Section title="Пульс сообщества" subtitle="О чём действительно говорили предприниматели за последние сутки.">
-          {pulse.map((item, index) => (
+      {pulse.length || openSources ? (
+        <Section title="Пульс сообщества" subtitle="О чём действительно говорили предприниматели за последние сутки." action={openSources ? <button type="button" onClick={openSources} className="min-h-11 rounded-[14px] px-3 text-xs font-semibold text-zinc-400 ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]">Источники</button> : null}>
+          {pulse.length ? pulse.map((item, index) => (
             <a
               key={item.id}
               href={item.source_url || undefined}
@@ -278,7 +280,7 @@ export const TodayMobileV2 = ({
               </span>
               <ArrowUpRight className="h-4 w-4 shrink-0 text-zinc-700" />
             </a>
-          ))}
+          )) : <button type="button" onClick={openSources} className="flex min-h-16 w-full items-center gap-3 py-3 text-left text-sm text-zinc-600"><Radio className="h-5 w-5 text-primary" /><span>Добавьте отраслевые каналы, чтобы LocalOS собирал важные обсуждения.</span><ChevronRight className="ml-auto h-4 w-4" /></button>}
         </Section>
       ) : null}
 

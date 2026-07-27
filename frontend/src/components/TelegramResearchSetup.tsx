@@ -237,7 +237,7 @@ export const TelegramResearchSetup = ({ businessId, mode = 'full', scopeType = '
         body: JSON.stringify({ sources: selected }),
       });
       await newAuth.makeRequest(`/business/${encodeURIComponent(businessId)}/telegram-research/backfill`, { method: 'POST' });
-      setMessage('Источники сохранены. LocalOS загрузит последние 90 дней и продолжит обновлять их автоматически.');
+      setMessage('Источники сохранены. LocalOS соберёт доступные публичные материалы и будет обновлять их автоматически. Личные и закрытые чаты не собираются.');
       await loadStatus();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить источники');

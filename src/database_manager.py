@@ -2058,6 +2058,19 @@ class DatabaseManager:
                 return None
             return json.dumps(value, ensure_ascii=False)
 
+        def _sync_company_registry(lead_id: str) -> None:
+            enabled = str(os.getenv("COMPANY_REGISTRY_ENABLED", "true")).strip().lower() in {"1", "true", "yes", "on"}
+            if not enabled or "company_id" not in table_columns:
+                return
+            from services.company_registry_service import ensure_company_for_lead
+
+            registry_cursor = self.conn.cursor()
+            registry_cursor.execute("SELECT * FROM prospectingleads WHERE id = %s", (lead_id,))
+            registry_row = registry_cursor.fetchone()
+            registry_payload = self._row_to_dict(registry_cursor, registry_row) if registry_row else dict(lead_data)
+            registry_cursor.close()
+            ensure_company_for_lead(self.conn, lead_id, registry_payload)
+
         def _update_existing_lead(existing_id: str) -> None:
             updates: Dict[str, Any] = {}
 
@@ -2138,6 +2151,7 @@ class DatabaseManager:
                 """,
                 params,
             )
+            _sync_company_registry(existing_id)
             self.conn.commit()
 
         source_external_id = lead_data.get('source_external_id') or lead_data.get('google_id')
@@ -2261,6 +2275,7 @@ class DatabaseManager:
                 VALUES ({legacy_placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """, legacy_values)
         
+        _sync_company_registry(lead_id)
         self.conn.commit()
         return lead_id
 

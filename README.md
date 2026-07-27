@@ -119,8 +119,10 @@ LocalOS помогает владельцам и управляющим лока
 - **Инфраструктура**: Docker, Docker Compose, Nginx, systemd, venv (для локальных тестов)
 - **База данных (runtime)**: PostgreSQL 16 в Docker
   - **Legacy**: SQLite (`src/reports.db`) используется только для старых отчётов и вспомогательных скриптов
-  - **Основные таблицы (в PostgreSQL - имена в нижнем регистре)**: users, businesses, userservices, parsequeue, cards, externalbusinessaccounts, businessmaplinks, businessmetricshistory, externalbusinessstats, externalbusinessreviews; AIAgents, AIAgentConversations, AIAgentMessages, Bookings
-  - **Иерархия**: Users → Businesses → все остальные данные (все привязано к `business_id`)
+  - **Основные таблицы (в PostgreSQL - имена в нижнем регистре)**: users, businesses, companies, company_locations, business_company_links, prospectingleads, lead_workstreams, userservices, parsequeue, cards, knowledge_sources, knowledge_documents, knowledge_source_subscriptions, externalbusinessaccounts, businessmaplinks, businessmetricshistory, externalbusinessstats, externalbusinessreviews; AIAgents, AIAgentConversations, AIAgentMessages, Bookings
+  - **Иерархия доступа**: Users → Networks/Businesses задаёт tenant scope. `Company + CompanyLocation` хранит каноническую публичную идентичность; доступ к ней вычисляется из `business_company_links`, workstreams и отношений, а не из глобального каталога.
+  - **Публичные Telegram-источники**: один `knowledge_source` на канал, единые documents/embeddings и отдельные `knowledge_source_subscriptions` для тем и графика каждого бизнеса. Личные, закрытые и invite-only чаты не собираются.
+  - **Поэтапный запуск реестра**: `COMPANY_REGISTRY_ENABLED` → `COMPANY_PARSER_DUAL_WRITE_ENABLED` → `COMPANY_LOCATION_PARSER_ENABLED` → `COMPANY_REGISTRY_WEB_ENABLED` / `COMPANY_REGISTRY_MINIAPP_ENABLED`. `LEAD_SHADOW_BUSINESS_CREATION_ENABLED` отключается только после проверки паритета; в Docker Compose новые флаги по умолчанию выключены.
   - **AI/communication tables**: `AIAgents`, `AIAgentConversations`, `AIAgentMessages`, `agent_blueprints`, `agent_runs`, `agent_approvals` и связанные runtime/audit таблицы
   - **Безопасность**: Alembic migrations, production backups перед schema changes, tenant scope, approval/audit boundaries
 - **Внешние интеграции**: Яндекс.Бизнес, Google Business Profile, 2ГИС (с шифрованием auth_data)
