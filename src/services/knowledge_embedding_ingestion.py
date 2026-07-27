@@ -219,10 +219,201 @@ def ingest_deidentified_private_aggregates(conn, *, limit: int = 1000) -> int:
     return len(rows)
 
 
+def ingest_company_profiles(conn, *, limit: int = 1000) -> int:
+    """Build one provenance-rich semantic document per canonical company."""
+    if not _table_exists(conn, "companies"):
+        return 0
+    source = _source(conn, key="company-registry-semantic", title="Канонический реестр компаний")
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor.execute(
+        """
+        SELECT company.id, company.canonical_name, company.legal_name,
+               company.primary_category, company.first_seen_source,
+               locations.items AS locations, profiles.items AS external_profiles,
+               observations.items AS observations, services.items AS public_services,
+               social.items AS social_sources, audits.items AS public_audits,
+               GREATEST(
+                   company.updated_at,
+                   locations.updated_at,
+                   profiles.updated_at,
+                   observations.updated_at,
+                   services.updated_at,
+                   social.updated_at,
+                   audits.updated_at
+               ) AS source_updated_at
+        FROM companies company
+        LEFT JOIN LATERAL (
+            SELECT jsonb_agg(jsonb_build_object(
+                       'location_id', location.id,
+                       'name', location.display_name,
+                       'address', location.address,
+                       'city', location.city,
+                       'region', location.region,
+                       'country', location.country,
+                       'is_primary', location.is_primary
+                   ) ORDER BY location.is_primary DESC, location.created_at) AS items,
+                   MAX(location.updated_at) AS updated_at
+            FROM company_locations location
+            WHERE location.company_id = company.id AND location.status = 'active'
+        ) locations ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT jsonb_agg(jsonb_build_object(
+                       'provider', profile.provider,
+                       'external_id', profile.external_id,
+                       'url', profile.canonical_url,
+                       'last_collected_at', profile.last_collected_at,
+                       'source', profile.provider
+                   ) ORDER BY profile.provider, profile.created_at) AS items,
+                   MAX(profile.updated_at) AS updated_at
+            FROM company_external_profiles profile
+            JOIN company_locations location ON location.id = profile.company_location_id
+            WHERE location.company_id = company.id AND profile.status = 'active'
+        ) profiles ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT jsonb_agg(jsonb_build_object(
+                       'predicate', observation.predicate,
+                       'value', observation.value_json,
+                       'source_type', observation.source_type,
+                       'source_url', observation.source_url,
+                       'confidence', observation.confidence,
+                       'observed_at', observation.observed_at
+                   ) ORDER BY observation.observed_at DESC) AS items,
+                   MAX(observation.updated_at) AS updated_at
+            FROM company_observations observation
+            WHERE observation.company_id = company.id
+              AND observation.status IN ('observed', 'confirmed')
+              AND observation.invalidated_at IS NULL
+        ) observations ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT jsonb_agg(jsonb_build_object(
+                       'name', service.name,
+                       'description', service.description,
+                       'category', service.category,
+                       'price', service.price_text,
+                       'source_url', service.source_url,
+                       'observed_at', service.observed_at
+                   ) ORDER BY service.observed_at DESC) AS items,
+                   MAX(service.updated_at) AS updated_at
+            FROM company_public_services service
+            JOIN company_locations location ON location.id = service.company_location_id
+            WHERE location.company_id = company.id AND service.invalidated_at IS NULL
+        ) services ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT jsonb_agg(jsonb_build_object(
+                       'relation_type', link.relation_type,
+                       'verification_status', link.verification_status,
+                       'confidence', link.confidence,
+                       'source_title', knowledge.title,
+                       'source_url', knowledge.canonical_url,
+                       'evidence', link.evidence_json
+                   ) ORDER BY link.confidence DESC, link.updated_at DESC) AS items,
+                   MAX(link.updated_at) AS updated_at
+            FROM company_social_source_links link
+            JOIN knowledge_sources knowledge ON knowledge.id = link.source_id
+            WHERE link.company_id = company.id
+              AND knowledge.visibility = 'public'
+              AND knowledge.sensitivity_class = 'public'
+        ) social ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT jsonb_agg(entry.payload ORDER BY entry.updated_at DESC) AS items,
+                   MAX(entry.updated_at) AS updated_at
+            FROM (
+                SELECT jsonb_build_object(
+                           'audit_type', 'public_lead_audit',
+                           'audit_id', audit.lead_id,
+                           'source_url', audit.slug,
+                           'content', LEFT(COALESCE(
+                               audit.published_json,
+                               audit.edited_json,
+                               audit.generated_json,
+                               audit.page_json
+                           )::text, 12000)
+                       ) AS payload,
+                       audit.updated_at
+                FROM adminprospectingleadpublicoffers audit
+                WHERE audit.company_id = company.id AND audit.audit_context = 'public'
+                UNION ALL
+                SELECT jsonb_build_object(
+                           'audit_type', 'sales_room_audit',
+                           'audit_id', audit.id,
+                           'source_url', audit.prepared_audit_url,
+                           'title', audit.offer_title,
+                           'summary', audit.offer_text
+                       ) AS payload,
+                       audit.updated_at
+                FROM sales_room_audit_offers audit
+                WHERE audit.company_id = company.id AND audit.audit_context = 'public'
+            ) entry
+        ) audits ON TRUE
+        WHERE company.status IN ('observed', 'active')
+          AND NOT EXISTS (
+              SELECT 1 FROM knowledge_documents document
+              WHERE document.source_id = %s AND document.external_id = company.id::text
+                AND document.invalidated_at IS NULL
+                AND document.updated_at >= GREATEST(
+                    company.updated_at,
+                    locations.updated_at,
+                    profiles.updated_at,
+                    observations.updated_at,
+                    services.updated_at,
+                    social.updated_at,
+                    audits.updated_at
+                )
+          )
+        ORDER BY GREATEST(
+            company.updated_at,
+            locations.updated_at,
+            profiles.updated_at,
+            observations.updated_at,
+            services.updated_at,
+            social.updated_at,
+            audits.updated_at
+        ) ASC
+        LIMIT %s
+        """,
+        (source["id"], max(1, min(int(limit), 10000))),
+    )
+    rows = [dict(row) for row in cursor.fetchall()]
+    cursor.close()
+    for row in rows:
+        payload = {
+            "company_id": str(row["id"]),
+            "name": row.get("canonical_name"),
+            "legal_name": row.get("legal_name"),
+            "primary_category": row.get("primary_category"),
+            "locations": row.get("locations") or [],
+            "external_profiles": row.get("external_profiles") or [],
+            "observations": row.get("observations") or [],
+            "public_services": row.get("public_services") or [],
+            "social_sources": row.get("social_sources") or [],
+            "public_audits": row.get("public_audits") or [],
+        }
+        body, flags = redact_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str))
+        upsert_document(
+            conn,
+            source_id=str(source["id"]),
+            external_id=str(row["id"]),
+            document_type="company_public_profile",
+            title=str(row.get("canonical_name") or "Компания"),
+            content_text=body,
+            published_at=row.get("source_updated_at"),
+            sensitivity_class="public",
+            pii_flags=flags,
+            allowed_uses=USES,
+            metadata={
+                "company_id": str(row["id"]),
+                "first_seen_source": row.get("first_seen_source"),
+                "provenance_included": True,
+            },
+        )
+    return len(rows)
+
+
 def ingest_semantic_sources(conn, *, limit_per_source: int = 1000) -> dict[str, int]:
     return {
         "reviews": ingest_public_reviews(conn, limit=limit_per_source),
         "posts": ingest_public_posts(conn, limit=limit_per_source),
         "news": ingest_approved_news(conn, limit=limit_per_source),
+        "companies": ingest_company_profiles(conn, limit=limit_per_source),
         "private_aggregates": ingest_deidentified_private_aggregates(conn, limit=limit_per_source),
     }

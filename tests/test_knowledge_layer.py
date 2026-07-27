@@ -293,6 +293,21 @@ def test_domain_imports_exclude_orphaned_business_rows():
     assert "not_prevalence_evidence" in ingestion
 
 
+def test_company_semantic_profile_combines_public_data_with_provenance():
+    ingestion_path = Path(__file__).resolve().parents[1] / "src" / "services" / "knowledge_embedding_ingestion.py"
+    ingestion = ingestion_path.read_text(encoding="utf-8")
+
+    assert "def ingest_company_profiles" in ingestion
+    assert 'document_type="company_public_profile"' in ingestion
+    assert "company_external_profiles" in ingestion
+    assert "company_public_services" in ingestion
+    assert "company_social_source_links" in ingestion
+    assert "adminprospectingleadpublicoffers" in ingestion
+    assert "sales_room_audit_offers" in ingestion
+    assert '"provenance_included": True' in ingestion
+    assert '"companies": ingest_company_profiles' in ingestion
+
+
 class _FakeCursor:
     def execute(self, *_args, **_kwargs):
         return None
