@@ -698,9 +698,9 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
             },
             [
                 {
-                    "label": "Посмотреть записи",
-                    "description": "Сверить загрузку мастеров и слабые смены.",
-                    "route": "/dashboard/bookings",
+                    "label": "Открыть статистику загрузки",
+                    "description": "Сверить данные CRM по мастерам и слабым сменам.",
+                    "route": "/dashboard/finance",
                 },
             ],
         )
@@ -762,9 +762,9 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
             },
             [
                 {
-                    "label": "Проверить записи",
-                    "description": "Найти ближайшие записи, где нужно подтверждение.",
-                    "route": "/dashboard/bookings",
+                    "label": "Открыть статистику неявок",
+                    "description": "Проверить динамику неявок и отмен по данным CRM.",
+                    "route": "/dashboard/finance",
                 },
                 {
                     "label": "Настроить бота",
@@ -804,9 +804,9 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
                     "route": "/dashboard/chats",
                 },
                 {
-                    "label": "Проверить записи",
-                    "description": "Найти клиентов без следующего визита.",
-                    "route": "/dashboard/bookings",
+                    "label": "Открыть статистику возвратов",
+                    "description": "Проверить долю повторных визитов по данным CRM.",
+                    "route": "/dashboard/finance",
                 },
             ],
         )

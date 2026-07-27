@@ -16,7 +16,7 @@ import { api } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
 
 type BetaFeedbackBannerProps = {
-  area: 'agents' | 'operator' | 'bookings';
+  area: 'agents' | 'operator';
   title: string;
   description: string;
   businessId?: string | null;

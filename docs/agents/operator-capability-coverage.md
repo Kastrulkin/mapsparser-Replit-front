@@ -20,7 +20,7 @@ coverage boundary; it must not be used to imply unsupported provider writes.
 | Services | `services.price.update` | `available` | Tenant-scoped narrow internal write | `/dashboard/card?tab=services` |
 | Services | `services.optimize` | `draft_only` | Existing paid preview handler | `/dashboard/card?tab=services` |
 | Services | `services.apply` | `approval_required` | Stored action envelope and idempotent confirm | `/dashboard/card?tab=services` |
-| Bookings | `appointments.manage` | `available` for reads | `ActionOrchestrator` and canonical `appointments.read` handler | `/dashboard/bookings` |
+| CRM statistics | `crm.stats` | `manual_handoff` | CRM remains the source of records; LocalOS uses imported aggregates | `/dashboard/progress` and `/dashboard/finance` |
 | Finance | `finance.manage` | `request_only` | Manual section until typed proposal/apply UX is connected | `/dashboard/finance` |
 | Communications | `communications.manage` | `request_only` | Draft/request boundary; external send needs approval | `/dashboard/chats` |
 | Partnerships | `partnerships.manage` | `request_only` | Draft/request boundary; outreach send needs approval | `/dashboard/partnerships` |

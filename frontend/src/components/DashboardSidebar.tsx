@@ -98,15 +98,6 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         : 'Shows what is done, what needs attention, and the most important next step.',
     },
     {
-      id: 'bookings',
-      label: t.dashboard.sidebar.bookings,
-      icon: Calendar,
-      path: '/dashboard/bookings',
-      tooltip: language === 'ru'
-        ? 'Смотрите входящие записи и их текущий статус.'
-        : 'View incoming bookings and their current status.',
-    },
-    {
       id: 'chats',
       label: t.dashboard.sidebar.chats,
       icon: MessageSquare,
@@ -148,8 +139,8 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       icon: BadgeDollarSign,
       path: '/dashboard/average-ticket',
       tooltip: language === 'ru'
-        ? 'Допродажи, кросс-продажи, скрипты и пакеты по реальным записям.'
-        : 'Upsells, cross-sells, scripts, and packages based on real bookings.',
+        ? 'Допродажи, кросс-продажи, скрипты и пакеты по статистике из CRM.'
+        : 'Upsells, cross-sells, scripts, and packages based on CRM statistics.',
     },
     {
       id: 'ai-chat-promotion',

@@ -62,7 +62,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("services.price.update", "Изменение цены одной услуги", "available", "write_internal", "explicit_command", "/dashboard/card?tab=services", ("Измени цену услуги Маникюр на 1500",)),
     OperatorCapability("finance.manage", "Финансы и импорты", "request_only", "financial", "separate_confirmation", "/dashboard/finance", ("Добавь расход", "Покажи финансовый итог"), "finance.transaction.create"),
     OperatorCapability("average_ticket.manage", "Средний чек и допродажи", "manual", "read_or_draft", "manual_handoff", "/dashboard/average-ticket", ("Как увеличить средний чек?",)),
-    OperatorCapability("appointments.manage", "Бронирования", "available", "read_only", "none", "/dashboard/bookings", ("Покажи записи на завтра",), "appointments.read"),
+    OperatorCapability("crm.stats", "Статистика CRM", "manual", "read_only", "manual_handoff", "/dashboard/progress", ("Покажи статистику записей и загрузки",)),
     OperatorCapability("communications.manage", "Чаты и сообщения", "request_only", "communication", "separate_confirmation", "/dashboard/chats", ("Подготовь сообщение клиентам",), "communications.draft"),
     OperatorCapability("partnerships.manage", "Партнёрства и outreach", "request_only", "external_send", "separate_confirmation", "/dashboard/partnerships", ("Найди партнёров рядом",), "partnership.draft_offer"),
     OperatorCapability("network.manage", "Сеть и локации", "manual", "write_internal", "manual_handoff", "/dashboard/network", ("Покажи проблемные локации",)),
@@ -81,7 +81,7 @@ OPERATOR_ACTION_ORCHESTRATOR = ActionOrchestrator(build_capability_handlers())
 MANUAL_MATCHERS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("finance.manage", ("финанс", "расход", "доход", "выруч", "транзакц")),
     ("average_ticket.manage", ("средн", "допрод", "чек")),
-    ("appointments.manage", ("бронир", "запис", "визит")),
+    ("crm.stats", ("бронир", "запис", "визит", "неявк", "загрузк")),
     ("communications.manage", ("чат", "сообщен", "напоминан", "клиентам")),
     ("partnerships.manage", ("партнер", "партнёр", "outreach", "предложен")),
     ("network.manage", ("локац", "филиал", "сеть")),
@@ -469,6 +469,9 @@ def _create_content_plan(*, business_id: str, user_id: str, message: str) -> dic
 
 def _manual_result(capability: str) -> dict[str, Any]:
     spec = CAPABILITY_BY_NAME[capability]
+    capability_copy = {
+        "crm.stats": "LocalOS не управляет записями. Статистика загружается из CRM и отображается в «Прогрессе» и «Финансах».",
+    }
     copy_by_status = {
         "request_only": "Для этого действия нужен контролируемый запрос и подтверждение. Откройте раздел, чтобы проверить параметры.",
         "manual": "Этот раздел пока управляется вручную. Откройте его — Оператор не будет имитировать выполнение.",
@@ -477,9 +480,9 @@ def _manual_result(capability: str) -> dict[str, Any]:
     result = {
         "status": "approval_required" if spec.status == "approval_required" else "manual_handoff",
         "intent": capability,
-        "chat_response": copy_by_status.get(spec.status, "Откройте раздел для продолжения."),
+        "chat_response": capability_copy.get(capability) or copy_by_status.get(spec.status, "Откройте раздел для продолжения."),
         "external_writes_performed": False,
-        "result_ref": _result_ref(capability),
+        "result_ref": _result_ref(capability, label="Открыть Прогресс" if capability == "crm.stats" else None),
     }
     return standardize_operator_result(result, capability)
 
@@ -589,7 +592,7 @@ def route_operator_message(
             "Я управляю LocalOS через единый набор безопасных возможностей. "
             "Уже выполняю работу с карточкой и отзывами, создаю новости, посты и контент-планы, "
             "оптимизирую услуги и меняю цену одной точно указанной услуги. "
-            "Финансы, бронирования, партнёрства, сеть, агентов и настройки открываю в нужном разделе, "
+            "Статистику CRM показываю в «Прогрессе» и «Финансах». Партнёрства, сеть, агентов и настройки открываю в нужном разделе, "
             "если безопасный handler ещё не подключён. Внешние публикации и отправки не выполняю без отдельного подтверждения."
         )
         result["capability_catalog"] = operator_capability_catalog()
@@ -638,18 +641,6 @@ def route_operator_message(
         return standardize_operator_result(
             generate_news_draft_from_operator(cursor, business_id=business_id, user_id=user_id, message=clean_message, channel=channel),
             "news.generate",
-        ), {}
-    if any(marker in lowered_message for marker in ("запис", "бронир", "визит")) and any(
-        marker in lowered_message for marker in ("покаж", "какие", "сколько", "есть")
-    ):
-        return _execute_registered_capability(
-            capability="appointments.manage",
-            business_id=business_id,
-            user_id=user_id,
-            channel=channel,
-            message=clean_message,
-            payload=_appointments_payload(clean_message, limit),
-            orchestrator=action_orchestrator,
         ), {}
     manual_review_intent = classify_operator_chat_intent(clean_message)
     manual_review_result = run_manual_review(

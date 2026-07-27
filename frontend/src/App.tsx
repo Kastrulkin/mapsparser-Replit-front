@@ -125,11 +125,6 @@ const AdminPage = lazy(() =>
     default: module.AdminPage,
   })),
 );
-const BookingsPage = lazy(() =>
-  import("./pages/dashboard/BookingsPage").then((module) => ({
-    default: module.BookingsPage,
-  })),
-);
 const ChatsPage = lazy(() =>
   import("./pages/dashboard/ChatsPage").then((module) => ({
     default: module.ChatsPage,
@@ -283,7 +278,7 @@ const AppShell = () => {
             <Route path="operator" element={<OperatorPage />} />
             <Route path="telegram-radar" element={<TelegramRadarPage />} />
             <Route path="agents" element={<AgentBlueprintsPage />} />
-            <Route path="bookings" element={<BookingsPage />} />
+            <Route path="bookings" element={<Navigate to="/dashboard/progress" replace />} />
             <Route path="chats" element={<ChatsPage />} />
             <Route path="network" element={<NetworkDashboardPage />} />
             <Route path="bazich" element={<AdminPage />} />

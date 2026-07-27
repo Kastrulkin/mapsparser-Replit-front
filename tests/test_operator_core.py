@@ -54,21 +54,6 @@ class ServiceCursor:
         return value
 
 
-class AppointmentsOrchestrator:
-    def __init__(self):
-        self.envelope = None
-
-    def execute(self, envelope, user_data):
-        self.envelope = envelope
-        return {
-            "success": True,
-            "status": "completed",
-            "action_id": "action-1",
-            "result": {"count": 2, "appointments": [{"id": "booking-1"}, {"id": "booking-2"}]},
-            "billing": {},
-        }
-
-
 def test_exact_service_price_update_returns_result_link() -> None:
     cursor = ServiceCursor([{"id": "service-1", "name": "Маникюр", "price": Decimal("1000")}])
 
@@ -184,28 +169,24 @@ def test_catalog_covers_all_operator_status_classes() -> None:
         "news.generate",
         "content_plan.generate",
         "finance.manage",
-        "appointments.manage",
+        "crm.stats",
         "partnerships.manage",
         "settings.manage",
     }.issubset(names)
 
 
-def test_appointments_read_uses_action_orchestrator_and_returns_link() -> None:
-    orchestrator = AppointmentsOrchestrator()
-
+def test_crm_queries_open_aggregated_progress_instead_of_booking_management() -> None:
     result, pending = route_operator_message(
         ServiceCursor(),
         business_id="business-1",
         user_id="user-1",
-        message="Покажи записи на завтра",
+        message="Покажи статистику записей и загрузки",
         channel="web",
-        action_orchestrator=orchestrator,
     )
 
-    assert result["status"] == "completed"
-    assert result["capability"] == "appointments.manage"
-    assert result["result_ref"]["href"] == "/dashboard/bookings"
-    assert result["appointments"][0]["id"] == "booking-1"
-    assert orchestrator.envelope["capability"] == "appointments.read"
-    assert orchestrator.envelope["payload"]["from"] == orchestrator.envelope["payload"]["to"]
+    assert result["status"] == "manual_handoff"
+    assert result["capability"] == "crm.stats"
+    assert result["result_ref"]["href"] == "/dashboard/progress"
+    assert result["result_ref"]["label"] == "Открыть Прогресс"
+    assert "не управляет записями" in result["chat_response"]
     assert pending == {}
