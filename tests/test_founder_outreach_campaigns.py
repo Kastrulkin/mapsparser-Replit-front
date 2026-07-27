@@ -77,6 +77,44 @@ def test_channel_setup_gap_can_be_saved_as_draft_but_not_approved():
     assert "channels_ready" in approve_block
 
 
+def test_vk_permission_change_refreshes_saved_campaign_channel_status():
+    from services import outreach_campaign_service as campaign_service
+
+    touch = {
+        "channel": "vk",
+        "contact_point_id": "contact-1",
+        "sender_account_id": "sender-1",
+        "message_brief_json": {"channel_status": "permission_required"},
+        "sender_status": "connected",
+        "sender_outreach_enabled": True,
+        "sender_health_status": "healthy",
+        "sender_capabilities_json": {"direct_send": True, "reply_sync": True},
+    }
+
+    assert campaign_service.runtime_touch_channel_status(touch) == "ready"
+
+    touch["sender_outreach_enabled"] = False
+    assert campaign_service.runtime_touch_channel_status(touch) == "permission_required"
+
+
+def test_saved_campaign_and_approval_use_live_channel_readiness():
+    api_source = (ROOT / "src/api/outreach_campaign_api.py").read_text()
+    payload_start = api_source.index("def _campaign_payload")
+    payload_end = api_source.index("\n\n@outreach_campaign_bp.get", payload_start)
+    payload_block = api_source[payload_start:payload_end]
+    campaign_source = (ROOT / "src/services/outreach_campaign_service.py").read_text()
+    approve_start = campaign_source.index("def approve_campaign")
+    approve_end = campaign_source.index("\n\ndef change_campaign_status", approve_start)
+    approve_block = campaign_source[approve_start:approve_end]
+    frontend_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    assert "runtime_touch_channel_status" in payload_block
+    assert 'touch["channel_status"]' in payload_block
+    assert "touch.channel_status || touch.message_brief_json?.channel_status" in frontend_source
+    assert "runtime_touch_channel_status" in approve_block
+    assert "t.message_brief_json->>'channel_status' = 'ready'" not in approve_block
+
+
 def test_campaign_approval_uses_sender_mode_scope_preflight():
     campaign_source = (ROOT / "src/services/outreach_campaign_service.py").read_text()
     approve_start = campaign_source.index("def approve_campaign")

@@ -26,6 +26,7 @@ from services.outreach_campaign_service import (
     record_campaign_event,
     record_manual_touch,
     resolve_sender_mode,
+    runtime_touch_channel_status,
     update_draft_campaign_touch,
 )
 from services.outreach_safety_service import (
@@ -223,10 +224,26 @@ def _campaign_payload(cursor: Any, campaign_id: str) -> dict[str, Any] | None:
         return None
     campaign = dict(row)
     cursor.execute(
-        "SELECT * FROM outreach_campaign_touches WHERE campaign_id = %s ORDER BY sequence_index",
+        """
+        SELECT touch.*,
+               sender.status AS sender_status,
+               sender.outreach_enabled AS sender_outreach_enabled,
+               sender.health_status AS sender_health_status,
+               sender.capabilities_json AS sender_capabilities_json,
+               permissions.outreach_enabled AS telegram_outreach_enabled
+        FROM outreach_campaign_touches touch
+        LEFT JOIN outreach_sender_accounts sender ON sender.id = touch.sender_account_id
+        LEFT JOIN telegram_account_permissions permissions ON permissions.account_id = sender.external_account_id
+        WHERE touch.campaign_id = %s
+        ORDER BY touch.sequence_index
+        """,
         (campaign_id,),
     )
-    campaign["touches"] = [dict(item) for item in cursor.fetchall()]
+    campaign["touches"] = []
+    for item in cursor.fetchall():
+        touch = dict(item)
+        touch["channel_status"] = runtime_touch_channel_status(touch)
+        campaign["touches"].append(touch)
     campaign["generation_current"] = bool(campaign["touches"]) and all(
         generation_contract_current(
             touch.get("message_brief_json"),

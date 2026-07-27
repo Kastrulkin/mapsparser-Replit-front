@@ -334,6 +334,7 @@ interface SavedOutreachCampaign {
     sequence_index?: number;
     channel?: string;
     status?: string;
+    channel_status?: string;
     sender_account_id?: string | null;
     contact_point_id?: string | null;
     angle_type?: string;
@@ -1035,7 +1036,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const savedCampaignChannelBlockers: ChannelSetupBlocker[] = [];
   for (const touch of savedOutreachCampaign?.touches || []) {
     const channel = String(touch.channel || '');
-    const channelStatus = String(touch.message_brief_json?.channel_status || '');
+    const channelStatus = String(touch.channel_status || touch.message_brief_json?.channel_status || '');
     const touchNumber = Number(touch.sequence_index || 0) + 1;
     const channelLabel = contactTypeLabels[channel] || channel.toUpperCase();
     if (['telegram', 'email', 'vk'].includes(channel)) {

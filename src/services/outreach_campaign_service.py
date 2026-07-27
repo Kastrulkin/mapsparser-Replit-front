@@ -152,6 +152,38 @@ def _text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
+def runtime_touch_channel_status(touch: dict[str, Any]) -> str:
+    """Return current channel readiness without rewriting the campaign snapshot."""
+    channel = _text(touch.get("channel")).lower()
+    brief = touch.get("message_brief_json")
+    saved_status = _text(brief.get("channel_status")) if isinstance(brief, dict) else ""
+    if channel in MANUAL_CHANNELS:
+        return "manual"
+    if channel not in AUTOMATIC_CHANNELS:
+        return saved_status or "recipient_missing"
+    if not touch.get("contact_point_id"):
+        return "recipient_missing"
+    if not touch.get("sender_account_id"):
+        return "sender_selection_required"
+    if _text(touch.get("sender_status")) != "connected":
+        return "connect_required"
+    health_status = _text(touch.get("sender_health_status"))
+    if health_status in {"paused", "blocked"}:
+        return "sender_paused"
+    if health_status == "degraded":
+        return "sender_degraded"
+    if channel == "telegram" and not touch.get("telegram_outreach_enabled"):
+        return "permission_required"
+    if channel in {"email", "vk"} and not touch.get("sender_outreach_enabled"):
+        return "permission_required"
+    capabilities = touch.get("sender_capabilities_json")
+    if not isinstance(capabilities, dict):
+        capabilities = {}
+    if not capabilities.get("direct_send") or not capabilities.get("reply_sync"):
+        return "adapter_unavailable"
+    return "ready"
+
+
 def update_draft_campaign_touch(
     cursor: Any,
     *,
@@ -2625,13 +2657,7 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         """
         SELECT c.*, COUNT(t.id) AS touch_count,
                BOOL_AND(COALESCE((t.quality_gate_json->>'passed')::boolean, FALSE)) AS quality_passed,
-               BOOL_AND(CASE WHEN t.channel IN ('telegram', 'email', 'vk') THEN t.sender_account_id IS NOT NULL ELSE TRUE END) AS senders_ready,
-               BOOL_AND(
-                   CASE
-                       WHEN t.channel IN ('telegram', 'email', 'vk') THEN t.message_brief_json->>'channel_status' = 'ready'
-                       ELSE t.message_brief_json->>'channel_status' = 'manual'
-                   END
-               ) AS channels_ready
+               BOOL_AND(CASE WHEN t.channel IN ('telegram', 'email', 'vk') THEN t.sender_account_id IS NOT NULL ELSE TRUE END) AS senders_ready
         FROM outreach_campaigns c
         LEFT JOIN outreach_campaign_touches t ON t.campaign_id = c.id
         WHERE c.id = %s
@@ -2648,22 +2674,33 @@ def approve_campaign(cursor: Any, campaign_id: str, *, user_id: str) -> dict[str
         not campaign.get("touch_count")
         or not campaign.get("quality_passed")
         or not campaign.get("senders_ready")
-        or not campaign.get("channels_ready")
     ):
         raise ValueError("Campaign preflight failed")
     cursor.execute(
         """
         SELECT touch.*,
                sender.scope_type AS sender_scope_type,
-               sender.business_id AS sender_business_id
+               sender.business_id AS sender_business_id,
+               sender.status AS sender_status,
+               sender.outreach_enabled AS sender_outreach_enabled,
+               sender.health_status AS sender_health_status,
+               sender.capabilities_json AS sender_capabilities_json,
+               permissions.outreach_enabled AS telegram_outreach_enabled
         FROM outreach_campaign_touches touch
         LEFT JOIN outreach_sender_accounts sender ON sender.id = touch.sender_account_id
+        LEFT JOIN telegram_account_permissions permissions ON permissions.account_id = sender.external_account_id
         WHERE touch.campaign_id = %s
         ORDER BY touch.sequence_index
         """,
         (campaign_id,),
     )
     approval_touches = [_dict(row) for row in cursor.fetchall()]
+    channels_ready = all(
+        runtime_touch_channel_status(touch) == ("ready" if touch.get("channel") in AUTOMATIC_CHANNELS else "manual")
+        for touch in approval_touches
+    )
+    if not channels_ready:
+        raise ValueError("Campaign preflight failed")
     if not all(
         generation_contract_current(
             touch.get("message_brief_json"),
