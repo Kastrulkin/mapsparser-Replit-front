@@ -365,8 +365,31 @@ interface OutreachSenderAccountSummary {
   display_name?: string | null;
   status?: string;
   outreach_enabled?: boolean;
+  capabilities?: {
+    direct_send?: boolean;
+    reply_sync?: boolean;
+  };
   health_status?: string;
 }
+
+const automaticOutreachChannels = new Set(['telegram', 'email', 'vk']);
+
+const outreachSenderReady = (account: OutreachSenderAccountSummary | undefined) => Boolean(
+  account
+  && account.status === 'connected'
+  && account.outreach_enabled
+  && account.capabilities?.direct_send
+  && account.capabilities?.reply_sync
+  && !['blocked', 'paused', 'degraded'].includes(String(account.health_status || '')),
+);
+
+const outreachSenderStatusLabel = (account: OutreachSenderAccountSummary) => {
+  if (account.status !== 'connected') return 'нужно подключить';
+  if (['blocked', 'paused', 'degraded'].includes(String(account.health_status || ''))) return 'нужно проверить';
+  if (!account.outreach_enabled) return 'отправка запрещена';
+  if (!account.capabilities?.direct_send || !account.capabilities?.reply_sync) return 'нет безопасной отправки';
+  return 'готов';
+};
 
 interface PilotReadiness {
   status?: string;
@@ -385,6 +408,7 @@ interface ChannelSetupBlocker {
   label: string;
   actionLabel: string;
   target: string;
+  focusTarget?: string;
   actionHref?: string;
 }
 
@@ -1038,9 +1062,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     const channel = String(touch.channel || '');
     const channelStatus = String(touch.channel_status || touch.message_brief_json?.channel_status || '');
     const touchNumber = Number(touch.sequence_index || 0) + 1;
+    const selectedSenderId = sequenceSenders[touchNumber - 1] || touch.sender_account_id || '';
+    const selectedSender = senderAccounts.find((account) => account.id === selectedSenderId);
     const channelLabel = contactTypeLabels[channel] || channel.toUpperCase();
     if (['telegram', 'email', 'vk'].includes(channel)) {
-      if (channelStatus === 'ready' && touch.sender_account_id) continue;
+      if (touch.contact_point_id && outreachSenderReady(selectedSender)) continue;
       if (channel === 'vk' && channelStatus === 'permission_required') {
         savedCampaignChannelBlockers.push({
           key: `${touchNumber}-${channel}`,
@@ -1057,6 +1083,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           label: `Касание ${touchNumber} · ${channelLabel}: выберите отправителя`,
           actionLabel: `Выбрать отправителя для касания ${touchNumber}`,
           target: 'outreach-sequence',
+          focusTarget: `touch-sender-${touchNumber - 1}`,
         });
         continue;
       }
@@ -1105,7 +1132,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     : savedOutreachCampaign
       ? `Версия ${Number(savedOutreachCampaign.version || 0)} · ${savedOutreachCampaign.status === 'approved' ? 'подтверждена' : 'черновик'}`
       : 'Цепочка не сохранена';
-  const summaryNextAction: { label: string; target: string; href?: string } = !drawerRecipient
+  const summaryNextAction: { label: string; target: string; focusTarget?: string; href?: string } = !drawerRecipient
     ? { label: 'Выбрать получателя', target: 'lead-contacts' }
     : !connectedEmailSender
       ? { label: 'Подключить email', target: 'sender-settings' }
@@ -1123,6 +1150,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 ? {
                     label: savedCampaignChannelBlockers[0].actionLabel,
                     target: savedCampaignChannelBlockers[0].target,
+                    focusTarget: savedCampaignChannelBlockers[0].focusTarget,
                     href: savedCampaignChannelBlockers[0].actionHref,
                   }
                 : savedOutreachCampaign?.status === 'draft'
@@ -1130,14 +1158,16 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   : canDispatchPilot
                     ? { label: 'Отправить первый шаг', target: 'outreach-sequence' }
                     : { label: 'Проверить готовность', target: 'outreach-sequence' };
-  const scrollToLeadSection = (target: string) => {
+  const scrollToLeadSection = (target: string, focusTarget?: string) => {
     const section = document.getElementById(target);
     const toggle = section?.querySelector(`[aria-controls="${target}-content"]`);
     if (toggle instanceof HTMLButtonElement && toggle.getAttribute('aria-expanded') !== 'true') {
       toggle.click();
     }
     window.requestAnimationFrame(() => {
-      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const focusElement = focusTarget ? document.getElementById(focusTarget) : null;
+      (focusElement || section)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (focusElement instanceof HTMLSelectElement) focusElement.focus({ preventScroll: true });
     });
   };
 
@@ -1154,6 +1184,28 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   useEffect(() => {
     void loadSenderAccounts();
   }, [loadSenderAccounts]);
+
+  useEffect(() => {
+    if (senderAccountsLoading || !selectedWorkstream?.id) return;
+    const additions: Record<number, string> = {};
+    sequenceChannels.forEach((channel, index) => {
+      if (!automaticOutreachChannels.has(channel) || sequenceSenders[index]) return;
+      const readyAccounts = senderAccounts.filter((account) => (
+        account.channel === channel && outreachSenderReady(account)
+      ));
+      if (readyAccounts.length === 1) additions[index] = readyAccounts[0].id;
+    });
+    const addedIndexes = Object.keys(additions).map(Number);
+    if (addedIndexes.length === 0) return;
+    setSequenceSenders((current) => ({ ...current, ...additions }));
+    if (savedOutreachCampaign) {
+      const steps = addedIndexes.map((index) => index + 1).join(', ');
+      setCampaignSetupDirty(true);
+      setOutreachPreview(null);
+      setPilotReadiness(null);
+      setNotice(`LocalOS выбрал единственный готовый аккаунт для касаний ${steps}. Проверьте и сохраните изменения.`);
+    }
+  }, [savedOutreachCampaign?.id, selectedWorkstream?.id, senderAccounts, senderAccountsLoading, sequenceChannels, sequenceSenders]);
 
   useEffect(() => {
     if (!selectedLead?.id || !selectedWorkstream?.id) {
@@ -1572,6 +1624,27 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setOutreachPreview(null);
     setPilotReadiness(null);
     setCampaignSetupDirty(true);
+  };
+
+  const updateSequenceSender = (index: number, senderAccountId: string) => {
+    const channel = sequenceChannels[index];
+    const matchingIndexes = sequenceChannels
+      .map((item, itemIndex) => item === channel ? itemIndex : -1)
+      .filter((itemIndex) => itemIndex >= 0);
+    setSequenceSenders((current) => {
+      const next = { ...current };
+      matchingIndexes.forEach((itemIndex) => {
+        next[itemIndex] = senderAccountId;
+      });
+      return next;
+    });
+    setOutreachPreview(null);
+    setPilotReadiness(null);
+    setCampaignSetupDirty(true);
+    const steps = matchingIndexes.map((itemIndex) => itemIndex + 1).join(', ');
+    setNotice(senderAccountId
+      ? `Отправитель выбран для всех касаний ${contactTypeLabels[channel] || channel}: ${steps}. Теперь проверьте и сохраните изменения.`
+      : `Выбор отправителя снят с касаний ${steps}.`);
   };
 
   const updateSenderMode = (mode: SenderMode) => {
@@ -2324,7 +2397,14 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   ) : (
                     <Button
                       type="button"
-                      onClick={() => scrollToLeadSection(summaryNextAction.target)}
+                      onClick={() => {
+                        if (campaignSetupDirty) {
+                          void prepareOutreachCampaign(true);
+                          return;
+                        }
+                        scrollToLeadSection(summaryNextAction.target, summaryNextAction.focusTarget);
+                      }}
+                      disabled={campaignSetupDirty && Boolean(busyAction)}
                       className="min-h-11 shrink-0 bg-slate-950 text-white transition-transform duration-150 active:scale-[0.96] hover:bg-slate-800"
                     >
                       {summaryNextAction.label}
@@ -2345,7 +2425,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                               <ArrowRight className="h-4 w-4" />
                             </a>
                           ) : (
-                            <button type="button" onClick={() => scrollToLeadSection(blocker.target)} className="inline-flex min-h-10 shrink-0 items-center gap-1 font-semibold text-orange-700 transition-colors hover:text-orange-800">
+                            <button type="button" onClick={() => scrollToLeadSection(blocker.target, blocker.focusTarget)} className="inline-flex min-h-10 shrink-0 items-center gap-1 font-semibold text-orange-700 transition-colors hover:text-orange-800">
                               {blocker.actionLabel}
                               <ArrowRight className="h-4 w-4" />
                             </button>
@@ -2981,9 +3061,18 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 </label>
 
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {[0, 1, 2, 3].map((index) => (
-                    <div key={index} className="rounded-md bg-white p-3 text-xs font-semibold text-slate-600">
-                      <div>{sequenceAngleLabels[index]}</div>
+                  {[0, 1, 2, 3].map((index) => {
+                    const channel = sequenceChannels[index];
+                    const accounts = senderAccounts.filter((account) => account.channel === channel);
+                    const sameChannelSteps = sequenceChannels
+                      .map((item, itemIndex) => item === channel ? itemIndex + 1 : -1)
+                      .filter((itemIndex) => itemIndex > 0);
+                    return (
+                    <div key={index} className="rounded-md bg-white p-3 text-xs font-semibold text-slate-600 shadow-[0_0_0_1px_rgba(15,23,42,0.06)]">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>{sequenceAngleLabels[index]}</div>
+                        <span className="tabular-nums text-[11px] text-slate-400">Шаг {index + 1}</span>
+                      </div>
                       <div className="mt-2 grid grid-cols-[minmax(0,1fr)_84px] gap-2">
                         <select
                           aria-label={`Канал касания ${index + 1}`}
@@ -3011,8 +3100,36 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         />
                       </div>
                       <div className="mt-1 text-[11px] font-medium text-slate-400">День <span className="tabular-nums">{sequenceDays[index]}</span> от старта</div>
+                      {automaticOutreachChannels.has(channel) ? (
+                        <label className="mt-3 block border-t border-slate-100 pt-3 text-xs font-semibold text-slate-600" htmlFor={`touch-sender-${index}`}>
+                          Отправитель
+                          <select
+                            id={`touch-sender-${index}`}
+                            aria-label={`Отправитель касания ${index + 1}`}
+                            value={sequenceSenders[index] || ''}
+                            onChange={(event) => updateSequenceSender(index, event.target.value)}
+                            disabled={senderAccountsLoading}
+                            className="mt-2 min-h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition-[border-color,box-shadow] duration-150 focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                          >
+                            <option value="">{senderAccountsLoading ? 'Проверяем аккаунты…' : 'Выберите отправителя'}</option>
+                            {accounts.map((account) => (
+                              <option key={account.id} value={account.id} disabled={!outreachSenderReady(account)}>
+                                {account.display_name || account.sender_identity || account.id} · {outreachSenderStatusLabel(account)}
+                              </option>
+                            ))}
+                          </select>
+                          {accounts.length === 0 && !senderAccountsLoading ? (
+                            <span className="mt-2 block text-pretty font-medium leading-5 text-amber-700">Нет подключённого аккаунта для этого канала.</span>
+                          ) : sameChannelSteps.length > 1 ? (
+                            <span className="mt-2 block text-pretty font-medium leading-5 text-slate-500">Один выбор применяется к шагам {sameChannelSteps.join(' и ')}.</span>
+                          ) : null}
+                        </label>
+                      ) : (
+                        <div className="mt-3 border-t border-slate-100 pt-3 text-pretty text-xs font-medium leading-5 text-slate-500">Отправляется вручную — аккаунт выбирать не нужно.</div>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="mt-3">
@@ -3046,34 +3163,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       return <Badge key={channel} variant="outline" className={item.status === 'ready' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : item.status === 'permission_required' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'bg-white text-slate-700'}>{channel} · {labels[String(item.status || '')] || item.status}</Badge>;
                       })}
                     </div>
-                    {[0, 1, 2, 3].map((touchIndex) => {
-                      const channel = sequenceChannels[touchIndex];
-                      const accounts = outreachPreview.channel_availability?.[channel]?.sender_accounts || [];
-                      if (!['telegram', 'email', 'vk'].includes(channel) || accounts.length === 0) return null;
-                      return (
-                        <label key={`${channel}-${touchIndex}`} className="block rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-950">
-                          Отправитель для касания {touchIndex + 1} · {channel}
-                          <select
-                            value={sequenceSenders[touchIndex] || ''}
-                            onChange={(event) => {
-                              setSequenceSenders((current) => ({ ...current, [touchIndex]: event.target.value }));
-                              setOutreachPreview(null);
-                              setPilotReadiness(null);
-                              setCampaignSetupDirty(true);
-                              setNotice('Отправитель выбран. Обновите preview.');
-                            }}
-                            className="mt-2 min-h-10 w-full rounded-md border border-amber-200 bg-white px-3 text-sm font-medium text-slate-900"
-                          >
-                            <option value="">Выберите аккаунт</option>
-                            {accounts.map((account) => (
-                              <option key={account.id} value={account.id} disabled={account.status !== 'ready'}>
-                                {account.display_name || account.sender_identity || account.id} · {account.status}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      );
-                    })}
                   </div>
                 ) : null}
 
@@ -3216,21 +3305,21 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       {busyAction === 'review-saved-edits' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
                       Проверить сохранённые сообщения
                     </Button>
+                  ) : savedOutreachCampaign && campaignSetupDirty ? (
+                    <Button onClick={() => void prepareOutreachCampaign(true)} disabled={Boolean(busyAction) || !outreachStartIso(sequenceStartAt)} className="min-h-11 bg-slate-950 text-white transition-transform duration-150 active:scale-[0.96] hover:bg-slate-800 sm:col-span-2">
+                      {busyAction === 'save-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                      Проверить и сохранить изменения
+                    </Button>
                   ) : (
                     <Button variant="outline" onClick={() => void prepareOutreachCampaign(false)} disabled={busyAction === 'preview-campaign' || !outreachStartIso(sequenceStartAt)} className="min-h-11 bg-white">
                       {busyAction === 'preview-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                      {savedOutreachCampaign ? 'Проверить новые настройки' : 'Подготовить цепочку'}
+                      Подготовить цепочку
                     </Button>
                   )}
                   {!savedOutreachCampaign ? (
                     <Button variant="outline" onClick={() => void prepareOutreachCampaign(true)} disabled={busyAction === 'save-campaign' || !outreachStartIso(sequenceStartAt) || !['ready', 'needs_channel_setup', 'needs_evidence', 'needs_revision'].includes(String(outreachPreview?.status || ''))} className="min-h-11 bg-white">
                       {busyAction === 'save-campaign' && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
                       Сохранить цепочку
-                    </Button>
-                  ) : campaignSetupDirty ? (
-                    <Button variant="outline" onClick={() => void prepareOutreachCampaign(true)} disabled={busyAction === 'save-campaign' || !outreachStartIso(sequenceStartAt) || !['ready', 'needs_channel_setup', 'needs_evidence', 'needs_revision'].includes(String(outreachPreview?.status || ''))} className="min-h-11 bg-white">
-                      {busyAction === 'save-campaign' && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
-                      Сохранить изменения
                     </Button>
                   ) : null}
                 </div>

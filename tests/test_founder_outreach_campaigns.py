@@ -1512,7 +1512,7 @@ def test_review_saved_touch_edits_does_not_require_a_new_campaign_version():
     assert "Проверить сохранённые сообщения" in history_block
     assert "Результат проверки" in history_block
 
-    save_version_index = admin_source.index("Сохранить изменения", history_end)
+    save_version_index = admin_source.index("Проверить и сохранить изменения", history_end)
     setup_dirty_block = admin_source[save_version_index - 1_200:save_version_index + 100]
     assert "campaignSetupDirty ?" in setup_dirty_block
 
@@ -1851,11 +1851,23 @@ def test_lead_drawer_has_one_sticky_next_action_summary():
 
     assert 'className="sticky top-0 z-20' in source
     assert "summaryNextAction" in source
-    assert "scrollToLeadSection(summaryNextAction.target)" in source
+    assert "void prepareOutreachCampaign(true)" in source
+    assert "scrollToLeadSection(summaryNextAction.target, summaryNextAction.focusTarget)" in source
     assert "Получатель" in source
     assert "Отправитель" in source
     assert "Первый шаг" in source
     assert "Состояние" in source
+
+
+def test_sender_selection_is_always_visible_and_reused_for_same_channel_touches():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    assert 'id={`touch-sender-${index}`}' in source
+    assert "updateSequenceSender(index, event.target.value)" in source
+    assert "item === channel ? itemIndex : -1" in source
+    assert "Один выбор применяется к шагам" in source
+    assert "outreachPreview.channel_availability?.[channel]?.sender_accounts" not in source
+    assert "Проверить и сохранить изменения" in source
 
 
 def test_sticky_next_action_names_regeneration_before_unsaved_schedule_review():
