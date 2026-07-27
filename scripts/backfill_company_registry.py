@@ -41,6 +41,7 @@ def main() -> int:
         "leads_would_resolve": 0,
         "leads_resolved": 0,
         "shadow_businesses": 0,
+        "shadow_businesses_detection": "moderation_status",
         "leads_with_strong_identity": 0,
         "leads_without_strong_identity": 0,
         "public_rows_without_company_location": {},
@@ -49,15 +50,37 @@ def main() -> int:
     }
     try:
         cursor = db.conn.cursor()
-        cursor.execute("SELECT COUNT(*) AS count FROM businesses WHERE COALESCE(moderation_status, '') = 'lead_outreach'")
-        shadow_row = cursor.fetchone()
-        report["shadow_businesses"] = int((shadow_row.get("count") if hasattr(shadow_row, "get") else shadow_row[0]) or 0)
         cursor.execute(
             """
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'businesses'
+                  AND column_name = 'moderation_status'
+            ) AS exists
+            """
+        )
+        moderation_column_row = cursor.fetchone()
+        has_moderation_status = bool(
+            moderation_column_row.get("exists")
+            if hasattr(moderation_column_row, "get")
+            else moderation_column_row[0]
+        )
+        if has_moderation_status:
+            cursor.execute("SELECT COUNT(*) AS count FROM businesses WHERE COALESCE(moderation_status, '') = 'lead_outreach'")
+            shadow_row = cursor.fetchone()
+            report["shadow_businesses"] = int((shadow_row.get("count") if hasattr(shadow_row, "get") else shadow_row[0]) or 0)
+            business_filter = "WHERE COALESCE(b.moderation_status, '') <> 'lead_outreach'"
+        else:
+            report["shadow_businesses_detection"] = "unavailable_on_legacy_schema"
+            business_filter = ""
+        cursor.execute(
+            f"""
             SELECT b.*,
                    EXISTS (SELECT 1 FROM business_company_links link WHERE link.business_id = b.id) AS registry_linked
             FROM businesses b
-            WHERE COALESCE(b.moderation_status, '') <> 'lead_outreach'
+            {business_filter}
             ORDER BY b.created_at ASC
             LIMIT %s
             """,
