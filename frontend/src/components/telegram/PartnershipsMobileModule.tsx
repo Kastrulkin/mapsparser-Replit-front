@@ -217,6 +217,9 @@ const Empty = ({ title, text }: { title: string; text: string }) => (
 
 export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
   const businessId = scope?.kind === "business" ? String(scope.id || "") : "";
+  const requestedLeadId = new URLSearchParams(window.location.search).get("item_type") === "partner"
+    ? new URLSearchParams(window.location.search).get("item_id") || ""
+    : "";
   const [tab, setTab] = useState<PartnershipTab>("overview");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -296,7 +299,8 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
           `/api/partnership/blockers-summary?business_id=${encodeURIComponent(businessId)}&window_days=30`,
         ),
       ]);
-      setLeads(leadData.items || []);
+      const nextLeads = leadData.items || [];
+      setLeads(nextLeads);
       setDrafts(draftData.drafts || []);
       setBatches(batchData.batches || []);
       setReadyDrafts(batchData.ready_drafts || []);
@@ -305,9 +309,15 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
       setOutcomes(outcomeData);
       setSourceQuality(sourceData);
       setBlockers(blockerData);
-      if (selectedLead)
+      if (!selectedLead && requestedLeadId) {
+        const requestedLead = nextLeads.find((item) => item.id === requestedLeadId);
+        if (requestedLead) {
+          setSelectedLead(requestedLead);
+          setTab("leads");
+        }
+      } else if (selectedLead)
         setSelectedLead(
-          (leadData.items || []).find((item) => item.id === selectedLead.id) ||
+          nextLeads.find((item) => item.id === selectedLead.id) ||
             null,
         );
     } catch (requestError) {

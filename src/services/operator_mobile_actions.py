@@ -6,12 +6,18 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
+from core.service_catalog_compression import build_service_catalog_compression_draft
+
 
 MOBILE_ACTION_TTL_MINUTES = 15
 MOBILE_ACTIONS = {
     "review_replies.generate": {"estimated_credits_per_item": 1, "external_effects": False},
-    "review_replies.mark_manual_published": {"estimated_credits_per_item": 0, "external_effects": False},
     "finance.sales_import": {"estimated_credits_per_item": 0, "external_effects": False},
+    "finance.transaction.delete": {"estimated_credits_per_item": 0, "external_effects": False},
+    "cards.schedule.update": {"estimated_credits_per_item": 0, "external_effects": False},
+    "content.plan.delete": {"estimated_credits_per_item": 0, "external_effects": False},
+    "services.optimize": {"estimated_credits_per_item": 1, "external_effects": False},
+    "services.compress": {"estimated_credits_per_item": 0, "external_effects": False},
 }
 
 
@@ -62,6 +68,18 @@ def _resolve_review_targets(cursor: Any, scope: dict[str, Any], review_ids: list
     return targets, rows
 
 
+def _requested_business_id(scope: dict[str, Any], input_payload: dict[str, Any]) -> str:
+    if scope.get("kind") == "business":
+        return str(scope.get("id") or "")
+    return str(input_payload.get("business_id") or "").strip()
+
+
+def _business_allowed(scope: dict[str, Any], business_id: str) -> bool:
+    if scope.get("kind") == "platform":
+        return bool(business_id)
+    return business_id in {str(item) for item in scope.get("business_ids") or []}
+
+
 def create_mobile_action_preview(
     cursor: Any,
     *,
@@ -75,12 +93,11 @@ def create_mobile_action_preview(
         return {"status": "blocked", "blocked_reasons": ["unsupported_mobile_action"]}
     review_ids = input_payload.get("review_ids") if isinstance(input_payload.get("review_ids"), list) else []
     envelope: dict[str, Any]
+    changes: list[dict[str, Any]] = []
+    preview_extras: dict[str, Any] = {}
     if capability == "finance.sales_import":
-        requested_business_id = str(input_payload.get("business_id") or "").strip()
-        allowed = {str(item) for item in scope.get("business_ids") or []}
-        if scope.get("kind") == "business":
-            requested_business_id = str(scope.get("id") or "")
-        if not requested_business_id or (scope.get("kind") != "platform" and requested_business_id not in allowed):
+        requested_business_id = _requested_business_id(scope, input_payload)
+        if not _business_allowed(scope, requested_business_id):
             return {"status": "blocked", "blocked_reasons": ["business_selection_required"]}
         cursor.execute("SELECT id, name FROM businesses WHERE id = %s", (requested_business_id,))
         business = _row(cursor, cursor.fetchone())
@@ -109,8 +126,105 @@ def create_mobile_action_preview(
         if not business or not transactions:
             return {"status": "blocked", "blocked_reasons": ["transactions_not_found_or_forbidden"]}
         targets = [requested_business_id]
-        objects = transactions
+        objects = [
+            {**item, "business_id": requested_business_id, "business_name": str(business.get("name") or "")}
+            for item in transactions
+        ]
         envelope = {"transactions": transactions, "business_id": requested_business_id}
+    elif capability == "finance.transaction.delete":
+        transaction_id = str(input_payload.get("transaction_id") or "").strip()
+        requested_business_id = _requested_business_id(scope, input_payload)
+        if not transaction_id or not _business_allowed(scope, requested_business_id):
+            return {"status": "blocked", "blocked_reasons": ["transaction_not_found_or_forbidden"]}
+        cursor.execute(
+            """
+            SELECT transaction.id, transaction.business_id, transaction.amount,
+                   transaction.transaction_date, transaction.description, business.name AS business_name
+            FROM financialtransactions transaction
+            JOIN businesses business ON business.id = transaction.business_id
+            WHERE transaction.id = %s AND transaction.business_id = %s
+            """,
+            (transaction_id, requested_business_id),
+        )
+        transaction = _row(cursor, cursor.fetchone())
+        if not transaction:
+            return {"status": "blocked", "blocked_reasons": ["transaction_not_found_or_forbidden"]}
+        targets = [requested_business_id]
+        objects = [transaction]
+        envelope = {"transaction_id": transaction_id, "business_id": requested_business_id}
+        changes = [{"object_id": transaction_id, "operation": capability, "label": "Удалить финансовую операцию"}]
+    elif capability == "cards.schedule.update":
+        requested_business_id = _requested_business_id(scope, input_payload)
+        if not _business_allowed(scope, requested_business_id):
+            return {"status": "blocked", "blocked_reasons": ["business_selection_required"]}
+        cursor.execute("SELECT id, name FROM businesses WHERE id = %s", (requested_business_id,))
+        business = _row(cursor, cursor.fetchone())
+        try:
+            interval_hours = max(24, min(24 * 30, int(input_payload.get("interval_hours") or 24)))
+        except (TypeError, ValueError):
+            return {"status": "blocked", "blocked_reasons": ["invalid_schedule"]}
+        if not business:
+            return {"status": "blocked", "blocked_reasons": ["business_not_found_or_forbidden"]}
+        enabled = bool(input_payload.get("enabled"))
+        targets = [requested_business_id]
+        objects = [{"id": requested_business_id, "business_id": requested_business_id, "business_name": str(business.get("name") or ""), "enabled": enabled, "interval_hours": interval_hours}]
+        envelope = {"business_id": requested_business_id, "enabled": enabled, "interval_hours": interval_hours}
+        changes = [{"object_id": requested_business_id, "operation": capability, "label": "Включить проверку карточек" if enabled else "Выключить проверку карточек", "interval_hours": interval_hours}]
+    elif capability == "content.plan.delete":
+        plan_id = str(input_payload.get("plan_id") or "").strip()
+        if not plan_id:
+            return {"status": "blocked", "blocked_reasons": ["plan_required"]}
+        cursor.execute(
+            """
+            SELECT plan.id, plan.business_id, plan.title, business.name AS business_name,
+                   COUNT(item.id) AS items_count
+            FROM contentplans plan
+            JOIN businesses business ON business.id = plan.business_id
+            LEFT JOIN contentplanitems item ON item.plan_id = plan.id
+            WHERE plan.id = %s
+            GROUP BY plan.id, business.name
+            """,
+            (plan_id,),
+        )
+        plan = _row(cursor, cursor.fetchone())
+        plan_business_id = str(plan.get("business_id") or "")
+        if not plan or not _business_allowed(scope, plan_business_id):
+            return {"status": "blocked", "blocked_reasons": ["plan_not_found_or_forbidden"]}
+        targets = [plan_business_id]
+        objects = [{**plan, "id": plan_id}]
+        envelope = {"plan_id": plan_id, "business_id": plan_business_id}
+        changes = [{"object_id": plan_id, "operation": capability, "label": "Удалить контент-план", "items_count": int(plan.get("items_count") or 0)}]
+    elif capability in {"services.optimize", "services.compress"}:
+        requested_business_id = _requested_business_id(scope, input_payload)
+        if not _business_allowed(scope, requested_business_id):
+            return {"status": "blocked", "blocked_reasons": ["business_selection_required"]}
+        cursor.execute("SELECT id, name FROM businesses WHERE id = %s", (requested_business_id,))
+        business = _row(cursor, cursor.fetchone())
+        cursor.execute(
+            """
+            SELECT id, business_id, name, description, category, price
+            FROM userservices
+            WHERE business_id = %s AND COALESCE(is_active, TRUE)
+            ORDER BY category, name
+            LIMIT 100
+            """,
+            (requested_business_id,),
+        )
+        services = [_row(cursor, item) for item in (cursor.fetchall() or [])]
+        if not business or not services:
+            return {"status": "blocked", "blocked_reasons": ["services_not_found_or_forbidden"]}
+        targets = [requested_business_id]
+        objects = [{**item, "business_name": str(business.get("name") or "")} for item in services]
+        envelope = {
+            "business_id": requested_business_id,
+            "service_ids": [str(item.get("id") or "") for item in services],
+            "request_id": str(input_payload.get("request_id") or "").strip()[:100],
+        }
+        if capability == "services.compress":
+            preview_extras["analysis"] = build_service_catalog_compression_draft(services)
+            changes = [{"object_id": item.get("id"), "operation": capability, "label": str(item.get("name") or "Услуга")} for item in services]
+        else:
+            changes = [{"object_id": item.get("id"), "operation": capability, "label": f"Подготовить улучшение: {item.get('name') or 'услуга'}"} for item in services]
     else:
         targets, objects = _resolve_review_targets(cursor, scope, review_ids)
         envelope = {"review_ids": [str(item.get("id") or "") for item in objects]}
@@ -128,14 +242,15 @@ def create_mobile_action_preview(
     preview = {
         "capability": capability,
         "scope": scope,
-        "target_businesses": [{"id": item, "name": str(business.get("name") or "") if capability == "finance.sales_import" else next((str(row.get("business_name") or "") for row in objects if str(row.get("business_id")) == item), "")} for item in targets],
+        "target_businesses": [{"id": item, "name": next((str(row.get("business_name") or "") for row in objects if str(row.get("business_id") or item) == item), "")} for item in targets],
         "objects": objects,
-        "changes": [{"object_id": item.get("id"), "operation": capability} for item in objects],
+        "changes": changes or [{"object_id": item.get("id"), "operation": capability} for item in objects],
         "estimated_credits": estimated,
         "external_effects": bool(spec.get("external_effects")),
         "is_mass_action": len(objects) > 1 or len(targets) > 1,
         "confirmation_required": True,
         "expires_at": expires_at.isoformat(),
+        **preview_extras,
     }
     cursor.execute(
         """

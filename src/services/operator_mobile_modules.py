@@ -334,20 +334,65 @@ def _agents(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _diagnostics(cursor: Any, scope: dict[str, Any]) -> list[dict[str, Any]]:
-    if scope.get("kind") != "platform" or not _table_exists(cursor, "parsequeue"):
+    if scope.get("kind") != "platform":
         return []
-    cursor.execute(
-        """
-        SELECT q.id, q.business_id, b.name AS business_name,
-               COALESCE(q.task_type, 'Задача интеграции') AS title,
-               COALESCE(NULLIF(TRIM(q.error_message), ''), q.source, q.url, 'Требует проверки') AS subtitle,
-               q.status, q.source, q.updated_at
-        FROM parsequeue q LEFT JOIN businesses b ON b.id = q.business_id
-        WHERE q.status IN ('error', 'failed', 'stuck', 'captcha_required') OR COALESCE(q.captcha_required, 0) = 1
-        ORDER BY q.updated_at DESC LIMIT 200
-        """
-    )
-    return [{**_row(cursor, item), "kind": "diagnostic_job"} for item in cursor.fetchall() or []]
+    items: list[dict[str, Any]] = []
+    if _table_exists(cursor, "parsequeue"):
+        cursor.execute(
+            """
+            SELECT q.id, q.business_id, b.name AS business_name,
+                   COALESCE(q.task_type, 'Задача интеграции') AS title,
+                   COALESCE(NULLIF(TRIM(q.error_message), ''), q.source, q.url, 'Требует проверки') AS subtitle,
+                   q.status, q.source, q.updated_at
+            FROM parsequeue q LEFT JOIN businesses b ON b.id = q.business_id
+            WHERE q.status IN ('error', 'failed', 'stuck', 'captcha_required') OR COALESCE(q.captcha_required, 0) = 1
+            ORDER BY q.updated_at DESC LIMIT 150
+            """
+        )
+        items.extend({**_row(cursor, item), "kind": "diagnostic_job"} for item in cursor.fetchall() or [])
+    if _table_exists(cursor, "knowledge_embedding_jobs"):
+        cursor.execute(
+            """
+            SELECT status, COUNT(*) AS jobs_count, MAX(updated_at) AS updated_at
+            FROM knowledge_embedding_jobs
+            WHERE status IN ('blocked', 'dead_letter')
+            GROUP BY status
+            ORDER BY status
+            """
+        )
+        for value in cursor.fetchall() or []:
+            row = _row(cursor, value)
+            count = int(row.get("jobs_count") or 0)
+            items.append({
+                "id": f"embedding-{row.get('status')}",
+                "kind": "embedding_backlog",
+                "title": "Embeddings требуют проверки",
+                "subtitle": f"Не обработано заданий: {count}",
+                "status": "failed",
+                "updated_at": row.get("updated_at"),
+            })
+    if _table_exists(cursor, "knowledge_sources"):
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS sources_count, MAX(updated_at) AS updated_at
+            FROM knowledge_sources
+            WHERE visibility = 'public'
+              AND status = 'active'
+              AND (last_collected_at IS NULL OR last_collected_at < NOW() - INTERVAL '48 hours')
+            """
+        )
+        stale = _row(cursor, cursor.fetchone())
+        stale_count = int(stale.get("sources_count") or 0)
+        if stale_count:
+            items.append({
+                "id": "telegram-radar-stale-sources",
+                "kind": "radar_backlog",
+                "title": "Источники Пульса давно не обновлялись",
+                "subtitle": f"Публичных источников без свежего сбора: {stale_count}",
+                "status": "stuck",
+                "updated_at": stale.get("updated_at"),
+            })
+    return items[:200]
 
 
 LOADERS = {

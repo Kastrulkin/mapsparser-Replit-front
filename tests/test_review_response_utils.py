@@ -14,3 +14,8 @@ def test_extract_review_response_text_supports_nested_business_comment() -> None
 def test_extract_review_response_text_supports_answers_list() -> None:
     review = {"answers": [{"message": "Ответ из списка"}]}
     assert extract_review_response_text(review) == "Ответ из списка"
+
+
+def test_extract_review_response_text_supports_provider_official_answer() -> None:
+    review = {"officialAnswer": {"text": "Ответ из карточки"}}
+    assert extract_review_response_text(review) == "Ответ из карточки"

@@ -82,6 +82,7 @@ def _load_businesses(
     *,
     query: str = "",
     limit: int = 100,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     params: list[Any] = []
     access_filter = "TRUE"
@@ -94,7 +95,10 @@ def _load_businesses(
         search_filter = "AND (b.name ILIKE %s OR COALESCE(b.address, '') ILIKE %s)"
         pattern = f"%{cleaned_query}%"
         params.extend([pattern, pattern])
-    params.append(max(1, min(int(limit or 100), 200)))
+    params.extend([
+        max(1, min(int(limit or 100), 201)),
+        max(0, int(offset or 0)),
+    ])
     cursor.execute(
         f"""
         SELECT DISTINCT
@@ -111,7 +115,7 @@ def _load_businesses(
           AND NOT (b.network_id IS NOT NULL AND b.id = b.network_id)
           {search_filter}
         ORDER BY b.name, COALESCE(b.address, '')
-        LIMIT %s
+        LIMIT %s OFFSET %s
         """,
         tuple(params),
     )
@@ -167,6 +171,7 @@ def list_control_scopes(
     user_id: str,
     search_query: str = "",
     business_limit: int = 100,
+    business_cursor: str = "",
 ) -> dict[str, Any]:
     actor = _load_actor(cursor, user_id)
     if not actor:
@@ -180,13 +185,21 @@ def list_control_scopes(
             for item in networks
             if normalized_query in " ".join(str(item.get("name") or "").lower().split())
         ]
-    businesses = _load_businesses(
+    try:
+        business_offset = max(0, int(str(business_cursor or "0")))
+    except (TypeError, ValueError):
+        business_offset = 0
+    page_size = max(1, min(int(business_limit or 100), 200))
+    business_page = _load_businesses(
         cursor,
         user_id,
         is_superadmin,
         query=search_query,
-        limit=business_limit,
+        limit=page_size + 1,
+        offset=business_offset,
     )
+    has_more_businesses = len(business_page) > page_size
+    businesses = business_page[:page_size]
     platform = None
     if is_superadmin and not normalized_query:
         cursor.execute(f"SELECT COUNT(*) AS cnt FROM businesses b WHERE {_active_business_clause('b')}")
@@ -226,6 +239,9 @@ def list_control_scopes(
             for item in businesses
         ],
         "total_choices": total_choices,
+        "business_cursor": str(business_offset),
+        "next_business_cursor": str(business_offset + page_size) if has_more_businesses else None,
+        "has_more_businesses": has_more_businesses,
     }
 
 

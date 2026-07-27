@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import base64
+import hashlib
 import json
 import re
 import uuid
@@ -40,6 +41,8 @@ from services.operator_manual_publish import mark_review_reply_draft_manual_publ
 from services.operator_mobile_actions import confirm_mobile_action, create_mobile_action_preview
 from services.operator_mobile_modules import list_operator_mobile_module
 from services.operator_mobile_today import build_mobile_progress, build_mobile_today
+from services.operator_mobile_jobs import load_mobile_job
+from services.operator_mobile_deep_links import resolve_mobile_deep_link
 from services.operator_news_generation import classify_news_generate_intent, generate_news_draft_from_operator
 from services.operator_paid_executor import build_paid_action_execution_attempt
 from services.operator_paid_preflight import build_paid_action_preflight
@@ -82,26 +85,27 @@ operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
 def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
     kind = str(scope.get("kind") or "business")
     items = [
-        {"key": "today", "label": "Сегодня", "group": "primary", "status": "available"},
-        {"key": "tasks", "label": "Задачи", "group": "primary", "status": "available"},
-        {"key": "reviews", "label": "Отзывы", "group": "primary", "status": "available"},
-        {"key": "operator", "label": "Оператор", "group": "primary", "status": "available"},
-        {"key": "progress", "label": "Прогресс", "group": "more", "status": "hidden" if kind == "platform" else "available"},
-        {"key": "cards", "label": "Карточки", "group": "more", "status": "available"},
-        {"key": "content", "label": "Контент", "group": "more", "status": "available"},
-        {"key": "services", "label": "Услуги", "group": "more", "status": "available"},
-        {"key": "finance", "label": "Финансы", "group": "more", "status": "available"},
-        {"key": "analytics", "label": "Аналитика", "group": "more", "status": "read_only"},
-        {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "available"},
-        {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "read_only"},
-        {"key": "settings", "label": "Настройки", "group": "more", "status": "available"},
+        {"key": "today", "label": "Сегодня", "group": "primary", "status": "available", "available_actions": ["open_focus", "delegate"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["today"], "version": 2},
+        {"key": "tasks", "label": "Задачи", "group": "primary", "status": "available", "available_actions": ["open"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["task", "job", "approval"], "version": 2},
+        {"key": "reviews", "label": "Отзывы", "group": "primary", "status": "available", "available_actions": ["generate_reply", "edit_draft", "mark_manual_published"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["review", "review_draft"], "version": 2},
+        {"key": "operator", "label": "Оператор", "group": "primary", "status": "available", "available_actions": ["send_message", "open_result"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["operator_message", "operator_result"], "version": 2},
+        {"key": "progress", "label": "Прогресс", "group": "more", "status": "hidden" if kind == "platform" else "available", "reason": "Выберите бизнес или сеть" if kind == "platform" else "", "available_actions": ["open_next_step"], "supported_scopes": ["business", "network"], "deep_link_targets": ["progress", "growth_step"], "version": 2},
+        {"key": "cards", "label": "Карточки", "group": "more", "status": "available", "available_actions": ["schedule_update"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["card", "parse_job", "integration_error"], "version": 2},
+        {"key": "content", "label": "Контент", "group": "more", "status": "available", "available_actions": ["plan_generate", "item_update", "draft_generate"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["content_plan", "content_item", "post"], "version": 2},
+        {"key": "services", "label": "Услуги", "group": "more", "status": "available", "available_actions": ["update", "optimize", "compress"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["service", "service_suggestion"], "version": 2},
+        {"key": "finance", "label": "Финансы", "group": "more", "status": "available", "available_actions": ["sales_import", "operation_update", "analytics_open"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["finance", "sale", "finance_warning", "finance_import"], "version": 2},
+        {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "available", "available_actions": ["search", "draft", "send_preview"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["partner", "partnership_reply", "outreach_touch"], "version": 2},
+        {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "read_only", "reason": "Запуск и подтверждения пока доступны в основном кабинете", "available_actions": [], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["agent", "agent_run", "agent_result"], "version": 1},
+        {"key": "settings", "label": "Настройки", "group": "more", "status": "read_only", "reason": "Сейчас доступны настройки уведомлений; подключения и тариф ещё переносятся", "available_actions": ["notifications_update"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["settings"], "version": 1},
     ]
     company_registry_miniapp_enabled = str(os.getenv("COMPANY_REGISTRY_MINIAPP_ENABLED", "false")).lower() in {"1", "true", "yes", "on"}
+    if kind == "business":
+        items.append({"key": "community_sources", "label": "Пульс сообщества", "group": "more", "status": "available", "available_actions": ["source_add", "subscription_update"], "supported_scopes": ["business"], "deep_link_targets": ["community_source"], "version": 2})
     if kind == "business" and company_registry_miniapp_enabled:
-        items.append({"key": "company", "label": "Моя компания", "group": "more", "status": "available"})
+        items.append({"key": "company", "label": "Моя компания", "group": "more", "status": "available", "available_actions": ["open_profile", "add_to_work"], "supported_scopes": ["business"], "deep_link_targets": ["company"], "version": 2})
     if kind == "platform" and is_superadmin and company_registry_miniapp_enabled:
-        items.append({"key": "companies", "label": "Компании", "group": "more", "status": "available"})
-        items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "read_only"})
+        items.append({"key": "companies", "label": "Компании", "group": "more", "status": "available", "available_actions": ["search", "open_profile", "add_to_work"], "supported_scopes": ["platform"], "deep_link_targets": ["company"], "version": 2})
+        items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "read_only", "reason": "Показываем ошибки без небезопасного массового перезапуска", "available_actions": [], "supported_scopes": ["platform"], "deep_link_targets": ["diagnostic_job", "integration_error"], "version": 1})
     return items
 
 
@@ -142,8 +146,8 @@ def _mobile_background_tasks(cursor, scope: dict) -> list[dict]:
         row = dict(value)
         raw_status = str(row.get("status") or "")
         if raw_status in {"pending", "processing"}:
-            status, progress, severity = "in_progress", 25 if raw_status == "pending" else 65, "low"
-            description = "LocalOS собирает read-only данные. Экран можно закрыть."
+            status, progress, severity = "in_progress", None, "low"
+            description = "Задача ждёт запуска." if raw_status == "pending" else "LocalOS собирает данные с карт. Экран можно закрыть."
         elif raw_status == "completed":
             status, progress, severity = "completed", 100, "low"
             description = "Данные собраны и готовы к просмотру."
@@ -264,11 +268,18 @@ def operator_scopes():
         return jsonify({"success": False, "error": "Требуется авторизация"}), 401
     user_id = str(user_data.get("user_id") or user_data.get("id") or "")
     query = str(request.args.get("q") or "").strip()
+    business_cursor = str(request.args.get("cursor") or "").strip()
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        catalog = list_control_scopes(cursor, user_id=user_id, search_query=query, business_limit=100)
-        requested_kind, requested_id = _scope_request_values(payload)
+        catalog = list_control_scopes(
+            cursor,
+            user_id=user_id,
+            search_query=query,
+            business_limit=50,
+            business_cursor=business_cursor,
+        )
+        requested_kind, requested_id = _scope_request_values()
         selected = resolve_control_scope(
             cursor,
             user_id=user_id,
@@ -317,8 +328,23 @@ def operator_telegram_bootstrap():
             return jsonify({"success": False, "error": "Telegram-сессия недействительна"}), 401
         user_id = str(user.get("id") or "")
         query = str(payload.get("q") or "").strip()
-        catalog = list_control_scopes(cursor, user_id=user_id, search_query=query, business_limit=100)
-        selected = resolve_control_scope(cursor, user_id=user_id)
+        business_cursor = str(payload.get("cursor") or "").strip()
+        catalog = list_control_scopes(
+            cursor,
+            user_id=user_id,
+            search_query=query,
+            business_limit=50,
+            business_cursor=business_cursor,
+        )
+        requested_kind, requested_id = _scope_request_values(payload)
+        selected = resolve_control_scope(
+            cursor,
+            user_id=user_id,
+            requested_kind=requested_kind,
+            requested_id=requested_id,
+        )
+        if not selected and requested_kind:
+            selected = resolve_control_scope(cursor, user_id=user_id)
         summary = build_operator_scope_summary(cursor, scope=selected, user_id=user_id) if selected else None
         preferences = load_control_preferences(cursor, user_id)
         web_session_token = None
@@ -329,6 +355,16 @@ def operator_telegram_bootstrap():
                 user_agent="localos-telegram-mini-app",
                 expires_days=1,
             )
+        navigation = _mobile_navigation(selected or {}, bool(user.get("is_superadmin")))
+        deep_link = resolve_mobile_deep_link(
+            cursor,
+            scope=selected or {},
+            navigation=navigation,
+            screen=str(payload.get("screen") or "today"),
+            item_type=str(payload.get("item_type") or ""),
+            item_id=str(payload.get("item_id") or ""),
+            filters=payload.get("filters") if isinstance(payload.get("filters"), dict) else {},
+        )
         return jsonify(
             {
                 "success": True,
@@ -342,11 +378,12 @@ def operator_telegram_bootstrap():
                 "summary": summary,
                 "preferences": preferences,
                 "notification_preferences": preferences.get("notifications") if isinstance(preferences, dict) else {},
-                "deep_link_targets": [item["key"] for item in _mobile_navigation(selected or {}, bool(user.get("is_superadmin"))) if item.get("status") != "hidden"],
+                "deep_link_targets": [item["key"] for item in navigation if item.get("status") != "hidden"],
+                "resolved_deep_link": deep_link,
                 "web_session_token": web_session_token,
                 "mini_app_v2_enabled": str(os.getenv("TELEGRAM_MINI_APP_V2_ENABLED", "true")).lower() in {"1", "true", "yes", "on"},
                 "today_v2_enabled": str(os.getenv("TELEGRAM_MINI_APP_TODAY_V2_ENABLED", "true")).lower() in {"1", "true", "yes", "on"},
-                "navigation": _mobile_navigation(selected or {}, bool(user.get("is_superadmin"))),
+                "navigation": navigation,
             }
         )
     finally:
@@ -2145,7 +2182,12 @@ def operator_mobile_services_analyze():
 
         def store_service_preview(preview_payload: dict) -> str:
             preview_action_id = str(uuid.uuid4())
-            idempotency_key = f"mobile:{user_id}:services.{mode}:{preview_action_id}"
+            stable_preview = json.dumps(
+                {"business_id": business_id, "capability": f"services.{mode}", "service_ids": service_ids},
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            idempotency_key = hashlib.sha256(f"{user_id}|{stable_preview}".encode("utf-8")).hexdigest()[:32]
             expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
             cursor.execute(
                 """
@@ -2682,6 +2724,32 @@ def operator_mobile_action_preview():
         db.close()
 
 
+@operator_bp.route("/mobile/actions/<action_id>", methods=["GET"])
+def operator_mobile_action_status(action_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        job = load_mobile_job(cursor, job_id=action_id, user_id=user_id, scope=scope)
+        if not job or job.get("kind") != "operator_action":
+            return jsonify({"success": False, "error": "Действие не найдено"}), 404
+        cursor.execute(
+            "SELECT preview_json, estimated_credits, external_effects, is_mass_action, expires_at FROM operatoractions WHERE id = %s AND user_id = %s",
+            (action_id, user_id),
+        )
+        row = cursor.fetchone()
+        values = dict(row) if row else {}
+        return jsonify({"success": True, "action": {**job, **values}})
+    finally:
+        db.close()
+
+
 @operator_bp.route("/mobile/actions/<action_id>/confirm", methods=["POST"])
 def operator_mobile_action_confirm(action_id: str):
     user_data = require_auth_from_request()
@@ -2783,6 +2851,171 @@ def operator_mobile_action_confirm(action_id: str):
                 "external_writes_performed": False,
             }
 
+        def finance_transaction_delete_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            transaction_id = str(envelope.get("transaction_id") or "")
+            if len(targets) != 1 or targets[0] != business_id or not transaction_id:
+                return {"status": "blocked", "blocked_reasons": ["finance_preview_changed"]}
+            cursor.execute(
+                "DELETE FROM financialtransactions WHERE id = %s AND business_id = %s RETURNING id",
+                (transaction_id, business_id),
+            )
+            if not cursor.fetchone():
+                return {"status": "blocked", "blocked_reasons": ["transaction_changed_after_preview"]}
+            return {
+                "status": "completed",
+                "capability": "finance.transaction.delete",
+                "deleted_transaction_id": transaction_id,
+                "external_writes_performed": False,
+            }
+
+        def card_schedule_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            if len(targets) != 1 or targets[0] != business_id:
+                return {"status": "blocked", "blocked_reasons": ["schedule_preview_changed"]}
+            current = get_card_automation_snapshot(db.conn, business_id).get("settings") or {}
+            merged = dict(current)
+            merged.update({
+                "review_sync_enabled": bool(envelope.get("enabled")),
+                "review_sync_interval_hours": int(envelope.get("interval_hours") or 24),
+                "review_sync_schedule_mode": "interval",
+                "review_sync_schedule_days": [],
+                "review_sync_schedule_time": None,
+            })
+            snapshot = save_card_automation_settings(db.conn, business_id, user_id, merged)
+            return {
+                "status": "completed",
+                "capability": "cards.schedule.update",
+                "business_id": business_id,
+                "settings": snapshot.get("settings") or {},
+                "next_run_at": (snapshot.get("settings") or {}).get("review_sync_next_run_at"),
+                "external_writes_performed": False,
+            }
+
+        def content_plan_delete_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            plan_id = str(envelope.get("plan_id") or "")
+            if len(targets) != 1 or targets[0] != business_id or not plan_id:
+                return {"status": "blocked", "blocked_reasons": ["content_plan_preview_changed"]}
+            cursor.execute(
+                "DELETE FROM contentplans WHERE id = %s AND business_id = %s RETURNING id, title",
+                (plan_id, business_id),
+            )
+            deleted = cursor.fetchone()
+            if not deleted:
+                return {"status": "blocked", "blocked_reasons": ["content_plan_changed"]}
+            deleted_row = dict(deleted)
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="content_plan_deleted",
+                action_key="content.plan.delete",
+                status="completed",
+                input_summary={"plan_id": plan_id},
+                output_summary={"title": str(deleted_row.get("title") or "")},
+                metadata={"channel": "telegram_mini_app"},
+            )
+            return {
+                "status": "completed",
+                "capability": "content.plan.delete",
+                "deleted_plan_id": plan_id,
+                "external_writes_performed": False,
+            }
+
+        def current_service_rows(business_id: str) -> list[dict]:
+            cursor.execute(
+                """
+                SELECT id, business_id, name, description, category, price
+                FROM userservices
+                WHERE business_id = %s AND COALESCE(is_active, TRUE)
+                ORDER BY category, name
+                LIMIT 100
+                """,
+                (business_id,),
+            )
+            return [dict(item) for item in (cursor.fetchall() or [])]
+
+        def service_targets_unchanged(envelope: dict, targets: list[str], services: list[dict]) -> tuple[bool, str]:
+            business_id = str(envelope.get("business_id") or "")
+            expected_ids = [str(item) for item in envelope.get("service_ids") or []]
+            current_ids = [str(item.get("id") or "") for item in services]
+            return len(targets) == 1 and targets[0] == business_id and expected_ids == current_ids, business_id
+
+        def services_optimize_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            services = current_service_rows(business_id)
+            unchanged, business_id = service_targets_unchanged(envelope, targets, services)
+            if not unchanged:
+                return {"status": "blocked", "blocked_reasons": ["services_changed_after_preview"]}
+            result = optimize_services_from_operator(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                limit=len(services),
+                channel="telegram_mini_app",
+            )
+            if str(result.get("status") or "") != "completed":
+                return {"status": "blocked", "blocked_reasons": result.get("blocked_reasons") or ["service_optimization_failed"]}
+            return {**result, "capability": "services.optimize", "external_writes_performed": False}
+
+        def services_compress_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            services = current_service_rows(business_id)
+            unchanged, business_id = service_targets_unchanged(envelope, targets, services)
+            if not unchanged:
+                return {"status": "blocked", "blocked_reasons": ["services_changed_after_preview"]}
+            analysis = build_service_catalog_compression_draft(services)
+            created_service_ids: list[str] = []
+            archived_service_ids: list[str] = []
+            for group in analysis.get("groups") or []:
+                if str(group.get("action") or "") not in {"apply", "promotion"}:
+                    continue
+                source_ids = [str(item) for item in group.get("source_service_ids") or [] if str(item)]
+                if not source_ids:
+                    continue
+                cursor.execute(
+                    "SELECT id FROM userservices WHERE business_id = %s AND id = ANY(%s) AND COALESCE(is_active, TRUE)",
+                    (business_id, source_ids),
+                )
+                found_ids = [str(dict(item).get("id") or "") for item in (cursor.fetchall() or [])]
+                if not found_ids:
+                    continue
+                if str(group.get("action") or "") == "apply":
+                    target = group.get("target") if isinstance(group.get("target"), dict) else {}
+                    created_id = str(uuid.uuid4())
+                    cursor.execute(
+                        """
+                        INSERT INTO userservices (
+                            id, user_id, business_id, category, name, description,
+                            keywords, price, is_active, created_at, updated_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW(), NOW())
+                        """,
+                        (
+                            created_id,
+                            user_id,
+                            business_id,
+                            str(target.get("category") or "Общие услуги"),
+                            str(target.get("name") or group.get("title") or "Объединённая услуга"),
+                            str(target.get("description") or ""),
+                            json.dumps(target.get("keywords") or [], ensure_ascii=False),
+                            str(target.get("price") or ""),
+                        ),
+                    )
+                    created_service_ids.append(created_id)
+                cursor.execute(
+                    "UPDATE userservices SET is_active = FALSE, updated_at = NOW() WHERE business_id = %s AND id = ANY(%s)",
+                    (business_id, found_ids),
+                )
+                archived_service_ids.extend(found_ids)
+            return {
+                "status": "completed",
+                "capability": "services.compress",
+                "created_count": len(created_service_ids),
+                "archived_count": len(set(archived_service_ids)),
+                "external_writes_performed": False,
+            }
+
         result, idempotent = confirm_mobile_action(
             cursor,
             action_id=action_id,
@@ -2791,6 +3024,11 @@ def operator_mobile_action_confirm(action_id: str):
             executors={
                 "review_replies.generate": generate_executor,
                 "finance.sales_import": finance_sales_executor,
+                "finance.transaction.delete": finance_transaction_delete_executor,
+                "cards.schedule.update": card_schedule_executor,
+                "content.plan.delete": content_plan_delete_executor,
+                "services.optimize": services_optimize_executor,
+                "services.compress": services_compress_executor,
             },
         )
         if result.get("status") == "blocked":
@@ -2801,6 +3039,30 @@ def operator_mobile_action_confirm(action_id: str):
     except Exception:
         db.conn.rollback()
         raise
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/jobs/<job_id>", methods=["GET"])
+def operator_mobile_job_status(job_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        job = load_mobile_job(
+            cursor,
+            job_id=job_id,
+            user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
+            scope=scope,
+        )
+        if not job:
+            return jsonify({"success": False, "error": "Задача не найдена или недоступна"}), 404
+        return jsonify({"success": True, "job": job})
     finally:
         db.close()
 
@@ -2904,9 +3166,42 @@ def operator_mobile_history():
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
-        if scope.get("kind") != "business":
-            return jsonify({"success": True, "scope": scope, "conversation": None, "items": [], "requires_business_selection": True})
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        if scope.get("kind") != "business":
+            limit = max(1, min(int(request.args.get("limit") or 100), 200))
+            platform = scope.get("kind") == "platform"
+            business_ids = [str(item) for item in scope.get("business_ids") or []]
+            cursor.execute(
+                """
+                SELECT message.id, message.role, message.content, message.capability,
+                       message.status, message.result_json, message.created_at,
+                       message.business_id, business.name AS business_name
+                FROM operatormessages message
+                JOIN operatorconversations conversation ON conversation.id = message.conversation_id
+                LEFT JOIN businesses business ON business.id = message.business_id
+                WHERE message.user_id = %s
+                  AND conversation.channel = 'telegram_mini_app'
+                  AND (%s OR message.business_id = ANY(%s))
+                ORDER BY message.created_at DESC
+                LIMIT %s
+                """,
+                (user_id, platform, business_ids, limit),
+            )
+            items = [dict(item) for item in (cursor.fetchall() or [])]
+            items.reverse()
+            return jsonify({
+                "success": True,
+                "scope": scope,
+                "conversation": None,
+                "items": items,
+                "counts": {"total": len(items)},
+                "cursor": None,
+                "as_of": datetime.now(timezone.utc).isoformat(),
+                "freshness": {"status": "live"},
+                "data_warnings": [],
+                "available_actions": [{"key": "select_business", "label": "Выбрать точку для поручения"}],
+                "requires_business_selection": True,
+            })
         business_id = str(scope.get("id") or "")
         conversation = find_latest_operator_conversation(
             cursor,

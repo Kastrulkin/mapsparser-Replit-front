@@ -3,7 +3,13 @@ WITH review_candidates AS (
     SELECT source_reviews.*,
            FIRST_VALUE(NULLIF(BTRIM(source_reviews.response_text), '')) OVER (
                PARTITION BY source_reviews.business_id,
-                            LOWER(BTRIM(COALESCE(source_reviews.source, ''))),
+                            CASE
+                                WHEN LOWER(COALESCE(source_reviews.source, '')) LIKE '%%yandex%%' THEN 'yandex'
+                                WHEN LOWER(COALESCE(source_reviews.source, '')) LIKE '%%2gis%%'
+                                  OR LOWER(COALESCE(source_reviews.source, '')) LIKE '%%two_gis%%'
+                                  OR LOWER(COALESCE(source_reviews.source, '')) LIKE '%%two-gis%%' THEN '2gis'
+                                ELSE LOWER(BTRIM(COALESCE(source_reviews.source, '')))
+                            END,
                             source_reviews.rating,
                             LOWER(BTRIM(COALESCE(source_reviews.text, ''))),
                             COALESCE(source_reviews.published_at::date, source_reviews.created_at::date)
@@ -13,7 +19,13 @@ WITH review_candidates AS (
            ) AS matching_response_text,
            FIRST_VALUE(source_reviews.response_at) OVER (
                PARTITION BY source_reviews.business_id,
-                            LOWER(BTRIM(COALESCE(source_reviews.source, ''))),
+                            CASE
+                                WHEN LOWER(COALESCE(source_reviews.source, '')) LIKE '%%yandex%%' THEN 'yandex'
+                                WHEN LOWER(COALESCE(source_reviews.source, '')) LIKE '%%2gis%%'
+                                  OR LOWER(COALESCE(source_reviews.source, '')) LIKE '%%two_gis%%'
+                                  OR LOWER(COALESCE(source_reviews.source, '')) LIKE '%%two-gis%%' THEN '2gis'
+                                ELSE LOWER(BTRIM(COALESCE(source_reviews.source, '')))
+                            END,
                             source_reviews.rating,
                             LOWER(BTRIM(COALESCE(source_reviews.text, ''))),
                             COALESCE(source_reviews.published_at::date, source_reviews.created_at::date)
@@ -23,7 +35,13 @@ WITH review_candidates AS (
            ) AS matching_response_at,
            ROW_NUMBER() OVER (
                PARTITION BY source_reviews.business_id,
-                            LOWER(BTRIM(COALESCE(source_reviews.source, ''))),
+                            CASE
+                                WHEN LOWER(COALESCE(source_reviews.source, '')) LIKE '%%yandex%%' THEN 'yandex'
+                                WHEN LOWER(COALESCE(source_reviews.source, '')) LIKE '%%2gis%%'
+                                  OR LOWER(COALESCE(source_reviews.source, '')) LIKE '%%two_gis%%'
+                                  OR LOWER(COALESCE(source_reviews.source, '')) LIKE '%%two-gis%%' THEN '2gis'
+                                ELSE LOWER(BTRIM(COALESCE(source_reviews.source, '')))
+                            END,
                             source_reviews.rating,
                             LOWER(BTRIM(COALESCE(source_reviews.text, ''))),
                             COALESCE(source_reviews.published_at::date, source_reviews.created_at::date)

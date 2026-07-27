@@ -22,6 +22,15 @@ class ActionCursor:
             self.rows = [item for item in source if item["id"] in requested]
         elif self.query.startswith("select id, name from businesses"):
             self.rows = [{"id": "b-1", "name": "Первая"}] if params[0] == "b-1" else []
+        elif "from contentplans plan" in self.query:
+            self.rows = [{"id": "plan-1", "business_id": "b-1", "title": "План на месяц", "business_name": "Первая", "items_count": 8}] if params[0] == "plan-1" else []
+        elif "from userservices" in self.query:
+            self.rows = [
+                {"id": "s-1", "business_id": "b-1", "name": "Стрижка", "description": "С укладкой", "category": "Стрижки", "price": "2900"},
+                {"id": "s-2", "business_id": "b-1", "name": "Окрашивание", "description": "", "category": "Цвет", "price": "5000"},
+            ] if params[0] == "b-1" else []
+        elif "from financialtransactions transaction" in self.query:
+            self.rows = [{"id": "t-1", "business_id": "b-1", "amount": 2900, "transaction_date": "2026-07-24", "description": "Стрижка", "business_name": "Первая"}] if params == ("t-1", "b-1") else []
         elif self.query.startswith("insert into operatoractions"):
             if not self.action:
                 self.action = {
@@ -142,3 +151,90 @@ def test_finance_preview_keeps_reviewed_sales_and_business_target():
     assert preview["estimated_credits"] == 0
     assert preview["target_businesses"] == [{"id": "b-1", "name": "Первая"}]
     assert [item["sale_type"] for item in preview["objects"]] == ["service", "cross_sell"]
+
+
+def test_card_schedule_preview_uses_scope_business_not_untrusted_target():
+    cursor = ActionCursor()
+    preview = create_mobile_action_preview(
+        cursor,
+        user_id="u-1",
+        scope={"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+        capability="cards.schedule.update",
+        input_payload={"business_id": "b-2", "enabled": True, "interval_hours": 48},
+    )
+
+    assert preview["status"] == "preview"
+    assert preview["target_businesses"] == [{"id": "b-1", "name": "Первая"}]
+    assert preview["changes"][0]["interval_hours"] == 48
+    assert preview["estimated_credits"] == 0
+
+
+def test_content_plan_delete_preview_contains_affected_items():
+    cursor = ActionCursor()
+    preview = create_mobile_action_preview(
+        cursor,
+        user_id="u-1",
+        scope={"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+        capability="content.plan.delete",
+        input_payload={"plan_id": "plan-1"},
+    )
+
+    assert preview["status"] == "preview"
+    assert preview["changes"] == [{
+        "object_id": "plan-1",
+        "operation": "content.plan.delete",
+        "label": "Удалить контент-план",
+        "items_count": 8,
+    }]
+    assert preview["target_businesses"] == [{"id": "b-1", "name": "Первая"}]
+
+
+def test_content_plan_delete_preview_rejects_other_scope():
+    cursor = ActionCursor()
+    preview = create_mobile_action_preview(
+        cursor,
+        user_id="u-1",
+        scope={"kind": "business", "id": "b-2", "business_ids": ["b-2"]},
+        capability="content.plan.delete",
+        input_payload={"plan_id": "plan-1"},
+    )
+
+    assert preview["status"] == "blocked"
+    assert preview["blocked_reasons"] == ["plan_not_found_or_forbidden"]
+
+
+def test_service_optimization_uses_common_preview_and_verified_catalog():
+    cursor = ActionCursor()
+    preview = create_mobile_action_preview(
+        cursor,
+        user_id="u-1",
+        scope={"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+        capability="services.optimize",
+        input_payload={"business_id": "b-2", "request_id": "intent-1"},
+    )
+
+    assert preview["status"] == "preview"
+    assert preview["estimated_credits"] == 2
+    assert [item["id"] for item in preview["objects"]] == ["s-1", "s-2"]
+    assert preview["target_businesses"] == [{"id": "b-1", "name": "Первая"}]
+    assert cursor.action["envelope_json"] == '{"business_id": "b-1", "service_ids": ["s-1", "s-2"], "request_id": "intent-1"}'
+
+
+def test_finance_delete_preview_is_bound_to_scope_and_transaction():
+    cursor = ActionCursor()
+    preview = create_mobile_action_preview(
+        cursor,
+        user_id="u-1",
+        scope={"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+        capability="finance.transaction.delete",
+        input_payload={"business_id": "b-2", "transaction_id": "t-1"},
+    )
+
+    assert preview["status"] == "preview"
+    assert preview["confirmation_required"] is True
+    assert preview["objects"][0]["amount"] == 2900
+    assert preview["changes"] == [{
+        "object_id": "t-1",
+        "operation": "finance.transaction.delete",
+        "label": "Удалить финансовую операцию",
+    }]
