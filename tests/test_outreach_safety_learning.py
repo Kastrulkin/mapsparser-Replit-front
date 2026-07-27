@@ -209,6 +209,90 @@ def test_human_confirmation_maps_only_real_reply_outcomes():
     assert confirmed_reply_learning_outcome("no_response") is None
 
 
+def test_accepted_touch_edit_records_editorial_learning_pair(monkeypatch):
+    class TouchEditCursor:
+        def __init__(self):
+            self.current = None
+
+        def execute(self, query, _params=None):
+            normalized = " ".join(str(query).split())
+            if normalized.startswith("SELECT t.*, c.status AS campaign_status"):
+                self.current = {
+                    "id": "touch-1",
+                    "campaign_id": "campaign-1",
+                    "campaign_status": "draft",
+                    "campaign_version": 4,
+                    "status": "draft",
+                    "sequence_index": 0,
+                    "channel": "email",
+                    "subject": "Исходная тема",
+                    "generated_text": "Исходный текст ИИ",
+                    "message_brief_json": {},
+                    "quality_gate_json": {"passed": True},
+                    "strategy_json": {"sender_mode": "localos_for_partner"},
+                }
+            elif normalized.startswith("UPDATE outreach_campaign_touches SET subject"):
+                self.current = {
+                    "id": "touch-1",
+                    "campaign_id": "campaign-1",
+                    "status": "draft",
+                    "sequence_index": 0,
+                    "channel": "email",
+                    "subject": "Тема человека",
+                    "generated_text": "Текст человека",
+                    "message_brief_json": {
+                        "original_generated_text": "Исходный текст ИИ",
+                        "human_edited": True,
+                    },
+                    "strategy_json": {
+                        "sender_mode": "localos_for_partner",
+                        "human_edited": True,
+                    },
+                }
+
+        def fetchone(self):
+            return self.current
+
+    learning_events = []
+    monkeypatch.setattr(outreach_campaign_service, "record_campaign_event", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        outreach_campaign_service,
+        "record_learning_event",
+        lambda *_args, **kwargs: learning_events.append(kwargs) or "learning-1",
+    )
+
+    outreach_campaign_service.update_draft_campaign_touch(
+        TouchEditCursor(),
+        campaign_id="campaign-1",
+        touch_id="touch-1",
+        subject="Тема человека",
+        generated_text="Текст человека",
+        user_id="user-1",
+    )
+
+    assert len(learning_events) == 1
+    assert learning_events[0]["outcome_type"] == "editorial_correction"
+    assert learning_events[0]["payload"] == {
+        "source": "inline_campaign_editor",
+        "preference_status": "accepted_edit",
+        "original_subject": "Исходная тема",
+        "final_subject": "Тема человека",
+        "original_text": "Исходный текст ИИ",
+        "final_text": "Текст человека",
+        "reviewer_id": "user-1",
+    }
+
+
+def test_editorial_correction_learning_outcome_is_allowed_by_postgres_schema():
+    migration_dir = Path(__file__).resolve().parents[1] / "alembic_migrations" / "versions"
+    migration_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in migration_dir.glob("*.py")
+    )
+
+    assert "'editorial_correction'" in migration_source
+
+
 class _ReactionLearningCursor:
     def __init__(self, existing_outcome="positive_reply"):
         self.existing_outcome = existing_outcome

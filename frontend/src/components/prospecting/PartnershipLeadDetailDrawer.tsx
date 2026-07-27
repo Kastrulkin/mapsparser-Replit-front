@@ -652,7 +652,7 @@ export default function PartnershipLeadDetailDrawer({
             </a>
             <details className="border-t border-slate-200 pt-3">
               <summary className="flex min-h-10 cursor-pointer items-center text-sm font-semibold text-slate-700">
-                Stop-list и запреты
+                Исключения из контактов
               </summary>
               <div className="pt-3">
                 <OutreachSuppressionManager

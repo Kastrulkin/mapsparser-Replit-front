@@ -16,6 +16,7 @@ from services.outreach_campaign_service import (
     DEFAULT_SEQUENCE,
     SENDER_MODE_LOCALOS_FOR_PARTNER,
     SUPPORTED_CHANNELS,
+    apply_draft_campaign_review,
     approve_campaign,
     build_pilot_readiness,
     build_preview,
@@ -25,6 +26,7 @@ from services.outreach_campaign_service import (
     record_campaign_event,
     record_manual_touch,
     resolve_sender_mode,
+    update_draft_campaign_touch,
 )
 from services.outreach_safety_service import (
     classify_inbound_event,
@@ -724,7 +726,7 @@ def preview_campaign(workstream_id: str):
             ),
         )
         campaign = None
-        if bool(payload.get("save")) and preview.get("status") in {"ready", "needs_channel_setup"}:
+        if bool(payload.get("save")) and preview.get("status") in {"ready", "needs_channel_setup", "needs_evidence", "needs_revision"}:
             campaign = persist_preview(
                 cursor,
                 preview,
@@ -959,6 +961,141 @@ def get_campaign(campaign_id: str):
         if not _authorized_campaign(cursor, campaign_id, user_data):
             return jsonify({"success": False, "error": "Campaign not found or access denied"}), 404
         return jsonify({"success": True, "campaign": _campaign_payload(cursor, campaign_id)})
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.patch("/api/outreach/campaigns/<campaign_id>/touches/<touch_id>")
+def update_campaign_touch(campaign_id: str, touch_id: str):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    payload = request.get_json(silent=True) or {}
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        if not _authorized_campaign(cursor, campaign_id, user_data):
+            return jsonify({"success": False, "error": "Campaign not found or access denied"}), 404
+        touch = update_draft_campaign_touch(
+            cursor,
+            campaign_id=campaign_id,
+            touch_id=touch_id,
+            subject=payload.get("subject"),
+            generated_text=str(payload.get("text") or ""),
+            user_id=str(user_data.get("user_id") or ""),
+        )
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "touch": touch,
+            "campaign": _campaign_payload(cursor, campaign_id),
+            "campaign_version_unchanged": True,
+            "quality_review_required": True,
+            "external_dispatch_performed": False,
+        })
+    except LookupError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc), "reason_code": "touch_edit_blocked"}), 409
+    finally:
+        conn.close()
+
+
+@outreach_campaign_bp.post("/api/outreach/campaigns/<campaign_id>/review-edits")
+def review_campaign_touch_edits(campaign_id: str):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        authorized = _authorized_campaign(cursor, campaign_id, user_data)
+        if not authorized:
+            return jsonify({"success": False, "error": "Campaign not found or access denied"}), 404
+        campaign = _campaign_payload(cursor, campaign_id)
+        if not campaign:
+            return jsonify({"success": False, "error": "Campaign not found"}), 404
+        if campaign.get("status") != "draft":
+            return jsonify({"success": False, "error": "Only a draft campaign can be reviewed"}), 409
+
+        touches = list(campaign.get("touches") or [])
+        if not touches:
+            return jsonify({"success": False, "error": "Campaign has no messages to review"}), 409
+        scheduled_values = [
+            touch.get("scheduled_at")
+            for touch in touches
+            if isinstance(touch.get("scheduled_at"), datetime)
+        ]
+        start_at = min(scheduled_values) if scheduled_values else datetime.now(timezone.utc)
+        sequence = []
+        overrides = []
+        for touch in touches:
+            scheduled_at = touch.get("scheduled_at")
+            day_offset = (
+                max(0, round((scheduled_at - start_at).total_seconds() / 86_400))
+                if isinstance(scheduled_at, datetime)
+                else int(touch.get("sequence_index") or 0) * 3
+            )
+            brief = touch.get("message_brief_json") if isinstance(touch.get("message_brief_json"), dict) else {}
+            sequence.append({
+                "channel": str(touch.get("channel") or "manual"),
+                "day_offset": day_offset,
+                "angle": str(touch.get("angle_type") or "proof"),
+                "sender_account_id": str(touch.get("sender_account_id") or "") or None,
+            })
+            overrides.append({
+                "sequence_index": int(touch.get("sequence_index") or 0),
+                "subject": str(touch.get("subject") or ""),
+                "text": str(touch.get("generated_text") or ""),
+                "original_subject": str(brief.get("original_generated_subject") or ""),
+                "original_text": str(brief.get("original_generated_text") or ""),
+                "human_edited": bool(brief.get("human_edited")),
+            })
+
+        preview = build_preview(
+            cursor,
+            str(campaign.get("workstream_id") or authorized.get("workstream_id") or ""),
+            sequence=sequence,
+            touch_overrides=overrides,
+            start_at=start_at,
+            sender_mode=str(campaign.get("sender_mode") or "") or None,
+            generate_ai=False,
+            manual_reviewer_role=(
+                "superadmin" if user_data.get("is_superadmin") else "business_user"
+            ),
+        )
+        reviewed_touches = [
+            {
+                "sequence_index": int(touch.get("sequence_index") or 0),
+                "subject": touch.get("subject"),
+                "text": touch.get("text"),
+                "quality_gate": touch.get("quality_gate") or {},
+            }
+            for touch in preview.get("touches") or []
+        ]
+        review = apply_draft_campaign_review(
+            cursor,
+            campaign_id=campaign_id,
+            reviewed_touches=reviewed_touches,
+            user_id=str(user_data.get("user_id") or ""),
+        )
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "review": review,
+            "preview": preview,
+            "campaign": _campaign_payload(cursor, campaign_id),
+            "campaign_version_unchanged": True,
+            "external_dispatch_performed": False,
+        })
+    except LookupError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc), "reason_code": "touch_review_blocked"}), 409
     finally:
         conn.close()
 

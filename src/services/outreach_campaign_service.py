@@ -152,6 +152,282 @@ def _text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
+def update_draft_campaign_touch(
+    cursor: Any,
+    *,
+    campaign_id: str,
+    touch_id: str,
+    subject: str | None,
+    generated_text: str,
+    user_id: str,
+) -> dict[str, Any]:
+    """Persist one manually edited message without changing campaign version or state."""
+    normalized_text = generated_text.strip() if isinstance(generated_text, str) else ""
+    normalized_subject = _text(subject)
+    if not normalized_text:
+        raise ValueError("Message text is required")
+    if len(normalized_text) > 3000:
+        raise ValueError("Message text is too long")
+    if len(normalized_subject) > 200:
+        raise ValueError("Email subject is too long")
+
+    cursor.execute(
+        """
+        SELECT t.*, c.status AS campaign_status, c.version AS campaign_version,
+               c.scope_type, c.business_id, ws.workstream_type
+        FROM outreach_campaign_touches t
+        JOIN outreach_campaigns c ON c.id = t.campaign_id
+        JOIN lead_workstreams ws ON ws.id = c.workstream_id
+        WHERE t.id = %s AND t.campaign_id = %s
+        FOR UPDATE
+        """,
+        (touch_id, campaign_id),
+    )
+    existing = _dict(cursor.fetchone())
+    if not existing:
+        raise LookupError("Campaign touch not found")
+    if existing.get("campaign_status") != "draft" or existing.get("status") != "draft":
+        raise ValueError("Only a draft campaign message can be edited")
+    if existing.get("channel") == "email" and not normalized_subject:
+        raise ValueError("Email subject is required")
+
+    raw_message_brief = existing.get("message_brief_json")
+    message_brief = dict(raw_message_brief) if isinstance(raw_message_brief, dict) else {}
+    if not message_brief.get("original_generated_text"):
+        message_brief["original_generated_text"] = _text(existing.get("generated_text"))
+    if not message_brief.get("original_generated_subject"):
+        message_brief["original_generated_subject"] = _text(existing.get("subject")) or None
+    message_brief["human_edited"] = True
+    message_brief["manual_edit_review_required"] = True
+    message_brief["generation_source"] = "inline_campaign_editor"
+
+    raw_quality_gate = existing.get("quality_gate_json")
+    quality_gate = dict(raw_quality_gate) if isinstance(raw_quality_gate, dict) else {}
+    blocking_reasons = list(quality_gate.get("blocking_reasons") or [])
+    if "manual_edit_requires_review" not in blocking_reasons:
+        blocking_reasons.append("manual_edit_requires_review")
+    reason_codes = list(quality_gate.get("reason_codes") or [])
+    if "MANUAL_EDIT_REQUIRES_REVIEW" not in reason_codes:
+        reason_codes.append("MANUAL_EDIT_REQUIRES_REVIEW")
+    quality_gate.update({
+        "passed": False,
+        "verdict": "revise",
+        "blocking_reasons": blocking_reasons,
+        "reason_codes": reason_codes,
+        "canonical_reason_codes": reason_codes,
+    })
+
+    raw_strategy = existing.get("strategy_json")
+    strategy = dict(raw_strategy) if isinstance(raw_strategy, dict) else {}
+    strategy["human_edited"] = True
+    strategy["content_source"] = "inline_campaign_editor"
+    editorial_strategy_fingerprint = strategy_fingerprint(strategy)
+
+    cursor.execute(
+        """
+        UPDATE outreach_campaign_touches
+        SET subject = %s,
+            generated_text = %s,
+            approved_text = NULL,
+            message_brief_json = %s,
+            quality_gate_json = %s,
+            strategy_json = %s,
+            strategy_fingerprint = %s,
+            updated_at = NOW()
+        WHERE id = %s AND campaign_id = %s
+        RETURNING *
+        """,
+        (
+            normalized_subject or None,
+            normalized_text,
+            Json(message_brief),
+            Json(quality_gate),
+            Json(strategy),
+            editorial_strategy_fingerprint,
+            touch_id,
+            campaign_id,
+        ),
+    )
+    updated = _dict(cursor.fetchone())
+    if not updated:
+        raise LookupError("Campaign touch not found")
+    updated["campaign_version"] = int(existing.get("campaign_version") or 0)
+    record_campaign_event(
+        cursor,
+        campaign_id,
+        "campaign_touch_edited",
+        actor_id=user_id,
+        touch_id=touch_id,
+        payload={
+            "campaign_version": updated["campaign_version"],
+            "sequence_index": int(updated.get("sequence_index") or 0),
+            "channel": _text(updated.get("channel")),
+            "quality_review_required": True,
+        },
+    )
+    record_learning_event(
+        cursor,
+        campaign={
+            "id": campaign_id,
+            "scope_type": existing.get("scope_type"),
+            "business_id": existing.get("business_id"),
+            "workstream_type": existing.get("workstream_type"),
+        },
+        touch={
+            **updated,
+            "strategy_json": strategy,
+            "strategy_fingerprint": editorial_strategy_fingerprint,
+        },
+        outcome_type="editorial_correction",
+        payload={
+            "source": "inline_campaign_editor",
+            "preference_status": "accepted_edit",
+            "original_subject": _text(existing.get("subject")),
+            "final_subject": normalized_subject,
+            "original_text": _text(existing.get("generated_text")),
+            "final_text": normalized_text,
+            "reviewer_id": user_id,
+        },
+    )
+    return updated
+
+
+def apply_draft_campaign_review(
+    cursor: Any,
+    *,
+    campaign_id: str,
+    reviewed_touches: list[dict[str, Any]],
+    user_id: str,
+) -> dict[str, Any]:
+    """Persist a server-side review of the current draft without creating a version."""
+    cursor.execute(
+        """
+        SELECT id, version, status
+        FROM outreach_campaigns
+        WHERE id = %s
+        FOR UPDATE
+        """,
+        (campaign_id,),
+    )
+    campaign = _dict(cursor.fetchone())
+    if not campaign:
+        raise LookupError("Campaign not found")
+    if campaign.get("status") != "draft":
+        raise ValueError("Only a draft campaign can be reviewed")
+
+    cursor.execute(
+        """
+        SELECT id, campaign_id, sequence_index, status, subject, generated_text,
+               message_brief_json
+        FROM outreach_campaign_touches
+        WHERE campaign_id = %s
+        ORDER BY sequence_index
+        """,
+        (campaign_id,),
+    )
+    existing_touches = [_dict(row) for row in cursor.fetchall()]
+    if not existing_touches:
+        raise ValueError("Campaign has no messages to review")
+    if any(touch.get("status") != "draft" for touch in existing_touches):
+        raise ValueError("Only draft campaign messages can be reviewed")
+
+    reviewed_by_index: dict[int, dict[str, Any]] = {}
+    for item in reviewed_touches or []:
+        if not isinstance(item, dict):
+            raise ValueError("Reviewed touches must contain objects")
+        try:
+            sequence_index = int(item.get("sequence_index"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Reviewed touch sequence_index must be an integer") from exc
+        if sequence_index in reviewed_by_index:
+            raise ValueError("Reviewed touch sequence_index is duplicated")
+        gate = item.get("quality_gate")
+        if not isinstance(gate, dict) or not isinstance(gate.get("passed"), bool):
+            raise ValueError("Reviewed touch quality gate is required")
+        reviewed_by_index[sequence_index] = item
+
+    expected_indexes = {int(touch.get("sequence_index") or 0) for touch in existing_touches}
+    if set(reviewed_by_index) != expected_indexes:
+        raise ValueError("Review must include every campaign message")
+
+    reviewed_at = datetime.now(timezone.utc).isoformat()
+    all_passed = True
+    for touch in existing_touches:
+        sequence_index = int(touch.get("sequence_index") or 0)
+        reviewed = reviewed_by_index[sequence_index]
+        reviewed_text = reviewed.get("text")
+        reviewed_subject = reviewed.get("subject")
+        if reviewed_text is not None and _text(reviewed_text) != _text(touch.get("generated_text")):
+            raise ValueError("Campaign message changed during review; run the review again")
+        if reviewed_subject is not None and _text(reviewed_subject) != _text(touch.get("subject")):
+            raise ValueError("Campaign subject changed during review; run the review again")
+
+        gate = dict(reviewed["quality_gate"])
+        passed = bool(gate.get("passed"))
+        all_passed = all_passed and passed
+        if passed:
+            gate["verdict"] = "approve"
+            gate["blocking_reasons"] = [
+                reason
+                for reason in list(gate.get("blocking_reasons") or [])
+                if str(reason).lower() != "manual_edit_requires_review"
+            ]
+            gate["reason_codes"] = [
+                reason
+                for reason in list(gate.get("reason_codes") or [])
+                if str(reason).upper() != "MANUAL_EDIT_REQUIRES_REVIEW"
+            ]
+            gate["canonical_reason_codes"] = [
+                reason
+                for reason in list(gate.get("canonical_reason_codes") or [])
+                if str(reason).upper() != "MANUAL_EDIT_REQUIRES_REVIEW"
+            ]
+        manual_review = dict(gate.get("manual_review") or {})
+        manual_review.update({
+            "passed": passed,
+            "reviewer_role": manual_review.get("reviewer_role") or "authorized_user",
+            "source": "saved_draft_review",
+            "reviewed_at": reviewed_at,
+        })
+        gate["manual_review"] = manual_review
+
+        brief = dict(touch.get("message_brief_json") or {})
+        brief["manual_edit_review_required"] = False
+        brief["manual_edit_review_passed"] = passed
+        brief["manual_edit_reviewed_at"] = reviewed_at
+        brief["manual_edit_reviewed_by"] = user_id or None
+
+        cursor.execute(
+            """
+            UPDATE outreach_campaign_touches
+            SET quality_gate_json = %s,
+                message_brief_json = %s,
+                updated_at = NOW()
+            WHERE campaign_id = %s AND id = %s
+            """,
+            (Json(gate), Json(brief), campaign_id, str(touch["id"])),
+        )
+
+    result = {
+        "campaign_id": campaign_id,
+        "campaign_version": int(campaign.get("version") or 0),
+        "reviewed_touch_count": len(existing_touches),
+        "all_passed": all_passed,
+    }
+    record_campaign_event(
+        cursor,
+        campaign_id,
+        "campaign_touch_edits_reviewed",
+        actor_id=user_id,
+        payload={
+            "campaign_version": result["campaign_version"],
+            "reviewed_touch_count": result["reviewed_touch_count"],
+            "all_passed": all_passed,
+        },
+    )
+    return result
+
+
 def _represented_business_opening(context: dict[str, Any]) -> str:
     """Build the external company voice for an authorised LocalOS sender account."""
     business_name = _text(context.get("represented_business_name"))
@@ -1304,9 +1580,23 @@ def _strategy_dimensions(
 
 def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict[str, Any]]:
     contacts_by_type: dict[str, dict[str, Any]] = {}
-    for contact in context.get("contacts") or []:
-        if not _recipient_contact_eligible(contact):
-            continue
+    eligible_contacts = [
+        contact
+        for contact in context.get("contacts") or []
+        if _recipient_contact_eligible(contact)
+    ]
+    selected_contact_id = _text(context.get("selected_contact_point_id"))
+    selected_contact = next(
+        (
+            contact
+            for contact in eligible_contacts
+            if _text(contact.get("id")) == selected_contact_id
+        ),
+        None,
+    )
+    if selected_contact:
+        contacts_by_type[_text(selected_contact.get("contact_type"))] = selected_contact
+    for contact in eligible_contacts:
         contacts_by_type.setdefault(str(contact.get("contact_type") or ""), contact)
     scope_type = (
         "platform"
@@ -1461,12 +1751,40 @@ def _quality_gate(
         "отзыв даёт проверяемую тему",
         "без приписывания бизнесу скрытой проблемы",
     )
+    residential_partnership = bool(
+        _text(candidate.get("sender_mode")) in {
+            SENDER_MODE_PARTNER_BUSINESS,
+            SENDER_MODE_LOCALOS_FOR_PARTNER,
+        }
+        and _text(candidate.get("recipient_type")) == "residential_complex"
+    )
+    residential_audience_present = bool(re.search(
+        r"\b(?:жител\w*|гост\w*|семь\w*|сосед\w*)\b",
+        normalized_text,
+        flags=re.UNICODE,
+    ))
+    residential_offer_present = bool(re.search(
+        r"\b(?:услов\w*|стриж\w*|услуг\w*|предлож\w*|приглас\w*|партн\w*|скид\w*|мероприят\w*|мастер-класс\w*)\b",
+        normalized_text,
+        flags=re.UNICODE,
+    ))
+    residential_relevance = bool(
+        residential_partnership
+        and contains(candidate.get("recipient"))
+        and residential_audience_present
+        and residential_offer_present
+    )
     checks = {
         "removal": contains(candidate.get("recipient")) and (
             any(contains(anchor) for anchor in personalization_anchors)
             or respectful_close
+            or residential_relevance
         ),
-        "bridge": any(contains(anchor) for anchor in personalization_anchors[1:]),
+        "bridge": (
+            any(contains(anchor) for anchor in personalization_anchors[1:])
+            or residential_relevance
+            or (respectful_close and contains(candidate.get("recipient")))
+        ),
         "fact": bool(candidate.get("source_url") and candidate.get("evidence_status") in {"approved", "observed"}),
         "freshness": _text(candidate.get("freshness")).lower() not in {
             "",
@@ -1481,7 +1799,10 @@ def _quality_gate(
             claim.lower() in text.lower() for claim in proof_context.get("forbidden_claims", [])
         ),
         "channel_fit": channel in SUPPORTED_CHANNELS and word_count <= channel_word_limit,
-        "single_cta": question_count == 1 and bool(_text(candidate.get("next_step"))),
+        "single_cta": (
+            question_count == 1
+            or (respectful_close and question_count == 0)
+        ) and bool(_text(candidate.get("next_step"))),
         "suppression_safety": not suppressed,
         "human_tone": not any(phrase in normalized_text for phrase in banned_machine_phrases),
         "sensitive_review": candidate.get("evidence_kind") != "review",
@@ -1703,9 +2024,9 @@ def _normalize_touch_overrides(
             raise ValueError("touch override sequence_index must be an integer") from exc
         if override_index < 0 or override_index > 20 or override_index in normalized:
             raise ValueError("touch override sequence_index is invalid or duplicated")
-        override_text = _text(item.get("text"))
+        override_text = str(item.get("text") or "").strip()
         override_subject = _text(item.get("subject"))
-        original_text = _text(item.get("original_text"))
+        original_text = str(item.get("original_text") or "").strip()
         original_subject = _text(item.get("original_subject"))
         if not override_text:
             raise ValueError("touch override text is required")
@@ -2047,11 +2368,13 @@ def build_preview(
                 touch["quality_gate"] = gate
     if override_by_index:
         expected_indexes = {int(touch["sequence_index"]) for touch in touches}
-        if set(override_by_index) != expected_indexes:
-            raise ValueError("touch_overrides must include every campaign touch")
+        if not set(override_by_index).issubset(expected_indexes):
+            raise ValueError("touch_overrides contain an unknown campaign touch")
         reviewer_role = _text(manual_reviewer_role) or "authorized_user"
         for touch in touches:
             index = int(touch["sequence_index"])
+            if index not in override_by_index:
+                continue
             override = override_by_index[index]
             touch["text"] = override["text"]
             if touch["channel"] == "email" and override["subject"]:
@@ -2160,7 +2483,7 @@ def build_preview(
 
 
 def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> dict[str, Any]:
-    if preview.get("status") not in {"ready", "needs_channel_setup"} or not preview.get("touches"):
+    if preview.get("status") not in {"ready", "needs_channel_setup", "needs_evidence", "needs_revision"} or not preview.get("touches"):
         raise ValueError("needs_evidence")
     workstream_id = str(preview["workstream_id"])
     cursor.execute("SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM outreach_campaigns WHERE workstream_id = %s", (workstream_id,))

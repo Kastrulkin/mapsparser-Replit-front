@@ -36,6 +36,7 @@ import {
 import {
   OutreachTouchMessageEditor,
 } from './OutreachTouchMessageEditor';
+import { OutreachDateTimePicker } from './OutreachDateTimePicker';
 import {
   OutreachTouchMessageDraft,
   outreachTouchMessageDraft,
@@ -57,6 +58,17 @@ type WorkstreamType = 'localos_sales' | 'client_partnership';
 type SenderMode = 'localos' | 'partner_business' | 'localos_for_partner';
 type RegistryView = 'leads' | 'messages' | 'results';
 type ScopeFilter = 'all' | 'localos_sales' | 'client_partnership';
+
+const outreachLocalDateTimeValue = (value?: string | null) => {
+  const date = new Date(String(value || ''));
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  const hours = `${date.getHours()}`.padStart(2, '0');
+  const minutes = `${date.getMinutes()}`.padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
 
 interface BusinessOption {
   id: string;
@@ -235,8 +247,10 @@ interface OutreachQualityGate {
 }
 
 interface OutreachTouchPreview {
+  id?: string;
   sequence_index: number;
   channel: string;
+  contact_point_id?: string | null;
   day_offset: number;
   angle: string;
   subject?: string | null;
@@ -248,6 +262,7 @@ interface OutreachTouchPreview {
   problem_hypothesis?: string | null;
   relevance_bridge?: string | null;
   scheduled_at?: string | null;
+  human_edited?: boolean;
 }
 
 interface OutreachPreview {
@@ -320,6 +335,7 @@ interface SavedOutreachCampaign {
     channel?: string;
     status?: string;
     sender_account_id?: string | null;
+    contact_point_id?: string | null;
     angle_type?: string;
     scheduled_at?: string;
     subject?: string | null;
@@ -332,10 +348,23 @@ interface SavedOutreachCampaign {
       observation?: string | null;
       problem_hypothesis?: string | null;
       relevance_bridge?: string | null;
+      human_edited?: boolean;
+      manual_edit_review_required?: boolean;
+      manual_edit_review_passed?: boolean;
     };
   }>;
   inbound_events?: OutreachInboundEvent[];
   deliveries?: OutreachDelivery[];
+}
+
+interface OutreachSenderAccountSummary {
+  id: string;
+  channel?: string;
+  sender_identity?: string | null;
+  display_name?: string | null;
+  status?: string;
+  outreach_enabled?: boolean;
+  health_status?: string;
 }
 
 interface PilotReadiness {
@@ -440,7 +469,7 @@ const outreachQualityReasonLabels: Record<string, string> = {
   CHANNEL_LIMIT_EXCEEDED: 'Текст не подходит выбранному каналу',
   STYLE_VIOLATION: 'Текст звучит неестественно или нарушает голос',
   TERMINAL_CONTACT_STATE: 'Контакт уже находится в конечном статусе',
-  SUPPRESSED_CONTACT: 'Получатель находится в stop-list',
+  SUPPRESSED_CONTACT: 'Получатель исключён из контактов',
   APPROVAL_BYPASS: 'Требуется новое ручное подтверждение',
   SENSITIVE_TARGETING: 'Сигнал нельзя безопасно использовать в сообщении',
 };
@@ -647,29 +676,61 @@ const strongestResearch = (workstreams: LeadWorkstream[]) => workstreams
 
 const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
+interface LeadDrawerSectionProps {
+  id: string;
+  title: string;
+  description: string;
+  status?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}
+
+const LeadDrawerSection = ({
+  id,
+  title,
+  description,
+  status,
+  defaultOpen = false,
+  children,
+}: LeadDrawerSectionProps) => {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <section
+      id={id}
+      className="scroll-mt-28 overflow-hidden rounded-2xl bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_1px_2px_-1px_rgba(15,23,42,0.06)]"
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={`${id}-content`}
+        onClick={() => setOpen((current) => !current)}
+        className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-400"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block text-balance text-sm font-semibold text-slate-950">{title}</span>
+          <span className="mt-1 block truncate text-xs leading-5 text-slate-600">{description}</span>
+        </span>
+        {status ? (
+          <Badge variant="outline" className="hidden shrink-0 border-slate-200 bg-slate-50 text-slate-700 sm:inline-flex">
+            {status}
+          </Badge>
+        ) : null}
+        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      <div id={`${id}-content`} hidden={!open} className="border-t border-slate-100 p-3 sm:p-4">
+        {children}
+      </div>
+    </section>
+  );
+};
+
 const senderProfileFactLines = (
   items: Array<string | { fact?: string; text?: string }> | undefined,
 ) => (items || [])
   .map((item) => typeof item === 'string' ? item : String(item.fact || item.text || ''))
   .filter(Boolean)
   .join('\n');
-
-const readinessCodeFromLegacyLabel = (label: string) => {
-  const normalized = label.trim().toLowerCase();
-  if (normalized.includes('профил') && normalized.includes('отправител')) return 'sender_profile';
-  if (normalized.includes('опыт основателя') || normalized.includes('опыт команды')) return 'sender_experience';
-  if (normalized.includes('доказательство') || normalized.includes('кейс')) return 'sender_proof';
-  if (normalized.includes('совместим') || normalized.includes('полезны друг другу')) return 'partner_compatibility';
-  if (normalized.includes('категори') && normalized.includes('партн')) return 'partner_category';
-  if (normalized.includes('контакт')) return 'recipient_contact';
-  if (normalized.includes('роль получателя')) return 'recipient_role';
-  if (normalized.includes('почему сейчас') || normalized.includes('публичный сигнал')) return 'timing_signal';
-  if (normalized.includes('проблем')) return 'confirmed_problem';
-  if (normalized.includes('результат первого шага')) return 'first_step_result';
-  if (normalized.includes('сегмент')) return 'lead_segment';
-  if (normalized.includes('stop-list')) return 'suppression';
-  return 'research_evidence';
-};
 
 export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ваш бизнес' }: AdminLeadRegistryProps) {
   const [view, setView] = useState<RegistryView>('leads');
@@ -737,6 +798,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [touchEdits, setTouchEdits] = useState<Record<number, OutreachTouchMessageDraft>>({});
   const [editingTouchIndex, setEditingTouchIndex] = useState<number | null>(null);
   const [touchEditsValidated, setTouchEditsValidated] = useState(false);
+  const [campaignSetupDirty, setCampaignSetupDirty] = useState(false);
+  const [senderAccounts, setSenderAccounts] = useState<OutreachSenderAccountSummary[]>([]);
+  const [senderAccountsLoading, setSenderAccountsLoading] = useState(false);
 
   const loadLeads = useCallback(async () => {
     setLoading(true);
@@ -806,57 +870,42 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     : senderMode === 'localos_for_partner'
       ? `${selectedWorkstream?.client_business_name || 'Бизнес партнёра'} через LocalOS`
       : selectedWorkstream?.client_business_name || 'Выбранный клиент';
+  const loadSenderAccounts = useCallback(async () => {
+    const businessId = selectedWorkstream?.client_business_id;
+    if (selectedSenderScope === 'business' && !businessId) {
+      setSenderAccounts([]);
+      return;
+    }
+    setSenderAccountsLoading(true);
+    try {
+      const query = new URLSearchParams({ scope_type: selectedSenderScope });
+      if (selectedSenderScope === 'business' && businessId) query.set('business_id', businessId);
+      const payload = await newAuth.makeRequest(`/outreach/sender-accounts?${query.toString()}`);
+      setSenderAccounts(Array.isArray(payload?.sender_accounts) ? payload.sender_accounts : []);
+    } catch {
+      setSenderAccounts([]);
+    } finally {
+      setSenderAccountsLoading(false);
+    }
+  }, [selectedSenderScope, selectedWorkstream?.client_business_id]);
+  const connectedEmailSender = senderAccounts.find((account) => (
+    account.channel === 'email' && account.status === 'connected'
+  )) || null;
+  const connectedEmailReady = Boolean(
+    connectedEmailSender?.outreach_enabled
+    && !['blocked', 'paused', 'degraded'].includes(String(connectedEmailSender.health_status || '')),
+  );
   const drawerContacts = (contactIntelligence?.contacts || selectedWorkstream?.contact_points || [])
     .filter((item) => item.type !== 'website');
   const drawerTelegramSources = contactIntelligence?.telegram_sources || [];
   const drawerRecipient = contactIntelligence?.selected_recipient || selectedWorkstream?.selected_recipient || null;
-  const drawerReadiness = contactIntelligence?.job?.message_readiness || selectedWorkstream?.message_readiness || {};
-  const drawerFirstMessage = contactIntelligence?.first_message || null;
-  const drawerMessageCurrent = Boolean(drawerFirstMessage?.generation_current);
-  const readinessIssues = (() => {
-    const explicitIssues = (drawerReadiness.missing_items || []).length
-      ? (drawerReadiness.missing_items || []).map((item) => ({
-          code: String(item.code || 'research_evidence'),
-          label: String(item.label || 'Добавьте подтверждённые данные'),
-        }))
-      : (drawerReadiness.missing || []).map((label) => ({
-          code: readinessCodeFromLegacyLabel(label),
-          label,
-        }));
-    const profileIssues = (contactIntelligence?.sender_profile_completeness?.missing_items || []).map((item) => ({
-      code: String(item.code || 'sender_profile'),
-      label: String(item.label || 'Дополните профиль отправителя'),
-    }));
-    const combinedIssues = [...explicitIssues, ...profileIssues].filter((item, index, items) => (
-      items.findIndex((candidate) => candidate.code === item.code) === index
-    ));
-    if (combinedIssues.length || drawerFirstMessage?.generated_text) return combinedIssues;
-    const inferredIssues: Array<{ code: string; label: string }> = [];
-    if (!drawerRecipient) {
-      inferredIssues.push({ code: 'recipient_contact', label: 'Выберите подходящий контакт' });
-    }
-    if (!contactIntelligence?.sender_profile?.confirmed_at) {
-      inferredIssues.push({ code: 'sender_profile', label: 'Добавьте факты об отправителе' });
-    }
-    if (
-      selectedWorkstream?.workstream_type === 'client_partnership'
-      && selectedWorkstream.service_compatibility_score == null
-      && !selectedWorkstream.research?.why_now
-    ) {
-      inferredIssues.push({
-        code: 'partner_compatibility',
-        label: 'Подтвердите, чем бизнес отправителя и потенциальный партнёр полезны друг другу',
-      });
-    }
-    return inferredIssues;
-  })();
   const readyChannelCount = Object.values(outreachPreview?.channel_availability || {})
     .filter((item) => item.status === 'ready').length;
   const senderProfileChecklist = contactIntelligence?.sender_profile_completeness;
   const savedCampaignFirstScheduledAt = (savedOutreachCampaign?.touches || [])
     .map((touch) => touch.scheduled_at)
     .filter((value): value is string => Boolean(value))
-    .sort()[0];
+    .sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0];
   const savedCampaignDisplayTouches: OutreachTouchPreview[] = (savedOutreachCampaign?.touches || [])
     .filter((touch) => Boolean(touch.generated_text || touch.approved_text))
     .sort((left, right) => Number(left.sequence_index || 0) - Number(right.sequence_index || 0))
@@ -867,8 +916,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         ? Math.max(0, Math.round((scheduledAt - firstScheduledAt) / 86_400_000))
         : Number(touch.sequence_index || 0) * 3;
       return {
+        id: touch.id,
         sequence_index: Number(touch.sequence_index || 0),
         channel: String(touch.channel || 'manual'),
+        contact_point_id: touch.contact_point_id,
         day_offset: calculatedDayOffset,
         angle: String(touch.angle_type || ''),
         subject: touch.subject,
@@ -880,15 +931,55 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         problem_hypothesis: touch.message_brief_json?.problem_hypothesis,
         relevance_bridge: touch.message_brief_json?.relevance_bridge,
         scheduled_at: touch.scheduled_at,
+        human_edited: Boolean(touch.message_brief_json?.human_edited),
       };
     });
   const displayedOutreachTouches = (outreachPreview?.touches || []).length > 0
     ? outreachPreview?.touches || []
     : savedCampaignDisplayTouches;
-  const hasTouchEdits = Object.values(touchEdits).some((draft) => draft.humanEdited);
-  const outreachCalendarTouches = displayedOutreachTouches.length > 0
-    ? displayedOutreachTouches
-    : buildProjectedOutreachTouches(sequenceChannels, sequenceDays, sequenceStartAt);
+  const chainTouchesByContactId = new Map<string, OutreachTouchPreview[]>();
+  displayedOutreachTouches.forEach((touch) => {
+    const contactPointId = String(touch.contact_point_id || '');
+    if (!contactPointId) return;
+    chainTouchesByContactId.set(contactPointId, [
+      ...(chainTouchesByContactId.get(contactPointId) || []),
+      touch,
+    ]);
+  });
+  const hasTouchEdits = Object.entries(touchEdits).some(([rawIndex, draft]) => {
+    const touchIndex = Number(rawIndex);
+    const persistedTouch = (savedOutreachCampaign?.touches || []).find(
+      (touch) => Number(touch.sequence_index || 0) === touchIndex,
+    );
+    if (!persistedTouch) return draft.humanEdited;
+    const persistedSubject = String(persistedTouch.subject || '').trim();
+    const persistedText = String(persistedTouch.approved_text || persistedTouch.generated_text || '').trim();
+    return draft.subject.trim() !== persistedSubject || draft.text.trim() !== persistedText;
+  });
+  const savedCampaignHasHumanEdits = (savedOutreachCampaign?.touches || []).some(
+    (touch) => Boolean(touch.message_brief_json?.human_edited),
+  );
+  const savedCampaignHasPendingReview = (savedOutreachCampaign?.touches || []).some(
+    (touch) => Boolean(touch.message_brief_json?.manual_edit_review_required),
+  );
+  const savedCampaignQualityPassed = Boolean(
+    (savedOutreachCampaign?.touches || []).length
+    && (savedOutreachCampaign?.touches || []).every((touch) => Boolean(touch.quality_gate_json?.passed)),
+  );
+  const outreachTouchEditsStorageKey = useMemo(() => {
+    const workstreamId = String(selectedWorkstream?.id || '');
+    const campaignId = String(savedOutreachCampaign?.id || '');
+    const campaignVersion = Number(savedOutreachCampaign?.version || 0);
+    if (!workstreamId || !campaignId || !campaignVersion) return '';
+    return `localos:outreach-touch-edits:${workstreamId}:${campaignId}:${campaignVersion}`;
+  }, [savedOutreachCampaign?.id, savedOutreachCampaign?.version, selectedWorkstream?.id]);
+  const outreachCalendarTouches = (outreachPreview?.touches || []).length > 0
+    ? outreachPreview?.touches || []
+    : campaignSetupDirty
+      ? buildProjectedOutreachTouches(sequenceChannels, sequenceDays, sequenceStartAt)
+      : savedCampaignDisplayTouches.length > 0
+        ? savedCampaignDisplayTouches
+        : buildProjectedOutreachTouches(sequenceChannels, sequenceDays, sequenceStartAt);
   const savedConversationTouches = [...(savedOutreachCampaign?.touches || [])]
     .sort((left, right) => Number(left.sequence_index || 0) - Number(right.sequence_index || 0));
   const humanReplyEvents = (savedOutreachCampaign?.inbound_events || [])
@@ -946,6 +1037,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const pilotReplyReceived = savedOutreachCampaign?.stop_reason === 'recipient_replied';
   const canDispatchPilot = Boolean(
     savedOutreachCampaign?.status === 'approved'
+    && !campaignSetupDirty
     && savedOutreachCampaign?.generation_current
     && latestCampaignFirstTouch
     && ['telegram', 'email'].includes(String(latestCampaignFirstTouch.channel || ''))
@@ -959,6 +1051,39 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     && !pilotReplyReceived,
   );
 
+  const summaryFirstTouch = outreachCalendarTouches[0] || null;
+  const summaryFirstTouchMoment = formatOutreachMoment(summaryFirstTouch?.scheduled_at);
+  const summaryStatus = campaignSetupDirty
+    ? 'Есть несохранённые настройки'
+    : savedOutreachCampaign
+      ? `Версия ${Number(savedOutreachCampaign.version || 0)} · ${savedOutreachCampaign.status === 'approved' ? 'подтверждена' : 'черновик'}`
+      : 'Цепочка не сохранена';
+  const summaryNextAction = !drawerRecipient
+    ? { label: 'Выбрать получателя', target: 'lead-contacts' }
+    : !connectedEmailSender
+      ? { label: 'Подключить email', target: 'sender-settings' }
+      : !connectedEmailReady
+        ? { label: 'Разрешить отправку', target: 'sender-settings' }
+        : savedOutreachCampaign?.requires_regeneration
+          ? { label: 'Подготовить новую цепочку', target: 'outreach-sequence' }
+          : campaignSetupDirty
+            ? { label: 'Проверить и сохранить', target: 'outreach-sequence' }
+            : savedCampaignHasPendingReview || !savedCampaignQualityPassed
+              ? { label: 'Проверить сообщения', target: 'lead-conversation' }
+              : canDispatchPilot
+                ? { label: 'Отправить первый шаг', target: 'outreach-sequence' }
+                : { label: 'Проверить готовность', target: 'outreach-sequence' };
+  const scrollToLeadSection = (target: string) => {
+    const section = document.getElementById(target);
+    const toggle = section?.querySelector(`[aria-controls="${target}-content"]`);
+    if (toggle instanceof HTMLButtonElement && toggle.getAttribute('aria-expanded') !== 'true') {
+      toggle.click();
+    }
+    window.requestAnimationFrame(() => {
+      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   useEffect(() => {
     if (!selectedLead) return;
     if (selectedWorkstreamId && selectedLead.workstreams?.some((item) => item.id === selectedWorkstreamId)) return;
@@ -968,6 +1093,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   useEffect(() => {
     setPilotReadiness(null);
   }, [selectedLeadId, selectedWorkstreamId]);
+
+  useEffect(() => {
+    void loadSenderAccounts();
+  }, [loadSenderAccounts]);
 
   useEffect(() => {
     if (!selectedLead?.id || !selectedWorkstream?.id) {
@@ -1056,6 +1185,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setTouchEdits({});
     setEditingTouchIndex(null);
     setTouchEditsValidated(false);
+    setCampaignSetupDirty(false);
     setSenderMode(
       selectedWorkstream?.workstream_type === 'localos_sales'
         ? 'localos'
@@ -1077,6 +1207,45 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         const campaigns = Array.isArray(payload?.campaigns) ? payload.campaigns : [];
         const latestCampaign = campaigns[0] || null;
         setSavedOutreachCampaign(latestCampaign);
+        const latestTouches = [...(latestCampaign?.touches || [])]
+          .sort((left, right) => Number(left.sequence_index || 0) - Number(right.sequence_index || 0));
+        if (latestTouches.length > 0) {
+          const nextChannels = ['telegram', 'email', 'max', 'vk'];
+          const nextDays = [0, 3, 7, 12];
+          const nextSenders: Record<number, string> = {};
+          const firstScheduledAt = latestTouches
+            .map((touch) => touch.scheduled_at)
+            .filter((value): value is string => Boolean(value))
+            .sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0];
+          const firstScheduledTimestamp = firstScheduledAt
+            ? new Date(firstScheduledAt).getTime()
+            : Number.NaN;
+
+          latestTouches.forEach((touch, position) => {
+            const sequenceIndex = Number.isInteger(Number(touch.sequence_index))
+              ? Number(touch.sequence_index)
+              : position;
+            if (sequenceIndex < 0 || sequenceIndex >= nextChannels.length) return;
+            nextChannels[sequenceIndex] = String(touch.channel || nextChannels[sequenceIndex]);
+            if (touch.sender_account_id) nextSenders[sequenceIndex] = touch.sender_account_id;
+            const scheduledTimestamp = touch.scheduled_at
+              ? new Date(touch.scheduled_at).getTime()
+              : Number.NaN;
+            if (Number.isFinite(firstScheduledTimestamp) && Number.isFinite(scheduledTimestamp)) {
+              nextDays[sequenceIndex] = Math.max(
+                0,
+                Math.round((scheduledTimestamp - firstScheduledTimestamp) / 86_400_000),
+              );
+            }
+          });
+
+          setSequenceChannels(nextChannels);
+          setSequenceDays(nextDays);
+          setSequenceStartAt(outreachLocalDateTimeValue(firstScheduledAt));
+          setSequenceSenders(nextSenders);
+        }
+        setOutreachPreview(null);
+        setCampaignSetupDirty(false);
         const savedMode = latestCampaign?.policy_json?.sender_mode;
         if (
           savedMode === 'localos'
@@ -1094,6 +1263,64 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       active = false;
     };
   }, [selectedWorkstream?.id]);
+
+  useEffect(() => {
+    if (!outreachTouchEditsStorageKey) return;
+    try {
+      const storedValue = localStorage.getItem(outreachTouchEditsStorageKey);
+      if (!storedValue) return;
+      const parsedValue = JSON.parse(storedValue);
+      if (!parsedValue || typeof parsedValue !== 'object' || Array.isArray(parsedValue)) return;
+      const restoredEdits: Record<number, OutreachTouchMessageDraft> = {};
+      Object.entries(parsedValue).forEach(([rawIndex, rawDraft]) => {
+        const touchIndex = Number(rawIndex);
+        if (!Number.isInteger(touchIndex) || !rawDraft || typeof rawDraft !== 'object' || Array.isArray(rawDraft)) return;
+        const subject = typeof rawDraft.subject === 'string' ? rawDraft.subject : '';
+        const text = typeof rawDraft.text === 'string' ? rawDraft.text : '';
+        const originalSubject = typeof rawDraft.originalSubject === 'string' ? rawDraft.originalSubject : '';
+        const originalText = typeof rawDraft.originalText === 'string' ? rawDraft.originalText : '';
+        if (!text.trim()) return;
+        const persistedTouch = (savedOutreachCampaign?.touches || []).find(
+          (touch) => Number(touch.sequence_index || 0) === touchIndex,
+        );
+        const persistedSubject = String(persistedTouch?.subject || '').trim();
+        const persistedText = String(
+          persistedTouch?.approved_text || persistedTouch?.generated_text || '',
+        ).trim();
+        if (
+          persistedTouch
+          && subject.trim() === persistedSubject
+          && text.trim() === persistedText
+        ) return;
+        restoredEdits[touchIndex] = {
+          subject,
+          text,
+          originalSubject,
+          originalText,
+          humanEdited: subject.trim() !== originalSubject || text.trim() !== originalText,
+        };
+      });
+      if (Object.values(restoredEdits).some((draft) => draft.humanEdited)) {
+        setTouchEdits(restoredEdits);
+        setTouchEditsValidated(false);
+        setNotice('Восстановили несохранённые ручные правки. Проверьте их и сохраните новую версию цепочки.');
+      } else {
+        localStorage.removeItem(outreachTouchEditsStorageKey);
+      }
+    } catch {
+      localStorage.removeItem(outreachTouchEditsStorageKey);
+    }
+  }, [outreachTouchEditsStorageKey, savedOutreachCampaign?.id, savedOutreachCampaign?.version]);
+
+  useEffect(() => {
+    if (!hasTouchEdits) return undefined;
+    const warnAboutUnsavedTouchEdits = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnAboutUnsavedTouchEdits);
+    return () => window.removeEventListener('beforeunload', warnAboutUnsavedTouchEdits);
+  }, [hasTouchEdits]);
 
   const runAction = async (key: string, requestFactory: () => Promise<unknown>, successMessage: string) => {
     setBusyAction(key);
@@ -1275,56 +1502,27 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     }
   };
 
-  const scrollToDrawerSection = (elementId: string) => {
-    window.requestAnimationFrame(() => {
-      document.getElementById(elementId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  };
-
-  const openSenderFacts = () => {
-    setSenderFactsOpen(true);
-    scrollToDrawerSection('sender-facts');
-  };
-
-  const openRecipientContacts = () => {
-    scrollToDrawerSection('lead-contacts-title');
-  };
-
-  const openSuppressionList = () => {
-    scrollToDrawerSection('lead-suppression-list');
-  };
-
-  const openPartnershipMatching = () => {
-    if (!selectedLead?.id || !selectedWorkstream?.client_business_id) return;
-    window.localStorage.setItem('admin_selected_business_id', selectedWorkstream.client_business_id);
-    const params = new URLSearchParams({
-      lead: selectedLead.id,
-      focus: 'match',
-    });
-    window.location.assign(`/dashboard/partnerships?${params.toString()}`);
-  };
-
   const updateSequenceChannel = (index: number, channel: string) => {
     setSequenceChannels((current) => current.map((item, itemIndex) => itemIndex === index ? channel : item));
     setSequenceSenders((current) => ({ ...current, [index]: '' }));
     setOutreachPreview(null);
-    setSavedOutreachCampaign(null);
     setPilotReadiness(null);
+    setCampaignSetupDirty(true);
   };
 
   const updateSequenceDay = (index: number, day: number) => {
     setSequenceDays((current) => current.map((item, itemIndex) => itemIndex === index ? Math.max(0, day) : item));
     setOutreachPreview(null);
-    setSavedOutreachCampaign(null);
     setPilotReadiness(null);
+    setCampaignSetupDirty(true);
   };
 
   const updateSenderMode = (mode: SenderMode) => {
     setSenderMode(mode);
     setSequenceSenders({});
     setOutreachPreview(null);
-    setSavedOutreachCampaign(null);
     setPilotReadiness(null);
+    setCampaignSetupDirty(true);
     setNotice('Способ представления изменён. Подготовьте новый preview и проверьте всю цепочку.');
   };
 
@@ -1335,25 +1533,48 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     { channel: sequenceChannels[3], day_offset: sequenceDays[3], angle: 'respectful_close', sender_account_id: sequenceSenders[3] || undefined },
   ];
 
-  const campaignTouchOverrides = () => displayedOutreachTouches.map((touch) => {
-    const draft = touchEdits[touch.sequence_index];
-    const currentText = draft?.text.trim() || outreachTouchMessageText(touch);
-    const currentSubject = draft?.subject.trim() || String(touch.subject || '').trim();
-    return {
-      sequence_index: touch.sequence_index,
-      subject: currentSubject,
-      text: currentText,
-      original_subject: draft?.originalSubject || String(touch.subject || '').trim(),
-      original_text: draft?.originalText || outreachTouchMessageText(touch),
-      human_edited: Boolean(draft?.humanEdited),
-    };
-  });
+  const campaignTouchOverrides = ({ preserveSavedCampaign = false } = {}) => {
+    const savedTouchesByIndex = new Map(
+      (savedOutreachCampaign?.touches || []).map((touch) => [Number(touch.sequence_index || 0), touch]),
+    );
+    const touchesToOverride = preserveSavedCampaign
+      ? displayedOutreachTouches.filter((touch) => {
+          const savedTouch = savedTouchesByIndex.get(touch.sequence_index);
+          return Boolean(
+            savedTouch?.message_brief_json?.human_edited
+            && touch.channel === sequenceChannels[touch.sequence_index],
+          );
+        })
+      : displayedOutreachTouches;
+    return touchesToOverride.map((touch) => {
+      const draft = touchEdits[touch.sequence_index];
+      const savedTouch = savedTouchesByIndex.get(touch.sequence_index);
+      const currentText = draft?.text.trim() || outreachTouchMessageText(touch);
+      const currentSubject = draft?.subject.trim() || String(touch.subject || '').trim();
+      return {
+        sequence_index: touch.sequence_index,
+        subject: currentSubject,
+        text: currentText,
+        original_subject: draft?.originalSubject || String(touch.subject || '').trim(),
+        original_text: draft?.originalText || outreachTouchMessageText(touch),
+        human_edited: Boolean(
+          draft?.humanEdited || savedTouch?.message_brief_json?.human_edited,
+        ),
+      };
+    });
+  };
 
   const startTouchEdit = (touch: OutreachTouchPreview) => {
-    setTouchEdits((current) => ({
-      ...current,
-      [touch.sequence_index]: current[touch.sequence_index] || outreachTouchMessageDraft(touch),
-    }));
+    setTouchEdits((current) => {
+      const next = {
+        ...current,
+        [touch.sequence_index]: current[touch.sequence_index] || outreachTouchMessageDraft(touch),
+      };
+      if (outreachTouchEditsStorageKey) {
+        localStorage.setItem(outreachTouchEditsStorageKey, JSON.stringify(next));
+      }
+      return next;
+    });
     setEditingTouchIndex(touch.sequence_index);
   };
 
@@ -1361,6 +1582,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setTouchEdits((current) => {
       const next = { ...current };
       delete next[touchIndex];
+      if (outreachTouchEditsStorageKey) {
+        if (Object.keys(next).length > 0) {
+          localStorage.setItem(outreachTouchEditsStorageKey, JSON.stringify(next));
+        } else {
+          localStorage.removeItem(outreachTouchEditsStorageKey);
+        }
+      }
       return next;
     });
     setEditingTouchIndex((current) => current === touchIndex ? null : current);
@@ -1369,12 +1597,93 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setPilotReadiness(null);
   };
 
+  const acceptTouchEdit = async (touchIndex: number, draft: OutreachTouchMessageDraft) => {
+    const campaignId = String(savedOutreachCampaign?.id || '');
+    const campaignTouch = (savedOutreachCampaign?.touches || []).find(
+      (touch) => Number(touch.sequence_index || 0) === touchIndex,
+    );
+    const touchId = String(campaignTouch?.id || '');
+    if (!campaignId || !touchId) {
+      setNotice('Сначала сохраните цепочку как черновик — после этого отдельные сообщения можно менять без новой версии.');
+      return;
+    }
+    const busyKey = `accept-touch-${touchIndex}`;
+    setBusyAction(busyKey);
+    setNotice('');
+    try {
+      const payload = await newAuth.makeRequest(
+        `/outreach/campaigns/${encodeURIComponent(campaignId)}/touches/${encodeURIComponent(touchId)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            subject: draft.subject.trim(),
+            text: draft.text.trim(),
+          }),
+        },
+      );
+      if (payload?.campaign) {
+        setSavedOutreachCampaign(payload.campaign);
+      } else {
+        await reloadLatestOutreachCampaign();
+      }
+      setTouchEdits((current) => {
+        const next = { ...current };
+        delete next[touchIndex];
+        if (outreachTouchEditsStorageKey) {
+          if (Object.keys(next).length > 0) {
+            localStorage.setItem(outreachTouchEditsStorageKey, JSON.stringify(next));
+          } else {
+            localStorage.removeItem(outreachTouchEditsStorageKey);
+          }
+        }
+        return next;
+      });
+      setEditingTouchIndex(null);
+      setOutreachPreview(null);
+      setTouchEditsValidated(false);
+      setPilotReadiness(null);
+      setNotice(`Изменения сохранены в версии ${Number(payload?.touch?.campaign_version || savedOutreachCampaign?.version || 1)}. Теперь проверьте сохранённые сообщения — новая версия цепочки не нужна.`);
+    } catch (requestError) {
+      setNotice(requestError instanceof Error ? requestError.message : 'Не удалось сохранить изменения сообщения');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
   const reloadLatestOutreachCampaign = async () => {
     const workstreamId = String(selectedWorkstream?.id || '');
     if (!workstreamId) return;
     const payload = await newAuth.makeRequest(`/outreach/workstreams/${encodeURIComponent(workstreamId)}/campaigns`);
     const campaigns = Array.isArray(payload?.campaigns) ? payload.campaigns : [];
     setSavedOutreachCampaign(campaigns[0] || null);
+  };
+
+  const reviewSavedTouchEdits = async () => {
+    const campaignId = String(savedOutreachCampaign?.id || '');
+    if (!campaignId) return;
+    if (hasTouchEdits) {
+      setNotice('Сначала сохраните каждое изменённое сообщение кнопкой «Принять изменения».');
+      return;
+    }
+    setBusyAction('review-saved-edits');
+    setNotice('');
+    setPilotReadiness(null);
+    try {
+      const payload = await newAuth.makeRequest(
+        `/outreach/campaigns/${encodeURIComponent(campaignId)}/review-edits`,
+        { method: 'POST' },
+      );
+      setOutreachPreview(payload?.preview || null);
+      if (payload?.campaign) setSavedOutreachCampaign(payload.campaign);
+      setTouchEditsValidated(Boolean(payload?.review?.all_passed));
+      setNotice(payload?.review?.all_passed
+        ? `Все ${Number(payload?.review?.reviewed_touch_count || 0)} сообщения проверены. Версия ${Number(payload?.review?.campaign_version || savedOutreachCampaign?.version || 1)} готова к подтверждению.`
+        : 'Проверка завершена. Исправьте сообщения с замечаниями и снова нажмите «Проверить сохранённые сообщения».');
+    } catch (requestError) {
+      setNotice(requestError instanceof Error ? requestError.message : 'Не удалось проверить сохранённые сообщения');
+    } finally {
+      setBusyAction('');
+    }
   };
 
   const prepareOutreachCampaign = async (save: boolean) => {
@@ -1392,7 +1701,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         method: 'POST',
         body: JSON.stringify({
           sequence: campaignSequence(),
-          touch_overrides: hasTouchEdits ? campaignTouchOverrides() : undefined,
+          touch_overrides: hasTouchEdits
+            ? campaignTouchOverrides()
+            : campaignSetupDirty
+              ? campaignTouchOverrides({ preserveSavedCampaign: true })
+              : undefined,
           start_at: scheduleStart,
           save,
           sender_mode: senderMode,
@@ -1402,10 +1715,12 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       setTouchEditsValidated(hasTouchEdits);
       if (payload?.campaign) {
         setSavedOutreachCampaign(payload.campaign);
+        setCampaignSetupDirty(false);
+        if (outreachTouchEditsStorageKey) localStorage.removeItem(outreachTouchEditsStorageKey);
         setTouchEdits({});
         setEditingTouchIndex(null);
         setTouchEditsValidated(false);
-        setNotice(`Версия ${payload.campaign.version} сохранена как черновик. Проверьте всю цепочку перед approval.`);
+        setNotice('Тексты, каналы и расписание сохранены. Ничего не отправлено. Теперь можно утвердить цепочку для отправки.');
         await reloadLatestOutreachCampaign();
       }
     } catch (requestError) {
@@ -1417,6 +1732,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
   const approveOutreachCampaign = async () => {
     if (!savedOutreachCampaign?.id) return;
+    if (campaignSetupDirty) {
+      setNotice('Сначала проверьте и сохраните новую версию. Старая цепочка остаётся в истории, но подтвердить её после изменения настроек нельзя.');
+      return;
+    }
     setPilotReadiness(null);
     setBusyAction('approve-campaign');
     setNotice('');
@@ -1434,6 +1753,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
   const runPilotPreflight = async () => {
     if (!savedOutreachCampaign?.id) return;
+    if (campaignSetupDirty) {
+      setNotice('Сначала проверьте и сохраните новую версию цепочки.');
+      return;
+    }
     setBusyAction('pilot-preflight');
     setNotice('');
     try {
@@ -1455,8 +1778,12 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
   const dispatchPilotFirstTouch = async () => {
     if (!savedOutreachCampaign?.id) return;
+    if (campaignSetupDirty) {
+      setNotice('Отправка заблокирована: сначала проверьте и сохраните новую версию цепочки.');
+      return;
+    }
     const confirmed = window.confirm(
-      'Отправить только первое касание этой кампании реальному получателю? LocalOS ещё раз проверит ответы, разрешения, tenant scope, stop-list и лимиты.',
+      'Отправить только первое касание этой кампании реальному получателю? LocalOS ещё раз проверит ответы, разрешения, доступ, исключения и лимиты.',
     );
     if (!confirmed) return;
     setBusyAction('pilot-dispatch');
@@ -1882,16 +2209,16 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 )}
               </div>
 
-              <div className="grid grid-cols-5 gap-1" aria-label="Этапы подготовки первого обращения">
-                {['Контакты', 'Получатель', 'Почему сейчас', 'Письмо', 'Проверка'].map((label, index) => {
+              <div className="grid grid-cols-5 gap-1" aria-label="Этапы подготовки цепочки обращений">
+                {['Контакты', 'Получатель', 'Основание', 'Цепочка', 'Проверка'].map((label, index) => {
                   const completedSteps = [
                     drawerContacts.length > 0,
                     Boolean(drawerRecipient),
                     Boolean(selectedWorkstream.research?.why_now)
                       || (selectedWorkstream.workstream_type === 'client_partnership'
                         && selectedWorkstream.service_compatibility_score != null),
-                    Boolean(drawerFirstMessage?.generated_text),
-                    Boolean(drawerFirstMessage?.quality_gate_json?.passed && drawerMessageCurrent),
+                    Boolean(savedOutreachCampaign?.touches?.length),
+                    Boolean(savedCampaignQualityPassed && !savedCampaignHasPendingReview),
                   ];
                   const done = completedSteps[index];
                   return (
@@ -1905,6 +2232,52 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 })}
               </div>
 
+              <section className="sticky top-0 z-20 rounded-2xl bg-white/95 p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.10),0_8px_24px_-12px_rgba(15,23,42,0.28)] backdrop-blur">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Получатель</div>
+                      <div className="mt-1 truncate text-sm font-semibold text-slate-950">{drawerRecipient?.value || 'Не выбран'}</div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Отправитель</div>
+                      <div className="mt-1 truncate text-sm font-semibold text-slate-950">
+                        {senderAccountsLoading ? 'Проверяем…' : connectedEmailSender?.sender_identity || 'Email не подключён'}
+                      </div>
+                      {connectedEmailSender?.display_name ? <div className="mt-0.5 truncate text-xs text-slate-500">{connectedEmailSender.display_name}</div> : null}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Первый шаг</div>
+                      <div className="mt-1 truncate text-sm font-semibold text-slate-950">
+                        {summaryFirstTouch ? `${contactTypeLabels[summaryFirstTouch.channel] || summaryFirstTouch.channel}${summaryFirstTouchMoment ? ` · ${summaryFirstTouchMoment}` : ''}` : 'Не настроен'}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Состояние</div>
+                      <div className={`mt-1 truncate text-sm font-semibold ${campaignSetupDirty ? 'text-amber-700' : 'text-slate-950'}`}>{summaryStatus}</div>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => scrollToLeadSection(summaryNextAction.target)}
+                    className="min-h-11 shrink-0 bg-slate-950 text-white transition-transform duration-150 active:scale-[0.96] hover:bg-slate-800"
+                  >
+                    {summaryNextAction.label}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </section>
+
+              <LeadDrawerSection
+                key={`conversation-${selectedWorkstream.id || 'legacy'}`}
+                id="lead-conversation"
+                title="Сообщения и каналы"
+                description={savedOutreachCampaign
+                  ? `${savedConversationTouches.length} касания · ${humanReplyEvents.length ? `${humanReplyEvents.length} ответов` : 'ответов пока нет'}`
+                  : 'Здесь появятся сохранённые сообщения, отправки и ответы'}
+                status={savedOutreachCampaign ? `Версия ${Number(savedOutreachCampaign.version || 0)}` : 'Не сохранено'}
+                defaultOpen={Boolean(humanReplyEvents.length || savedCampaignHasPendingReview)}
+              >
               <section
                 className="grid gap-4 lg:grid-cols-[minmax(280px,0.72fr)_minmax(0,1.55fr)]"
                 aria-label="Каналы и история сообщений"
@@ -1992,16 +2365,21 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                                   draft={touchDraft}
                                   editing={editingTouchIndex === touchIndex}
                                   disabled={Boolean(busyAction)}
+                                  saving={busyAction === `accept-touch-${touchIndex}`}
+                                  persisted={Boolean(touch.message_brief_json?.human_edited)}
                                   onStart={() => startTouchEdit(editableTouch)}
                                   onChange={(nextDraft) => {
-                                    setTouchEdits((current) => ({ ...current, [touchIndex]: nextDraft }));
+                                    setTouchEdits((current) => {
+                                      const next = { ...current, [touchIndex]: nextDraft };
+                                      if (outreachTouchEditsStorageKey) {
+                                        localStorage.setItem(outreachTouchEditsStorageKey, JSON.stringify(next));
+                                      }
+                                      return next;
+                                    });
                                     setTouchEditsValidated(false);
                                     setPilotReadiness(null);
                                   }}
-                                  onFinish={() => {
-                                    setEditingTouchIndex(null);
-                                    setNotice('Правка применена. Проверьте всю цепочку и сохраните новую версию.');
-                                  }}
+                                  onAccept={(draft) => void acceptTouchEdit(touchIndex, draft)}
                                   onCancel={() => resetTouchEdit(touchIndex)}
                                   onReset={() => resetTouchEdit(touchIndex)}
                                 />
@@ -2055,32 +2433,36 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       ))}
                       {hasTouchEdits ? (
                         <div className="rounded-xl bg-orange-50 p-4 ring-1 ring-inset ring-orange-200">
-                          <div className="text-sm font-semibold text-orange-950">В цепочке есть ручные правки</div>
+                          <div className="text-sm font-semibold text-orange-950">В цепочке есть несохранённые ручные правки</div>
                           <p className="mt-1 text-pretty text-xs leading-5 text-orange-900">
-                            Сначала проверьте всю цепочку. После проверки сохраните её как новую черновую версию — текущая версия останется в истории.
+                            Черновик сохранён на этом устройстве и восстановится после перезагрузки. Откройте каждое изменённое сообщение и нажмите «Принять изменения» — версия цепочки при этом не изменится.
                           </p>
-                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => void prepareOutreachCampaign(false)}
-                              disabled={busyAction === 'preview-campaign' || !outreachStartIso(sequenceStartAt)}
-                              className="min-h-10 bg-white transition-transform active:scale-[0.96]"
-                            >
-                              {busyAction === 'preview-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                              Проверить правки
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => void prepareOutreachCampaign(true)}
-                              disabled={busyAction === 'save-campaign' || !touchEditsValidated || !['ready', 'needs_channel_setup'].includes(String(outreachPreview?.status || ''))}
-                              className="min-h-10 bg-white transition-transform active:scale-[0.96]"
-                            >
-                              {busyAction === 'save-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
-                              Сохранить новую версию
-                            </Button>
+                        </div>
+                      ) : null}
+                      {savedCampaignHasHumanEdits ? (
+                        <div className={`rounded-xl p-4 ring-1 ring-inset ${savedCampaignQualityPassed
+                          ? 'bg-emerald-50 ring-emerald-200'
+                          : 'bg-amber-50 ring-amber-200'}`}>
+                          <div className={`text-sm font-semibold ${savedCampaignQualityPassed ? 'text-emerald-950' : 'text-amber-950'}`}>
+                            Результат проверки
                           </div>
+                          <p className={`mt-1 text-pretty text-xs leading-5 ${savedCampaignQualityPassed ? 'text-emerald-900' : 'text-amber-900'}`}>
+                            {savedCampaignHasPendingReview
+                              ? 'Сохранённые сообщения изменились и ещё не проверены.'
+                              : savedCampaignQualityPassed
+                                ? 'Все сохранённые сообщения прошли проверку. Новая версия цепочки не создавалась.'
+                                : 'Есть сообщения с замечаниями. Откройте их ниже, исправьте и повторите проверку.'}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void reviewSavedTouchEdits()}
+                            disabled={Boolean(busyAction) || hasTouchEdits}
+                            className="mt-3 min-h-10 bg-white transition-transform active:scale-[0.96]"
+                          >
+                            {busyAction === 'review-saved-edits' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                            Проверить сохранённые сообщения
+                          </Button>
                         </div>
                       ) : null}
                     </div>
@@ -2091,7 +2473,20 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   )}
                 </div>
               </section>
+              </LeadDrawerSection>
 
+              <LeadDrawerSection
+                key={`contacts-${selectedWorkstream.id || 'legacy'}`}
+                id="lead-contacts"
+                title="Получатель и найденные контакты"
+                description={chainTouchesByContactId.size > 0
+                  ? `${chainTouchesByContactId.size} для отправки · всего найдено ${drawerContacts.length}`
+                  : drawerRecipient?.value
+                    ? `Выбран ${drawerRecipient.value} · всего найдено ${drawerContacts.length}`
+                  : `${drawerContacts.length} найдено · выберите контакт для первого сообщения`}
+                status={chainTouchesByContactId.size > 0 ? 'Для цепочки выбрано' : drawerRecipient ? 'Получатель выбран' : 'Нужно выбрать'}
+                defaultOpen={!drawerRecipient || manualContactOpen}
+              >
               <section className="rounded-md bg-slate-50 p-4" aria-labelledby="lead-contacts-title">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -2229,6 +2624,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 <div className="mt-3 space-y-2">
                   {drawerContacts.map((contact) => {
                     const selected = drawerRecipient?.id === contact.id;
+                    const chainTouches = chainTouchesByContactId.get(String(contact.id)) || [];
+                    const selectedForSending = chainTouches.length > 0;
                     const invalid = contact.verification_status === 'invalid';
                     const selecting = busyAction === `recipient-${contact.id}`;
                     return (
@@ -2239,15 +2636,22 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         aria-pressed={selected}
                         aria-busy={selecting}
                         disabled={invalid || selecting}
-                        className={`flex min-h-14 w-full items-center gap-3 rounded-md px-3 text-left transition-[background-color,box-shadow,transform] duration-150 ease-out active:scale-[0.96] ${selected ? 'bg-white shadow-sm ring-2 ring-emerald-200' : 'bg-white hover:bg-slate-100'} ${invalid ? 'cursor-not-allowed opacity-50' : selecting ? 'cursor-wait' : ''}`}
+                        className={`flex min-h-14 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-[background-color,box-shadow,transform] duration-150 ease-out active:scale-[0.96] ${selectedForSending ? 'bg-emerald-50/60 shadow-[0_0_0_2px_rgba(16,185,129,0.62),0_4px_12px_-6px_rgba(5,150,105,0.28)]' : selected ? 'bg-white shadow-[0_0_0_2px_rgba(14,165,233,0.24)]' : 'bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.05)] hover:bg-slate-100'} ${invalid ? 'cursor-not-allowed opacity-50' : selecting ? 'cursor-wait' : ''}`}
                       >
-                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${selected ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${selectedForSending ? 'bg-emerald-600 text-white' : selected ? 'bg-sky-50 text-sky-700' : 'bg-slate-100 text-slate-600'}`}>
                           {contact.owner_type === 'person' ? <UserRound className="h-4 w-4" /> : <MessageCircle className="h-4 w-4" />}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="flex min-w-0 items-center gap-2">
+                          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                             <span className="truncate text-sm font-semibold text-slate-950">{contact.person_name || contact.value || contactTypeLabels[String(contact.type || '')] || 'Контакт'}</span>
-                            {selected && <span className="shrink-0 text-xs font-semibold text-emerald-700">Выбран</span>}
+                            {selectedForSending ? (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-white">
+                                <Check className="h-3 w-3" />
+                                Выбран для отправки
+                              </span>
+                            ) : selected ? (
+                              <span className="shrink-0 text-[11px] font-semibold text-sky-700">Выбран как получатель</span>
+                            ) : null}
                           </span>
                           <span className="mt-0.5 block truncate text-xs text-slate-500">
                             {[contact.role_title, contactTypeLabels[String(contact.type || '')], contact.person_name ? contact.value : ''].filter(Boolean).join(' · ')}
@@ -2255,6 +2659,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                           <span className="mt-0.5 block truncate text-xs text-slate-500">
                             {verificationLabel(contact.verification_status)} · источник {contactSourceLabel(contact.source_type)}
                           </span>
+                          {selectedForSending ? (
+                            <span className="mt-1 block text-pretty text-[11px] font-medium leading-4 text-emerald-800">
+                              {chainTouches.map((touch) => `Шаг ${Number(touch.sequence_index || 0) + 1} · ${contactTypeLabels[String(touch.channel || '')] || touch.channel}`).join(' · ')}
+                            </span>
+                          ) : null}
                         </span>
                         {['verified', 'confirmed_source'].includes(String(contact.verification_status || '')) && <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />}
                       </button>
@@ -2319,8 +2728,16 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </div>
                 )}
               </section>
+              </LeadDrawerSection>
 
               {selectedWorkstream.research && (
+                <LeadDrawerSection
+                  key={`research-${selectedWorkstream.id || 'legacy'}`}
+                  id="lead-research"
+                  title="Почему обращаемся"
+                  description={selectedWorkstream.research.why_now || 'Публичный повод не подтверждён'}
+                  status={`${Number(selectedWorkstream.research.score || 0)} баллов`}
+                >
                 <section className="rounded-md bg-slate-50 p-4" aria-labelledby="lead-research-title">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -2379,147 +2796,18 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     </details>
                   )}
                 </section>
+                </LeadDrawerSection>
               )}
 
-              <section className="rounded-md bg-slate-50 p-4" aria-labelledby="first-message-title">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 id="first-message-title" className="text-sm font-semibold text-slate-950">Первое письмо</h3>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {drawerFirstMessage?.requires_regeneration
-                        ? 'Факты сохранены, но текст нужно подготовить заново'
-                        : drawerReadiness.label || 'Сначала проверим контакты и основания'}
-                    </p>
-                  </div>
-                  <Badge variant="outline" className={drawerReadiness.code === 'ready' && drawerMessageCurrent
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                    : 'border-amber-200 bg-amber-50 text-amber-800'}>
-                    {drawerFirstMessage?.requires_regeneration
-                      ? 'Нужно переписать'
-                      : drawerReadiness.code === 'ready' && drawerMessageCurrent
-                        ? 'Готово к проверке'
-                        : drawerReadiness.label || 'Не готово'}
-                  </Badge>
-                </div>
-                {drawerFirstMessage?.generated_text ? (
-                  <>
-                    {drawerFirstMessage.requires_regeneration ? (
-                      <div className="mt-3 rounded-md bg-amber-50 p-3 text-pretty text-sm leading-6 text-amber-950">
-                        <div className="font-semibold">Это письмо создано по старым правилам</div>
-                        <p className="mt-1">LocalOS не позволит подтвердить его. Перегенерируйте текст: факты и выбранный контакт сохранятся, а письмо пройдёт текущую AI-проверку.</p>
-                        <Button variant="outline" onClick={startContactIntelligence} disabled={busyAction === 'contact-intelligence'} className="mt-2 min-h-10 bg-white">
-                          {busyAction === 'contact-intelligence' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                          Переписать по текущим правилам
-                        </Button>
-                      </div>
-                    ) : null}
-                    <div className="mt-3 whitespace-pre-wrap rounded-md bg-white p-4 text-sm leading-6 text-slate-800">
-                      {drawerFirstMessage.edited_text || drawerFirstMessage.generated_text}
-                    </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      <div className="rounded-md bg-white p-3">
-                        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">От чьего лица</div>
-                        <div className="mt-1 text-sm font-medium text-slate-800">
-                          {contactIntelligence?.sender_profile
-                            ? `${contactIntelligence.sender_profile.display_name} · ${contactIntelligence.sender_profile.role_title}`
-                            : selectedWorkstream.workstream_type === 'localos_sales' ? 'LocalOS' : selectedWorkstream.client_business_name}
-                        </div>
-                      </div>
-                      <div className="rounded-md bg-white p-3">
-                        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Почему такой вопрос</div>
-                        <div className="mt-1 text-sm font-medium text-slate-800">
-                          {String(drawerFirstMessage.message_brief_json?.cta || 'Один простой следующий шаг без обязательств')}
-                        </div>
-                      </div>
-                    </div>
-                    <p className="mt-3 text-xs text-slate-500 tabular-nums">
-                      {Number(drawerFirstMessage.quality_gate_json?.word_count || 0)} слов · ссылка на цифровую комнату не добавлена
-                    </p>
-                  </>
-                ) : (
-                  <div className="mt-3 rounded-lg bg-white p-4 shadow-sm shadow-slate-900/5">
-                    <div className="font-semibold text-slate-900 text-wrap-balance">Для персонального письма не хватает данных</div>
-                    <p className="mt-1 text-pretty text-sm leading-6 text-slate-600">
-                      {drawerRecipient
-                        ? 'Контакт уже выбран. Письмо появится после того, как будут подтверждены факты об отправителе и причина обратиться именно к этой компании.'
-                        : 'Сначала выберите подходящий контакт, затем подтвердите факты об отправителе и причину обратиться именно к этой компании.'}
-                    </p>
-                    {readinessIssues.length > 0 ? (
-                      <div className="mt-3 space-y-2">
-                        {readinessIssues.map((issue, index) => {
-                          const senderIssue = [
-                            'sender_profile',
-                            'sender_confirmation',
-                            'sender_identity',
-                            'sender_experience',
-                            'sender_proof',
-                            'sender_audience',
-                            'sender_offer',
-                            'sender_voice',
-                            'sender_forbidden_claims',
-                            'sender_services',
-                            'desired_partner_types',
-                          ].includes(issue.code);
-                          const partnerIssue = ['partner_compatibility', 'partner_category'].includes(issue.code);
-                          const contactIssue = ['recipient_contact', 'recipient_role'].includes(issue.code);
-                          const suppressionIssue = issue.code === 'suppression';
-                          const description = senderIssue
-                            ? `Расскажите о ${selectedWorkstream.client_business_name || senderCompany || 'бизнесе отправителя'}: кто пишет, какой опыт подтверждён и что можно предложить партнёру.`
-                            : partnerIssue
-                              ? `Нужны услуги, аудитория и география обеих компаний, чтобы проверить реальную пользу и не придумать повод для партнёрства.`
-                              : contactIssue
-                                ? 'Выберите канал и человека или общий контакт компании, которому уместно адресовать первое сообщение.'
-                                : suppressionIssue
-                                  ? 'Сначала проверьте причину запрета. LocalOS не подготовит отправку, пока действует stop-list.'
-                                  : 'Обновите исследование компании: LocalOS проверит карточку, сайт и доступные публичные источники.';
-                          return (
-                            <div key={`${issue.code}-${issue.label}`} className="rounded-md bg-slate-50 p-3">
-                              <div className="flex gap-3">
-                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-800 tabular-nums">
-                                  {index + 1}
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-sm font-semibold text-slate-900">{issue.label}</div>
-                                  <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">{description}</p>
-                                  {senderIssue ? (
-                                    <Button variant="outline" onClick={openSenderFacts} className="mt-2 min-h-10 bg-white active:scale-[0.96] transition-transform">
-                                      Заполнить факты об отправителе <ArrowRight className="ml-2 h-4 w-4" />
-                                    </Button>
-                                  ) : partnerIssue ? (
-                                    <Button variant="outline" onClick={openPartnershipMatching} disabled={!selectedWorkstream.client_business_id} className="mt-2 min-h-10 bg-white active:scale-[0.96] transition-transform">
-                                      Проверить совместимость <ArrowRight className="ml-2 h-4 w-4" />
-                                    </Button>
-                                  ) : contactIssue ? (
-                                    <Button variant="outline" onClick={openRecipientContacts} className="mt-2 min-h-10 bg-white active:scale-[0.96] transition-transform">
-                                      Перейти к контактам <ArrowRight className="ml-2 h-4 w-4" />
-                                    </Button>
-                                  ) : suppressionIssue ? (
-                                    <Button variant="outline" onClick={openSuppressionList} className="mt-2 min-h-10 bg-white active:scale-[0.96] transition-transform">
-                                      Открыть stop-list <ArrowRight className="ml-2 h-4 w-4" />
-                                    </Button>
-                                  ) : (
-                                    <Button variant="outline" onClick={startContactIntelligence} disabled={busyAction === 'contact-intelligence'} className="mt-2 min-h-10 bg-white active:scale-[0.96] transition-transform">
-                                      Обновить исследование <RefreshCw className={`ml-2 h-4 w-4 ${busyAction === 'contact-intelligence' ? 'animate-spin' : ''}`} />
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        <p className="pt-1 text-xs leading-5 text-slate-500">
-                          После каждого шага LocalOS повторно проверит данные и подготовит письмо только на подтверждённых фактах.
-                        </p>
-                      </div>
-                    ) : (
-                      <Button variant="outline" onClick={startContactIntelligence} disabled={busyAction === 'contact-intelligence'} className="mt-3 min-h-10 bg-white active:scale-[0.96] transition-transform">
-                        Проверить данные компании
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </section>
-
+              <LeadDrawerSection
+                key={`sequence-${selectedWorkstream.id || 'legacy'}`}
+                id="outreach-sequence"
+                title="Цепочка, расписание и запуск"
+                description={summaryFirstTouch
+                  ? `Первый шаг: ${contactTypeLabels[summaryFirstTouch.channel] || summaryFirstTouch.channel}${summaryFirstTouchMoment ? ` · ${summaryFirstTouchMoment}` : ''}`
+                  : 'Выберите порядок каналов, проверьте сообщения и сохраните цепочку'}
+                status={campaignSetupDirty ? 'Не сохранено' : savedOutreachCampaign?.status === 'approved' ? 'Подтверждено' : 'Черновик'}
+              >
               <section className="rounded-md bg-slate-50 p-4" aria-labelledby="outreach-sequence-title">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -2582,18 +2870,15 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 <label className="mt-3 block rounded-md bg-white p-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_1px_2px_-1px_rgba(15,23,42,0.06)]">
                   <span className="text-sm font-semibold text-slate-950">Дата и время первого касания</span>
                   <span className="mt-1 block text-pretty text-xs leading-5 text-slate-600">Это начало новой версии. Остальные даты рассчитываются по интервалам и сразу видны в календаре.</span>
-                  <Input
-                    aria-label="Дата и время первого касания"
-                    type="datetime-local"
-                    required
+                  <OutreachDateTimePicker
+                    ariaLabel="Дата и время первого касания"
                     value={sequenceStartAt}
-                    onChange={(event) => {
-                      setSequenceStartAt(event.target.value);
+                    onChange={(value) => {
+                      setSequenceStartAt(value);
                       setOutreachPreview(null);
-                      setSavedOutreachCampaign(null);
                       setPilotReadiness(null);
+                      setCampaignSetupDirty(true);
                     }}
-                    className="mt-2 h-11 max-w-xs bg-white tabular-nums"
                   />
                 </label>
 
@@ -2675,8 +2960,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                             onChange={(event) => {
                               setSequenceSenders((current) => ({ ...current, [touchIndex]: event.target.value }));
                               setOutreachPreview(null);
-                              setSavedOutreachCampaign(null);
                               setPilotReadiness(null);
+                              setCampaignSetupDirty(true);
                               setNotice('Отправитель выбран. Обновите preview.');
                             }}
                             className="mt-2 min-h-10 w-full rounded-md border border-amber-200 bg-white px-3 text-sm font-medium text-slate-900"
@@ -2770,16 +3055,21 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                           draft={touchEdits[touch.sequence_index]}
                           editing={editingTouchIndex === touch.sequence_index}
                           disabled={Boolean(busyAction)}
+                          saving={busyAction === `accept-touch-${touch.sequence_index}`}
+                          persisted={Boolean(touch.human_edited)}
                           onStart={() => startTouchEdit(touch)}
                           onChange={(draft) => {
-                            setTouchEdits((current) => ({ ...current, [touch.sequence_index]: draft }));
+                            setTouchEdits((current) => {
+                              const next = { ...current, [touch.sequence_index]: draft };
+                              if (outreachTouchEditsStorageKey) {
+                                localStorage.setItem(outreachTouchEditsStorageKey, JSON.stringify(next));
+                              }
+                              return next;
+                            });
                             setTouchEditsValidated(false);
                             setPilotReadiness(null);
                           }}
-                          onFinish={() => {
-                            setEditingTouchIndex(null);
-                            setNotice('Правка применена в этом предпросмотре. Нажмите «Проверить правки».');
-                          }}
+                          onAccept={(draft) => void acceptTouchEdit(touch.sequence_index, draft)}
                           onCancel={() => resetTouchEdit(touch.sequence_index)}
                           onReset={() => resetTouchEdit(touch.sequence_index)}
                         />
@@ -2823,24 +3113,58 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 ) : null}
 
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <Button variant="outline" onClick={() => void prepareOutreachCampaign(false)} disabled={busyAction === 'preview-campaign' || !outreachStartIso(sequenceStartAt)} className="min-h-11 bg-white">
-                    {busyAction === 'preview-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                    {hasTouchEdits ? 'Проверить правки' : savedOutreachCampaign ? 'Подготовить новую версию' : 'Подготовить цепочку'}
-                  </Button>
-                  <Button variant="outline" onClick={() => void prepareOutreachCampaign(true)} disabled={busyAction === 'save-campaign' || !outreachStartIso(sequenceStartAt) || (hasTouchEdits && !touchEditsValidated) || !['ready', 'needs_channel_setup'].includes(String(outreachPreview?.status || ''))} className="min-h-11 bg-white">
-                    {busyAction === 'save-campaign' && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
-                    {outreachPreview?.status === 'needs_channel_setup' ? 'Сохранить черновик версии' : 'Сохранить новую версию'}
-                  </Button>
+                  {savedOutreachCampaign && !campaignSetupDirty ? (
+                    <Button variant="outline" onClick={() => void reviewSavedTouchEdits()} disabled={Boolean(busyAction) || hasTouchEdits} className="min-h-11 bg-white">
+                      {busyAction === 'review-saved-edits' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                      Проверить сохранённые сообщения
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={() => void prepareOutreachCampaign(false)} disabled={busyAction === 'preview-campaign' || !outreachStartIso(sequenceStartAt)} className="min-h-11 bg-white">
+                      {busyAction === 'preview-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                      {savedOutreachCampaign ? 'Проверить новые настройки' : 'Подготовить цепочку'}
+                    </Button>
+                  )}
+                  {!savedOutreachCampaign ? (
+                    <Button variant="outline" onClick={() => void prepareOutreachCampaign(true)} disabled={busyAction === 'save-campaign' || !outreachStartIso(sequenceStartAt) || !['ready', 'needs_channel_setup', 'needs_evidence', 'needs_revision'].includes(String(outreachPreview?.status || ''))} className="min-h-11 bg-white">
+                      {busyAction === 'save-campaign' && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+                      Сохранить цепочку
+                    </Button>
+                  ) : campaignSetupDirty ? (
+                    <Button variant="outline" onClick={() => void prepareOutreachCampaign(true)} disabled={busyAction === 'save-campaign' || !outreachStartIso(sequenceStartAt) || !['ready', 'needs_channel_setup', 'needs_evidence', 'needs_revision'].includes(String(outreachPreview?.status || ''))} className="min-h-11 bg-white">
+                      {busyAction === 'save-campaign' && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+                      Сохранить изменения
+                    </Button>
+                  ) : null}
                 </div>
+                <p className="mt-2 text-pretty text-xs leading-5 text-slate-500">
+                  Сохранятся тексты, каналы и расписание. Ничего не будет отправлено.
+                </p>
+                {campaignSetupDirty ? (
+                  <div className="mt-3 rounded-md bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-950 ring-1 ring-inset ring-amber-200">
+                    <div className="font-semibold">Настройки новой версии ещё не сохранены</div>
+                    <p className="mt-1 text-pretty text-amber-900">Сохранённая цепочка остаётся в истории. Календарь уже показывает новые параметры, но подтверждение и отправка заблокированы до проверки и сохранения новой версии.</p>
+                  </div>
+                ) : null}
                 {savedOutreachCampaign?.status === 'draft' ? (
-                  <Button onClick={() => void approveOutreachCampaign()} disabled={busyAction === 'approve-campaign' || savedOutreachCampaign.requires_regeneration || savedCampaignNeedsChannelSetup} className="mt-2 min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
+                  <Button onClick={() => void approveOutreachCampaign()} disabled={busyAction === 'approve-campaign' || campaignSetupDirty || savedOutreachCampaign.requires_regeneration || savedCampaignNeedsChannelSetup || !savedCampaignQualityPassed || savedCampaignHasPendingReview} className="mt-2 min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
                     {busyAction === 'approve-campaign' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                    {savedOutreachCampaign.requires_regeneration
+                    {campaignSetupDirty
+                      ? 'Сначала сохраните новую версию'
+                      : savedCampaignHasPendingReview
+                        ? 'Сначала проверьте сохранённые сообщения'
+                        : !savedCampaignQualityPassed
+                          ? 'Сначала исправьте сообщения с замечаниями'
+                      : savedOutreachCampaign.requires_regeneration
                       ? 'Сначала подготовьте новую цепочку'
                       : savedCampaignNeedsChannelSetup
                         ? 'Сначала настройте каналы и отправителя'
-                        : 'Подтвердить всю цепочку один раз'}
+                        : 'Утвердить цепочку для отправки'}
                   </Button>
+                ) : null}
+                {savedOutreachCampaign?.status === 'draft' && !campaignSetupDirty ? (
+                  <p className="mt-2 text-pretty text-center text-xs leading-5 text-slate-500">
+                    Утверждение разрешит использовать эти сообщения. Первое касание запускается отдельно после проверки готовности.
+                  </p>
                 ) : null}
                 {savedOutreachCampaign && !pilotAlreadySent && !pilotReplyReceived ? (
                   <section className={`mt-3 rounded-2xl p-4 ${pilotReadiness?.can_dispatch_first_touch
@@ -2850,13 +3174,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       <div>
                         <h4 className="text-balance text-sm font-semibold text-slate-950">Готовность к первому касанию</h4>
                         <p className="mt-1 max-w-2xl text-pretty text-sm leading-6 text-slate-600">
-                          LocalOS проверит текущую версию, отправителя, контакт, ответы, stop-list и лимиты. Сообщение не отправится.
+                          LocalOS проверит текущую версию, отправителя, контакт, ответы, исключения и лимиты. Сообщение не отправится.
                         </p>
                       </div>
                       <Button
                         variant="outline"
                         onClick={() => void runPilotPreflight()}
-                        disabled={Boolean(busyAction)}
+                        disabled={Boolean(busyAction) || campaignSetupDirty}
                         className="min-h-11 shrink-0 bg-white"
                       >
                         {busyAction === 'pilot-preflight' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
@@ -2908,12 +3232,25 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 ) : null}
                 <p className="mt-2 text-xs leading-5 text-slate-500">Перед каждым касанием LocalOS повторно проверит approval версии, sender account, разрешение, ответ, suppression, cooldown и дневной лимит.</p>
               </section>
+              </LeadDrawerSection>
 
+              <LeadDrawerSection
+                key={`sender-${selectedWorkstream.id || 'legacy'}-${selectedSenderScope}`}
+                id="sender-settings"
+                title="Отправитель и подключения"
+                description={connectedEmailSender?.sender_identity
+                  ? `${connectedEmailSender.sender_identity} · ${connectedEmailReady ? 'готов к отправке' : 'нужно проверить разрешение'}`
+                  : `${selectedSenderLabel} · email не подключён`}
+                status={connectedEmailReady ? 'Готово' : 'Нужно действие'}
+              >
               <div className="rounded-md bg-slate-50 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Отправитель</div>
                     <div className="mt-1 font-semibold text-slate-950">{selectedSenderLabel}</div>
+                    <div className="mt-1 text-sm font-medium text-slate-700">
+                      {senderAccountsLoading ? 'Проверяем email…' : connectedEmailSender?.sender_identity || 'Email пока не подключён'}
+                    </div>
                   </div>
                   <Badge variant="outline" className={readyChannelCount > 0
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
@@ -2925,13 +3262,14 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 </div>
                 <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">Telegram и email выбираются только из этого контура. MAX, VK и WhatsApp остаются ручными, пока для них нет проверенного adapter и синхронизации ответов.</p>
                 <details className="mt-3 border-t border-slate-200 pt-2">
-                  <summary className="flex min-h-10 cursor-pointer items-center text-sm font-semibold text-slate-700">Подключить или проверить email</summary>
+                  <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-slate-700">Проверить или заменить email отправителя</summary>
                   <div className="pt-3">
                     <OutreachEmailSetup
                       scopeType={selectedSenderScope}
                       businessId={selectedSenderScope === 'business' ? selectedWorkstream.client_business_id : null}
                       compact
                       onChanged={() => {
+                        void loadSenderAccounts();
                         setOutreachPreview(null);
                         setPilotReadiness(null);
                       }}
@@ -3060,6 +3398,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </div>
                 </details>
               </div>
+              </LeadDrawerSection>
 
               <div className="space-y-2">
                 <Button onClick={prepareRoom} disabled={busyAction === 'prepare-room'} className="w-full min-h-11 bg-orange-500 text-white hover:bg-orange-600">
@@ -3089,7 +3428,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               )}
 
               <details id="lead-suppression-list" className="scroll-mt-6 border-t border-slate-200 pt-4">
-                <summary className="min-h-10 cursor-pointer text-sm font-semibold text-slate-700">Stop-list и «не беспокоить»</summary>
+                <summary className="min-h-10 cursor-pointer text-sm font-semibold text-slate-700">Исключения из контактов</summary>
                 <div className="pt-3">
                   <OutreachSuppressionManager
                     workstreamId={selectedWorkstream.id}

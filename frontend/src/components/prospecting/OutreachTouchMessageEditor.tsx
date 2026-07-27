@@ -14,9 +14,11 @@ type OutreachTouchMessageEditorProps = {
   draft?: OutreachTouchMessageDraft;
   editing: boolean;
   disabled?: boolean;
+  saving?: boolean;
+  persisted?: boolean;
   onStart: () => void;
   onChange: (draft: OutreachTouchMessageDraft) => void;
-  onFinish: () => void;
+  onAccept: (draft: OutreachTouchMessageDraft) => void;
   onCancel: () => void;
   onReset: () => void;
 };
@@ -26,9 +28,11 @@ export function OutreachTouchMessageEditor({
   draft,
   editing,
   disabled = false,
+  saving = false,
+  persisted = false,
   onStart,
   onChange,
-  onFinish,
+  onAccept,
   onCancel,
   onReset,
 }: OutreachTouchMessageEditorProps) {
@@ -66,7 +70,7 @@ export function OutreachTouchMessageEditor({
         </label>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-pretty text-xs leading-5 text-slate-500">
-            Правка не отправится автоматически. Сначала LocalOS проверит факты, затем сохранит новую версию цепочки.
+            «Принять изменения» сохранит это сообщение в текущем черновике. Каналы, даты и версия всей цепочки не изменятся.
           </p>
           <div className="flex shrink-0 gap-2">
             <Button type="button" variant="ghost" onClick={onCancel} className="min-h-10 transition-transform active:scale-[0.96]">
@@ -75,11 +79,11 @@ export function OutreachTouchMessageEditor({
             <Button
               type="button"
               variant="outline"
-              onClick={onFinish}
-              disabled={!current.text.trim()}
+              onClick={() => onAccept(current)}
+              disabled={disabled || saving || !current.text.trim() || !current.humanEdited}
               className="min-h-10 bg-white transition-transform active:scale-[0.96]"
             >
-              <Check className="mr-1.5 h-4 w-4" /> Применить правку
+              <Check className="mr-1.5 h-4 w-4" /> {saving ? 'Сохраняем…' : 'Принять изменения'}
             </Button>
           </div>
         </div>
@@ -101,9 +105,11 @@ export function OutreachTouchMessageEditor({
         >
           <Pencil className="mr-1.5 h-4 w-4" /> Редактировать
         </Button>
-        {current.humanEdited ? (
+        {persisted ? (
+          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">Изменения сохранены</span>
+        ) : current.humanEdited ? (
           <>
-            <span className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-800">Изменено вручную</span>
+            <span className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-800">Правки не сохранены</span>
             <Button type="button" variant="ghost" onClick={onReset} className="min-h-10 transition-transform active:scale-[0.96]">
               <RotateCcw className="mr-1.5 h-4 w-4" /> Вернуть исходный текст
             </Button>

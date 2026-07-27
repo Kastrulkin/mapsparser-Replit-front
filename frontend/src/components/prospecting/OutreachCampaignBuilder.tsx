@@ -26,6 +26,7 @@ import {
 import {
   OutreachTouchMessageEditor,
 } from '@/components/prospecting/OutreachTouchMessageEditor';
+import { OutreachDateTimePicker } from '@/components/prospecting/OutreachDateTimePicker';
 import {
   OutreachTouchMessageDraft,
   outreachTouchMessageDraft,
@@ -211,7 +212,7 @@ const QUALITY_REASON_LABELS: Record<string, string> = {
   CHANNEL_LIMIT_EXCEEDED: 'Текст не подходит выбранному каналу',
   STYLE_VIOLATION: 'Текст звучит неестественно или нарушает голос',
   TERMINAL_CONTACT_STATE: 'Контакт уже находится в конечном статусе',
-  SUPPRESSED_CONTACT: 'Получатель находится в stop-list',
+  SUPPRESSED_CONTACT: 'Получатель исключён из контактов',
   APPROVAL_BYPASS: 'Требуется новое ручное подтверждение',
   SENSITIVE_TARGETING: 'Сигнал нельзя безопасно использовать в сообщении',
 };
@@ -414,7 +415,7 @@ export function OutreachCampaignBuilder({
         setTouchEdits({});
         setEditingTouchIndex(null);
         setTouchEditsValidated(false);
-        setNotice(`Версия ${payload.campaign.version} сохранена как черновик. Проверьте всю цепочку.`);
+        setNotice('Тексты, каналы и расписание сохранены. Ничего не отправлено.');
         await loadCampaigns();
         setSelectedCampaignId(String(payload.campaign.id || ''));
       }
@@ -694,16 +695,13 @@ export function OutreachCampaignBuilder({
       <label className="block rounded-xl bg-white p-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_1px_2px_-1px_rgba(15,23,42,0.06)]">
         <span className="text-sm font-semibold text-slate-950">Дата и время первого касания</span>
         <span className="mt-1 block text-pretty text-xs leading-5 text-slate-600">Остальные сообщения появятся в календаре по выбранным интервалам. Изменение создаёт новую версию и требует повторного подтверждения.</span>
-        <Input
-          aria-label="Дата и время первого касания"
-          type="datetime-local"
-          required
+        <OutreachDateTimePicker
+          ariaLabel="Дата и время первого касания"
           value={startAt}
-          onChange={(event) => {
-            setStartAt(event.target.value);
+          onChange={(value) => {
+            setStartAt(value);
             invalidateDraft();
           }}
-          className="mt-2 h-11 max-w-xs bg-white tabular-nums"
         />
       </label>
 
@@ -841,7 +839,7 @@ export function OutreachCampaignBuilder({
       ) : null}
       {preview?.status === 'suppressed' ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-950">
-          Получатель находится в stop-list. Отправка заблокирована до provider call.
+          Получатель исключён из контактов. Отправка заблокирована.
         </div>
       ) : null}
       {preview?.generation?.status === 'ready' ? (
@@ -1039,15 +1037,23 @@ export function OutreachCampaignBuilder({
         </Button>
         <Button variant="outline" onClick={() => void prepare(true)} disabled={Boolean(busy) || !outreachStartIso(startAt) || (hasTouchEdits && !touchEditsValidated) || preview?.status !== 'ready'} className="min-h-11 bg-white">
           {busy === 'save' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Сохранить новую версию
+          Сохранить изменения
         </Button>
       </div>
+      <p className="text-pretty text-xs leading-5 text-slate-500">
+        Сохранятся тексты, каналы и расписание. Ничего не будет отправлено.
+      </p>
 
       {selectedCampaign?.status === 'draft' ? (
         <Button onClick={() => void approve()} disabled={Boolean(busy)} className="min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
           {busy === 'approve' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-          Подтвердить всю цепочку один раз
+          Утвердить цепочку для отправки
         </Button>
+      ) : null}
+      {selectedCampaign?.status === 'draft' ? (
+        <p className="text-pretty text-center text-xs leading-5 text-slate-500">
+          Утверждение разрешит использовать эти сообщения. Первое касание запускается отдельно после проверки готовности.
+        </p>
       ) : null}
 
       {selectedCampaign && !pilotAlreadySent && !pilotReplyReceived ? (
@@ -1058,7 +1064,7 @@ export function OutreachCampaignBuilder({
             <div>
               <h4 className="text-balance text-sm font-semibold text-slate-950">Готовность к первому касанию</h4>
               <p className="mt-1 max-w-2xl text-pretty text-sm leading-6 text-slate-600">
-                LocalOS проверит текущую версию, отправителя, контакт, ответы, stop-list и лимиты. Сообщение не отправится.
+                LocalOS проверит текущую версию, отправителя, контакт, ответы, исключения и лимиты. Сообщение не отправится.
               </p>
             </div>
             <Button

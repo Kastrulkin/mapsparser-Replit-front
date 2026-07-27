@@ -62,7 +62,7 @@ export function OutreachSuppressionManager({
       const payload = await newAuth.makeRequest(`/outreach/workstreams/${encodeURIComponent(workstreamId)}/suppressions`);
       setItems(Array.isArray(payload?.suppressions) ? payload.suppressions : []);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Не удалось проверить stop-list');
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось проверить список исключений');
     }
   }, [workstreamId]);
 
@@ -85,7 +85,7 @@ export function OutreachSuppressionManager({
           note: note.trim(),
         }),
       });
-      setNotice('Лид добавлен в stop-list. Новые касания заблокированы до provider call.');
+      setNotice('Лид исключён из контактов. Новые касания заблокированы.');
       setNote('');
       await load();
       onChanged?.();
@@ -102,7 +102,7 @@ export function OutreachSuppressionManager({
     setError('');
     try {
       await newAuth.makeRequest(`/outreach/suppressions/${encodeURIComponent(suppressionId)}`, { method: 'DELETE' });
-      setNotice('Запрет снят. Для отправки всё равно потребуется новый preflight и approval.');
+      setNotice('Запрет снят. Перед отправкой LocalOS снова проверит готовность и запросит подтверждение.');
       await load();
       onChanged?.();
     } catch (requestError) {
@@ -135,7 +135,7 @@ export function OutreachSuppressionManager({
       setImportText('');
       onChanged?.();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Импорт stop-list не выполнен');
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось импортировать список исключений');
     } finally {
       setBusy('');
     }
@@ -148,7 +148,7 @@ export function OutreachSuppressionManager({
       <div className="flex items-start gap-3">
         <ShieldOff className="mt-0.5 h-5 w-5 text-rose-700" />
         <div>
-          <div className="font-semibold text-slate-950">Stop-list и «не беспокоить»</div>
+          <div className="font-semibold text-slate-950">Исключения из контактов</div>
           <p className="mt-1 text-sm leading-6 text-slate-600">Запрет проверяется по лиду и по всем каналам перед каждой отправкой. Область: {scopeType === 'platform' ? 'продажи LocalOS' : 'только этот бизнес'}.</p>
         </div>
       </div>
@@ -169,17 +169,17 @@ export function OutreachSuppressionManager({
 
       <div className="grid gap-2 sm:grid-cols-[180px_minmax(0,1fr)]">
         <select value={reason} onChange={(event) => setReason(event.target.value)} className="min-h-11 rounded-md border border-slate-200 bg-white px-3 text-sm">
-          <option value="manual_dnc">Не контактировать</option>
+          <option value="manual_dnc">Исключить из контактов</option>
           <option value="not_interested">Не интересно</option>
           <option value="unsubscribe">Отписка</option>
           <option value="complaint">Жалоба</option>
         </select>
         <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Причина или комментарий" className="min-h-11 bg-white" />
       </div>
-      <Button variant="outline" onClick={() => void suppressLead()} disabled={Boolean(busy)} className="min-h-11 w-full border-rose-200 bg-white text-rose-700"><Ban className="mr-2 h-4 w-4" />Добавить лида в stop-list</Button>
+      <Button variant="outline" onClick={() => void suppressLead()} disabled={Boolean(busy)} className="min-h-11 w-full border-rose-200 bg-white text-rose-700"><Ban className="mr-2 h-4 w-4" />Исключить лида из контактов</Button>
 
       <details className="border-t border-slate-200 pt-2">
-        <summary className="min-h-10 cursor-pointer text-sm font-semibold text-slate-700">Импортировать stop-list бизнеса</summary>
+        <summary className="min-h-10 cursor-pointer text-sm font-semibold text-slate-700">Импортировать список исключений бизнеса</summary>
         <div className="space-y-3 pt-3">
           <Textarea value={importText} onChange={(event) => setImportText(event.target.value)} placeholder={'email@example.ru\ntelegram:@username\nphone:+79990000000'} className="min-h-28 bg-white font-mono text-sm" />
           <Button variant="outline" onClick={() => void importContacts()} disabled={busy === 'import' || !importText.trim()} className="min-h-11 w-full bg-white">{busy === 'import' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}Импортировать</Button>

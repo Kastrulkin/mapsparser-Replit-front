@@ -17,6 +17,7 @@ from services.outreach_campaign_service import (
     build_evidence_ledger,
     build_pilot_readiness,
     build_personalization_candidates,
+    channel_availability,
     _localos_representative_profile,
     _normalize_touch_overrides,
     resolve_sender_mode,
@@ -66,9 +67,10 @@ def test_channel_setup_gap_can_be_saved_as_draft_but_not_approved():
     approve_end = campaign_source.index("\n\ndef change_campaign_status", approve_start)
     approve_block = campaign_source[approve_start:approve_end]
 
-    assert 'preview.get("status") in {"ready", "needs_channel_setup"}' in api_source
-    assert "['ready', 'needs_channel_setup'].includes" in frontend_source
-    assert "Сохранить черновик версии" in frontend_source
+    assert 'preview.get("status") in {"ready", "needs_channel_setup", "needs_evidence", "needs_revision"}' in api_source
+    assert "['ready', 'needs_channel_setup', 'needs_evidence', 'needs_revision'].includes" in frontend_source
+    assert "Сохранить цепочку" in frontend_source
+    assert "Ничего не будет отправлено" in frontend_source
     assert "savedCampaignNeedsChannelSetup" in frontend_source
     assert "Сначала настройте каналы и отправителя" in frontend_source
     assert "senders_ready" in approve_block
@@ -992,6 +994,27 @@ def test_manual_touch_overrides_preserve_original_copy_and_reject_invalid_payloa
         ])
 
 
+def test_manual_touch_overrides_preserve_paragraph_breaks():
+    message = (
+        'Здравствуйте! Мы ваши соседи - сеть детских парикмахерских "Весёлая расчёска".\n\n'
+        "Хотели предложить Yes Apart небольшой проект для семей.\n\n"
+        "Подскажите, пожалуйста, с кем можно обсудить такую идею?"
+    )
+
+    normalized = _normalize_touch_overrides([
+        {
+            "sequence_index": 0,
+            "subject": "Yes Apart | Весёлая расчёска",
+            "text": message,
+            "original_text": message,
+            "human_edited": True,
+        },
+    ])
+
+    assert normalized[0]["text"] == message
+    assert normalized[0]["original_text"] == message
+
+
 def test_outreach_ui_shows_compact_calendar_and_edits_messages_outside_it():
     calendar_ui = (ROOT / "frontend/src/components/prospecting/OutreachScheduleCalendar.tsx").read_text()
     partner_ui = (ROOT / "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx").read_text()
@@ -1006,7 +1029,9 @@ def test_outreach_ui_shows_compact_calendar_and_edits_messages_outside_it():
     assert "touchText(item.touch)" not in calendar_ui
     assert "item.touch.subject" not in calendar_ui
     assert "Редактировать" in editor_ui
-    assert "Применить правку" in editor_ui
+    assert "Принять изменения" in editor_ui
+    assert "Изменения сохранены" in editor_ui
+    assert "Правки не сохранены" in editor_ui
     assert "Вернуть исходный текст" in editor_ui
     assert "touch_overrides" in partner_ui
     assert "touch_overrides" in admin_ui
@@ -1014,9 +1039,10 @@ def test_outreach_ui_shows_compact_calendar_and_edits_messages_outside_it():
     history_end = admin_ui.index('Контакты и получатель', history_start)
     history_block = admin_ui[history_start:history_end]
     assert "OutreachTouchMessageEditor" in history_block
-    assert "В цепочке есть ручные правки" in history_block
-    assert "Проверить правки" in history_block
-    assert "Сохранить новую версию" in history_block
+    assert "В цепочке есть несохранённые ручные правки" in history_block
+    assert "Проверить сохранённые сообщения" in history_block
+    assert "Результат проверки" in history_block
+    assert "Сохранить новую версию" not in history_block
     campaign_source = (ROOT / "src/services/outreach_campaign_service.py").read_text()
     assert ") and not override_by_index" in campaign_source
     assert 'touch["generation_source"] = "manual_product_correction"' in campaign_source
@@ -1322,3 +1348,487 @@ def test_recipient_selection_updates_drawer_without_grey_stale_state():
     assert "selected_recipient: contact" in select_block
     assert "aria-pressed={selected}" in contacts_block
     assert "disabled:opacity-50" not in contacts_block
+
+
+def test_contacts_used_by_campaign_touches_are_visually_distinct_from_the_current_recipient():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    contacts_start = source.index("{drawerContacts.map")
+    contacts_end = source.index("{!contactIntelligenceLoading", contacts_start)
+    contacts_block = source[contacts_start:contacts_end]
+
+    assert "chainTouchesByContactId" in source
+    assert "touch.contact_point_id" in source
+    assert "selectedForSending" in contacts_block
+    assert "Выбран для отправки" in contacts_block
+    assert "Выбран как получатель" in contacts_block
+    assert "Шаг ${Number(touch.sequence_index || 0) + 1}" in contacts_block
+
+
+def test_saved_campaign_remains_visible_while_editing_new_version():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    channel_start = source.index("const updateSequenceChannel")
+    channel_end = source.index("\n\n  const updateSequenceDay", channel_start)
+    channel_block = source[channel_start:channel_end]
+
+    day_start = channel_end
+    day_end = source.index("\n\n  const updateSenderMode", day_start)
+    day_block = source[day_start:day_end]
+
+    mode_start = day_end
+    mode_end = source.index("\n\n  const campaignSequence", mode_start)
+    mode_block = source[mode_start:mode_end]
+
+    schedule_start = source.index('ariaLabel="Дата и время первого касания"')
+    schedule_end = source.index("/>\n", schedule_start)
+    schedule_block = source[schedule_start:schedule_end]
+
+    assert "setSavedOutreachCampaign(null)" not in channel_block
+    assert "setSavedOutreachCampaign(null)" not in day_block
+    assert "setSavedOutreachCampaign(null)" not in mode_block
+    assert "setSavedOutreachCampaign(null)" not in schedule_block
+    assert "setCampaignSetupDirty(true)" in channel_block
+    assert "setCampaignSetupDirty(true)" in day_block
+    assert "setCampaignSetupDirty(true)" in mode_block
+    assert "setCampaignSetupDirty(true)" in schedule_block
+    assert "campaignSetupDirty" in source[source.index("const outreachCalendarTouches"):source.index("const savedConversationTouches")]
+    assert "busyAction === 'approve-campaign' || campaignSetupDirty" in source
+    assert "Настройки новой версии ещё не сохранены" in source
+
+
+def test_outreach_uses_the_product_date_time_picker_in_both_campaign_surfaces():
+    admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    builder_source = (ROOT / "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx").read_text()
+    picker_source = (ROOT / "frontend/src/components/prospecting/OutreachDateTimePicker.tsx").read_text()
+
+    assert "<OutreachDateTimePicker" in admin_source
+    assert "<OutreachDateTimePicker" in builder_source
+    assert 'type="datetime-local"' not in admin_source
+    assert 'type="datetime-local"' not in builder_source
+    assert "Когда отправить первый шаг" in picker_source
+    assert "Сегодня" in picker_source
+    assert "Завтра" in picker_source
+    assert 'type="time"' in picker_source
+
+
+def test_manual_touch_edits_survive_reload_until_new_campaign_version_is_saved():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    assert "outreachTouchEditsStorageKey" in source
+    assert "localStorage.getItem(outreachTouchEditsStorageKey" in source
+    assert "localStorage.setItem(outreachTouchEditsStorageKey" in source
+    assert "beforeunload" in source
+
+    prepare_campaign_start = source.index("const prepareOutreachCampaign")
+    saved_campaign_start = source.index("if (payload?.campaign)", prepare_campaign_start)
+    saved_campaign_end = source.index("\n      }", saved_campaign_start)
+    saved_campaign_block = source[saved_campaign_start:saved_campaign_end]
+    assert "localStorage.removeItem(outreachTouchEditsStorageKey" in saved_campaign_block
+
+
+def test_accept_touch_edits_persists_current_draft_without_campaign_version():
+    admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    editor_source = (ROOT / "frontend/src/components/prospecting/OutreachTouchMessageEditor.tsx").read_text()
+    api_source = (ROOT / "src/api/outreach_campaign_api.py").read_text()
+
+    assert "Принять изменения" in editor_source
+    assert "onAccept" in editor_source
+    assert "const acceptTouchEdit" in admin_source
+    accept_start = admin_source.index("const acceptTouchEdit")
+    accept_end = admin_source.index("\n\n  const", accept_start)
+    accept_block = admin_source[accept_start:accept_end]
+    assert "method: 'PATCH'" in accept_block
+    assert "/outreach/campaigns/" in accept_block
+    assert "/touches/" in accept_block
+    assert "prepareOutreachCampaign(true)" not in accept_block
+    assert "Изменения сохранены" in accept_block
+    assert '@outreach_campaign_bp.patch("/api/outreach/campaigns/<campaign_id>/touches/<touch_id>")' in api_source
+
+
+def test_review_saved_touch_edits_does_not_require_a_new_campaign_version():
+    admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    api_source = (ROOT / "src/api/outreach_campaign_api.py").read_text()
+
+    assert "Проверить сохранённые сообщения" in admin_source
+    assert "/review-edits" in admin_source
+    assert '@outreach_campaign_bp.post("/api/outreach/campaigns/<campaign_id>/review-edits")' in api_source
+
+    history_start = admin_source.index("История сообщений")
+    history_end = admin_source.index("Контакты и получатель", history_start)
+    history_block = admin_source[history_start:history_end]
+    assert "Проверить сохранённые сообщения" in history_block
+    assert "Результат проверки" in history_block
+
+    save_version_index = admin_source.index("Сохранить изменения", history_end)
+    setup_dirty_block = admin_source[save_version_index - 1_200:save_version_index + 100]
+    assert "campaignSetupDirty ?" in setup_dirty_block
+
+
+def test_persisted_server_touch_is_not_restored_as_an_unsaved_device_edit():
+    admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    restore_start = admin_source.index("const storedValue = localStorage.getItem(outreachTouchEditsStorageKey)")
+    restore_end = admin_source.index("\n  }, [outreachTouchEditsStorageKey", restore_start)
+    restore_block = admin_source[restore_start:restore_end]
+
+    assert "savedOutreachCampaign?.touches" in restore_block
+    assert "persistedTouch?.approved_text || persistedTouch?.generated_text" in restore_block
+    assert "localStorage.removeItem(outreachTouchEditsStorageKey)" in restore_block
+    assert "Восстановили несохранённые ручные правки" in restore_block
+
+
+def test_accepting_touch_while_schedule_is_dirty_still_persists_exact_text():
+    admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    accept_start = admin_source.index("const acceptTouchEdit")
+    accept_end = admin_source.index("\n\n  const reloadLatestOutreachCampaign", accept_start)
+    accept_block = admin_source[accept_start:accept_end]
+    patch_index = accept_block.index("method: 'PATCH'")
+    setup_guard_index = accept_block.find("if (campaignSetupDirty)")
+
+    assert setup_guard_index == -1 or patch_index < setup_guard_index
+    assert "subject: draft.subject.trim()" in accept_block
+    assert "text: draft.text.trim()" in accept_block
+    assert "setOutreachPreview(null)" in accept_block
+
+
+def test_low_quality_schedule_change_can_be_saved_as_draft_but_not_approved():
+    admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    api_source = (ROOT / "src/api/outreach_campaign_api.py").read_text()
+    campaign_source = (ROOT / "src/services/outreach_campaign_service.py").read_text()
+
+    preview_route_start = api_source.index("def preview_campaign")
+    preview_route_end = api_source.index("\n\n@outreach_campaign_bp", preview_route_start)
+    preview_route = api_source[preview_route_start:preview_route_end]
+    persist_start = campaign_source.index("def persist_preview")
+    persist_end = campaign_source.index("\n\ndef ", persist_start)
+    persist_block = campaign_source[persist_start:persist_end]
+
+    assert 'preview.get("status") in {"ready", "needs_channel_setup", "needs_evidence", "needs_revision"}' in preview_route
+    assert 'preview.get("status") not in {"ready", "needs_channel_setup", "needs_evidence", "needs_revision"}' in persist_block
+    assert "'ready', 'needs_channel_setup', 'needs_evidence', 'needs_revision'" in admin_source
+    assert "!savedCampaignQualityPassed" in admin_source
+
+
+def test_residential_partnership_copy_passes_without_copying_internal_evidence_phrases():
+    candidate = {
+        "observed_fact": 'В публичной карточке Yes Apart указана категория "Жилой комплекс".',
+        "recipient": "Yes Apart",
+        "recipient_type": "residential_complex",
+        "sender_mode": "localos_for_partner",
+        "represented_business": "Весёлая расчёска",
+        "bridge": "Это позволяет обсудить предложение непосредственно для жителей комплекса",
+        "trust_statement": "Весёлая расчёска предлагает услуги семьям с детьми рядом с комплексом",
+        "evidence_kind": "residential_context",
+        "source_url": "https://example.test/maps/yes-apart",
+        "evidence_status": "observed",
+        "freshness": "current_snapshot",
+        "confidence": 0.95,
+        "next_step": "Обсудить специальные условия для семей жителей и гостей",
+    }
+    message = (
+        'Здравствуйте! Мы ваши соседи - сеть детских парикмахерских "Весёлая расчёска". '
+        "Хотим предложить особые условия на детские стрижки для семей гостей и жителей Yes Apart. "
+        "Подскажите, с кем можно обсудить детали?"
+    )
+
+    gate = _quality_gate(
+        message,
+        candidate,
+        None,
+        channel="email",
+        channel_status="ready",
+        suppressed=False,
+    )
+    suppressed_gate = _quality_gate(
+        message,
+        candidate,
+        None,
+        channel="email",
+        channel_status="ready",
+        suppressed=True,
+    )
+
+    assert gate["passed"] is True
+    assert gate["total_score"] == 18
+    assert gate["reason_codes"] == []
+    assert suppressed_gate["passed"] is False
+    assert "SUPPRESSED_CONTACT" in suppressed_gate["reason_codes"]
+
+
+def test_residential_map_category_evidence_does_not_force_internal_phrases_into_human_copy():
+    candidate = {
+        "observed_fact": 'В публичной карточке Yes Apart указана категория "Апарт-отель / жилой комплекс".',
+        "recipient": "Yes Apart",
+        "recipient_type": "residential_complex",
+        "sender_mode": "localos_for_partner",
+        "represented_business": "Весёлая расчёска",
+        "bridge": "Это позволяет обсудить предложение непосредственно для жителей комплекса",
+        "trust_statement": "Весёлая расчёска предлагает услуги семьям с детьми рядом с комплексом",
+        "evidence_kind": "map_card_category",
+        "source_url": "https://example.test/maps/yes-apart",
+        "evidence_status": "observed",
+        "freshness": "current_snapshot",
+        "confidence": 0.95,
+        "next_step": "Обсудить небольшой локальный проект для семей",
+    }
+    message = (
+        'Здравствуйте! Мы ваши соседи - сеть детских парикмахерских "Весёлая расчёска". '
+        "Замечаем, что люди всё больше собираются в небольшие сообщества вокруг дома. "
+        "Хотели предложить Yes Apart небольшой проект для семей, который поможет познакомить "
+        "жителей с полезными местами рядом. Подскажите, с кем можно обсудить такую идею?"
+    )
+
+    gate = _quality_gate(
+        message,
+        candidate,
+        None,
+        channel="email",
+        channel_status="ready",
+        suppressed=False,
+    )
+
+    assert gate["checks"]["human_tone"] is True
+    assert gate["checks"]["style_contract"] is True
+    assert gate["checks"]["removal"] is True
+    assert gate["checks"]["bridge"] is True
+    assert gate["criterion_scores"]["observation_accuracy"] == 2
+    assert gate["criterion_scores"]["recipient_specificity"] == 2
+    assert gate["passed"] is True
+
+
+def test_residential_followups_are_scored_by_recipient_offer_relevance_not_literal_evidence_copy():
+    candidate = {
+        "observed_fact": 'В публичной карточке Yes Apart указана категория "Апарт-отель / жилой комплекс".',
+        "recipient": "Yes Apart",
+        "recipient_type": "residential_complex",
+        "sender_mode": "localos_for_partner",
+        "represented_business": "Весёлая расчёска",
+        "bridge": "Это позволяет обсудить предложение непосредственно для жителей комплекса",
+        "trust_statement": "Весёлая расчёска предлагает услуги семьям с детьми рядом с комплексом",
+        "evidence_kind": "map_card_category",
+        "source_url": "https://example.test/maps/yes-apart",
+        "evidence_status": "observed",
+        "freshness": "current_snapshot",
+        "confidence": 0.95,
+        "next_step": "Обсудить небольшой локальный проект для семей",
+    }
+    messages = [
+        (
+            "matching_authority",
+            "max",
+            "Здравствуйте!\n\n"
+            "У нас есть несколько идей, как мы могли бы быть полезны сообществу жильцов "
+            "Yes Apart. Например, мастер-классы. Это простой способ познакомить жителей "
+            "с чем-то новым и сделать жизнь локального сообщества немного интереснее.\n\n"
+            "Подскажите, с кем я мог бы обсудить возможное сотрудничество?\n\n"
+            "С кем я мог бы обговорить это?",
+            16,
+            ["MULTIPLE_CTA"],
+            False,
+        ),
+        (
+            "proof",
+            "vk",
+            "Здравствуйте!\n\n"
+            "Мы подготовили два варианта сотрудничества для семей Yes Apart.\n\n"
+            "Один - специальные условия для жителей комплекса. Второй - небольшие "
+            "мероприятия и мастер-классы, которые помогают объединять соседей вокруг "
+            "полезных мест рядом с домом.\n\n"
+            "Кажется, это могло бы быть интересным. С кем я мог бы обсудить?",
+            18,
+            [],
+            True,
+        ),
+        (
+            "respectful_close",
+            "telegram",
+            "Здравствуйте!\n\n"
+            "Похоже, сейчас эта тема не в приоритете.\n\n"
+            "Если позже захотите сделать что-то полезное для локального сообщества "
+            "жителей Yes Apart вместе с соседними бизнесами - будем рады обсудить. "
+            "Пока больше отвлекать не будем.",
+            18,
+            [],
+            True,
+        ),
+    ]
+
+    for angle, channel, message, expected_score, expected_reasons, expected_passed in messages:
+        gate = _quality_gate(
+            message,
+            candidate,
+            None,
+            channel=channel,
+            channel_status="manual" if channel == "max" else "ready",
+            suppressed=False,
+            angle=angle,
+        )
+
+        assert gate["total_score"] == expected_score
+        assert gate["reason_codes"] == expected_reasons
+        assert gate["passed"] is expected_passed
+
+
+def test_new_campaign_version_preserves_saved_human_copy_for_unchanged_channels():
+    admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    campaign_source = (ROOT / "src/services/outreach_campaign_service.py").read_text()
+
+    overrides_start = admin_source.index("const campaignTouchOverrides")
+    overrides_end = admin_source.index("\n\n  const", overrides_start)
+    overrides_block = admin_source[overrides_start:overrides_end]
+    prepare_start = admin_source.index("const prepareOutreachCampaign")
+    prepare_end = admin_source.index("\n\n  const approveOutreachCampaign", prepare_start)
+    prepare_block = admin_source[prepare_start:prepare_end]
+
+    assert "savedOutreachCampaign?.touches" in overrides_block
+    assert "touch.channel === sequenceChannels" in overrides_block
+    assert "savedTouch?.message_brief_json?.human_edited" in overrides_block
+    assert "campaignSetupDirty" in prepare_block
+    assert "preserveSavedCampaign" in prepare_block
+    assert "set(override_by_index).issubset(expected_indexes)" in campaign_source
+    assert "if index not in override_by_index:" in campaign_source
+
+
+def test_selected_campaign_recipient_wins_over_generic_email_ranking():
+    class SenderCursor:
+        def execute(self, _query, _params):
+            return None
+
+        def fetchall(self):
+            return []
+
+    availability = channel_availability(
+        SenderCursor(),
+        {
+            "sender_mode": "localos_for_partner",
+            "client_business_id": "business-1",
+            "selected_contact_point_id": "pr-contact",
+            "contacts": [
+                {
+                    "id": "office-contact",
+                    "contact_type": "email",
+                    "value": "office@yesapart.com",
+                    "verification_status": "confirmed_source",
+                    "confidence": 0.99,
+                },
+                {
+                    "id": "pr-contact",
+                    "contact_type": "email",
+                    "value": "pr@yesapart.com",
+                    "verification_status": "confirmed_source",
+                    "confidence": 0.8,
+                },
+            ],
+        },
+    )
+
+    assert availability["email"]["contact_point_id"] == "pr-contact"
+    assert availability["email"]["recipient"] == "pr@yesapart.com"
+
+
+def test_new_version_message_edit_is_persisted_even_before_schedule_version_is_saved():
+    admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    accept_start = admin_source.index("const acceptTouchEdit")
+    accept_end = admin_source.index("\n\n  const reloadLatestOutreachCampaign", accept_start)
+    accept_block = admin_source[accept_start:accept_end]
+
+    patch_request = accept_block.index("method: 'PATCH'")
+    setup_guard = accept_block.find("if (campaignSetupDirty)")
+    assert setup_guard == -1 or patch_request < setup_guard
+    assert "subject: draft.subject.trim()" in accept_block
+    assert "text: draft.text.trim()" in accept_block
+
+
+def test_lead_drawer_uses_progressive_disclosure_without_unmounting_form_state():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    assert "const LeadDrawerSection" in source
+    assert 'id="lead-conversation"' in source
+    assert 'id="lead-contacts"' in source
+    assert 'id="lead-research"' in source
+    assert 'id="first-message"' not in source
+    assert 'title="Первое сообщение"' not in source
+    assert 'id="outreach-sequence"' in source
+    assert 'id="sender-settings"' in source
+    assert "hidden={!open}" in source
+    assert "{open ? children" not in source
+
+
+def test_lead_drawer_progress_tracks_the_saved_sequence_instead_of_legacy_first_message():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    assert 'aria-label="Этапы подготовки цепочки обращений"' in source
+    assert "['Контакты', 'Получатель', 'Основание', 'Цепочка', 'Проверка']" in source
+    assert "Boolean(savedOutreachCampaign?.touches?.length)" in source
+    assert "Boolean(savedCampaignQualityPassed && !savedCampaignHasPendingReview)" in source
+
+
+def test_russian_outreach_ui_uses_human_suppression_labels():
+    sources = [
+        (ROOT / "frontend/src/components/prospecting/OutreachSuppressionManager.tsx").read_text(),
+        (ROOT / "frontend/src/components/prospecting/PartnershipLeadDetailDrawer.tsx").read_text(),
+        (ROOT / "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx").read_text(),
+        (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text(),
+    ]
+    combined = "\n".join(sources)
+
+    assert "Исключения из контактов" in combined
+    assert "Исключить из контактов" in combined
+    assert "Не контактировать" not in combined
+    assert "Stop-list" not in combined
+    assert "stop-list" not in combined
+
+
+def test_lead_drawer_shows_the_real_connected_sender_and_refreshes_it_after_setup():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    assert "const loadSenderAccounts" in source
+    assert "connectedEmailSender?.sender_identity" in source
+    assert "connectedEmailSender?.display_name" in source
+    assert "Проверить или заменить email отправителя" in source
+    setup_start = source.index("<OutreachEmailSetup")
+    setup_end = source.index("/>", setup_start)
+    assert "void loadSenderAccounts()" in source[setup_start:setup_end]
+
+
+def test_lead_drawer_has_one_sticky_next_action_summary():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    assert 'className="sticky top-0 z-20' in source
+    assert "summaryNextAction" in source
+    assert "scrollToLeadSection(summaryNextAction.target)" in source
+    assert "Получатель" in source
+    assert "Отправитель" in source
+    assert "Первый шаг" in source
+    assert "Состояние" in source
+
+
+def test_sticky_next_action_names_regeneration_before_unsaved_schedule_review():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    action_start = source.index("const summaryNextAction")
+    action_end = source.index("\n  const scrollToLeadSection", action_start)
+    action_block = source[action_start:action_end]
+
+    regeneration_index = action_block.index("savedOutreachCampaign?.requires_regeneration")
+    dirty_setup_index = action_block.index("campaignSetupDirty")
+    assert regeneration_index < dirty_setup_index
+    assert "Подготовить новую цепочку" in action_block
+
+
+def test_saved_campaign_hydrates_schedule_form_and_calendar_from_same_version():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    load_start = source.index("const loadCampaign = async")
+    load_end = source.index("void loadCampaign();", load_start)
+    load_block = source[load_start:load_end]
+
+    assert "latestCampaign?.touches" in load_block
+    assert "setSequenceChannels" in load_block
+    assert "setSequenceDays" in load_block
+    assert "setSequenceStartAt" in load_block
+    assert "setCampaignSetupDirty(false)" in load_block
+    assert ".sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0]" in load_block
