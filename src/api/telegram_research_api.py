@@ -432,7 +432,7 @@ def community_sources(business_id: str):
         cursor.execute(
             """
             SELECT source.id, source.title, source.canonical_url, source.status,
-                   source.sync_status, source.last_collected_at, source.next_sync_at,
+                   source.source_role, source.sync_status, source.last_collected_at, source.next_sync_at,
                    source.last_sync_error, subscription.purposes_json,
                    subscription.topics_json, subscription.schedule_json,
                    (SELECT COUNT(*) FROM knowledge_documents document
@@ -583,6 +583,18 @@ def update_community_source_subscription(business_id: str, source_id: str):
         row = cursor.fetchone()
         if not row:
             return jsonify({"success": False, "error": "Источник не найден"}), 404
+        cursor.execute(
+            """
+            UPDATE knowledge_sources
+            SET next_sync_at = LEAST(
+                    COALESCE(next_sync_at, NOW()),
+                    NOW() + (%s * INTERVAL '1 hour')
+                ),
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (interval_hours, source_id),
+        )
         db.conn.commit()
         result = dict(row) if hasattr(row, "keys") else {"source_id": source_id, "topics_json": topics, "schedule_json": {"interval_hours": interval_hours}}
         return jsonify({"success": True, "subscription": result})

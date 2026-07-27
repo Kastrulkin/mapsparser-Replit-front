@@ -160,7 +160,9 @@ def test_public_preview_and_userbot_collection_do_not_overlap():
 
     assert "sync_mode = 'public_preview'" in source
     assert "canonical_url LIKE %s" in source
-    assert '("https://t.me/%", interval_seconds' in source
+    assert "default_interval_seconds = max(21600" in source
+    assert "FROM knowledge_source_subscriptions subscription" in source
+    assert "subscription.schedule_json->>'interval_hours'" in source
     assert 'os.getenv("TELEGRAM_HTTP_PROXY")' in source
     assert 'os.getenv("OUTBOUND_HTTP_PROXY")' in source
     assert "request.ProxyHandler" in source

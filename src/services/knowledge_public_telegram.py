@@ -121,12 +121,31 @@ def _inspect_source_entity(conn: Any, source: dict[str, Any]) -> dict[str, Any]:
 def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, Any]:
     if not _monitor_enabled():
         return {"status": "disabled", "sources_checked": 0, "documents_seen": 0}
-    interval_seconds = max(86400, int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_INTERVAL_SEC", "86400")))
+    default_interval_seconds = max(21600, int(os.getenv("KNOWLEDGE_TELEGRAM_MONITOR_INTERVAL_SEC", "86400")))
     run_id = str(uuid.uuid4())
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute(
         """
-        SELECT source.* FROM knowledge_sources source
+        SELECT source.*,
+               GREATEST(
+                   21600,
+                   COALESCE(
+                       (
+                           SELECT MIN(
+                               CASE
+                                   WHEN subscription.schedule_json->>'interval_hours' IN ('6', '12', '24', '72', '168')
+                                   THEN (subscription.schedule_json->>'interval_hours')::INTEGER * 3600
+                                   ELSE 86400
+                               END
+                           )
+                           FROM knowledge_source_subscriptions subscription
+                           WHERE subscription.source_id = source.id
+                             AND subscription.is_active = TRUE
+                       ),
+                       %s
+                   )
+               ) AS effective_interval_seconds
+        FROM knowledge_sources source
         WHERE source.source_type = 'telegram'
           AND (
                 source.status = 'active'
@@ -140,11 +159,38 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
           AND source.visibility = 'public'
           AND source.canonical_url LIKE %s
           AND (source.next_sync_at IS NULL OR source.next_sync_at <= NOW())
-          AND (source.last_collected_at IS NULL OR source.last_collected_at < NOW() - (%s * INTERVAL '1 second'))
+          AND (
+              source.last_collected_at IS NULL
+              OR source.last_collected_at < NOW() - (
+                  GREATEST(
+                      21600,
+                      COALESCE(
+                          (
+                              SELECT MIN(
+                                  CASE
+                                      WHEN subscription.schedule_json->>'interval_hours' IN ('6', '12', '24', '72', '168')
+                                      THEN (subscription.schedule_json->>'interval_hours')::INTEGER * 3600
+                                      ELSE 86400
+                                  END
+                              )
+                              FROM knowledge_source_subscriptions subscription
+                              WHERE subscription.source_id = source.id
+                                AND subscription.is_active = TRUE
+                          ),
+                          %s
+                      )
+                  ) * INTERVAL '1 second'
+              )
+          )
         ORDER BY source.last_collected_at ASC NULLS FIRST, source.updated_at ASC
         LIMIT %s
         """,
-        ("https://t.me/%", interval_seconds, max(1, min(limit_sources, 50))),
+        (
+            default_interval_seconds,
+            "https://t.me/%",
+            default_interval_seconds,
+            max(1, min(limit_sources, 50)),
+        ),
     )
     sources = [dict(row) for row in cursor.fetchall()]
     cursor.execute(
@@ -161,6 +207,7 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
     documents_imported = 0
     errors: list[dict[str, str]] = []
     for source in sources:
+        interval_seconds = max(21600, int(source.get("effective_interval_seconds") or default_interval_seconds))
         try:
             auto_discovered = bool((source.get("metadata_json") or {}).get("auto_discovered"))
             workstream_ids: list[str] = []

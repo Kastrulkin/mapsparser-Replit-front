@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, CircleAlert, ExternalLink, Loader2, Plus, Radio, Trash2 } from 'lucide-react';
+import { Check, ChevronRight, CircleAlert, ExternalLink, Loader2, Pencil, Plus, Radio, Trash2, X } from 'lucide-react';
 
 type CommunitySource = {
   id: string;
@@ -9,6 +9,7 @@ type CommunitySource = {
   canonical_url?: string;
   status?: string;
   sync_status?: string;
+  last_sync_error?: string;
   last_collected_at?: string;
   next_sync_at?: string;
   documents_count?: number;
@@ -17,10 +18,20 @@ type CommunitySource = {
   schedule_json?: { interval_hours?: number };
 };
 
+const spring = { type: 'spring', duration: 0.3, bounce: 0 };
+const intervalOptions = [['6', 'Каждые 6 часов'], ['12', 'Каждые 12 часов'], ['24', 'Раз в день'], ['72', 'Раз в 3 дня'], ['168', 'Раз в неделю']];
+const topicPresets = ['Цены и затраты', 'Маркетинг', 'Клиенты', 'Конкуренты'];
+const previewSources: CommunitySource[] = [
+  { id: 'preview-ready', title: 'Beauty Business Club', canonical_url: 'https://t.me/beauty_business', sync_status: 'ready', last_collected_at: new Date().toISOString(), next_sync_at: new Date(Date.now() + 86400000).toISOString(), documents_count: 248, embeddings_count: 248, topics_json: ['Маркетинг', 'Клиенты'], schedule_json: { interval_hours: 24 } },
+  { id: 'preview-queued', title: 'Предприниматели Батуми', canonical_url: 'https://t.me/business_batumi', sync_status: 'queued', next_sync_at: new Date().toISOString(), documents_count: 0, embeddings_count: 0, topics_json: ['Цены и затраты'], schedule_json: { interval_hours: 12 } },
+];
+
 const headers = () => ({ Authorization: `Bearer ${window.sessionStorage.getItem('localos_mini_session') || ''}`, 'Content-Type': 'application/json' });
 const read = async (response: Response) => {
-  const payload = await response.json();
-  if (!response.ok || payload?.success === false) throw new Error(payload?.error || 'Не удалось выполнить запрос');
+  const raw = await response.text();
+  let payload: Record<string, unknown> = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch { throw new Error('Сервис вернул неполный ответ. Попробуйте ещё раз.'); }
+  if (!response.ok || payload.success === false) throw new Error(typeof payload.error === 'string' ? payload.error : 'Не удалось выполнить запрос');
   return payload;
 };
 const dateLabel = (value?: string) => {
@@ -28,85 +39,143 @@ const dateLabel = (value?: string) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? 'дата неизвестна' : date.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
+const intervalLabel = (value?: number) => intervalOptions.find(([key]) => key === String(value || 24))?.[1]?.toLowerCase() || 'раз в день';
+const statusMeta = (item: CommunitySource) => {
+  if (item.sync_status === 'failed' || item.last_sync_error) return { label: 'Нужна проверка', dot: 'bg-rose-400', text: 'Не получилось обновить источник' };
+  if (['queued', 'running', 'processing'].includes(item.sync_status || '')) return { label: 'Собираем', dot: 'bg-sky-300 motion-safe:animate-pulse', text: 'Новые публичные материалы уже в очереди' };
+  if (item.last_collected_at) return { label: 'Всё работает', dot: 'bg-emerald-400', text: 'Продолжаем следить за новыми обсуждениями' };
+  return { label: 'Первый сбор', dot: 'bg-amber-300 motion-safe:animate-pulse', text: 'Проверяем источник и собираем историю' };
+};
 
 export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: string | null }) => {
   const [items, setItems] = useState<CommunitySource[]>([]);
   const [url, setUrl] = useState('');
-  const [topics, setTopics] = useState('');
+  const [topics, setTopics] = useState<string[]>([]);
+  const [customTopics, setCustomTopics] = useState('');
   const [intervalHours, setIntervalHours] = useState('24');
+  const [editingId, setEditingId] = useState('');
+  const [editTopics, setEditTopics] = useState('');
+  const [editInterval, setEditInterval] = useState('24');
+  const [removeId, setRemoveId] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!businessId) { setLoading(false); return; }
+    if (businessId === 'preview') { setItems(previewSources); setLoading(false); return; }
     try {
       const payload = await fetch(`/api/business/${encodeURIComponent(businessId)}/community-sources`, { headers: headers() }).then(read);
-      setItems(payload.items || []);
+      setItems(Array.isArray(payload.items) ? payload.items : []);
       setError('');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Не удалось загрузить источники');
-    } finally {
-      setLoading(false);
-    }
-  };
+    } finally { setLoading(false); }
+  }, [businessId]);
 
-  useEffect(() => { void load(); }, [businessId]);
+  useEffect(() => { void load(); }, [load]);
 
   const add = async (event: FormEvent) => {
     event.preventDefault();
     if (!businessId || !url.trim()) return;
     setBusy('add'); setError(''); setMessage('');
     try {
-      await fetch(`/api/business/${encodeURIComponent(businessId)}/community-sources`, {
-        method: 'POST',
-        headers: headers(),
-        body: JSON.stringify({
-          url: url.trim(),
-          topics: topics.split(',').map((item) => item.trim()).filter(Boolean),
-          interval_hours: Number(intervalHours),
-        }),
+      const extraTopics = customTopics.split(',').map((item) => item.trim()).filter(Boolean);
+      if (businessId === 'preview') {
+        setItems((current) => [{ id: `preview-${Date.now()}`, title: url.replace(/^https?:\/\/t\.me\//, '@'), canonical_url: url, sync_status: 'queued', next_sync_at: new Date().toISOString(), documents_count: 0, embeddings_count: 0, topics_json: [...new Set([...topics, ...extraTopics])], schedule_json: { interval_hours: Number(intervalHours) } }, ...current]);
+        setUrl(''); setTopics([]); setCustomTopics(''); setMessage('Источник добавлен. LocalOS начал собирать публичные материалы.');
+        return;
+      }
+      const payload = await fetch(`/api/business/${encodeURIComponent(businessId)}/community-sources`, {
+        method: 'POST', headers: headers(), body: JSON.stringify({ url: url.trim(), topics: [...new Set([...topics, ...extraTopics])], interval_hours: Number(intervalHours) }),
       }).then(read);
-      setUrl('');
-      setTopics('');
-      setMessage('Источник добавлен. LocalOS начал собирать публичные материалы.');
+      setUrl(''); setTopics([]); setCustomTopics('');
+      setMessage(typeof payload.message === 'string' ? payload.message : 'Источник добавлен. LocalOS начал собирать публичные материалы.');
       await load();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Не удалось добавить источник');
-    } finally { setBusy(''); }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось добавить источник'); }
+    finally { setBusy(''); }
   };
 
-  const remove = async (sourceId: string) => {
+  const startEditing = (item: CommunitySource) => {
+    setEditingId(item.id);
+    setEditTopics((item.topics_json || []).join(', '));
+    setEditInterval(String(item.schedule_json?.interval_hours || 24));
+    setMessage(''); setError('');
+  };
+
+  const save = async (sourceId: string) => {
     if (!businessId) return;
-    setBusy(sourceId); setError('');
+    setBusy(`save:${sourceId}`); setError(''); setMessage('');
     try {
+      if (businessId === 'preview') {
+        setItems((current) => current.map((item) => item.id === sourceId ? { ...item, topics_json: editTopics.split(',').map((topic) => topic.trim()).filter(Boolean), schedule_json: { interval_hours: Number(editInterval) } } : item));
+        setEditingId(''); setMessage('Настройки сохранены. Новый график уже учтён.');
+        return;
+      }
+      await fetch(`/api/business/${encodeURIComponent(businessId)}/community-sources/${encodeURIComponent(sourceId)}`, {
+        method: 'PATCH', headers: headers(), body: JSON.stringify({ topics: editTopics.split(',').map((item) => item.trim()).filter(Boolean), interval_hours: Number(editInterval) }),
+      }).then(read);
+      setEditingId(''); setMessage('Настройки сохранены. Новый график уже учтён.');
+      await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось сохранить настройки'); }
+    finally { setBusy(''); }
+  };
+
+  const remove = async () => {
+    if (!businessId || !removeId) return;
+    const sourceId = removeId;
+    setBusy(`remove:${sourceId}`); setError('');
+    try {
+      if (businessId === 'preview') {
+        setItems((current) => current.filter((item) => item.id !== sourceId));
+        setRemoveId(''); setEditingId(''); setMessage('Источник больше не влияет на ваш «Пульс сообщества».');
+        return;
+      }
       await fetch(`/api/business/${encodeURIComponent(businessId)}/community-sources/${encodeURIComponent(sourceId)}`, { method: 'DELETE', headers: headers() }).then(read);
       setItems((current) => current.filter((item) => item.id !== sourceId));
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Не удалось отключить источник');
-    } finally { setBusy(''); }
+      setRemoveId(''); setEditingId(''); setMessage('Источник больше не влияет на ваш «Пульс сообщества».');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось отключить источник'); }
+    finally { setBusy(''); }
   };
 
-  if (!businessId) return <div className="rounded-[22px] bg-amber-400/10 p-4 text-sm text-amber-100 ring-1 ring-inset ring-amber-300/20">Выберите конкретный бизнес, чтобы настроить его источники.</div>;
+  if (!businessId) return <div className="rounded-[22px] bg-amber-400/10 p-4 text-sm text-amber-100 shadow-[0_0_0_1px_rgba(252,211,77,0.2)]">Выберите конкретный бизнес, чтобы настроить его источники.</div>;
 
-  return <div className="space-y-5">
-    <section className="rounded-[24px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]">
+  return <div className="space-y-6">
+    <section className="rounded-[26px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_22px_70px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.08)]">
       <span className="grid h-11 w-11 place-items-center rounded-[15px] bg-primary/15 text-primary"><Radio className="h-5 w-5" /></span>
-      <h2 className="mt-4 text-balance text-lg font-semibold">Добавьте источники, за которыми важно следить</h2>
-      <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">LocalOS соберёт публичные посты, найдёт повторяющиеся темы и покажет их в «Пульсе сообщества». Личные и закрытые чаты не собираются.</p>
-      <form onSubmit={add} className="mt-4">
-        <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://t.me/channel" inputMode="url" className="min-h-12 w-full rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] placeholder:text-zinc-700 focus:ring-primary/50" />
-        <input value={topics} onChange={(event) => setTopics(event.target.value)} placeholder="Темы через запятую — необязательно" className="mt-2 min-h-12 w-full rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] placeholder:text-zinc-700 focus:ring-primary/50" />
-        <label className="mt-2 flex min-h-12 items-center gap-3 rounded-2xl bg-black/20 px-4 text-xs text-zinc-500 ring-1 ring-inset ring-white/[0.07]"><span className="flex-1">Проверять источник</span><select value={intervalHours} onChange={(event) => setIntervalHours(event.target.value)} className="bg-transparent text-right text-zinc-200 outline-none"><option value="6">каждые 6 часов</option><option value="12">каждые 12 часов</option><option value="24">раз в день</option><option value="72">раз в 3 дня</option><option value="168">раз в неделю</option></select></label>
-        <button type="submit" disabled={busy === 'add' || !url.trim()} className="mt-2 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold transition-transform active:scale-[0.96] disabled:opacity-45">{busy === 'add' ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="h-4 w-4" />}{busy === 'add' ? 'Проверяем источник…' : 'Добавить источник'}</button>
+      <h2 className="mt-4 text-balance text-xl font-semibold tracking-[-0.03em]">За чем следить?</h2>
+      <p className="mt-2 text-pretty text-sm leading-6 text-zinc-500">LocalOS соберёт публичные посты, найдёт повторяющиеся темы и покажет главное на экране «Сегодня».</p>
+      <form onSubmit={add} className="mt-5">
+        <label className="text-xs font-medium text-zinc-400"><span className="mb-2 block px-1">Ссылка на публичный канал или группу</span><input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://t.me/channel" inputMode="url" autoCapitalize="none" className="min-h-12 w-full rounded-2xl bg-black/20 px-4 text-sm text-zinc-100 outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
+        <details className="mt-3 rounded-[18px] bg-black/15 shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 px-4 text-xs font-semibold text-zinc-400"><span className="flex-1">Уточнить темы и график</span><ChevronRight className="h-4 w-4" /></summary>
+          <div className="border-t border-white/[0.055] p-3">
+            <p className="px-1 text-[11px] leading-4 text-zinc-600">Какие темы важнее всего?</p>
+            <div className="mt-2 flex flex-wrap gap-2">{topicPresets.map((topic) => { const selected = topics.includes(topic); return <button key={topic} type="button" aria-pressed={selected} onClick={() => setTopics((current) => selected ? current.filter((item) => item !== topic) : [...current, topic])} className={`min-h-11 rounded-[14px] px-3 text-xs font-medium transition-[background-color,color,transform] active:scale-[0.96] ${selected ? 'bg-primary/15 text-primary shadow-[0_0_0_1px_rgba(255,92,51,0.25)]' : 'bg-white/[0.04] text-zinc-500 shadow-[0_0_0_1px_rgba(255,255,255,0.06)]'}`}>{topic}</button>; })}</div>
+            <input value={customTopics} onChange={(event) => setCustomTopics(event.target.value)} placeholder="Другие темы через запятую" className="mt-3 min-h-12 w-full rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] placeholder:text-zinc-700 focus:ring-primary/50" />
+            <label className="mt-3 block text-[11px] text-zinc-600"><span className="mb-1.5 block px-1">Как часто проверять</span><select value={intervalHours} onChange={(event) => setIntervalHours(event.target.value)} className="min-h-12 w-full rounded-2xl bg-zinc-900 px-4 text-sm text-zinc-200 outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50">{intervalOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          </div>
+        </details>
+        <button type="submit" disabled={busy === 'add' || !url.trim()} className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold shadow-[0_12px_32px_rgba(255,92,51,0.24)] transition-[filter,transform] active:scale-[0.96] disabled:opacity-45">{busy === 'add' ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="h-4 w-4" />}{busy === 'add' ? 'Проверяем доступность…' : 'Начать следить'}</button>
       </form>
-      <p className="mt-3 text-pretty text-[11px] leading-4 text-zinc-600">Сбор публичных материалов и поиск по ним бесплатны. Кредиты понадобятся только для персонального анализа и генерации.</p>
+      <p className="mt-3 text-pretty text-[11px] leading-4 text-zinc-600">Сбор публичных материалов и поиск бесплатны. Личные и закрытые чаты не собираются.</p>
     </section>
-    <AnimatePresence initial={false}>{message ? <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex gap-3 rounded-[18px] bg-emerald-400/10 p-4 text-xs text-emerald-100 ring-1 ring-inset ring-emerald-300/20"><Check className="h-4 w-4 shrink-0" />{message}</motion.div> : null}</AnimatePresence>
-    {error ? <div className="flex gap-3 rounded-[18px] bg-rose-400/10 p-4 text-xs text-rose-100 ring-1 ring-inset ring-rose-300/20"><CircleAlert className="h-4 w-4 shrink-0" />{error}</div> : null}
-    <section><div className="flex items-end justify-between px-1"><h2 className="text-lg font-semibold">Отслеживаем</h2><span className="text-xs tabular-nums text-zinc-600">{items.length}</span></div>
-      {loading ? <div className="mt-3 space-y-2">{[1, 2].map((item) => <div key={item} className="h-28 animate-pulse rounded-[22px] bg-white/[0.04] motion-reduce:animate-none" />)}</div> : items.length ? <div className="mt-3 space-y-2">{items.map((item) => <article key={item.id} className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><span className="mt-0.5 h-2 w-2 rounded-full bg-emerald-400" /><div className="min-w-0 flex-1"><b className="block truncate text-sm">{item.title || 'Источник Telegram'}</b><p className="mt-1 truncate text-[11px] text-zinc-600">{item.canonical_url}</p></div>{item.canonical_url ? <a href={item.canonical_url} target="_blank" rel="noreferrer" aria-label="Открыть источник" className="grid h-11 w-11 place-items-center text-zinc-500"><ExternalLink className="h-4 w-4" /></a> : null}</div><div className="mt-3 grid grid-cols-2 gap-2 rounded-[15px] bg-black/20 p-3 text-[10px] text-zinc-600"><span>Материалов <b className="ml-1 tabular-nums text-zinc-300">{item.documents_count || 0}</b></span><span>Поиск готов <b className="ml-1 tabular-nums text-zinc-300">{item.embeddings_count || 0}</b></span><span className="col-span-2">Последний сбор: {dateLabel(item.last_collected_at)}</span><span className="col-span-2">Следующая проверка: {dateLabel(item.next_sync_at)}</span>{item.topics_json?.length ? <span className="col-span-2 truncate">Темы: {item.topics_json.join(', ')}</span> : null}</div><button type="button" disabled={busy === item.id} onClick={() => void remove(item.id)} className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] text-xs font-semibold text-zinc-600 ring-1 ring-inset ring-white/[0.06] active:scale-[0.96]"><Trash2 className="h-4 w-4" />Не отслеживать</button></article>)}</div> : <div className="mt-3 rounded-[22px] bg-white/[0.025] p-6 text-center text-xs leading-5 text-zinc-600 ring-1 ring-inset ring-white/[0.06]">Добавьте первый отраслевой канал или публичный канал бизнеса.</div>}
+
+    <AnimatePresence initial={false}>{message ? <motion.div initial={{ opacity: 0, y: 6, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0 }} transition={spring} className="flex gap-3 rounded-[18px] bg-emerald-400/10 p-4 text-xs leading-5 text-emerald-100 shadow-[0_0_0_1px_rgba(110,231,183,0.2)]"><motion.span initial={{ scale: 0.25, opacity: 0, filter: 'blur(4px)' }} animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }} transition={spring}><Check className="h-4 w-4" /></motion.span>{message}</motion.div> : null}</AnimatePresence>
+    {error ? <div role="alert" className="flex gap-3 rounded-[18px] bg-rose-400/10 p-4 text-xs leading-5 text-rose-100 shadow-[0_0_0_1px_rgba(251,113,133,0.2)]"><CircleAlert className="h-4 w-4 shrink-0" />{error}</div> : null}
+
+    <section>
+      <div className="flex min-h-11 items-center justify-between gap-3 px-1"><div><h2 className="text-balance text-lg font-semibold">В работе</h2><p className="mt-1 text-xs text-zinc-600">Источники, за которыми следит LocalOS</p></div><span className="text-sm tabular-nums text-zinc-500">{items.length}</span></div>
+      {loading ? <div className="mt-3 space-y-2" aria-busy="true">{[1, 2].map((item) => <div key={item} className="h-40 animate-pulse rounded-[24px] bg-white/[0.04] motion-reduce:animate-none" />)}</div> : items.length ? <div className="mt-3 space-y-3">{items.map((item) => { const status = statusMeta(item); const editing = editingId === item.id; return <motion.article layout key={item.id} className="rounded-[24px] bg-white/[0.04] p-4 shadow-[0_16px_50px_rgba(0,0,0,0.16),0_0_0_1px_rgba(255,255,255,0.07)]">
+        <div className="flex items-start gap-3"><span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${status.dot}`} /><div className="min-w-0 flex-1"><b className="block truncate text-sm">{item.title || 'Источник Telegram'}</b><p className="mt-1 truncate text-[11px] text-zinc-600">{item.canonical_url}</p></div>{item.canonical_url ? <a href={item.canonical_url} target="_blank" rel="noreferrer" aria-label="Открыть источник" className="grid h-11 w-11 place-items-center rounded-[14px] text-zinc-500 transition-[background-color,transform] active:scale-[0.96]"><ExternalLink className="h-4 w-4" /></a> : null}</div>
+        <div className="mt-3 border-y border-white/[0.055] py-3"><div className="flex items-start justify-between gap-4"><div><b className="block text-xs text-zinc-300">{status.label}</b><p className="mt-1 text-pretty text-[11px] leading-4 text-zinc-600">{status.text}</p></div><span className="shrink-0 text-right"><b className="block text-sm tabular-nums text-zinc-300">{item.documents_count || 0}</b><small className="text-[9px] text-zinc-700">материалов</small></span></div>{item.last_sync_error ? <p className="mt-2 text-pretty text-[10px] leading-4 text-rose-300">{item.last_sync_error}</p> : null}</div>
+        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[10px] leading-4 text-zinc-600"><span><b className="block font-medium text-zinc-400">Последний сбор</b>{dateLabel(item.last_collected_at)}</span><span><b className="block font-medium text-zinc-400">Следующий</b>{dateLabel(item.next_sync_at)}</span><span className="col-span-2"><b className="font-medium text-zinc-400">Ваш график:</b> {intervalLabel(item.schedule_json?.interval_hours)}</span>{item.topics_json?.length ? <span className="col-span-2 text-pretty"><b className="font-medium text-zinc-400">Темы:</b> {item.topics_json.join(', ')}</span> : null}</div>
+        <AnimatePresence initial={false}>{editing ? <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={spring} className="overflow-hidden"><div className="mt-4 border-t border-white/[0.055] pt-4"><label className="text-[11px] text-zinc-600"><span className="mb-1.5 block px-1">Темы через запятую</span><input value={editTopics} onChange={(event) => setEditTopics(event.target.value)} className="min-h-12 w-full rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /></label><label className="mt-3 block text-[11px] text-zinc-600"><span className="mb-1.5 block px-1">Как часто проверять</span><select value={editInterval} onChange={(event) => setEditInterval(event.target.value)} className="min-h-12 w-full rounded-2xl bg-zinc-900 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07]">{intervalOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><div className="mt-3 grid grid-cols-[1fr_48px] gap-2"><button type="button" disabled={busy === `save:${item.id}`} onClick={() => void save(item.id)} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold transition-transform active:scale-[0.96] disabled:opacity-45">{busy === `save:${item.id}` ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}Сохранить</button><button type="button" aria-label="Не отслеживать" onClick={() => setRemoveId(item.id)} className="grid h-12 w-12 place-items-center rounded-2xl text-rose-300 shadow-[0_0_0_1px_rgba(251,113,133,0.16)] transition-transform active:scale-[0.96]"><Trash2 className="h-4 w-4" /></button></div></div></motion.div> : null}</AnimatePresence>
+        {!editing ? <button type="button" onClick={() => startEditing(item)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-white/[0.045] text-xs font-semibold text-zinc-400 shadow-[0_0_0_1px_rgba(255,255,255,0.06)] transition-[background-color,transform] active:scale-[0.96]"><Pencil className="h-4 w-4" />Настроить</button> : null}
+      </motion.article>; })}</div> : <div className="mt-3 rounded-[24px] bg-white/[0.025] p-7 text-center shadow-[0_0_0_1px_rgba(255,255,255,0.06)]"><Radio className="mx-auto h-7 w-7 text-zinc-700" /><b className="mt-3 block">Пульс пока не настроен</b><p className="mx-auto mt-2 max-w-xs text-pretty text-xs leading-5 text-zinc-600">Добавьте первый отраслевой канал или публичный канал бизнеса по ссылке выше.</p></div>}
     </section>
+
+    <AnimatePresence initial={false}>{removeId ? <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setRemoveId('')}><motion.section role="dialog" aria-modal="true" aria-labelledby="remove-source-title" onClick={(event) => event.stopPropagation()} className="w-full max-w-xl rounded-[28px] bg-zinc-900 p-5 shadow-[0_28px_100px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.1)]" initial={{ y: 32 }} animate={{ y: 0 }} exit={{ y: 24 }} transition={spring}><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-rose-400/10 text-rose-300"><Trash2 className="h-5 w-5" /></span><div className="min-w-0 flex-1"><h2 id="remove-source-title" className="text-balance text-lg font-semibold">Перестать следить?</h2><p className="mt-1 text-pretty text-xs leading-5 text-zinc-500">Источник исчезнет из вашего «Пульса». Уже собранные публичные материалы не удаляются.</p></div><button type="button" aria-label="Закрыть" onClick={() => setRemoveId('')} className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-zinc-500 active:scale-[0.96]"><X className="h-4 w-4" /></button></div><div className="mt-5 grid grid-cols-2 gap-2"><button type="button" onClick={() => setRemoveId('')} className="min-h-12 rounded-2xl bg-white/[0.05] text-sm font-semibold shadow-[0_0_0_1px_rgba(255,255,255,0.07)] active:scale-[0.96]">Оставить</button><button type="button" disabled={busy === `remove:${removeId}`} onClick={() => void remove()} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-rose-500 text-sm font-semibold active:scale-[0.96] disabled:opacity-50">{busy === `remove:${removeId}` ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : null}Не отслеживать</button></div></motion.section></motion.div> : null}</AnimatePresence>
   </div>;
 };
