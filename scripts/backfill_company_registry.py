@@ -45,6 +45,7 @@ def main() -> int:
         "leads_with_strong_identity": 0,
         "leads_without_strong_identity": 0,
         "public_rows_without_company_location": {},
+        "tables_unavailable": [],
         "legacy_public_telegram_source_groups": 0,
         "errors": [],
     }
@@ -140,8 +141,26 @@ def main() -> int:
                 cursor.execute("ROLLBACK TO SAVEPOINT company_registry_lead")
                 cursor.execute("RELEASE SAVEPOINT company_registry_lead")
                 report["errors"].append({"lead_id": lead.get("id"), "error": str(exc)})
+        public_tables = (
+            "parsequeue",
+            "cards",
+            "externalbusinessreviews",
+            "externalbusinessposts",
+            "externalbusinessphotos",
+            "externalbusinessstats",
+            "businessmetricshistory",
+        )
+        available_public_tables = []
+        for public_table in public_tables:
+            cursor.execute("SELECT to_regclass(%s) AS table_name", (f"public.{public_table}",))
+            table_row = cursor.fetchone()
+            table_name = table_row.get("table_name") if hasattr(table_row, "get") else table_row[0]
+            if not table_name:
+                report["tables_unavailable"].append(public_table)
+                continue
+            available_public_tables.append(public_table)
         if args.apply:
-            for public_table in ("parsequeue", "cards", "externalbusinessreviews", "externalbusinessposts", "externalbusinessphotos", "externalbusinessstats", "businessmetricshistory"):
+            for public_table in available_public_tables:
                 cursor.execute(
                     f"""
                     UPDATE {public_table} public_row
@@ -153,6 +172,12 @@ def main() -> int:
                     """
                 )
             for audit_table in ("adminprospectingleadpublicoffers", "sales_room_audit_offers"):
+                cursor.execute("SELECT to_regclass(%s) AS table_name", (f"public.{audit_table}",))
+                table_row = cursor.fetchone()
+                table_name = table_row.get("table_name") if hasattr(table_row, "get") else table_row[0]
+                if not table_name:
+                    report["tables_unavailable"].append(audit_table)
+                    continue
                 cursor.execute(
                     f"""
                     UPDATE {audit_table} audit
@@ -164,19 +189,29 @@ def main() -> int:
                       AND lead.company_id IS NOT NULL
                     """
                 )
-            cursor.execute(
-                """
-                UPDATE partnership_partner_cards card
-                SET company_id = lead.company_id,
-                    company_location_id = lead.company_location_id,
-                    updated_at = NOW()
-                FROM prospectingleads lead
-                WHERE card.lead_id = lead.id
-                  AND card.company_id IS NULL
-                  AND lead.company_id IS NOT NULL
-                """
+            cursor.execute("SELECT to_regclass('public.partnership_partner_cards') AS table_name")
+            partnership_table_row = cursor.fetchone()
+            partnership_table_name = (
+                partnership_table_row.get("table_name")
+                if hasattr(partnership_table_row, "get")
+                else partnership_table_row[0]
             )
-        for public_table in ("parsequeue", "cards", "externalbusinessreviews", "externalbusinessposts", "externalbusinessphotos", "externalbusinessstats", "businessmetricshistory"):
+            if partnership_table_name:
+                cursor.execute(
+                    """
+                    UPDATE partnership_partner_cards card
+                    SET company_id = lead.company_id,
+                        company_location_id = lead.company_location_id,
+                        updated_at = NOW()
+                    FROM prospectingleads lead
+                    WHERE card.lead_id = lead.id
+                      AND card.company_id IS NULL
+                      AND lead.company_id IS NOT NULL
+                    """
+                )
+            else:
+                report["tables_unavailable"].append("partnership_partner_cards")
+        for public_table in available_public_tables:
             cursor.execute(f"SELECT COUNT(*) AS count FROM {public_table} WHERE company_location_id IS NULL")
             missing_row = cursor.fetchone()
             report["public_rows_without_company_location"][public_table] = int((missing_row.get("count") if hasattr(missing_row, "get") else missing_row[0]) or 0)
