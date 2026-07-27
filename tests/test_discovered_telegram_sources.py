@@ -155,6 +155,8 @@ def test_residential_source_is_saved_as_recipient_radar_source(monkeypatch):
         connection,
         {
             "id": "lead-legenda-yakhtennaya",
+            "company_id": "company-legenda",
+            "company_location_id": "location-legenda",
             "name": "Legenda на Яхтенной, 24",
             "category": "Жилой комплекс",
             "messenger_links_json": ["https://t.me/LegendaDevelopment"],
@@ -164,12 +166,25 @@ def test_residential_source_is_saved_as_recipient_radar_source(monkeypatch):
     assert result == {"references": 1, "sources": 1, "queued": 1}
     assert saved_sources[0]["title"] == "Telegram ЖК · @LegendaDevelopment"
     assert saved_sources[0]["source_role"] == "community"
-    assert saved_sources[0]["business_id"] == "business-oliver"
-    assert saved_sources[0]["metadata"]["source_owner_type"] == "residential_complex"
-    assert saved_sources[0]["metadata"]["sender_business_is_owner"] is False
+    assert saved_sources[0]["business_id"] is None
+    assert saved_sources[0]["account_id"] is None
+    assert saved_sources[0]["external_key"] == "telegram-public:legendadevelopment"
+    assert saved_sources[0]["sync_status"] == "queued"
+    assert saved_sources[0]["metadata"]["permission_reason"] == "public_preview_ready"
     assert any(
         "INSERT INTO lead_signal_links" in query
         for query, _params in connection.cursor_instance.executions
+    )
+    company_links = [
+        params
+        for query, params in connection.cursor_instance.executions
+        if "INSERT INTO company_social_source_links" in query
+    ]
+    assert len(company_links) == 1
+    assert company_links[0][1:4] == (
+        "company-legenda",
+        "location-legenda",
+        "source-legenda",
     )
 
 
@@ -178,6 +193,70 @@ def test_private_invites_shares_and_bots_are_not_channel_candidates():
     assert parse_telegram_reference("https://t.me/share/url?url=https://localos.pro") is None
     assert parse_telegram_reference("https://example.com/localos") is None
     assert parse_telegram_reference("https://t.me/localos_helper_bot")["kind"] == "bot"
+
+
+def test_existing_public_channel_is_reused_across_lead_workstreams(monkeypatch):
+    class Cursor:
+        def __init__(self):
+            self.last_query = ""
+            self.executions = []
+
+        def execute(self, query, params=None):
+            self.last_query = query
+            self.executions.append((query, params or ()))
+
+        def fetchall(self):
+            if "FROM lead_workstreams" in self.last_query:
+                return [{
+                    "id": "workstream-two",
+                    "workstream_type": "client_partnership",
+                    "client_business_id": "business-two",
+                }]
+            return []
+
+        def fetchone(self):
+            if "FROM knowledge_sources" in self.last_query:
+                return {
+                    "id": "shared-source",
+                    "status": "active",
+                    "canonical_url": "https://t.me/city_business",
+                }
+            return None
+
+        def close(self):
+            return None
+
+    class Connection:
+        def __init__(self):
+            self.cursor_instance = Cursor()
+
+        def cursor(self, **_kwargs):
+            return self.cursor_instance
+
+    def fail_upsert(*_args, **_kwargs):
+        raise AssertionError("A duplicate source must not be created")
+
+    monkeypatch.setattr(
+        "services.discovered_telegram_source_service.upsert_source",
+        fail_upsert,
+    )
+    connection = Connection()
+    result = sync_discovered_telegram_sources(
+        connection,
+        {
+            "id": "lead-two",
+            "name": "Second company",
+            "messenger_links_json": ["https://t.me/city_business/42"],
+        },
+    )
+
+    assert result == {"references": 1, "sources": 1, "queued": 0}
+    lead_link_params = [
+        params
+        for query, params in connection.cursor_instance.executions
+        if "INSERT INTO lead_signal_links" in query
+    ]
+    assert lead_link_params[0][2] == "shared-source"
 
 
 def test_only_specific_fresh_channel_posts_become_personalization_signals():
@@ -229,29 +308,31 @@ def test_only_specific_fresh_channel_posts_become_personalization_signals():
     assert signals[0]["sender_business_is_owner"] is False
 
 
-def test_monitor_requires_radar_permission_and_preflights_auto_discovered_sources():
+def test_monitor_collects_global_public_sources_without_tenant_permission():
     source = Path("src/services/knowledge_public_telegram.py").read_text(encoding="utf-8")
 
-    assert "JOIN telegram_account_permissions permission" in source
-    assert "permission.radar_enabled = TRUE" in source
+    monitor_query = source[source.index("def run_public_telegram_monitor"):]
+    assert "JOIN telegram_account_permissions permission" not in monitor_query
     assert "source.status = 'candidate'" in source
     assert "mark_discovered_source_classification" in source
     assert "inspect_telegram_entity" in source
+    assert "public_preview" in source
     assert 'classification_method="telegram_entity_api"' in source
 
 
-def test_discovery_is_scoped_and_linked_to_workstream():
+def test_discovery_is_global_and_linked_to_workstream():
     source = Path("src/services/discovered_telegram_source_service.py").read_text(encoding="utf-8")
     migration = Path(
         "alembic_migrations/versions/20260720_link_discovered_telegram_sources.py"
     ).read_text(encoding="utf-8")
 
-    assert "sender.scope_type = %s" in source
-    assert "COALESCE(sender.business_id, '') = COALESCE(%s, '')" in source
+    assert 'external_key=f"telegram-public:{reference[' in source
+    assert "business_id=None" in source
+    assert "account_id=None" in source
     assert "telegram_knowledge_source" in source
     assert "telegram_knowledge_source" in migration
-    assert "radar_permission_required" in source
-    assert "telegram_account_required" in source
+    assert "public_preview_ready" in source
+    assert "company_social_source_links" in source
     assert "source.allowed_uses @>" in source
     assert "source.allowed_uses ?" not in source
 

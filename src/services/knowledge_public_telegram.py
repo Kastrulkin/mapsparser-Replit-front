@@ -127,11 +127,7 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
     cursor.execute(
         """
         SELECT source.* FROM knowledge_sources source
-        LEFT JOIN telegram_account_permissions permission
-          ON permission.account_id = source.account_id
-         AND permission.radar_enabled = TRUE
         WHERE source.source_type = 'telegram'
-          AND (source.sync_mode = 'public_preview' OR permission.radar_enabled = TRUE)
           AND (
                 source.status = 'active'
                 OR (
@@ -171,7 +167,11 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
             metadata = source.get("metadata_json") if isinstance(source.get("metadata_json"), dict) else {}
             entity_inspection: dict[str, Any] | None = None
             entity_error = ""
-            if auto_discovered and metadata.get("classification_method") != "telegram_entity_api":
+            if (
+                auto_discovered
+                and source.get("account_id")
+                and metadata.get("classification_method") != "telegram_entity_api"
+            ):
                 try:
                     entity_inspection = _inspect_source_entity(conn, source)
                 except Exception as error:
@@ -197,9 +197,19 @@ def run_public_telegram_monitor(conn, *, limit_sources: int = 10) -> dict[str, A
             inspection = inspect_public_channel(str(source.get("canonical_url") or ""))
             if auto_discovered and entity_inspection is None and metadata.get("classification_method") != "telegram_entity_api":
                 if not inspection.get("is_public_channel"):
-                    raise RuntimeError(
-                        f"telegram_entity_and_public_preview_unavailable:{entity_error or 'not_public_channel'}"
+                    from services.discovered_telegram_source_service import mark_discovered_source_classification
+
+                    mark_discovered_source_classification(
+                        conn,
+                        source_id=str(source["id"]),
+                        is_public_channel=False,
+                        username=str(metadata.get("telegram_username") or "").strip(),
+                        signal_source_eligible=False,
+                        recipient_eligible=False,
+                        classification_method="public_preview",
+                        reason=str(inspection.get("reason") or entity_error or "not_public_channel"),
                     )
+                    continue
                 from services.discovered_telegram_source_service import mark_discovered_source_classification
 
                 username = str(metadata.get("telegram_username") or "").strip()

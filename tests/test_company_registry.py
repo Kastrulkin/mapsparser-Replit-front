@@ -67,4 +67,5 @@ def test_public_telegram_collection_is_global_and_subscriptions_are_tenant_scope
     assert "knowledge_source_subscriptions" in api
     assert "business_id=None" in api
     assert "visibility=\"public\"" in api
-    assert "LEFT JOIN telegram_account_permissions" in monitor
+    assert "LEFT JOIN telegram_account_permissions" not in monitor
+    assert "source.sync_mode = 'public_preview'" in monitor

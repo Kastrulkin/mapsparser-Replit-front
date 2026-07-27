@@ -1,4 +1,4 @@
-"""Turn public Telegram links found during lead parsing into scoped evidence sources."""
+"""Turn public Telegram links found during enrichment into shared evidence sources."""
 
 from __future__ import annotations
 
@@ -142,39 +142,159 @@ def parse_telegram_reference(value: Any) -> dict[str, str] | None:
     }
 
 
-def _scoped_radar_account(cursor: Any, workstream: dict[str, Any]) -> dict[str, Any]:
-    scope_type = "platform" if workstream.get("workstream_type") == "localos_sales" else "business"
-    business_id = None if scope_type == "platform" else str(workstream.get("client_business_id") or "").strip()
+def _existing_public_source(cursor: Any, canonical_url: str) -> dict[str, Any]:
     cursor.execute(
         """
-        SELECT sender.external_account_id AS account_id,
-               COALESCE(permission.radar_enabled, FALSE) AS radar_enabled
-        FROM outreach_sender_accounts sender
-        JOIN externalbusinessaccounts account
-          ON account.id = sender.external_account_id
-         AND account.source = 'telegram_app'
-         AND account.is_active = TRUE
-        LEFT JOIN telegram_account_permissions permission
-          ON permission.account_id = sender.external_account_id
-        WHERE sender.scope_type = %s
-          AND COALESCE(sender.business_id, '') = COALESCE(%s, '')
-          AND sender.channel = 'telegram'
-          AND sender.status = 'connected'
-        ORDER BY COALESCE(permission.radar_enabled, FALSE) DESC,
-                 sender.updated_at DESC,
-                 sender.id
+        SELECT *
+        FROM knowledge_sources
+        WHERE source_type = 'telegram'
+          AND visibility = 'public'
+          AND sensitivity_class = 'public'
+          AND LOWER(RTRIM(canonical_url, '/')) = LOWER(RTRIM(%s, '/'))
+        ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'candidate' THEN 1 ELSE 2 END,
+                 last_collected_at DESC NULLS LAST,
+                 created_at
         LIMIT 1
         """,
-        (scope_type, business_id),
+        (canonical_url,),
     )
-    row = cursor.fetchone()
-    account = _row_dict(row, cursor)
-    return {
-        "scope_type": scope_type,
-        "business_id": business_id,
-        "account_id": str(account.get("account_id") or "").strip() or None,
-        "radar_enabled": bool(account.get("radar_enabled")),
-    }
+    return _row_dict(cursor.fetchone(), cursor)
+
+
+def _register_global_public_source(
+    conn: Any,
+    cursor: Any,
+    *,
+    lead: dict[str, Any],
+    reference: dict[str, str],
+    discovery_origin: str,
+) -> dict[str, Any]:
+    """Reuse a public Telegram source globally, independent of a tenant account."""
+    cursor.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended(LOWER(RTRIM(%s, '/')), 0))",
+        (reference["canonical_url"],),
+    )
+    existing = _existing_public_source(cursor, reference["canonical_url"])
+    if existing:
+        cursor.execute(
+            """
+            UPDATE knowledge_sources
+            SET business_id = NULL,
+                account_id = NULL,
+                visibility = 'public',
+                sensitivity_class = 'public',
+                sync_mode = 'public_preview',
+                sync_status = CASE WHEN status = 'active' THEN sync_status ELSE 'queued' END,
+                next_sync_at = CASE
+                    WHEN status = 'active' THEN next_sync_at
+                    ELSE LEAST(COALESCE(next_sync_at, NOW()), NOW())
+                END,
+                metadata_json = metadata_json || %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (
+                Json({
+                    "auto_discovered": True,
+                    "discovery_origin": discovery_origin,
+                    "telegram_username": reference["username"],
+                    "permission_reason": "public_preview_ready",
+                }),
+                existing["id"],
+            ),
+        )
+        return existing
+
+    shared_service = SHARED_SERVICE_TELEGRAM_SOURCES.get(reference["username"].lower())
+    attribution = (
+        {
+            "source_owner": shared_service.get("owner"),
+            "source_owner_type": "external_service",
+            "source_owner_role": "service_provider",
+            "source_owner_scope": "shared_service",
+        }
+        if shared_service
+        else {"source_owner_type": "unconfirmed_public_source"}
+    )
+    residential_source = source_attribution_for_lead(lead).get("source_owner_type") == "residential_complex"
+    return upsert_source(
+        conn,
+        source_type="telegram",
+        external_key=f"telegram-public:{reference['username'].lower()}",
+        title=(
+            str(shared_service["title"])
+            if shared_service
+            else f"Telegram ЖК · @{reference['username']}"
+            if residential_source
+            else f"Telegram · @{reference['username']}"
+        ),
+        canonical_url=reference["canonical_url"],
+        source_role="service" if shared_service else "community",
+        visibility="public",
+        sensitivity_class="public",
+        allowed_uses=[
+            "market",
+            "outreach",
+            "localos_content",
+            "client_content",
+            "industry_recommendations",
+        ],
+        status="candidate",
+        metadata={
+            "auto_discovered": True,
+            "discovery_origin": discovery_origin,
+            "added_manually": discovery_origin == "manual_lead_contact",
+            "telegram_username": reference["username"],
+            "telegram_reference_type": "public_reference_unverified",
+            "permission_reason": "public_preview_ready",
+            **attribution,
+        },
+        business_id=None,
+        account_id=None,
+        sync_mode="public_preview",
+        sync_status="queued",
+        backfill_days=180,
+    )
+
+
+def _link_source_to_company(
+    cursor: Any,
+    *,
+    lead: dict[str, Any],
+    source_id: str,
+    reference: dict[str, str],
+    discovery_origin: str,
+) -> None:
+    company_id = str(lead.get("company_id") or "").strip()
+    if not company_id:
+        return
+    company_location_id = str(lead.get("company_location_id") or "").strip() or None
+    cursor.execute(
+        """
+        INSERT INTO company_social_source_links (
+            id, company_id, company_location_id, source_id, relation_type,
+            confidence, verification_status, evidence_json, created_at, updated_at
+        ) VALUES (%s, %s, %s, %s, 'unconfirmed', 0.6500, 'observed', %s, NOW(), NOW())
+        ON CONFLICT (company_id, source_id, relation_type) DO UPDATE SET
+            company_location_id = COALESCE(EXCLUDED.company_location_id, company_social_source_links.company_location_id),
+            confidence = GREATEST(company_social_source_links.confidence, EXCLUDED.confidence),
+            evidence_json = company_social_source_links.evidence_json || EXCLUDED.evidence_json,
+            updated_at = NOW()
+        """,
+        (
+            str(uuid.uuid4()),
+            company_id,
+            company_location_id,
+            source_id,
+            Json({
+                "lead_id": str(lead.get("id") or ""),
+                "discovery_origin": discovery_origin,
+                "discovered_url": reference.get("discovered_url"),
+                "canonical_url": reference.get("canonical_url"),
+                "relation_claim": "unconfirmed_until_verified",
+            }),
+        ),
+    )
 
 
 def sync_discovered_telegram_sources(
@@ -184,7 +304,7 @@ def sync_discovered_telegram_sources(
     *,
     discovery_origin: str = "map_parse",
 ) -> dict[str, int]:
-    """Idempotently register public Telegram references for every lead workstream."""
+    """Register public Telegram references once and link them to lead contexts."""
     lead_id = str(lead.get("id") or "").strip()
     if not lead_id:
         return {"references": 0, "sources": 0, "queued": 0}
@@ -220,98 +340,25 @@ def sync_discovered_telegram_sources(
         workstreams = [_row_dict(row, cursor) for row in cursor.fetchall() or []]
         sources_saved = 0
         queued = 0
-        for workstream in workstreams:
-            scope = _scoped_radar_account(cursor, workstream)
-            permission_reason = (
-                "ready"
-                if scope["radar_enabled"]
-                else "radar_permission_required" if scope["account_id"] else "telegram_account_required"
+        for reference in references.values():
+            shared_service = SHARED_SERVICE_TELEGRAM_SOURCES.get(reference["username"].lower())
+            source = _register_global_public_source(
+                conn,
+                cursor,
+                lead=lead,
+                reference=reference,
+                discovery_origin=discovery_origin,
             )
-            for reference in references.values():
-                external_scope = scope["business_id"] or "platform"
-                shared_service = SHARED_SERVICE_TELEGRAM_SOURCES.get(
-                    reference["username"].lower()
-                )
-                attribution = (
-                    {
-                        "source_owner": shared_service.get("owner"),
-                        "source_owner_type": "external_service",
-                        "source_owner_role": "service_provider",
-                        "source_owner_scope": "shared_service",
-                        "sender_business_is_owner": False,
-                        "lead_attribution": "shared_service",
-                    }
-                    if shared_service
-                    else source_attribution_for_lead(lead)
-                )
-                residential_source = attribution.get("source_owner_type") == "residential_complex"
-                source = upsert_source(
-                    conn,
-                    source_type="telegram",
-                    external_key=f"lead-parse:{scope['scope_type']}:{external_scope}:{reference['username'].lower()}",
-                    title=(
-                        str(shared_service["title"])
-                        if shared_service
-                        else f"Telegram ЖК · @{reference['username']}"
-                        if residential_source
-                        else f"Telegram · {str(lead.get('name') or reference['username']).strip()}"
-                    ),
-                    canonical_url=reference["canonical_url"],
-                    source_role="service" if shared_service else "community",
-                    visibility="public",
-                    sensitivity_class="public",
-                    allowed_uses=["market", "outreach"],
-                    status="candidate",
-                    metadata={
-                        "auto_discovered": True,
-                        "discovery_origin": discovery_origin,
-                        "added_manually": discovery_origin == "manual_lead_contact",
-                        "telegram_username": reference["username"],
-                        "telegram_reference_type": "public_reference_unverified",
-                        "permission_reason": permission_reason,
-                        **attribution,
-                    },
-                    business_id=scope["business_id"],
-                    account_id=scope["account_id"],
-                    sync_mode="public_preview",
-                    sync_status="queued" if scope["radar_enabled"] else "needs_account",
-                    backfill_days=180,
-                )
-                source_metadata = source.get("metadata_json") if isinstance(source.get("metadata_json"), dict) else {}
-                verified_signal_source = bool(
-                    source_metadata.get("classification_method") == "telegram_entity_api"
-                    and source_metadata.get("signal_source_eligible") is True
-                )
-                cursor.execute(
-                    """
-                    UPDATE knowledge_sources
-                    SET status = CASE WHEN %s THEN 'active' ELSE status END,
-                        account_id = COALESCE(%s, account_id),
-                        sync_status = CASE
-                            WHEN %s AND %s THEN 'ready'
-                            WHEN %s THEN 'idle'
-                            WHEN status = 'candidate' AND %s THEN 'queued'
-                            WHEN status = 'candidate' THEN 'needs_account'
-                            ELSE sync_status
-                        END,
-                        next_sync_at = CASE WHEN %s THEN COALESCE(next_sync_at, NOW()) ELSE next_sync_at END,
-                        metadata_json = metadata_json || %s,
-                        updated_at = NOW()
-                    WHERE id = %s
-                    """,
-                    (
-                        verified_signal_source,
-                        scope["account_id"],
-                        verified_signal_source,
-                        scope["radar_enabled"],
-                        verified_signal_source,
-                        scope["radar_enabled"],
-                        scope["radar_enabled"],
-                        Json({"permission_reason": permission_reason}),
-                        source["id"],
-                    ),
-                )
-                if not shared_service:
+            source_id = str(source["id"])
+            _link_source_to_company(
+                cursor,
+                lead=lead,
+                source_id=source_id,
+                reference=reference,
+                discovery_origin=discovery_origin,
+            )
+            if not shared_service:
+                for workstream in workstreams:
                     cursor.execute(
                         """
                         INSERT INTO lead_signal_links (
@@ -320,10 +367,10 @@ def sync_discovered_telegram_sources(
                         ON CONFLICT (workstream_id, source_type, source_id)
                         DO UPDATE SET updated_at = NOW()
                         """,
-                        (str(uuid.uuid4()), workstream["id"], str(source["id"])),
+                        (str(uuid.uuid4()), workstream["id"], source_id),
                     )
-                sources_saved += 1
-                queued += 1 if scope["radar_enabled"] else 0
+            sources_saved += 1
+            queued += 1 if str(source.get("status") or "candidate") != "active" else 0
         return {"references": len(references), "sources": sources_saved, "queued": queued}
     finally:
         cursor.close()
@@ -494,16 +541,15 @@ def discovered_telegram_signals(
         JOIN knowledge_documents document
           ON document.source_id = source.id
          AND document.invalidated_at IS NULL
-        JOIN telegram_account_permissions permission
-          ON permission.account_id = source.account_id
-         AND permission.radar_enabled = TRUE
         WHERE link.workstream_id = %s
           AND link.source_type = 'telegram_knowledge_source'
           AND link.status = 'selected'
           AND source.status = 'active'
           AND source.sync_status = 'ready'
           AND source.visibility = 'public'
+          AND source.sensitivity_class = 'public'
           AND source.sync_mode = 'public_preview'
+          AND COALESCE((source.metadata_json->>'signal_source_eligible')::boolean, TRUE) = TRUE
           AND source.allowed_uses @> '["outreach"]'::jsonb
           AND document.document_type = 'telegram_message'
           AND document.published_at >= NOW() - INTERVAL '180 days'
