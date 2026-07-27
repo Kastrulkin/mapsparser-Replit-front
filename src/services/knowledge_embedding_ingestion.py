@@ -398,12 +398,13 @@ def ingest_company_profiles(conn, *, limit: int = 1000) -> int:
             content_text=body,
             published_at=row.get("source_updated_at"),
             sensitivity_class="public",
-            pii_flags=flags,
+            pii_flags=[flag for flag in flags if flag != "secret"],
             allowed_uses=USES,
             metadata={
                 "company_id": str(row["id"]),
                 "first_seen_source": row.get("first_seen_source"),
                 "provenance_included": True,
+                "source_text_redacted": bool(flags),
             },
         )
     return len(rows)
