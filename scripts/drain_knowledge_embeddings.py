@@ -15,7 +15,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--max-batches", type=int, default=2000)
-    parser.add_argument("--pause-seconds", type=float, default=0.5)
+    parser.add_argument("--pause-seconds", type=float, default=10.0)
     args = parser.parse_args()
     database = DatabaseManager()
     processed = 0
@@ -34,7 +34,10 @@ def main() -> None:
                 )
             if result.get("status") in {"idle", "disabled", "balance_guard"}:
                 break
-            time.sleep(max(0.0, min(args.pause_seconds, 30.0)))
+            pause_seconds = max(0.0, min(args.pause_seconds, 30.0))
+            if result.get("status") == "failed":
+                pause_seconds = max(pause_seconds, 10.0)
+            time.sleep(pause_seconds)
     except Exception:
         database.conn.rollback()
         raise
