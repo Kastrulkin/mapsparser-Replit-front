@@ -16,6 +16,7 @@ OPERATOR_EVENT_TYPES = {
     "operator_manual_action_presented",
     "operator_manual_publish_marked",
     "operator_message_received",
+    "operator_mobile_interaction",
     "operator_paid_action_estimated",
     "operator_review_added",
     "operator_tool_executed",

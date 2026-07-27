@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import localOsLogo from '@/assets/images/logo.png';
 import { PartnershipsMobileModule } from '@/components/telegram/PartnershipsMobileModule';
+import { ProgressMobileModule, type ProgressPayload } from '@/components/telegram/ProgressMobileModule';
+import { TodayMobileV2, type TodayPayload } from '@/components/telegram/TodayMobileV2';
 
 type Scope = {
   kind: 'platform' | 'network' | 'business';
@@ -60,6 +62,7 @@ type Bootstrap = {
   catalog?: Catalog;
   web_session_token?: string;
   navigation?: NavigationItem[];
+  today_v2_enabled?: boolean;
 };
 
 type NavigationItem = { key: string; label: string; group: 'primary' | 'more'; status: 'available' | 'read_only' | 'hidden' };
@@ -132,6 +135,7 @@ declare global {
 
 const previewBootstrap: Bootstrap = {
   success: true,
+  today_v2_enabled: true,
   selected_scope: { kind: 'business', id: 'preview', name: 'Весёлая расчёска', business_ids: ['preview'], can_switch: true },
   summary: {
     attention_items: [
@@ -153,6 +157,7 @@ const previewBootstrap: Bootstrap = {
     { key: 'tasks', label: 'Задачи', group: 'primary', status: 'available' },
     { key: 'reviews', label: 'Отзывы', group: 'primary', status: 'available' },
     { key: 'operator', label: 'Оператор', group: 'primary', status: 'available' },
+    { key: 'progress', label: 'Прогресс', group: 'more', status: 'available' },
     { key: 'cards', label: 'Карточки', group: 'more', status: 'read_only' },
     { key: 'content', label: 'Контент', group: 'more', status: 'available' },
     { key: 'services', label: 'Услуги', group: 'more', status: 'available' },
@@ -186,6 +191,35 @@ const previewFinanceDashboard: FinanceDashboardMobile = {
   workplaces: [{ name: 'Кресло 1', type: 'Кресло', revenue: 520000, occupancy: 0.76, idle_hours: 45 }],
 };
 
+const previewToday: TodayPayload = {
+  scope: previewBootstrap.selected_scope,
+  focus_action: {
+    id: 'reviews_unanswered',
+    title: 'Ответьте на четыре новых отзыва',
+    reason: 'Клиенты уже ждут реакции, а LocalOS собрал отзывы в одну очередь.',
+    expected_outcome: 'Клиенты увидят, что бизнес внимательно относится к обратной связи.',
+    cta_label: 'Открыть отзывы',
+    screen: 'reviews',
+    count: 4,
+  },
+  active_work: [{ id: 'work-1', title: 'Обновляет данные карточки', stage: 'Собирает данные Яндекса и 2ГИС', progress: 65, screen: 'cards', business_name: 'Весёлая расчёска' }],
+  changes_24h: [{ id: 'change-1', title: 'Загружено новых отзывов: 6', description: 'Отзывы появились в LocalOS после последнего сбора данных.', source: 'Отзывы с карт', occurred_at: new Date().toISOString(), screen: 'reviews' }],
+  community_pulse: [{ id: 'pulse-1', title: 'Подорожание красителей', description: 'За сутки тема повторилась в 21 сообщении из 3 источников.', message_count: 21, sources_count: 3, source_name: 'Beauty Owners Chat', source_url: 'https://t.me/', last_discussed_at: new Date().toISOString() }],
+  completed_results: [{ id: 'result-1', title: 'Подготовлено два черновика публикаций', description: 'Тексты готовы к проверке — публикации ещё не выполнялись.', source: 'Контент LocalOS', occurred_at: new Date().toISOString(), screen: 'content' }],
+  progress_summary: { completed_milestones: 7, total_milestones: 15, percent: 47 },
+  as_of: new Date().toISOString(),
+};
+
+const previewProgress: ProgressPayload = {
+  status: 'available',
+  focus_action: previewToday.focus_action,
+  summary: { completed_milestones: 7, total_milestones: 15, active_areas: 4, needs_attention: 2, completed_last_30_days: 5, percent: 47 },
+  areas: [
+    { key: 'maps', label: 'Карты и репутация', status: 'needs_attention', summary: 'Карточка обновляется, новые отзывы ждут ответа.', problem: 'Без ответа осталось четыре отзыва.', progress: { completed: 3, total: 4 }, milestones: [{ key: 'map-linked', label: 'Карточка подключена', status: 'done', evidence: 'Яндекс и 2ГИС доступны LocalOS.' }, { key: 'reviews', label: 'Ответить на новые отзывы', status: 'next' }], action: { cta_label: 'Открыть отзывы', screen: 'reviews' } },
+    { key: 'content', label: 'Контент', status: 'in_progress', summary: 'План создан, два черновика готовы.', progress: { completed: 2, total: 3 }, milestones: [{ key: 'plan', label: 'Контент-план создан', status: 'done' }, { key: 'publish', label: 'Подтвердить первую публикацию', status: 'next' }], action: { cta_label: 'Открыть контент', screen: 'content' } },
+  ],
+};
+
 const spring = { type: 'spring', duration: 0.3, bounce: 0 };
 const webApp = () => window.Telegram?.WebApp;
 const isPreview = () => ['localhost', '127.0.0.1'].includes(window.location.hostname) && new URLSearchParams(window.location.search).get('preview') === '1';
@@ -217,6 +251,11 @@ export const TelegramControlPage = () => {
   const initData = webApp()?.initData || '';
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(preview ? previewBootstrap : null);
   const [workspace, setWorkspace] = useState<Workspace | null>(preview ? { items: previewBootstrap.summary?.attention_items, summary: previewBootstrap.summary } : null);
+  const [todayData, setTodayData] = useState<TodayPayload | null>(preview ? previewToday : null);
+  const [todayLoading, setTodayLoading] = useState(!preview);
+  const [todaySlowLoading, setTodaySlowLoading] = useState(false);
+  const [progressData, setProgressData] = useState<ProgressPayload | null>(preview ? previewProgress : null);
+  const [progressLoading, setProgressLoading] = useState(false);
   const [tab, setTab] = useState<Tab>('today');
   const [module, setModule] = useState('');
   const [loading, setLoading] = useState(!preview);
@@ -243,6 +282,7 @@ export const TelegramControlPage = () => {
   const [moduleLoading, setModuleLoading] = useState(false);
   const [moduleSaving, setModuleSaving] = useState(false);
   const [moduleActionBusy, setModuleActionBusy] = useState('');
+  const trackedTodayScope = useRef('');
 
   const scope = bootstrap?.selected_scope || bootstrap?.summary?.scope;
   const summary = workspace?.summary || bootstrap?.summary;
@@ -259,6 +299,28 @@ export const TelegramControlPage = () => {
     setWorkspace(result);
   };
 
+  const loadToday = async (nextScope?: Scope, enabled = bootstrap?.today_v2_enabled !== false, quietly = false) => {
+    if (preview || !enabled) return;
+    if (!quietly) setTodayLoading(true);
+    const timer = window.setTimeout(() => setTodaySlowLoading(true), 400);
+    try {
+      const params = scopeQuery(nextScope || scope);
+      const result = await fetch(`/api/operator/mobile/today?${params.toString()}`, { headers: authHeaders() }).then(readJson<TodayPayload>);
+      setTodayData(result); setError('');
+    } catch (requestError) {
+      if (!quietly) setError(requestError instanceof Error ? requestError.message : 'Не удалось собрать картину дня.');
+    } finally {
+      window.clearTimeout(timer); setTodaySlowLoading(false); if (!quietly) setTodayLoading(false);
+    }
+  };
+
+  const trackMobileInteraction = (eventName: string, target = '') => {
+    if (preview) return;
+    void fetch('/api/operator/mobile/interaction', {
+      method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null, event_name: eventName, screen: tab, target }),
+    }).catch(() => undefined);
+  };
+
   const loadBootstrap = async (query = '') => {
     if (preview) return;
     if (!initData) { setLoading(false); return; }
@@ -269,7 +331,7 @@ export const TelegramControlPage = () => {
       }).then(readJson<Bootstrap>);
       if (result.web_session_token) window.sessionStorage.setItem('localos_mini_session', result.web_session_token);
       setBootstrap(result);
-      if (!query) await loadWorkspace(result.selected_scope);
+      if (!query) await Promise.all([loadWorkspace(result.selected_scope), loadToday(result.selected_scope, result.today_v2_enabled !== false)]);
       setError('');
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Не удалось открыть LocalOS.');
@@ -294,16 +356,18 @@ export const TelegramControlPage = () => {
   }, [module, picker, tab]);
 
   const chooseScope = async (kind: string, id?: string | null) => {
-    if (preview) { setPicker(false); return; }
+    if (preview) { setPicker(false); return true; }
     setLoading(true);
     try {
       const result = await fetch('/api/operator/telegram/scope', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ init_data: initData, scope_type: kind, scope_id: id || null }),
       }).then(readJson<Bootstrap>);
       setBootstrap((current) => ({ ...current, ...result, catalog: current?.catalog }));
-      await loadWorkspace(result.selected_scope);
+      await Promise.all([loadWorkspace(result.selected_scope), loadToday(result.selected_scope, result.today_v2_enabled !== false)]);
+      setProgressData(null);
       setPicker(false); setTab('today'); setError('');
-    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось сменить бизнес.'); }
+      return true;
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось сменить бизнес.'); return false; }
     finally { setLoading(false); }
   };
 
@@ -344,6 +408,15 @@ export const TelegramControlPage = () => {
     if (!moduleKey || preview) return;
     if (!quietly) setModuleLoading(true);
     const params = scopeQuery(scope);
+    if (moduleKey === 'progress') {
+      if (!quietly) setProgressLoading(true);
+      await fetch(`/api/operator/mobile/progress?${params.toString()}`, { headers: authHeaders() })
+        .then(readJson<ProgressPayload>)
+        .then((result) => { setProgressData(result); setError(''); })
+        .catch((requestError) => setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить прогресс.'))
+        .finally(() => { if (!quietly) { setModuleLoading(false); setProgressLoading(false); } });
+      return;
+    }
     const load = (key: string) => fetch(`/api/operator/mobile/modules/${key}?${params.toString()}`, { headers: authHeaders() }).then(readJson<ModuleData>);
     await load(moduleKey)
       .then((result) => { setModuleData(result); setError(''); })
@@ -356,6 +429,19 @@ export const TelegramControlPage = () => {
     if (preview) { setModuleData(previewModules[module] || {}); return; }
     void loadModule(module);
   }, [module, scope?.kind, scope?.id]);
+
+  useEffect(() => {
+    if (tab !== 'today' || !bootstrap?.today_v2_enabled || !todayData?.active_work?.length) return;
+    const timer = window.setInterval(() => void loadToday(scope, true, true), 20000);
+    return () => window.clearInterval(timer);
+  }, [tab, bootstrap?.today_v2_enabled, scope?.kind, scope?.id, todayData?.active_work?.length]);
+
+  useEffect(() => {
+    const scopeKey = `${scope?.kind || ''}:${scope?.id || ''}`;
+    if (tab !== 'today' || !bootstrap?.today_v2_enabled || !todayData?.as_of || trackedTodayScope.current === scopeKey) return;
+    trackedTodayScope.current = scopeKey;
+    trackMobileInteraction('today_open');
+  }, [tab, bootstrap?.today_v2_enabled, scope?.kind, scope?.id, todayData?.as_of]);
 
   const updateService = async (item: ModuleItem, values: { name: string; description: string; price: string; category: string }) => {
     if (!item.id || preview) return;
@@ -416,6 +502,19 @@ export const TelegramControlPage = () => {
   const openTask = (item: AttentionItem) => {
     if (item.target_scope?.id) { void chooseScope('business', item.target_scope.id); return; }
     if (String(item.id || '').includes('review')) setTab('reviews'); else setTab('tasks');
+  };
+
+  const openMobileTarget = (screen = 'tasks', targetScope?: { kind?: string; id?: string }) => {
+    const navigate = () => {
+      if (isTab(screen) && screen !== 'more') { setModule(''); setTab(screen); return; }
+      const destination = screen === 'analytics' ? 'finance' : screen;
+      setTab('more'); setModule(destination || 'tasks');
+    };
+    if (targetScope?.id && (targetScope.id !== scope?.id || targetScope.kind !== scope?.kind)) {
+      void chooseScope(targetScope.kind || 'business', targetScope.id).then((changed) => { if (changed) navigate(); });
+      return;
+    }
+    navigate();
   };
 
   const askOperator = async (event: FormEvent) => {
@@ -518,12 +617,12 @@ export const TelegramControlPage = () => {
         <AnimatePresence initial={false} mode="wait">
           <motion.div key={`${tab}-${module}-${picker}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={spring}>
             {picker ? <ScopePicker catalog={catalog} search={search} setSearch={setSearch} choose={chooseScope} /> : null}
-            {!picker && tab === 'today' ? <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} /> : null}
+            {!picker && tab === 'today' ? bootstrap?.today_v2_enabled !== false ? <TodayMobileV2 data={todayData} loading={todayLoading} slowLoading={todaySlowLoading} command={command} setCommand={setCommand} ask={askOperator} openTarget={openMobileTarget} openProgress={() => openMobileTarget(scope?.kind === 'platform' ? 'tasks' : 'progress')} track={trackMobileInteraction} /> : <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} /> : null}
             {!picker && tab === 'tasks' ? <Tasks items={tasks} filter={taskFilter} setFilter={setTaskFilter} openTask={openTask} /> : null}
             {!picker && tab === 'reviews' ? <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
             {!picker && tab === 'operator' ? <Operator messages={messages} busy={operatorBusy} command={command} setCommand={setCommand} ask={askOperator} openScreen={(screen) => { if (isTab(screen) && screen !== 'more') setTab(screen); }} /> : null}
             {!picker && tab === 'more' && !module ? <More navigation={moreNavigation} onOpen={setModule} /> : null}
-            {!picker && tab === 'more' && module ? <ModuleScreen module={module} scope={scope} data={moduleData} loading={moduleLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTasks={() => { setModule(''); setTab('tasks'); }} openSettings={() => setModule('settings')} back={() => setModule('')} /> : null}
+            {!picker && tab === 'more' && module ? <ModuleScreen module={module} scope={scope} data={moduleData} loading={moduleLoading} progressData={progressData} progressLoading={progressLoading} saving={moduleSaving} actionBusy={moduleActionBusy} saveNotifications={saveNotifications} updateService={updateService} generateContentDraft={generateContentDraft} updateContentItem={updateContentItem} reload={() => loadModule(module)} openTarget={openMobileTarget} track={trackMobileInteraction} openTasks={() => { setModule(''); setTab('tasks'); }} openSettings={() => setModule('settings')} back={() => setModule('')} /> : null}
           </motion.div>
         </AnimatePresence>
         <AnimatePresence initial={false}>{actionPreview ? <ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirm={() => void confirmSelectedReviews()} cancel={() => setActionPreview(null)} /> : null}</AnimatePresence>
@@ -600,7 +699,7 @@ const ResponseBox = ({ label, text }: { label: string; text: string }) => <div c
 
 const Operator = ({ messages, busy, command, setCommand, ask, openScreen }: { messages: OperatorMessage[]; busy: boolean; command: string; setCommand: (value: string) => void; ask: (event: FormEvent) => void; openScreen: (screen: string) => void }) => <Screen title="Оператор" subtitle="Опишите, какой результат нужен. LocalOS разберётся, что открыть или подготовить."><div className="min-h-[42vh] space-y-3">{messages.length ? messages.map((message, index) => <div key={message.id || `${message.role}-${index}`} className={`max-w-[88%] rounded-[20px] px-4 py-3 text-sm leading-6 ${message.role === 'user' ? 'ml-auto bg-primary text-white' : 'bg-white/[0.05] text-zinc-300 ring-1 ring-inset ring-white/[0.07]'}`}><p className="whitespace-pre-wrap">{message.text}</p>{message.role === 'operator' && message.status === 'completed' ? <small className="mt-2 block text-[10px] text-zinc-600">Готово</small> : null}{message.role === 'operator' && message.screen && ['today', 'tasks', 'reviews'].includes(message.screen) ? <button type="button" onClick={() => openScreen(message.screen || 'tasks')} className="mt-3 min-h-11 w-full rounded-[14px] bg-white/[0.05] text-xs font-semibold text-zinc-200 ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]">Открыть результат</button> : null}</div>) : <Empty icon={Bot} title="Что поручить?" text="Например: «Подготовь ответы на плохие отзывы» или «Проверь свежесть карточки»." />}{busy ? <div className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none" />Разбираюсь и собираю результат…</div> : null}</div><form onSubmit={ask} className="sticky bottom-24 mt-4 flex gap-2 rounded-[20px] bg-zinc-900 p-2 ring-1 ring-inset ring-white/[0.08]"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Напишите задачу" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-700" /><button aria-label="Отправить задачу" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary active:scale-[0.96]"><Send className="h-4 w-4" /></button></form></Screen>;
 
-const moduleIcons: Record<string, typeof Star> = { cards: MapPinned, content: FileText, services: LayoutGrid, finance: CreditCard, analytics: BarChart3, partnerships: Users, agents: Bot, settings: Settings, diagnostics: ShieldCheck };
+const moduleIcons: Record<string, typeof Star> = { progress: TrendingUp, cards: MapPinned, content: FileText, services: LayoutGrid, finance: CreditCard, analytics: BarChart3, partnerships: Users, agents: Bot, settings: Settings, diagnostics: ShieldCheck };
 const More = ({ navigation, onOpen }: { navigation: NavigationItem[]; onOpen: (key: string) => void }) => {
   return <Screen title="Ещё" subtitle="Результаты бизнеса и рабочие инструменты LocalOS.">
     <section><div className="grid grid-cols-2 gap-2">{navigation.map((item) => { const Icon = moduleIcons[item.key] || CircleEllipsis; return <button key={item.key} onClick={() => onOpen(item.key)} className="min-h-32 rounded-[22px] bg-white/[0.04] p-4 text-left ring-1 ring-inset ring-white/[0.07] transition-[background-color,transform] active:scale-[0.96]"><span className="grid h-10 w-10 place-items-center rounded-[14px] bg-primary/12 text-primary"><Icon className="h-5 w-5" /></span><b className="mt-4 block text-sm">{item.label}</b><small className="mt-1 block text-pretty leading-4 text-zinc-600">{moduleNames[item.key]?.[1] || (item.status === 'read_only' ? 'Просмотр данных' : '')}</small></button>; })}</div></section>
@@ -608,26 +707,29 @@ const More = ({ navigation, onOpen }: { navigation: NavigationItem[]; onOpen: (k
 };
 
 const moduleNames: Record<string, [string, string]> = {
+  progress: ['Прогресс', 'Подтверждённый путь роста и один следующий шаг.'],
   cards: ['Карточки', 'Актуальность данных и ошибки подключений.'], content: ['Контент', 'Планы, новости, посты и готовые черновики.'], services: ['Услуги', 'Список, цены и предложения по улучшению.'],
   finance: ['Финансы', 'Обзор, учёт, услуги, команда, рабочие места и импорт.'], analytics: ['Аналитика', 'Выручка, заказы и динамика без перехода в веб-кабинет.'], partnerships: ['Партнёрства', 'Лиды, черновики, ответы и контроль отправок.'], agents: ['ИИ-сотрудники', 'Состояние, история и результаты фоновой работы.'], settings: ['Настройки', 'Уведомления, подключения, тариф и доступ.'], diagnostics: ['Диагностика', 'Технические очереди и ошибки — только для суперадмина.'],
 };
 
 type ModuleScreenProps = {
-  module: string; scope?: Scope; data: ModuleData; loading: boolean; saving: boolean; actionBusy: string;
+  module: string; scope?: Scope; data: ModuleData; loading: boolean; progressData?: ProgressPayload | null; progressLoading: boolean; saving: boolean; actionBusy: string;
   saveNotifications: (preferences: NotificationPreferences) => Promise<void>;
   updateService: (item: ModuleItem, values: { name: string; description: string; price: string; category: string }) => Promise<void>;
   generateContentDraft: (item: ModuleItem) => Promise<void>;
   updateContentItem: (item: ModuleItem, values: { theme: string; draft_text: string; scheduled_for: string }) => Promise<void>;
   reload: () => Promise<void>;
+  openTarget: (screen?: string, targetScope?: { kind?: string; id?: string }) => void;
+  track: (eventName: string, target?: string) => void;
   openTasks: () => void;
   openSettings: () => void;
   back: () => void;
 };
 
-const ModuleScreen = ({ module, scope, data, loading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTasks, openSettings, back }: ModuleScreenProps) => {
+const ModuleScreen = ({ module, scope, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTarget, track, openTasks, openSettings, back }: ModuleScreenProps) => {
   const content = moduleNames[module] || ['Раздел', 'Рабочая очередь LocalOS.'];
   return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
-    {loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'finance' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} openSettings={openSettings} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <GenericModule module={module} items={data.items || []} />}
+    {module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'finance' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} openSettings={openSettings} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <GenericModule module={module} items={data.items || []} />}
   </Screen>;
 };
 

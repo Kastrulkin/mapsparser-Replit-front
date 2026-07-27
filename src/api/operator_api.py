@@ -39,6 +39,7 @@ from services.operator_manual_review import process_operator_chat_message
 from services.operator_manual_publish import mark_review_reply_draft_manual_published
 from services.operator_mobile_actions import confirm_mobile_action, create_mobile_action_preview
 from services.operator_mobile_modules import list_operator_mobile_module
+from services.operator_mobile_today import build_mobile_progress, build_mobile_today
 from services.operator_news_generation import classify_news_generate_intent, generate_news_draft_from_operator
 from services.operator_paid_executor import build_paid_action_execution_attempt
 from services.operator_paid_preflight import build_paid_action_preflight
@@ -85,6 +86,7 @@ def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
         {"key": "tasks", "label": "Задачи", "group": "primary", "status": "available"},
         {"key": "reviews", "label": "Отзывы", "group": "primary", "status": "available"},
         {"key": "operator", "label": "Оператор", "group": "primary", "status": "available"},
+        {"key": "progress", "label": "Прогресс", "group": "more", "status": "hidden" if kind == "platform" else "available"},
         {"key": "cards", "label": "Карточки", "group": "more", "status": "available"},
         {"key": "content", "label": "Контент", "group": "more", "status": "available"},
         {"key": "services", "label": "Услуги", "group": "more", "status": "available"},
@@ -339,6 +341,7 @@ def operator_telegram_bootstrap():
                 "deep_link_targets": [item["key"] for item in _mobile_navigation(selected or {}, bool(user.get("is_superadmin"))) if item.get("status") != "hidden"],
                 "web_session_token": web_session_token,
                 "mini_app_v2_enabled": str(os.getenv("TELEGRAM_MINI_APP_V2_ENABLED", "true")).lower() in {"1", "true", "yes", "on"},
+                "today_v2_enabled": str(os.getenv("TELEGRAM_MINI_APP_TODAY_V2_ENABLED", "true")).lower() in {"1", "true", "yes", "on"},
                 "navigation": _mobile_navigation(selected or {}, bool(user.get("is_superadmin"))),
             }
         )
@@ -1838,6 +1841,96 @@ def operator_mobile_workspace():
             "summary": summary,
             "navigation": _mobile_navigation(scope, bool(user_data.get("is_superadmin"))),
         })
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/today", methods=["GET"])
+def operator_mobile_today():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    if str(os.getenv("TELEGRAM_MINI_APP_TODAY_V2_ENABLED", "true")).lower() not in {"1", "true", "yes", "on"}:
+        return jsonify({"success": False, "error": "Новый экран пока не включён"}), 404
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        payload = build_mobile_today(cursor, scope=scope, user_id=user_id)
+        return jsonify({"success": True, **payload})
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/progress", methods=["GET"])
+def operator_mobile_progress():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        payload = build_mobile_progress(cursor, scope=scope, user_id=user_id)
+        if payload.get("status") == "hidden":
+            return jsonify({"success": False, "error": "Прогресс доступен после выбора бизнеса или сети"}), 409
+        return jsonify({"success": True, **payload})
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/interaction", methods=["POST"])
+def operator_mobile_interaction():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    payload = request.get_json(silent=True) or {}
+    event_name = str(payload.get("event_name") or "").strip()
+    allowed_events = {
+        "today_open",
+        "today_focus_open",
+        "today_delegate_open",
+        "today_pulse_open",
+        "today_progress_open",
+        "progress_action_open",
+    }
+    if event_name not in allowed_events:
+        return jsonify({"success": False, "error": "Событие не поддерживается"}), 400
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        business_ids = [str(item) for item in scope.get("business_ids") or [] if str(item)]
+        business_id = str(scope.get("id") or "") if scope.get("kind") == "business" else (business_ids[0] if business_ids else "")
+        record_operator_event(
+            cursor,
+            business_id=business_id,
+            user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
+            event_type="operator_mobile_interaction",
+            channel="telegram_mini_app",
+            action_key=event_name,
+            status="completed",
+            input_summary={"screen": payload.get("screen")},
+            output_summary={"target": payload.get("target")},
+            metadata={
+                "event_name": event_name,
+                "scope_type": scope.get("kind"),
+                "scope_id": scope.get("id"),
+            },
+        )
+        db.conn.commit()
+        return jsonify({"success": True})
+    except Exception:
+        db.conn.rollback()
+        raise
     finally:
         db.close()
 
