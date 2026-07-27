@@ -58,6 +58,7 @@ type TouchPreview = {
   id?: string;
   sequence_index: number;
   channel: string;
+  sender_account_id?: string | null;
   day_offset: number;
   angle: string;
   subject?: string | null;
@@ -821,11 +822,40 @@ export function OutreachCampaignBuilder({
               </Badge>
             ))}
           </div>
+          {Object.entries(preview.channel_availability).some(([, item]) => !['ready', 'manual'].includes(String(item.status || ''))) ? (
+            <div className="space-y-2 rounded-xl bg-amber-50 p-3 shadow-[0_0_0_1px_rgba(245,158,11,0.22)]">
+              <div className="text-sm font-semibold text-amber-950">Что нужно настроить</div>
+              {Object.entries(preview.channel_availability).map(([channel, item]) => {
+                const status = String(item.status || '');
+                if (['ready', 'manual'].includes(status)) return null;
+                const channelLabel = channel === 'vk' ? 'VK' : channel === 'email' ? 'Email' : channel === 'telegram' ? 'Telegram' : channel;
+                const message = channel === 'vk' && status === 'permission_required'
+                  ? 'VK подключён, но отправка запрещена'
+                  : status === 'sender_selection_required'
+                    ? `${channelLabel}: выберите отправителя для каждого касания`
+                    : `${channelLabel}: ${CHANNEL_STATUS_LABELS[status] || 'канал пока не готов'}`;
+                return (
+                  <div key={`${channel}-${status}`} className="flex flex-col gap-2 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-pretty leading-5">{message}</span>
+                    {channel === 'vk' && status === 'permission_required' ? (
+                      <a
+                        href={`/dashboard/settings/integrations?focus=vk&sender_scope=${businessId ? 'business' : 'platform'}&return_to=${encodeURIComponent('/dashboard/partnerships')}`}
+                        className="inline-flex min-h-10 shrink-0 items-center gap-1 font-semibold text-orange-700 transition-colors hover:text-orange-800"
+                      >
+                        Разрешить отправку в VK
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
           {[0, 1, 2, 3].map((touchIndex) => {
             const channel = channels[touchIndex];
             const availability = preview.channel_availability?.[channel];
             const accounts = availability?.sender_accounts || [];
-            if (!['telegram', 'email', 'vk'].includes(channel) || accounts.length <= 1) return null;
+            if (!['telegram', 'email', 'vk'].includes(channel) || accounts.length === 0) return null;
             return (
               <label key={`${channel}-${touchIndex}`} className="block rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-950">
                 Отправитель для касания {touchIndex + 1} · {channel}

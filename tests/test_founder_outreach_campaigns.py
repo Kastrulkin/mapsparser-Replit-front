@@ -1890,3 +1890,31 @@ def test_saved_campaign_hydrates_schedule_form_and_calendar_from_same_version():
     assert "setSequenceStartAt" in load_block
     assert "setCampaignSetupDirty(false)" in load_block
     assert ".sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0]" in load_block
+
+
+def test_channel_setup_blocker_names_vk_permission_and_links_to_exact_setting():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    assert "VK подключён, но отправка запрещена" in source
+    assert "Разрешить отправку в VK" in source
+    assert "focus=vk" in source
+    assert "sender_scope=${selectedSenderScope}" in source
+    assert "return_to=${encodeURIComponent" in source
+
+
+def test_single_available_sender_can_be_selected_for_every_automatic_touch():
+    sources = [
+        (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text(),
+        (ROOT / "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx").read_text(),
+    ]
+
+    for source in sources:
+        assert "accounts.length <= 1" not in source
+        assert "accounts.length === 0" in source or "!accounts.length" in source
+
+
+def test_sender_settings_no_longer_describe_vk_as_manual_only():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    assert "MAX, VK и WhatsApp остаются ручными" not in source
+    assert "VK отправляется автоматически после отдельного разрешения" in source

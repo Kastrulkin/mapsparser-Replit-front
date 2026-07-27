@@ -379,6 +379,14 @@ interface PilotReadiness {
   }>;
 }
 
+interface ChannelSetupBlocker {
+  key: string;
+  label: string;
+  actionLabel: string;
+  target: string;
+  actionHref?: string;
+}
+
 interface LeadWorkstream {
   id?: string | null;
   workstream_type: WorkstreamType;
@@ -1024,13 +1032,51 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     : ['Сигнал', 'Опыт основателя', 'Кейс или материал', 'Завершение'];
   const latestCampaignFirstTouch = (savedOutreachCampaign?.touches || [])
     .find((touch) => Number(touch.sequence_index || 0) === 0);
-  const savedCampaignNeedsChannelSetup = (savedOutreachCampaign?.touches || []).some((touch) => {
+  const savedCampaignChannelBlockers: ChannelSetupBlocker[] = [];
+  for (const touch of savedOutreachCampaign?.touches || []) {
     const channel = String(touch.channel || '');
     const channelStatus = String(touch.message_brief_json?.channel_status || '');
-    return ['telegram', 'email', 'vk'].includes(channel)
-      ? !touch.sender_account_id || channelStatus !== 'ready'
-      : channelStatus !== 'manual';
-  });
+    const touchNumber = Number(touch.sequence_index || 0) + 1;
+    const channelLabel = contactTypeLabels[channel] || channel.toUpperCase();
+    if (['telegram', 'email', 'vk'].includes(channel)) {
+      if (channelStatus === 'ready' && touch.sender_account_id) continue;
+      if (channel === 'vk' && channelStatus === 'permission_required') {
+        savedCampaignChannelBlockers.push({
+          key: `${touchNumber}-${channel}`,
+          label: `Касание ${touchNumber} · VK: VK подключён, но отправка запрещена`,
+          actionLabel: 'Разрешить отправку в VK',
+          target: 'sender-settings',
+          actionHref: `/dashboard/settings/integrations?focus=vk&sender_scope=${selectedSenderScope}&return_to=${encodeURIComponent(`/dashboard/bazich?lead=${selectedLead?.id || ''}&workstream=${selectedWorkstream?.id || ''}`)}`,
+        });
+        continue;
+      }
+      if (!touch.sender_account_id || channelStatus === 'sender_selection_required') {
+        savedCampaignChannelBlockers.push({
+          key: `${touchNumber}-${channel}`,
+          label: `Касание ${touchNumber} · ${channelLabel}: выберите отправителя`,
+          actionLabel: `Выбрать отправителя для касания ${touchNumber}`,
+          target: 'outreach-sequence',
+        });
+        continue;
+      }
+      savedCampaignChannelBlockers.push({
+        key: `${touchNumber}-${channel}`,
+        label: `Касание ${touchNumber} · ${channelLabel}: канал пока не готов`,
+        actionLabel: `Настроить ${channelLabel}`,
+        target: 'sender-settings',
+      });
+      continue;
+    }
+    if (channelStatus !== 'manual') {
+      savedCampaignChannelBlockers.push({
+        key: `${touchNumber}-${channel}`,
+        label: `Касание ${touchNumber} · ${channelLabel}: настройте ручную отправку`,
+        actionLabel: `Проверить касание ${touchNumber}`,
+        target: 'outreach-sequence',
+      });
+    }
+  }
+  const savedCampaignNeedsChannelSetup = savedCampaignChannelBlockers.length > 0;
   const pilotAlreadySent = (savedOutreachCampaign?.touches || []).some((touch) => (
     ['manual_sent', 'sent', 'delivered'].includes(String(touch.status || ''))
   ));
@@ -1058,7 +1104,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     : savedOutreachCampaign
       ? `Версия ${Number(savedOutreachCampaign.version || 0)} · ${savedOutreachCampaign.status === 'approved' ? 'подтверждена' : 'черновик'}`
       : 'Цепочка не сохранена';
-  const summaryNextAction = !drawerRecipient
+  const summaryNextAction: { label: string; target: string; href?: string } = !drawerRecipient
     ? { label: 'Выбрать получателя', target: 'lead-contacts' }
     : !connectedEmailSender
       ? { label: 'Подключить email', target: 'sender-settings' }
@@ -1073,7 +1119,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
             : savedCampaignHasPendingReview || !savedCampaignQualityPassed
               ? { label: 'Проверить сообщения', target: 'lead-conversation' }
               : savedCampaignNeedsChannelSetup
-                ? { label: 'Настроить каналы и отправителя', target: 'outreach-sequence' }
+                ? {
+                    label: savedCampaignChannelBlockers[0].actionLabel,
+                    target: savedCampaignChannelBlockers[0].target,
+                    href: savedCampaignChannelBlockers[0].actionHref,
+                  }
                 : savedOutreachCampaign?.status === 'draft'
                   ? { label: 'Утвердить цепочку', target: 'outreach-sequence' }
                   : canDispatchPilot
@@ -2263,15 +2313,47 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       <div className={`mt-1 truncate text-sm font-semibold ${campaignSetupDirty ? 'text-amber-700' : 'text-slate-950'}`}>{summaryStatus}</div>
                     </div>
                   </div>
-                  <Button
-                    type="button"
-                    onClick={() => scrollToLeadSection(summaryNextAction.target)}
-                    className="min-h-11 shrink-0 bg-slate-950 text-white transition-transform duration-150 active:scale-[0.96] hover:bg-slate-800"
-                  >
-                    {summaryNextAction.label}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
+                  {summaryNextAction.href ? (
+                    <Button asChild className="min-h-11 shrink-0 bg-slate-950 text-white transition-transform duration-150 active:scale-[0.96] hover:bg-slate-800">
+                      <a href={summaryNextAction.href}>
+                        {summaryNextAction.label}
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </a>
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={() => scrollToLeadSection(summaryNextAction.target)}
+                      className="min-h-11 shrink-0 bg-slate-950 text-white transition-transform duration-150 active:scale-[0.96] hover:bg-slate-800"
+                    >
+                      {summaryNextAction.label}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
+                {savedCampaignChannelBlockers.length > 0 ? (
+                  <div className="mt-3 rounded-xl bg-amber-50 p-3 shadow-[0_0_0_1px_rgba(245,158,11,0.22)]">
+                    <div className="text-sm font-semibold text-amber-950">Что мешает утвердить цепочку</div>
+                    <div className="mt-2 space-y-2">
+                      {savedCampaignChannelBlockers.map((blocker) => (
+                        <div key={blocker.key} className="flex flex-col gap-2 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+                          <span className="text-pretty leading-5">{blocker.label}</span>
+                          {blocker.actionHref ? (
+                            <a href={blocker.actionHref} className="inline-flex min-h-10 shrink-0 items-center gap-1 font-semibold text-orange-700 transition-colors hover:text-orange-800">
+                              {blocker.actionLabel}
+                              <ArrowRight className="h-4 w-4" />
+                            </a>
+                          ) : (
+                            <button type="button" onClick={() => scrollToLeadSection(blocker.target)} className="inline-flex min-h-10 shrink-0 items-center gap-1 font-semibold text-orange-700 transition-colors hover:text-orange-800">
+                              {blocker.actionLabel}
+                              <ArrowRight className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </section>
 
               <LeadDrawerSection
@@ -2966,7 +3048,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     {[0, 1, 2, 3].map((touchIndex) => {
                       const channel = sequenceChannels[touchIndex];
                       const accounts = outreachPreview.channel_availability?.[channel]?.sender_accounts || [];
-                      if (!['telegram', 'email', 'vk'].includes(channel) || accounts.length <= 1) return null;
+                      if (!['telegram', 'email', 'vk'].includes(channel) || accounts.length === 0) return null;
                       return (
                         <label key={`${channel}-${touchIndex}`} className="block rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-950">
                           Отправитель для касания {touchIndex + 1} · {channel}
@@ -3275,7 +3357,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       : 'Проверьте каналы'}
                   </Badge>
                 </div>
-                <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">Telegram и email выбираются только из этого контура. MAX, VK и WhatsApp остаются ручными, пока для них нет проверенного adapter и синхронизации ответов.</p>
+                <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">Telegram и email выбираются только из этого контура. VK отправляется автоматически после отдельного разрешения. MAX и WhatsApp пока выполняются вручную.</p>
                 <details className="mt-3 border-t border-slate-200 pt-2">
                   <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-slate-700">Проверить или заменить email отправителя</summary>
                   <div className="pt-3">
@@ -3298,6 +3380,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   {selectedSenderScope === 'platform'
                     ? 'Настроить Telegram LocalOS'
                     : 'Настроить Telegram бизнеса'}
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+                <a
+                  href={`/dashboard/settings/integrations?focus=vk&sender_scope=${selectedSenderScope}&return_to=${encodeURIComponent(`/dashboard/bazich?lead=${selectedLead.id}&workstream=${selectedWorkstream.id || ''}`)}`}
+                  className="ml-4 inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-orange-700 transition-colors hover:text-orange-800"
+                >
+                  Разрешить отправку в VK
                   <ArrowRight className="h-4 w-4" />
                 </a>
                 <details
