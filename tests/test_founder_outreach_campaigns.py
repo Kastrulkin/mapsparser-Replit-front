@@ -1892,14 +1892,22 @@ def test_saved_campaign_hydrates_schedule_form_and_calendar_from_same_version():
     assert ".sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0]" in load_block
 
 
-def test_channel_setup_blocker_names_vk_permission_and_links_to_exact_setting():
-    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+def test_channel_setup_blocker_names_vk_permission_and_links_to_exact_outreach_setting():
+    admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    builder_source = (ROOT / "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx").read_text()
+    settings_source = (ROOT / "frontend/src/pages/dashboard/settings/IntegrationsPageV3.tsx").read_text()
 
-    assert "VK подключён, но отправка запрещена" in source
-    assert "Разрешить отправку в VK" in source
-    assert "focus=vk" in source
-    assert "sender_scope=${selectedSenderScope}" in source
-    assert "return_to=${encodeURIComponent" in source
+    assert "VK подключён, но отправка запрещена" in admin_source
+    assert "Разрешить отправку в VK" in admin_source
+    assert "focus=outreach_vk&sender_scope=${selectedSenderScope}" in admin_source
+    assert "focus=vk&sender_scope=${selectedSenderScope}" not in admin_source
+    assert "return_to=${encodeURIComponent" in admin_source
+
+    assert "focus=outreach_vk&sender_scope=${businessId ? 'business' : 'platform'}" in builder_source
+    assert "focus=vk&sender_scope=${businessId ? 'business' : 'platform'}" not in builder_source
+
+    assert "VK для аутрича LocalOS" in settings_source
+    assert "Контур: LocalOS" in settings_source
 
 
 def test_single_available_sender_can_be_selected_for_every_automatic_touch():

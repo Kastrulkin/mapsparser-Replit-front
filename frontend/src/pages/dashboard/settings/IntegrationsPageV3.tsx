@@ -1233,12 +1233,16 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, focus, 
 
       <SettingsDetailSheet
         open={Boolean(selectedService)}
-        title={selectedService?.id === 'telegram' && senderScope === 'platform'
-          ? 'Telegram для продаж LocalOS'
-          : selectedService?.name || 'Подключение'}
-        description={selectedService?.id === 'telegram' && senderScope === 'platform'
-          ? 'Подключите личный Telegram-аккаунт суперадмина. Он не будет доступен партнёрским кампаниям клиентских бизнесов.'
-          : selectedService ? serviceDescriptions[selectedService.id] || selectedService.description : ''}
+        title={selectedService?.id === 'outreach_vk' && senderScope === 'platform'
+          ? 'VK для аутрича LocalOS'
+          : selectedService?.id === 'telegram' && senderScope === 'platform'
+            ? 'Telegram для продаж LocalOS'
+            : selectedService?.name || 'Подключение'}
+        description={selectedService?.id === 'outreach_vk' && senderScope === 'platform'
+          ? 'Контур: LocalOS. Здесь настраивается платформенное VK-сообщество для одобренных сообщений. Выбранный клиентский бизнес и его подключения не используются.'
+          : selectedService?.id === 'telegram' && senderScope === 'platform'
+            ? 'Подключите личный Telegram-аккаунт суперадмина. Он не будет доступен партнёрским кампаниям клиентских бизнесов.'
+            : selectedService ? serviceDescriptions[selectedService.id] || selectedService.description : ''}
         onOpenChange={(open) => {
           if (!open) setActiveServiceId(null);
         }}

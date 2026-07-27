@@ -1046,7 +1046,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           label: `Касание ${touchNumber} · VK: VK подключён, но отправка запрещена`,
           actionLabel: 'Разрешить отправку в VK',
           target: 'sender-settings',
-          actionHref: `/dashboard/settings/integrations?focus=vk&sender_scope=${selectedSenderScope}&return_to=${encodeURIComponent(`/dashboard/bazich?lead=${selectedLead?.id || ''}&workstream=${selectedWorkstream?.id || ''}`)}`,
+          actionHref: `/dashboard/settings/integrations?focus=outreach_vk&sender_scope=${selectedSenderScope}&return_to=${encodeURIComponent(`/dashboard/bazich?lead=${selectedLead?.id || ''}&workstream=${selectedWorkstream?.id || ''}`)}`,
         });
         continue;
       }
@@ -3383,7 +3383,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   <ArrowRight className="h-4 w-4" />
                 </a>
                 <a
-                  href={`/dashboard/settings/integrations?focus=vk&sender_scope=${selectedSenderScope}&return_to=${encodeURIComponent(`/dashboard/bazich?lead=${selectedLead.id}&workstream=${selectedWorkstream.id || ''}`)}`}
+                  href={`/dashboard/settings/integrations?focus=outreach_vk&sender_scope=${selectedSenderScope}&return_to=${encodeURIComponent(`/dashboard/bazich?lead=${selectedLead.id}&workstream=${selectedWorkstream.id || ''}`)}`}
                   className="ml-4 inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-orange-700 transition-colors hover:text-orange-800"
                 >
                   Разрешить отправку в VK

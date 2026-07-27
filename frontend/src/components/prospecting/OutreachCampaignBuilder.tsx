@@ -839,7 +839,7 @@ export function OutreachCampaignBuilder({
                     <span className="text-pretty leading-5">{message}</span>
                     {channel === 'vk' && status === 'permission_required' ? (
                       <a
-                        href={`/dashboard/settings/integrations?focus=vk&sender_scope=${businessId ? 'business' : 'platform'}&return_to=${encodeURIComponent('/dashboard/partnerships')}`}
+                        href={`/dashboard/settings/integrations?focus=outreach_vk&sender_scope=${businessId ? 'business' : 'platform'}&return_to=${encodeURIComponent('/dashboard/partnerships')}`}
                         className="inline-flex min-h-10 shrink-0 items-center gap-1 font-semibold text-orange-700 transition-colors hover:text-orange-800"
                       >
                         Разрешить отправку в VK
