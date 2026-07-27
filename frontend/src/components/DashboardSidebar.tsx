@@ -98,6 +98,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         : 'Shows what is done, what needs attention, and the most important next step.',
     },
     {
+      id: 'finance',
+      label: t.dashboard.sidebar.finance,
+      icon: DollarSign,
+      path: '/dashboard/finance',
+      tooltip: language === 'ru'
+        ? 'Финансовые показатели бизнеса и рабочая экономика.'
+        : 'Business financial metrics and operating economics.',
+    },
+    {
       id: 'chats',
       label: t.dashboard.sidebar.chats,
       icon: MessageSquare,
@@ -123,15 +132,6 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       tooltip: language === 'ru'
         ? 'Рабочий inbox сообщений из выбранных Telegram-чатов: ответить, сохранить идею или скрыть.'
         : 'Work inbox for selected Telegram chats: reply, save an idea, or dismiss.',
-    },
-    {
-      id: 'finance',
-      label: t.dashboard.sidebar.finance,
-      icon: DollarSign,
-      path: '/dashboard/finance',
-      tooltip: language === 'ru'
-        ? 'Финансовые показатели бизнеса и рабочая экономика.'
-        : 'Business financial metrics and operating economics.',
     },
     {
       id: 'average-ticket',
