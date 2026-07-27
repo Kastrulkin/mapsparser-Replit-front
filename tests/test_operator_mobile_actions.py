@@ -24,6 +24,10 @@ class ActionCursor:
             self.rows = [{"id": "b-1", "name": "Первая"}] if params[0] == "b-1" else []
         elif "from contentplans plan" in self.query:
             self.rows = [{"id": "plan-1", "business_id": "b-1", "title": "План на месяц", "business_name": "Первая", "items_count": 8}] if params[0] == "plan-1" else []
+        elif "from contentplanitems item" in self.query:
+            self.rows = [{"id": "item-1", "business_id": "b-1", "theme": "Летний уход", "status": "planned", "plan_id": "plan-1", "business_name": "Первая"}] if params[0] == "item-1" else []
+        elif "from userservices service" in self.query:
+            self.rows = [{"id": "s-1", "business_id": "b-1", "name": "Стрижка", "description": "С укладкой", "category": "Стрижки", "price": "2900", "is_active": True, "business_name": "Первая"}] if params[0] == "s-1" else []
         elif "from userservices" in self.query:
             self.rows = [
                 {"id": "s-1", "business_id": "b-1", "name": "Стрижка", "description": "С укладкой", "category": "Стрижки", "price": "2900"},
@@ -31,6 +35,8 @@ class ActionCursor:
             ] if params[0] == "b-1" else []
         elif "from financialtransactions transaction" in self.query:
             self.rows = [{"id": "t-1", "business_id": "b-1", "amount": 2900, "transaction_date": "2026-07-24", "description": "Стрижка", "business_name": "Первая"}] if params == ("t-1", "b-1") else []
+        elif "from parsequeue queue" in self.query:
+            self.rows = [{"id": "q-1", "business_id": "b-1", "url": "https://yandex.ru/maps/org/1", "status": "failed", "source": "yandex", "error_message": "timeout", "business_name": "Первая"}] if params[0] == "q-1" else []
         elif self.query.startswith("insert into operatoractions"):
             if not self.action:
                 self.action = {
@@ -238,3 +244,71 @@ def test_finance_delete_preview_is_bound_to_scope_and_transaction():
         "operation": "finance.transaction.delete",
         "label": "Удалить финансовую операцию",
     }]
+
+
+def test_content_plan_generation_preview_is_bound_to_business_and_period():
+    cursor = ActionCursor()
+    preview = create_mobile_action_preview(
+        cursor,
+        user_id="u-1",
+        scope={"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+        capability="content.plan.generate",
+        input_payload={"business_id": "b-2", "period_days": 30, "density": "active"},
+    )
+
+    assert preview["status"] == "preview"
+    assert preview["target_businesses"] == [{"id": "b-1", "name": "Первая"}]
+    assert preview["changes"][0]["label"] == "Собрать контент-план на 30 дней"
+
+
+def test_content_draft_preview_checks_item_scope():
+    cursor = ActionCursor()
+    preview = create_mobile_action_preview(
+        cursor,
+        user_id="u-1",
+        scope={"kind": "business", "id": "b-2", "business_ids": ["b-2"]},
+        capability="content.item.generate",
+        input_payload={"item_id": "item-1"},
+    )
+
+    assert preview["status"] == "blocked"
+    assert preview["blocked_reasons"] == ["content_item_not_found_or_forbidden"]
+
+
+def test_service_archive_preview_requires_current_active_state():
+    cursor = ActionCursor()
+    preview = create_mobile_action_preview(
+        cursor,
+        user_id="u-1",
+        scope={"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+        capability="services.archive",
+        input_payload={"service_id": "s-1"},
+    )
+
+    assert preview["status"] == "preview"
+    assert preview["objects"][0]["name"] == "Стрижка"
+    assert preview["changes"][0]["label"] == "Убрать услугу в архив"
+
+
+def test_diagnostic_retry_requires_platform_scope_and_failed_job():
+    cursor = ActionCursor()
+    blocked = create_mobile_action_preview(
+        cursor,
+        user_id="u-1",
+        scope={"kind": "business", "id": "b-1", "business_ids": ["b-1"]},
+        capability="diagnostics.retry",
+        input_payload={"job_id": "q-1"},
+    )
+    preview = create_mobile_action_preview(
+        cursor,
+        user_id="u-1",
+        scope={"kind": "platform", "id": None, "business_ids": ["b-1"]},
+        capability="diagnostics.retry",
+        input_payload={"job_id": "q-1"},
+    )
+
+    assert blocked["status"] == "blocked"
+    assert blocked["blocked_reasons"] == ["platform_scope_required"]
+    assert preview["status"] == "preview"
+    assert preview["target_businesses"] == [{"id": "b-1", "name": "Первая"}]
+    assert preview["changes"][0]["label"] == "Повторить сбор данных карточки"

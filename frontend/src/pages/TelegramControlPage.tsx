@@ -13,11 +13,12 @@ import { CommunitySourcesMobileModule } from '@/components/telegram/CommunitySou
 import AgentsMobileModule from '@/components/telegram/AgentsMobileModule';
 import DiagnosticsMobileModule from '@/components/telegram/DiagnosticsMobileModule';
 import ActionPreviewSheet, { type MobileActionPreview } from '@/components/telegram/ActionPreviewSheet';
+import JobProgressSheet from '@/components/telegram/JobProgressSheet';
 import MobileShell from '@/components/telegram/MobileShell';
 import { ScopeProvider, useMobileScope, type MobileScope } from '@/components/telegram/ScopeProvider';
 import { ProgressMobileModule, type ProgressPayload } from '@/components/telegram/ProgressMobileModule';
 import { TodayMobileV2, type TodayPayload } from '@/components/telegram/TodayMobileV2';
-import { mobileAuthHeaders, mobileJsonHeaders, mobileScopeQuery, readMobileJson } from '@/lib/mobileDataClient';
+import { cancelMobileJob, confirmMobileAction, loadMobileJob, mobileAuthHeaders, mobileJsonHeaders, mobileScopeQuery, readMobileJson, retryMobileJob, type MobileJob } from '@/lib/mobileDataClient';
 import { resolveMobileRoute } from '@/lib/mobileDeepLinkRouter';
 
 type AttentionItem = {
@@ -68,6 +69,7 @@ type Bootstrap = {
   navigation?: NavigationItem[];
   today_v2_enabled?: boolean;
   resolved_deep_link?: { screen?: string; item_type?: string | null; item_id?: string | null; filters?: Record<string, string>; fallback_applied?: boolean };
+  active_job?: MobileJob | null;
 };
 
 type NavigationItem = {
@@ -132,7 +134,7 @@ type FinanceDashboardMobile = {
   staff?: Array<Record<string, FinanceValue>>;
   workplaces?: Array<Record<string, FinanceValue>>;
 };
-type ModuleData = { items?: ModuleItem[]; counts?: { total?: number }; as_of?: string; data_warnings?: string[]; status?: string; preferences?: NotificationPreferences; filters?: { period_days?: number[]; density?: string[] }; finance_dashboard?: FinanceDashboardMobile };
+type ModuleData = { items?: ModuleItem[]; counts?: { total?: number }; as_of?: string; data_warnings?: string[]; status?: string; preferences?: NotificationPreferences; available_actions?: Array<{ key?: string; label?: string }>; filters?: { period_days?: number[]; density?: string[] }; finance_dashboard?: FinanceDashboardMobile };
 type Tab = 'today' | 'tasks' | 'reviews' | 'operator' | 'more';
 
 type TelegramWebApp = {
@@ -280,6 +282,8 @@ export const TelegramControlPage = () => {
   const [moduleLoading, setModuleLoading] = useState(false);
   const [moduleSaving, setModuleSaving] = useState(false);
   const [moduleActionBusy, setModuleActionBusy] = useState('');
+  const [restoredJob, setRestoredJob] = useState<MobileJob | null>(null);
+  const [restoredJobBusy, setRestoredJobBusy] = useState(false);
   const trackedTodayScope = useRef('');
 
   const scope = bootstrap?.selected_scope || bootstrap?.summary?.scope;
@@ -356,6 +360,7 @@ export const TelegramControlPage = () => {
         }));
       } else {
         setBootstrap(result);
+        setRestoredJob(result.active_job || null);
       }
       if (!query && !cursor) await Promise.all([loadWorkspace(result.selected_scope), loadToday(result.selected_scope, result.today_v2_enabled !== false)]);
       setError('');
@@ -367,6 +372,33 @@ export const TelegramControlPage = () => {
   };
 
   useEffect(() => { webApp()?.ready?.(); webApp()?.expand?.(); void loadBootstrap(); }, []);
+
+  useEffect(() => {
+    if (!restoredJob?.id || restoredJob.terminal) return;
+    const timer = window.setInterval(() => {
+      void loadMobileJob(restoredJob.id || '', scope).then((result) => {
+        setRestoredJob(result.job || null);
+        if (result.job?.terminal) void loadWorkspace();
+      }).catch(() => undefined);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [restoredJob?.id, restoredJob?.terminal, scope?.kind, scope?.id]);
+
+  const retryRestoredJob = async () => {
+    if (!restoredJob?.id) return;
+    setRestoredJobBusy(true);
+    try { const result = await retryMobileJob(restoredJob.id, scope); setRestoredJob(result.job || null); setError(''); }
+    catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось повторить задачу.'); }
+    finally { setRestoredJobBusy(false); }
+  };
+
+  const cancelRestoredJob = async () => {
+    if (!restoredJob?.id) return;
+    setRestoredJobBusy(true);
+    try { const result = await cancelMobileJob(restoredJob.id, scope); setRestoredJob(result.job || null); setError(''); }
+    catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось остановить задачу.'); }
+    finally { setRestoredJobBusy(false); }
+  };
   useEffect(() => {
     if (!picker || !initData) return;
     const timer = window.setTimeout(() => void loadBootstrap(search.trim()), 250);
@@ -642,7 +674,7 @@ export const TelegramControlPage = () => {
       <MobileShell
         header={<TopBar />}
         error={error}
-        overlay={<ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirmLabel="Подготовить ответы" onConfirm={() => void confirmSelectedReviews()} onCancel={() => setActionPreview(null)} />}
+        overlay={<><ActionPreviewSheet preview={actionPreview} busy={reviewActionBusy === 'bulk'} confirmLabel="Подготовить ответы" onConfirm={() => void confirmSelectedReviews()} onCancel={() => setActionPreview(null)} /><JobProgressSheet job={restoredJob} busy={restoredJobBusy} onClose={() => setRestoredJob(null)} onRetry={() => void retryRestoredJob()} onCancel={() => void cancelRestoredJob()} /></>}
         navigation={!picker ? <BottomNav current={tab} showMore={showMore} setCurrent={(next) => { setModule(''); setTab(next); }} /> : null}
       >
         <AnimatePresence initial={false} mode="wait">
@@ -758,7 +790,7 @@ type ModuleScreenProps = {
 const ModuleScreen = ({ module, focusItemId, scope, data, loading, progressData, progressLoading, saving, actionBusy, saveNotifications, updateService, generateContentDraft, updateContentItem, reload, openTarget, track, openTasks, openSettings, back }: ModuleScreenProps) => {
   const content = moduleNames[module] || ['Раздел', 'Рабочая очередь LocalOS.'];
   return <Screen title={content[0]} subtitle={content[1]} action={<button aria-label="Назад" onClick={back} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><ArrowLeft className="h-4 w-4" /></button>}>
-    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'finance' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} openSettings={openSettings} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
+    {module === 'companies' || module === 'company' ? <CompaniesMobileModule businessId={module === 'company' && scope?.kind === 'business' ? scope.id : null} /> : module === 'community_sources' ? <CommunitySourcesMobileModule businessId={scope?.kind === 'business' ? scope.id : null} /> : module === 'progress' ? <ProgressMobileModule data={progressData} loading={progressLoading} openTarget={openTarget} track={track} /> : loading ? <ReviewSkeleton /> : module === 'settings' ? <NotificationSettings preferences={data.preferences || {}} saving={saving} save={saveNotifications} /> : module === 'cards' ? <CardsModule scope={scope} items={data.items || []} reload={reload} /> : module === 'content' ? <ContentModule focusItemId={focusItemId} scope={scope} items={data.items || []} filters={data.filters} busy={actionBusy} generate={generateContentDraft} update={updateContentItem} reload={reload} /> : module === 'services' ? <ServicesModule focusItemId={focusItemId} scope={scope} items={data.items || []} busy={actionBusy} update={updateService} reload={reload} /> : module === 'finance' ? <FinanceModule scope={scope} items={data.items || []} reload={reload} openTasks={openTasks} openSettings={openSettings} /> : module === 'partnerships' ? <PartnershipsMobileModule scope={scope} /> : module === 'agents' ? <AgentsMobileModule items={data.items || []} scope={scope} reload={reload} canRun={Boolean(data.available_actions?.some((action) => action.key === 'agents.run'))} /> : module === 'diagnostics' ? <DiagnosticsMobileModule items={data.items || []} scope={scope} reload={reload} /> : module === 'analytics' ? <AnalyticsModule items={data.items || []} /> : <ModuleUnavailable />}
   </Screen>;
 };
 
@@ -785,6 +817,8 @@ const CardsModule = ({ scope, items, reload }: { scope?: MobileScope; items: Mod
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<MobileActionPreview | null>(null);
+  const [refreshPreview, setRefreshPreview] = useState<MobileActionPreview | null>(null);
+  const [activeJob, setActiveJob] = useState<MobileJob | null>(null);
   const saveSchedule = async (item: ModuleItem, enabled: boolean) => {
     setBusy(item.id || 'schedule');
     try {
@@ -802,11 +836,45 @@ const CardsModule = ({ scope, items, reload }: { scope?: MobileScope; items: Mod
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить график.'); }
     finally { setBusy(''); }
   };
+  const prepareRefresh = async (item: ModuleItem) => {
+    setBusy(`refresh:${item.id || ''}`); setError('');
+    try {
+      const result = await fetch('/api/operator/mobile/actions/preview', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null, capability: 'cards.refresh', input: { business_id: item.business_id || item.id, source: 'all' } }) }).then(readJson<{ preview?: MobileActionPreview }>);
+      setRefreshPreview(result.preview || null);
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось проверить обновление.'); }
+    finally { setBusy(''); }
+  };
+  const confirmRefresh = async () => {
+    if (!refreshPreview?.action_id) return;
+    setBusy(refreshPreview.action_id); setError('');
+    try {
+      const result = await confirmMobileAction(refreshPreview.action_id, scope);
+      const jobId = String(result.operator_result?.job_id || '');
+      setRefreshPreview(null);
+      if (jobId) {
+        const loaded = await loadMobileJob(jobId, scope);
+        setActiveJob(loaded.job || null);
+      }
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось запустить обновление.'); }
+    finally { setBusy(''); }
+  };
+  useEffect(() => {
+    if (!activeJob?.id || activeJob.terminal) return;
+    const timer = window.setInterval(() => {
+      void loadMobileJob(activeJob.id || '', scope).then((result) => {
+        setActiveJob(result.job || null);
+        if (result.job?.status === 'completed') void reload();
+      }).catch(() => undefined);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [activeJob?.id, activeJob?.terminal, scope?.kind, scope?.id]);
   return <div>
     <div className="mb-4 rounded-[22px] bg-primary/[0.08] p-4 ring-1 ring-inset ring-primary/15"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-[14px] bg-primary/15 text-primary"><RefreshCw className="h-5 w-5" /></span><div><b className="block text-sm">Данные из Яндекса и 2ГИС</b><p className="mt-1 text-xs leading-5 text-zinc-500">LocalOS проверяет карточки по вашему графику и показывает, когда данные были собраны в последний раз.</p></div></div></div>
     {error ? <InlineError text={error} /> : null}
-    {items.length ? <div className="space-y-2">{items.map((item) => <article key={item.id} className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><b className="block text-sm leading-5">{item.title || item.business_name}</b><small className="mt-1 block truncate text-zinc-600">{item.subtitle || item.business_name}</small></div><StatusPill value={item.status} /></div><div className="mt-4 flex flex-wrap gap-2">{(item.provider_sources || []).filter(Boolean).map((source) => <span key={source} className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-semibold text-zinc-300 ring-1 ring-inset ring-white/[0.07]">{providerName(source)}</span>)}</div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><MetricMini label="Рейтинг" value={item.rating} /><MetricMini label="Отзывы" value={item.reviews_count} /><MetricMini label="SEO" value={item.seo_score} /></div><div className="mt-4 rounded-[16px] bg-black/20 p-3 text-xs leading-5 ring-1 ring-inset ring-white/[0.05]"><p className="text-zinc-400">Последняя проверка: <b className="font-medium text-zinc-200">{dateLabel(item.parse_updated_at || item.review_sync_last_run_at || item.updated_at)}</b></p><p className="mt-1 text-zinc-400">{item.review_sync_enabled ? <>Следующее обновление: <b className="font-medium text-zinc-200">{dateLabel(item.review_sync_next_run_at)}</b></> : 'Автоматическое обновление выключено'}</p><p className="mt-1 text-zinc-600">Одно обновление — {item.refresh_cost_credits || 10} кредитов</p></div>{editing === item.id ? <div className="mt-3 rounded-[18px] bg-white/[0.035] p-3 ring-1 ring-inset ring-white/[0.06]"><label className="text-[11px] text-zinc-500">Как часто проверять<select value={interval} onChange={(event) => setInterval(event.target.value)} className="mt-2 min-h-11 w-full rounded-[14px] bg-zinc-900 px-3 text-sm text-zinc-200 ring-1 ring-inset ring-white/[0.07]"><option value="24">Каждый день</option><option value="48">Раз в 2 дня</option><option value="168">Раз в неделю</option><option value="336">Раз в 2 недели</option></select></label><p className="mt-3 text-pretty text-[11px] leading-5 text-zinc-500">Чем чаще проверка, тем быстрее LocalOS заметит новые отзывы и изменения в карточке. Но кредиты будут расходоваться быстрее: при этом графике — до <b className="font-semibold tabular-nums text-zinc-300">{monthlyRefreshCost(interval, item.refresh_cost_credits || 10)} кредитов за 30 дней</b>.</p><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" disabled={busy === item.id} onClick={() => void saveSchedule(item, false)} className="min-h-11 rounded-[14px] bg-white/[0.05] text-xs font-semibold text-zinc-400 ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]">Выключить</button><button type="button" disabled={busy === item.id} onClick={() => void saveSchedule(item, true)} className="min-h-11 rounded-[14px] bg-primary text-xs font-semibold active:scale-[0.96]">{busy === item.id ? 'Сохраняем…' : 'Сохранить график'}</button></div></div> : <button type="button" onClick={() => { setInterval(String(item.review_sync_interval_hours || 24)); setEditing(item.id || 'schedule'); }} className="mt-3 min-h-11 w-full rounded-[14px] bg-white/[0.05] text-xs font-semibold ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><Settings className="mr-2 inline h-4 w-4" />Настроить график</button>}</article>)}</div> : <Empty icon={MapPinned} title="Карточки не подключены" text="Добавьте ссылки на Яндекс и 2ГИС в настройках бизнеса — после этого LocalOS начнёт следить за обновлениями." />}
+    {items.length ? <div className="space-y-2">{items.map((item) => <article key={item.id} className="rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><b className="block text-sm leading-5">{item.title || item.business_name}</b><small className="mt-1 block truncate text-zinc-600">{item.subtitle || item.business_name}</small></div><StatusPill value={item.status} /></div><div className="mt-4 flex flex-wrap gap-2">{(item.provider_sources || []).filter(Boolean).map((source) => <span key={source} className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-semibold text-zinc-300 ring-1 ring-inset ring-white/[0.07]">{providerName(source)}</span>)}</div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><MetricMini label="Рейтинг" value={item.rating} /><MetricMini label="Отзывы" value={item.reviews_count} /><MetricMini label="SEO" value={item.seo_score} /></div><div className="mt-4 rounded-[16px] bg-black/20 p-3 text-xs leading-5 ring-1 ring-inset ring-white/[0.05]"><p className="text-zinc-400">Последняя проверка: <b className="font-medium text-zinc-200">{dateLabel(item.parse_updated_at || item.review_sync_last_run_at || item.updated_at)}</b></p><p className="mt-1 text-zinc-400">{item.review_sync_enabled ? <>Следующее обновление: <b className="font-medium text-zinc-200">{dateLabel(item.review_sync_next_run_at)}</b></> : 'Автоматическое обновление выключено'}</p><p className="mt-1 text-zinc-600">Одно обновление — {item.refresh_cost_credits || 10} кредитов</p></div>{editing === item.id ? <div className="mt-3 rounded-[18px] bg-white/[0.035] p-3 ring-1 ring-inset ring-white/[0.06]"><label className="text-[11px] text-zinc-500">Как часто проверять<select value={interval} onChange={(event) => setInterval(event.target.value)} className="mt-2 min-h-11 w-full rounded-[14px] bg-zinc-900 px-3 text-sm text-zinc-200 ring-1 ring-inset ring-white/[0.07]"><option value="24">Каждый день</option><option value="48">Раз в 2 дня</option><option value="168">Раз в неделю</option><option value="336">Раз в 2 недели</option></select></label><p className="mt-3 text-pretty text-[11px] leading-5 text-zinc-500">Чем чаще проверка, тем быстрее LocalOS заметит новые отзывы и изменения в карточке. Но кредиты будут расходоваться быстрее: при этом графике — до <b className="font-semibold tabular-nums text-zinc-300">{monthlyRefreshCost(interval, item.refresh_cost_credits || 10)} кредитов за 30 дней</b>.</p><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" disabled={busy === item.id} onClick={() => void saveSchedule(item, false)} className="min-h-11 rounded-[14px] bg-white/[0.05] text-xs font-semibold text-zinc-400 ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]">Выключить</button><button type="button" disabled={busy === item.id} onClick={() => void saveSchedule(item, true)} className="min-h-11 rounded-[14px] bg-primary text-xs font-semibold active:scale-[0.96]">{busy === item.id ? 'Сохраняем…' : 'Сохранить график'}</button></div></div> : <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => { setInterval(String(item.review_sync_interval_hours || 24)); setEditing(item.id || 'schedule'); }} className="min-h-11 rounded-[14px] bg-white/[0.05] px-3 text-xs font-semibold ring-1 ring-inset ring-white/[0.07] transition-transform active:scale-[0.96]"><Settings className="mr-1.5 inline h-4 w-4" />График</button><button type="button" disabled={Boolean(busy)} onClick={() => void prepareRefresh(item)} className="min-h-11 rounded-[14px] bg-primary px-3 text-xs font-semibold text-white transition-transform active:scale-[0.96] disabled:opacity-50"><RefreshCw className="mr-1.5 inline h-4 w-4" />Обновить</button></div>}</article>)}</div> : <Empty icon={MapPinned} title="Карточки не подключены" text="Добавьте ссылки на Яндекс и 2ГИС в настройках бизнеса — после этого LocalOS начнёт следить за обновлениями." />}
     <ActionPreviewSheet preview={preview} busy={Boolean(busy)} confirmLabel="Сохранить график" onCancel={() => setPreview(null)} onConfirm={() => void confirmSchedule()} />
+    <ActionPreviewSheet preview={refreshPreview} busy={Boolean(busy)} confirmLabel="Обновить карточки" onCancel={() => setRefreshPreview(null)} onConfirm={() => void confirmRefresh()} />
+    <JobProgressSheet job={activeJob} onClose={() => { setActiveJob(null); if (activeJob?.status === 'completed') void reload(); }} />
   </div>;
 };
 
@@ -818,6 +886,11 @@ const ContentModule = ({ focusItemId, scope, items, filters, busy, generate, upd
   const [planAction, setPlanAction] = useState('');
   const [error, setError] = useState('');
   const [deletePreview, setDeletePreview] = useState<MobileActionPreview | null>(null);
+  const [generatePreview, setGeneratePreview] = useState<MobileActionPreview | null>(null);
+  const [draftPreview, setDraftPreview] = useState<MobileActionPreview | null>(null);
+  const [draftItem, setDraftItem] = useState<ModuleItem | null>(null);
+  const [activeJob, setActiveJob] = useState<MobileJob | null>(null);
+  const [jobBusy, setJobBusy] = useState(false);
   const allowedPeriods = (filters?.period_days || [14, 30]).filter((value) => Number.isFinite(value) && value > 0);
   const [periodDays, setPeriodDays] = useState(() => allowedPeriods.includes(30) ? 30 : allowedPeriods[0] || 30);
   const [density, setDensity] = useState('standard');
@@ -840,37 +913,101 @@ const ContentModule = ({ focusItemId, scope, items, filters, busy, generate, upd
     setContentSection('posts');
     window.requestAnimationFrame(() => document.getElementById(`content-day-${date}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
-  const generatePlan = async () => {
+  const prepareGeneratePlan = async () => {
     setGenerating(true); setError('');
     try {
-      await fetch('/api/operator/mobile/content/plans/generate', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null, business_id: scope?.kind === 'business' ? scope.id : null, period_days: periodDays, density }) }).then(readJson);
-      await reload(); setPlanAction(''); setContentSection('calendar'); setError('');
+      const result = await fetch('/api/operator/mobile/actions/preview', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null, capability: 'content.plan.generate', input: { business_id: scope?.kind === 'business' ? scope.id : null, period_days: periodDays, density } }) }).then(readJson<{ preview?: MobileActionPreview }>);
+      setGeneratePreview(result.preview || null);
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось подготовить план.'); }
     finally { setGenerating(false); }
+  };
+  const confirmGeneratePlan = async () => {
+    if (!generatePreview?.action_id) return;
+    setGenerating(true); setError('');
+    try {
+      const result = await confirmMobileAction(generatePreview.action_id, scope);
+      const job = result.operator_result?.job;
+      const jobId = String(result.operator_result?.job_id || job?.id || '');
+      setGeneratePreview(null);
+      if (job) setActiveJob(job);
+      else if (jobId) {
+        const loaded = await loadMobileJob(jobId, scope);
+        setActiveJob(loaded.job || null);
+      }
+      setPlanAction('');
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось запустить сборку плана.'); }
+    finally { setGenerating(false); }
+  };
+  const prepareDraft = async (item: ModuleItem) => {
+    if (!item.id) return;
+    if (item.id.startsWith('content-')) { await generate(item); return; }
+    setDraftItem(item); setError('');
+    try {
+      const result = await fetch('/api/operator/mobile/actions/preview', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null, capability: 'content.item.generate', input: { item_id: item.id } }) }).then(readJson<{ preview?: MobileActionPreview }>);
+      setDraftPreview(result.preview || null);
+    } catch (requestError) { setDraftItem(null); setError(requestError instanceof Error ? requestError.message : 'Не удалось проверить генерацию текста.'); }
+  };
+  const confirmDraft = async () => {
+    if (!draftPreview?.action_id || !draftItem?.id) return;
+    setJobBusy(true); setError('');
+    try {
+      const result = await confirmMobileAction(draftPreview.action_id, scope);
+      const job = result.operator_result?.job;
+      const jobId = String(result.operator_result?.job_id || job?.id || '');
+      setDraftPreview(null);
+      if (job) setActiveJob(job);
+      else if (jobId) {
+        const loaded = await loadMobileJob(jobId, scope);
+        setActiveJob(loaded.job || null);
+      }
+      setContentSection('posts');
+      setEditing(draftItem.id);
+      setDraftItem(null);
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось запустить подготовку текста.'); }
+    finally { setJobBusy(false); }
+  };
+  useEffect(() => {
+    if (!activeJob?.id || activeJob.terminal) return;
+    const timer = window.setInterval(() => {
+      void loadMobileJob(activeJob.id || '', scope).then((result) => {
+        const nextJob = result.job || null;
+        setActiveJob(nextJob);
+        if (nextJob?.status === 'completed') void reload();
+      }).catch(() => undefined);
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [activeJob?.id, activeJob?.terminal, scope?.kind, scope?.id]);
+  const retryJob = async () => {
+    if (!activeJob?.id) return;
+    setJobBusy(true);
+    try { const result = await retryMobileJob(activeJob.id, scope); setActiveJob(result.job || null); setError(''); }
+    catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось повторить задачу.'); }
+    finally { setJobBusy(false); }
+  };
+  const cancelJob = async () => {
+    if (!activeJob?.id) return;
+    setJobBusy(true);
+    try { const result = await cancelMobileJob(activeJob.id, scope); setActiveJob(result.job || null); setError(''); }
+    catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось остановить задачу.'); }
+    finally { setJobBusy(false); }
   };
   const prepareDeletePlan = async () => { if (!planId) return; setDeleting(true); try { const result = await fetch('/api/operator/mobile/actions/preview', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null, capability: 'content.plan.delete', input: { plan_id: planId, business_id: scope?.kind === 'business' ? scope.id : null } }) }).then(readJson<{ preview?: MobileActionPreview }>); setDeletePreview(result.preview || null); setPlanAction(''); setError(''); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось проверить удаление плана.'); } finally { setDeleting(false); } };
   const confirmDeletePlan = async () => { if (!deletePreview?.action_id) return; setDeleting(true); try { await fetch(`/api/operator/mobile/actions/${deletePreview.action_id}/confirm`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null }) }).then(readJson); setDeletePreview(null); await reload(); setPlanAction(''); setError(''); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось удалить план.'); } finally { setDeleting(false); } };
   return <><AnimatePresence initial={false} mode="wait">
-    {generating ? <ContentPlanProgress key="progress" periodDays={periodDays} density={density} /> : <motion.div key="content" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={spring}>
+    <motion.div key="content" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={spring}>
       {planTitle ? <section className="mb-3 rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><small className="text-zinc-600">Текущий контент-план</small><b className="mt-1 block text-balance text-base">{planTitle}</b><p className="mt-2 text-pretty text-xs text-zinc-500"><span className="tabular-nums">{items.length}</span> публикаций{items[0]?.plan_period_days ? <> · <span className="tabular-nums">{items[0].plan_period_days}</span> дней</> : null}</p></div><button type="button" aria-label="Дополнительные действия с планом" aria-expanded={planAction === 'menu'} onClick={() => setPlanAction(planAction === 'menu' ? '' : 'menu')} className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white/[0.05] text-zinc-400 ring-1 ring-inset ring-white/[0.07] transition-transform active:scale-[0.96]"><CircleEllipsis className="h-5 w-5" /></button></div><div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-2"><button type="button" onClick={() => { setEditing(''); scrollTo('posts'); }} className="flex min-h-11 items-center justify-center gap-2 rounded-[14px] bg-primary px-3 text-xs font-semibold text-white shadow-[0_10px_24px_rgba(255,92,51,0.2)] transition-transform active:scale-[0.96]"><Pencil className="h-4 w-4" />Редактировать публикации</button><button type="button" onClick={() => setPlanAction('new')} className="min-h-11 rounded-[14px] bg-white/[0.05] px-4 text-xs font-semibold text-zinc-300 ring-1 ring-inset ring-white/[0.07] transition-transform active:scale-[0.96]">Новый план</button></div>{planAction === 'menu' ? <div className="mt-3"><button type="button" disabled={deleting} onClick={() => void prepareDeletePlan()} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-rose-500/[0.08] px-3 text-xs font-semibold text-rose-300 ring-1 ring-inset ring-rose-400/15 transition-transform active:scale-[0.96] disabled:opacity-50">{deleting ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Trash2 className="h-4 w-4" />}{deleting ? 'Проверяем…' : 'Удалить текущий план'}</button></div> : null}</section> : null}
       {error ? <InlineError text={error} /> : null}
-      {(!items.length || planAction === 'new') && scope?.kind === 'business' ? <ContentPlanSetup periods={allowedPeriods} periodDays={periodDays} setPeriodDays={setPeriodDays} density={density} setDensity={setDensity} existingPlan={Boolean(items.length)} cancel={items.length ? () => setPlanAction('') : undefined} generate={() => void generatePlan()} /> : null}
+      {(!items.length || planAction === 'new') && scope?.kind === 'business' ? <ContentPlanSetup periods={allowedPeriods} periodDays={periodDays} setPeriodDays={setPeriodDays} density={density} setDensity={setDensity} existingPlan={Boolean(items.length)} cancel={items.length ? () => setPlanAction('') : undefined} generate={() => void prepareGeneratePlan()} /> : null}
       {scope?.kind !== 'business' && !items.length ? <Empty icon={Building2} title="Выберите одну точку" text="Сеть можно анализировать целиком, но календарь создаётся для конкретного бизнеса." /> : null}
-      {items.length && planAction !== 'new' ? <><div role="navigation" aria-label="Разделы контент-плана" className="sticky top-2 z-10 mb-3 grid grid-cols-2 rounded-[20px] bg-zinc-900/90 p-1 shadow-[0_12px_38px_rgba(0,0,0,0.34)] ring-1 ring-inset ring-white/[0.08] backdrop-blur-xl"><button type="button" aria-current={contentSection === 'calendar' ? 'page' : undefined} onClick={() => scrollTo('calendar')} className={`min-h-11 rounded-[16px] text-sm font-semibold transition-[background-color,color,transform,box-shadow] active:scale-[0.96] ${contentSection === 'calendar' ? 'bg-white/[0.1] text-white shadow-[0_4px_14px_rgba(0,0,0,0.24)]' : 'text-zinc-500'}`}>Календарь</button><button type="button" aria-current={contentSection === 'posts' ? 'page' : undefined} onClick={() => scrollTo('posts')} className={`min-h-11 rounded-[16px] text-sm font-semibold transition-[background-color,color,transform,box-shadow] active:scale-[0.96] ${contentSection === 'posts' ? 'bg-white/[0.1] text-white shadow-[0_4px_14px_rgba(0,0,0,0.24)]' : 'text-zinc-500'}`}>Посты <span className="ml-1 tabular-nums text-[11px] opacity-60">{items.length}</span></button></div><div ref={calendarRef} className="scroll-mt-20"><ContentCalendar items={items} openDate={scrollToDate} /></div><ContentPostList postsRef={postsRef} items={items} editing={editing} busy={busy} setEditing={setEditing} generate={generate} update={update} /></> : null}
-    </motion.div>}
-  </AnimatePresence><ActionPreviewSheet preview={deletePreview} busy={deleting} confirmLabel="Удалить план" onCancel={() => setDeletePreview(null)} onConfirm={() => void confirmDeletePlan()} /></>;
+      {items.length && planAction !== 'new' ? <><div role="navigation" aria-label="Разделы контент-плана" className="sticky top-2 z-10 mb-3 grid grid-cols-2 rounded-[20px] bg-zinc-900/90 p-1 shadow-[0_12px_38px_rgba(0,0,0,0.34)] ring-1 ring-inset ring-white/[0.08] backdrop-blur-xl"><button type="button" aria-current={contentSection === 'calendar' ? 'page' : undefined} onClick={() => scrollTo('calendar')} className={`min-h-11 rounded-[16px] text-sm font-semibold transition-[background-color,color,transform,box-shadow] active:scale-[0.96] ${contentSection === 'calendar' ? 'bg-white/[0.1] text-white shadow-[0_4px_14px_rgba(0,0,0,0.24)]' : 'text-zinc-500'}`}>Календарь</button><button type="button" aria-current={contentSection === 'posts' ? 'page' : undefined} onClick={() => scrollTo('posts')} className={`min-h-11 rounded-[16px] text-sm font-semibold transition-[background-color,color,transform,box-shadow] active:scale-[0.96] ${contentSection === 'posts' ? 'bg-white/[0.1] text-white shadow-[0_4px_14px_rgba(0,0,0,0.24)]' : 'text-zinc-500'}`}>Посты <span className="ml-1 tabular-nums text-[11px] opacity-60">{items.length}</span></button></div><div ref={calendarRef} className="scroll-mt-20"><ContentCalendar items={items} openDate={scrollToDate} /></div><ContentPostList postsRef={postsRef} items={items} editing={editing} busy={busy} setEditing={setEditing} generate={prepareDraft} update={update} /></> : null}
+    </motion.div>
+  </AnimatePresence><ActionPreviewSheet preview={deletePreview} busy={deleting} confirmLabel="Удалить план" onCancel={() => setDeletePreview(null)} onConfirm={() => void confirmDeletePlan()} /><ActionPreviewSheet preview={generatePreview} busy={generating} confirmLabel="Собрать план" onCancel={() => setGeneratePreview(null)} onConfirm={() => void confirmGeneratePlan()} /><ActionPreviewSheet preview={draftPreview} busy={jobBusy} confirmLabel="Создать текст" onCancel={() => { setDraftPreview(null); setDraftItem(null); }} onConfirm={() => void confirmDraft()} /><JobProgressSheet job={activeJob} busy={jobBusy} onClose={() => { setActiveJob(null); if (activeJob?.status === 'completed') void reload(); }} onRetry={() => void retryJob()} onCancel={() => void cancelJob()} /></>;
 };
 
 const ContentPlanSetup = ({ periods, periodDays, setPeriodDays, density, setDensity, existingPlan, cancel, generate }: { periods: number[]; periodDays: number; setPeriodDays: (value: number) => void; density: string; setDensity: (value: string) => void; existingPlan: boolean; cancel?: () => void; generate: () => void }) => {
   const weekly = density === 'light' ? 1 : density === 'active' ? 3 : 2;
   const estimate = Math.max(4, Math.round(periodDays / 7 * weekly));
   return <section className="mb-4 rounded-[26px] bg-gradient-to-b from-primary/[0.09] to-white/[0.035] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.24)] ring-1 ring-inset ring-primary/15"><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-primary/15 text-primary"><WandSparkles className="h-5 w-5" /></span><div><h2 className="text-balance text-base font-semibold">{existingPlan ? 'Настройте новый план' : 'LocalOS соберёт план за вас'}</h2><p className="mt-1 text-pretty text-xs leading-5 text-zinc-500">Выберите горизонт и темп. Мы сверим услуги, спрос и карточку, затем расставим темы по календарю.</p></div></div><div className="mt-5"><p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-600">Период</p><div className="grid grid-flow-col auto-cols-fr gap-2">{periods.map((days) => <button type="button" key={days} aria-pressed={periodDays === days} onClick={() => setPeriodDays(days)} className={`min-h-12 rounded-[15px] px-3 text-sm font-semibold tabular-nums ring-1 ring-inset transition-[background-color,color,transform,box-shadow] active:scale-[0.96] ${periodDays === days ? 'bg-primary text-white shadow-[0_10px_26px_rgba(255,92,51,0.2)] ring-primary' : 'bg-black/20 text-zinc-400 ring-white/[0.07]'}`}>{days} дней</button>)}</div></div><div className="mt-4"><p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-600">Темп публикаций</p><div className="grid grid-cols-3 gap-2">{[['light', '1 в неделю'], ['standard', '2 в неделю'], ['active', '3 в неделю']].map(([key, label]) => <button type="button" key={key} aria-pressed={density === key} onClick={() => setDensity(key)} className={`min-h-12 rounded-[15px] px-2 text-[11px] font-semibold ring-1 ring-inset transition-[background-color,color,transform] active:scale-[0.96] ${density === key ? 'bg-white/[0.1] text-white ring-white/15' : 'bg-black/15 text-zinc-600 ring-white/[0.06]'}`}>{label}</button>)}</div></div><div className="mt-4 flex items-center justify-between rounded-[16px] bg-black/20 px-3 py-3 ring-1 ring-inset ring-white/[0.05]"><span className="text-xs text-zinc-500">Будет подготовлено</span><b className="text-sm tabular-nums text-zinc-200">около {estimate} публикаций</b></div><p className="mt-3 text-pretty text-[11px] leading-5 text-zinc-600">Ничего не публикуется автоматически. Сначала вы увидите календарь и сможете изменить каждую тему.</p><div className={`mt-4 grid gap-2 ${cancel ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-1'}`}>{cancel ? <button type="button" onClick={cancel} className="min-h-12 rounded-[16px] bg-white/[0.05] px-4 text-xs font-semibold text-zinc-400 ring-1 ring-inset ring-white/[0.07] transition-transform active:scale-[0.96]">Отмена</button> : null}<button type="button" onClick={generate} className="flex min-h-12 items-center justify-center gap-2 rounded-[16px] bg-primary px-4 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.24)] transition-[filter,transform] active:scale-[0.96]"><WandSparkles className="h-4 w-4" />Собрать план на {periodDays} дней</button></div></section>;
-};
-
-const ContentPlanProgress = ({ periodDays, density }: { periodDays: number; density: string }) => {
-  const weekly = density === 'light' ? 1 : density === 'active' ? 3 : 2;
-  const estimate = Math.max(4, Math.round(periodDays / 7 * weekly));
-  return <motion.section aria-live="polite" key="generation" initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -5, filter: 'blur(4px)' }} transition={spring} className="rounded-[28px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_28px_90px_rgba(0,0,0,0.42)] ring-1 ring-inset ring-white/[0.08]"><div className="flex items-start gap-3"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-primary/15 text-primary"><Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" /></span><div className="min-w-0 flex-1"><small className="font-semibold uppercase tracking-[0.13em] text-primary">LocalOS работает</small><h2 className="mt-1 text-balance text-xl font-semibold tracking-[-0.035em]">Собираем ваш контент-план</h2><p className="mt-1 text-pretty text-xs leading-5 text-zinc-500">Сверяем карточку, услуги и темы. Готовим около <span className="tabular-nums">{estimate}</span> публикаций на <span className="tabular-nums">{periodDays}</span> дней.</p></div></div><div className="mt-5 overflow-hidden rounded-full bg-white/[0.06]"><motion.div className="h-1.5 w-1/3 rounded-full bg-primary" animate={{ x: ['-100%', '300%'] }} transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }} /></div><p className="mt-3 text-pretty text-[11px] leading-5 text-zinc-600">Экран можно закрыть. Как только план будет сохранён, он появится в календаре.</p></motion.section>;
 };
 
 const calendarMonthStart = (items: ModuleItem[]) => {
@@ -941,21 +1078,24 @@ const ServicesModule = ({ focusItemId, scope, items, busy, update, reload }: { f
   const [analysis, setAnalysis] = useState<(MobileActionPreview & { mode: string; service_count?: number }) | null>(null);
   const [running, setRunning] = useState('');
   const [error, setError] = useState('');
+  const [itemPreview, setItemPreview] = useState<MobileActionPreview | null>(null);
   useEffect(() => {
     if (!focusItemId || !items.some((item) => item.id === focusItemId)) return;
     setEditing(focusItemId);
     window.requestAnimationFrame(() => document.getElementById(`service-item-${focusItemId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   }, [focusItemId, items]);
   const run = async (mode: string, confirmed = false) => { setRunning(mode); try { if (confirmed) { if (!analysis?.action_id) throw new Error('Проверка устарела. Подготовьте её заново.'); await fetch(`/api/operator/mobile/actions/${analysis.action_id}/confirm`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null }) }).then(readJson); setAnalysis(null); await reload(); } else { const result = await fetch('/api/operator/mobile/actions/preview', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null, capability: `services.${mode}`, input: { business_id: scope?.kind === 'business' ? scope.id : null, request_id: window.crypto.randomUUID() } }) }).then(readJson<{ preview?: MobileActionPreview }>); if (!result.preview?.action_id) throw new Error('Не удалось подготовить проверку.'); setAnalysis({ mode, ...result.preview, service_count: result.preview.objects?.length || 0 }); } setError(''); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось проанализировать услуги.'); } finally { setRunning(''); } };
-  return <div><div className="mb-3 grid grid-cols-2 gap-2"><button type="button" disabled={Boolean(running) || scope?.kind !== 'business'} onClick={() => void run('optimize')} className="min-h-20 rounded-[20px] bg-primary/[0.1] p-3 text-left ring-1 ring-inset ring-primary/20 active:scale-[0.96] disabled:opacity-45"><WandSparkles className="h-5 w-5 text-primary" /><b className="mt-2 block text-xs">Улучшить услуги</b><small className="mt-1 block text-[10px] leading-4 text-zinc-600">Названия и описания</small></button><button type="button" disabled={Boolean(running) || scope?.kind !== 'business'} onClick={() => void run('compress')} className="min-h-20 rounded-[20px] bg-white/[0.04] p-3 text-left ring-1 ring-inset ring-white/[0.07] active:scale-[0.96] disabled:opacity-45"><PackageCheck className="h-5 w-5 text-primary" /><b className="mt-2 block text-xs">Сократить меню</b><small className="mt-1 block text-[10px] leading-4 text-zinc-600">Объединить повторы</small></button></div>{scope?.kind !== 'business' ? <p className="mb-3 text-xs text-zinc-600">Для изменений выберите конкретную точку.</p> : null}{error ? <InlineError text={error} /> : null}{analysis ? <section className="mb-3 rounded-[22px] bg-zinc-900 p-4 ring-1 ring-inset ring-primary/25"><b className="text-sm">{analysis.mode === 'compress' ? 'Проверим сокращение меню' : 'Подготовим улучшения'}</b><p className="mt-2 text-xs leading-5 text-zinc-400">{analysis.mode === 'compress' ? `Сейчас ${analysis.analysis?.before_count || items.length} позиций, после объединения останется около ${analysis.analysis?.after_count || items.length}. Исходные позиции будут перенесены в архив LocalOS.` : `LocalOS подготовит варианты для ${analysis.service_count || items.length} услуг. Стоимость — до ${analysis.estimated_credits || 0} кредитов.`}</p><p className="mt-2 text-[11px] text-zinc-600">На Яндекс и 2ГИС изменения не отправляются.</p><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => setAnalysis(null)} className="min-h-11 rounded-[14px] bg-white/[0.05] text-xs font-semibold ring-1 ring-inset ring-white/[0.07]">Отмена</button><button type="button" disabled={Boolean(running)} onClick={() => void run(analysis.mode, true)} className="min-h-11 rounded-[14px] bg-primary text-xs font-semibold">{running ? 'Выполняем…' : 'Подтвердить'}</button></div></section> : null}{items.length ? <div className="space-y-2">{items.map((item) => <ServiceItemCard key={item.id} item={item} editing={editing === item.id} busy={busy === item.id} setEditing={() => setEditing(editing === item.id ? '' : item.id || '')} update={async (values) => { await update(item, values); setEditing(''); }} />)}</div> : <Empty icon={LayoutGrid} title="Услуги не добавлены" text="Добавьте первую услугу, чтобы LocalOS мог проверить название, описание и цену." />}</div>;
+  const changeActiveState = async (item: ModuleItem) => { if (!item.id) return; setRunning(item.id); try { const capability = item.status === 'archived' ? 'services.restore' : 'services.archive'; const result = await fetch('/api/operator/mobile/actions/preview', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null, capability, input: { service_id: item.id } }) }).then(readJson<{ preview?: MobileActionPreview }>); setItemPreview(result.preview || null); setError(''); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось проверить изменение.'); } finally { setRunning(''); } };
+  const confirmActiveState = async () => { if (!itemPreview?.action_id) return; setRunning(itemPreview.action_id); try { await confirmMobileAction(itemPreview.action_id, scope); setItemPreview(null); await reload(); setError(''); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось изменить услугу.'); } finally { setRunning(''); } };
+  return <div><div className="mb-3 grid grid-cols-2 gap-2"><button type="button" disabled={Boolean(running) || scope?.kind !== 'business'} onClick={() => void run('optimize')} className="min-h-20 rounded-[20px] bg-primary/[0.1] p-3 text-left ring-1 ring-inset ring-primary/20 active:scale-[0.96] disabled:opacity-45"><WandSparkles className="h-5 w-5 text-primary" /><b className="mt-2 block text-xs">Улучшить услуги</b><small className="mt-1 block text-[10px] leading-4 text-zinc-600">Названия и описания</small></button><button type="button" disabled={Boolean(running) || scope?.kind !== 'business'} onClick={() => void run('compress')} className="min-h-20 rounded-[20px] bg-white/[0.04] p-3 text-left ring-1 ring-inset ring-white/[0.07] active:scale-[0.96] disabled:opacity-45"><PackageCheck className="h-5 w-5 text-primary" /><b className="mt-2 block text-xs">Сократить меню</b><small className="mt-1 block text-[10px] leading-4 text-zinc-600">Объединить повторы</small></button></div>{scope?.kind !== 'business' ? <p className="mb-3 text-xs text-zinc-600">Для изменений выберите конкретную точку.</p> : null}{error ? <InlineError text={error} /> : null}{analysis ? <section className="mb-3 rounded-[22px] bg-zinc-900 p-4 ring-1 ring-inset ring-primary/25"><b className="text-sm">{analysis.mode === 'compress' ? 'Проверим сокращение меню' : 'Подготовим улучшения'}</b><p className="mt-2 text-xs leading-5 text-zinc-400">{analysis.mode === 'compress' ? `Сейчас ${analysis.analysis?.before_count || items.length} позиций, после объединения останется около ${analysis.analysis?.after_count || items.length}. Исходные позиции будут перенесены в архив LocalOS.` : `LocalOS подготовит варианты для ${analysis.service_count || items.length} услуг. Стоимость — до ${analysis.estimated_credits || 0} кредитов.`}</p><p className="mt-2 text-[11px] text-zinc-600">На Яндекс и 2ГИС изменения не отправляются.</p><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => setAnalysis(null)} className="min-h-11 rounded-[14px] bg-white/[0.05] text-xs font-semibold ring-1 ring-inset ring-white/[0.07]">Отмена</button><button type="button" disabled={Boolean(running)} onClick={() => void run(analysis.mode, true)} className="min-h-11 rounded-[14px] bg-primary text-xs font-semibold">{running ? 'Выполняем…' : 'Подтвердить'}</button></div></section> : null}{items.length ? <div className="space-y-2">{items.map((item) => <ServiceItemCard key={item.id} item={item} editing={editing === item.id} busy={busy === item.id || running === item.id} setEditing={() => setEditing(editing === item.id ? '' : item.id || '')} update={async (values) => { await update(item, values); setEditing(''); }} changeActive={() => void changeActiveState(item)} />)}</div> : <Empty icon={LayoutGrid} title="Услуги не добавлены" text="Добавьте первую услугу, чтобы LocalOS мог проверить название, описание и цену." />}<ActionPreviewSheet preview={itemPreview} busy={Boolean(running)} confirmLabel={itemPreview?.capability === 'services.restore' ? 'Вернуть услугу' : 'Убрать в архив'} onCancel={() => setItemPreview(null)} onConfirm={() => void confirmActiveState()} /></div>;
 };
 
-const ServiceItemCard = ({ item, editing, busy, setEditing, update }: { item: ModuleItem; editing: boolean; busy: boolean; setEditing: () => void; update: (values: { name: string; description: string; price: string; category: string }) => Promise<void> }) => {
+const ServiceItemCard = ({ item, editing, busy, setEditing, update, changeActive }: { item: ModuleItem; editing: boolean; busy: boolean; setEditing: () => void; update: (values: { name: string; description: string; price: string; category: string }) => Promise<void>; changeActive: () => void }) => {
   const [name, setName] = useState(item.title || '');
   const [description, setDescription] = useState(item.subtitle || '');
   const [price, setPrice] = useState(item.price || '');
   const [category, setCategory] = useState(item.category || '');
-  return <article id={`service-item-${item.id || ''}`} className="scroll-mt-24 rounded-[22px] bg-white/[0.04] p-4 ring-1 ring-inset ring-white/[0.07]"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><b className="block text-sm leading-5">{item.title}</b><small className="mt-1 block truncate text-zinc-600">{[item.business_name, item.category].filter(Boolean).join(' · ')}</small><small className="mt-1 block text-[10px] text-zinc-700">{item.source ? `Получено из ${providerName(item.source)}` : 'Добавлено в LocalOS'} · обновлено {dateLabel(item.updated_at)}</small></div><StatusPill value={item.status} /></div>{editing ? <div className="mt-4 space-y-2"><input value={name} onChange={(event) => setName(event.target.value)} aria-label="Название услуги" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><div className="grid grid-cols-2 gap-2"><input value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Категория услуги" placeholder="Категория" className="min-h-11 min-w-0 rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07]" /><input value={price} onChange={(event) => setPrice(event.target.value)} aria-label="Цена услуги" placeholder="Цена" className="min-h-11 min-w-0 rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07]" /></div><textarea value={description} onChange={(event) => setDescription(event.target.value)} aria-label="Описание услуги" rows={4} className="w-full rounded-[14px] bg-black/20 p-3 text-sm leading-6 outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><button type="button" disabled={busy} onClick={() => void update({ name, description, price, category })} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-primary text-xs font-semibold active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}Сохранить изменения</button></div> : <><p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{item.subtitle}</p><div className="mt-3 flex items-center justify-between"><b className="text-sm tabular-nums text-zinc-200">{item.price || 'Цена не указана'}</b><button type="button" onClick={setEditing} className="flex min-h-11 items-center gap-2 rounded-[14px] bg-white/[0.055] px-4 text-xs font-semibold ring-1 ring-inset ring-white/[0.08] active:scale-[0.96]"><Pencil className="h-4 w-4" />Изменить</button></div></>}</article>;
+  return <article id={`service-item-${item.id || ''}`} className={`scroll-mt-24 rounded-[22px] p-4 ring-1 ring-inset ${item.status === 'archived' ? 'bg-white/[0.02] opacity-70 ring-white/[0.05]' : 'bg-white/[0.04] ring-white/[0.07]'}`}><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><b className="block text-sm leading-5">{item.title}</b><small className="mt-1 block truncate text-zinc-600">{[item.business_name, item.category].filter(Boolean).join(' · ')}</small><small className="mt-1 block text-[10px] text-zinc-700">{item.source ? `Получено из ${providerName(item.source)}` : 'Добавлено в LocalOS'} · обновлено {dateLabel(item.updated_at)}</small></div><StatusPill value={item.status} /></div>{editing ? <div className="mt-4 space-y-2"><input value={name} onChange={(event) => setName(event.target.value)} aria-label="Название услуги" className="min-h-11 w-full rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><div className="grid grid-cols-2 gap-2"><input value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Категория услуги" placeholder="Категория" className="min-h-11 min-w-0 rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07]" /><input value={price} onChange={(event) => setPrice(event.target.value)} aria-label="Цена услуги" placeholder="Цена" className="min-h-11 min-w-0 rounded-[14px] bg-black/20 px-3 text-sm outline-none ring-1 ring-inset ring-white/[0.07]" /></div><textarea value={description} onChange={(event) => setDescription(event.target.value)} aria-label="Описание услуги" rows={4} className="w-full rounded-[14px] bg-black/20 p-3 text-sm leading-6 outline-none ring-1 ring-inset ring-white/[0.07] focus:ring-primary/50" /><button type="button" disabled={busy} onClick={() => void update({ name, description, price, category })} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-primary text-xs font-semibold active:scale-[0.96] disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Check className="h-4 w-4" />}Сохранить изменения</button></div> : <><p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{item.subtitle}</p><div className="mt-3 flex items-center justify-between"><b className="text-sm tabular-nums text-zinc-200">{item.price || 'Цена не указана'}</b><div className="flex gap-1"><button type="button" disabled={busy} onClick={changeActive} className="min-h-11 rounded-[14px] px-3 text-xs font-semibold text-zinc-500 transition-transform active:scale-[0.96] disabled:opacity-50">{item.status === 'archived' ? 'Вернуть' : 'В архив'}</button>{item.status !== 'archived' ? <button type="button" onClick={setEditing} className="flex min-h-11 items-center gap-2 rounded-[14px] bg-white/[0.055] px-3 text-xs font-semibold ring-1 ring-inset ring-white/[0.08] active:scale-[0.96]"><Pencil className="h-4 w-4" />Изменить</button> : null}</div></div></>}</article>;
 };
 
 type RecognizedSale = { id?: string; transaction_date?: string; amount?: number; title?: string; sale_type?: 'service' | 'upsell' | 'cross_sell'; notes?: string };

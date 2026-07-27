@@ -15,9 +15,17 @@ MOBILE_ACTIONS = {
     "finance.sales_import": {"estimated_credits_per_item": 0, "external_effects": False},
     "finance.transaction.delete": {"estimated_credits_per_item": 0, "external_effects": False},
     "cards.schedule.update": {"estimated_credits_per_item": 0, "external_effects": False},
+    "cards.refresh": {"estimated_credits_per_item": 10, "external_effects": True},
+    "content.plan.generate": {"estimated_credits_per_item": 0, "external_effects": False},
     "content.plan.delete": {"estimated_credits_per_item": 0, "external_effects": False},
+    "content.item.generate": {"estimated_credits_per_item": 1, "external_effects": False},
+    "content.item.delete": {"estimated_credits_per_item": 0, "external_effects": False},
+    "services.archive": {"estimated_credits_per_item": 0, "external_effects": False},
+    "services.restore": {"estimated_credits_per_item": 0, "external_effects": False},
     "services.optimize": {"estimated_credits_per_item": 1, "external_effects": False},
     "services.compress": {"estimated_credits_per_item": 0, "external_effects": False},
+    "agents.run": {"estimated_credits_per_item": 2, "external_effects": False},
+    "diagnostics.retry": {"estimated_credits_per_item": 10, "external_effects": True},
 }
 
 
@@ -78,6 +86,14 @@ def _business_allowed(scope: dict[str, Any], business_id: str) -> bool:
     if scope.get("kind") == "platform":
         return bool(business_id)
     return business_id in {str(item) for item in scope.get("business_ids") or []}
+
+
+def _load_business(cursor: Any, scope: dict[str, Any], input_payload: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    business_id = _requested_business_id(scope, input_payload)
+    if not _business_allowed(scope, business_id):
+        return "", {}
+    cursor.execute("SELECT id, name FROM businesses WHERE id = %s", (business_id,))
+    return business_id, _row(cursor, cursor.fetchone())
 
 
 def create_mobile_action_preview(
@@ -153,23 +169,57 @@ def create_mobile_action_preview(
         objects = [transaction]
         envelope = {"transaction_id": transaction_id, "business_id": requested_business_id}
         changes = [{"object_id": transaction_id, "operation": capability, "label": "Удалить финансовую операцию"}]
-    elif capability == "cards.schedule.update":
-        requested_business_id = _requested_business_id(scope, input_payload)
-        if not _business_allowed(scope, requested_business_id):
+    elif capability in {"cards.schedule.update", "cards.refresh"}:
+        requested_business_id, business = _load_business(cursor, scope, input_payload)
+        if not requested_business_id:
             return {"status": "blocked", "blocked_reasons": ["business_selection_required"]}
-        cursor.execute("SELECT id, name FROM businesses WHERE id = %s", (requested_business_id,))
-        business = _row(cursor, cursor.fetchone())
-        try:
-            interval_hours = max(24, min(24 * 30, int(input_payload.get("interval_hours") or 24)))
-        except (TypeError, ValueError):
-            return {"status": "blocked", "blocked_reasons": ["invalid_schedule"]}
         if not business:
             return {"status": "blocked", "blocked_reasons": ["business_not_found_or_forbidden"]}
-        enabled = bool(input_payload.get("enabled"))
+        if capability == "cards.refresh":
+            source = str(input_payload.get("source") or "all").strip().lower()
+            if source not in {"all", "yandex", "2gis"}:
+                return {"status": "blocked", "blocked_reasons": ["invalid_card_source"]}
+            targets = [requested_business_id]
+            objects = [{
+                "id": requested_business_id,
+                "business_id": requested_business_id,
+                "business_name": str(business.get("name") or ""),
+                "source": source,
+            }]
+            envelope = {"business_id": requested_business_id, "source": source}
+            changes = [{
+                "object_id": requested_business_id,
+                "operation": capability,
+                "label": "Обновить данные Яндекса и 2ГИС" if source == "all" else f"Обновить данные: {source}",
+            }]
+        else:
+            try:
+                interval_hours = max(24, min(24 * 30, int(input_payload.get("interval_hours") or 24)))
+            except (TypeError, ValueError):
+                return {"status": "blocked", "blocked_reasons": ["invalid_schedule"]}
+            enabled = bool(input_payload.get("enabled"))
+            targets = [requested_business_id]
+            objects = [{"id": requested_business_id, "business_id": requested_business_id, "business_name": str(business.get("name") or ""), "enabled": enabled, "interval_hours": interval_hours}]
+            envelope = {"business_id": requested_business_id, "enabled": enabled, "interval_hours": interval_hours}
+            changes = [{"object_id": requested_business_id, "operation": capability, "label": "Включить проверку карточек" if enabled else "Выключить проверку карточек", "interval_hours": interval_hours}]
+    elif capability == "content.plan.generate":
+        requested_business_id, business = _load_business(cursor, scope, input_payload)
+        if not requested_business_id or not business:
+            return {"status": "blocked", "blocked_reasons": ["business_selection_required"]}
+        try:
+            period_days = int(input_payload.get("period_days") or 30)
+        except (TypeError, ValueError):
+            return {"status": "blocked", "blocked_reasons": ["invalid_plan_period"]}
+        if period_days not in {7, 14, 30, 60, 90}:
+            return {"status": "blocked", "blocked_reasons": ["invalid_plan_period"]}
+        density = str(input_payload.get("density") or "standard").strip().lower()
+        if density not in {"light", "standard", "active"}:
+            return {"status": "blocked", "blocked_reasons": ["invalid_plan_density"]}
+        content_mix = input_payload.get("content_mix") if isinstance(input_payload.get("content_mix"), dict) else {}
         targets = [requested_business_id]
-        objects = [{"id": requested_business_id, "business_id": requested_business_id, "business_name": str(business.get("name") or ""), "enabled": enabled, "interval_hours": interval_hours}]
-        envelope = {"business_id": requested_business_id, "enabled": enabled, "interval_hours": interval_hours}
-        changes = [{"object_id": requested_business_id, "operation": capability, "label": "Включить проверку карточек" if enabled else "Выключить проверку карточек", "interval_hours": interval_hours}]
+        objects = [{"id": requested_business_id, "business_id": requested_business_id, "business_name": str(business.get("name") or ""), "period_days": period_days, "density": density}]
+        envelope = {"business_id": requested_business_id, "period_days": period_days, "density": density, "content_mix": content_mix}
+        changes = [{"object_id": requested_business_id, "operation": capability, "label": f"Собрать контент-план на {period_days} дней"}]
     elif capability == "content.plan.delete":
         plan_id = str(input_payload.get("plan_id") or "").strip()
         if not plan_id:
@@ -194,6 +244,50 @@ def create_mobile_action_preview(
         objects = [{**plan, "id": plan_id}]
         envelope = {"plan_id": plan_id, "business_id": plan_business_id}
         changes = [{"object_id": plan_id, "operation": capability, "label": "Удалить контент-план", "items_count": int(plan.get("items_count") or 0)}]
+    elif capability in {"content.item.generate", "content.item.delete"}:
+        item_id = str(input_payload.get("item_id") or "").strip()
+        cursor.execute(
+            """
+            SELECT item.id, item.business_id, item.theme, item.status, item.plan_id,
+                   business.name AS business_name
+            FROM contentplanitems item
+            JOIN businesses business ON business.id = item.business_id
+            WHERE item.id = %s
+            """,
+            (item_id,),
+        )
+        item = _row(cursor, cursor.fetchone())
+        item_business_id = str(item.get("business_id") or "")
+        if not item or not _business_allowed(scope, item_business_id):
+            return {"status": "blocked", "blocked_reasons": ["content_item_not_found_or_forbidden"]}
+        targets = [item_business_id]
+        objects = [item]
+        envelope = {"item_id": item_id, "business_id": item_business_id, "language": str(input_payload.get("language") or "ru")[:12]}
+        changes = [{"object_id": item_id, "operation": capability, "label": "Создать текст публикации" if capability.endswith("generate") else "Удалить публикацию из плана"}]
+    elif capability in {"services.archive", "services.restore"}:
+        service_id = str(input_payload.get("service_id") or "").strip()
+        cursor.execute(
+            """
+            SELECT service.id, service.business_id, service.name, service.description,
+                   service.category, service.price, COALESCE(service.is_active, TRUE) AS is_active,
+                   business.name AS business_name
+            FROM userservices service
+            JOIN businesses business ON business.id = service.business_id
+            WHERE service.id = %s
+            """,
+            (service_id,),
+        )
+        service = _row(cursor, cursor.fetchone())
+        service_business_id = str(service.get("business_id") or "")
+        if not service or not _business_allowed(scope, service_business_id):
+            return {"status": "blocked", "blocked_reasons": ["service_not_found_or_forbidden"]}
+        expected_active = capability == "services.archive"
+        if bool(service.get("is_active")) != expected_active:
+            return {"status": "blocked", "blocked_reasons": ["service_state_changed"]}
+        targets = [service_business_id]
+        objects = [service]
+        envelope = {"service_id": service_id, "business_id": service_business_id, "expected_active": expected_active}
+        changes = [{"object_id": service_id, "operation": capability, "label": "Убрать услугу в архив" if expected_active else "Вернуть услугу"}]
     elif capability in {"services.optimize", "services.compress"}:
         requested_business_id = _requested_business_id(scope, input_payload)
         if not _business_allowed(scope, requested_business_id):
@@ -225,6 +319,61 @@ def create_mobile_action_preview(
             changes = [{"object_id": item.get("id"), "operation": capability, "label": str(item.get("name") or "Услуга")} for item in services]
         else:
             changes = [{"object_id": item.get("id"), "operation": capability, "label": f"Подготовить улучшение: {item.get('name') or 'услуга'}"} for item in services]
+    elif capability == "agents.run":
+        blueprint_id = str(input_payload.get("blueprint_id") or "").strip()
+        cursor.execute(
+            """
+            SELECT blueprint.id, blueprint.business_id, blueprint.name,
+                   blueprint.description, blueprint.status, business.name AS business_name,
+                   version.id AS active_version_id
+            FROM agent_blueprints blueprint
+            JOIN businesses business ON business.id = blueprint.business_id
+            LEFT JOIN agent_blueprint_versions version
+              ON version.id = NULLIF(blueprint.metadata_json->>'active_version_id', '')
+             AND version.blueprint_id = blueprint.id
+            WHERE blueprint.id = %s
+            """,
+            (blueprint_id,),
+        )
+        blueprint = _row(cursor, cursor.fetchone())
+        blueprint_business_id = str(blueprint.get("business_id") or "")
+        if not blueprint or not _business_allowed(scope, blueprint_business_id):
+            return {"status": "blocked", "blocked_reasons": ["agent_not_found_or_forbidden"]}
+        if not str(blueprint.get("active_version_id") or ""):
+            return {"status": "blocked", "blocked_reasons": ["agent_active_version_required"]}
+        inputs = input_payload.get("inputs") if isinstance(input_payload.get("inputs"), dict) else {}
+        targets = [blueprint_business_id]
+        objects = [blueprint]
+        envelope = {
+            "blueprint_id": blueprint_id,
+            "business_id": blueprint_business_id,
+            "active_version_id": str(blueprint.get("active_version_id") or ""),
+            "inputs": inputs,
+        }
+        changes = [{"object_id": blueprint_id, "operation": capability, "label": f"Запустить: {blueprint.get('name') or 'ИИ-сотрудник'}"}]
+    elif capability == "diagnostics.retry":
+        if scope.get("kind") != "platform":
+            return {"status": "blocked", "blocked_reasons": ["platform_scope_required"]}
+        job_id = str(input_payload.get("job_id") or "").strip()
+        cursor.execute(
+            """
+            SELECT queue.id, queue.business_id, queue.url, queue.status, queue.source,
+                   queue.error_message, business.name AS business_name
+            FROM parsequeue queue
+            LEFT JOIN businesses business ON business.id = queue.business_id
+            WHERE queue.id = %s
+            """,
+            (job_id,),
+        )
+        failed_job = _row(cursor, cursor.fetchone())
+        if not failed_job or str(failed_job.get("status") or "").lower() not in {"failed", "error", "stuck", "captcha_required"}:
+            return {"status": "blocked", "blocked_reasons": ["diagnostic_job_not_retryable"]}
+        if not str(failed_job.get("business_id") or "") or not str(failed_job.get("url") or ""):
+            return {"status": "blocked", "blocked_reasons": ["diagnostic_job_target_missing"]}
+        targets = [str(failed_job.get("business_id") or "")]
+        objects = [failed_job]
+        envelope = {"job_id": job_id, "business_id": targets[0], "url": str(failed_job.get("url") or "")}
+        changes = [{"object_id": job_id, "operation": capability, "label": "Повторить сбор данных карточки"}]
     else:
         targets, objects = _resolve_review_targets(cursor, scope, review_ids)
         envelope = {"review_ids": [str(item.get("id") or "") for item in objects]}
@@ -314,7 +463,13 @@ def confirm_mobile_action(
     if not executor:
         return {"status": "blocked", "blocked_reasons": ["confirm_handler_unavailable"]}, False
     envelope = _json(action.get("envelope_json"), {})
-    result = executor(envelope, stored_targets, scope)
+    execution_envelope = {
+        **envelope,
+        "_action_id": action_id,
+        "_user_id": user_id,
+        "_idempotency_key": str(action.get("idempotency_key") or ""),
+    }
+    result = executor(execution_envelope, stored_targets, scope)
     if str(result.get("status") or "") != "completed":
         return result, False
     cursor.execute(

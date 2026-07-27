@@ -39,10 +39,18 @@ from services.operator_inbox import build_operator_inbox
 from services.operator_manual_review import process_operator_chat_message
 from services.operator_manual_publish import mark_review_reply_draft_manual_published
 from services.operator_mobile_actions import confirm_mobile_action, create_mobile_action_preview
+from services.operator_async_jobs import (
+    cancel_operator_async_job,
+    create_operator_async_job,
+    list_operator_async_jobs,
+    load_operator_async_job,
+    retry_operator_async_job,
+)
 from services.operator_mobile_modules import list_operator_mobile_module
 from services.operator_mobile_today import build_mobile_progress, build_mobile_today
 from services.operator_mobile_jobs import load_mobile_job
 from services.operator_mobile_deep_links import resolve_mobile_deep_link
+from services.agent_run_queue import async_agent_runs_enabled, enqueue_agent_run
 from services.operator_news_generation import classify_news_generate_intent, generate_news_draft_from_operator
 from services.operator_paid_executor import build_paid_action_execution_attempt
 from services.operator_paid_preflight import build_paid_action_preflight
@@ -73,7 +81,7 @@ from core.service_catalog_compression import build_service_catalog_compression_d
 from services.gigachat_client import analyze_screenshot_with_gigachat
 from services.agent_source_ingestion import build_agent_source_from_upload
 from services.llm import analyze_text_with_gigachat
-from services.operator_map_refresh import DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS
+from services.operator_map_refresh import DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS, enqueue_paid_operator_map_refresh
 from services.operator_review_canonicalization import CANONICAL_REVIEWS_CTE
 from services.operator_services_optimization import SERVICES_OPTIMIZE_CREDITS_PER_SERVICE
 from subscription_manager import get_allowed_content_plan_horizons
@@ -84,18 +92,19 @@ operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
 
 def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
     kind = str(scope.get("kind") or "business")
+    agent_runs_available = str(os.getenv("AGENT_ASYNC_RUNS_ENABLED", "false")).lower() in {"1", "true", "yes", "on"}
     items = [
         {"key": "today", "label": "Сегодня", "group": "primary", "status": "available", "available_actions": ["open_focus", "delegate"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["today"], "version": 2},
         {"key": "tasks", "label": "Задачи", "group": "primary", "status": "available", "available_actions": ["open"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["task", "job", "approval"], "version": 2},
         {"key": "reviews", "label": "Отзывы", "group": "primary", "status": "available", "available_actions": ["generate_reply", "edit_draft", "mark_manual_published"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["review", "review_draft"], "version": 2},
         {"key": "operator", "label": "Оператор", "group": "primary", "status": "available", "available_actions": ["send_message", "open_result"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["operator_message", "operator_result"], "version": 2},
         {"key": "progress", "label": "Прогресс", "group": "more", "status": "hidden" if kind == "platform" else "available", "reason": "Выберите бизнес или сеть" if kind == "platform" else "", "available_actions": ["open_next_step"], "supported_scopes": ["business", "network"], "deep_link_targets": ["progress", "growth_step"], "version": 2},
-        {"key": "cards", "label": "Карточки", "group": "more", "status": "available", "available_actions": ["schedule_update"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["card", "parse_job", "integration_error"], "version": 2},
+        {"key": "cards", "label": "Карточки", "group": "more", "status": "available", "available_actions": ["schedule_update", "refresh"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["card", "parse_job", "integration_error"], "version": 2},
         {"key": "content", "label": "Контент", "group": "more", "status": "available", "available_actions": ["plan_generate", "item_update", "draft_generate"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["content_plan", "content_item", "post"], "version": 2},
-        {"key": "services", "label": "Услуги", "group": "more", "status": "available", "available_actions": ["update", "optimize", "compress"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["service", "service_suggestion"], "version": 2},
+        {"key": "services", "label": "Услуги", "group": "more", "status": "available", "available_actions": ["update", "archive", "restore", "optimize", "compress"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["service", "service_suggestion"], "version": 2},
         {"key": "finance", "label": "Финансы", "group": "more", "status": "available", "available_actions": ["sales_import", "operation_update", "analytics_open"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["finance", "sale", "finance_warning", "finance_import"], "version": 2},
         {"key": "partnerships", "label": "Партнёрства", "group": "more", "status": "available", "available_actions": ["search", "draft", "send_preview"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["partner", "partnership_reply", "outreach_touch"], "version": 2},
-        {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "read_only", "reason": "Запуск и подтверждения пока доступны в основном кабинете", "available_actions": [], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["agent", "agent_run", "agent_result"], "version": 1},
+        {"key": "agents", "label": "ИИ-сотрудники", "group": "more", "status": "available" if agent_runs_available else "read_only", "reason": "Запуски пока не включены для этого бизнеса" if not agent_runs_available else "", "available_actions": ["run", "open_result"] if agent_runs_available else [], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["agent", "agent_run", "agent_result"], "version": 2},
         {"key": "settings", "label": "Настройки", "group": "more", "status": "read_only", "reason": "Сейчас доступны настройки уведомлений; подключения и тариф ещё переносятся", "available_actions": ["notifications_update"], "supported_scopes": ["business", "network", "platform"], "deep_link_targets": ["settings"], "version": 1},
     ]
     company_registry_miniapp_enabled = str(os.getenv("COMPANY_REGISTRY_MINIAPP_ENABLED", "false")).lower() in {"1", "true", "yes", "on"}
@@ -103,9 +112,10 @@ def _mobile_navigation(scope: dict, is_superadmin: bool = False) -> list[dict]:
         items.append({"key": "community_sources", "label": "Пульс сообщества", "group": "more", "status": "available", "available_actions": ["source_add", "subscription_update"], "supported_scopes": ["business"], "deep_link_targets": ["community_source"], "version": 2})
     if kind == "business" and company_registry_miniapp_enabled:
         items.append({"key": "company", "label": "Моя компания", "group": "more", "status": "available", "available_actions": ["open_profile", "add_to_work"], "supported_scopes": ["business"], "deep_link_targets": ["company"], "version": 2})
-    if kind == "platform" and is_superadmin and company_registry_miniapp_enabled:
-        items.append({"key": "companies", "label": "Компании", "group": "more", "status": "available", "available_actions": ["search", "open_profile", "add_to_work"], "supported_scopes": ["platform"], "deep_link_targets": ["company"], "version": 2})
-        items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "read_only", "reason": "Показываем ошибки без небезопасного массового перезапуска", "available_actions": [], "supported_scopes": ["platform"], "deep_link_targets": ["diagnostic_job", "integration_error"], "version": 1})
+    if kind == "platform" and is_superadmin:
+        if company_registry_miniapp_enabled:
+            items.append({"key": "companies", "label": "Компании", "group": "more", "status": "available", "available_actions": ["search", "open_profile", "add_to_work"], "supported_scopes": ["platform"], "deep_link_targets": ["company"], "version": 2})
+        items.append({"key": "diagnostics", "label": "Диагностика", "group": "more", "status": "available", "reason": "", "available_actions": ["retry_one"], "supported_scopes": ["platform"], "deep_link_targets": ["diagnostic_job", "integration_error"], "version": 2})
     return items
 
 
@@ -167,6 +177,45 @@ def _mobile_background_tasks(cursor, scope: dict) -> list[dict]:
             "target_scope": {"kind": "business", "id": row.get("business_id")},
             "available_actions": ["open"] if status != "needs_attention" else [],
             "action_unavailable_reason": "Повтор платный и появится после preview" if status == "needs_attention" else None,
+        })
+    cursor.execute(
+        """
+        SELECT job.id, job.business_id, business.name AS business_name, job.kind,
+               job.status, job.progress, job.stage, job.error_text, job.updated_at
+        FROM operator_async_jobs job
+        LEFT JOIN businesses business ON business.id = job.business_id
+        WHERE (%s OR job.business_id = ANY(%s))
+        ORDER BY job.updated_at DESC
+        LIMIT 25
+        """,
+        (platform, business_ids),
+    )
+    job_titles = {
+        "content_plan_generate": "Контент-план",
+        "content_draft_generate": "Текст публикации",
+        "finance_document_recognize": "Распознавание продаж",
+        "finance_crm_sync": "Синхронизация CRM",
+        "diagnostics_retry": "Повтор задачи",
+    }
+    for value in cursor.fetchall() or []:
+        row = dict(value)
+        raw_status = str(row.get("status") or "queued")
+        status = "completed" if raw_status == "completed" else "needs_attention" if raw_status == "failed" else "in_progress"
+        available_actions = ["open"]
+        if raw_status == "failed" and str(row.get("kind") or "") in {"content_plan_generate", "content_draft_generate", "finance_document_recognize", "finance_crm_sync", "diagnostics_retry"}:
+            available_actions.append("retry")
+        tasks.append({
+            "id": f"job:{row.get('id')}",
+            "object_id": row.get("id"),
+            "kind": "operator_async_job",
+            "title": f"{job_titles.get(str(row.get('kind') or ''), 'Работа LocalOS')} · {row.get('business_name') or 'бизнес'}",
+            "description": str(row.get("error_text") or row.get("stage") or "LocalOS выполняет задачу"),
+            "status": status,
+            "progress": int(row.get("progress") or 0),
+            "severity": "high" if raw_status == "failed" else "low",
+            "updated_at": row.get("updated_at"),
+            "target_scope": {"kind": "business", "id": row.get("business_id")},
+            "available_actions": available_actions,
         })
     return tasks
 
@@ -365,6 +414,31 @@ def operator_telegram_bootstrap():
             item_id=str(payload.get("item_id") or ""),
             filters=payload.get("filters") if isinstance(payload.get("filters"), dict) else {},
         )
+        active_job = None
+        cursor.execute("SELECT to_regclass('public.operator_async_jobs') AS table_ref")
+        if dict(cursor.fetchone() or {}).get("table_ref"):
+            selected_business_ids = [str(item) for item in (selected or {}).get("business_ids") or []]
+            cursor.execute(
+                """
+                SELECT id
+                FROM operator_async_jobs
+                WHERE user_id = %s
+                  AND status IN ('queued', 'running', 'waiting_for_review')
+                  AND (%s OR business_id = ANY(%s))
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (user_id, (selected or {}).get("kind") == "platform", selected_business_ids),
+            )
+            active_row = cursor.fetchone()
+            if active_row:
+                active_job = load_operator_async_job(
+                    cursor,
+                    job_id=str(dict(active_row).get("id") or ""),
+                    user_id=user_id,
+                    scope=selected or {},
+                    is_superadmin=bool(user.get("is_superadmin")),
+                )
         return jsonify(
             {
                 "success": True,
@@ -380,6 +454,7 @@ def operator_telegram_bootstrap():
                 "notification_preferences": preferences.get("notifications") if isinstance(preferences, dict) else {},
                 "deep_link_targets": [item["key"] for item in navigation if item.get("status") != "hidden"],
                 "resolved_deep_link": deep_link,
+                "active_job": active_job,
                 "web_session_token": web_session_token,
                 "mini_app_v2_enabled": str(os.getenv("TELEGRAM_MINI_APP_V2_ENABLED", "true")).lower() in {"1", "true", "yes", "on"},
                 "today_v2_enabled": str(os.getenv("TELEGRAM_MINI_APP_TODAY_V2_ENABLED", "true")).lower() in {"1", "true", "yes", "on"},
@@ -2892,6 +2967,143 @@ def operator_mobile_action_confirm(action_id: str):
                 "external_writes_performed": False,
             }
 
+        def card_refresh_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            if len(targets) != 1 or targets[0] != business_id:
+                return {"status": "blocked", "blocked_reasons": ["card_refresh_preview_changed"]}
+            refresh = enqueue_paid_operator_map_refresh(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                estimated_credits=DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS,
+                explicit_consent=True,
+                metadata={
+                    "channel": "telegram_mini_app",
+                    "operator_action_id": str(envelope.get("_action_id") or ""),
+                    "operator_idempotency_key": str(envelope.get("_idempotency_key") or ""),
+                    "requested_source": str(envelope.get("source") or "all"),
+                },
+            )
+            if str(refresh.get("status") or "") != "queued":
+                return {"status": "blocked", "blocked_reasons": refresh.get("blocked_reasons") or ["card_refresh_failed"], "refresh": refresh}
+            return {
+                "status": "completed",
+                "capability": "cards.refresh",
+                "job_id": str(refresh.get("queue_id") or ""),
+                "job_kind": "map_refresh",
+                "queue_status": str(refresh.get("queue_status") or "pending"),
+                "estimated_credits": DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS,
+                "external_writes_performed": False,
+            }
+
+        def diagnostic_retry_executor(envelope: dict, targets: list[str], resolved_scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            source_job_id = str(envelope.get("job_id") or "")
+            if resolved_scope.get("kind") != "platform" or len(targets) != 1 or targets[0] != business_id:
+                return {"status": "blocked", "blocked_reasons": ["diagnostic_retry_preview_changed"]}
+            cursor.execute("SELECT status, url FROM parsequeue WHERE id = %s AND business_id = %s", (source_job_id, business_id))
+            source_job = cursor.fetchone()
+            if not source_job or str(dict(source_job).get("status") or "").lower() not in {"failed", "error", "stuck", "captcha_required"}:
+                return {"status": "blocked", "blocked_reasons": ["diagnostic_job_changed"]}
+            retry = enqueue_paid_operator_map_refresh(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                explicit_url=str(dict(source_job).get("url") or envelope.get("url") or ""),
+                estimated_credits=DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS,
+                explicit_consent=True,
+                metadata={
+                    "channel": "telegram_mini_app_diagnostics",
+                    "retry_source_queue_id": source_job_id,
+                    "operator_action_id": str(envelope.get("_action_id") or ""),
+                },
+            )
+            if str(retry.get("status") or "") != "queued":
+                return {"status": "blocked", "blocked_reasons": retry.get("blocked_reasons") or ["diagnostic_retry_failed"]}
+            return {
+                "status": "completed",
+                "capability": "diagnostics.retry",
+                "job_id": str(retry.get("queue_id") or ""),
+                "job_kind": "map_refresh",
+                "source_job_id": source_job_id,
+                "external_writes_performed": False,
+            }
+
+        def content_plan_generate_executor(envelope: dict, targets: list[str], resolved_scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            action_key = str(envelope.get("_idempotency_key") or envelope.get("_action_id") or "")
+            if len(targets) != 1 or targets[0] != business_id or not action_key:
+                return {"status": "blocked", "blocked_reasons": ["content_plan_preview_changed"]}
+            job = create_operator_async_job(
+                cursor,
+                user_id=user_id,
+                action_id=str(envelope.get("_action_id") or "") or None,
+                business_id=business_id,
+                kind="content_plan_generate",
+                payload={
+                    "scope_type": str(resolved_scope.get("kind") or "business"),
+                    "scope_target_id": str(resolved_scope.get("id") or business_id),
+                    "period_days": int(envelope.get("period_days") or 30),
+                    "density": str(envelope.get("density") or "standard"),
+                    "content_mix": envelope.get("content_mix") if isinstance(envelope.get("content_mix"), dict) else {},
+                },
+                idempotency_key=f"content-plan:{action_key}:{business_id}",
+                stage="Собираем данные о бизнесе",
+            )
+            return {
+                "status": "completed",
+                "capability": "content.plan.generate",
+                "job_id": job.get("id"),
+                "job": job,
+                "external_writes_performed": False,
+            }
+
+        def content_item_generate_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            item_id = str(envelope.get("item_id") or "")
+            action_key = str(envelope.get("_idempotency_key") or envelope.get("_action_id") or "")
+            if len(targets) != 1 or targets[0] != business_id or not item_id or not action_key:
+                return {"status": "blocked", "blocked_reasons": ["content_item_preview_changed"]}
+            cursor.execute("SELECT business_id FROM contentplanitems WHERE id = %s", (item_id,))
+            current = cursor.fetchone()
+            if not current or str(dict(current).get("business_id") or "") != business_id:
+                return {"status": "blocked", "blocked_reasons": ["content_item_changed"]}
+            job = create_operator_async_job(
+                cursor,
+                user_id=user_id,
+                action_id=str(envelope.get("_action_id") or "") or None,
+                business_id=business_id,
+                kind="content_draft_generate",
+                payload={"item_id": item_id, "language": str(envelope.get("language") or "ru")},
+                idempotency_key=f"content-draft:{action_key}:{item_id}",
+                stage="Сверяем тему с данными бизнеса",
+            )
+            return {
+                "status": "completed",
+                "capability": "content.item.generate",
+                "job_id": job.get("id"),
+                "job": job,
+                "external_writes_performed": False,
+            }
+
+        def content_item_delete_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            item_id = str(envelope.get("item_id") or "")
+            if len(targets) != 1 or targets[0] != business_id or not item_id:
+                return {"status": "blocked", "blocked_reasons": ["content_item_preview_changed"]}
+            cursor.execute(
+                "DELETE FROM contentplanitems WHERE id = %s AND business_id = %s RETURNING id",
+                (item_id, business_id),
+            )
+            if not cursor.fetchone():
+                return {"status": "blocked", "blocked_reasons": ["content_item_changed"]}
+            return {
+                "status": "completed",
+                "capability": "content.item.delete",
+                "deleted_item_id": item_id,
+                "external_writes_performed": False,
+            }
+
         def content_plan_delete_executor(envelope: dict, targets: list[str], _scope: dict):
             business_id = str(envelope.get("business_id") or "")
             plan_id = str(envelope.get("plan_id") or "")
@@ -3016,6 +3228,67 @@ def operator_mobile_action_confirm(action_id: str):
                 "external_writes_performed": False,
             }
 
+        def service_active_state_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            service_id = str(envelope.get("service_id") or "")
+            expected_active = bool(envelope.get("expected_active"))
+            if len(targets) != 1 or targets[0] != business_id or not service_id:
+                return {"status": "blocked", "blocked_reasons": ["service_preview_changed"]}
+            cursor.execute(
+                """
+                UPDATE userservices
+                SET is_active = %s, updated_at = NOW()
+                WHERE id = %s AND business_id = %s AND COALESCE(is_active, TRUE) = %s
+                RETURNING id, is_active
+                """,
+                (not expected_active, service_id, business_id, expected_active),
+            )
+            updated = cursor.fetchone()
+            if not updated:
+                return {"status": "blocked", "blocked_reasons": ["service_state_changed"]}
+            return {
+                "status": "completed",
+                "capability": "services.archive" if expected_active else "services.restore",
+                "service_id": service_id,
+                "is_active": not expected_active,
+                "external_writes_performed": False,
+            }
+
+        def agent_run_executor(envelope: dict, targets: list[str], _scope: dict):
+            business_id = str(envelope.get("business_id") or "")
+            blueprint_id = str(envelope.get("blueprint_id") or "")
+            active_version_id = str(envelope.get("active_version_id") or "")
+            if len(targets) != 1 or targets[0] != business_id or not blueprint_id or not active_version_id:
+                return {"status": "blocked", "blocked_reasons": ["agent_preview_changed"]}
+            if not async_agent_runs_enabled(business_id):
+                return {"status": "blocked", "blocked_reasons": ["agent_async_runs_disabled"]}
+            cursor.execute("SELECT * FROM agent_blueprints WHERE id = %s AND business_id = %s", (blueprint_id, business_id))
+            blueprint_row = cursor.fetchone()
+            cursor.execute("SELECT * FROM agent_blueprint_versions WHERE id = %s AND blueprint_id = %s", (active_version_id, blueprint_id))
+            version_row = cursor.fetchone()
+            if not blueprint_row or not version_row:
+                return {"status": "blocked", "blocked_reasons": ["agent_version_changed"]}
+            action_key = str(envelope.get("_idempotency_key") or envelope.get("_action_id") or "")
+            result = enqueue_agent_run(
+                cursor,
+                blueprint=dict(blueprint_row),
+                version=dict(version_row),
+                input_payload=envelope.get("inputs") if isinstance(envelope.get("inputs"), dict) else {},
+                user_data={"id": user_id, "user_id": user_id},
+                idempotency_key=f"mobile:{action_key}",
+            )
+            if not result.get("success"):
+                return {"status": "blocked", "blocked_reasons": [str(result.get("code") or "agent_run_failed")], "agent_result": result}
+            run = result.get("run") if isinstance(result.get("run"), dict) else {}
+            return {
+                "status": "completed",
+                "capability": "agents.run",
+                "job_id": str(run.get("id") or ""),
+                "job_kind": "agent_run",
+                "run": run,
+                "external_writes_performed": False,
+            }
+
         result, idempotent = confirm_mobile_action(
             cursor,
             action_id=action_id,
@@ -3026,9 +3299,17 @@ def operator_mobile_action_confirm(action_id: str):
                 "finance.sales_import": finance_sales_executor,
                 "finance.transaction.delete": finance_transaction_delete_executor,
                 "cards.schedule.update": card_schedule_executor,
+                "cards.refresh": card_refresh_executor,
+                "diagnostics.retry": diagnostic_retry_executor,
+                "content.plan.generate": content_plan_generate_executor,
                 "content.plan.delete": content_plan_delete_executor,
+                "content.item.generate": content_item_generate_executor,
+                "content.item.delete": content_item_delete_executor,
+                "services.archive": service_active_state_executor,
+                "services.restore": service_active_state_executor,
                 "services.optimize": services_optimize_executor,
                 "services.compress": services_compress_executor,
+                "agents.run": agent_run_executor,
             },
         )
         if result.get("status") == "blocked":
@@ -3039,6 +3320,31 @@ def operator_mobile_action_confirm(action_id: str):
     except Exception:
         db.conn.rollback()
         raise
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/jobs", methods=["GET"])
+def operator_mobile_jobs():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        payload = list_operator_async_jobs(
+            cursor,
+            user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
+            scope=scope,
+            is_superadmin=bool(user_data.get("is_superadmin")),
+            status=str(request.args.get("status") or ""),
+            cursor_value=str(request.args.get("cursor") or ""),
+            limit=int(request.args.get("limit") or 25),
+        )
+        return jsonify({"success": True, **payload})
     finally:
         db.close()
 
@@ -3054,15 +3360,86 @@ def operator_mobile_job_status(job_id: str):
         scope = _resolve_mobile_scope(cursor, user_data)
         if not scope:
             return jsonify({"success": False, "error": "Раздел недоступен"}), 403
-        job = load_mobile_job(
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        job = load_operator_async_job(
+            cursor,
+            job_id=job_id,
+            user_id=user_id,
+            scope=scope,
+            is_superadmin=bool(user_data.get("is_superadmin")),
+        )
+        if not job:
+            job = load_mobile_job(
+                cursor,
+                job_id=job_id,
+                user_id=user_id,
+                scope=scope,
+            )
+        if not job:
+            return jsonify({"success": False, "error": "Задача не найдена или недоступна"}), 404
+        return jsonify({"success": True, "job": job})
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/jobs/<job_id>/retry", methods=["POST"])
+def operator_mobile_job_retry(job_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        job = retry_operator_async_job(
             cursor,
             job_id=job_id,
             user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
             scope=scope,
+            is_superadmin=bool(user_data.get("is_superadmin")),
         )
         if not job:
             return jsonify({"success": False, "error": "Задача не найдена или недоступна"}), 404
+        if job.get("blocked_reason"):
+            return jsonify({"success": False, "error": "Повтор недоступен", "job": job}), 409
+        db.conn.commit()
         return jsonify({"success": True, "job": job})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/jobs/<job_id>/cancel", methods=["POST"])
+def operator_mobile_job_cancel(job_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        scope = _resolve_mobile_scope(cursor, user_data)
+        if not scope:
+            return jsonify({"success": False, "error": "Раздел недоступен"}), 403
+        job = cancel_operator_async_job(
+            cursor,
+            job_id=job_id,
+            user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
+            scope=scope,
+            is_superadmin=bool(user_data.get("is_superadmin")),
+        )
+        if not job:
+            return jsonify({"success": False, "error": "Задача не найдена или недоступна"}), 404
+        if job.get("blocked_reason"):
+            return jsonify({"success": False, "error": "Остановить задачу нельзя", "job": job}), 409
+        db.conn.commit()
+        return jsonify({"success": True, "job": job})
+    except Exception:
+        db.conn.rollback()
+        raise
     finally:
         db.close()
 

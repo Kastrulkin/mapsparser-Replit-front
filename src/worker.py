@@ -59,6 +59,7 @@ from services.operator_refresh_recovery import release_failed_refresh_reservatio
 from services.operator_refresh_telegram_followup import dispatch_operator_refresh_telegram_followup
 from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
 from services.agent_run_queue import claim_next_agent_run, execute_claimed_agent_run
+from services.operator_async_jobs import process_next_operator_async_job
 from services.social_post_service import collect_due_social_post_metrics, dispatch_due_social_posts
 from services.telegram_opportunity_monitor import run_telegram_opportunity_monitor
 from services.knowledge_public_telegram import run_public_telegram_monitor
@@ -129,6 +130,7 @@ _LAST_OUTREACH_REPLY_NOTIFICATION_AT = 0.0
 _LAST_CARD_AUTOMATION_AT = 0.0
 _LAST_AGENT_SCHEDULE_DISPATCH_AT = 0.0
 _LAST_AGENT_RUN_QUEUE_AT = 0.0
+_LAST_OPERATOR_ASYNC_JOB_AT = 0.0
 _LAST_SOCIAL_POST_DISPATCH_AT = 0.0
 _LAST_SOCIAL_POST_METRICS_AT = 0.0
 _LAST_TELEGRAM_OPPORTUNITY_MONITOR_AT = 0.0
@@ -1746,6 +1748,29 @@ def _process_agent_run_queue_if_due() -> None:
                 db.close()
         except Exception:
             pass
+
+
+def _process_operator_async_job_if_due() -> None:
+    global _LAST_OPERATOR_ASYNC_JOB_AT
+    if not _env_bool("OPERATOR_ASYNC_JOBS_ENABLED", True):
+        return
+    now = time.time()
+    interval_sec = max(1, int(os.getenv("OPERATOR_ASYNC_JOB_INTERVAL_SEC", "2")))
+    if now - _LAST_OPERATOR_ASYNC_JOB_AT < interval_sec:
+        return
+    _LAST_OPERATOR_ASYNC_JOB_AT = now
+    try:
+        result = process_next_operator_async_job()
+        if result:
+            print(
+                "[OPERATOR_ASYNC_JOB] "
+                f"job_id={result.get('id')} kind={result.get('kind')} status={result.get('status')}",
+                flush=True,
+            )
+    except Exception:
+        print("[OPERATOR_ASYNC_JOB] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
 
 
 def _process_contact_intelligence_if_due() -> None:
@@ -6812,6 +6837,7 @@ if __name__ == "__main__":
             _run_card_automation_if_due()
             _dispatch_agent_schedules_if_due()
             _process_agent_run_queue_if_due()
+            _process_operator_async_job_if_due()
             _process_contact_intelligence_if_due()
             _dispatch_social_posts_if_due()
             _collect_social_post_metrics_if_due()

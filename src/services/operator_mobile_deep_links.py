@@ -19,6 +19,8 @@ ITEM_SPECS = {
     "operator_message": ("operator", "operatormessages", "business_id"),
     "operator_result": ("operator", "operatoractions", "business_id"),
     "approval": ("tasks", "operatoractions", "business_id"),
+    "task": ("tasks", "operatoractions", "business_id"),
+    "job": ("tasks", "operator_async_jobs", "business_id"),
     "parse_job": ("cards", "parsequeue", "business_id"),
     "integration_error": ("cards", "parsequeue", "business_id"),
     "diagnostic_job": ("diagnostics", "parsequeue", "business_id"),

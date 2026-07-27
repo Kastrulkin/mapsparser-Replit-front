@@ -419,16 +419,27 @@ def list_operator_mobile_module(cursor: Any, *, module: str, scope: dict[str, An
         ],
         "services": [
             {"key": "services.update", "label": "Изменить услугу"},
+            {"key": "services.archive", "label": "Убрать в архив"},
+            {"key": "services.restore", "label": "Вернуть из архива"},
             {"key": "services.optimize", "label": "Улучшить услуги"},
             {"key": "services.compress", "label": "Сократить меню"},
         ],
-        "cards": [{"key": "cards.schedule.update", "label": "Настроить график"}],
+        "cards": [
+            {"key": "cards.schedule.update", "label": "Настроить график"},
+            {"key": "cards.refresh", "label": "Обновить карточки"},
+        ],
         "finance": [{"key": "finance.sales_import", "label": "Загрузить продажи"}],
         "partnerships": [
             {"key": "partnerships.search", "label": "Найти кандидатов"},
             {"key": "partnerships.draft", "label": "Подготовить предложение"},
             {"key": "partnerships.send_preview", "label": "Проверить отправку"},
         ],
+        "agents": (
+            [{"key": "agents.run", "label": "Запустить"}]
+            if str(os.getenv("AGENT_ASYNC_RUNS_ENABLED", "false")).lower() in {"1", "true", "yes", "on"}
+            else []
+        ),
+        "diagnostics": [{"key": "diagnostics.retry", "label": "Повторить одну задачу"}],
     }.get(module, [])
     return {
         "status": "available" if available_actions else "read_only",

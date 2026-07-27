@@ -31,3 +31,56 @@ export const mobileJsonHeaders = () => ({
 });
 
 export const mobileAuthHeaders = () => ({ Authorization: `Bearer ${sessionToken()}` });
+
+export type MobileJob = {
+  id?: string;
+  kind?: string;
+  status?: 'queued' | 'running' | 'waiting_for_review' | 'completed' | 'failed' | 'cancelled';
+  progress?: number;
+  stage?: string;
+  result?: Record<string, unknown>;
+  error?: string | null;
+  terminal?: boolean;
+  available_actions?: string[];
+};
+
+export type MobileActionResult = {
+  action_id?: string;
+  job_id?: string;
+  job?: MobileJob;
+  status?: string;
+  capability?: string;
+};
+
+export const confirmMobileAction = (actionId: string, scope?: MobileScopeRef) => fetch(
+  `/api/operator/mobile/actions/${actionId}/confirm`,
+  {
+    method: 'POST',
+    headers: mobileJsonHeaders(),
+    body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null }),
+  },
+).then(readMobileJson<{ success?: boolean; idempotent?: boolean; operator_result?: MobileActionResult }>);
+
+export const loadMobileJob = (jobId: string, scope?: MobileScopeRef) => {
+  const params = mobileScopeQuery(scope);
+  return fetch(`/api/operator/mobile/jobs/${jobId}?${params.toString()}`, { headers: mobileAuthHeaders() })
+    .then(readMobileJson<{ success?: boolean; job?: MobileJob }>);
+};
+
+export const retryMobileJob = (jobId: string, scope?: MobileScopeRef) => fetch(
+  `/api/operator/mobile/jobs/${jobId}/retry`,
+  {
+    method: 'POST',
+    headers: mobileJsonHeaders(),
+    body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null }),
+  },
+).then(readMobileJson<{ success?: boolean; job?: MobileJob }>);
+
+export const cancelMobileJob = (jobId: string, scope?: MobileScopeRef) => fetch(
+  `/api/operator/mobile/jobs/${jobId}/cancel`,
+  {
+    method: 'POST',
+    headers: mobileJsonHeaders(),
+    body: JSON.stringify({ scope_type: scope?.kind, scope_id: scope?.id || null }),
+  },
+).then(readMobileJson<{ success?: boolean; job?: MobileJob }>);
