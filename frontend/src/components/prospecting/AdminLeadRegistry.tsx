@@ -1027,7 +1027,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const savedCampaignNeedsChannelSetup = (savedOutreachCampaign?.touches || []).some((touch) => {
     const channel = String(touch.channel || '');
     const channelStatus = String(touch.message_brief_json?.channel_status || '');
-    return ['telegram', 'email'].includes(channel)
+    return ['telegram', 'email', 'vk'].includes(channel)
       ? !touch.sender_account_id || channelStatus !== 'ready'
       : channelStatus !== 'manual';
   });
@@ -1040,13 +1040,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     && !campaignSetupDirty
     && savedOutreachCampaign?.generation_current
     && latestCampaignFirstTouch
-    && ['telegram', 'email'].includes(String(latestCampaignFirstTouch.channel || ''))
+    && ['telegram', 'email', 'vk'].includes(String(latestCampaignFirstTouch.channel || ''))
     && !pilotAlreadySent
     && pilotReadiness?.can_dispatch_first_touch,
   );
   const canSyncPilotReply = Boolean(
     latestCampaignFirstTouch
-    && ['telegram', 'email'].includes(String(latestCampaignFirstTouch.channel || ''))
+    && ['telegram', 'email', 'vk'].includes(String(latestCampaignFirstTouch.channel || ''))
     && pilotAlreadySent
     && !pilotReplyReceived,
   );
@@ -1064,15 +1064,21 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       ? { label: 'Подключить email', target: 'sender-settings' }
       : !connectedEmailReady
         ? { label: 'Разрешить отправку', target: 'sender-settings' }
-        : savedOutreachCampaign?.requires_regeneration
-          ? { label: 'Подготовить новую цепочку', target: 'outreach-sequence' }
+        : savedOutreachCampaign?.requires_regeneration && savedCampaignHasHumanEdits
+          ? { label: 'Проверить сохранённые сообщения', target: 'lead-conversation' }
+          : savedOutreachCampaign?.requires_regeneration
+            ? { label: 'Подготовить новую цепочку', target: 'outreach-sequence' }
           : campaignSetupDirty
             ? { label: 'Проверить и сохранить', target: 'outreach-sequence' }
             : savedCampaignHasPendingReview || !savedCampaignQualityPassed
               ? { label: 'Проверить сообщения', target: 'lead-conversation' }
-              : canDispatchPilot
-                ? { label: 'Отправить первый шаг', target: 'outreach-sequence' }
-                : { label: 'Проверить готовность', target: 'outreach-sequence' };
+              : savedCampaignNeedsChannelSetup
+                ? { label: 'Настроить каналы и отправителя', target: 'outreach-sequence' }
+                : savedOutreachCampaign?.status === 'draft'
+                  ? { label: 'Утвердить цепочку', target: 'outreach-sequence' }
+                  : canDispatchPilot
+                    ? { label: 'Отправить первый шаг', target: 'outreach-sequence' }
+                    : { label: 'Проверить готовность', target: 'outreach-sequence' };
   const scrollToLeadSection = (target: string) => {
     const section = document.getElementById(target);
     const toggle = section?.querySelector(`[aria-controls="${target}-content"]`);
@@ -2856,7 +2862,16 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </fieldset>
                 ) : null}
 
-                {savedOutreachCampaign?.requires_regeneration ? (
+                {savedOutreachCampaign?.requires_regeneration && savedCampaignHasHumanEdits ? (
+                  <div className="mt-3 rounded-md bg-amber-50 p-3 text-pretty text-sm leading-6 text-amber-950">
+                    <div className="font-semibold">Сохранённые правки нужно повторно проверить</div>
+                    <p className="mt-1">Тексты, каналы и расписание останутся в этой же версии. LocalOS только повторит проверку качества.</p>
+                    <Button variant="outline" onClick={() => scrollToLeadSection('lead-conversation')} className="mt-2 min-h-10 bg-white">
+                      <ShieldCheck className="mr-2 h-4 w-4" />
+                      Проверить сохранённые сообщения
+                    </Button>
+                  </div>
+                ) : savedOutreachCampaign?.requires_regeneration ? (
                   <div className="mt-3 rounded-md bg-amber-50 p-3 text-pretty text-sm leading-6 text-amber-950">
                     <div className="font-semibold">Эту версию нельзя подтвердить</div>
                     <p className="mt-1">Она создана до текущей проверки персонализации. Покажите новую цепочку, проверьте тексты и сохраните следующую версию.</p>
@@ -2896,7 +2911,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                           <option value="telegram">Telegram</option>
                           <option value="email">Email</option>
                           <option value="max">MAX · вручную</option>
-                          <option value="vk">VK · вручную</option>
+                          <option value="vk">VK</option>
                           <option value="whatsapp">WhatsApp · вручную</option>
                           <option value="sms">SMS · вручную</option>
                         </select>
@@ -2924,7 +2939,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   />
                 </div>
 
-                {['max', 'vk', 'whatsapp', 'sms', 'manual'].includes(sequenceChannels[0]) ? (
+                {['max', 'whatsapp', 'sms', 'manual'].includes(sequenceChannels[0]) ? (
                   <div className="mt-3 rounded-md bg-sky-50 px-3 py-3 text-pretty text-sm leading-6 text-sky-900">
                     Первое касание выполняется вручную. Кампания подождёт вашей отметки и через 48 часов перейдёт в «Нужно внимание» — автоматическое продолжение не начнётся скрытно.
                   </div>
@@ -2951,7 +2966,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     {[0, 1, 2, 3].map((touchIndex) => {
                       const channel = sequenceChannels[touchIndex];
                       const accounts = outreachPreview.channel_availability?.[channel]?.sender_accounts || [];
-                      if (!['telegram', 'email'].includes(channel) || accounts.length <= 1) return null;
+                      if (!['telegram', 'email', 'vk'].includes(channel) || accounts.length <= 1) return null;
                       return (
                         <label key={`${channel}-${touchIndex}`} className="block rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-950">
                           Отправитель для касания {touchIndex + 1} · {channel}
@@ -3158,15 +3173,15 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       ? 'Сначала подготовьте новую цепочку'
                       : savedCampaignNeedsChannelSetup
                         ? 'Сначала настройте каналы и отправителя'
-                        : 'Утвердить цепочку для отправки'}
+                        : 'Утвердить цепочку и перейти к отправке'}
                   </Button>
                 ) : null}
                 {savedOutreachCampaign?.status === 'draft' && !campaignSetupDirty ? (
                   <p className="mt-2 text-pretty text-center text-xs leading-5 text-slate-500">
-                    Утверждение разрешит использовать эти сообщения. Первое касание запускается отдельно после проверки готовности.
+                    После нажатия статус изменится с «Черновик» на «Утверждена». Сообщение ещё не отправится: первое касание запускается отдельно после проверки готовности.
                   </p>
                 ) : null}
-                {savedOutreachCampaign && !pilotAlreadySent && !pilotReplyReceived ? (
+                {savedOutreachCampaign?.status === 'approved' && !pilotAlreadySent && !pilotReplyReceived ? (
                   <section className={`mt-3 rounded-2xl p-4 ${pilotReadiness?.can_dispatch_first_touch
                     ? 'bg-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.22),0_1px_2px_-1px_rgba(15,23,42,0.08)]'
                     : 'bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_1px_2px_-1px_rgba(15,23,42,0.06)]'}`}>

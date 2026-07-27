@@ -1264,6 +1264,20 @@ def test_pilot_preflight_requires_explicit_check_before_ui_enables_dispatch():
     assert admin_ui.index("Проверить готовность") < admin_ui.rindex("Отправить только первое касание")
 
 
+def test_draft_campaign_ui_explains_how_human_approval_changes_campaign_status():
+    builder_ui = (
+        ROOT / "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx"
+    ).read_text()
+    admin_ui = (
+        ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx"
+    ).read_text()
+
+    for source in (builder_ui, admin_ui):
+        assert "Утвердить цепочку и перейти к отправке" in source
+        assert "статус изменится с «Черновик» на «Утверждена»" in source
+        assert "Сообщение ещё не отправится" in source
+
+
 def test_business_user_reaches_tenant_campaign_authorization_for_pilot(monkeypatch):
     module_path = ROOT / "src/api/outreach_campaign_api.py"
     spec = importlib.util.spec_from_file_location("outreach_campaign_api_pilot_test", module_path)
@@ -1817,6 +1831,50 @@ def test_sticky_next_action_names_regeneration_before_unsaved_schedule_review():
     dirty_setup_index = action_block.index("campaignSetupDirty")
     assert regeneration_index < dirty_setup_index
     assert "Подготовить новую цепочку" in action_block
+
+
+def test_stale_manually_edited_campaign_is_rechecked_without_replacing_saved_version():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    action_start = source.index("const summaryNextAction")
+    action_end = source.index("\n  const scrollToLeadSection", action_start)
+    action_block = source[action_start:action_end]
+
+    manual_review_index = action_block.index("savedOutreachCampaign?.requires_regeneration && savedCampaignHasHumanEdits")
+    generic_regeneration_index = action_block.index("savedOutreachCampaign?.requires_regeneration", manual_review_index + 1)
+    assert manual_review_index < generic_regeneration_index
+    assert "Проверить сохранённые сообщения" in action_block
+    assert "Тексты, каналы и расписание останутся в этой же версии" in source
+
+
+def test_ready_draft_primary_action_is_approval_before_preflight():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    action_start = source.index("const summaryNextAction")
+    action_end = source.index("\n  const scrollToLeadSection", action_start)
+    action_block = source[action_start:action_end]
+
+    assert "savedOutreachCampaign?.status === 'draft'" in action_block
+    assert "Утвердить цепочку" in action_block
+    assert action_block.index("savedOutreachCampaign?.status === 'draft'") < action_block.index("canDispatchPilot")
+
+
+def test_preflight_is_only_shown_after_campaign_approval():
+    admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    builder_source = (ROOT / "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx").read_text()
+
+    assert "{savedOutreachCampaign?.status === 'approved' && !pilotAlreadySent && !pilotReplyReceived ? (" in admin_source
+    assert "{selectedCampaign?.status === 'approved' && !pilotAlreadySent && !pilotReplyReceived ? (" in builder_source
+
+
+def test_partner_builder_blocks_approval_until_current_quality_checked_draft_is_ready():
+    source = (ROOT / "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx").read_text()
+    approval_start = source.index("{selectedCampaign?.status === 'draft'")
+    approval_end = source.index("</Button>", approval_start)
+    approval_block = source[approval_start:approval_end]
+
+    assert "campaignReadyForApproval" in approval_block
+    assert "disabled={Boolean(busy) || !campaignReadyForApproval}" in approval_block
 
 
 def test_saved_campaign_hydrates_schedule_form_and_calendar_from_same_version():

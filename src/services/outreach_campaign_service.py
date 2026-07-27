@@ -385,6 +385,7 @@ def apply_draft_campaign_review(
         manual_review = dict(gate.get("manual_review") or {})
         manual_review.update({
             "passed": passed,
+            "review_version": REVIEW_PROMPT_VERSION,
             "reviewer_role": manual_review.get("reviewer_role") or "authorized_user",
             "source": "saved_draft_review",
             "reviewed_at": reviewed_at,
@@ -396,6 +397,9 @@ def apply_draft_campaign_review(
         brief["manual_edit_review_passed"] = passed
         brief["manual_edit_reviewed_at"] = reviewed_at
         brief["manual_edit_reviewed_by"] = user_id or None
+        brief["generation_source"] = "manual_product_correction"
+        brief["generation_prompt_version"] = PROMPT_VERSION
+        brief["semantic_review_prompt_version"] = REVIEW_PROMPT_VERSION
 
         cursor.execute(
             """
@@ -2851,7 +2855,7 @@ def change_campaign_status(
         )
     else:
         cursor.execute(
-            "UPDATE outreach_campaign_touches SET status = CASE WHEN channel IN ('max', 'vk', 'whatsapp', 'sms', 'manual') THEN 'awaiting_manual_send' ELSE 'scheduled' END, manual_due_at = CASE WHEN channel IN ('max', 'vk', 'whatsapp', 'sms', 'manual') THEN NOW() + INTERVAL '48 hours' ELSE manual_due_at END, updated_at = NOW() WHERE campaign_id = %s AND status = 'paused'",
+            "UPDATE outreach_campaign_touches SET status = CASE WHEN channel IN ('max', 'whatsapp', 'sms', 'manual') THEN 'awaiting_manual_send' ELSE 'scheduled' END, manual_due_at = CASE WHEN channel IN ('max', 'whatsapp', 'sms', 'manual') THEN NOW() + INTERVAL '48 hours' ELSE manual_due_at END, updated_at = NOW() WHERE campaign_id = %s AND status = 'paused'",
             (campaign_id,),
         )
         cursor.execute(

@@ -280,8 +280,31 @@ def test_vk_is_an_automatic_campaign_channel_with_runtime_gates():
         worker_source.index("def _dispatch_outreach_queue_if_due"):
         worker_source.index("def _run_card_automation_if_due")
     ]
-    assert "sync_vk_replies" in dispatch_block
-    assert dispatch_block.index("sync_vk_replies(") < dispatch_block.index("dispatch_due_outreach_queue(")
+    reply_sync_block = worker_source[
+        worker_source.index("def _sync_outreach_replies_if_due"):
+        worker_source.index("def _dispatch_outreach_queue_if_due")
+    ]
+    assert "sync_vk_replies" in reply_sync_block
+    assert "reply_sync_ready = _sync_outreach_replies_if_due()" in dispatch_block
+    assert dispatch_block.index("reply_sync_ready = _sync_outreach_replies_if_due()") < dispatch_block.index("dispatch_due_outreach_queue(")
+
+
+def test_vk_is_presented_and_resumed_as_automatic_channel_everywhere():
+    campaign_source = Path("src/services/outreach_campaign_service.py").read_text(encoding="utf-8")
+    admin_source = Path("frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text(encoding="utf-8")
+    builder_source = Path("frontend/src/components/prospecting/OutreachCampaignBuilder.tsx").read_text(encoding="utf-8")
+
+    assert "VK · вручную" not in admin_source
+    assert "VK · вручную" not in builder_source
+    assert "const MANUAL_CHANNELS = new Set(['max', 'whatsapp', 'sms', 'manual'])" in builder_source
+    assert "['telegram', 'email', 'vk'].includes(channel)" in admin_source
+    assert "['telegram', 'email', 'vk'].includes(firstCampaignTouch.channel)" in builder_source
+    assert "['telegram', 'email', 'vk'].includes(String(latestCampaignFirstTouch.channel || ''))" in admin_source
+
+    resume_start = campaign_source.index("UPDATE outreach_campaign_touches SET status = CASE WHEN channel IN")
+    resume_end = campaign_source.index("WHERE campaign_id = %s AND status = 'paused'", resume_start)
+    resume_sql = campaign_source[resume_start:resume_end]
+    assert "'vk'" not in resume_sql
 
 
 def test_vk_reply_sync_only_reads_campaign_peers():

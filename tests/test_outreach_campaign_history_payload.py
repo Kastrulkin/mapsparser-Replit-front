@@ -265,3 +265,51 @@ def test_successful_manual_edit_review_removes_the_review_blocker_from_every_tou
     for brief in cursor.updated_message_briefs:
         assert brief["manual_edit_review_required"] is False
         assert brief["manual_edit_review_passed"] is True
+
+
+def test_successful_manual_edit_review_makes_current_draft_approvable_without_regeneration():
+    from services.outreach_campaign_service import apply_draft_campaign_review
+    from services.outreach_personalization_ai import (
+        PROMPT_VERSION,
+        REVIEW_PROMPT_VERSION,
+        generation_contract_current,
+    )
+
+    cursor = DraftCampaignReviewCursor()
+    reviewed_touches = [
+        {
+            "sequence_index": index,
+            "quality_gate": {
+                "passed": True,
+                "verdict": "approve",
+                "total_score": 18,
+                "max_score": 18,
+                "reason_codes": [],
+                "manual_review": {
+                    "passed": True,
+                    "review_version": REVIEW_PROMPT_VERSION,
+                    "reviewer_role": "superadmin",
+                },
+            },
+        }
+        for index in range(4)
+    ]
+
+    apply_draft_campaign_review(
+        cursor,
+        campaign_id="campaign-1",
+        reviewed_touches=reviewed_touches,
+        user_id="user-1",
+    )
+
+    assert len(cursor.updated_quality_gates) == 4
+    assert len(cursor.updated_message_briefs) == 4
+    for brief, gate in zip(
+        cursor.updated_message_briefs,
+        cursor.updated_quality_gates,
+        strict=True,
+    ):
+        assert brief["generation_source"] == "manual_product_correction"
+        assert brief["generation_prompt_version"] == PROMPT_VERSION
+        assert brief["semantic_review_prompt_version"] == REVIEW_PROMPT_VERSION
+        assert generation_contract_current(brief, gate, require_ai=True) is True

@@ -81,6 +81,8 @@ type CampaignTouch = TouchPreview & {
   approved_text?: string | null;
   quality_gate_json?: QualityGate;
   message_brief_json?: {
+    channel_status?: ChannelStatus;
+    manual_edit_review_required?: boolean;
     source_url?: string | null;
     observation?: string | null;
     problem_hypothesis?: string | null;
@@ -94,6 +96,8 @@ type Campaign = {
   status?: string;
   stop_reason?: string | null;
   needs_attention_reason?: string | null;
+  generation_current?: boolean;
+  requires_regeneration?: boolean;
   touches?: CampaignTouch[];
   events?: Array<{
     id?: string;
@@ -162,7 +166,7 @@ type PilotReadiness = {
 
 const ANGLES = ['signal', 'founder_story', 'proof', 'respectful_close'] as const;
 const ANGLE_LABELS = ['Сигнал', 'Опыт основателя', 'Кейс или материал', 'Завершение'];
-const MANUAL_CHANNELS = new Set(['max', 'vk', 'whatsapp', 'sms', 'manual']);
+const MANUAL_CHANNELS = new Set(['max', 'whatsapp', 'sms', 'manual']);
 const DEFAULT_CHANNELS = ['telegram', 'email', 'max', 'vk'];
 const DEFAULT_DAYS = [0, 3, 7, 12];
 
@@ -636,20 +640,50 @@ export function OutreachCampaignBuilder({
     && !selectedCampaign.stop_reason;
   const firstCampaignTouch = (selectedCampaign?.touches || [])
     .find((touch) => Number(touch.sequence_index) === 0);
+  const campaignHasPendingReview = (selectedCampaign?.touches || []).some(
+    (touch) => Boolean(touch.message_brief_json?.manual_edit_review_required),
+  );
+  const campaignQualityPassed = Boolean(
+    (selectedCampaign?.touches || []).length
+    && (selectedCampaign?.touches || []).every((touch) => Boolean((touch.quality_gate || touch.quality_gate_json)?.passed)),
+  );
+  const campaignNeedsChannelSetup = (selectedCampaign?.touches || []).some((touch) => {
+    const channelStatus = String(touch.channel_status || touch.message_brief_json?.channel_status || '');
+    return ['telegram', 'email', 'vk'].includes(touch.channel)
+      ? !touch.sender_account_id || channelStatus !== 'ready'
+      : channelStatus !== 'manual';
+  });
+  const campaignReadyForApproval = Boolean(
+    selectedCampaign?.status === 'draft'
+    && selectedCampaign.generation_current
+    && !selectedCampaign.requires_regeneration
+    && campaignQualityPassed
+    && !campaignHasPendingReview
+    && !campaignNeedsChannelSetup,
+  );
+  const campaignApprovalBlocker = selectedCampaign?.requires_regeneration || !selectedCampaign?.generation_current
+    ? 'Сначала обновите цепочку по текущим правилам'
+    : campaignHasPendingReview
+      ? 'Сначала проверьте сохранённые правки'
+      : !campaignQualityPassed
+        ? 'Сначала исправьте сообщения с замечаниями'
+        : campaignNeedsChannelSetup
+          ? 'Сначала настройте каналы и отправителя'
+          : 'Утвердить цепочку и перейти к отправке';
   const pilotAlreadySent = (selectedCampaign?.touches || []).some((touch) => (
     ['manual_sent', 'sent', 'delivered'].includes(String(touch.status || ''))
   ));
   const canPilotDispatch = Boolean(
     selectedCampaign?.status === 'approved'
     && firstCampaignTouch
-    && ['telegram', 'email'].includes(firstCampaignTouch.channel)
+    && ['telegram', 'email', 'vk'].includes(firstCampaignTouch.channel)
     && !pilotAlreadySent
     && pilotReadiness?.can_dispatch_first_touch,
   );
   const pilotReplyReceived = selectedCampaign?.stop_reason === 'recipient_replied';
   const canPilotReplySync = Boolean(
     firstCampaignTouch
-    && ['telegram', 'email'].includes(firstCampaignTouch.channel)
+    && ['telegram', 'email', 'vk'].includes(firstCampaignTouch.channel)
     && pilotAlreadySent
     && !pilotReplyReceived,
   );
@@ -722,7 +756,7 @@ export function OutreachCampaignBuilder({
                 <option value="telegram">Telegram</option>
                 <option value="email">Email</option>
                 <option value="max">MAX · вручную</option>
-                <option value="vk">VK · вручную</option>
+                <option value="vk">VK</option>
                 <option value="whatsapp">WhatsApp · вручную</option>
                 <option value="sms">SMS · вручную</option>
               </select>
@@ -791,7 +825,7 @@ export function OutreachCampaignBuilder({
             const channel = channels[touchIndex];
             const availability = preview.channel_availability?.[channel];
             const accounts = availability?.sender_accounts || [];
-            if (!['telegram', 'email'].includes(channel) || accounts.length <= 1) return null;
+            if (!['telegram', 'email', 'vk'].includes(channel) || accounts.length <= 1) return null;
             return (
               <label key={`${channel}-${touchIndex}`} className="block rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-950">
                 Отправитель для касания {touchIndex + 1} · {channel}
@@ -1045,18 +1079,18 @@ export function OutreachCampaignBuilder({
       </p>
 
       {selectedCampaign?.status === 'draft' ? (
-        <Button onClick={() => void approve()} disabled={Boolean(busy)} className="min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
+        <Button onClick={() => void approve()} disabled={Boolean(busy) || !campaignReadyForApproval} className="min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
           {busy === 'approve' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-          Утвердить цепочку для отправки
+          {campaignApprovalBlocker}
         </Button>
       ) : null}
       {selectedCampaign?.status === 'draft' ? (
         <p className="text-pretty text-center text-xs leading-5 text-slate-500">
-          Утверждение разрешит использовать эти сообщения. Первое касание запускается отдельно после проверки готовности.
+          После нажатия статус изменится с «Черновик» на «Утверждена». Сообщение ещё не отправится: первое касание запускается отдельно после проверки готовности.
         </p>
       ) : null}
 
-      {selectedCampaign && !pilotAlreadySent && !pilotReplyReceived ? (
+      {selectedCampaign?.status === 'approved' && !pilotAlreadySent && !pilotReplyReceived ? (
         <section className={pilotReadiness?.can_dispatch_first_touch
           ? 'rounded-2xl bg-emerald-50 p-4 shadow-[0_0_0_1px_rgba(16,185,129,0.22),0_1px_2px_-1px_rgba(15,23,42,0.08)]'
           : 'rounded-2xl bg-slate-50 p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_1px_2px_-1px_rgba(15,23,42,0.06)]'}>
