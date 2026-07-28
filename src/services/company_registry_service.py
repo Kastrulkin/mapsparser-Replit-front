@@ -81,6 +81,78 @@ def normalize_text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
 
+def _coordinate_value(value: Any, *, latitude: bool) -> float | None:
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    try:
+        number = float(str(value).strip().replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+    lower, upper = (-90.0, 90.0) if latitude else (-180.0, 180.0)
+    return number if lower <= number <= upper else None
+
+
+def resolve_company_coordinates(payload: dict[str, Any] | None) -> tuple[float | None, float | None]:
+    """Read coordinates from canonical, legacy and parser payload shapes."""
+    source = payload if isinstance(payload, dict) else {}
+    candidates: list[dict[str, Any]] = [source]
+    for key in ("geo", "location", "coordinates", "geometry"):
+        nested = source.get(key)
+        if isinstance(nested, dict):
+            candidates.append(nested)
+            nested_location = nested.get("location")
+            if isinstance(nested_location, dict):
+                candidates.append(nested_location)
+    for key in ("raw_payload_json", "search_payload_json", "enrich_payload_json"):
+        nested = source.get(key)
+        if isinstance(nested, dict):
+            candidates.append(nested)
+            for nested_key in ("geo", "location", "coordinates", "geometry"):
+                nested_value = nested.get(nested_key)
+                if isinstance(nested_value, dict):
+                    candidates.append(nested_value)
+                    nested_location = nested_value.get("location")
+                    if isinstance(nested_location, dict):
+                        candidates.append(nested_location)
+    latitude_keys = ("latitude", "lat", "geo_lat", "geoLat")
+    longitude_keys = ("longitude", "lon", "lng", "geo_lon", "geoLon")
+    for candidate in candidates:
+        latitude_value = next((candidate.get(key) for key in latitude_keys if candidate.get(key) not in (None, "")), None)
+        longitude_value = next((candidate.get(key) for key in longitude_keys if candidate.get(key) not in (None, "")), None)
+        resolved_latitude = _coordinate_value(latitude_value, latitude=True)
+        resolved_longitude = _coordinate_value(longitude_value, latitude=False)
+        if resolved_latitude is not None and resolved_longitude is not None:
+            return resolved_latitude, resolved_longitude
+    return None, None
+
+
+def _sync_location_coordinates(
+    cursor,
+    *,
+    location_id: str,
+    latitude: float | None,
+    longitude: float | None,
+    source: str,
+) -> None:
+    if not location_id or latitude is None or longitude is None:
+        return
+    cursor.execute(
+        """
+        UPDATE company_locations
+        SET latitude = COALESCE(latitude, %s),
+            longitude = COALESCE(longitude, %s),
+            metadata_json = COALESCE(metadata_json, '{}'::jsonb) || jsonb_build_object(
+                'coordinates_source', %s,
+                'coordinates_synced_at', NOW()
+            ),
+            updated_at = NOW()
+        WHERE id = %s
+          AND (latitude IS NULL OR longitude IS NULL)
+        """,
+        (latitude, longitude, source, location_id),
+    )
+
+
 def _roles(row: dict[str, Any]) -> list[dict[str, str]]:
     result: list[dict[str, str]] = []
     for key in ("client", "localos_lead", "partner", "competitor"):
@@ -534,6 +606,14 @@ def ensure_company_for_business(conn, business: dict[str, Any], *, source: str =
     )
     existing = cursor.fetchone()
     if existing:
+        latitude, longitude = resolve_company_coordinates(business)
+        _sync_location_coordinates(
+            cursor,
+            location_id=str(existing.get("company_location_id") or ""),
+            latitude=latitude,
+            longitude=longitude,
+            source=source,
+        )
         cursor.close()
         return {"company_id": str(existing["company_id"]), "company_location_id": str(existing.get("company_location_id") or "")}
     cursor.execute("SELECT url, map_type FROM businessmaplinks WHERE business_id = %s AND COALESCE(BTRIM(url), '') <> '' ORDER BY created_at", (business_id,))
@@ -550,6 +630,7 @@ def ensure_company_for_business(conn, business: dict[str, Any], *, source: str =
 
     company_id = ""
     location_id = ""
+    latitude, longitude = resolve_company_coordinates(business)
     for key_type, value, _confidence in identities:
         cursor.execute(
             """
@@ -586,7 +667,7 @@ def ensure_company_for_business(conn, business: dict[str, Any], *, source: str =
             INSERT INTO company_locations (id, company_id, display_name, address, city, country, latitude, longitude, timezone, is_primary)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
             """,
-            (location_id, company_id, business.get("name"), business.get("address"), business.get("city"), business.get("country"), business.get("latitude"), business.get("longitude"), business.get("timezone")),
+            (location_id, company_id, business.get("name"), business.get("address"), business.get("city"), business.get("country"), latitude, longitude, business.get("timezone")),
         )
     elif not location_id:
         location_id = str(uuid.uuid4())
@@ -602,9 +683,17 @@ def ensure_company_for_business(conn, business: dict[str, Any], *, source: str =
             """,
             (
                 location_id, company_id, business.get("name"), business.get("address"),
-                business.get("city"), business.get("country"), business.get("latitude"),
-                business.get("longitude"), business.get("timezone"), company_id,
+                business.get("city"), business.get("country"), latitude,
+                longitude, business.get("timezone"), company_id,
             ),
+        )
+    else:
+        _sync_location_coordinates(
+            cursor,
+            location_id=location_id,
+            latitude=latitude,
+            longitude=longitude,
+            source=source,
         )
     cursor.execute(
         """
@@ -673,6 +762,14 @@ def ensure_company_for_lead(
         cursor.execute("SELECT company_id, company_location_id FROM prospectingleads WHERE id = %s", (lead_id,))
         linked = cursor.fetchone()
         if linked and linked.get("company_id"):
+            latitude, longitude = resolve_company_coordinates(lead)
+            _sync_location_coordinates(
+                cursor,
+                location_id=str(linked.get("company_location_id") or ""),
+                latitude=latitude,
+                longitude=longitude,
+                source=source,
+            )
             cursor.close()
             return {"company_id": str(linked["company_id"]), "company_location_id": str(linked.get("company_location_id") or "")}
 
@@ -695,6 +792,7 @@ def ensure_company_for_lead(
 
     company_id = ""
     location_id = ""
+    latitude, longitude = resolve_company_coordinates(lead)
     for key_type, value, _confidence in identity_candidates:
         cursor.execute(
             """
@@ -734,13 +832,12 @@ def ensure_company_for_lead(
                 Json({"first_lead_id": lead_id} if link_lead else {"first_observation_id": lead_id}),
             ),
         )
-        coordinates = lead.get("location") if isinstance(lead.get("location"), dict) else {}
         cursor.execute(
             """
             INSERT INTO company_locations (id, company_id, display_name, address, city, latitude, longitude, is_primary)
             VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE)
             """,
-            (location_id, company_id, lead.get("name"), lead.get("address"), lead.get("city"), coordinates.get("lat") or coordinates.get("latitude"), coordinates.get("lon") or coordinates.get("longitude")),
+            (location_id, company_id, lead.get("name"), lead.get("address"), lead.get("city"), latitude, longitude),
         )
     elif not location_id:
         location_id = str(uuid.uuid4())
@@ -750,6 +847,14 @@ def ensure_company_for_lead(
             VALUES (%s, %s, %s, %s, %s, NOT EXISTS (SELECT 1 FROM company_locations WHERE company_id = %s))
             """,
             (location_id, company_id, lead.get("name"), lead.get("address"), lead.get("city"), company_id),
+        )
+    else:
+        _sync_location_coordinates(
+            cursor,
+            location_id=location_id,
+            latitude=latitude,
+            longitude=longitude,
+            source=source,
         )
 
     for key_type, value, confidence in identity_candidates:

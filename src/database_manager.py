@@ -2113,6 +2113,14 @@ class DatabaseManager:
                     if value is not None:
                         updates[field] = value
 
+            coordinate_values = {
+                "lat": lead_data.get("lat") if lead_data.get("lat") is not None else lead_data.get("geo_lat"),
+                "lon": lead_data.get("lon") if lead_data.get("lon") is not None else lead_data.get("geo_lon"),
+            }
+            for field, value in coordinate_values.items():
+                if field in table_columns and value is not None:
+                    updates[field] = value
+
             if "location" in table_columns and lead_data.get("location") is not None:
                 updates["location"] = _to_json_param(lead_data.get("location"))
 
@@ -2213,6 +2221,15 @@ class DatabaseManager:
         if 'pipeline_status' in table_columns:
             fields.append('pipeline_status')
             values.append(lead_data.get('pipeline_status') or 'unprocessed')
+
+        coordinate_values = {
+            "lat": lead_data.get("lat") if lead_data.get("lat") is not None else lead_data.get("geo_lat"),
+            "lon": lead_data.get("lon") if lead_data.get("lon") is not None else lead_data.get("geo_lon"),
+        }
+        for column_name, value in coordinate_values.items():
+            if column_name in table_columns and value is not None:
+                fields.append(column_name)
+                values.append(value)
 
         optional_scalar_columns = (
             'disqualification_reason',
