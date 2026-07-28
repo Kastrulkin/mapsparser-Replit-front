@@ -133,6 +133,7 @@ def list_companies(
     is_superadmin: bool,
     search: str = "",
     role: str = "",
+    category: str = "",
     city: str = "",
     status: str = "",
     cursor_value: int = 0,
@@ -173,6 +174,9 @@ def list_companies(
     }.get(role_filter)
     if role_sql:
         filters.append(role_sql)
+    if category:
+        filters.append("LOWER(COALESCE(c.primary_category, '')) = %(category)s")
+        params["category"] = normalize_text(category)
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute(
         f"""
@@ -226,6 +230,153 @@ def list_companies(
             "label": "Обновить данные карт" if not collected or (age_days is not None and age_days > 7) else "Открыть компанию",
         }
     return {"items": rows, "cursor": str(offset + safe_limit) if has_more else None, "as_of": now.isoformat()}
+
+
+def list_company_map_points(
+    conn,
+    *,
+    user_id: str,
+    is_superadmin: bool,
+    search: str = "",
+    role: str = "",
+    category: str = "",
+    status: str = "",
+    limit: int = 5000,
+    include_points: bool = True,
+) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit), 5000))
+    base_filters = [_access_sql(is_superadmin)]
+    params: dict[str, Any] = {"user_id": user_id, "limit": safe_limit}
+    query = normalize_text(search)
+    if query:
+        base_filters.append(
+            """
+            (
+                LOWER(c.canonical_name) LIKE %(query)s
+                OR EXISTS (
+                    SELECT 1 FROM company_locations ql
+                    WHERE ql.company_id = c.id
+                      AND LOWER(COALESCE(ql.address, '') || ' ' || COALESCE(ql.city, '')) LIKE %(query)s
+                )
+            )
+            """
+        )
+        params["query"] = f"%{query}%"
+    if status:
+        base_filters.append("c.status = %(status)s")
+    else:
+        base_filters.append("c.status IN ('observed', 'active')")
+    role_filter = str(role or "").strip().lower()
+    role_sql = {
+        "client": "EXISTS (SELECT 1 FROM business_company_links rf WHERE rf.company_id = c.id)",
+        "localos_lead": "EXISTS (SELECT 1 FROM prospectingleads rl JOIN lead_workstreams rw ON rw.lead_id = rl.id WHERE rl.company_id = c.id AND rw.workstream_type = 'localos_sales')",
+        "partner": "EXISTS (SELECT 1 FROM prospectingleads rl JOIN lead_workstreams rw ON rw.lead_id = rl.id WHERE rl.company_id = c.id AND rw.workstream_type = 'client_partnership')",
+        "competitor": "EXISTS (SELECT 1 FROM company_relationships rr WHERE (rr.subject_company_id = c.id OR rr.object_company_id = c.id) AND rr.relationship_type = 'competitor')",
+        "unassigned": "NOT EXISTS (SELECT 1 FROM business_company_links rf WHERE rf.company_id = c.id) AND NOT EXISTS (SELECT 1 FROM prospectingleads rl WHERE rl.company_id = c.id)",
+    }.get(role_filter)
+    if role_sql:
+        base_filters.append(role_sql)
+
+    selected_filters = list(base_filters)
+    if category:
+        selected_filters.append("LOWER(COALESCE(c.primary_category, '')) = %(category)s")
+        params["category"] = normalize_text(category)
+
+    client_sql = "EXISTS (SELECT 1 FROM business_company_links bl WHERE bl.company_id = c.id)"
+    lead_sql = "EXISTS (SELECT 1 FROM prospectingleads ll JOIN lead_workstreams lw ON lw.lead_id = ll.id WHERE ll.company_id = c.id AND lw.workstream_type = 'localos_sales')"
+    partner_sql = "EXISTS (SELECT 1 FROM prospectingleads pl JOIN lead_workstreams pw ON pw.lead_id = pl.id WHERE pl.company_id = c.id AND pw.workstream_type = 'client_partnership')"
+    competitor_sql = "EXISTS (SELECT 1 FROM company_relationships cr WHERE (cr.subject_company_id = c.id OR cr.object_company_id = c.id) AND cr.relationship_type = 'competitor')"
+    mapped_sql = "EXISTS (SELECT 1 FROM company_locations ml WHERE ml.company_id = c.id AND ml.status = 'active' AND ml.latitude IS NOT NULL AND ml.longitude IS NOT NULL)"
+
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor.execute(
+        f"""
+        SELECT COUNT(*) AS matching_count,
+               COUNT(*) FILTER (WHERE {mapped_sql}) AS mapped_count,
+               COUNT(*) FILTER (WHERE {client_sql}) AS client_count,
+               COUNT(*) FILTER (WHERE {lead_sql}) AS lead_count,
+               COUNT(*) FILTER (WHERE {partner_sql}) AS partner_count,
+               COUNT(*) FILTER (WHERE {competitor_sql}) AS competitor_count
+        FROM companies c
+        WHERE {' AND '.join(selected_filters)}
+        """,
+        params,
+    )
+    counts = dict(cursor.fetchone() or {})
+    rows: list[dict[str, Any]] = []
+    if include_points:
+        cursor.execute(
+            f"""
+            SELECT c.id, c.canonical_name AS name, c.primary_category, c.status,
+                   loc.id AS primary_location_id, loc.address, loc.city,
+                   loc.latitude, loc.longitude,
+                   {client_sql} AS is_client,
+                   {lead_sql} AS is_localos_lead,
+                   {partner_sql} AS is_partner,
+                   {competitor_sql} AS is_competitor
+            FROM companies c
+            JOIN LATERAL (
+                SELECT l.id, l.address, l.city, l.latitude, l.longitude
+                FROM company_locations l
+                WHERE l.company_id = c.id
+                  AND l.status = 'active'
+                  AND l.latitude IS NOT NULL
+                  AND l.longitude IS NOT NULL
+                ORDER BY l.is_primary DESC, l.created_at ASC
+                LIMIT 1
+            ) loc ON TRUE
+            WHERE {' AND '.join(selected_filters)}
+            ORDER BY c.canonical_name, c.id
+            LIMIT %(limit)s
+            """,
+            params,
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+    cursor.execute(
+        f"""
+        SELECT c.primary_category AS value, COUNT(*) AS count
+        FROM companies c
+        WHERE {' AND '.join(base_filters)}
+          AND NULLIF(TRIM(c.primary_category), '') IS NOT NULL
+        GROUP BY c.primary_category
+        ORDER BY COUNT(*) DESC, c.primary_category
+        LIMIT 200
+        """,
+        params,
+    )
+    categories = [dict(row) for row in cursor.fetchall()]
+    cursor.close()
+
+    for row in rows:
+        row["roles"] = _roles(row)
+        row["latitude"] = float(row["latitude"])
+        row["longitude"] = float(row["longitude"])
+
+    mapped_count = int(counts.get("mapped_count") or 0)
+    role_counts = {
+        "client": int(counts.get("client_count") or 0),
+        "localos_lead": int(counts.get("lead_count") or 0),
+        "partner": int(counts.get("partner_count") or 0),
+        "competitor": int(counts.get("competitor_count") or 0),
+    }
+    return {
+        "items": rows,
+        "counts": {
+            "matching": int(counts.get("matching_count") or 0),
+            "mapped": mapped_count,
+            "without_coordinates": max(0, int(counts.get("matching_count") or 0) - mapped_count),
+            "roles": role_counts,
+        },
+        "filters": {
+            "categories": [
+                {"value": str(item.get("value") or ""), "label": str(item.get("value") or ""), "count": int(item.get("count") or 0)}
+                for item in categories
+                if item.get("value")
+            ]
+        },
+        "truncated": mapped_count > safe_limit,
+        "as_of": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def get_company_detail(conn, *, company_id: str, user_id: str, is_superadmin: bool) -> dict[str, Any] | None:

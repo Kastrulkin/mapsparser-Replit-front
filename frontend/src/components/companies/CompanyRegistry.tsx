@@ -7,6 +7,8 @@ import {
   CircleAlert,
   CopyCheck,
   ExternalLink,
+  LayoutList,
+  Map,
   MapPin,
   RefreshCw,
   Search,
@@ -15,6 +17,8 @@ import {
   X,
 } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
+import { CompanyRegistryMap } from './CompanyRegistryMap';
+import { type CompanyMapPoint } from './companyRegistryMapModel';
 
 type CompanyRole = { key: string; label: string };
 type CompanySummary = {
@@ -62,6 +66,13 @@ type MergePreview = {
   changes: string[];
   expires_at?: string;
 };
+type CompanyMapCounts = {
+  matching: number;
+  mapped: number;
+  without_coordinates: number;
+  roles?: Record<string, number>;
+};
+type CompanyCategoryOption = { value: string; label: string; count: number };
 
 const roleOptions = [
   ['', 'Все'],
@@ -266,6 +277,8 @@ export const CompanyRegistry = () => {
   const [items, setItems] = useState<CompanySummary[]>([]);
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
+  const [category, setCategory] = useState('');
+  const [view, setView] = useState<'list' | 'map'>('list');
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -277,16 +290,24 @@ export const CompanyRegistry = () => {
   const [mergePreview, setMergePreview] = useState<MergePreview | null>(null);
   const [mergeBusy, setMergeBusy] = useState(false);
   const [mergeMessage, setMergeMessage] = useState('');
+  const [mapItems, setMapItems] = useState<CompanyMapPoint[]>([]);
+  const [mapCounts, setMapCounts] = useState<CompanyMapCounts | null>(null);
+  const [mapCategories, setMapCategories] = useState<CompanyCategoryOption[]>([]);
+  const [mapLoading, setMapLoading] = useState(true);
+  const [mapError, setMapError] = useState('');
+  const [mapTruncated, setMapTruncated] = useState(false);
   const reducedMotion = useReducedMotion();
 
   const load = useCallback(async (nextCursor = '', append = false) => {
-    append ? setLoadingMore(true) : setLoading(true);
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     setError('');
     try {
       const query = new URLSearchParams({ limit: '30' });
       if (search.trim()) query.set('search', search.trim());
       if (role === 'archive') query.set('status', 'archived');
       else if (role) query.set('role', role);
+      if (category) query.set('category', category);
       if (nextCursor) query.set('cursor', nextCursor);
       const payload = await newAuth.makeRequest(`/companies?${query.toString()}`);
       const nextItems = Array.isArray(payload?.items) ? payload.items : [];
@@ -298,18 +319,46 @@ export const CompanyRegistry = () => {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [role, search]);
+  }, [category, role, search]);
+
+  const loadMap = useCallback(async () => {
+    setMapLoading(true);
+    setMapError('');
+    try {
+      const query = new URLSearchParams();
+      if (search.trim()) query.set('search', search.trim());
+      if (role === 'archive') query.set('status', 'archived');
+      else if (role) query.set('role', role);
+      if (category) query.set('category', category);
+      if (view === 'list') query.set('summary_only', 'true');
+      const payload = await newAuth.makeRequest(`/admin/companies/map?${query.toString()}`);
+      if (view === 'map') setMapItems(Array.isArray(payload?.items) ? payload.items : []);
+      setMapCounts(payload?.counts || null);
+      setMapCategories(Array.isArray(payload?.filters?.categories) ? payload.filters.categories : []);
+      setMapTruncated(Boolean(payload?.truncated));
+    } catch (reason) {
+      setMapError(reason instanceof Error ? reason.message : 'Не удалось загрузить карту компаний');
+    } finally {
+      setMapLoading(false);
+    }
+  }, [category, role, search, view]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 250);
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadMap(), 250);
+    return () => window.clearTimeout(timer);
+  }, [loadMap]);
+
   const summary = useMemo(() => ({
-    total: items.length,
-    clients: items.filter((item) => item.roles?.some((itemRole) => itemRole.key === 'client')).length,
-    attention: items.filter((item) => item.freshness?.status !== 'fresh').length,
-  }), [items]);
+    total: mapCounts?.matching ?? items.length,
+    clients: mapCounts?.roles?.client ?? items.filter((item) => item.roles?.some((itemRole) => itemRole.key === 'client')).length,
+    mapped: mapCounts?.mapped ?? 0,
+    withoutCoordinates: mapCounts?.without_coordinates ?? 0,
+  }), [items, mapCounts]);
 
   const loadDuplicates = useCallback(async () => {
     setShowDuplicates(true);
@@ -368,16 +417,23 @@ export const CompanyRegistry = () => {
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[['В выборке', summary.total], ['Клиенты', summary.clients], ['Нужны данные', summary.attention]].map(([label, value]) => (
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[["В выборке", summary.total], ["Клиенты", summary.clients], ["На карте", summary.mapped], ["Без координат", summary.withoutCoordinates]].map(([label, value]) => (
           <div key={String(label)} className="rounded-3xl bg-white p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.06),0_8px_28px_rgba(15,23,42,0.04)]"><b className="block text-2xl tabular-nums text-slate-950">{value}</b><span className="text-xs text-slate-500">{label}</span></div>
         ))}
       </div>
 
-      <div className="flex flex-col gap-3 lg:flex-row">
-        <label className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, адрес, телефон, сайт или ссылка на карты" className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition-[border-color,box-shadow] placeholder:text-slate-400 focus:border-orange-300 focus:ring-4 focus:ring-orange-100" /></label>
-        <div className="flex gap-2 overflow-x-auto pb-1 lg:max-w-[58%]">
-          {roleOptions.map(([key, label]) => <button type="button" key={key || 'all'} onClick={() => setRole(key)} className={`min-h-11 shrink-0 rounded-2xl px-4 text-xs font-semibold transition-[background-color,color,scale] active:scale-[0.96] ${role === key ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{label}</button>)}
+      <div className="space-y-3">
+        <div className="flex flex-col gap-3 xl:flex-row">
+          <label className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, адрес, телефон, сайт или ссылка на карты" className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition-[border-color,box-shadow] placeholder:text-slate-400 focus:border-orange-300 focus:ring-4 focus:ring-orange-100" /></label>
+          <label className="min-w-0 xl:w-72"><span className="sr-only">Тип бизнеса</span><select value={category} onChange={(event) => setCategory(event.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 outline-none transition-[border-color,box-shadow] focus:border-orange-300 focus:ring-4 focus:ring-orange-100"><option value="">Все типы бизнеса</option>{mapCategories.map((item) => <option key={item.value} value={item.value}>{item.label} · {item.count}</option>)}</select></label>
+          <div className="grid h-12 grid-cols-2 rounded-2xl bg-slate-100 p-1 shadow-inner xl:w-56" aria-label="Представление реестра">
+            <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')} className={`flex min-h-10 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition-[background-color,color,box-shadow,scale] active:scale-[0.96] ${view === 'list' ? 'bg-white text-slate-950 shadow-[0_1px_4px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'}`}><LayoutList className="h-4 w-4" />Список</button>
+            <button type="button" aria-pressed={view === 'map'} onClick={() => { setMapLoading(true); setView('map'); }} className={`flex min-h-10 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition-[background-color,color,box-shadow,scale] active:scale-[0.96] ${view === 'map' ? 'bg-white text-slate-950 shadow-[0_1px_4px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'}`}><Map className="h-4 w-4" />Карта</button>
+          </div>
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {roleOptions.map(([key, label]) => <button type="button" key={key || 'all'} aria-pressed={role === key} onClick={() => setRole(key)} className={`min-h-11 shrink-0 rounded-2xl px-4 text-xs font-semibold transition-[background-color,color,scale] active:scale-[0.96] ${role === key ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{label}</button>)}
         </div>
       </div>
 
@@ -409,7 +465,7 @@ export const CompanyRegistry = () => {
         </AnimatePresence>
       </section>
 
-      {loading ? <RegistrySkeleton /> : error ? (
+      {view === 'map' ? <CompanyRegistryMap items={mapItems} loading={mapLoading} error={mapError} truncated={mapTruncated} withoutCoordinates={summary.withoutCoordinates} onSelect={setSelectedId} onRetry={() => void loadMap()} /> : loading ? <RegistrySkeleton /> : error ? (
         <div className="rounded-3xl bg-rose-50 p-6 text-rose-700 ring-1 ring-inset ring-rose-100"><CircleAlert className="h-5 w-5" /><b className="mt-3 block">Реестр временно недоступен</b><p className="mt-1 text-sm">{error}</p><button type="button" onClick={() => void load()} className="mt-4 min-h-11 rounded-2xl bg-white px-4 text-sm font-semibold shadow-sm transition-transform active:scale-[0.96]">Повторить</button></div>
       ) : items.length ? (
         <motion.div layout className="divide-y divide-slate-100 overflow-hidden rounded-3xl bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06),0_12px_36px_rgba(15,23,42,0.05)]">
@@ -425,7 +481,7 @@ export const CompanyRegistry = () => {
         <div className="rounded-3xl bg-slate-50 p-10 text-center"><Users className="mx-auto h-7 w-7 text-slate-300" /><b className="mt-4 block text-slate-900">Компании не найдены</b><p className="mt-1 text-pretty text-sm text-slate-500">Измените запрос или фильтр. Новые компании появятся после поиска, импорта или парсинга.</p></div>
       )}
 
-      {cursor ? <button type="button" disabled={loadingMore} onClick={() => void load(cursor, true)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white text-sm font-semibold text-slate-700 shadow-[0_0_0_1px_rgba(15,23,42,0.07)] transition-transform active:scale-[0.96] disabled:opacity-50">{loadingMore ? <RefreshCw className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : null}{loadingMore ? 'Загружаем…' : 'Показать ещё'}</button> : null}
+      {view === 'list' && cursor ? <button type="button" disabled={loadingMore} onClick={() => void load(cursor, true)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white text-sm font-semibold text-slate-700 shadow-[0_0_0_1px_rgba(15,23,42,0.07)] transition-transform active:scale-[0.96] disabled:opacity-50">{loadingMore ? <RefreshCw className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : null}{loadingMore ? 'Загружаем…' : 'Показать ещё'}</button> : null}
 
       <AnimatePresence initial={false}>{selectedId ? <CompanyDrawer key={selectedId} companyId={selectedId} close={() => setSelectedId('')} /> : null}</AnimatePresence>
       <AnimatePresence initial={false}>{mergePreview ? (

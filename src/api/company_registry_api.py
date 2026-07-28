@@ -9,7 +9,7 @@ from psycopg2.extras import Json, RealDictCursor
 
 from auth_system import verify_session
 from database_manager import DatabaseManager
-from services.company_registry_service import get_company_detail, list_companies
+from services.company_registry_service import get_company_detail, list_companies, list_company_map_points
 from services.lead_workstream_service import create_workstream
 
 
@@ -73,6 +73,7 @@ def companies_list():
             is_superadmin=bool((user or {}).get("is_superadmin")),
             search=str(request.args.get("search") or ""),
             role=str(request.args.get("role") or ""),
+            category=str(request.args.get("category") or ""),
             city=str(request.args.get("city") or ""),
             status=str(request.args.get("status") or ""),
             cursor_value=cursor_value,
@@ -81,6 +82,31 @@ def companies_list():
         return jsonify({"success": True, **result})
     except Exception:
         return jsonify({"error": "company_registry_unavailable"}), 503
+    finally:
+        db.close()
+
+
+@company_registry_bp.route("/api/admin/companies/map", methods=["GET"])
+def companies_map():
+    user, error = _superadmin()
+    if error:
+        return error
+    db = DatabaseManager()
+    try:
+        summary_only = str(request.args.get("summary_only") or "").strip().lower() in {"1", "true", "yes", "on"}
+        result = list_company_map_points(
+            db.conn,
+            user_id=_user_id(user or {}),
+            is_superadmin=True,
+            search=str(request.args.get("search") or ""),
+            role=str(request.args.get("role") or ""),
+            category=str(request.args.get("category") or ""),
+            status=str(request.args.get("status") or ""),
+            include_points=not summary_only,
+        )
+        return jsonify({"success": True, **result})
+    except Exception:
+        return jsonify({"error": "company_map_unavailable"}), 503
     finally:
         db.close()
 
