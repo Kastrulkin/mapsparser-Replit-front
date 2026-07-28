@@ -1129,9 +1129,15 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const summaryFirstTouchMoment = formatOutreachMoment(summaryFirstTouch?.scheduled_at);
   const summaryStatus = campaignSetupDirty
     ? 'Есть несохранённые настройки'
-    : savedOutreachCampaign
-      ? `Версия ${Number(savedOutreachCampaign.version || 0)} · ${savedOutreachCampaign.status === 'approved' ? 'подтверждена' : 'черновик'}`
-      : 'Цепочка не сохранена';
+    : savedOutreachCampaign?.status === 'approved' && pilotReplyReceived
+      ? `Версия ${Number(savedOutreachCampaign.version || 0)} · ответ получен`
+      : savedOutreachCampaign?.status === 'approved' && pilotAlreadySent
+        ? `Версия ${Number(savedOutreachCampaign.version || 0)} · кампания запущена, первое письмо отправлено`
+        : savedOutreachCampaign?.status === 'approved'
+          ? `Версия ${Number(savedOutreachCampaign.version || 0)} · утверждена, ждёт запуска`
+          : savedOutreachCampaign
+            ? `Версия ${Number(savedOutreachCampaign.version || 0)} · черновик`
+            : 'Цепочка не сохранена';
   const summaryNextAction: { label: string; target: string; focusTarget?: string; href?: string } = !drawerRecipient
     ? { label: 'Выбрать получателя', target: 'lead-contacts' }
     : !connectedEmailSender
@@ -1144,6 +1150,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
             ? { label: 'Подготовить новую цепочку', target: 'outreach-sequence' }
           : campaignSetupDirty
             ? { label: 'Проверить и сохранить', target: 'outreach-sequence' }
+            : pilotReplyReceived
+              ? { label: 'Посмотреть ответ', target: 'lead-conversation' }
+              : pilotAlreadySent
+                ? { label: 'Проверить статус кампании', target: 'outreach-sequence' }
             : savedCampaignHasPendingReview || !savedCampaignQualityPassed
               ? { label: 'Проверить сообщения', target: 'lead-conversation' }
               : savedCampaignNeedsChannelSetup
@@ -1157,7 +1167,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   ? { label: 'Утвердить цепочку', target: 'outreach-sequence' }
                   : canDispatchPilot
                     ? { label: 'Отправить первый шаг', target: 'outreach-sequence' }
-                    : { label: 'Проверить готовность', target: 'outreach-sequence' };
+                    : { label: 'Проверить перед отправкой', target: 'outreach-sequence' };
   const scrollToLeadSection = (target: string, focusTarget?: string) => {
     const section = document.getElementById(target);
     const toggle = section?.querySelector(`[aria-controls="${target}-content"]`);
@@ -3359,9 +3369,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     : 'bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_1px_2px_-1px_rgba(15,23,42,0.06)]'}`}>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <h4 className="text-balance text-sm font-semibold text-slate-950">Готовность к первому касанию</h4>
+                        <h4 className="text-balance text-sm font-semibold text-slate-950">Перед отправкой первого письма</h4>
                         <p className="mt-1 max-w-2xl text-pretty text-sm leading-6 text-slate-600">
-                          LocalOS проверит текущую версию, отправителя, контакт, ответы, исключения и лимиты. Сообщение не отправится.
+                          Цепочка утверждена, но ещё не запущена. Дата в календаре — план и в пилотном режиме не запускает отправку автоматически. Проверка ничего не отправит; после неё появится отдельная кнопка отправки первого письма.
                         </p>
                       </div>
                       <Button
@@ -3371,7 +3381,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         className="min-h-11 shrink-0 bg-white"
                       >
                         {busyAction === 'pilot-preflight' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                        Проверить готовность
+                        Проверить перед отправкой
                       </Button>
                     </div>
                     {pilotReadiness ? (
@@ -3405,10 +3415,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 ) : null}
                 {canSyncPilotReply || pilotReplyReceived ? (
                   <div className={`mt-3 rounded-md p-3 text-sm ${pilotReplyReceived ? 'bg-emerald-50 text-emerald-950' : 'bg-sky-50 text-sky-950'}`}>
-                    <div className="font-semibold">{pilotReplyReceived ? 'Ответ получен — цепочка остановлена' : 'Ожидание ответа на пилот'}</div>
+                    <div className="font-semibold">{pilotReplyReceived ? 'Ответ получен — цепочка остановлена' : 'Кампания запущена — ждём ответ'}</div>
                     <p className="mt-1 leading-6">{pilotReplyReceived
                       ? 'LocalOS сохранил ответ и отменил будущие касания по всем каналам.'
-                      : 'Проверка ограничена конкретной кампанией и аккаунтом отправителя.'}</p>
+                      : 'Первое письмо отправлено. Следующие касания остаются в плане и не отправятся автоматически, пока фоновая отправка выключена.'}</p>
                     {canSyncPilotReply ? (
                       <Button variant="outline" onClick={() => void syncPilotReply()} disabled={Boolean(busyAction)} className="mt-2 min-h-11 w-full bg-white">
                         <RefreshCw className={`mr-2 h-4 w-4 ${busyAction === 'pilot-reply-sync' ? 'animate-spin' : ''}`} />

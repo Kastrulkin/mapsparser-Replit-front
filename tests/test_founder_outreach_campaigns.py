@@ -1293,13 +1293,13 @@ def test_pilot_preflight_requires_explicit_check_before_ui_enables_dispatch():
     assert "build_pilot_readiness" in api
     assert "run_dispatch_preflight" in api
     assert '"messages_sent": 0' in service
-    assert "Проверить готовность" in ui
+    assert "Проверить перед отправкой" in ui
     assert "pilotReadiness?.can_dispatch_first_touch" in ui
-    assert ui.index("Проверить готовность") < ui.rindex("Отправить только первое касание")
-    assert "Проверить готовность" in admin_ui
+    assert ui.index("Проверить перед отправкой") < ui.rindex("Отправить только первое касание")
+    assert "Проверить перед отправкой" in admin_ui
     assert "pilotReadiness?.can_dispatch_first_touch" in admin_ui
     assert "/pilot-preflight" in admin_ui
-    assert admin_ui.index("Проверить готовность") < admin_ui.rindex("Отправить только первое касание")
+    assert admin_ui.index("Проверить перед отправкой") < admin_ui.rindex("Отправить только первое касание")
 
 
 def test_draft_campaign_ui_explains_how_human_approval_changes_campaign_status():
@@ -1907,6 +1907,23 @@ def test_ready_draft_primary_action_is_approval_before_preflight():
     assert "savedOutreachCampaign?.status === 'draft'" in action_block
     assert "Утвердить цепочку" in action_block
     assert action_block.index("savedOutreachCampaign?.status === 'draft'") < action_block.index("canDispatchPilot")
+
+
+def test_sticky_campaign_action_distinguishes_approval_from_actual_launch():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    action_start = source.index("const summaryNextAction")
+    action_end = source.index("\n  const scrollToLeadSection", action_start)
+    action_block = source[action_start:action_end]
+
+    assert "утверждена, ждёт запуска" in source
+    assert "кампания запущена" in source
+    assert "Проверить перед отправкой" in action_block
+    assert "Проверить статус кампании" in action_block
+    assert action_block.index("pilotAlreadySent") < action_block.index("savedCampaignNeedsChannelSetup")
+    assert action_block.index("pilotAlreadySent") < action_block.index("canDispatchPilot")
+    assert "Цепочка утверждена, но ещё не запущена" in source
+    assert "Дата в календаре — план" in source
 
 
 def test_preflight_is_only_shown_after_campaign_approval():

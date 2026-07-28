@@ -1126,9 +1126,9 @@ export function OutreachCampaignBuilder({
           : 'rounded-2xl bg-slate-50 p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_1px_2px_-1px_rgba(15,23,42,0.06)]'}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h4 className="text-balance text-sm font-semibold text-slate-950">Готовность к первому касанию</h4>
+              <h4 className="text-balance text-sm font-semibold text-slate-950">Перед отправкой первого письма</h4>
               <p className="mt-1 max-w-2xl text-pretty text-sm leading-6 text-slate-600">
-                LocalOS проверит текущую версию, отправителя, контакт, ответы, исключения и лимиты. Сообщение не отправится.
+                Цепочка утверждена, но ещё не запущена. Дата в календаре — план и в пилотном режиме не запускает отправку автоматически. Проверка ничего не отправит; после неё появится отдельная кнопка отправки первого письма.
               </p>
             </div>
             <Button
@@ -1138,7 +1138,7 @@ export function OutreachCampaignBuilder({
               className="min-h-11 shrink-0 bg-white"
             >
               {busy === 'pilot-preflight' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-              Проверить готовность
+              Проверить перед отправкой
             </Button>
           </div>
           {pilotReadiness ? (
@@ -1183,12 +1183,12 @@ export function OutreachCampaignBuilder({
           ? 'rounded-xl border border-emerald-200 bg-emerald-50 p-4'
           : 'rounded-xl border border-sky-200 bg-sky-50 p-4'}>
           <div className={pilotReplyReceived ? 'text-sm font-semibold text-emerald-950' : 'text-sm font-semibold text-sky-950'}>
-            {pilotReplyReceived ? 'Ответ получен — цепочка остановлена' : 'Ожидание ответа на пилот'}
+            {pilotReplyReceived ? 'Ответ получен — цепочка остановлена' : 'Кампания запущена — ждём ответ'}
           </div>
           <p className={pilotReplyReceived ? 'mt-1 text-sm leading-6 text-emerald-900' : 'mt-1 text-sm leading-6 text-sky-900'}>
             {pilotReplyReceived
               ? 'LocalOS сохранил классификацию ответа и отменил все будущие касания по другим каналам.'
-              : 'Глобальный worker выключен. Запустите безопасную проверку входящих для отправителя этой кампании.'}
+              : 'Первое письмо отправлено. Следующие касания остаются в плане и не отправятся автоматически, пока фоновая отправка выключена.'}
           </p>
           {canPilotReplySync ? (
             <Button
