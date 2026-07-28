@@ -116,7 +116,11 @@ export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCo
           </Map>
         </YMaps>
       </div>
-      {truncated || withoutCoordinates > 0 ? <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-3 text-pretty text-xs text-slate-500 sm:px-5">{withoutCoordinates > 0 ? <span><b className="tabular-nums text-slate-700">{withoutCoordinates}</b> компаний пока без координат</span> : null}{truncated ? <span>Масштаб выборки большой — уточните фильтры.</span> : null}</div> : null}
+      <div className="flex min-h-10 flex-wrap items-center gap-x-4 gap-y-1 px-4 text-pretty text-xs text-slate-500 sm:px-5">
+        {withoutCoordinates > 0 ? <span><b className="tabular-nums text-slate-700">{withoutCoordinates}</b> компаний пока без координат</span> : null}
+        {truncated ? <span>Масштаб выборки большой — уточните фильтры.</span> : null}
+        <a className="ml-auto inline-flex min-h-10 items-center text-slate-400 transition-colors hover:text-slate-600" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">Часть координат: © OpenStreetMap</a>
+      </div>
     </section>
   );
 };
