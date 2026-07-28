@@ -28,6 +28,7 @@ import { OutreachEmailSetup } from '../OutreachEmailSetup';
 import { OutreachLearningInsights } from './OutreachLearningInsights';
 import { OutreachSuppressionManager } from './OutreachSuppressionManager';
 import { OutreachMessageQueue } from './OutreachMessageQueue';
+import { partnerTypeForCategory, partnerTypeOptions } from './partnerTypeFilter';
 import {
   buildProjectedOutreachTouches,
   defaultOutreachStartValue,
@@ -764,6 +765,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [clientBusinessId, setClientBusinessId] = useState('');
   const [actionState, setActionState] = useState('');
   const [signalStrength, setSignalStrength] = useState('');
+  const [partnerType, setPartnerType] = useState('');
   const [query, setQuery] = useState('');
   const [messageStatus, setMessageStatus] = useState('');
   const [messageChannel, setMessageChannel] = useState('');
@@ -872,13 +874,30 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         if (!haystack.includes(normalized)) return false;
       }
       const workstreams = lead.workstreams || [];
+      if (partnerType) {
+        const isPartnerLead = workstreams.some((item) => item.workstream_type === 'client_partnership');
+        if (!isPartnerLead || partnerTypeForCategory(lead.category) !== partnerType) return false;
+      }
       if (signalStrength && !workstreams.some((item) => item.research?.signal_label === signalStrength)) return false;
       if (view === 'results') {
         return workstreams.some((item) => ['replied', 'responded', 'converted', 'qualified'].includes(String(item.status || '')));
       }
       return true;
     });
-  }, [leads, query, signalStrength, view]);
+  }, [leads, partnerType, query, signalStrength, view]);
+
+  const visiblePartnerTypeOptions = useMemo(() => {
+    const counts: Record<string, number> = {};
+    leads.forEach((lead) => {
+      const isPartnerLead = (lead.workstreams || []).some((item) => item.workstream_type === 'client_partnership');
+      if (!isPartnerLead) return;
+      const type = partnerTypeForCategory(lead.category);
+      counts[type] = (counts[type] || 0) + 1;
+    });
+    return partnerTypeOptions
+      .filter((option) => Boolean(counts[option.id]))
+      .map((option) => ({ ...option, count: counts[option.id] }));
+  }, [leads]);
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) || null;
   const selectedWorkstream = selectedLead?.workstreams?.find((item) => item.id === selectedWorkstreamId)
@@ -2093,7 +2112,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
 
         <div className={`mt-4 grid grid-cols-[minmax(0,1fr)] gap-3 ${
           view === 'leads'
-            ? 'lg:grid-cols-[minmax(240px,1fr)_auto_minmax(170px,220px)_minmax(180px,240px)_minmax(180px,240px)]'
+            ? 'md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(240px,1.2fr)_auto_minmax(170px,1fr)_minmax(180px,1fr)_minmax(170px,1fr)_minmax(180px,1fr)]'
             : 'lg:grid-cols-[minmax(280px,1fr)_auto_minmax(190px,240px)]'
         }`}>
           <div className="relative min-w-0">
@@ -2110,7 +2129,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setScope(item.id)}
+                onClick={() => {
+                  setScope(item.id);
+                  if (item.id === 'localos_sales') setPartnerType('');
+                }}
                 className={`min-h-8 whitespace-nowrap rounded px-3 text-xs font-semibold transition-colors ${
                   scope === item.id ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950'
                 }`}
@@ -2130,6 +2152,21 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           </select>
           {view === 'leads' ? (
             <>
+              <select
+                value={partnerType}
+                onChange={(event) => {
+                  const nextPartnerType = event.target.value;
+                  setPartnerType(nextPartnerType);
+                  if (nextPartnerType) setScope('client_partnership');
+                }}
+                className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+                aria-label="Фильтр по типу партнёра"
+              >
+                <option value="">Любой тип партнёра</option>
+                {visiblePartnerTypeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>{option.label} · {option.count}</option>
+                ))}
+              </select>
               <select
                 value={signalStrength}
                 onChange={(event) => setSignalStrength(event.target.value)}
