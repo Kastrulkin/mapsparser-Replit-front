@@ -1248,8 +1248,8 @@ def test_pilot_dispatch_is_bounded_to_one_confirmed_campaign_queue_item():
     assert "is_superadmin" not in ui[can_dispatch_start:can_dispatch_end]
     assert "sender_account_id: str | None = None" in telegram_sync
     assert 'query += " AND q.sender_account_id = %s"' in telegram_sync
-    assert "Следующий шаг: первое пилотное касание" in admin_ui
-    assert "dispatchPilotFirstTouch" in admin_ui
+    assert "Проверить статус кампании" in admin_ui
+    assert "dispatchPilotFirstTouch" not in admin_ui
 
 
 def test_pilot_preflight_explains_exact_next_action_without_sending():
@@ -1296,10 +1296,9 @@ def test_pilot_preflight_requires_explicit_check_before_ui_enables_dispatch():
     assert "Проверить перед отправкой" in ui
     assert "pilotReadiness?.can_dispatch_first_touch" in ui
     assert ui.index("Проверить перед отправкой") < ui.rindex("Отправить только первое касание")
-    assert "Проверить перед отправкой" in admin_ui
-    assert "pilotReadiness?.can_dispatch_first_touch" in admin_ui
-    assert "/pilot-preflight" in admin_ui
-    assert admin_ui.index("Проверить перед отправкой") < admin_ui.rindex("Отправить только первое касание")
+    assert "Проверить статус кампании" in admin_ui
+    assert "pilotReadiness?.can_dispatch_first_touch" not in admin_ui
+    assert "/pilot-preflight" not in admin_ui
 
 
 def test_draft_campaign_ui_explains_how_human_approval_changes_campaign_status():
@@ -1310,10 +1309,12 @@ def test_draft_campaign_ui_explains_how_human_approval_changes_campaign_status()
         ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx"
     ).read_text()
 
-    for source in (builder_ui, admin_ui):
-        assert "Утвердить цепочку и перейти к отправке" in source
-        assert "статус изменится с «Черновик» на «Утверждена»" in source
-        assert "Сообщение ещё не отправится" in source
+    assert "Утвердить цепочку и перейти к отправке" in builder_ui
+    assert "статус изменится с «Черновик» на «Утверждена»" in builder_ui
+    assert "Сообщение ещё не отправится" in builder_ui
+    assert "Утвердить цепочку и перейти к отправке" in admin_ui
+    assert "статус изменится с «Черновик» на «Подтверждена»" in admin_ui
+    assert "Автоматические касания будут поставлены в очередь" in admin_ui
 
 
 def test_business_user_reaches_tenant_campaign_authorization_for_pilot(monkeypatch):
@@ -1906,7 +1907,7 @@ def test_ready_draft_primary_action_is_approval_before_preflight():
 
     assert "savedOutreachCampaign?.status === 'draft'" in action_block
     assert "Утвердить цепочку" in action_block
-    assert action_block.index("savedOutreachCampaign?.status === 'draft'") < action_block.index("canDispatchPilot")
+    assert action_block.index("savedOutreachCampaign?.status === 'draft'") < action_block.rindex("Проверить статус кампании")
 
 
 def test_sticky_campaign_action_distinguishes_approval_from_actual_launch():
@@ -1916,21 +1917,21 @@ def test_sticky_campaign_action_distinguishes_approval_from_actual_launch():
     action_end = source.index("\n  const scrollToLeadSection", action_start)
     action_block = source[action_start:action_end]
 
-    assert "утверждена, ждёт запуска" in source
+    assert "подтверждена, отправка по графику" in source
     assert "кампания запущена" in source
-    assert "Проверить перед отправкой" in action_block
+    assert "Проверить перед отправкой" not in action_block
     assert "Проверить статус кампании" in action_block
     assert action_block.index("pilotAlreadySent") < action_block.index("savedCampaignNeedsChannelSetup")
-    assert action_block.index("pilotAlreadySent") < action_block.index("canDispatchPilot")
-    assert "Цепочка утверждена, но ещё не запущена" in source
-    assert "Дата в календаре — план" in source
+    assert 'id="campaign-status"' in source
+    assert "Автоматические касания выполняются по графику" in source
 
 
 def test_preflight_is_only_shown_after_campaign_approval():
     admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
     builder_source = (ROOT / "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx").read_text()
 
-    assert "{savedOutreachCampaign?.status === 'approved' && !pilotAlreadySent && !pilotReplyReceived ? (" in admin_source
+    assert "/pilot-preflight" not in admin_source
+    assert 'id="campaign-status"' in admin_source
     assert "{selectedCampaign?.status === 'approved' && !pilotAlreadySent && !pilotReplyReceived ? (" in builder_source
 
 

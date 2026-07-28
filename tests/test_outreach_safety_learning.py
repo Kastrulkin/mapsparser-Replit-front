@@ -819,6 +819,23 @@ def test_background_dispatch_query_targets_only_allowed_business_campaigns(monke
     assert dispatch_params[1:3] == ["business-a", "business-b"]
 
 
+def test_manual_pilot_dispatch_is_not_primary_for_future_schedule():
+    admin_ui = Path("frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text(encoding="utf-8")
+    dispatcher = Path("src/services/outreach_dispatch_service.py").read_text(encoding="utf-8")
+
+    assert "AND (q.scheduled_at IS NULL OR q.scheduled_at <= NOW())" in dispatcher
+    assert "Проверить статус кампании" in admin_ui
+    assert "Отправить первый шаг" not in admin_ui
+    assert 'id="campaign-status"' in admin_ui
+    assert 'title="Состояние кампании"' in admin_ui
+    assert admin_ui.index('id="sender-settings"') < admin_ui.index('id="campaign-status"')
+    assert "Запланировано" in admin_ui
+    assert "Отправлено" in admin_ui
+    assert "Ожидает ручной отправки" in admin_ui
+    assert "Открыть отправленные" in admin_ui
+    assert "Открыть канал" in admin_ui
+
+
 def test_worker_dispatch_is_limited_to_versioned_campaign_cohort():
     worker = Path("src/worker.py").read_text(encoding="utf-8")
     function_start = worker.index("def _dispatch_outreach_queue_if_due()")

@@ -391,18 +391,6 @@ const outreachSenderStatusLabel = (account: OutreachSenderAccountSummary) => {
   return 'готов';
 };
 
-interface PilotReadiness {
-  status?: string;
-  reason_code?: string;
-  can_dispatch_first_touch?: boolean;
-  next_action?: string;
-  checks?: Array<{
-    code?: string;
-    label?: string;
-    passed?: boolean;
-  }>;
-}
-
 interface ChannelSetupBlocker {
   key: string;
   label: string;
@@ -580,6 +568,7 @@ const outreachTouchStatusLabels: Record<string, string> = {
   approved: 'Подтверждено',
   scheduled: 'Запланировано',
   queued: 'В очереди',
+  awaiting_manual_send: 'Ожидает ручной отправки',
   sent: 'Отправлено',
   delivered: 'Доставлено',
   manual_sent: 'Отправлено вручную',
@@ -588,6 +577,9 @@ const outreachTouchStatusLabels: Record<string, string> = {
   stopped: 'Остановлено',
   skipped: 'Пропущено',
   failed: 'Ошибка отправки',
+  retry: 'Повторная попытка',
+  dlq: 'Нужна помощь',
+  reply_cancelled: 'Остановлено после ответа',
 };
 
 const outreachReplyClassificationLabels: Record<string, string> = {
@@ -822,7 +814,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [senderFactsOpen, setSenderFactsOpen] = useState(false);
   const [outreachPreview, setOutreachPreview] = useState<OutreachPreview | null>(null);
   const [savedOutreachCampaign, setSavedOutreachCampaign] = useState<SavedOutreachCampaign | null>(null);
-  const [pilotReadiness, setPilotReadiness] = useState<PilotReadiness | null>(null);
   const [sequenceChannels, setSequenceChannels] = useState(['telegram', 'email', 'max', 'vk']);
   const [sequenceDays, setSequenceDays] = useState([0, 3, 7, 12]);
   const [sequenceStartAt, setSequenceStartAt] = useState(defaultOutreachStartValue);
@@ -1109,21 +1100,68 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     ['manual_sent', 'sent', 'delivered'].includes(String(touch.status || ''))
   ));
   const pilotReplyReceived = savedOutreachCampaign?.stop_reason === 'recipient_replied';
-  const canDispatchPilot = Boolean(
-    savedOutreachCampaign?.status === 'approved'
-    && !campaignSetupDirty
-    && savedOutreachCampaign?.generation_current
-    && latestCampaignFirstTouch
-    && ['telegram', 'email', 'vk'].includes(String(latestCampaignFirstTouch.channel || ''))
-    && !pilotAlreadySent
-    && pilotReadiness?.can_dispatch_first_touch,
-  );
   const canSyncPilotReply = Boolean(
     latestCampaignFirstTouch
     && ['telegram', 'email', 'vk'].includes(String(latestCampaignFirstTouch.channel || ''))
     && pilotAlreadySent
     && !pilotReplyReceived,
   );
+  const campaignStatusItems = savedConversationTouches.map((touch) => {
+    const delivery = touch.id ? deliveryByTouchId.get(touch.id) : undefined;
+    const channel = String(touch.channel || 'manual');
+    const rawStatus = String(delivery?.delivery_status || touch.status || 'draft');
+    const replyReceived = humanReplyEvents.some((event) => event.touch_id === touch.id);
+    const status = replyReceived
+      ? 'reply'
+      : !automaticOutreachChannels.has(channel) && !['manual_sent', 'sent', 'delivered'].includes(rawStatus)
+        ? 'awaiting_manual_send'
+        : ['approved', 'queued', 'scheduled'].includes(rawStatus)
+          ? 'scheduled'
+          : rawStatus;
+    const contact = drawerContacts.find((item) => item.id === touch.contact_point_id)
+      || drawerContacts.find((item) => String(item.type || '') === channel);
+    const sender = senderAccounts.find((account) => account.id === touch.sender_account_id)
+      || (channel === 'email' ? connectedEmailSender : undefined);
+    let verificationHref = '';
+    let verificationLabelText = '';
+    if (channel === 'email' && contact?.value) {
+      const search = `in:sent to:${contact.value}`;
+      const authUser = sender?.sender_identity ? `?authuser=${encodeURIComponent(sender.sender_identity)}` : '';
+      verificationHref = `https://mail.google.com/mail/u/${authUser}#search/${encodeURIComponent(search)}`;
+      verificationLabelText = 'Открыть отправленные';
+    } else if (/^https?:\/\//i.test(String(contact?.value || ''))) {
+      verificationHref = String(contact?.value || '');
+      verificationLabelText = 'Открыть канал';
+    }
+    return {
+      id: touch.id || `${touch.sequence_index}-${channel}`,
+      sequenceIndex: Number(touch.sequence_index || 0),
+      channel,
+      channelLabel: contactTypeLabels[channel] || (channel === 'manual' ? 'Ручной канал' : channel.toUpperCase()),
+      status,
+      statusLabel: outreachTouchStatusLabels[status] || status,
+      moment: formatOutreachMoment(delivery?.sent_at || delivery?.scheduled_at || touch.scheduled_at),
+      sent: ['sent', 'delivered', 'manual_sent', 'reply'].includes(status),
+      verificationHref,
+      verificationLabel: verificationLabelText,
+      providerMessageId: delivery?.provider_message_id || '',
+      errorText: delivery?.error_text || '',
+    };
+  });
+  const campaignNeedsAttention = campaignStatusItems.some((item) => ['failed', 'dlq', 'retry'].includes(item.status));
+  const nextCampaignTouch = campaignStatusItems.find((item) => ['scheduled', 'awaiting_manual_send'].includes(item.status));
+  const campaignStatusLabel = pilotReplyReceived
+    ? 'Ответ получен'
+    : campaignNeedsAttention
+      ? 'Нужно внимание'
+      : savedOutreachCampaign?.status === 'approved'
+        ? pilotAlreadySent ? 'В работе' : 'Запланировано'
+        : savedOutreachCampaign?.status === 'draft'
+          ? 'Черновик'
+          : 'Не настроено';
+  const campaignStatusDescription = savedOutreachCampaign
+    ? `${campaignStatusItems.length} касания${nextCampaignTouch ? ` · следующее: ${nextCampaignTouch.channelLabel}${nextCampaignTouch.moment ? ` · ${nextCampaignTouch.moment}` : ''}` : ''}`
+    : 'Сначала сохраните и подтвердите цепочку';
 
   const summaryFirstTouch = outreachCalendarTouches[0] || null;
   const summaryFirstTouchMoment = formatOutreachMoment(summaryFirstTouch?.scheduled_at);
@@ -1134,7 +1172,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       : savedOutreachCampaign?.status === 'approved' && pilotAlreadySent
         ? `Версия ${Number(savedOutreachCampaign.version || 0)} · кампания запущена, первое письмо отправлено`
         : savedOutreachCampaign?.status === 'approved'
-          ? `Версия ${Number(savedOutreachCampaign.version || 0)} · утверждена, ждёт запуска`
+          ? `Версия ${Number(savedOutreachCampaign.version || 0)} · подтверждена, отправка по графику`
           : savedOutreachCampaign
             ? `Версия ${Number(savedOutreachCampaign.version || 0)} · черновик`
             : 'Цепочка не сохранена';
@@ -1153,7 +1191,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
             : pilotReplyReceived
               ? { label: 'Посмотреть ответ', target: 'lead-conversation' }
               : pilotAlreadySent
-                ? { label: 'Проверить статус кампании', target: 'outreach-sequence' }
+                ? { label: 'Проверить статус кампании', target: 'campaign-status' }
             : savedCampaignHasPendingReview || !savedCampaignQualityPassed
               ? { label: 'Проверить сообщения', target: 'lead-conversation' }
               : savedCampaignNeedsChannelSetup
@@ -1165,9 +1203,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   }
                 : savedOutreachCampaign?.status === 'draft'
                   ? { label: 'Утвердить цепочку', target: 'outreach-sequence' }
-                  : canDispatchPilot
-                    ? { label: 'Отправить первый шаг', target: 'outreach-sequence' }
-                    : { label: 'Проверить перед отправкой', target: 'outreach-sequence' };
+                  : { label: 'Проверить статус кампании', target: 'campaign-status' };
   const scrollToLeadSection = (target: string, focusTarget?: string) => {
     const section = document.getElementById(target);
     const toggle = section?.querySelector(`[aria-controls="${target}-content"]`);
@@ -1186,10 +1222,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     if (selectedWorkstreamId && selectedLead.workstreams?.some((item) => item.id === selectedWorkstreamId)) return;
     setSelectedWorkstreamId(selectedLead.workstreams?.[0]?.id || null);
   }, [selectedLead, selectedWorkstreamId]);
-
-  useEffect(() => {
-    setPilotReadiness(null);
-  }, [selectedLeadId, selectedWorkstreamId]);
 
   useEffect(() => {
     void loadSenderAccounts();
@@ -1212,7 +1244,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       const steps = addedIndexes.map((index) => index + 1).join(', ');
       setCampaignSetupDirty(true);
       setOutreachPreview(null);
-      setPilotReadiness(null);
       setNotice(`LocalOS выбрал единственный готовый аккаунт для касаний ${steps}. Проверьте и сохраните изменения.`);
     }
   }, [savedOutreachCampaign?.id, selectedWorkstream?.id, senderAccounts, senderAccountsLoading, sequenceChannels, sequenceSenders]);
@@ -1295,7 +1326,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   useEffect(() => {
     setOutreachPreview(null);
     setSavedOutreachCampaign(null);
-    setPilotReadiness(null);
     setSenderFactsOpen(false);
     setSequenceChannels(['telegram', 'email', 'max', 'vk']);
     setSequenceDays([0, 3, 7, 12]);
@@ -1625,14 +1655,12 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setSequenceChannels((current) => current.map((item, itemIndex) => itemIndex === index ? channel : item));
     setSequenceSenders((current) => ({ ...current, [index]: '' }));
     setOutreachPreview(null);
-    setPilotReadiness(null);
     setCampaignSetupDirty(true);
   };
 
   const updateSequenceDay = (index: number, day: number) => {
     setSequenceDays((current) => current.map((item, itemIndex) => itemIndex === index ? Math.max(0, day) : item));
     setOutreachPreview(null);
-    setPilotReadiness(null);
     setCampaignSetupDirty(true);
   };
 
@@ -1649,7 +1677,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       return next;
     });
     setOutreachPreview(null);
-    setPilotReadiness(null);
     setCampaignSetupDirty(true);
     const steps = matchingIndexes.map((itemIndex) => itemIndex + 1).join(', ');
     setNotice(senderAccountId
@@ -1661,7 +1688,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setSenderMode(mode);
     setSequenceSenders({});
     setOutreachPreview(null);
-    setPilotReadiness(null);
     setCampaignSetupDirty(true);
     setNotice('Способ представления изменён. Подготовьте новый preview и проверьте всю цепочку.');
   };
@@ -1734,7 +1760,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setEditingTouchIndex((current) => current === touchIndex ? null : current);
     setTouchEditsValidated(false);
     setOutreachPreview(null);
-    setPilotReadiness(null);
   };
 
   const acceptTouchEdit = async (touchIndex: number, draft: OutreachTouchMessageDraft) => {
@@ -1781,7 +1806,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       setEditingTouchIndex(null);
       setOutreachPreview(null);
       setTouchEditsValidated(false);
-      setPilotReadiness(null);
       setNotice(`Изменения сохранены в версии ${Number(payload?.touch?.campaign_version || savedOutreachCampaign?.version || 1)}. Теперь проверьте сохранённые сообщения — новая версия цепочки не нужна.`);
     } catch (requestError) {
       setNotice(requestError instanceof Error ? requestError.message : 'Не удалось сохранить изменения сообщения');
@@ -1807,7 +1831,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     }
     setBusyAction('review-saved-edits');
     setNotice('');
-    setPilotReadiness(null);
     try {
       const payload = await newAuth.makeRequest(
         `/outreach/campaigns/${encodeURIComponent(campaignId)}/review-edits`,
@@ -1833,7 +1856,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       setNotice('Выберите корректные дату и время первого касания.');
       return;
     }
-    setPilotReadiness(null);
     setBusyAction(save ? 'save-campaign' : 'preview-campaign');
     setNotice('');
     try {
@@ -1876,69 +1898,15 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       setNotice('Сначала проверьте и сохраните новую версию. Старая цепочка остаётся в истории, но подтвердить её после изменения настроек нельзя.');
       return;
     }
-    setPilotReadiness(null);
     setBusyAction('approve-campaign');
     setNotice('');
     try {
       const payload = await newAuth.makeRequest(`/outreach/campaigns/${encodeURIComponent(savedOutreachCampaign.id)}/approve`, { method: 'POST' });
       setSavedOutreachCampaign((current) => current ? { ...current, status: payload?.campaign?.status || 'approved' } : current);
-      setNotice('Вся цепочка подтверждена. Для пилота отправьте только первое касание; остальные не запустятся скрытно.');
+      setNotice('Цепочка принята для отправки. LocalOS выполнит автоматические касания по графику, а ручные покажет в состоянии кампании.');
       await reloadLatestOutreachCampaign();
     } catch (requestError) {
       setNotice(requestError instanceof Error ? requestError.message : 'Цепочка не прошла preflight');
-    } finally {
-      setBusyAction('');
-    }
-  };
-
-  const runPilotPreflight = async () => {
-    if (!savedOutreachCampaign?.id) return;
-    if (campaignSetupDirty) {
-      setNotice('Сначала проверьте и сохраните новую версию цепочки.');
-      return;
-    }
-    setBusyAction('pilot-preflight');
-    setNotice('');
-    try {
-      const payload = await newAuth.makeRequest(`/outreach/campaigns/${encodeURIComponent(savedOutreachCampaign.id)}/pilot-preflight`, {
-        method: 'POST',
-      });
-      const readiness: PilotReadiness = payload?.pilot_readiness || {};
-      setPilotReadiness(readiness);
-      if (readiness.can_dispatch_first_touch) {
-        setNotice('Проверка пройдена. LocalOS готов отправить только первое касание после вашего отдельного подтверждения.');
-      }
-    } catch (requestError) {
-      setPilotReadiness(null);
-      setNotice(requestError instanceof Error ? requestError.message : 'Не удалось проверить готовность к пилоту');
-    } finally {
-      setBusyAction('');
-    }
-  };
-
-  const dispatchPilotFirstTouch = async () => {
-    if (!savedOutreachCampaign?.id) return;
-    if (campaignSetupDirty) {
-      setNotice('Отправка заблокирована: сначала проверьте и сохраните новую версию цепочки.');
-      return;
-    }
-    const confirmed = window.confirm(
-      'Отправить только первое касание этой кампании реальному получателю? LocalOS ещё раз проверит ответы, разрешения, доступ, исключения и лимиты.',
-    );
-    if (!confirmed) return;
-    setBusyAction('pilot-dispatch');
-    setNotice('');
-    try {
-      const payload = await newAuth.makeRequest(`/outreach/campaigns/${encodeURIComponent(savedOutreachCampaign.id)}/pilot-dispatch-first-touch`, {
-        method: 'POST',
-        body: JSON.stringify({ confirm_campaign_id: savedOutreachCampaign.id }),
-      });
-      setNotice(Number(payload?.messages_sent || 0) === 1
-        ? 'Первое пилотное касание отправлено. Остальные каналы не запускались.'
-        : 'Первое касание не отправлено: safety-preflight остановил операцию.');
-      await reloadLatestOutreachCampaign();
-    } catch (requestError) {
-      setNotice(requestError instanceof Error ? requestError.message : 'Пилотное касание не отправлено');
     } finally {
       setBusyAction('');
     }
@@ -2556,7 +2524,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                                       return next;
                                     });
                                     setTouchEditsValidated(false);
-                                    setPilotReadiness(null);
                                   }}
                                   onAccept={(draft) => void acceptTouchEdit(touchIndex, draft)}
                                   onCancel={() => resetTouchEdit(touchIndex)}
@@ -3064,7 +3031,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     onChange={(value) => {
                       setSequenceStartAt(value);
                       setOutreachPreview(null);
-                      setPilotReadiness(null);
                       setCampaignSetupDirty(true);
                     }}
                   />
@@ -3264,7 +3230,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                               return next;
                             });
                             setTouchEditsValidated(false);
-                            setPilotReadiness(null);
                           }}
                           onAccept={(draft) => void acceptTouchEdit(touch.sequence_index, draft)}
                           onCancel={() => resetTouchEdit(touch.sequence_index)}
@@ -3360,72 +3325,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 ) : null}
                 {savedOutreachCampaign?.status === 'draft' && !campaignSetupDirty ? (
                   <p className="mt-2 text-pretty text-center text-xs leading-5 text-slate-500">
-                    После нажатия статус изменится с «Черновик» на «Утверждена». Сообщение ещё не отправится: первое касание запускается отдельно после проверки готовности.
+                    После нажатия статус изменится с «Черновик» на «Подтверждена». Автоматические касания будут поставлены в очередь на указанные даты; перед каждым LocalOS ещё раз проверит разрешения, ответы, исключения и лимиты.
                   </p>
-                ) : null}
-                {savedOutreachCampaign?.status === 'approved' && !pilotAlreadySent && !pilotReplyReceived ? (
-                  <section className={`mt-3 rounded-2xl p-4 ${pilotReadiness?.can_dispatch_first_touch
-                    ? 'bg-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.22),0_1px_2px_-1px_rgba(15,23,42,0.08)]'
-                    : 'bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.08),0_1px_2px_-1px_rgba(15,23,42,0.06)]'}`}>
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <h4 className="text-balance text-sm font-semibold text-slate-950">Перед отправкой первого письма</h4>
-                        <p className="mt-1 max-w-2xl text-pretty text-sm leading-6 text-slate-600">
-                          Цепочка утверждена, но ещё не запущена. Дата в календаре — план и в пилотном режиме не запускает отправку автоматически. Проверка ничего не отправит; после неё появится отдельная кнопка отправки первого письма.
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        onClick={() => void runPilotPreflight()}
-                        disabled={Boolean(busyAction) || campaignSetupDirty}
-                        className="min-h-11 shrink-0 bg-white"
-                      >
-                        {busyAction === 'pilot-preflight' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                        Проверить перед отправкой
-                      </Button>
-                    </div>
-                    {pilotReadiness ? (
-                      <div className="mt-4 border-t border-slate-200/80 pt-3">
-                        <ul className="grid gap-2 sm:grid-cols-2">
-                          {(pilotReadiness.checks || []).map((check) => (
-                            <li key={String(check.code || check.label)} className="flex items-start gap-2 text-sm leading-5 text-slate-700">
-                              {check.passed
-                                ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                                : <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />}
-                              <span className="text-pretty">{check.label}</span>
-                            </li>
-                          ))}
-                        </ul>
-                        <p className={`mt-3 text-pretty text-sm font-medium leading-6 ${pilotReadiness.can_dispatch_first_touch ? 'text-emerald-900' : 'text-amber-900'}`}>
-                          {pilotReadiness.next_action}
-                        </p>
-                      </div>
-                    ) : null}
-                  </section>
-                ) : null}
-                {canDispatchPilot ? (
-                  <div className="mt-3 rounded-md bg-orange-50 p-3 text-sm text-orange-950">
-                    <div className="font-semibold">Следующий шаг: первое пилотное касание</div>
-                    <p className="mt-1 leading-6 text-orange-900">Будет отправлено ровно одно сообщение. Остальные каналы не запустятся.</p>
-                    <Button onClick={() => void dispatchPilotFirstTouch()} disabled={Boolean(busyAction)} className="mt-2 min-h-11 w-full bg-orange-500 text-white hover:bg-orange-600">
-                      {busyAction === 'pilot-dispatch' ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                      Отправить только первое касание
-                    </Button>
-                  </div>
-                ) : null}
-                {canSyncPilotReply || pilotReplyReceived ? (
-                  <div className={`mt-3 rounded-md p-3 text-sm ${pilotReplyReceived ? 'bg-emerald-50 text-emerald-950' : 'bg-sky-50 text-sky-950'}`}>
-                    <div className="font-semibold">{pilotReplyReceived ? 'Ответ получен — цепочка остановлена' : 'Кампания запущена — ждём ответ'}</div>
-                    <p className="mt-1 leading-6">{pilotReplyReceived
-                      ? 'LocalOS сохранил ответ и отменил будущие касания по всем каналам.'
-                      : 'Первое письмо отправлено. Следующие касания остаются в плане и не отправятся автоматически, пока фоновая отправка выключена.'}</p>
-                    {canSyncPilotReply ? (
-                      <Button variant="outline" onClick={() => void syncPilotReply()} disabled={Boolean(busyAction)} className="mt-2 min-h-11 w-full bg-white">
-                        <RefreshCw className={`mr-2 h-4 w-4 ${busyAction === 'pilot-reply-sync' ? 'animate-spin' : ''}`} />
-                        Проверить ответ сейчас
-                      </Button>
-                    ) : null}
-                  </div>
                 ) : null}
                 <p className="mt-2 text-xs leading-5 text-slate-500">Перед каждым касанием LocalOS повторно проверит approval версии, sender account, разрешение, ответ, suppression, cooldown и дневной лимит.</p>
               </section>
@@ -3468,7 +3369,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       onChanged={() => {
                         void loadSenderAccounts();
                         setOutreachPreview(null);
-                        setPilotReadiness(null);
                       }}
                     />
                   </div>
@@ -3602,6 +3502,84 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </div>
                 </details>
               </div>
+              </LeadDrawerSection>
+
+              <LeadDrawerSection
+                id="campaign-status"
+                title="Состояние кампании"
+                description={campaignStatusDescription}
+                status={campaignStatusLabel}
+                defaultOpen={Boolean(savedOutreachCampaign?.status === 'approved')}
+              >
+                {campaignStatusItems.length > 0 ? (
+                  <div className="divide-y divide-slate-200 overflow-hidden rounded-xl bg-slate-50 shadow-sm shadow-slate-900/5">
+                    {campaignStatusItems.map((item) => (
+                      <div key={item.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-slate-950">Шаг {item.sequenceIndex + 1} · {item.channelLabel}</span>
+                            <Badge variant="outline" className={outreachStatusTone(item.status)}>
+                              {item.statusLabel}
+                            </Badge>
+                          </div>
+                          {item.moment ? (
+                            <div className="mt-1 text-xs text-slate-500 tabular-nums">
+                              {item.sent ? 'Отправлено' : item.status === 'awaiting_manual_send' ? 'Сделать вручную' : 'Запланировано'} {item.moment}
+                            </div>
+                          ) : null}
+                          {item.providerMessageId ? (
+                            <div className="mt-1 truncate text-xs text-slate-400">ID отправки: {item.providerMessageId}</div>
+                          ) : null}
+                          {item.errorText ? (
+                            <div className="mt-1 text-pretty text-xs leading-5 text-rose-700">{item.errorText}</div>
+                          ) : null}
+                        </div>
+                        {item.verificationHref ? (
+                          <a
+                            href={item.verificationHref}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex min-h-10 shrink-0 items-center gap-2 text-sm font-semibold text-orange-700 transition-colors hover:text-orange-800"
+                          >
+                            {item.verificationLabel}
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-600">
+                    Касаний пока нет. Сохраните цепочку — здесь появятся даты, каналы и состояние каждого шага.
+                  </div>
+                )}
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-pretty text-xs leading-5 text-slate-500">
+                    Автоматические касания выполняются по графику. Любой ответ или исключение останавливает следующие шаги до отправки.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void reloadLatestOutreachCampaign()}
+                    disabled={Boolean(busyAction)}
+                    className="min-h-10 shrink-0 bg-white"
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Обновить статус
+                  </Button>
+                </div>
+                {canSyncPilotReply ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void syncPilotReply()}
+                    disabled={Boolean(busyAction)}
+                    className="mt-2 min-h-10 w-full bg-white"
+                  >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${busyAction === 'pilot-reply-sync' ? 'animate-spin' : ''}`} />
+                    Проверить ответ сейчас
+                  </Button>
+                ) : null}
               </LeadDrawerSection>
 
               <div className="space-y-2">
