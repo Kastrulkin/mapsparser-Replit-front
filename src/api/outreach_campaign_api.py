@@ -302,6 +302,218 @@ def _campaign_payload(cursor: Any, campaign_id: str) -> dict[str, Any] | None:
     return campaign
 
 
+MESSAGE_QUEUE_READ_EVENTS = {"read", "read_receipt", "opened", "message_read"}
+MESSAGE_QUEUE_FAILED_STATUSES = {"failed", "delivery_failed", "retry", "dlq", "blocked"}
+
+
+def _message_queue_status(row: dict[str, Any], *, now: datetime | None = None) -> str:
+    """Resolve one honest, user-facing state for an outreach touch.
+
+    Read/delivered states are never inferred from a successful send. They only
+    appear when the provider persisted the corresponding receipt.
+    """
+    if bool(row.get("reply_is_human")):
+        return "replied"
+    receipt_type = str(row.get("receipt_event_type") or "").strip().lower()
+    if receipt_type in MESSAGE_QUEUE_READ_EVENTS:
+        return "read"
+
+    delivery_status = str(row.get("delivery_status") or "").strip().lower()
+    if delivery_status in MESSAGE_QUEUE_FAILED_STATUSES:
+        return "failed"
+    if delivery_status in {"read", "opened"}:
+        return "read"
+    if delivery_status in {"delivered", "sent", "sending", "queued"}:
+        return delivery_status
+
+    touch_status = str(row.get("touch_status") or "draft").strip().lower()
+    campaign_status = str(row.get("campaign_status") or "draft").strip().lower()
+    if touch_status in MESSAGE_QUEUE_FAILED_STATUSES:
+        return "failed"
+    if touch_status in {"sent", "delivered", "manual_sent"}:
+        return "sent" if touch_status == "manual_sent" else touch_status
+    if touch_status in {"paused", "cancelled", "skipped", "reply_cancelled"}:
+        return touch_status
+    if campaign_status == "draft" or touch_status == "draft":
+        return "draft"
+
+    scheduled_at = row.get("scheduled_at")
+    current_time = now or datetime.now(timezone.utc)
+    if isinstance(scheduled_at, datetime):
+        comparable_scheduled_at = scheduled_at
+        if comparable_scheduled_at.tzinfo is None:
+            comparable_scheduled_at = comparable_scheduled_at.replace(tzinfo=timezone.utc)
+        if comparable_scheduled_at > current_time:
+            return "scheduled"
+
+    channel = str(row.get("channel") or "").strip().lower()
+    if channel in {"max", "whatsapp", "manual"} or touch_status in {"manual", "awaiting_manual_send"}:
+        return "awaiting_manual_send"
+    if campaign_status in {"approved", "active"} or touch_status in {"approved", "scheduled"}:
+        return "scheduled"
+    return touch_status or "draft"
+
+
+@outreach_campaign_bp.get("/api/outreach/messages")
+def get_outreach_message_queue():
+    """Return current-version outreach touches as an operational message queue."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    requested_workstream_type = str(request.args.get("workstream_type") or "").strip().lower()
+    if requested_workstream_type not in {"", "localos_sales", "client_partnership"}:
+        return jsonify({"success": False, "error": "Unsupported workstream_type"}), 400
+    requested_business_id = str(request.args.get("business_id") or "").strip() or None
+    requested_channel = str(request.args.get("channel") or "").strip().lower()
+    requested_status = str(request.args.get("status") or "").strip().lower()
+    search_query = str(request.args.get("q") or "").strip()
+    try:
+        limit = max(1, min(int(request.args.get("limit") or 100), 500))
+        offset = max(0, int(request.args.get("offset") or 0))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "limit and offset must be integers"}), 400
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        is_superadmin = bool(user_data.get("is_superadmin"))
+        resolved_business_id = None
+        if requested_business_id or not is_superadmin:
+            resolved_business_id = _resolve_business_for_user(cursor, user_data, requested_business_id)
+            if not resolved_business_id:
+                return jsonify({"success": False, "error": "Business access denied"}), 403
+        if not is_superadmin and requested_workstream_type == "localos_sales":
+            return jsonify({"success": False, "error": "Platform outreach access denied"}), 403
+
+        where_clauses = ["ranked.campaign_rank = 1"]
+        params: list[Any] = []
+        if requested_workstream_type:
+            where_clauses.append("ranked.workstream_type = %s")
+            params.append(requested_workstream_type)
+        elif not is_superadmin:
+            where_clauses.append("ranked.workstream_type = 'client_partnership'")
+        if resolved_business_id:
+            where_clauses.append("ranked.client_business_id = %s")
+            params.append(resolved_business_id)
+        if requested_channel:
+            where_clauses.append("touch.channel = %s")
+            params.append(requested_channel)
+        if search_query:
+            where_clauses.append(
+                "(lead.name ILIKE %s OR COALESCE(contact.value, '') ILIKE %s OR COALESCE(touch.subject, '') ILIKE %s OR COALESCE(touch.approved_text, touch.generated_text, '') ILIKE %s)"
+            )
+            search_pattern = f"%{search_query}%"
+            params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
+
+        cursor.execute(
+            f"""
+            WITH ranked_campaigns AS (
+                SELECT campaign.*,
+                       workstream.workstream_type,
+                       workstream.client_business_id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY campaign.workstream_id
+                           ORDER BY campaign.version DESC, campaign.created_at DESC
+                       ) AS campaign_rank
+                FROM outreach_campaigns campaign
+                JOIN lead_workstreams workstream ON workstream.id = campaign.workstream_id
+            )
+            SELECT
+                touch.id AS touch_id,
+                touch.sequence_index,
+                touch.channel,
+                touch.status AS touch_status,
+                touch.scheduled_at,
+                touch.subject,
+                COALESCE(touch.approved_text, touch.generated_text, '') AS message_text,
+                ranked.id AS campaign_id,
+                ranked.version AS campaign_version,
+                ranked.status AS campaign_status,
+                ranked.workstream_id,
+                ranked.workstream_type,
+                ranked.client_business_id,
+                lead.id AS lead_id,
+                lead.name AS lead_name,
+                lead.category AS lead_category,
+                business.name AS client_business_name,
+                contact.value AS recipient,
+                contact.contact_type AS recipient_type,
+                sender.sender_identity,
+                sender.display_name AS sender_display_name,
+                delivery.id AS delivery_id,
+                delivery.delivery_status,
+                delivery.provider_message_id,
+                delivery.error_text,
+                delivery.sent_at,
+                delivery.updated_at AS delivery_updated_at,
+                reply.id AS reply_event_id,
+                reply.is_human AS reply_is_human,
+                reply.classification AS reply_classification,
+                reply.raw_payload_json AS reply_payload_json,
+                reply.occurred_at AS replied_at,
+                receipt.event_type AS receipt_event_type,
+                receipt.occurred_at AS receipt_at
+            FROM ranked_campaigns ranked
+            JOIN outreach_campaign_touches touch ON touch.campaign_id = ranked.id
+            JOIN prospectingleads lead ON lead.id = ranked.lead_id
+            LEFT JOIN businesses business ON business.id = ranked.client_business_id
+            LEFT JOIN lead_contact_points contact ON contact.id = touch.contact_point_id
+            LEFT JOIN outreach_sender_accounts sender ON sender.id = touch.sender_account_id
+            LEFT JOIN LATERAL (
+                SELECT queue.id, queue.delivery_status, queue.provider_message_id,
+                       queue.error_text, queue.sent_at, queue.updated_at
+                FROM outreachsendqueue queue
+                WHERE queue.campaign_touch_id = touch.id
+                ORDER BY queue.created_at DESC
+                LIMIT 1
+            ) delivery ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT inbound.id, inbound.is_human, inbound.classification,
+                       inbound.raw_payload_json, inbound.occurred_at
+                FROM outreach_inbound_events inbound
+                WHERE inbound.touch_id = touch.id
+                  AND inbound.is_human = TRUE
+                ORDER BY inbound.occurred_at DESC, inbound.created_at DESC
+                LIMIT 1
+            ) reply ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT inbound.event_type, inbound.occurred_at
+                FROM outreach_inbound_events inbound
+                WHERE inbound.touch_id = touch.id
+                  AND LOWER(inbound.event_type) IN ('read', 'read_receipt', 'opened', 'message_read')
+                ORDER BY inbound.occurred_at DESC, inbound.created_at DESC
+                LIMIT 1
+            ) receipt ON TRUE
+            WHERE {' AND '.join(where_clauses)}
+            ORDER BY COALESCE(delivery.sent_at, touch.scheduled_at, touch.updated_at) DESC
+            LIMIT 5000
+            """,
+            tuple(params),
+        )
+        raw_items = [dict(row) for row in cursor.fetchall()]
+        items = []
+        summary: dict[str, int] = {"all": 0}
+        for item in raw_items:
+            item["status"] = _message_queue_status(item)
+            summary["all"] += 1
+            summary[item["status"]] = summary.get(item["status"], 0) + 1
+            if requested_status and item["status"] != requested_status:
+                continue
+            items.append(item)
+        total = len(items)
+        return jsonify({
+            "success": True,
+            "items": items[offset:offset + limit],
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "summary": summary,
+        })
+    finally:
+        conn.close()
+
+
 @outreach_campaign_bp.get("/api/outreach/sender-accounts")
 def get_sender_accounts():
     user_data, error = _require_auth()

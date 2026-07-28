@@ -27,6 +27,7 @@ import { Checkbox } from '../ui/checkbox';
 import { OutreachEmailSetup } from '../OutreachEmailSetup';
 import { OutreachLearningInsights } from './OutreachLearningInsights';
 import { OutreachSuppressionManager } from './OutreachSuppressionManager';
+import { OutreachMessageQueue } from './OutreachMessageQueue';
 import {
   buildProjectedOutreachTouches,
   defaultOutreachStartValue,
@@ -764,6 +765,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [actionState, setActionState] = useState('');
   const [signalStrength, setSignalStrength] = useState('');
   const [query, setQuery] = useState('');
+  const [messageStatus, setMessageStatus] = useState('');
+  const [messageChannel, setMessageChannel] = useState('');
   const [leads, setLeads] = useState<LeadItem[]>([]);
   const [clientFilterOptions, setClientFilterOptions] = useState<ClientFilterOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -870,9 +873,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       }
       const workstreams = lead.workstreams || [];
       if (signalStrength && !workstreams.some((item) => item.research?.signal_label === signalStrength)) return false;
-      if (view === 'messages') {
-        return workstreams.some((item) => item.channel_state?.code !== 'choose_channel' || item.room_state?.code !== 'missing');
-      }
       if (view === 'results') {
         return workstreams.some((item) => ['replied', 'responded', 'converted', 'qualified'].includes(String(item.status || '')));
       }
@@ -2068,7 +2068,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setView(item.id)}
+                onClick={() => {
+                  setView(item.id);
+                  if (item.id === 'messages') {
+                    setActionState('');
+                    setSignalStrength('');
+                  }
+                }}
                 className={`min-h-10 whitespace-nowrap rounded-md px-4 text-sm font-semibold transition-colors active:scale-[0.96] ${
                   view === item.id ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
                 }`}
@@ -2077,19 +2083,25 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               </button>
             ))}
           </div>
-          <Button onClick={() => setSearchOpen(true)} className="min-h-11 bg-orange-500 text-white hover:bg-orange-600">
-            <Search className="mr-2 h-4 w-4" />
-            Найти лидов
-          </Button>
+          {view === 'leads' ? (
+            <Button onClick={() => setSearchOpen(true)} className="min-h-11 bg-orange-500 text-white hover:bg-orange-600">
+              <Search className="mr-2 h-4 w-4" />
+              Найти лидов
+            </Button>
+          ) : null}
         </div>
 
-        <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(240px,1fr)_auto_minmax(170px,220px)_minmax(180px,240px)_minmax(180px,240px)]">
+        <div className={`mt-4 grid grid-cols-[minmax(0,1fr)] gap-3 ${
+          view === 'leads'
+            ? 'lg:grid-cols-[minmax(240px,1fr)_auto_minmax(170px,220px)_minmax(180px,240px)_minmax(180px,240px)]'
+            : 'lg:grid-cols-[minmax(280px,1fr)_auto_minmax(190px,240px)]'
+        }`}>
           <div className="relative min-w-0">
             <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Компания, категория, город или контакт"
+              placeholder={view === 'messages' ? 'Компания, получатель или текст сообщения' : 'Компания, категория, город или контакт'}
               className="h-10 pl-9"
             />
           </div>
@@ -2116,30 +2128,34 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
             <option value="">Все клиенты</option>
             {clientFilterOptions.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}
           </select>
-          <select
-            value={signalStrength}
-            onChange={(event) => setSignalStrength(event.target.value)}
-            className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
-            aria-label="Фильтр по силе сигнала"
-          >
-            <option value="">Любой сигнал</option>
-            <option value="strong_signal">Сильный сигнал</option>
-            <option value="reason_to_check">Есть повод</option>
-            <option value="fit_only">Только соответствие</option>
-          </select>
-          <select
-            value={actionState}
-            onChange={(event) => setActionState(event.target.value)}
-            className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
-            aria-label="Фильтр по следующему действию"
-          >
-            <option value="">Любое действие</option>
-            <option value="find_contact">Найти контакт</option>
-            <option value="prepare_room">Подготовить комнату</option>
-            <option value="review_message">Проверить сообщение</option>
-            <option value="wait_or_follow_up">Проверить ответ</option>
-            <option value="record_result">Зафиксировать результат</option>
-          </select>
+          {view === 'leads' ? (
+            <>
+              <select
+                value={signalStrength}
+                onChange={(event) => setSignalStrength(event.target.value)}
+                className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+                aria-label="Фильтр по силе сигнала"
+              >
+                <option value="">Любой сигнал</option>
+                <option value="strong_signal">Сильный сигнал</option>
+                <option value="reason_to_check">Есть повод</option>
+                <option value="fit_only">Только соответствие</option>
+              </select>
+              <select
+                value={actionState}
+                onChange={(event) => setActionState(event.target.value)}
+                className="h-10 min-w-0 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+                aria-label="Фильтр по следующему действию"
+              >
+                <option value="">Любое действие</option>
+                <option value="find_contact">Найти контакт</option>
+                <option value="prepare_room">Подготовить комнату</option>
+                <option value="review_message">Проверить сообщение</option>
+                <option value="wait_or_follow_up">Проверить ответ</option>
+                <option value="record_result">Зафиксировать результат</option>
+              </select>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -2151,39 +2167,56 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       )}
 
       <div className="px-4 py-3 sm:px-6">
-        {view === 'results' ? (
-          <div className="pb-5">
-            <OutreachLearningInsights
-              workstreamType={scope === 'client_partnership' ? 'client_partnership' : 'localos_sales'}
-              businessId={scope === 'client_partnership' ? clientBusinessId : null}
-            />
-          </div>
-        ) : null}
-        <div className="flex items-center justify-between gap-3 pb-3 text-sm text-slate-500">
-          <span className="tabular-nums">{loading ? 'Загружаем…' : `${filteredLeads.length} компаний`}</span>
-          <button type="button" onClick={loadLeads} className="flex min-h-10 items-center gap-2 px-2 font-medium hover:text-slate-950">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Обновить
-          </button>
-        </div>
-
-        {error ? (
-          <div className="flex min-h-40 flex-col items-center justify-center gap-3 text-center">
-            <CircleAlert className="h-7 w-7 text-amber-500" />
-            <p className="max-w-md text-sm text-slate-600">{error}</p>
-            <Button variant="outline" onClick={loadLeads}>Повторить</Button>
-          </div>
-        ) : !loading && !filteredLeads.length ? (
-          <div className="flex min-h-52 flex-col items-center justify-center gap-3 text-center">
-            <Users className="h-8 w-8 text-slate-300" />
-            <div>
-              <h3 className="font-semibold text-slate-950">В этом списке пока нет компаний</h3>
-              <p className="mt-1 max-w-md text-sm text-slate-500">Найдите новые компании или измените фильтры.</p>
-            </div>
-            <Button onClick={() => setSearchOpen(true)} className="bg-orange-500 text-white hover:bg-orange-600">Найти лидов</Button>
-          </div>
+        {view === 'messages' ? (
+          <OutreachMessageQueue
+            query={query}
+            scope={scope}
+            businessId={clientBusinessId}
+            channel={messageChannel}
+            status={messageStatus}
+            onChannelChange={setMessageChannel}
+            onStatusChange={setMessageStatus}
+            onOpenLead={(leadId, workstreamId) => {
+              setSelectedLeadId(leadId);
+              setSelectedWorkstreamId(workstreamId);
+              setNotice('');
+            }}
+          />
         ) : (
-          <div className="divide-y divide-slate-200">
+          <>
+            {view === 'results' ? (
+              <div className="pb-5">
+                <OutreachLearningInsights
+                  workstreamType={scope === 'client_partnership' ? 'client_partnership' : 'localos_sales'}
+                  businessId={scope === 'client_partnership' ? clientBusinessId : null}
+                />
+              </div>
+            ) : null}
+            <div className="flex items-center justify-between gap-3 pb-3 text-sm text-slate-500">
+              <span className="tabular-nums">{loading ? 'Загружаем…' : `${filteredLeads.length} компаний`}</span>
+              <button type="button" onClick={loadLeads} className="flex min-h-10 items-center gap-2 px-2 font-medium hover:text-slate-950">
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                Обновить
+              </button>
+            </div>
+
+            {error ? (
+              <div className="flex min-h-40 flex-col items-center justify-center gap-3 text-center">
+                <CircleAlert className="h-7 w-7 text-amber-500" />
+                <p className="max-w-md text-sm text-slate-600">{error}</p>
+                <Button variant="outline" onClick={loadLeads}>Повторить</Button>
+              </div>
+            ) : !loading && !filteredLeads.length ? (
+              <div className="flex min-h-52 flex-col items-center justify-center gap-3 text-center">
+                <Users className="h-8 w-8 text-slate-300" />
+                <div>
+                  <h3 className="font-semibold text-slate-950">В этом списке пока нет компаний</h3>
+                  <p className="mt-1 max-w-md text-sm text-slate-500">Найдите новые компании или измените фильтры.</p>
+                </div>
+                <Button onClick={() => setSearchOpen(true)} className="bg-orange-500 text-white hover:bg-orange-600">Найти лидов</Button>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-200">
             {filteredLeads.map((lead) => {
               const workstreams = lead.workstreams || [];
               const primary = workstreams[0];
@@ -2249,7 +2282,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 </button>
               );
             })}
-          </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
