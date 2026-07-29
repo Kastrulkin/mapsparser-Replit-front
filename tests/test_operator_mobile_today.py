@@ -124,6 +124,34 @@ def test_pulse_does_not_merge_unrelated_long_business_posts():
     assert mobile_today._cluster_pulse(rows) == []
 
 
+def test_pulse_cluster_links_only_to_primary_source():
+    rows = [
+        {
+            "source_id": "law-one",
+            "chat_title": "Beauty Law",
+            "telegram_message_id": "11",
+            "message_text": "Обсуждают новые требования к маркировке косметики",
+            "message_date": "2026-07-29T08:00:00+00:00",
+            "message_link": "https://t.me/beautylaw/11",
+        },
+        {
+            "source_id": "law-two",
+            "chat_title": "Salon Owners",
+            "telegram_message_id": "12",
+            "message_text": "Новые требования к маркировке косметики обсуждают владельцы салонов",
+            "message_date": "2026-07-29T09:00:00+00:00",
+            "message_link": "https://t.me/salonowners/12",
+        },
+    ]
+
+    pulse = mobile_today._cluster_pulse(rows)
+
+    assert len(pulse) == 1
+    assert pulse[0]["eyebrow"] == "Обсуждали"
+    assert pulse[0]["source_url"] in {"https://t.me/beautylaw/11", "https://t.me/salonowners/12"}
+    assert len(pulse[0]["source_links"]) == 1
+
+
 def test_growth_focus_wins_when_operator_item_has_lower_effect():
     focus = mobile_today.select_daily_focus(
         {"primary_action": {"id": "minor", "title": "Проверить", "severity": "low", "count": 1}},

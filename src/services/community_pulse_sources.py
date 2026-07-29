@@ -14,6 +14,13 @@ BEAUTY_SOURCE_MARKERS = (
     "beauty", "бьюти", "салон", "парикмах", "колорист", "маник", "педик",
     "космет", "бров", "ресниц", "барбер", "нейл", "nail", "spa", "спа",
 )
+CATEGORY_INDUSTRY_KEYS = {
+    "бьюти": "beauty",
+    "медицина": "medical",
+    "туризм": "travel",
+    "образование": "education_children",
+    "рестораны": "food",
+}
 
 
 def _row(cursor: Any, value: Any) -> dict[str, Any]:
@@ -49,6 +56,15 @@ def source_industry_key(source: dict[str, Any]) -> str:
     explicit = str(metadata.get("industry_key") or "").strip().lower()
     if explicit:
         return explicit
+    raw_categories = metadata.get("categories")
+    categories = {
+        str(value or "").strip().lower()
+        for value in (raw_categories if isinstance(raw_categories, list) else [])
+        if str(value or "").strip()
+    }
+    category_keys = [CATEGORY_INDUSTRY_KEYS[value] for value in categories if value in CATEGORY_INDUSTRY_KEYS]
+    if len(category_keys) == 1:
+        return category_keys[0]
     detected = detect_industry_key(
         business_name=source.get("title"),
         business_type=source.get("source_role"),
@@ -65,6 +81,14 @@ def is_default_industry_source(source: dict[str, Any], industry_keys: set[str]) 
     if not industry_keys:
         return False
     metadata = _metadata(source.get("metadata_json"))
+    raw_categories = metadata.get("categories")
+    categories = {
+        str(value or "").strip().lower()
+        for value in (raw_categories if isinstance(raw_categories, list) else [])
+        if str(value or "").strip()
+    }
+    if "для клиентов" in categories:
+        return False
     if metadata.get("community_default") is False:
         return False
     if metadata.get("submitted_by_business_id") and metadata.get("community_default") is not True:

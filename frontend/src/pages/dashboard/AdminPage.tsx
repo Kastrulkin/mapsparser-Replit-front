@@ -40,6 +40,9 @@ const KnowledgeMarketOverview = lazy(() =>
 const CompanyRegistry = lazy(() =>
   import('../../components/companies/CompanyRegistry').then((module) => ({ default: module.CompanyRegistry })),
 );
+const TelegramSourceCatalog = lazy(() =>
+  import('../../components/admin/TelegramSourceCatalog').then((module) => ({ default: module.TelegramSourceCatalog })),
+);
 
 type AdminTabId = 'businesses' | 'companies' | 'subscriptions' | 'agents' | 'agentApi' | 'tokens' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting' | 'telegramRadar' | 'knowledge';
 interface Business {
@@ -1919,34 +1922,43 @@ export const AdminPage: React.FC = () => {
             <KnowledgeMarketOverview />
           </DashboardSection>
         ) : activeTab === 'telegramRadar' ? (
-          <DashboardSection
-            title={activeTabConfig.label}
-            description="Суперадминский доступ к inbox радара: выберите ЛокалОС или клиентский бизнес, проверьте найденные сообщения и статусы."
-            actions={(
-              <div className="flex w-full flex-col gap-2 sm:w-[420px]">
-                <label className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Бизнес
-                </label>
-                <select
-                  value={selectedRadarBusinessId}
-                  onChange={(event) => setSelectedRadarBusinessId(event.target.value)}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
-                >
-                  <option value={LOCALOS_RADAR_BUSINESS_ID}>ЛокалОС</option>
-                  {radarBusinessOptions.length === 0 ? (
-                    <option value="">Нет доступных бизнесов</option>
-                  ) : radarBusinessOptions.map((business) => (
-                    <option key={business.id} value={business.id}>
-                      {business.name} · {business.owner}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            contentClassName="p-0"
-          >
-            <TelegramOpportunityRadar businessId={selectedRadarBusinessId || null} mode="work" />
-          </DashboardSection>
+          <div className="space-y-6">
+            <DashboardSection
+              title="Источники Telegram"
+              description="Все публичные каналы и чаты в общей базе ЛокалОС. Разметьте отрасль, формат и аудиторию, чтобы Пульс показывал подходящие темы нужным бизнесам."
+              contentClassName="p-0"
+            >
+              <TelegramSourceCatalog />
+            </DashboardSection>
+            <DashboardSection
+              title="Найденные сообщения"
+              description="Выберите ЛокалОС или клиентский бизнес, проверьте найденные сообщения и рабочие статусы."
+              actions={(
+                <div className="flex w-full flex-col gap-2 sm:w-[420px]">
+                  <label className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    Бизнес
+                  </label>
+                  <select
+                    value={selectedRadarBusinessId}
+                    onChange={(event) => setSelectedRadarBusinessId(event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+                  >
+                    <option value={LOCALOS_RADAR_BUSINESS_ID}>ЛокалОС</option>
+                    {radarBusinessOptions.length === 0 ? (
+                      <option value="">Нет доступных бизнесов</option>
+                    ) : radarBusinessOptions.map((business) => (
+                      <option key={business.id} value={business.id}>
+                        {business.name} · {business.owner}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              contentClassName="p-0"
+            >
+              <TelegramOpportunityRadar businessId={selectedRadarBusinessId || null} mode="work" />
+            </DashboardSection>
+          </div>
         ) : (
           <>
             {(() => {

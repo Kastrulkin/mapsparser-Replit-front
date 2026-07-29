@@ -449,22 +449,26 @@ def _cluster_pulse(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if title == "Обсуждение предпринимателей" and top_terms:
             title = " ".join(term for term, _count in top_terms).capitalize()
         links = []
+        primary_link = None
         for item in items:
             link = str(item.get("message_link") or "").strip()
             username = str(item.get("telegram_username") or "").strip().lstrip("@")
             source_url = link or (f"https://t.me/{username}" if username else "")
             if source_url and source_url not in links:
                 links.append(source_url)
+            if source_url and str(item.get("chat_title") or "Telegram") == primary_source and primary_link is None:
+                primary_link = source_url
         score = len(items) * 10 + len(sources) * 8 + max(int(item.get("priority_score") or item.get("score") or 0) for item in items)
         pulse.append({
             "id": f"pulse:{re.sub(r'[^a-zа-яё0-9]+', '-', title.lower()).strip('-')[:64]}:{latest[:10]}",
+            "eyebrow": "Обсуждали",
             "title": title,
-            "description": f"За сутки тема повторилась в {len(items)} сообщениях из {len(sources)} источников.",
+            "description": f"Тему поднимали в {len(sources)} отраслевых источниках за последние сутки.",
             "message_count": len(items),
             "sources_count": len(sources),
             "source_name": primary_source,
-            "source_url": links[0] if links else None,
-            "source_links": links[:3],
+            "source_url": primary_link or (links[0] if links else None),
+            "source_links": [primary_link or links[0]] if primary_link or links else [],
             "last_discussed_at": latest,
             "score": score,
             "provenance": [
@@ -542,36 +546,61 @@ def _knowledge_pulse_rows(
 def _pulse_overview(rows: list[dict[str, Any]], industry_keys: set[str]) -> list[dict[str, Any]]:
     if not rows:
         return []
-    unique_sources = {str(item.get("source_id") or item.get("chat_title") or "") for item in rows}
-    latest = max(str(_iso(item.get("message_date") or item.get("created_at")) or "") for item in rows)
-    links = []
-    for item in rows:
-        link = str(item.get("message_link") or "").strip()
-        if link and link not in links:
-            links.append(link)
     label = industry_label(industry_keys)
-    return [{
-        "id": f"pulse:industry-overview:{latest[:10]}",
-        "title": f"Новое в отрасли: {label.lower()}",
-        "description": f"За сутки появилось {len(rows)} новых материалов из {len(unique_sources)} открытых источников.",
-        "message_count": len(rows),
-        "sources_count": len(unique_sources),
-        "source_name": label,
-        "source_url": links[0] if links else None,
-        "source_links": links[:3],
-        "last_discussed_at": latest,
-        "score": len(rows) * 10 + len(unique_sources) * 8,
-        "provenance": [
-            {
+
+    def rank(item: dict[str, Any]) -> tuple[int, int, str]:
+        metadata = _parse_json(item.get("raw_payload_json"))
+        priority = int(metadata.get("priority_score") or metadata.get("relevance_score") or 0)
+        engagement = int(metadata.get("raw_engagement") or metadata.get("views") or 0)
+        observed_at = str(_iso(item.get("message_date") or item.get("created_at")) or "")
+        return priority, engagement, observed_at
+
+    highlights = []
+    used_sources: set[str] = set()
+    used_topics: list[set[str]] = []
+    for item in sorted(rows, key=rank, reverse=True):
+        title = _topic_hint(item)
+        topic_tokens = _tokens(title)
+        if any(len(topic_tokens.intersection(existing)) >= 2 for existing in used_topics):
+            continue
+        source_id = str(item.get("source_id") or item.get("chat_title") or "")
+        if source_id in used_sources and len(used_sources) < 3:
+            continue
+        link = str(item.get("message_link") or "").strip() or None
+        text = re.sub(r"\s+", " ", str(item.get("message_text") or "")).strip()
+        description = text
+        if description.lower().startswith(title.lower()):
+            description = description[len(title):].lstrip(" .!?:—–-")
+        if len(description) > 180:
+            description = description[:177].rsplit(" ", 1)[0].rstrip(" ,.;:") + "…"
+        if len(description) < 24:
+            description = f"Важный материал из отраслевого источника «{item.get('chat_title') or label}»."
+        observed_at = str(_iso(item.get("message_date") or item.get("created_at")) or "")
+        highlights.append({
+            "id": f"pulse:highlight:{item.get('source_id')}:{item.get('telegram_message_id') or observed_at}",
+            "eyebrow": "Главное за день" if not highlights else "Говорили о",
+            "title": title,
+            "description": description,
+            "message_count": None,
+            "sources_count": None,
+            "source_name": str(item.get("chat_title") or label),
+            "source_url": link,
+            "source_links": [link] if link else [],
+            "last_discussed_at": observed_at,
+            "score": rank(item)[0],
+            "provenance": [{
                 "message_id": item.get("telegram_message_id"),
                 "source_id": item.get("source_id"),
                 "source_name": item.get("chat_title"),
-                "message_link": item.get("message_link"),
-                "message_date": _iso(item.get("message_date") or item.get("created_at")),
-            }
-            for item in rows[:10]
-        ],
-    }]
+                "message_link": link,
+                "message_date": observed_at,
+            }],
+        })
+        used_sources.add(source_id)
+        used_topics.append(topic_tokens)
+        if len(highlights) >= 3:
+            break
+    return highlights
 
 
 def _load_community_pulse(cursor: Any, scope: dict[str, Any], cutoff: datetime) -> list[dict[str, Any]]:

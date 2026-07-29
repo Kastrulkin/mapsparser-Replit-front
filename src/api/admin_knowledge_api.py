@@ -12,6 +12,7 @@ from services.knowledge_graph_service import (
     list_sources,
     overview,
     serialize_for_json,
+    update_source_categories,
 )
 from services.knowledge_embedding_ingestion import ingest_semantic_sources
 from services.knowledge_embeddings import embedding_status, enqueue_document_chunks
@@ -92,8 +93,36 @@ def knowledge_sources():
         return auth_error
     conn = get_db_connection()
     try:
-        items = list_sources(conn, status=str(request.args.get("status") or "").strip() or None)
+        items = list_sources(
+            conn,
+            status=str(request.args.get("status") or "").strip() or None,
+            source_type=str(request.args.get("source_type") or "").strip() or None,
+        )
         return _response({"success": True, "items": items, "count": len(items)})
+    finally:
+        conn.close()
+
+
+@admin_knowledge_bp.put("/api/admin/knowledge/sources/<source_id>/categories")
+def knowledge_source_categories(source_id):
+    _, auth_error = _require_superadmin()
+    if auth_error:
+        return auth_error
+    payload = _request_json()
+    categories = payload.get("categories")
+    if not isinstance(categories, list):
+        return _response({"success": False, "error": "categories must be a list"}, 400)
+    conn = get_db_connection()
+    try:
+        source = update_source_categories(conn, source_id=source_id, categories=categories)
+        if not source:
+            conn.rollback()
+            return _response({"success": False, "error": "Source not found"}, 404)
+        conn.commit()
+        return _response({"success": True, "source": source})
+    except ValueError as error:
+        conn.rollback()
+        return _response({"success": False, "error": str(error)}, 400)
     finally:
         conn.close()
 

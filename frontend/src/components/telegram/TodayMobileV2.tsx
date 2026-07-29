@@ -37,6 +37,7 @@ export type TodayActivityItem = {
 };
 
 export type CommunityPulseItem = TodayActivityItem & {
+  eyebrow?: string;
   message_count?: number;
   sources_count?: number;
   source_name?: string;
@@ -258,6 +259,7 @@ export const TodayMobileV2 = ({
             >
               <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-[13px] ${index === 0 ? 'bg-primary/15 text-primary' : 'bg-white/[0.045] text-zinc-500'}`}><Radio className="h-4 w-4" /></span>
               <span className="min-w-0 flex-1">
+                {item.eyebrow ? <small className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-primary/80">{item.eyebrow}</small> : null}
                 <b className="block text-balance text-sm leading-5">{item.title}</b>
                 <small className="mt-1 block text-pretty text-[11px] leading-4 text-zinc-600">{item.description}</small>
                 <small className="mt-2 block truncate text-[10px] text-zinc-700">{[item.source_name, item.message_count ? `${item.message_count} сообщений` : '', timeLabel(item.last_discussed_at)].filter(Boolean).join(' · ')}</small>

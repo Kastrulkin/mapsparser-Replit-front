@@ -37,6 +37,18 @@ def _row_dict(row: Any) -> dict[str, Any]:
     return {}
 
 
+def _json_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else {}
+        except (TypeError, ValueError):
+            return {}
+    return {}
+
+
 def upsert_source(
     conn,
     *,
@@ -470,10 +482,105 @@ def list_signals(
         cursor.close()
 
 
-def list_sources(conn, *, status: str | None = None) -> list[dict[str, Any]]:
+SOURCE_CATEGORY_ALIASES = {
+    "beauty": "бьюти",
+    "красота": "бьюти",
+    "салоны красоты": "бьюти",
+    "чаты": "чат",
+    "каналы": "канал",
+    "для владельцев": "владельцы",
+    "клиенты": "для клиентов",
+    "клиентский": "для клиентов",
+}
+
+
+def normalize_source_categories(values: list[Any]) -> list[str]:
+    categories = []
+    for value in values:
+        category = re.sub(r"\s+", " ", str(value or "").strip().lower())
+        category = SOURCE_CATEGORY_ALIASES.get(category, category)
+        if not category or len(category) > 40:
+            continue
+        if not re.fullmatch(r"[0-9a-zа-яё _-]+", category):
+            continue
+        if category not in categories:
+            categories.append(category)
+        if len(categories) >= 12:
+            break
+    return categories
+
+
+def update_source_categories(conn, *, source_id: str, categories: list[Any]) -> dict[str, Any] | None:
+    normalized = normalize_source_categories(categories)
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     try:
-        if status:
+        cursor.execute("SELECT metadata_json, visibility FROM knowledge_sources WHERE id = %s", (source_id,))
+        current = cursor.fetchone()
+        if not current:
+            return None
+        metadata = _json_dict(current.get("metadata_json"))
+        previous_values = metadata.get("categories")
+        previous_categories = normalize_source_categories(previous_values if isinstance(previous_values, list) else [])
+        metadata["categories"] = normalized
+        industry_categories = {
+            "бьюти": "beauty",
+            "медицина": "medical",
+            "туризм": "travel",
+            "образование": "education_children",
+            "рестораны": "food",
+        }
+        selected_industries = [industry_categories[item] for item in normalized if item in industry_categories]
+        previous_industries = [industry_categories[item] for item in previous_categories if item in industry_categories]
+        if len(selected_industries) == 1:
+            metadata["industry_key"] = selected_industries[0]
+            metadata.pop("industry_keys", None)
+        elif len(selected_industries) > 1:
+            metadata["industry_keys"] = selected_industries
+            metadata.pop("industry_key", None)
+        elif previous_industries:
+            metadata.pop("industry_key", None)
+            metadata.pop("industry_keys", None)
+        if "для клиентов" in normalized:
+            metadata["audience"] = "customers"
+            metadata["community_default"] = False
+        elif "владельцы" in normalized:
+            metadata["audience"] = "business_owners"
+            if str(current.get("visibility") or "") == "public":
+                metadata["community_default"] = True
+        elif {"для клиентов", "владельцы"}.intersection(previous_categories):
+            metadata.pop("audience", None)
+            metadata.pop("community_default", None)
+        cursor.execute(
+            """
+            UPDATE knowledge_sources
+            SET metadata_json = %s, updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (Json(metadata), source_id),
+        )
+        source = _row_dict(cursor.fetchone())
+        source["categories"] = normalized
+        return source
+    finally:
+        cursor.close()
+
+
+def list_sources(conn, *, status: str | None = None, source_type: str | None = None) -> list[dict[str, Any]]:
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        if status and source_type:
+            cursor.execute(
+                """
+                SELECT s.*, COUNT(d.id)::INT AS documents_count
+                FROM knowledge_sources s
+                LEFT JOIN knowledge_documents d ON d.source_id = s.id AND d.invalidated_at IS NULL
+                WHERE s.status = %s AND s.source_type = %s
+                GROUP BY s.id ORDER BY s.updated_at DESC
+                """,
+                (status, source_type),
+            )
+        elif status:
             cursor.execute(
                 """
                 SELECT s.*, COUNT(d.id)::INT AS documents_count
@@ -484,6 +591,17 @@ def list_sources(conn, *, status: str | None = None) -> list[dict[str, Any]]:
                 """,
                 (status,),
             )
+        elif source_type:
+            cursor.execute(
+                """
+                SELECT s.*, COUNT(d.id)::INT AS documents_count
+                FROM knowledge_sources s
+                LEFT JOIN knowledge_documents d ON d.source_id = s.id AND d.invalidated_at IS NULL
+                WHERE s.source_type = %s
+                GROUP BY s.id ORDER BY s.status, s.updated_at DESC
+                """,
+                (source_type,),
+            )
         else:
             cursor.execute(
                 """
@@ -493,7 +611,12 @@ def list_sources(conn, *, status: str | None = None) -> list[dict[str, Any]]:
                 GROUP BY s.id ORDER BY s.status, s.updated_at DESC
                 """
             )
-        return [_row_dict(row) for row in cursor.fetchall()]
+        sources = [_row_dict(row) for row in cursor.fetchall()]
+        for source in sources:
+            metadata = _json_dict(source.get("metadata_json"))
+            categories = metadata.get("categories")
+            source["categories"] = normalize_source_categories(categories if isinstance(categories, list) else [])
+        return sources
     finally:
         cursor.close()
 
