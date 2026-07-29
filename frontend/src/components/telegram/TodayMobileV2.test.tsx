@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TodayMobileV2 } from './TodayMobileV2';
 
 describe('TodayMobileV2', () => {
-  it('keeps the LocalOS assignment field visible in Russian', () => {
+  it('keeps the ЛокалОС assignment field visible in Russian', () => {
     render(
       <TodayMobileV2
         data={{ scope: { kind: 'business', id: 'business-1', name: 'Тестовый бизнес' } }}

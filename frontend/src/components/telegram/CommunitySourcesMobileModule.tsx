@@ -84,14 +84,14 @@ export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: stri
       const extraTopics = customTopics.split(',').map((item) => item.trim()).filter(Boolean);
       if (businessId === 'preview') {
         setItems((current) => [{ id: `preview-${Date.now()}`, title: url.replace(/^https?:\/\/t\.me\//, '@'), canonical_url: url, sync_status: 'queued', next_sync_at: new Date().toISOString(), documents_count: 0, embeddings_count: 0, topics_json: [...new Set([...topics, ...extraTopics])], schedule_json: { interval_hours: Number(intervalHours) } }, ...current]);
-        setUrl(''); setTopics([]); setCustomTopics(''); setMessage('Источник добавлен. LocalOS начал собирать публичные материалы.');
+        setUrl(''); setTopics([]); setCustomTopics(''); setMessage('Источник добавлен. ЛокалОС начал собирать публичные материалы.');
         return;
       }
       const payload = await fetch(`/api/business/${encodeURIComponent(businessId)}/community-sources`, {
         method: 'POST', headers: headers(), body: JSON.stringify({ url: url.trim(), topics: [...new Set([...topics, ...extraTopics])], interval_hours: Number(intervalHours) }),
       }).then(read);
       setUrl(''); setTopics([]); setCustomTopics('');
-      setMessage(typeof payload.message === 'string' ? payload.message : 'Источник добавлен. LocalOS начал собирать публичные материалы.');
+      setMessage(typeof payload.message === 'string' ? payload.message : 'Источник добавлен. ЛокалОС начал собирать публичные материалы.');
       await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось добавить источник'); }
     finally { setBusy(''); }
@@ -145,7 +145,7 @@ export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: stri
     <section className="rounded-[26px] bg-gradient-to-b from-zinc-900 to-zinc-900/70 p-5 shadow-[0_22px_70px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.08)]">
       <span className="grid h-11 w-11 place-items-center rounded-[15px] bg-primary/15 text-primary"><Radio className="h-5 w-5" /></span>
       <h2 className="mt-4 text-balance text-xl font-semibold tracking-[-0.03em]">За чем следить?</h2>
-      <p className="mt-2 text-pretty text-sm leading-6 text-zinc-500">LocalOS соберёт публичные посты, найдёт повторяющиеся темы и покажет главное на экране «Сегодня».</p>
+      <p className="mt-2 text-pretty text-sm leading-6 text-zinc-500">ЛокалОС соберёт публичные посты, найдёт повторяющиеся темы и покажет главное на экране «Сегодня».</p>
       <form onSubmit={add} className="mt-5">
         <label className="text-xs font-medium text-zinc-400"><span className="mb-2 block px-1">Ссылка на публичный канал или группу</span><input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://t.me/channel" inputMode="url" autoCapitalize="none" className="min-h-12 w-full rounded-2xl bg-black/20 px-4 text-sm text-zinc-100 outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
         <details className="mt-3 rounded-[18px] bg-black/15 shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
@@ -166,7 +166,7 @@ export const CommunitySourcesMobileModule = ({ businessId }: { businessId?: stri
     {error ? <div role="alert" className="flex gap-3 rounded-[18px] bg-rose-400/10 p-4 text-xs leading-5 text-rose-100 shadow-[0_0_0_1px_rgba(251,113,133,0.2)]"><CircleAlert className="h-4 w-4 shrink-0" />{error}</div> : null}
 
     <section>
-      <div className="flex min-h-11 items-center justify-between gap-3 px-1"><div><h2 className="text-balance text-lg font-semibold">В работе</h2><p className="mt-1 text-xs text-zinc-600">Источники, за которыми следит LocalOS</p></div><span className="text-sm tabular-nums text-zinc-500">{items.length}</span></div>
+      <div className="flex min-h-11 items-center justify-between gap-3 px-1"><div><h2 className="text-balance text-lg font-semibold">В работе</h2><p className="mt-1 text-xs text-zinc-600">Источники, за которыми следит ЛокалОС</p></div><span className="text-sm tabular-nums text-zinc-500">{items.length}</span></div>
       {loading ? <div className="mt-3 space-y-2" aria-busy="true">{[1, 2].map((item) => <div key={item} className="h-40 animate-pulse rounded-[24px] bg-white/[0.04] motion-reduce:animate-none" />)}</div> : items.length ? <div className="mt-3 space-y-3">{items.map((item) => { const status = statusMeta(item); const editing = editingId === item.id; return <motion.article layout key={item.id} className="rounded-[24px] bg-white/[0.04] p-4 shadow-[0_16px_50px_rgba(0,0,0,0.16),0_0_0_1px_rgba(255,255,255,0.07)]">
         <div className="flex items-start gap-3"><span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${status.dot}`} /><div className="min-w-0 flex-1"><b className="block truncate text-sm">{item.title || 'Источник Telegram'}</b><p className="mt-1 truncate text-[11px] text-zinc-600">{item.canonical_url}</p></div>{item.canonical_url ? <a href={item.canonical_url} target="_blank" rel="noreferrer" aria-label="Открыть источник" className="grid h-11 w-11 place-items-center rounded-[14px] text-zinc-500 transition-[background-color,transform] active:scale-[0.96]"><ExternalLink className="h-4 w-4" /></a> : null}</div>
         <div className="mt-3 border-y border-white/[0.055] py-3"><div className="flex items-start justify-between gap-4"><div><b className="block text-xs text-zinc-300">{status.label}</b><p className="mt-1 text-pretty text-[11px] leading-4 text-zinc-600">{status.text}</p></div><span className="shrink-0 text-right"><b className="block text-sm tabular-nums text-zinc-300">{item.documents_count || 0}</b><small className="text-[9px] text-zinc-700">материалов</small></span></div>{item.last_sync_error ? <p className="mt-2 text-pretty text-[10px] leading-4 text-rose-300">{item.last_sync_error}</p> : null}</div>

@@ -4,7 +4,7 @@ import MobileShell from './MobileShell';
 
 describe('MobileShell', () => {
   it('shows a recoverable offline state without hiding loaded content', () => {
-    render(<MobileShell header={<div>LocalOS</div>}><div>Загруженные задачи</div></MobileShell>);
+    render(<MobileShell header={<div>ЛокалОС</div>}><div>Загруженные задачи</div></MobileShell>);
 
     act(() => window.dispatchEvent(new Event('offline')));
 
@@ -13,7 +13,7 @@ describe('MobileShell', () => {
   });
 
   it('announces request errors', () => {
-    render(<MobileShell header={<div>LocalOS</div>} error="Не удалось обновить данные"><div>Экран</div></MobileShell>);
+    render(<MobileShell header={<div>ЛокалОС</div>} error="Не удалось обновить данные"><div>Экран</div></MobileShell>);
     expect(screen.getByRole('alert')).toHaveTextContent('Не удалось обновить данные');
   });
 });

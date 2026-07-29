@@ -87,7 +87,7 @@ export const ProgressMobileModule = ({ data, loading, openTarget, track }: Progr
     return <div className="space-y-3" aria-busy="true"><div className="h-52 animate-pulse rounded-[24px] bg-white/[0.045] motion-reduce:animate-none" /><div className="h-24 animate-pulse rounded-[22px] bg-white/[0.035] motion-reduce:animate-none" /><div className="h-24 animate-pulse rounded-[22px] bg-white/[0.035] motion-reduce:animate-none" /></div>;
   }
   if (!data?.summary) {
-    return <div className="rounded-[22px] bg-white/[0.035] p-6 text-center shadow-[0_0_0_1px_rgba(255,255,255,0.07)]"><Circle className="mx-auto h-6 w-6 text-zinc-700" /><b className="mt-3 block text-sm">Прогресс пока не собран</b><p className="mt-1 text-pretty text-xs leading-5 text-zinc-600">Выберите бизнес или сеть, чтобы LocalOS собрал подтверждённый путь роста.</p></div>;
+    return <div className="rounded-[22px] bg-white/[0.035] p-6 text-center shadow-[0_0_0_1px_rgba(255,255,255,0.07)]"><Circle className="mx-auto h-6 w-6 text-zinc-700" /><b className="mt-3 block text-sm">Прогресс пока не собран</b><p className="mt-1 text-pretty text-xs leading-5 text-zinc-600">Выберите бизнес или сеть, чтобы ЛокалОС собрал подтверждённый путь роста.</p></div>;
   }
 
   const summary = data.summary;

@@ -406,7 +406,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
         `/api/partnership/leads/${lead.id}/manual-contact`,
         {
           channel: lead.selected_channel || "manual",
-          comment: "Отмечено вручную из LocalOS Mini App",
+          comment: "Отмечено вручную из мини-приложения ЛокалОС",
         },
       );
     if (operation === "delete") {
@@ -636,7 +636,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
               Партнёрства
             </small>
             <h2 className="mt-2 text-xl font-semibold text-balance">
-              LocalOS ведёт кандидатов до ответа
+              ЛокалОС ведёт кандидатов до ответа
             </h2>
             <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">
               Поиск, отбор, предложение и результаты собраны в одном маршруте.
@@ -1074,7 +1074,7 @@ export const PartnershipsMobileModule = ({ scope }: { scope?: Scope }) => {
           ) : (
             <Empty
               title="Писем пока нет"
-              text="Откройте кандидата, проверьте карточку и попросите LocalOS подготовить предложение."
+              text="Откройте кандидата, проверьте карточку и попросите ЛокалОС подготовить предложение."
             />
           )}
         </div>
@@ -1559,7 +1559,7 @@ const LeadSheet = ({
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              {busy ? "LocalOS выполняет работу…" : step[1]}
+              {busy ? "ЛокалОС выполняет работу…" : step[1]}
             </button>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button

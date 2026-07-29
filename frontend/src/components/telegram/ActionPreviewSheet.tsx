@@ -18,7 +18,7 @@ const spring = { duration: 0.3, bounce: 0 };
 
 const externalEffectCopy = (capability?: string) => {
   if (capability === 'cards.refresh' || capability === 'diagnostics.retry') {
-    return 'LocalOS обратится ко внешнему источнику и обновит собранные данные.';
+    return 'ЛокалОС обратится ко внешнему источнику и обновит собранные данные.';
   }
   return 'Действие изменит данные во внешней системе.';
 };
@@ -29,7 +29,7 @@ export default function ActionPreviewSheet({ preview, busy, confirmLabel = 'По
       <motion.section role="dialog" aria-modal="true" aria-labelledby="mobile-action-preview-title" initial={{ opacity: 0, y: 40, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 24, scale: 0.98 }} transition={spring} className="w-full max-w-xl rounded-[28px] bg-zinc-900 p-5 shadow-[0_30px_100px_rgba(0,0,0,0.6)] ring-1 ring-inset ring-white/[0.09]">
         <div className="flex items-start gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-primary/12 text-primary"><ShieldCheck className="h-5 w-5" /></span>
-          <div className="min-w-0 flex-1"><h2 id="mobile-action-preview-title" className="text-balance text-lg font-semibold tracking-[-0.025em]">Проверьте действие</h2><p className="mt-1 text-pretty text-xs leading-5 text-zinc-500">LocalOS выполнит только перечисленные изменения после вашего подтверждения.</p></div>
+          <div className="min-w-0 flex-1"><h2 id="mobile-action-preview-title" className="text-balance text-lg font-semibold tracking-[-0.025em]">Проверьте действие</h2><p className="mt-1 text-pretty text-xs leading-5 text-zinc-500">ЛокалОС выполнит только перечисленные изменения после вашего подтверждения.</p></div>
           <button type="button" aria-label="Закрыть проверку" disabled={busy} onClick={onCancel} className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white/[0.05] text-zinc-400 ring-1 ring-inset ring-white/[0.07] transition-transform active:scale-[0.96] disabled:opacity-40"><X className="h-4 w-4" /></button>
         </div>
         <div className="mt-5 space-y-2">

@@ -10,7 +10,7 @@ const jobTitle = (job?: MobileJob | null) => {
   if (job?.kind === 'finance_document_recognize') return 'Разбираем продажи';
   if (job?.kind === 'card_refresh') return 'Обновляем данные карточки';
   if (job?.kind === 'agent_run') return 'ИИ-сотрудник выполняет задачу';
-  return 'LocalOS выполняет задачу';
+  return 'ЛокалОС выполняет задачу';
 };
 
 export default function JobProgressSheet({ job, busy = false, onClose, onRetry, onCancel }: { job: MobileJob | null; busy?: boolean; onClose: () => void; onRetry?: () => void; onCancel?: () => void }) {
@@ -29,7 +29,7 @@ export default function JobProgressSheet({ job, busy = false, onClose, onRetry, 
             {completed ? <Check className="h-5 w-5" /> : <Loader2 className={`h-5 w-5 ${failed || cancelled ? '' : 'animate-spin motion-reduce:animate-none'}`} />}
           </motion.span>
           <div className="min-w-0 flex-1">
-            <small className="font-semibold uppercase tracking-[0.13em] text-primary">{completed ? 'Готово' : failed ? 'Нужно внимание' : cancelled ? 'Остановлено' : 'LocalOS работает'}</small>
+            <small className="font-semibold uppercase tracking-[0.13em] text-primary">{completed ? 'Готово' : failed ? 'Нужно внимание' : cancelled ? 'Остановлено' : 'ЛокалОС работает'}</small>
             <h2 id="mobile-job-title" className="mt-1 text-balance text-xl font-semibold tracking-[-0.035em]">{jobTitle(job)}</h2>
             <p className="mt-2 text-pretty text-xs leading-5 text-zinc-500">{job.error || job.stage || 'Задача сохранена. Экран можно закрыть.'}</p>
           </div>
