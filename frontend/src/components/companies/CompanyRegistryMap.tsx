@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { Clusterer, Map, Placemark, YMaps, ZoomControl } from '@pbe/react-yandex-maps';
-import { Building2, MapPin } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Circle, Clusterer, Map, Placemark, YMaps, ZoomControl } from '@pbe/react-yandex-maps';
+import { Building2, Layers3, MapPin } from 'lucide-react';
 import {
+  buildCompanyDensityCells,
   buildCompanyMapViewport,
   COMPANY_MAP_ROLE_PRIORITY,
   COMPANY_MAP_ROLE_STYLES,
@@ -15,6 +16,7 @@ type CompanyRegistryMapProps = {
   error?: string;
   truncated?: boolean;
   withoutCoordinates?: number;
+  categoryLabel?: string;
   onSelect: (companyId: string) => void;
   onRetry: () => void;
 };
@@ -22,6 +24,10 @@ type CompanyRegistryMapProps = {
 type YandexMapInstance = {
   setBounds?: (bounds: [[number, number], [number, number]], options?: Record<string, unknown>) => void;
   setCenter?: (center: [number, number], zoom?: number, options?: Record<string, unknown>) => void;
+};
+
+type YandexBoundsChangeEvent = {
+  get: (key: string) => unknown;
 };
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (symbol) => ({
@@ -36,12 +42,15 @@ const MapSkeleton = () => (
   <div className="h-[560px] animate-pulse rounded-[28px] bg-slate-100 motion-reduce:animate-none" aria-label="Загрузка карты" />
 );
 
-export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCoordinates = 0, onSelect, onRetry }: CompanyRegistryMapProps) => {
+export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCoordinates = 0, categoryLabel, onSelect, onRetry }: CompanyRegistryMapProps) => {
+  const [displayMode, setDisplayMode] = useState<'points' | 'density'>('points');
   const validItems = useMemo(
     () => items.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude)),
     [items],
   );
   const viewport = useMemo(() => buildCompanyMapViewport(validItems), [validItems]);
+  const [mapZoom, setMapZoom] = useState(viewport.zoom);
+  const densityCells = useMemo(() => buildCompanyDensityCells(validItems, mapZoom), [mapZoom, validItems]);
   const mapRef = useRef<YandexMapInstance | null>(null);
   const pointsKey = useMemo(
     () => validItems.map((item) => `${item.id}:${item.latitude}:${item.longitude}`).join('|'),
@@ -57,6 +66,11 @@ export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCo
     }
     if (map.setCenter) map.setCenter(viewport.center, viewport.zoom, { duration: 180 });
   }, [pointsKey, viewport]);
+
+  const handleBoundsChange = (event: YandexBoundsChangeEvent) => {
+    const nextZoom = event.get('newZoom');
+    if (typeof nextZoom === 'number' && Number.isFinite(nextZoom)) setMapZoom(nextZoom);
+  };
 
   if (loading) return <MapSkeleton />;
   if (error) {
@@ -77,10 +91,14 @@ export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCo
   return (
     <section className="overflow-hidden rounded-[28px] bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06),0_18px_50px_rgba(15,23,42,0.08)]">
       <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div><b className="text-balance text-sm text-slate-950">Компании на карте</b><p className="mt-1 text-pretty text-xs text-slate-500">Нажмите на точку, чтобы открыть карточку компании.</p></div>
-        <div className="flex flex-wrap gap-x-3 gap-y-2 text-[11px] font-semibold text-slate-600">
-          {COMPANY_MAP_ROLE_PRIORITY.map((key) => <span key={key} className="inline-flex items-center gap-1.5"><i className={`h-2.5 w-2.5 rounded-full ${COMPANY_MAP_ROLE_STYLES[key].legend}`} />{COMPANY_MAP_ROLE_STYLES[key].label}</span>)}
+        <div><b className="text-balance text-sm text-slate-950">{displayMode === 'density' ? `Плотность: ${categoryLabel || 'все типы бизнеса'}` : 'Компании на карте'}</b><p className="mt-1 text-pretty text-xs text-slate-500">{displayMode === 'density' ? 'Чем насыщеннее зона, тем больше выбранных компаний находится рядом.' : 'Нажмите на точку, чтобы открыть карточку компании.'}</p></div>
+        <div className="grid h-11 shrink-0 grid-cols-2 rounded-2xl bg-slate-100 p-1 shadow-inner" aria-label="Вид карты">
+          <button type="button" aria-pressed={displayMode === 'points'} onClick={() => setDisplayMode('points')} className={`flex min-h-9 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-[background-color,color,box-shadow,scale] active:scale-[0.96] ${displayMode === 'points' ? 'bg-white text-slate-950 shadow-[0_1px_4px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'}`}><MapPin className="h-3.5 w-3.5" />Точки</button>
+          <button type="button" aria-pressed={displayMode === 'density'} onClick={() => setDisplayMode('density')} className={`flex min-h-9 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-[background-color,color,box-shadow,scale] active:scale-[0.96] ${displayMode === 'density' ? 'bg-white text-slate-950 shadow-[0_1px_4px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'}`}><Layers3 className="h-3.5 w-3.5" />Плотность</button>
         </div>
+      </div>
+      <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-2 px-4 pb-3 text-[11px] font-semibold text-slate-600 sm:px-5">
+        {displayMode === 'points' ? COMPANY_MAP_ROLE_PRIORITY.map((key) => <span key={key} className="inline-flex items-center gap-1.5"><i className={`h-2.5 w-2.5 rounded-full ${COMPANY_MAP_ROLE_STYLES[key].legend}`} />{COMPANY_MAP_ROLE_STYLES[key].label}</span>) : <><span>Меньше</span><span className="h-2.5 w-28 rounded-full bg-gradient-to-r from-orange-100 via-orange-300 to-orange-600 shadow-inner" aria-hidden="true" /><span>Больше</span><span className="ml-auto tabular-nums text-slate-500">{validItems.length} компаний</span></>}
       </div>
       <div className="h-[560px] min-h-[420px] w-full outline outline-1 -outline-offset-1 outline-black/10">
         <YMaps query={{ lang: 'ru_RU', load: 'package.full' }}>
@@ -90,9 +108,23 @@ export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCo
             defaultState={{ center: viewport.center, zoom: viewport.zoom, controls: [] }}
             instanceRef={(instance) => { mapRef.current = instance; }}
             modules={['geoObject.addon.balloon', 'geoObject.addon.hint']}
+            events={{ boundschange: handleBoundsChange }}
           >
             <ZoomControl options={{ position: { right: 14, top: 14 } }} />
-            <Clusterer options={{ preset: 'islands#invertedDarkBlueClusterIcons', groupByCoordinates: false, clusterDisableClickZoom: false, clusterOpenBalloonOnClick: false }}>
+            {displayMode === 'density' ? densityCells.flatMap((cell) => [
+              <Circle
+                key={`${cell.id}:outer`}
+                geometry={[[cell.latitude, cell.longitude], cell.radiusMeters]}
+                properties={{ hintContent: `${cell.count} компаний рядом` }}
+                options={{ fillColor: '#f97316', fillOpacity: 0.035 + cell.intensity * 0.1, strokeOpacity: 0 }}
+              />,
+              <Circle
+                key={`${cell.id}:inner`}
+                geometry={[[cell.latitude, cell.longitude], cell.radiusMeters * 0.62]}
+                properties={{ hintContent: `${cell.count} компаний рядом` }}
+                options={{ fillColor: '#ea580c', fillOpacity: 0.08 + cell.intensity * 0.44, strokeColor: '#c2410c', strokeOpacity: 0.08 + cell.intensity * 0.18, strokeWidth: 1 }}
+              />,
+            ]) : <Clusterer options={{ preset: 'islands#invertedDarkBlueClusterIcons', groupByCoordinates: false, clusterDisableClickZoom: false, clusterOpenBalloonOnClick: false }}>
               {validItems.map((company) => {
                 const role = getCompanyMapRole(company.roles);
                 const roles = (company.roles || []).map((item) => item.label).join(', ') || role.label;
@@ -112,7 +144,7 @@ export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCo
                   />
                 );
               })}
-            </Clusterer>
+            </Clusterer>}
           </Map>
         </YMaps>
       </div>

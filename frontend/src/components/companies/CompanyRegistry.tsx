@@ -359,6 +359,10 @@ export const CompanyRegistry = () => {
     mapped: mapCounts?.mapped ?? 0,
     withoutCoordinates: mapCounts?.without_coordinates ?? 0,
   }), [items, mapCounts]);
+  const selectedCategoryLabel = useMemo(
+    () => mapCategories.find((item) => item.value === category)?.label || '',
+    [category, mapCategories],
+  );
 
   const loadDuplicates = useCallback(async () => {
     setShowDuplicates(true);
@@ -426,7 +430,7 @@ export const CompanyRegistry = () => {
       <div className="space-y-3">
         <div className="flex flex-col gap-3 xl:flex-row">
           <label className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, адрес, телефон, сайт или ссылка на карты" className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition-[border-color,box-shadow] placeholder:text-slate-400 focus:border-orange-300 focus:ring-4 focus:ring-orange-100" /></label>
-          <label className="min-w-0 xl:w-72"><span className="sr-only">Тип бизнеса</span><select value={category} onChange={(event) => setCategory(event.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 outline-none transition-[border-color,box-shadow] focus:border-orange-300 focus:ring-4 focus:ring-orange-100"><option value="">Все типы бизнеса</option>{mapCategories.map((item) => <option key={item.value} value={item.value}>{item.label} · {item.count}</option>)}</select></label>
+          <label className="flex h-12 min-w-0 items-center rounded-2xl border border-slate-200 bg-white pl-4 transition-[border-color,box-shadow] focus-within:border-orange-300 focus-within:ring-4 focus-within:ring-orange-100 xl:w-72"><Building2 className="h-4 w-4 shrink-0 text-slate-400" /><span className="ml-2 shrink-0 text-xs font-semibold text-slate-500">Тип:</span><select aria-label={view === 'map' ? 'Тип бизнеса на карте' : 'Тип бизнеса'} value={category} onChange={(event) => setCategory(event.target.value)} className="h-full min-w-0 flex-1 bg-transparent pl-2 pr-3 text-sm font-medium text-slate-700 outline-none"><option value="">Все бизнесы</option>{mapCategories.map((item) => <option key={item.value} value={item.value}>{item.label} · {item.count}</option>)}</select></label>
           <div className="grid h-12 grid-cols-2 rounded-2xl bg-slate-100 p-1 shadow-inner xl:w-56" aria-label="Представление реестра">
             <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')} className={`flex min-h-10 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition-[background-color,color,box-shadow,scale] active:scale-[0.96] ${view === 'list' ? 'bg-white text-slate-950 shadow-[0_1px_4px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'}`}><LayoutList className="h-4 w-4" />Список</button>
             <button type="button" aria-pressed={view === 'map'} onClick={() => { setMapLoading(true); setView('map'); }} className={`flex min-h-10 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition-[background-color,color,box-shadow,scale] active:scale-[0.96] ${view === 'map' ? 'bg-white text-slate-950 shadow-[0_1px_4px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'}`}><Map className="h-4 w-4" />Карта</button>
@@ -465,7 +469,7 @@ export const CompanyRegistry = () => {
         </AnimatePresence>
       </section>
 
-      {view === 'map' ? <CompanyRegistryMap items={mapItems} loading={mapLoading} error={mapError} truncated={mapTruncated} withoutCoordinates={summary.withoutCoordinates} onSelect={setSelectedId} onRetry={() => void loadMap()} /> : loading ? <RegistrySkeleton /> : error ? (
+      {view === 'map' ? <CompanyRegistryMap items={mapItems} loading={mapLoading} error={mapError} truncated={mapTruncated} withoutCoordinates={summary.withoutCoordinates} categoryLabel={selectedCategoryLabel} onSelect={setSelectedId} onRetry={() => void loadMap()} /> : loading ? <RegistrySkeleton /> : error ? (
         <div className="rounded-3xl bg-rose-50 p-6 text-rose-700 ring-1 ring-inset ring-rose-100"><CircleAlert className="h-5 w-5" /><b className="mt-3 block">Реестр временно недоступен</b><p className="mt-1 text-sm">{error}</p><button type="button" onClick={() => void load()} className="mt-4 min-h-11 rounded-2xl bg-white px-4 text-sm font-semibold shadow-sm transition-transform active:scale-[0.96]">Повторить</button></div>
       ) : items.length ? (
         <motion.div layout className="divide-y divide-slate-100 overflow-hidden rounded-3xl bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.06),0_12px_36px_rgba(15,23,42,0.05)]">
