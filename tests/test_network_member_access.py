@@ -18,7 +18,11 @@ class AccessCursor:
 
 
 def test_network_member_has_business_access():
-    cursor = AccessCursor({"owner_id": "owner-1", "has_network_membership": True})
+    cursor = AccessCursor({
+        "owner_id": "owner-1",
+        "has_business_membership": False,
+        "has_network_membership": True,
+    })
 
     allowed, owner_id = verify_business_access(
         cursor,
@@ -28,11 +32,32 @@ def test_network_member_has_business_access():
 
     assert allowed is True
     assert owner_id == "owner-1"
-    assert cursor.executed[0][1] == ("member-1", "business-1")
+    assert cursor.executed[0][1] == ("member-1", "member-1", "business-1")
+
+
+def test_direct_business_member_has_business_access():
+    cursor = AccessCursor({
+        "owner_id": "owner-1",
+        "has_business_membership": True,
+        "has_network_membership": False,
+    })
+
+    allowed, owner_id = verify_business_access(
+        cursor,
+        "business-1",
+        {"user_id": "member-1", "is_superadmin": False},
+    )
+
+    assert allowed is True
+    assert owner_id == "owner-1"
 
 
 def test_unrelated_user_does_not_gain_business_access():
-    cursor = AccessCursor({"owner_id": "owner-1", "has_network_membership": False})
+    cursor = AccessCursor({
+        "owner_id": "owner-1",
+        "has_business_membership": False,
+        "has_network_membership": False,
+    })
 
     allowed, owner_id = verify_business_access(
         cursor,
@@ -92,6 +117,18 @@ def test_network_member_migration_has_safe_constraints():
 
     assert 'down_revision = "20260727_002"' in migration
     assert "UNIQUE (network_id, user_id)" in migration
+    assert "status IN ('active', 'revoked')" in migration
+
+
+def test_business_member_migration_has_safe_constraints():
+    from pathlib import Path
+
+    migration = Path(
+        "alembic_migrations/versions/20260729_add_business_members.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'down_revision = "20260729_001"' in migration
+    assert "UNIQUE (business_id, user_id)" in migration
     assert "status IN ('active', 'revoked')" in migration
 
 

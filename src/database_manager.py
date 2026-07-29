@@ -1370,7 +1370,7 @@ class DatabaseManager:
         return list(all_businesses.values())
 
     def get_businesses_for_user_access(self, user_id: str) -> List[Dict[str, Any]]:
-        """Return active businesses owned by the user or shared through a network."""
+        """Return active businesses owned by or shared with the user."""
         cursor = self.conn.cursor()
         moderation_filter = ""
         if self._businesses_has_column("moderation_status"):
@@ -1385,17 +1385,22 @@ class DatabaseManager:
               ON nm.network_id = b.network_id
              AND nm.user_id = %s
              AND nm.status = 'active'
+            LEFT JOIN business_members bm
+              ON bm.business_id = b.id
+             AND bm.user_id = %s
+             AND bm.status = 'active'
             WHERE (
                     b.owner_id = %s
                     OR n.owner_id = %s
                     OR nm.user_id IS NOT NULL
+                    OR bm.user_id IS NOT NULL
                   )
               AND (b.is_active = TRUE OR b.is_active IS NULL)
               {moderation_filter}
               {lead_parser_filter}
             ORDER BY b.created_at DESC
             """,
-            (user_id, user_id, user_id),
+            (user_id, user_id, user_id, user_id),
         )
         return [self._sanitize_business_payload(dict(row)) for row in cursor.fetchall()]
     
@@ -1673,6 +1678,22 @@ class DatabaseManager:
             }
             member_networks_by_user.setdefault(membership["user_id"], []).append(membership)
 
+        cursor.execute(
+            """
+            SELECT bm.user_id, bm.business_id, bm.role
+            FROM business_members bm
+            WHERE bm.status = 'active'
+            """
+        )
+        member_businesses_by_user = {}
+        for row in cursor.fetchall():
+            membership = dict(row) if hasattr(row, "keys") else {
+                "user_id": row[0],
+                "business_id": row[1],
+                "role": row[2],
+            }
+            member_businesses_by_user.setdefault(membership["user_id"], []).append(membership)
+
         # Все бизнесы в сетях
         cursor.execute("""
             SELECT * FROM businesses 
@@ -1723,7 +1744,19 @@ class DatabaseManager:
             user_id = user_dict.get('id')
             
             # Получаем прямые бизнесы пользователя
-            direct_businesses = businesses_by_owner.get(user_id, [])
+            direct_businesses = list(businesses_by_owner.get(user_id, []))
+            direct_business_ids = {business.get("id") for business in direct_businesses}
+            direct_businesses_by_id = {
+                business.get("id"): business for business in all_direct_businesses
+            }
+            for membership in member_businesses_by_user.get(user_id, []):
+                business_id = membership.get("business_id")
+                if business_id in direct_business_ids or business_id not in direct_businesses_by_id:
+                    continue
+                direct_businesses.append({
+                    **direct_businesses_by_id[business_id],
+                    "access_role": membership.get("role") or "member",
+                })
             # Логируем для отладки
             blocked_count = sum(1 for b in direct_businesses if b.get('is_active') == 0)
             if blocked_count > 0:
