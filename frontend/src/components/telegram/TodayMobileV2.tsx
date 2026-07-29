@@ -246,7 +246,7 @@ export const TodayMobileV2 = ({
       </Section>
 
       {pulse.length || openSources ? (
-        <Section title="Пульс сообщества" subtitle="О чём действительно говорили предприниматели за последние сутки." action={openSources ? <button type="button" onClick={openSources} className="min-h-11 rounded-[14px] px-3 text-xs font-semibold text-zinc-400 ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]">Источники</button> : null}>
+        <Section title="Пульс сообщества" subtitle="Что обсуждали и публиковали в отраслевых источниках за последние сутки." action={openSources ? <button type="button" onClick={openSources} className="min-h-11 rounded-[14px] px-3 text-xs font-semibold text-zinc-400 ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]">Источники</button> : null}>
           {pulse.length ? pulse.map((item, index) => (
             <a
               key={item.id}
@@ -264,7 +264,7 @@ export const TodayMobileV2 = ({
               </span>
               <ArrowUpRight className="h-4 w-4 shrink-0 text-zinc-700" />
             </a>
-          )) : <button type="button" onClick={openSources} className="flex min-h-16 w-full items-center gap-3 py-3 text-left text-sm text-zinc-600"><Radio className="h-5 w-5 text-primary" /><span>Добавьте отраслевые каналы, чтобы ЛокалОС собирал важные обсуждения.</span><ChevronRight className="ml-auto h-4 w-4" /></button>}
+          )) : <button type="button" onClick={openSources} className="flex min-h-16 w-full items-center gap-3 py-3 text-left text-sm text-zinc-600"><Radio className="h-5 w-5 text-primary" /><span>За сутки не набралось подтверждённой темы. ЛокалОС продолжает следить за отраслью; здесь можно добавить свои источники.</span><ChevronRight className="ml-auto h-4 w-4" /></button>}
         </Section>
       ) : null}
 

@@ -19,6 +19,7 @@ from core.telegram_userbot import (
 )
 from database_manager import DatabaseManager
 from services.knowledge_graph_service import knowledge_layer_enabled, upsert_source as upsert_knowledge_source
+from services.community_pulse_sources import industry_label, load_default_industry_sources
 from services.telegram_opportunity_radar import upsert_source as upsert_radar_source
 from services.telegram_research_service import (
     decide_audience_insight,
@@ -455,7 +456,28 @@ def community_sources(business_id: str):
         columns = [item[0] for item in (cursor.description or [])]
         for row in cursor.fetchall() or []:
             items.append(dict(row) if hasattr(row, "keys") else dict(zip(columns, row)))
-        return jsonify({"success": True, "items": items, "count": len(items), "collection_cost_credits": 0})
+        context = _business_knowledge_context(cursor, business_id)
+        industry_keys = {context["industry_key"]} if context["industry_key"] != "local_business" else set()
+        defaults = load_default_industry_sources(cursor, industry_keys)
+        return jsonify({
+            "success": True,
+            "items": items,
+            "count": len(items),
+            "collection_cost_credits": 0,
+            "industry": {
+                "key": context["industry_key"],
+                "label": industry_label(industry_keys),
+                "default_sources_count": len(defaults),
+                "default_sources": [
+                    {
+                        "id": str(source.get("id") or ""),
+                        "title": source.get("title"),
+                        "canonical_url": source.get("canonical_url"),
+                    }
+                    for source in defaults[:5]
+                ],
+            },
+        })
     finally:
         db.close()
 
@@ -487,7 +509,7 @@ def add_community_source(business_id: str):
             title = title or str(inspection.get("title") or "")
             entity_type = entity_type or "broadcast_channel"
         if not verified:
-            return jsonify({"success": False, "error": "Источник не подтверждён как публичный канал или открытая группа. Личные и закрытые чаты LocalOS не собирает."}), 400
+            return jsonify({"success": False, "error": "Источник не подтверждён как публичный канал или открытая группа. Личные и закрытые чаты ЛокалОС не собирает."}), 400
 
         context = _business_knowledge_context(cursor, business_id)
         requested_role = str(payload.get("source_role") or "community").strip().lower()
@@ -503,7 +525,14 @@ def add_community_source(business_id: str):
             sensitivity_class="public",
             allowed_uses=["market", "localos_content", "client_content", "industry_recommendations"],
             status="active",
-            metadata={"telegram_username": username, "telegram_source_type": entity_type, "collector": "public_telegram_preview"},
+            metadata={
+                "telegram_username": username,
+                "telegram_source_type": entity_type,
+                "collector": "public_telegram_preview",
+                "submitted_by_business_id": business_id,
+                "submitted_to_shared_catalog": True,
+                "industry_key": context["industry_key"],
+            },
             business_id=None,
             account_id=None,
             sync_mode="public_preview",
@@ -527,7 +556,7 @@ def add_community_source(business_id: str):
             "source": {"id": str(source["id"]), "title": source.get("title"), "canonical_url": canonical_url, "status": "active", "sync_status": "queued"},
             "reused": str(source.get("created_at") or "") != str(source.get("updated_at") or ""),
             "collection_cost_credits": 0,
-            "message": "Источник добавлен. Публичные сообщения собираются один раз для всей базы LocalOS.",
+            "message": "Источник добавлен. Публичные сообщения собираются один раз и пополняют общую базу ЛокалОС.",
         })
     except (TypeError, ValueError):
         db.conn.rollback()
@@ -656,6 +685,9 @@ def save_research_sources(business_id: str):
                     "telegram_username": username,
                     "telegram_source_type": str(source.get("source_type") or "chat"),
                     "collector": "public_telegram_preview",
+                    "submitted_by_business_id": business_id,
+                    "submitted_to_shared_catalog": True,
+                    "industry_key": knowledge_context["industry_key"],
                 },
                 business_id=None,
                 account_id=None,

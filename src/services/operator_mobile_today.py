@@ -6,6 +6,11 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
+from services.community_pulse_sources import (
+    industry_label,
+    load_business_industry_keys,
+    load_default_industry_sources,
+)
 from services.growth_overview_service import load_growth_overview
 from services.operator_scope_summary import build_operator_scope_summary
 
@@ -472,40 +477,144 @@ def _cluster_pulse(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return pulse[:3]
 
 
-def _load_community_pulse(cursor: Any, scope: dict[str, Any], cutoff: datetime) -> list[dict[str, Any]]:
-    if not _table_exists(cursor, "telegram_opportunities") or not _table_exists(cursor, "telegram_opportunity_sources"):
-        return []
+def _knowledge_pulse_rows(
+    cursor: Any,
+    scope: dict[str, Any],
+    cutoff: datetime,
+) -> tuple[list[dict[str, Any]], set[str]]:
+    if not _table_exists(cursor, "knowledge_sources") or not _table_exists(cursor, "knowledge_documents"):
+        return [], set()
     platform, business_ids = _business_filter(scope)
+    if platform:
+        return [], set()
+    industry_keys = load_business_industry_keys(cursor, business_ids)
+    default_sources = load_default_industry_sources(cursor, industry_keys)
+    source_ids = [str(item.get("id") or "") for item in default_sources if item.get("id")]
+    if _table_exists(cursor, "knowledge_source_subscriptions") and business_ids:
+        cursor.execute(
+            """
+            SELECT DISTINCT source_id
+            FROM knowledge_source_subscriptions
+            WHERE business_id = ANY(%s) AND is_active = TRUE
+            """,
+            (business_ids,),
+        )
+        for value in cursor.fetchall() or []:
+            item = _row(cursor, value)
+            source_id = str(item.get("source_id") or "")
+            if source_id and source_id not in source_ids:
+                source_ids.append(source_id)
+    if not source_ids:
+        return [], industry_keys
     cursor.execute(
         """
-        SELECT o.id, o.business_id, o.source_id, o.telegram_message_id,
-               o.chat_title, o.message_date, o.message_text, o.message_link,
-               o.signal_type, o.score, o.reason, o.priority_score,
-               o.raw_payload_json, o.created_at, s.telegram_username
-        FROM telegram_opportunities o
-        JOIN telegram_opportunity_sources s ON s.id = o.source_id
-        WHERE COALESCE(o.message_date, o.created_at) >= %s
-          AND s.is_active = TRUE
-          AND (
-                (%s = FALSE AND o.business_id = ANY(%s))
-                OR (
-                    o.business_id = %s
-                    AND COALESCE(s.monitor_config_json->>'visibility', '') = ANY(%s)
-                )
-          )
-          AND (
-                s.account_id IS NULL
-                OR EXISTS (
-                    SELECT 1 FROM telegram_account_permissions p
-                    WHERE p.account_id = s.account_id AND p.radar_enabled = TRUE
-                )
-          )
-        ORDER BY COALESCE(o.message_date, o.created_at) DESC
-        LIMIT 240
+        SELECT document.external_id AS telegram_message_id,
+               document.source_id, source.title AS chat_title,
+               document.published_at AS message_date,
+               document.created_at, document.content_text AS message_text,
+               COALESCE(document.permalink, source.canonical_url) AS message_link,
+               document.metadata_json AS raw_payload_json,
+               source.canonical_url
+        FROM knowledge_documents document
+        JOIN knowledge_sources source ON source.id = document.source_id
+        WHERE document.source_id = ANY(%s::uuid[])
+          AND document.invalidated_at IS NULL
+          AND COALESCE(document.published_at, document.created_at) >= %s
+        ORDER BY COALESCE(document.published_at, document.created_at) DESC
+        LIMIT 480
         """,
-        (cutoff, platform, business_ids, PLATFORM_RADAR_BUSINESS_ID, sorted(PUBLIC_RADAR_VISIBILITIES)),
+        (source_ids, cutoff),
     )
-    return _cluster_pulse([_row(cursor, value) for value in cursor.fetchall() or []])
+    rows = []
+    for value in cursor.fetchall() or []:
+        item = _row(cursor, value)
+        canonical_url = str(item.get("canonical_url") or "").rstrip("/")
+        item["telegram_username"] = canonical_url.rsplit("/", 1)[-1] if canonical_url else ""
+        rows.append(item)
+    return rows, industry_keys
+
+
+def _pulse_overview(rows: list[dict[str, Any]], industry_keys: set[str]) -> list[dict[str, Any]]:
+    if not rows:
+        return []
+    unique_sources = {str(item.get("source_id") or item.get("chat_title") or "") for item in rows}
+    latest = max(str(_iso(item.get("message_date") or item.get("created_at")) or "") for item in rows)
+    links = []
+    for item in rows:
+        link = str(item.get("message_link") or "").strip()
+        if link and link not in links:
+            links.append(link)
+    label = industry_label(industry_keys)
+    return [{
+        "id": f"pulse:industry-overview:{latest[:10]}",
+        "title": f"Новое в отрасли: {label.lower()}",
+        "description": f"За сутки появилось {len(rows)} новых материалов из {len(unique_sources)} открытых источников.",
+        "message_count": len(rows),
+        "sources_count": len(unique_sources),
+        "source_name": label,
+        "source_url": links[0] if links else None,
+        "source_links": links[:3],
+        "last_discussed_at": latest,
+        "score": len(rows) * 10 + len(unique_sources) * 8,
+        "provenance": [
+            {
+                "message_id": item.get("telegram_message_id"),
+                "source_id": item.get("source_id"),
+                "source_name": item.get("chat_title"),
+                "message_link": item.get("message_link"),
+                "message_date": _iso(item.get("message_date") or item.get("created_at")),
+            }
+            for item in rows[:10]
+        ],
+    }]
+
+
+def _load_community_pulse(cursor: Any, scope: dict[str, Any], cutoff: datetime) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    platform, business_ids = _business_filter(scope)
+    if _table_exists(cursor, "telegram_opportunities") and _table_exists(cursor, "telegram_opportunity_sources"):
+        cursor.execute(
+            """
+            SELECT o.id, o.business_id, o.source_id, o.telegram_message_id,
+                   o.chat_title, o.message_date, o.message_text, o.message_link,
+                   o.signal_type, o.score, o.reason, o.priority_score,
+                   o.raw_payload_json, o.created_at, s.telegram_username
+            FROM telegram_opportunities o
+            JOIN telegram_opportunity_sources s ON s.id = o.source_id
+            WHERE COALESCE(o.message_date, o.created_at) >= %s
+              AND s.is_active = TRUE
+              AND (
+                    (%s = FALSE AND o.business_id = ANY(%s))
+                    OR (
+                        o.business_id = %s
+                        AND COALESCE(s.monitor_config_json->>'visibility', '') = ANY(%s)
+                    )
+              )
+              AND (
+                    s.account_id IS NULL
+                    OR EXISTS (
+                        SELECT 1 FROM telegram_account_permissions p
+                        WHERE p.account_id = s.account_id AND p.radar_enabled = TRUE
+                    )
+                )
+            ORDER BY COALESCE(o.message_date, o.created_at) DESC
+            LIMIT 240
+            """,
+            (cutoff, platform, business_ids, PLATFORM_RADAR_BUSINESS_ID, sorted(PUBLIC_RADAR_VISIBILITIES)),
+        )
+        rows.extend(_row(cursor, value) for value in cursor.fetchall() or [])
+    knowledge_rows, industry_keys = _knowledge_pulse_rows(cursor, scope, cutoff)
+    rows.extend(knowledge_rows)
+    unique_rows = []
+    seen = set()
+    for item in rows:
+        key = (str(item.get("source_id") or ""), str(item.get("telegram_message_id") or item.get("message_link") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_rows.append(item)
+    clustered = _cluster_pulse(unique_rows)
+    return clustered or _pulse_overview(knowledge_rows, industry_keys)
 
 
 def _load_completed_results(
