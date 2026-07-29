@@ -155,3 +155,19 @@
     @apply outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10;
   }
 }
+
+.company-registry-map [class*='-ground-pane'] {
+  transition-property: filter, opacity;
+  transition-duration: 180ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.company-registry-map--density [class*='-ground-pane'] {
+  filter: grayscale(0.92) saturate(0.35) brightness(1.08) contrast(0.88);
+  opacity: 0.84;
+}
+
+.company-registry-map--density [class*='-controls-pane'],
+.company-registry-map--density [class*='-copyrights-pane'] {
+  z-index: 2 !important;
+}

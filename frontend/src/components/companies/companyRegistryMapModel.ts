@@ -17,13 +17,11 @@ export type CompanyMapViewport = {
   bounds: [[number, number], [number, number]] | null;
 };
 
-export type CompanyDensityCell = {
-  id: string;
-  latitude: number;
-  longitude: number;
-  count: number;
-  intensity: number;
-  radiusMeters: number;
+export type CompanyHeatmapColor = {
+  red: number;
+  green: number;
+  blue: number;
+  alpha: number;
 };
 
 const DEFAULT_CENTER: [number, number] = [55.751244, 37.618423];
@@ -59,54 +57,28 @@ export const buildCompanyMapViewport = (items: CompanyMapPoint[]): CompanyMapVie
   };
 };
 
-const WEB_MERCATOR_RADIUS_METERS = 6378137;
-const MIN_DENSITY_CELL_METERS = 600;
-const MAX_DENSITY_CELL_METERS = 120000;
+const COMPANY_HEATMAP_STOPS = [
+  { intensity: 0, red: 186, green: 230, blue: 253 },
+  { intensity: 0.3, red: 96, green: 165, blue: 250 },
+  { intensity: 0.58, red: 37, green: 99, blue: 235 },
+  { intensity: 0.8, red: 30, green: 64, blue: 175 },
+  { intensity: 1, red: 23, green: 37, blue: 84 },
+];
 
-const densityCellSizeForZoom = (zoom: number) => {
-  const normalizedZoom = Number.isFinite(zoom) ? Math.min(18, Math.max(2, zoom)) : 9;
-  const metersPerPixel = 156543.03392 / (2 ** normalizedZoom);
-  return Math.min(MAX_DENSITY_CELL_METERS, Math.max(MIN_DENSITY_CELL_METERS, metersPerPixel * 92));
-};
+export const getCompanyHeatmapColor = (intensity: number): CompanyHeatmapColor => {
+  const normalizedIntensity = Number.isFinite(intensity) ? Math.min(1, Math.max(0, intensity)) : 0;
+  const upperIndex = COMPANY_HEATMAP_STOPS.findIndex((stop) => stop.intensity >= normalizedIntensity);
+  const resolvedUpperIndex = upperIndex < 0 ? COMPANY_HEATMAP_STOPS.length - 1 : upperIndex;
+  const upper = COMPANY_HEATMAP_STOPS[resolvedUpperIndex];
+  const lower = COMPANY_HEATMAP_STOPS[Math.max(0, resolvedUpperIndex - 1)];
+  const interval = Math.max(0.001, upper.intensity - lower.intensity);
+  const progress = Math.min(1, Math.max(0, (normalizedIntensity - lower.intensity) / interval));
+  const interpolate = (start: number, end: number) => Math.round(start + (end - start) * progress);
 
-const projectToWebMercator = (latitude: number, longitude: number) => {
-  const safeLatitude = Math.min(85, Math.max(-85, latitude));
-  const latitudeRadians = safeLatitude * Math.PI / 180;
-  const longitudeRadians = longitude * Math.PI / 180;
   return {
-    x: WEB_MERCATOR_RADIUS_METERS * longitudeRadians,
-    y: WEB_MERCATOR_RADIUS_METERS * Math.log(Math.tan(Math.PI / 4 + latitudeRadians / 2)),
+    red: interpolate(lower.red, upper.red),
+    green: interpolate(lower.green, upper.green),
+    blue: interpolate(lower.blue, upper.blue),
+    alpha: Math.round(255 * Math.min(0.66, 0.05 + Math.pow(normalizedIntensity, 0.72) * 0.61)),
   };
-};
-
-export const buildCompanyDensityCells = (items: CompanyMapPoint[], zoom: number): CompanyDensityCell[] => {
-  const validItems = items.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
-  if (!validItems.length) return [];
-
-  const cellSizeMeters = densityCellSizeForZoom(zoom);
-  const buckets = new Map<string, { latitudeTotal: number; longitudeTotal: number; count: number }>();
-
-  validItems.forEach((item) => {
-    const projected = projectToWebMercator(item.latitude, item.longitude);
-    const column = Math.floor(projected.x / cellSizeMeters);
-    const row = Math.floor(projected.y / cellSizeMeters);
-    const key = `${column}:${row}`;
-    const bucket = buckets.get(key) || { latitudeTotal: 0, longitudeTotal: 0, count: 0 };
-    bucket.latitudeTotal += item.latitude;
-    bucket.longitudeTotal += item.longitude;
-    bucket.count += 1;
-    buckets.set(key, bucket);
-  });
-
-  const maxCount = Math.max(...Array.from(buckets.values(), (bucket) => bucket.count));
-  const intensityDenominator = Math.log1p(maxCount);
-
-  return Array.from(buckets.entries(), ([id, bucket]) => ({
-    id,
-    latitude: bucket.latitudeTotal / bucket.count,
-    longitude: bucket.longitudeTotal / bucket.count,
-    count: bucket.count,
-    intensity: intensityDenominator ? Math.log1p(bucket.count) / intensityDenominator : 1,
-    radiusMeters: cellSizeMeters * 0.82,
-  })).sort((left, right) => left.count - right.count);
 };

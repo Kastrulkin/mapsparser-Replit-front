@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Circle, Clusterer, Map, Placemark, YMaps, ZoomControl } from '@pbe/react-yandex-maps';
+import { Clusterer, Map, Placemark, YMaps, ZoomControl } from '@pbe/react-yandex-maps';
 import { Building2, Layers3, MapPin } from 'lucide-react';
 import {
-  buildCompanyDensityCells,
   buildCompanyMapViewport,
   COMPANY_MAP_ROLE_PRIORITY,
   COMPANY_MAP_ROLE_STYLES,
+  getCompanyHeatmapColor,
   getCompanyMapRole,
   type CompanyMapPoint,
 } from './companyRegistryMapModel';
@@ -24,10 +24,15 @@ type CompanyRegistryMapProps = {
 type YandexMapInstance = {
   setBounds?: (bounds: [[number, number], [number, number]], options?: Record<string, unknown>) => void;
   setCenter?: (center: [number, number], zoom?: number, options?: Record<string, unknown>) => void;
+  getBounds?: () => [[number, number], [number, number]];
+  getZoom?: () => number;
+  container?: { getSize?: () => [number, number] };
+  events?: YandexMapEventManager;
 };
 
-type YandexBoundsChangeEvent = {
-  get: (key: string) => unknown;
+type YandexMapEventManager = {
+  add?: (eventName: string, handler: () => void) => void;
+  remove?: (eventName: string, handler: () => void) => void;
 };
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (symbol) => ({
@@ -42,6 +47,28 @@ const MapSkeleton = () => (
   <div className="h-[560px] animate-pulse rounded-[28px] bg-slate-100 motion-reduce:animate-none" aria-label="Загрузка карты" />
 );
 
+const COMPANY_HEATMAP_PALETTE = Array.from({ length: 256 }, (_, index) => getCompanyHeatmapColor(index / 255));
+
+const getHeatmapRadius = (zoom: number) => {
+  if (zoom <= 6) return 42;
+  if (zoom <= 9) return 58;
+  if (zoom <= 12) return 70;
+  return 82;
+};
+
+const getHeatmapPointOpacity = (itemsCount: number) => {
+  if (itemsCount > 1000) return 0.065;
+  if (itemsCount > 300) return 0.08;
+  if (itemsCount > 80) return 0.12;
+  return 0.17;
+};
+
+const projectMercatorLatitude = (latitude: number) => {
+  const safeLatitude = Math.min(85, Math.max(-85, latitude));
+  const radians = safeLatitude * Math.PI / 180;
+  return Math.log(Math.tan(Math.PI / 4 + radians / 2));
+};
+
 export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCoordinates = 0, categoryLabel, onSelect, onRetry }: CompanyRegistryMapProps) => {
   const [displayMode, setDisplayMode] = useState<'points' | 'density'>('points');
   const validItems = useMemo(
@@ -50,8 +77,12 @@ export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCo
   );
   const viewport = useMemo(() => buildCompanyMapViewport(validItems), [validItems]);
   const [mapZoom, setMapZoom] = useState(viewport.zoom);
-  const densityCells = useMemo(() => buildCompanyDensityCells(validItems, mapZoom), [mapZoom, validItems]);
+  const [mapReady, setMapReady] = useState(false);
+  const [heatmapRevision, setHeatmapRevision] = useState(0);
+  const densityEntityLabel = categoryLabel?.toLocaleLowerCase('ru-RU').includes('салон') ? 'салонов' : 'компаний';
   const mapRef = useRef<YandexMapInstance | null>(null);
+  const heatmapCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const heatmapRedrawTimerRef = useRef<number | null>(null);
   const pointsKey = useMemo(
     () => validItems.map((item) => `${item.id}:${item.latitude}:${item.longitude}`).join('|'),
     [validItems],
@@ -65,12 +96,90 @@ export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCo
       return;
     }
     if (map.setCenter) map.setCenter(viewport.center, viewport.zoom, { duration: 180 });
-  }, [pointsKey, viewport]);
+  }, [mapReady, pointsKey, viewport]);
 
-  const handleBoundsChange = (event: YandexBoundsChangeEvent) => {
-    const nextZoom = event.get('newZoom');
-    if (typeof nextZoom === 'number' && Number.isFinite(nextZoom)) setMapZoom(nextZoom);
-  };
+  useEffect(() => {
+    if (displayMode !== 'density' || !mapReady) return;
+    const map = mapRef.current;
+    const canvas = heatmapCanvasRef.current;
+    const container = map?.container;
+    if (!canvas || !container?.getSize || !map?.getBounds) return;
+
+    const [width, height] = container.getSize();
+    const [[firstLatitude, firstLongitude], [secondLatitude, secondLongitude]] = map.getBounds();
+    const minLatitude = Math.min(firstLatitude, secondLatitude);
+    const maxLatitude = Math.max(firstLatitude, secondLatitude);
+    const minLongitude = Math.min(firstLongitude, secondLongitude);
+    const maxLongitude = Math.max(firstLongitude, secondLongitude);
+    const projectedSouth = projectMercatorLatitude(minLatitude);
+    const projectedNorth = projectMercatorLatitude(maxLatitude);
+    const longitudeSpan = Math.max(0.000001, maxLongitude - minLongitude);
+    const latitudeSpan = Math.max(0.000001, projectedNorth - projectedSouth);
+    if (!width || !height) return;
+    canvas.width = Math.ceil(width);
+    canvas.height = Math.ceil(height);
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    context.clearRect(0, 0, width, height);
+    context.globalCompositeOperation = 'lighter';
+    const radius = getHeatmapRadius(mapZoom);
+    const pointOpacity = getHeatmapPointOpacity(validItems.length);
+
+    validItems.forEach((item) => {
+      const x = (item.longitude - minLongitude) / longitudeSpan * width;
+      const projectedLatitude = projectMercatorLatitude(item.latitude);
+      const y = (projectedNorth - projectedLatitude) / latitudeSpan * height;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || x < -radius || y < -radius || x > width + radius || y > height + radius) return;
+      const gradient = context.createRadialGradient(x, y, 0, x, y, radius);
+      gradient.addColorStop(0, `rgba(255,255,255,${pointOpacity})`);
+      gradient.addColorStop(0.48, `rgba(255,255,255,${pointOpacity * 0.72})`);
+      gradient.addColorStop(0.76, `rgba(255,255,255,${pointOpacity * 0.28})`);
+      gradient.addColorStop(1, 'rgba(255,255,255,0)');
+      context.fillStyle = gradient;
+      context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    });
+
+    context.globalCompositeOperation = 'source-over';
+    const image = context.getImageData(0, 0, canvas.width, canvas.height);
+    for (let index = 0; index < image.data.length; index += 4) {
+      const intensity = image.data[index + 3];
+      if (!intensity) continue;
+      const color = COMPANY_HEATMAP_PALETTE[intensity];
+      image.data[index] = color.red;
+      image.data[index + 1] = color.green;
+      image.data[index + 2] = color.blue;
+      image.data[index + 3] = color.alpha;
+    }
+    context.putImageData(image, 0, 0);
+  }, [displayMode, heatmapRevision, mapReady, mapZoom, validItems]);
+
+  useEffect(() => {
+    const handleResize = () => setHeatmapRevision((revision) => revision + 1);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (heatmapRedrawTimerRef.current !== null) window.clearTimeout(heatmapRedrawTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const eventManager = map?.events;
+    if (!mapReady || !eventManager?.add || !eventManager.remove) return;
+    const handleBoundsChange = () => {
+      const nextZoom = map.getZoom?.();
+      if (typeof nextZoom === 'number' && Number.isFinite(nextZoom)) setMapZoom(nextZoom);
+      if (displayMode !== 'density') return;
+      if (heatmapRedrawTimerRef.current !== null) window.clearTimeout(heatmapRedrawTimerRef.current);
+      heatmapRedrawTimerRef.current = window.setTimeout(() => {
+        setHeatmapRevision((revision) => revision + 1);
+        heatmapRedrawTimerRef.current = null;
+      }, 90);
+    };
+    eventManager.add('boundschange', handleBoundsChange);
+    return () => eventManager.remove?.('boundschange', handleBoundsChange);
+  }, [displayMode, mapReady]);
 
   if (loading) return <MapSkeleton />;
   if (error) {
@@ -98,33 +207,19 @@ export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCo
         </div>
       </div>
       <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-2 px-4 pb-3 text-[11px] font-semibold text-slate-600 sm:px-5">
-        {displayMode === 'points' ? COMPANY_MAP_ROLE_PRIORITY.map((key) => <span key={key} className="inline-flex items-center gap-1.5"><i className={`h-2.5 w-2.5 rounded-full ${COMPANY_MAP_ROLE_STYLES[key].legend}`} />{COMPANY_MAP_ROLE_STYLES[key].label}</span>) : <><span>Меньше</span><span className="h-2.5 w-28 rounded-full bg-gradient-to-r from-orange-100 via-orange-300 to-orange-600 shadow-inner" aria-hidden="true" /><span>Больше</span><span className="ml-auto tabular-nums text-slate-500">{validItems.length} компаний</span></>}
+        {displayMode === 'points' ? COMPANY_MAP_ROLE_PRIORITY.map((key) => <span key={key} className="inline-flex items-center gap-1.5"><i className={`h-2.5 w-2.5 rounded-full ${COMPANY_MAP_ROLE_STYLES[key].legend}`} />{COMPANY_MAP_ROLE_STYLES[key].label}</span>) : <><span>Меньше {densityEntityLabel}</span><span className="h-2.5 w-32 rounded-full bg-gradient-to-r from-sky-100 via-blue-400 to-blue-950 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]" aria-hidden="true" /><span>Больше {densityEntityLabel}</span><span className="ml-auto tabular-nums text-slate-500">{validItems.length} компаний</span></>}
       </div>
-      <div className="h-[560px] min-h-[420px] w-full outline outline-1 -outline-offset-1 outline-black/10">
+      <div className={`company-registry-map relative h-[560px] min-h-[420px] w-full outline outline-1 -outline-offset-1 outline-black/10 ${displayMode === 'density' ? 'company-registry-map--density bg-slate-100' : ''}`}>
         <YMaps query={{ lang: 'ru_RU', load: 'package.full' }}>
           <Map
             width="100%"
             height="100%"
             defaultState={{ center: viewport.center, zoom: viewport.zoom, controls: [] }}
-            instanceRef={(instance) => { mapRef.current = instance; }}
+            instanceRef={(instance) => { mapRef.current = instance; setMapReady(Boolean(instance)); }}
             modules={['geoObject.addon.balloon', 'geoObject.addon.hint']}
-            events={{ boundschange: handleBoundsChange }}
           >
             <ZoomControl options={{ position: { right: 14, top: 14 } }} />
-            {displayMode === 'density' ? densityCells.flatMap((cell) => [
-              <Circle
-                key={`${cell.id}:outer`}
-                geometry={[[cell.latitude, cell.longitude], cell.radiusMeters]}
-                properties={{ hintContent: `${cell.count} компаний рядом` }}
-                options={{ fillColor: '#f97316', fillOpacity: 0.035 + cell.intensity * 0.1, strokeOpacity: 0 }}
-              />,
-              <Circle
-                key={`${cell.id}:inner`}
-                geometry={[[cell.latitude, cell.longitude], cell.radiusMeters * 0.62]}
-                properties={{ hintContent: `${cell.count} компаний рядом` }}
-                options={{ fillColor: '#ea580c', fillOpacity: 0.08 + cell.intensity * 0.44, strokeColor: '#c2410c', strokeOpacity: 0.08 + cell.intensity * 0.18, strokeWidth: 1 }}
-              />,
-            ]) : <Clusterer options={{ preset: 'islands#invertedDarkBlueClusterIcons', groupByCoordinates: false, clusterDisableClickZoom: false, clusterOpenBalloonOnClick: false }}>
+            {displayMode === 'points' ? <Clusterer options={{ preset: 'islands#invertedDarkBlueClusterIcons', groupByCoordinates: false, clusterDisableClickZoom: false, clusterOpenBalloonOnClick: false }}>
               {validItems.map((company) => {
                 const role = getCompanyMapRole(company.roles);
                 const roles = (company.roles || []).map((item) => item.label).join(', ') || role.label;
@@ -144,9 +239,10 @@ export const CompanyRegistryMap = ({ items, loading, error, truncated, withoutCo
                   />
                 );
               })}
-            </Clusterer>}
+            </Clusterer> : null}
           </Map>
         </YMaps>
+        {displayMode === 'density' ? <canvas ref={heatmapCanvasRef} className="pointer-events-none absolute inset-0 z-[1] h-full w-full" aria-hidden="true" /> : null}
       </div>
       <div className="flex min-h-10 flex-wrap items-center gap-x-4 gap-y-1 px-4 text-pretty text-xs text-slate-500 sm:px-5">
         {withoutCoordinates > 0 ? <span><b className="tabular-nums text-slate-700">{withoutCoordinates}</b> компаний пока без координат</span> : null}

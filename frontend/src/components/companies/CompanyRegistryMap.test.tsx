@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCompanyDensityCells, buildCompanyMapViewport, getCompanyMapRole } from './companyRegistryMapModel';
+import { buildCompanyMapViewport, getCompanyHeatmapColor, getCompanyMapRole } from './companyRegistryMapModel';
 
 describe('CompanyRegistryMap', () => {
   it('uses a stable role priority for marker colors', () => {
@@ -23,26 +23,13 @@ describe('CompanyRegistryMap', () => {
     expect(viewport.bounds).toEqual([[55.7, 37.5], [56.1, 38.2]]);
   });
 
-  it('aggregates nearby companies into density cells', () => {
-    const cells = buildCompanyDensityCells([
-      { id: 'one', name: 'Один', latitude: 59.9311, longitude: 30.3609 },
-      { id: 'two', name: 'Два', latitude: 59.9318, longitude: 30.3615 },
-      { id: 'three', name: 'Три', latitude: 59.999, longitude: 30.42 },
-    ], 13);
+  it('uses a light-to-dark blue palette for density intensity', () => {
+    const low = getCompanyHeatmapColor(0.1);
+    const high = getCompanyHeatmapColor(1);
 
-    expect(cells).toHaveLength(2);
-    expect(cells.at(-1)?.count).toBe(2);
-    expect(cells.at(-1)?.intensity).toBe(1);
-    expect(cells[0].intensity).toBeLessThan(1);
-  });
-
-  it('uses finer density cells as the map is zoomed in', () => {
-    const items = [
-      { id: 'one', name: 'Один', latitude: 59.9311, longitude: 30.3609 },
-      { id: 'two', name: 'Два', latitude: 59.936, longitude: 30.369 },
-    ];
-
-    expect(buildCompanyDensityCells(items, 9)).toHaveLength(1);
-    expect(buildCompanyDensityCells(items, 16)).toHaveLength(2);
+    expect(low.blue).toBeGreaterThan(low.red);
+    expect(high.red).toBeLessThan(low.red);
+    expect(high.green).toBeLessThan(low.green);
+    expect(high.alpha).toBeGreaterThan(low.alpha);
   });
 });
