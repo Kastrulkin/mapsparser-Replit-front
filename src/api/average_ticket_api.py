@@ -9,6 +9,7 @@ from flask import Blueprint, jsonify, request
 from psycopg2.extras import Json
 
 from auth_system import verify_session
+from core.auth_helpers import verify_business_access
 from core.helpers import get_business_owner_id
 from database_manager import DatabaseManager
 from services.llm import analyze_text_with_gigachat
@@ -71,11 +72,11 @@ def _require_business_access():
 
     db = DatabaseManager()
     cursor = db.conn.cursor()
-    owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
+    has_access, owner_id = verify_business_access(cursor, business_id, user_data)
     db.close()
     if not owner_id:
         return user_data, business_id, (jsonify({"error": "Бизнес не найден"}), 404)
-    if owner_id != user_data.get("user_id") and not user_data.get("is_superadmin"):
+    if not has_access:
         return user_data, business_id, (jsonify({"error": "Нет доступа к бизнесу"}), 403)
     return user_data, business_id, None
 

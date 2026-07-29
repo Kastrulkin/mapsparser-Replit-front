@@ -16,6 +16,7 @@ from auth_encryption import encrypt_auth_data, decrypt_auth_data
 from auth_system import verify_session
 from core import finance_crm, finance_imports
 from core.finance_kpis import calculate_finance_snapshot, default_period_range, get_default_finance_thresholds
+from core.auth_helpers import verify_business_access
 from core.helpers import get_business_id_from_user, get_business_owner_id
 from database_manager import DatabaseManager
 
@@ -77,12 +78,12 @@ def _require_finance_user_and_business():
 
     db = DatabaseManager()
     cursor = db.conn.cursor()
-    owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
+    has_access, owner_id = verify_business_access(cursor, business_id, user_data)
     db.close()
 
     if not owner_id:
         return user_data, business_id, (jsonify({"error": "Бизнес не найден"}), 404)
-    if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+    if not has_access:
         return user_data, business_id, (jsonify({"error": "Нет доступа к этому бизнесу"}), 403)
 
     return user_data, business_id, None
@@ -2542,11 +2543,11 @@ def get_financial_metrics():
 
         # Если передан business_id - проверяем доступ
         if business_id:
-            owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
+            has_access, owner_id = verify_business_access(cursor, business_id, user_data)
             if not owner_id:
                 db.close()
                 return jsonify({"error": "Бизнес не найден"}), 404
-            if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+            if not has_access:
                 db.close()
                 return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 

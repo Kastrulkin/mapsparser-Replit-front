@@ -3,6 +3,7 @@ import os
 from flask import Blueprint, jsonify, request
 from database_manager import DatabaseManager
 from auth_system import verify_session
+from core.auth_helpers import verify_business_access
 from progress_calculator import calculate_business_progress
 from core.card_audit import build_card_audit_snapshot
 from core.map_url_normalizer import normalize_map_url
@@ -59,15 +60,11 @@ def get_business_progress(business_id):
         cursor = db.conn.cursor()
         
         # Проверяем доступ к бизнесу
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
-        business = cursor.fetchone()
-        
-        if not business:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
-        
-        # Проверяем права доступа
-        if business[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+        if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
@@ -99,15 +96,11 @@ def get_business_card_audit(business_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
-        business = cursor.fetchone()
-
-        if not business:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
-
-        owner_id = business[0] if not hasattr(business, "keys") else business.get("owner_id")
-        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+        if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
@@ -136,6 +129,14 @@ def get_business_public_audit_links(business_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not owner_id:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        if not has_access:
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
         cursor.execute(
             """
             SELECT id, owner_id, name, network_id, business_type
@@ -150,11 +151,6 @@ def get_business_public_audit_links(business_id):
         if not business:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
-
-        owner_id = str(_row_get(business, 'owner_id', 1, '') or '').strip()
-        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
         business_name = str(_row_get(business, 'name', 2, '') or '').strip()
         network_id = str(_row_get(business, 'network_id', 3, '') or '').strip()

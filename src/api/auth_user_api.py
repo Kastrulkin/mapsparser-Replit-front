@@ -77,10 +77,8 @@ def get_user_info():
         is_superadmin = db.is_superadmin(user_id) and session_kind != "demo"
         if is_superadmin:
             businesses = db.get_all_businesses()
-        elif db.is_network_owner(user_id):
-            businesses = db.get_businesses_by_network_owner(user_id)
         else:
-            businesses = db.get_businesses_by_owner(user_id)
+            businesses = db.get_businesses_for_user_access(user_id)
 
         scope_business_id = _safe_get(user_data, "scope_business_id")
         if session_kind == "demo":

@@ -1,7 +1,6 @@
 """Auth helper functions for API endpoints."""
 from flask import request
 from auth_system import verify_session
-from core.helpers import get_business_owner_id
 
 
 def require_auth_from_request():
@@ -33,11 +32,42 @@ def verify_business_access(cursor, business_id: str, user_data: dict) -> tuple[b
             - has_access: True если есть доступ, иначе False
             - owner_id: ID владельца бизнеса или None если бизнес не найден
     """
-    owner_id = get_business_owner_id(cursor, business_id)
-    if not owner_id:
+    cursor.execute(
+        """
+        SELECT b.owner_id,
+               EXISTS (
+                   SELECT 1
+                   FROM network_members nm
+                   WHERE nm.network_id = b.network_id
+                     AND nm.user_id = %s
+                     AND nm.status = 'active'
+               ) AS has_network_membership
+        FROM businesses b
+        WHERE b.id = %s
+          AND (b.is_active = TRUE OR b.is_active IS NULL)
+        LIMIT 1
+        """,
+        (
+            user_data.get('user_id') or user_data.get('id'),
+            business_id,
+        ),
+    )
+    row = cursor.fetchone()
+    if not row:
         return False, None
-    
+
+    if hasattr(row, "keys"):
+        owner_id = row.get("owner_id")
+        has_network_membership = bool(row.get("has_network_membership"))
+    else:
+        owner_id = row[0]
+        has_network_membership = bool(row[1])
+
     user_id = user_data.get('user_id') or user_data.get('id')
-    has_access = owner_id == user_id or user_data.get('is_superadmin', False)
+    has_access = (
+        owner_id == user_id
+        or has_network_membership
+        or user_data.get('is_superadmin', False)
+    )
     
     return has_access, owner_id

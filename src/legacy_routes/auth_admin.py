@@ -1208,13 +1208,18 @@ def get_user_networks():
                 "networks": []
             })
 
-        # Получаем сети пользователя
+        # Получаем сети владельца и сети, к которым пользователь добавлен сотрудником.
         cursor.execute("""
-            SELECT id, name, description
-            FROM networks
-            WHERE owner_id = %s
-            ORDER BY name
-        """, (user_data['user_id'],))
+            SELECT n.id, n.name, n.description,
+                   CASE WHEN n.owner_id = %s THEN 'owner' ELSE nm.role END AS access_role
+            FROM networks n
+            LEFT JOIN network_members nm
+              ON nm.network_id = n.id
+             AND nm.user_id = %s
+             AND nm.status = 'active'
+            WHERE n.owner_id = %s OR nm.user_id IS NOT NULL
+            ORDER BY n.name
+        """, (user_data['user_id'], user_data['user_id'], user_data['user_id']))
 
         networks = []
         for row in cursor.fetchall():
@@ -1222,7 +1227,8 @@ def get_user_networks():
             networks.append({
                 "id": row_data.get("id"),
                 "name": row_data.get("name"),
-                "description": row_data.get("description")
+                "description": row_data.get("description"),
+                "access_role": row_data.get("access_role"),
             })
 
         db.close()

@@ -4,6 +4,7 @@ API для управления услугами бизнеса
 from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 from auth_system import verify_session
+from core.auth_helpers import verify_business_access
 from core.ai_learning import record_ai_learning_event
 from core.helpers import get_business_owner_id
 from core.service_keyword_scoring import build_services_quality_audit
@@ -225,11 +226,11 @@ def _get_service_regeneration_attempts(cursor, service_ids):
 def _get_user_business_id(user_data, business_id):
     db = DatabaseManager()
     cursor = db.conn.cursor()
-    owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
+    has_access, owner_id = verify_business_access(cursor, business_id, user_data)
     if not owner_id:
         db.close()
         return None, jsonify({"error": "Бизнес не найден"}), 404
-    if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
+    if not has_access:
         db.close()
         return None, jsonify({"error": "Нет доступа к этому бизнесу"}), 403
     db.close()
@@ -333,10 +334,10 @@ def _require_services_user():
 
 
 def _ensure_business_access(db, cursor, business_id, user_data):
-    owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
+    has_access, owner_id = verify_business_access(cursor, business_id, user_data)
     if not owner_id:
         return jsonify({"error": "Бизнес не найден"}), 404
-    if owner_id != user_data["user_id"] and not user_data.get("is_superadmin") and not db.is_superadmin(user_data["user_id"]):
+    if not has_access:
         return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
     return None, None
 
@@ -1049,12 +1050,12 @@ def add_service():
         cursor = db.conn.cursor()
         
         # Проверяем доступ
-        owner_id = get_business_owner_id(cursor, business_id)
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
         
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
@@ -1190,11 +1191,11 @@ def get_services():
 
         # Если передан business_id — фильтруем по нему и is_active, иначе по user_id
         if business_id:
-            owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
+            has_access, owner_id = verify_business_access(cursor, business_id, user_data)
             if not owner_id:
                 db.close()
                 return jsonify({"error": "Бизнес не найден"}), 404
-            if owner_id != user_id and not user_data.get('is_superadmin'):
+            if not has_access:
                 db.close()
                 return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
@@ -1440,11 +1441,11 @@ def get_services_seo_audit():
 
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
         if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
-        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
+        if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 

@@ -1368,6 +1368,36 @@ class DatabaseManager:
             all_businesses[business['id']] = business
         
         return list(all_businesses.values())
+
+    def get_businesses_for_user_access(self, user_id: str) -> List[Dict[str, Any]]:
+        """Return active businesses owned by the user or shared through a network."""
+        cursor = self.conn.cursor()
+        moderation_filter = ""
+        if self._businesses_has_column("moderation_status"):
+            moderation_filter = " AND COALESCE(b.moderation_status, '') <> 'lead_outreach'"
+        lead_parser_filter = self._lead_parser_business_filter("b.id")
+        cursor.execute(
+            f"""
+            SELECT b.*
+            FROM businesses b
+            LEFT JOIN networks n ON n.id = b.network_id
+            LEFT JOIN network_members nm
+              ON nm.network_id = b.network_id
+             AND nm.user_id = %s
+             AND nm.status = 'active'
+            WHERE (
+                    b.owner_id = %s
+                    OR n.owner_id = %s
+                    OR nm.user_id IS NOT NULL
+                  )
+              AND (b.is_active = TRUE OR b.is_active IS NULL)
+              {moderation_filter}
+              {lead_parser_filter}
+            ORDER BY b.created_at DESC
+            """,
+            (user_id, user_id, user_id),
+        )
+        return [self._sanitize_business_payload(dict(row)) for row in cursor.fetchall()]
     
     def is_network_owner(self, user_id: str) -> bool:
         """Проверить, является ли пользователь владельцем хотя бы одной сети"""
@@ -1378,6 +1408,25 @@ class DatabaseManager:
         row = cursor.fetchone()
         count = row[0] if not hasattr(row, "keys") else row.get("count", 0)
         return (count or 0) > 0
+
+    def get_user_networks(self, owner_id: str) -> List[Dict[str, Any]]:
+        """Return networks owned by or shared with a user."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT n.*,
+                   CASE WHEN n.owner_id = %s THEN 'owner' ELSE nm.role END AS access_role
+            FROM networks n
+            LEFT JOIN network_members nm
+              ON nm.network_id = n.id
+             AND nm.user_id = %s
+             AND nm.status = 'active'
+            WHERE n.owner_id = %s OR nm.user_id IS NOT NULL
+            ORDER BY n.created_at DESC
+            """,
+            (owner_id, owner_id, owner_id),
+        )
+        return [dict(row) for row in cursor.fetchall()]
     
     def create_network(self, name: str, owner_id: str, description: str = None) -> str:
         """Создать новую сеть"""
@@ -1502,16 +1551,6 @@ class DatabaseManager:
         )
         return network_id
     
-    def get_user_networks(self, owner_id: str) -> List[Dict[str, Any]]:
-        """Получить все сети пользователя"""
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT * FROM networks 
-            WHERE owner_id = %s 
-            ORDER BY created_at DESC
-        """, (owner_id,))
-        return [dict(row) for row in cursor.fetchall()]
-    
     def add_business_to_network(self, business_id: str, network_id: str) -> bool:
         """Добавить бизнес в сеть"""
         cursor = self.conn.cursor()
@@ -1618,6 +1657,22 @@ class DatabaseManager:
                 f"keys={list(all_networks[0].keys())}"
             )
 
+        cursor.execute(
+            """
+            SELECT nm.user_id, nm.network_id, nm.role
+            FROM network_members nm
+            WHERE nm.status = 'active'
+            """
+        )
+        member_networks_by_user = {}
+        for row in cursor.fetchall():
+            membership = dict(row) if hasattr(row, "keys") else {
+                "user_id": row[0],
+                "network_id": row[1],
+                "role": row[2],
+            }
+            member_networks_by_user.setdefault(membership["user_id"], []).append(membership)
+
         # Все бизнесы в сетях
         cursor.execute("""
             SELECT * FROM businesses 
@@ -1675,7 +1730,17 @@ class DatabaseManager:
                 print(f"🔍 DEBUG: Пользователь {user_id} имеет {blocked_count} заблокированных бизнесов из {len(direct_businesses)} всего")
             
             # Получаем сети пользователя
-            networks = networks_by_owner.get(user_id, [])
+            networks = list(networks_by_owner.get(user_id, []))
+            owned_network_ids = {network.get("id") for network in networks}
+            networks_by_id = {network.get("id"): network for network in all_networks}
+            for membership in member_networks_by_user.get(user_id, []):
+                network_id = membership.get("network_id")
+                if network_id in owned_network_ids or network_id not in networks_by_id:
+                    continue
+                networks.append({
+                    **networks_by_id[network_id],
+                    "access_role": membership.get("role") or "member",
+                })
             
             # Для каждой сети получаем её точки (бизнесы)
             networks_with_businesses = []

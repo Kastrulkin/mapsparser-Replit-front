@@ -13,6 +13,9 @@ def test_superadmin_business_routes_are_owned_by_superadmin_business_blueprint()
         "/api/superadmin/businesses/<business_id>/send-credentials": {
             frozenset({"POST"}): "superadmin_business_api.send_business_credentials",
         },
+        "/api/superadmin/networks/<network_id>/members": {
+            frozenset({"POST"}): "superadmin_business_api.add_network_member",
+        },
     }
 
     actual = {}

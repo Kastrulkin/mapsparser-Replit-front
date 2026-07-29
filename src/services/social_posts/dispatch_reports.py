@@ -12,11 +12,11 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 from auth_encryption import decrypt_auth_data
+from core.auth_helpers import verify_business_access
 from database_manager import DatabaseManager
 from core.outbound_network import outbound_urlopen
 from core.telegram_network import telegram_urlopen
 from core.telegram_token_store import decode_telegram_bot_token
-from core.helpers import get_business_owner_id
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
 
@@ -1311,12 +1311,18 @@ def _load_post_for_user(cursor: Any, user_id: str, post_id: str) -> dict[str, An
     return post
 
 def _require_business_access(cursor: Any, user_id: str, business_id: str) -> None:
-    owner_id = get_business_owner_id(cursor, business_id)
-    if str(owner_id or "").strip() == str(user_id or "").strip():
-        return
     cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
     row = cursor.fetchone()
-    if bool(_row_get(row, "coalesce", 0, False)):
+    if hasattr(row, "keys"):
+        is_superadmin = bool(row.get("coalesce"))
+    else:
+        is_superadmin = bool(row[0]) if row else False
+    has_access, _owner_id = verify_business_access(
+        cursor,
+        business_id,
+        {"user_id": user_id, "is_superadmin": is_superadmin},
+    )
+    if has_access:
         return
     raise PermissionError("Нет доступа к бизнесу")
 

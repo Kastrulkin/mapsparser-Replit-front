@@ -6,8 +6,9 @@ from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
-from auth_system import get_user_by_id, set_password, verify_session
+from auth_system import create_password_setup_token, get_user_by_id, set_password, verify_session
 from core import email_delivery
+from core.email_delivery import build_password_setup_link, send_password_setup_email
 from database_manager import DatabaseManager
 
 
@@ -141,6 +142,96 @@ def create_business():
         print(f"❌ Ошибка создания бизнеса: {exc}")
         traceback.print_exc()
         return jsonify({"error": str(exc)}), 500
+
+
+@superadmin_business_bp.route("/api/superadmin/networks/<network_id>/members", methods=["POST"])
+def add_network_member(network_id):
+    """Create or attach a regular user to all businesses in a network."""
+    db = DatabaseManager()
+    try:
+        actor, error_response = _require_superadmin(db)
+        if error_response:
+            return error_response
+
+        data = request.get_json(silent=True) or {}
+        email = str(data.get("email") or "").strip().lower()
+        name = str(data.get("name") or "").strip()
+        role = str(data.get("role") or "member").strip().lower()
+        if not email or "@" not in email:
+            return jsonify({"error": "Укажите корректный email"}), 400
+        if role not in {"manager", "member", "viewer"}:
+            return jsonify({"error": "Недопустимая роль"}), 400
+
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT id, name FROM networks WHERE id = %s LIMIT 1", (network_id,))
+        network = cursor.fetchone()
+        if not network:
+            return jsonify({"error": "Сеть не найдена"}), 404
+        network_name = network.get("name") if hasattr(network, "keys") else network[1]
+
+        existing_user = db.get_user_by_email(email)
+        account_created = existing_user is None
+        if existing_user:
+            user_id = existing_user["id"]
+            cursor.execute(
+                "UPDATE users SET is_active = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                (user_id,),
+            )
+        else:
+            user_id = str(uuid.uuid4())
+            cursor.execute(
+                """
+                INSERT INTO users (id, email, name, created_at, updated_at, is_active, is_verified)
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, TRUE, FALSE)
+                """,
+                (user_id, email, name or None),
+            )
+
+        cursor.execute(
+            """
+            INSERT INTO network_members (
+                id, network_id, user_id, role, status, created_by_user_id,
+                created_at, updated_at
+            ) VALUES (%s, %s, %s, %s, 'active', %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT (network_id, user_id) DO UPDATE SET
+                role = EXCLUDED.role,
+                status = 'active',
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (str(uuid.uuid4()), network_id, user_id, role, actor["user_id"]),
+        )
+        db.conn.commit()
+        db.close()
+        db = None
+
+        setup_url = None
+        email_sent = False
+        setup_result = create_password_setup_token(user_id)
+        if not setup_result.get("error"):
+            setup_url = build_password_setup_link(email, setup_result["verification_token"])
+            email_sent = bool(send_password_setup_email(email, name or None, setup_result["verification_token"]))
+
+        return jsonify(
+            {
+                "success": True,
+                "user_id": user_id,
+                "email": email,
+                "network_id": network_id,
+                "network_name": network_name,
+                "role": role,
+                "account_created": account_created,
+                "email_sent": email_sent,
+                "setup_url": setup_url,
+            }
+        ), 201 if account_created else 200
+    except Exception:
+        exc = sys.exc_info()[1]
+        if db is not None:
+            db.conn.rollback()
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        if db is not None:
+            db.close()
 
 
 @superadmin_business_bp.route("/api/superadmin/businesses/<business_id>", methods=["PUT"])
