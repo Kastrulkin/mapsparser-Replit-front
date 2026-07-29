@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useState } from 'react';
+import { FormEvent, ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
@@ -149,7 +149,6 @@ export const TodayMobileV2 = ({
   openSources,
   track,
 }: TodayMobileV2Props) => {
-  const [delegateOpen, setDelegateOpen] = useState(false);
   if (loading && !data) return <TodaySkeleton slow={slowLoading} />;
 
   const focus = data?.focus_action;
@@ -178,7 +177,7 @@ export const TodayMobileV2 = ({
               {focus?.title || 'От вас ничего не требуется'}
             </h1>
             <p className="mt-2 text-pretty text-sm leading-6 text-zinc-400">
-              {focus?.reason || 'LocalOS продолжает следить за данными и покажет здесь следующий важный шаг.'}
+              {focus?.reason || 'ЛокалОС продолжает следить за данными и покажет здесь следующий важный шаг.'}
             </p>
           </div>
           {focus?.count ? <b className="rounded-2xl bg-primary/15 px-3 py-2 text-xl tabular-nums text-primary">{focus.count}</b> : <Check className="h-8 w-8 shrink-0 text-emerald-400" />}
@@ -203,39 +202,24 @@ export const TodayMobileV2 = ({
       </motion.section>
 
       <section className="mt-3 overflow-hidden rounded-[22px] bg-white/[0.035] shadow-[0_0_0_1px_rgba(255,255,255,0.07)]">
-        <button
-          type="button"
-          aria-expanded={delegateOpen}
-          onClick={() => {
-            setDelegateOpen((value) => !value);
-            if (!delegateOpen) track('today_delegate_open');
-          }}
-          className="flex min-h-14 w-full items-center gap-3 px-4 text-left transition-[background-color,transform] active:scale-[0.96]"
-        >
+        <div className="flex min-h-14 items-center gap-3 px-4">
           <Sparkles className="h-4 w-4 text-primary" />
-          <span className="min-w-0 flex-1 text-sm font-semibold">Поручить LocalOS</span>
-          <ChevronRight className={`h-4 w-4 text-zinc-600 transition-transform ${delegateOpen ? 'rotate-90' : ''}`} />
-        </button>
-        <AnimatePresence initial={false}>
-          {delegateOpen ? (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={spring} className="overflow-hidden">
-              <form onSubmit={ask} className="border-t border-white/[0.055] p-3">
-                <div className="flex gap-2">
-                  <input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Например: подготовь ответы" className="min-h-12 min-w-0 flex-1 rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] placeholder:text-zinc-700 focus:ring-primary/50" />
-                  <button aria-label="Отправить поручение" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-white transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button>
-                </div>
-                <p className="px-1 pt-2 text-pretty text-[11px] leading-4 text-zinc-600">Опишите результат обычными словами. Внешние действия всегда попросят подтверждение.</p>
-              </form>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+          <h2 className="min-w-0 flex-1 text-balance text-sm font-semibold">Поручить ЛокалОС</h2>
+        </div>
+        <form onSubmit={ask} className="border-t border-white/[0.055] p-3">
+          <div className="flex gap-2">
+            <input onFocus={() => track('today_delegate_focus')} value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Например: подготовь ответы" className="min-h-12 min-w-0 flex-1 rounded-2xl bg-black/20 px-4 text-sm outline-none ring-1 ring-inset ring-white/[0.07] placeholder:text-zinc-700 focus:ring-primary/50" />
+            <button aria-label="Отправить поручение" className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-white transition-transform active:scale-[0.96]"><Send className="h-4 w-4" /></button>
+          </div>
+          <p className="px-1 pt-2 text-pretty text-[11px] leading-4 text-zinc-600">Опишите результат обычными словами. Внешние действия всегда попросят подтверждение.</p>
+        </form>
       </section>
 
       {activeWork.length ? (
         <motion.section layout className="mt-4 rounded-[22px] bg-sky-400/[0.055] p-4 shadow-[0_0_0_1px_rgba(56,189,248,0.12)]">
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 text-sky-300" />
-            <h2 className="text-sm font-semibold">LocalOS сейчас</h2>
+            <h2 className="text-sm font-semibold">ЛокалОС сейчас</h2>
             <span className="ml-auto h-2 w-2 rounded-full bg-sky-300 motion-safe:animate-pulse" />
           </div>
           <div className="mt-3 space-y-3">
@@ -280,11 +264,11 @@ export const TodayMobileV2 = ({
               </span>
               <ArrowUpRight className="h-4 w-4 shrink-0 text-zinc-700" />
             </a>
-          )) : <button type="button" onClick={openSources} className="flex min-h-16 w-full items-center gap-3 py-3 text-left text-sm text-zinc-600"><Radio className="h-5 w-5 text-primary" /><span>Добавьте отраслевые каналы, чтобы LocalOS собирал важные обсуждения.</span><ChevronRight className="ml-auto h-4 w-4" /></button>}
+          )) : <button type="button" onClick={openSources} className="flex min-h-16 w-full items-center gap-3 py-3 text-left text-sm text-zinc-600"><Radio className="h-5 w-5 text-primary" /><span>Добавьте отраслевые каналы, чтобы ЛокалОС собирал важные обсуждения.</span><ChevronRight className="ml-auto h-4 w-4" /></button>}
         </Section>
       ) : null}
 
-      <Section title="LocalOS сделал" subtitle="Подтверждённые результаты, а не обещания или технические события.">
+      <Section title="ЛокалОС сделал" subtitle="Подтверждённые результаты, а не обещания или технические события.">
         {results.length ? (
           <AnimatePresence initial={false}>
             {results.slice(0, 3).map((item) => (
