@@ -96,6 +96,34 @@ def test_pulse_hides_unconfirmed_topic_and_keeps_provenance():
     assert {item["message_id"] for item in pulse[0]["provenance"]} == {"1", "2"}
 
 
+def test_pulse_does_not_merge_unrelated_long_business_posts():
+    rows = [
+        {
+            "source_id": "calls",
+            "chat_title": "Beauty Calls",
+            "telegram_message_id": "1",
+            "message_text": "Сколько денег салон теряет на пропущенных звонках? Разбираем возврат клиентов и запись.",
+            "message_date": "2026-07-29T08:00:00+00:00",
+        },
+        {
+            "source_id": "margin",
+            "chat_title": "Beauty Finance",
+            "telegram_message_id": "2",
+            "message_text": "Парадокс оборота: почему рост выручки не означает рост прибыли? Считаем маржу салона.",
+            "message_date": "2026-07-29T09:00:00+00:00",
+        },
+        {
+            "source_id": "education",
+            "chat_title": "Beauty Education",
+            "telegram_message_id": "3",
+            "message_text": "Как добавить новую услугу без покупки оборудования? Обсуждаем обучение мастеров.",
+            "message_date": "2026-07-29T10:00:00+00:00",
+        },
+    ]
+
+    assert mobile_today._cluster_pulse(rows) == []
+
+
 def test_growth_focus_wins_when_operator_item_has_lower_effect():
     focus = mobile_today.select_daily_focus(
         {"primary_action": {"id": "minor", "title": "Проверить", "severity": "low", "count": 1}},

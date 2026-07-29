@@ -405,7 +405,12 @@ def _topic_hint(item: dict[str, Any]) -> str:
         markers = reason.split(":", 1)[1].split(",")
         if markers and markers[0].strip():
             return markers[0].strip().capitalize()
-    terms = list(_tokens(str(item.get("message_text") or "")))
+    text = str(item.get("message_text") or "")
+    for fragment in re.split(r"[\n.!?]+", text):
+        cleaned = re.sub(r"\s+", " ", fragment).strip(" —–-:;·•\t")
+        if len(cleaned) >= 16 and re.search(r"[a-zа-яё]{4,}", cleaned.lower()):
+            return cleaned[:90]
+    terms = sorted(_tokens(text))
     return " ".join(terms[:3]).capitalize() if terms else "Обсуждение предпринимателей"
 
 
@@ -413,7 +418,7 @@ def _cluster_pulse(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: list[dict[str, Any]] = []
     for item in rows:
         hint = _topic_hint(item)
-        item_tokens = _tokens(f"{hint} {item.get('message_text') or ''}")
+        item_tokens = _tokens(hint)
         target = None
         for group in groups:
             overlap = item_tokens.intersection(group["tokens"])
