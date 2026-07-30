@@ -1360,8 +1360,43 @@ def test_admin_lead_drawer_exposes_manual_reason_and_data_preparation_actions():
     route_block = backend_source[route_start:route_start + 2600]
     assert "_require_superadmin()" in route_block
     assert "_load_workstream(" in route_block
-    assert "message_brief_json" in route_block
+    assert "record_lead_preparation_step(" in route_block
     assert "operator_approved_reason" in route_block
+
+
+def test_admin_lead_drawer_does_not_show_missing_facts_blocker_after_manual_reason():
+    frontend_source = (
+        ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx"
+    ).read_text()
+
+    assert "result?.status === 'needs_evidence' && !savedOperatorReason" in frontend_source
+    assert "Идея подтверждена вручную. Цепочку можно подготовить" in frontend_source
+
+
+def test_admin_lead_drawer_keeps_preparation_steps_with_completion_time():
+    frontend_source = (
+        ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx"
+    ).read_text()
+    progress_service_source = (
+        ROOT / "src/services/lead_preparation_progress_service.py"
+    ).read_text()
+    parse_route_source = (
+        ROOT / "src/api/prospecting/sales_room_routes.py"
+    ).read_text()
+    partnership_route_source = (
+        ROOT / "src/api/prospecting/outreach_routes.py"
+    ).read_text()
+
+    assert "preparation_steps" in frontend_source
+    assert "completed_at" in frontend_source
+    assert "Идея подтверждена вручную" in frontend_source
+    assert "Аудит создан" in frontend_source
+    assert "Совместимость проверена" in frontend_source
+    assert "preparation_steps" in progress_service_source
+    assert "completed_at" in progress_service_source
+    assert 'step_code="card_refresh"' in parse_route_source
+    assert 'step_code="audit"' in partnership_route_source
+    assert 'step_code="compatibility"' in partnership_route_source
 
 
 def test_contact_normalization_deduplicates_url_shape():

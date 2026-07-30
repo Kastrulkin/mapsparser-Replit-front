@@ -28,6 +28,7 @@ from services.discovered_telegram_source_service import (
 )
 from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
 from services.outreach_personalization_ai import generation_contract_current
+from services.lead_preparation_progress_service import record_lead_preparation_step
 
 
 def _serialize_job(row: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -744,58 +745,22 @@ def admin_save_outreach_reason(lead_id: str):
                 "error": "Ручная причина обращения доступна только для партнёрских лидов",
             }), 400
 
-        cursor.execute(
-            """
-            SELECT id, message_brief_json
-            FROM lead_workstream_research
-            WHERE workstream_id = %s
-            ORDER BY researched_at DESC, created_at DESC
-            LIMIT 1
-            FOR UPDATE
-            """,
-            (workstream_id,),
-        )
-        research = cursor.fetchone()
         operator_approved_at = datetime.now(timezone.utc).isoformat()
         actor_id = str(user_data.get("user_id") or "")
-        message_brief = dict((research or {}).get("message_brief_json") or {})
-        message_brief.update({
-            "operator_approved_reason": operator_approved_reason,
-            "operator_approved_at": operator_approved_at,
-            "operator_approved_by": actor_id,
-            "operator_approved_source_type": "operator_input",
-        })
-        if research:
-            cursor.execute(
-                """
-                UPDATE lead_workstream_research
-                SET message_brief_json = %s
-                WHERE id = %s
-                """,
-                (Json(message_brief), research.get("id")),
-            )
-        else:
-            cursor.execute(
-                """
-                INSERT INTO lead_workstream_research (
-                    id, workstream_id, score, qualification_stage, signal_label,
-                    score_breakdown, why_now, signals_json, sources_json,
-                    contact_evidence_json, limitations_json, message_brief_json,
-                    message_readiness_json, report_hash, researched_at, created_at
-                ) VALUES (
-                    %s, %s, 15, 'potential_fit', 'fit_only',
-                    '{}'::jsonb, NULL, '[]'::jsonb, '[]'::jsonb,
-                    '[]'::jsonb, '[]'::jsonb, %s,
-                    '{}'::jsonb, %s, NOW(), NOW()
-                )
-                """,
-                (
-                    str(uuid.uuid4()),
-                    workstream_id,
-                    Json(message_brief),
-                    f"operator-approved-reason:{workstream_id}",
-                ),
-            )
+        record_lead_preparation_step(
+            cursor,
+            workstream_id=workstream_id,
+            step_code="reason",
+            label="Идея подтверждена вручную",
+            completed_at=operator_approved_at,
+            metadata={"source_type": "operator_input"},
+            message_brief_updates={
+                "operator_approved_reason": operator_approved_reason,
+                "operator_approved_at": operator_approved_at,
+                "operator_approved_by": actor_id,
+                "operator_approved_source_type": "operator_input",
+            },
+        )
         _record_lead_timeline_event(
             cursor,
             lead_id=lead_id,

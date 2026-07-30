@@ -61,6 +61,7 @@ from services.llm import analyze_text_with_gigachat
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
 from services.lead_workstream_service import resolve_workstream, update_workstream
+from services.lead_preparation_progress_service import record_lead_preparation_step
 from services.sales_room_helpers import (
     append_sales_room_link_to_outreach_text as _append_sales_room_link_to_outreach_text,
     make_sales_room_url as _make_sales_room_url,
@@ -1594,6 +1595,8 @@ def parse_lead_card(lead_id):
         return error
 
     try:
+        data = request.get_json(silent=True) or {}
+        workstream_id = str(data.get("workstream_id") or "").strip()
         lead = _load_prospecting_lead(lead_id)
         if not lead:
             return jsonify({"error": "Lead not found"}), 404
@@ -1617,6 +1620,29 @@ def parse_lead_card(lead_id):
             return jsonify({"error": "У лида нет ссылки на Яндекс Карты для запуска парсинга"}), 400
 
         task = _enqueue_parse_task_for_business(business_id, user_data["user_id"], source_url)
+        if workstream_id:
+            progress_conn = get_db_connection()
+            try:
+                progress_cur = progress_conn.cursor(cursor_factory=RealDictCursor)
+                progress_cur.execute(
+                    "SELECT id FROM lead_workstreams WHERE id = %s AND lead_id = %s LIMIT 1",
+                    (workstream_id, lead_id),
+                )
+                if progress_cur.fetchone():
+                    record_lead_preparation_step(
+                        progress_cur,
+                        workstream_id=workstream_id,
+                        step_code="card_refresh",
+                        label="Обновление карточки запущено",
+                        status="started",
+                        metadata={
+                            "task_id": str(task.get("id") or ""),
+                            "task_status": str(task.get("status") or "queued"),
+                        },
+                    )
+                    progress_conn.commit()
+            finally:
+                progress_conn.close()
         refreshed_lead = _load_prospecting_lead(lead_id) or display_lead
         return jsonify(
             {

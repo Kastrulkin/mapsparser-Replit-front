@@ -59,6 +59,7 @@ except ImportError:
 from pg_db_utils import get_db_connection
 from services.llm import analyze_text_with_gigachat
 from services.outreach_sender_profile_service import evaluate_sender_profile_completeness
+from services.lead_preparation_progress_service import record_lead_preparation_step
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.prospecting_service import ProspectingService
 from services.sales_room_helpers import (
@@ -462,6 +463,33 @@ def _partnership_match_needs_evidence(match: dict[str, Any] | None) -> bool:
         or not str(data.get("recipient_observation") or "").strip()
         or not source_url.startswith(("http://", "https://"))
     )
+
+
+def _resolve_preparation_workstream_id(
+    cursor,
+    *,
+    lead_id: str,
+    business_id: str,
+    requested_workstream_id: str | None,
+) -> str | None:
+    cursor.execute(
+        """
+        SELECT id
+        FROM lead_workstreams
+        WHERE lead_id = %s
+          AND workstream_type = 'client_partnership'
+          AND client_business_id = %s
+          AND (%s IS NULL OR id = %s)
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC
+        LIMIT 1
+        """,
+        (lead_id, business_id, requested_workstream_id, requested_workstream_id),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    value = row.get("id") if hasattr(row, "get") else row[0]
+    return str(value) if value else None
 
 
 def _save_partnership_match_assessment(
@@ -926,6 +954,8 @@ def partnership_audit_lead(lead_id):
     try:
         data = request.get_json(silent=True) or {}
         requested_business_id = str(data.get("business_id") or "").strip() or None
+        requested_workstream_id = str(data.get("workstream_id") or "").strip() or None
+        audit_progress = None
         conn = get_db_connection()
         try:
             _ensure_partnership_columns(conn)
@@ -989,6 +1019,19 @@ def partnership_audit_lead(lead_id):
                 """,
                 ("audited", "audited", lead_id),
             )
+            workstream_id = _resolve_preparation_workstream_id(
+                cur,
+                lead_id=lead_id,
+                business_id=business_id,
+                requested_workstream_id=requested_workstream_id,
+            )
+            if workstream_id:
+                audit_progress = record_lead_preparation_step(
+                    cur,
+                    workstream_id=workstream_id,
+                    step_code="audit",
+                    label="Аудит создан",
+                )
             conn.commit()
         finally:
             conn.close()
@@ -1001,6 +1044,7 @@ def partnership_audit_lead(lead_id):
                 "audit_profile": snapshot.get("audit_profile"),
                 "quality": quality,
                 "page": page_json,
+                "preparation_step": audit_progress,
             }
         )
     except AuditQualityError as quality_error:
@@ -1023,6 +1067,7 @@ def partnership_match_lead(lead_id):
     try:
         data = request.get_json(silent=True) or {}
         requested_business_id = str(data.get("business_id") or "").strip() or None
+        requested_workstream_id = str(data.get("workstream_id") or "").strip() or None
         conn = get_db_connection()
         try:
             _ensure_partnership_columns(conn)
@@ -1058,6 +1103,12 @@ def partnership_match_lead(lead_id):
                 lead_id=lead_id,
                 audit_json=audit_json,
             )
+            workstream_id = _resolve_preparation_workstream_id(
+                cur,
+                lead_id=lead_id,
+                business_id=business_id,
+                requested_workstream_id=requested_workstream_id,
+            )
             if "SENDER_PROFILE_INCOMPLETE" in (match_result.get("reason_codes") or []):
                 _save_partnership_match_assessment(
                     cur,
@@ -1065,6 +1116,13 @@ def partnership_match_lead(lead_id):
                     audit_json=audit_json,
                     match_result=match_result,
                 )
+                match_progress = record_lead_preparation_step(
+                    cur,
+                    workstream_id=workstream_id,
+                    step_code="compatibility",
+                    label="Совместимость проверена",
+                    metadata={"result_status": "needs_sender_profile"},
+                ) if workstream_id else None
                 conn.commit()
                 return jsonify({
                     "success": True,
@@ -1073,6 +1131,7 @@ def partnership_match_lead(lead_id):
                     "result": match_result,
                     "profile_completeness": match_result.get("profile_completeness") or {},
                     "next_action": match_result.get("next_action"),
+                    "preparation_step": match_progress,
                 })
             if _partnership_match_needs_evidence(match_result):
                 _save_partnership_match_assessment(
@@ -1081,6 +1140,13 @@ def partnership_match_lead(lead_id):
                     audit_json=audit_json,
                     match_result=match_result,
                 )
+                match_progress = record_lead_preparation_step(
+                    cur,
+                    workstream_id=workstream_id,
+                    step_code="compatibility",
+                    label="Совместимость проверена",
+                    metadata={"result_status": "needs_evidence"},
+                ) if workstream_id else None
                 conn.commit()
                 return jsonify({
                     "success": True,
@@ -1088,6 +1154,7 @@ def partnership_match_lead(lead_id):
                     "code": "PARTNERSHIP_MATCH_NEEDS_EVIDENCE",
                     "result": match_result,
                     "next_action": match_result.get("next_action"),
+                    "preparation_step": match_progress,
                 })
 
             _save_partnership_match_assessment(
@@ -1106,10 +1173,21 @@ def partnership_match_lead(lead_id):
                 """,
                 ("matched", "matched", lead_id),
             )
+            match_progress = record_lead_preparation_step(
+                cur,
+                workstream_id=workstream_id,
+                step_code="compatibility",
+                label="Совместимость проверена",
+                metadata={"result_status": "ready"},
+            ) if workstream_id else None
             conn.commit()
         finally:
             conn.close()
-        return jsonify({"success": True, "result": match_result})
+        return jsonify({
+            "success": True,
+            "result": match_result,
+            "preparation_step": match_progress,
+        })
     except Exception as e:
         print(f"Error partnership match lead: {e}")
         return jsonify({"error": str(e)}), 500

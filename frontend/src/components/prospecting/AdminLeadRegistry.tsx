@@ -112,9 +112,44 @@ interface WorkstreamResearch {
     operator_approved_at?: string;
     operator_approved_by?: string;
     operator_approved_source_type?: string;
+    preparation_steps?: Record<string, {
+      status?: 'started' | 'completed';
+      label?: string;
+      completed_at?: string;
+      metadata?: Record<string, unknown>;
+    }>;
   };
   researched_at?: string;
   stale?: boolean;
+}
+
+interface PreparationStep {
+  status?: 'started' | 'completed';
+  label?: string;
+  completed_at?: string;
+  metadata?: Record<string, unknown>;
+}
+
+const preparationStepTime = (value?: string) => {
+  const date = new Date(String(value || ''));
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+function PreparationStepStatus({ step }: { step?: PreparationStep }) {
+  if (!step?.completed_at) return null;
+  const time = preparationStepTime(step.completed_at);
+  return (
+    <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+      <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <span>{step.label || 'Действие выполнено'}{time ? ` · ${time}` : ''}</span>
+    </div>
+  );
 }
 
 interface ContactPoint {
@@ -950,6 +985,16 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const savedOperatorReason = String(
     selectedWorkstream?.research?.message_brief?.operator_approved_reason || '',
   ).trim();
+  const preparationSteps = selectedWorkstream?.research?.message_brief?.preparation_steps || {};
+  const reasonPreparationStep: PreparationStep | undefined = preparationSteps.reason || (
+    selectedWorkstream?.research?.message_brief?.operator_approved_at
+      ? {
+        status: 'completed',
+        label: 'Идея подтверждена вручную',
+        completed_at: selectedWorkstream.research.message_brief.operator_approved_at,
+      }
+      : undefined
+  );
   const readyChannelCount = Object.values(outreachPreview?.channel_availability || {})
     .filter((item) => item.status === 'ready').length;
   const senderProfileChecklist = contactIntelligence?.sender_profile_completeness;
@@ -1600,6 +1645,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     try {
       await newAuth.makeRequest(`/admin/prospecting/lead/${selectedLead.id}/parse`, {
         method: 'POST',
+        body: JSON.stringify({ workstream_id: selectedWorkstream.id }),
       });
       setOutreachPreview(null);
       if (savedOutreachCampaign) setCampaignSetupDirty(true);
@@ -1632,6 +1678,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         method: 'POST',
         body: JSON.stringify({
           business_id: selectedWorkstream.client_business_id,
+          workstream_id: selectedWorkstream.id,
         }),
       });
       setOutreachPreview(null);
@@ -1667,14 +1714,17 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           method: 'POST',
           body: JSON.stringify({
             business_id: selectedWorkstream.client_business_id,
+            workstream_id: selectedWorkstream.id,
           }),
         },
       );
       setOutreachPreview(null);
       if (savedOutreachCampaign) setCampaignSetupDirty(true);
       setDataPreparationMessage(
-        result?.status === 'needs_evidence'
+        result?.status === 'needs_evidence' && !savedOperatorReason
           ? 'Проверка выполнена, но фактов пока недостаточно. Добавьте конкретную идею сотрудничества или обновите данные карточки.'
+          : result?.status === 'needs_evidence' && savedOperatorReason
+            ? 'Идея подтверждена вручную. Цепочку можно подготовить. Автоматическая проверка не нашла достаточно публичных данных — это останется видимым ограничением.'
           : 'Совместимость проверена. Теперь можно подготовить цепочку.',
       );
       await loadLeads();
@@ -3197,11 +3247,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                             : <Check className="mr-2 h-4 w-4" />}
                           Сохранить причину обращения
                         </Button>
-                        {savedOperatorReason ? (
-                          <span className="text-xs font-medium text-emerald-700">
-                            Причина подтверждена вручную
-                          </span>
-                        ) : null}
+                        <PreparationStepStatus step={reasonPreparationStep} />
                       </div>
                     </div>
                   ) : null}
@@ -3211,45 +3257,54 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
                       Рекомендуемый порядок: обновить карточку, создать аудит, затем проверить совместимость компаний.
                     </p>
-                    <div className={`mt-3 grid gap-2 ${selectedWorkstream.workstream_type === 'client_partnership' ? 'sm:grid-cols-3' : ''}`}>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => void refreshLeadCardData()}
-                        disabled={Boolean(busyAction)}
-                        className="min-h-11 justify-start bg-white transition-transform active:scale-[0.96]"
-                      >
-                        {busyAction === 'parse-lead-card'
-                          ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                          : <Search className="mr-2 h-4 w-4" />}
-                        Обновить данные карточки
-                      </Button>
+                    <div className={`mt-3 grid gap-3 ${selectedWorkstream.workstream_type === 'client_partnership' ? 'sm:grid-cols-3' : ''}`}>
+                      <div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void refreshLeadCardData()}
+                          disabled={Boolean(busyAction)}
+                          className="min-h-11 w-full justify-start bg-white transition-transform active:scale-[0.96]"
+                        >
+                          {busyAction === 'parse-lead-card'
+                            ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                            : <Search className="mr-2 h-4 w-4" />}
+                          Обновить данные карточки
+                        </Button>
+                        <PreparationStepStatus step={preparationSteps.card_refresh} />
+                      </div>
                       {selectedWorkstream.workstream_type === 'client_partnership' ? (
                         <>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => void createLeadAudit()}
-                            disabled={Boolean(busyAction) || !selectedWorkstream.client_business_id}
-                            className="min-h-11 justify-start bg-white transition-transform active:scale-[0.96]"
-                          >
-                            {busyAction === 'audit-lead'
-                              ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                              : <ShieldCheck className="mr-2 h-4 w-4" />}
-                            Создать аудит
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => void checkLeadCompatibility()}
-                            disabled={Boolean(busyAction) || !selectedWorkstream.client_business_id}
-                            className="min-h-11 justify-start bg-white transition-transform active:scale-[0.96]"
-                          >
-                            {busyAction === 'match-lead'
-                              ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                              : <Users className="mr-2 h-4 w-4" />}
-                            Проверить совместимость
-                          </Button>
+                          <div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => void createLeadAudit()}
+                              disabled={Boolean(busyAction) || !selectedWorkstream.client_business_id}
+                              className="min-h-11 w-full justify-start bg-white transition-transform active:scale-[0.96]"
+                            >
+                              {busyAction === 'audit-lead'
+                                ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                : <ShieldCheck className="mr-2 h-4 w-4" />}
+                              Создать аудит
+                            </Button>
+                            <PreparationStepStatus step={preparationSteps.audit} />
+                          </div>
+                          <div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => void checkLeadCompatibility()}
+                              disabled={Boolean(busyAction) || !selectedWorkstream.client_business_id}
+                              className="min-h-11 w-full justify-start bg-white transition-transform active:scale-[0.96]"
+                            >
+                              {busyAction === 'match-lead'
+                                ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                : <Users className="mr-2 h-4 w-4" />}
+                              Проверить совместимость
+                            </Button>
+                            <PreparationStepStatus step={preparationSteps.compatibility} />
+                          </div>
                         </>
                       ) : null}
                     </div>
