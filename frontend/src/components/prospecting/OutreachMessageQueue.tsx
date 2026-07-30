@@ -68,6 +68,7 @@ const channelLabels: Record<string, string> = {
   email: 'Email',
   telegram: 'Telegram',
   vk: 'VK',
+  vk_manual: 'VK · вручную',
   whatsapp: 'WhatsApp',
   max: 'MAX',
   manual: 'Вручную',

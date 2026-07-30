@@ -1781,6 +1781,39 @@ def test_selected_campaign_recipient_wins_over_generic_email_ranking():
     assert availability["email"]["recipient"] == "pr@yesapart.com"
 
 
+def test_manual_vk_uses_vk_recipient_without_requiring_sender_account():
+    class SenderCursor:
+        def execute(self, _query, _params):
+            return None
+
+        def fetchall(self):
+            return []
+
+    availability = channel_availability(
+        SenderCursor(),
+        {
+            "sender_mode": "localos_for_partner",
+            "client_business_id": "business-1",
+            "selected_contact_point_id": "vk-contact",
+            "contacts": [
+                {
+                    "id": "vk-contact",
+                    "contact_type": "vk",
+                    "value": "https://vk.ru/bnckidsru",
+                    "verification_status": "confirmed_source",
+                    "confidence": 0.95,
+                },
+            ],
+        },
+    )
+
+    assert availability["vk"]["status"] == "connect_required"
+    assert availability["vk_manual"]["status"] == "manual"
+    assert availability["vk_manual"]["contact_point_id"] == "vk-contact"
+    assert availability["vk_manual"]["recipient"] == "https://vk.ru/bnckidsru"
+    assert availability["vk_manual"]["sender_account_id"] is None
+
+
 def test_new_version_message_edit_is_persisted_even_before_schedule_version_is_saved():
     admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
 
@@ -1858,6 +1891,18 @@ def test_lead_drawer_has_one_sticky_next_action_summary():
     assert "Отправитель" in source
     assert "Первый шаг" in source
     assert "Состояние" in source
+
+
+def test_admin_lead_registry_has_one_operational_surface_without_legacy_duplicate():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+
+    assert "LegacyProspectingManagement" not in source
+    assert "Дополнительные инструменты и аналитика" not in source
+    assert "Найти лидов" in source
+    assert 'title="Получатель и найденные контакты"' in source
+    assert 'title="Почему обращаемся"' in source
+    assert 'title="Цепочка, расписание и запуск"' in source
+    assert 'title="Отправитель и подключения"' in source
 
 
 def test_sender_selection_is_always_visible_and_reused_for_same_channel_touches():
@@ -1993,4 +2038,18 @@ def test_sender_settings_no_longer_describe_vk_as_manual_only():
     source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
 
     assert "MAX, VK и WhatsApp остаются ручными" not in source
-    assert "VK отправляется автоматически после отдельного разрешения" in source
+    assert "Для VK можно выбрать автоматическую отправку от подключённого сообщества или ручную отправку по найденной ссылке" in source
+
+
+def test_campaign_preview_always_surfaces_result_and_next_action():
+    source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    prepare_start = source.index("const prepareOutreachCampaign")
+    prepare_end = source.index("\n\n  const approveOutreachCampaign", prepare_start)
+    prepare_block = source[prepare_start:prepare_end]
+
+    assert "Цепочка подготовлена:" in prepare_block
+    assert "outreach-preview-result" in prepare_block
+    assert "outreachPreview?.status === 'observe'" in source
+    assert "outreachPreview?.status === 'needs_contact'" in source
+    assert "outreachPreview?.status === 'needs_sender_setup'" in source
+    assert "Цепочка пока не создана" in source

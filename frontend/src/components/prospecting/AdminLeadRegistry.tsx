@@ -6,7 +6,6 @@ import {
   ChevronDown,
   CircleAlert,
   ExternalLink,
-  Filter,
   MapPin,
   MessageCircle,
   Plus,
@@ -51,10 +50,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '../ui/sheet';
-
-const LegacyProspectingManagement = React.lazy(() =>
-  import('../ProspectingManagement').then((module) => ({ default: module.ProspectingManagement })),
-);
 
 type WorkstreamType = 'localos_sales' | 'client_partnership';
 type SenderMode = 'localos' | 'partner_business' | 'localos_for_partner';
@@ -268,7 +263,7 @@ interface OutreachTouchPreview {
 }
 
 interface OutreachPreview {
-  status?: 'ready' | 'needs_evidence' | 'needs_generation' | 'needs_revision' | 'needs_channel_setup' | 'invalid_sequence' | 'suppressed';
+  status?: 'ready' | 'observe' | 'needs_contact' | 'needs_sender_setup' | 'needs_evidence' | 'needs_generation' | 'needs_revision' | 'needs_channel_setup' | 'invalid_sequence' | 'suppressed' | 'excluded';
   missing?: string[];
   evidence?: Array<{ id?: string; fact?: string; source_url?: string; confidence?: number }>;
   generation?: { status?: string; source?: string; error?: string | null };
@@ -555,12 +550,15 @@ const contactTypeLabels: Record<string, string> = {
   telegram: 'Telegram',
   whatsapp: 'WhatsApp',
   vk: 'VK',
+  vk_manual: 'VK · вручную',
   instagram: 'Instagram',
   max: 'MAX',
   website_form: 'Форма на сайте',
   website: 'Сайт',
   other: 'Другой канал',
 };
+
+const recipientContactTypeForChannel = (channel: string) => channel === 'vk_manual' ? 'vk' : channel;
 
 const outreachTouchStatusLabels: Record<string, string> = {
   contact_ready: 'Контакт найден',
@@ -777,7 +775,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [selectedWorkstreamId, setSelectedWorkstreamId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState('');
   const [notice, setNotice] = useState('');
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchStep, setSearchStep] = useState(1);
   const [searchScope, setSearchScope] = useState<WorkstreamType>('localos_sales');
@@ -1042,7 +1039,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     String(selectedWorkstream?.selected_channel || ''),
   ])).filter(Boolean);
   const conversationChannels = conversationChannelCodes.map((channel) => {
-    const contacts = drawerContacts.filter((contact) => String(contact.type || '') === channel);
+    const recipientContactType = recipientContactTypeForChannel(channel);
+    const contacts = drawerContacts.filter((contact) => String(contact.type || '') === recipientContactType);
     const touches = savedConversationTouches.filter((touch) => String(touch.channel || '') === channel);
     const latestTouch = touches[touches.length - 1];
     const latestDelivery = latestTouch?.id ? deliveryByTouchId.get(latestTouch.id) : undefined;
@@ -1138,7 +1136,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           ? 'scheduled'
           : rawStatus;
     const contact = drawerContacts.find((item) => item.id === touch.contact_point_id)
-      || drawerContacts.find((item) => String(item.type || '') === channel);
+      || drawerContacts.find((item) => String(item.type || '') === recipientContactTypeForChannel(channel));
     const sender = senderAccounts.find((account) => account.id === touch.sender_account_id)
       || (channel === 'email' ? connectedEmailSender : undefined);
     let verificationHref = '';
@@ -1892,8 +1890,18 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           sender_mode: senderMode,
         }),
       });
-      setOutreachPreview(payload?.preview || null);
+      const preparedPreview = payload?.preview || null;
+      const preparedTouchCount = Array.isArray(preparedPreview?.touches) ? preparedPreview.touches.length : 0;
+      setOutreachPreview(preparedPreview);
       setTouchEditsValidated(hasTouchEdits);
+      if (!save) {
+        setNotice(preparedTouchCount > 0
+          ? `Цепочка подготовлена: ${preparedTouchCount} касания. Проверьте сообщения и сохраните цепочку.`
+          : 'Цепочка пока не создана. LocalOS показал ниже причину и следующий шаг.');
+        window.requestAnimationFrame(() => {
+          document.getElementById('outreach-preview-result')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      }
       if (payload?.campaign) {
         setSavedOutreachCampaign(payload.campaign);
         setCampaignSetupDirty(false);
@@ -2324,24 +2332,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           </>
         )}
       </div>
-
-      <details
-        className="border-t border-slate-200 px-4 py-4 sm:px-6"
-        onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
-      >
-        <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-700">
-          <Filter className="h-4 w-4" />
-          Дополнительные инструменты и аналитика
-          <ChevronDown className="ml-auto h-4 w-4" />
-        </summary>
-        {advancedOpen && (
-          <div className="mt-4 border-t border-slate-200 pt-4">
-            <React.Suspense fallback={<div className="py-8 text-center text-sm text-slate-500">Загружаем дополнительные инструменты…</div>}>
-              <LegacyProspectingManagement />
-            </React.Suspense>
-          </div>
-        )}
-      </details>
 
       <Sheet open={Boolean(selectedLead)} onOpenChange={(open) => { if (!open) setSelectedLeadId(null); }}>
         <SheetContent className="w-[96vw] max-w-none overflow-y-auto sm:max-w-6xl">
@@ -3131,7 +3121,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                           <option value="telegram">Telegram</option>
                           <option value="email">Email</option>
                           <option value="max">MAX · вручную</option>
-                          <option value="vk">VK</option>
+                          <option value="vk">VK · автоматически</option>
+                          <option value="vk_manual">VK · вручную</option>
                           <option value="whatsapp">WhatsApp · вручную</option>
                           <option value="sms">SMS · вручную</option>
                         </select>
@@ -3187,12 +3178,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   />
                 </div>
 
-                {['max', 'whatsapp', 'sms', 'manual'].includes(sequenceChannels[0]) ? (
+                {['max', 'whatsapp', 'sms', 'manual', 'vk_manual'].includes(sequenceChannels[0]) ? (
                   <div className="mt-3 rounded-md bg-sky-50 px-3 py-3 text-pretty text-sm leading-6 text-sky-900">
                     Первое касание выполняется вручную. Кампания подождёт вашей отметки и через 48 часов перейдёт в «Нужно внимание» — автоматическое продолжение не начнётся скрытно.
                   </div>
                 ) : null}
 
+                <div id="outreach-preview-result" className="scroll-mt-28" aria-live="polite">
                 {outreachPreview?.channel_availability ? (
                   <div className="mt-3 space-y-2">
                     <div className="flex flex-wrap gap-2">
@@ -3214,6 +3206,39 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                   </div>
                 ) : null}
 
+                {outreachPreview?.status === 'observe' ? (
+                  <div className="mt-3 rounded-md bg-amber-50 px-4 py-4 text-sm text-amber-950 ring-1 ring-inset ring-amber-200">
+                    <div className="font-semibold">Цепочка пока не создана</div>
+                    <p className="mt-1 text-pretty leading-6 text-amber-900">Не подтверждено, чем компании полезны друг другу. LocalOS не будет подставлять общий шаблон: сначала обновите аудит и matching или добавьте конкретную идею сотрудничества.</p>
+                    <Button type="button" variant="outline" onClick={() => scrollToLeadSection('lead-research')} className="mt-3 min-h-10 border-amber-200 bg-white text-amber-950">
+                      Проверить основание обращения
+                    </Button>
+                  </div>
+                ) : null}
+                {outreachPreview?.status === 'needs_contact' ? (
+                  <div className="mt-3 rounded-md bg-amber-50 px-4 py-4 text-sm text-amber-950 ring-1 ring-inset ring-amber-200">
+                    <div className="font-semibold">Цепочка пока не создана</div>
+                    <p className="mt-1 text-pretty leading-6 text-amber-900">Не выбран подходящий получатель. Найдите или добавьте контакт компании, затем выберите его для первого сообщения.</p>
+                    <Button type="button" variant="outline" onClick={() => scrollToLeadSection('lead-contacts')} className="mt-3 min-h-10 border-amber-200 bg-white text-amber-950">
+                      Выбрать получателя
+                    </Button>
+                  </div>
+                ) : null}
+                {outreachPreview?.status === 'needs_sender_setup' ? (
+                  <div className="mt-3 rounded-md bg-amber-50 px-4 py-4 text-sm text-amber-950 ring-1 ring-inset ring-amber-200">
+                    <div className="font-semibold">Цепочка пока не создана</div>
+                    <p className="mt-1 text-pretty leading-6 text-amber-900">Для выбранных каналов не готов отправитель или не заполнен обязательный профиль отправителя.</p>
+                    <Button type="button" variant="outline" onClick={() => scrollToLeadSection('sender-settings')} className="mt-3 min-h-10 border-amber-200 bg-white text-amber-950">
+                      Настроить отправителя
+                    </Button>
+                  </div>
+                ) : null}
+                {['suppressed', 'excluded'].includes(String(outreachPreview?.status || '')) ? (
+                  <div className="mt-3 rounded-md bg-rose-50 px-4 py-4 text-sm text-rose-950 ring-1 ring-inset ring-rose-200">
+                    <div className="font-semibold">Цепочка не создаётся</div>
+                    <p className="mt-1 text-pretty leading-6 text-rose-900">Лид исключён из аутрича из-за ответа, запрета на контакт или терминального состояния. Это ограничение сильнее выбранных каналов.</p>
+                  </div>
+                ) : null}
                 {outreachPreview?.status === 'needs_evidence' ? (
                   <div className="mt-3 rounded-md bg-amber-50 px-3 py-3 text-sm text-amber-900">
                     Нельзя подставить общий шаблон. Не хватает: {(outreachPreview.missing || []).join(', ') || 'подтверждённых фактов для персонализации'}.
@@ -3345,6 +3370,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                     ))}
                   </div>
                 ) : null}
+                </div>
 
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {savedOutreachCampaign && !campaignSetupDirty ? (
@@ -3430,7 +3456,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       : 'Проверьте каналы'}
                   </Badge>
                 </div>
-                <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">Telegram и email выбираются только из этого контура. VK отправляется автоматически после отдельного разрешения. MAX и WhatsApp пока выполняются вручную.</p>
+                <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">Telegram и email выбираются только из этого контура. Для VK можно выбрать автоматическую отправку от подключённого сообщества или ручную отправку по найденной ссылке. MAX и WhatsApp пока выполняются вручную.</p>
                 <details className="mt-3 border-t border-slate-200 pt-2">
                   <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-slate-700">Проверить или заменить email отправителя</summary>
                   <div className="pt-3">

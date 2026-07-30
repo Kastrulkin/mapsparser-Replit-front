@@ -167,7 +167,7 @@ type PilotReadiness = {
 
 const ANGLES = ['signal', 'founder_story', 'proof', 'respectful_close'] as const;
 const ANGLE_LABELS = ['Сигнал', 'Опыт основателя', 'Кейс или материал', 'Завершение'];
-const MANUAL_CHANNELS = new Set(['max', 'whatsapp', 'sms', 'manual']);
+const MANUAL_CHANNELS = new Set(['max', 'whatsapp', 'sms', 'manual', 'vk_manual']);
 const DEFAULT_CHANNELS = ['telegram', 'email', 'max', 'vk'];
 const DEFAULT_DAYS = [0, 3, 7, 12];
 
@@ -181,6 +181,17 @@ const CHANNEL_STATUS_LABELS: Record<string, string> = {
   sender_degraded: 'отправитель ограничен',
   sender_paused: 'отправитель на паузе',
   sender_selection_required: 'выберите отправителя',
+};
+
+const CHANNEL_LABELS: Record<string, string> = {
+  telegram: 'Telegram',
+  email: 'Email',
+  max: 'MAX · вручную',
+  vk: 'VK · автоматически',
+  vk_manual: 'VK · вручную',
+  whatsapp: 'WhatsApp · вручную',
+  sms: 'SMS · вручную',
+  manual: 'Ручной канал',
 };
 
 const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
@@ -750,6 +761,7 @@ export function OutreachCampaignBuilder({
                 value={channels[index]}
                 onChange={(event) => {
                   setChannels((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item));
+                  setSenderSelections((current) => ({ ...current, [index]: '' }));
                   invalidateDraft();
                 }}
                 className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900"
@@ -757,7 +769,8 @@ export function OutreachCampaignBuilder({
                 <option value="telegram">Telegram</option>
                 <option value="email">Email</option>
                 <option value="max">MAX · вручную</option>
-                <option value="vk">VK</option>
+                <option value="vk">VK · автоматически</option>
+                <option value="vk_manual">VK · вручную</option>
                 <option value="whatsapp">WhatsApp · вручную</option>
                 <option value="sms">SMS · вручную</option>
               </select>
@@ -818,7 +831,7 @@ export function OutreachCampaignBuilder({
                 : ['permission_required', 'sender_selection_required'].includes(String(item.status || ''))
                   ? 'border-amber-200 bg-amber-50 text-amber-800'
                   : 'bg-white text-slate-700'}>
-                {channel} · {CHANNEL_STATUS_LABELS[String(item.status || '')] || item.status}
+                {CHANNEL_LABELS[channel] || channel} · {CHANNEL_STATUS_LABELS[String(item.status || '')] || item.status}
               </Badge>
             ))}
           </div>
@@ -858,7 +871,7 @@ export function OutreachCampaignBuilder({
             if (!['telegram', 'email', 'vk'].includes(channel) || accounts.length === 0) return null;
             return (
               <label key={`${channel}-${touchIndex}`} className="block rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-950">
-                Отправитель для касания {touchIndex + 1} · {channel}
+                Отправитель для касания {touchIndex + 1} · {CHANNEL_LABELS[channel] || channel}
                 <select
                   value={senderSelections[touchIndex] || ''}
                   onChange={(event) => {
@@ -942,7 +955,7 @@ export function OutreachCampaignBuilder({
             return (
               <article key={`${touch.id || 'preview'}-${touch.sequence_index}`} className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
-                  <span>День {touch.day_offset} · {touch.channel}</span>
+                  <span>День {touch.day_offset} · {CHANNEL_LABELS[touch.channel] || touch.channel}</span>
                   <span className={touch.quality_gate?.passed ? 'text-emerald-700' : 'text-amber-700'}>
                     {touch.quality_gate?.passed ? 'Факты проверены' : touch.status || 'Нужна проверка'}
                   </span>

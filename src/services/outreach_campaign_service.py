@@ -46,7 +46,7 @@ from services.outreach_safety_service import (
 
 
 AUTOMATIC_CHANNELS = {"telegram", "email", "vk"}
-MANUAL_CHANNELS = {"max", "whatsapp", "sms", "manual"}
+MANUAL_CHANNELS = {"max", "whatsapp", "sms", "manual", "vk_manual"}
 SUPPORTED_CHANNELS = AUTOMATIC_CHANNELS | MANUAL_CHANNELS
 SENDER_MODE_LOCALOS = "localos"
 SENDER_MODE_PARTNER_BUSINESS = "partner_business"
@@ -1661,8 +1661,8 @@ def channel_availability(cursor: Any, context: dict[str, Any]) -> dict[str, dict
         sender_row = _dict(row)
         senders_by_channel.setdefault(str(sender_row.get("channel")), []).append(sender_row)
     result: dict[str, dict[str, Any]] = {}
-    for channel in ("telegram", "email", "whatsapp", "max", "vk", "sms", "manual"):
-        contact = contacts_by_type.get(channel)
+    for channel in ("telegram", "email", "whatsapp", "max", "vk", "vk_manual", "sms", "manual"):
+        contact = contacts_by_type.get("vk" if channel == "vk_manual" else channel)
         if channel == "email" and not contact and context.get("email"):
             fallback = {
                 "id": None,
@@ -2892,7 +2892,7 @@ def change_campaign_status(
         )
     else:
         cursor.execute(
-            "UPDATE outreach_campaign_touches SET status = CASE WHEN channel IN ('max', 'whatsapp', 'sms', 'manual') THEN 'awaiting_manual_send' ELSE 'scheduled' END, manual_due_at = CASE WHEN channel IN ('max', 'whatsapp', 'sms', 'manual') THEN NOW() + INTERVAL '48 hours' ELSE manual_due_at END, updated_at = NOW() WHERE campaign_id = %s AND status = 'paused'",
+            "UPDATE outreach_campaign_touches SET status = CASE WHEN channel IN ('max', 'whatsapp', 'sms', 'manual', 'vk_manual') THEN 'awaiting_manual_send' ELSE 'scheduled' END, manual_due_at = CASE WHEN channel IN ('max', 'whatsapp', 'sms', 'manual', 'vk_manual') THEN NOW() + INTERVAL '48 hours' ELSE manual_due_at END, updated_at = NOW() WHERE campaign_id = %s AND status = 'paused'",
             (campaign_id,),
         )
         cursor.execute(
