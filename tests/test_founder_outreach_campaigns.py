@@ -22,6 +22,11 @@ from services.outreach_campaign_service import (
     _normalize_touch_overrides,
     resolve_sender_mode,
 )
+from services.outreach_decision_service import (
+    build_outreach_decision,
+    offer_candidates,
+    trust_candidates,
+)
 from scripts.backfill_partnership_match_artifacts import _skip_reason
 
 
@@ -439,6 +444,102 @@ def test_partner_compatibility_is_valid_evidence_without_invented_problem():
             "relevance": "Есть основание проверить один безопасный партнёрский тест.",
         }
     ]
+
+
+def test_operator_approved_partnership_reason_can_prepare_personalized_chain_without_fake_matching():
+    manual_reason = (
+        "Предложить родителям после детского центра удобную детскую стрижку "
+        "в соседней Весёлой расчёске."
+    )
+    context = {
+        "workstream_type": "client_partnership",
+        "lifecycle_status": "active",
+        "lead_name": "Бэби-клуб на Комендантском",
+        "category": "Детский развивающий центр",
+        "city": "Санкт-Петербург",
+        "source_url": "https://example.test/maps/baby-club",
+        "updated_at": "2026-07-30T10:00:00Z",
+        "contacts": [{"verification_status": "verified"}],
+        "represented_business_name": "Весёлая расчёска",
+        "client_business_name": "Весёлая расчёска",
+        "sender_mode": "localos_for_partner",
+        "sender_profile": {},
+        "business_sender_profile": {},
+        "partnership_match": {},
+        "research": {
+            "message_brief_json": {
+                "operator_approved_reason": manual_reason,
+                "operator_approved_at": "2026-07-30T10:00:00Z",
+                "operator_approved_by": "superadmin-1",
+            },
+        },
+    }
+
+    evidence = build_evidence_ledger(context)
+
+    assert evidence == [{
+        "id": "operator-approved-partnership-reason",
+        "kind": "operator_approved_partnership_reason",
+        "fact": manual_reason,
+        "status": "approved",
+        "source_url": "https://example.test/maps/baby-club",
+        "observed_at": "2026-07-30T10:00:00Z",
+        "freshness": "current_snapshot",
+        "confidence": 1.0,
+        "hypothesis": None,
+        "relevance": manual_reason,
+        "source_type": "operator_input",
+    }]
+    assert context["partnership_match"] == {}
+
+    decision = build_outreach_decision(
+        context,
+        evidence,
+        {"vk": {"status": "ready"}},
+        {"suppressed": False},
+        sender_mode="localos_for_partner",
+        profile_ready=True,
+    )
+    assert decision["action"] == "write_now"
+    assert "operator_approved_partnership_reason" in decision["reason_codes"]
+
+    offers = offer_candidates(context, "localos_for_partner")
+    trusts = trust_candidates(context, "localos_for_partner")
+    assert offers[0]["text"] == manual_reason
+    assert offers[0]["source"] == "operator_input"
+    assert trusts[0]["source"] == "operator_input"
+
+    candidates = build_personalization_candidates(
+        context,
+        evidence,
+        selected_offer=offers[0],
+        selected_trust=trusts[0],
+    )
+    assert candidates
+    assert candidates[0]["observed_fact"] == manual_reason
+    assert candidates[0]["next_step"] == manual_reason
+
+    first_touch = _message_for_angle(
+        "signal",
+        candidates[0],
+        None,
+        [],
+    )
+    assert first_touch.startswith("Здравствуйте!\n\nМы ваши соседи - Весёлая расчёска.")
+    assert "У нас есть конкретная идея сотрудничества" in first_touch
+    assert "LocalOS" not in first_touch
+    assert first_touch.count("?") == 1
+    gate = _quality_gate(
+        first_touch,
+        candidates[0],
+        None,
+        channel="vk",
+        channel_status="ready",
+        suppressed=False,
+        angle="signal",
+    )
+    assert gate["passed"] is True
+    assert gate["total_score"] == 18
 
 
 def test_residential_evidence_uses_recipient_type_instead_of_placeholder_services():

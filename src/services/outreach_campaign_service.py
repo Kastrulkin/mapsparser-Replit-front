@@ -1271,6 +1271,29 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
 def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
     research = context.get("research") or {}
     ledger: list[dict[str, Any]] = []
+    research_brief = (
+        research.get("message_brief_json")
+        if isinstance(research.get("message_brief_json"), dict)
+        else {}
+    )
+    operator_approved_reason = _text(research_brief.get("operator_approved_reason"))
+    if (
+        context.get("workstream_type") == "client_partnership"
+        and operator_approved_reason
+    ):
+        ledger.append({
+            "id": "operator-approved-partnership-reason",
+            "kind": "operator_approved_partnership_reason",
+            "fact": operator_approved_reason,
+            "status": "approved",
+            "source_url": context.get("source_url") or context.get("website"),
+            "observed_at": research_brief.get("operator_approved_at") or context.get("updated_at"),
+            "freshness": "current_snapshot",
+            "confidence": 1.0,
+            "hypothesis": None,
+            "relevance": operator_approved_reason,
+            "source_type": "operator_input",
+        })
     research_evidence = _list(research.get("evidence_json"))
     source_items = research_evidence or _list(research.get("signals_json"))
     for index, signal in enumerate(source_items):
@@ -1368,7 +1391,9 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
     def evidence_priority(item: dict[str, Any]) -> tuple[int, float]:
         fact = _text(item.get("fact")).lower()
         kind = _text(item.get("kind"))
-        if kind == "residential_context":
+        if kind == "operator_approved_partnership_reason":
+            rank = -2
+        elif kind == "residential_context":
             rank = -1
         elif kind == "service_compatibility":
             rank = 0
@@ -1821,7 +1846,13 @@ def _quality_gate(
             or residential_relevance
             or (respectful_close and contains(candidate.get("recipient")))
         ),
-        "fact": bool(candidate.get("source_url") and candidate.get("evidence_status") in {"approved", "observed"}),
+        "fact": bool(
+            candidate.get("evidence_status") in {"approved", "observed"}
+            and (
+                candidate.get("source_url")
+                or candidate.get("evidence_kind") == "operator_approved_partnership_reason"
+            )
+        ),
         "freshness": _text(candidate.get("freshness")).lower() not in {
             "",
             "stale",
@@ -1956,6 +1987,40 @@ def _message_for_angle(
     representation = _text(candidate.get("representation_disclosure"))
     represented_business_opening = _text(candidate.get("represented_business_opening"))
     representation_block = f"{representation} " if representation else ""
+    operator_approved_partnership_reason = (
+        _text(candidate.get("evidence_kind"))
+        == "operator_approved_partnership_reason"
+    )
+    if operator_approved_partnership_reason:
+        if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER:
+            opening = "Здравствуйте!"
+            if represented_business_opening:
+                opening += f"\n\n{represented_business_opening}"
+        else:
+            opening = f"Здравствуйте! {introduction.rstrip()}".rstrip()
+        if angle == "signal":
+            return (
+                f"{opening}\n\nУ нас есть конкретная идея сотрудничества для \"{name}\": "
+                f"{observed_fact_inline}.\n\nПодскажите, с кем можно обсудить детали?"
+            )
+        if angle in {"founder_story", "business_reputation", "matching_authority"}:
+            trust_block = f"{trust_statement}.\n\n" if trust_statement else ""
+            return (
+                f"{opening}\n\n{trust_block}Предлагаем обсудить для \"{name}\" такую идею: "
+                f"{observed_fact_inline}.\n\nС кем можно обсудить детали?"
+            )
+        if angle == "proof":
+            proof = founder_proof or trust_statement
+            proof_block = f"{proof}.\n\n" if proof else ""
+            return (
+                f"{opening}\n\n{proof_block}Коротко напомним идею для \"{name}\": "
+                f"{observed_fact_inline}.\n\nПрислать короткое предложение?"
+            )
+        return (
+            f"{opening}\n\nКоротко закроем тему по \"{name}\". "
+            f"{observed_fact}. Если сейчас неактуально, больше писать не будем. "
+            "Вернуться позже?"
+        )
     residential_recipient = _text(candidate.get("recipient_type")) == "residential_complex"
     if residential_recipient:
         if represented_business_opening:

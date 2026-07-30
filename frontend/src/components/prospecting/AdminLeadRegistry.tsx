@@ -107,6 +107,12 @@ interface WorkstreamResearch {
   suggested_opener?: string;
   opener_source_url?: string;
   limitations?: string[];
+  message_brief?: {
+    operator_approved_reason?: string;
+    operator_approved_at?: string;
+    operator_approved_by?: string;
+    operator_approved_source_type?: string;
+  };
   researched_at?: string;
   stale?: boolean;
 }
@@ -797,6 +803,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [manualPersonName, setManualPersonName] = useState('');
   const [manualRoleTitle, setManualRoleTitle] = useState('');
   const [manualContactError, setManualContactError] = useState('');
+  const [manualOutreachReason, setManualOutreachReason] = useState('');
+  const [dataPreparationMessage, setDataPreparationMessage] = useState('');
   const [senderName, setSenderName] = useState('');
   const [senderRole, setSenderRole] = useState('');
   const [senderCompany, setSenderCompany] = useState('');
@@ -939,6 +947,9 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     .filter((item) => item.type !== 'website');
   const drawerTelegramSources = contactIntelligence?.telegram_sources || [];
   const drawerRecipient = contactIntelligence?.selected_recipient || selectedWorkstream?.selected_recipient || null;
+  const savedOperatorReason = String(
+    selectedWorkstream?.research?.message_brief?.operator_approved_reason || '',
+  ).trim();
   const readyChannelCount = Object.values(outreachPreview?.channel_availability || {})
     .filter((item) => item.status === 'ready').length;
   const senderProfileChecklist = contactIntelligence?.sender_profile_completeness;
@@ -1360,6 +1371,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setManualContactOpen(false);
     setManualContactValue('');
     setManualContactError('');
+    setManualOutreachReason(String(
+      selectedWorkstream?.research?.message_brief?.operator_approved_reason || '',
+    ));
+    setDataPreparationMessage('');
   }, [selectedWorkstream?.id]);
 
   useEffect(() => {
@@ -1534,6 +1549,141 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       await loadLeads();
     } catch (requestError) {
       setNotice(requestError instanceof Error ? requestError.message : 'Не удалось запустить проверку');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const saveManualOutreachReason = async () => {
+    if (
+      !selectedLead
+      || !selectedWorkstream?.id
+      || selectedWorkstream.workstream_type !== 'client_partnership'
+    ) return;
+    setBusyAction('outreach-reason');
+    setNotice('');
+    setDataPreparationMessage('');
+    try {
+      const result = await newAuth.makeRequest(
+        `/admin/prospecting/leads/${selectedLead.id}/outreach-reason`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            workstream_id: selectedWorkstream.id,
+            reason: manualOutreachReason.trim(),
+          }),
+        },
+      );
+      setManualOutreachReason(String(result?.reason || manualOutreachReason.trim()));
+      setOutreachPreview(null);
+      if (savedOutreachCampaign) setCampaignSetupDirty(true);
+      setDataPreparationMessage(
+        'Причина сохранена и подтверждена человеком. Теперь LocalOS сможет подготовить новую цепочку без общего шаблона.',
+      );
+      await loadLeads();
+    } catch (requestError) {
+      setDataPreparationMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Не удалось сохранить причину обращения',
+      );
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const refreshLeadCardData = async () => {
+    if (!selectedLead || !selectedWorkstream?.id) return;
+    setBusyAction('parse-lead-card');
+    setNotice('');
+    setDataPreparationMessage('');
+    try {
+      await newAuth.makeRequest(`/admin/prospecting/lead/${selectedLead.id}/parse`, {
+        method: 'POST',
+      });
+      setOutreachPreview(null);
+      if (savedOutreachCampaign) setCampaignSetupDirty(true);
+      setDataPreparationMessage(
+        'Обновление карточки запущено. Дождитесь завершения парсинга, затем создайте аудит.',
+      );
+      await loadLeads();
+    } catch (requestError) {
+      setDataPreparationMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Не удалось запустить обновление карточки',
+      );
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const createLeadAudit = async () => {
+    if (
+      !selectedLead
+      || !selectedWorkstream?.id
+      || selectedWorkstream.workstream_type !== 'client_partnership'
+    ) return;
+    setBusyAction('audit-lead');
+    setNotice('');
+    setDataPreparationMessage('');
+    try {
+      await newAuth.makeRequest(`/partnership/leads/${selectedLead.id}/audit`, {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: selectedWorkstream.client_business_id,
+        }),
+      });
+      setOutreachPreview(null);
+      if (savedOutreachCampaign) setCampaignSetupDirty(true);
+      setDataPreparationMessage(
+        'Аудит создан по текущим данным карточки. Следующий шаг — проверить совместимость.',
+      );
+      await loadLeads();
+    } catch (requestError) {
+      setDataPreparationMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Не удалось создать аудит',
+      );
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const checkLeadCompatibility = async () => {
+    if (
+      !selectedLead
+      || !selectedWorkstream?.id
+      || selectedWorkstream.workstream_type !== 'client_partnership'
+    ) return;
+    setBusyAction('match-lead');
+    setNotice('');
+    setDataPreparationMessage('');
+    try {
+      const result = await newAuth.makeRequest(
+        `/partnership/leads/${selectedLead.id}/match`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            business_id: selectedWorkstream.client_business_id,
+          }),
+        },
+      );
+      setOutreachPreview(null);
+      if (savedOutreachCampaign) setCampaignSetupDirty(true);
+      setDataPreparationMessage(
+        result?.status === 'needs_evidence'
+          ? 'Проверка выполнена, но фактов пока недостаточно. Добавьте конкретную идею сотрудничества или обновите данные карточки.'
+          : 'Совместимость проверена. Теперь можно подготовить цепочку.',
+      );
+      await loadLeads();
+    } catch (requestError) {
+      setDataPreparationMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Не удалось проверить совместимость',
+      );
     } finally {
       setBusyAction('');
     }
@@ -2938,31 +3088,37 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
               </section>
               </LeadDrawerSection>
 
-              {selectedWorkstream.research && (
+              {selectedWorkstream && (
                 <LeadDrawerSection
                   key={`research-${selectedWorkstream.id || 'legacy'}`}
                   id="lead-research"
                   title="Почему обращаемся"
-                  description={selectedWorkstream.research.why_now || 'Публичный повод не подтверждён'}
-                  status={`${Number(selectedWorkstream.research.score || 0)} баллов`}
+                  description={
+                    savedOperatorReason
+                      || selectedWorkstream.research?.why_now
+                      || 'Публичный повод не подтверждён'
+                  }
+                  status={savedOperatorReason
+                    ? 'Подтверждено вручную'
+                    : `${Number(selectedWorkstream.research?.score || 0)} баллов`}
                 >
                 <section className="rounded-md bg-slate-50 p-4" aria-labelledby="lead-research-title">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h3 id="lead-research-title" className="text-sm font-semibold text-slate-950">Почему сейчас</h3>
                       <p className="mt-1 text-sm leading-6 text-slate-700">
-                        {selectedWorkstream.research.why_now || 'Публичный повод не подтверждён. Компания подходит только по общим признакам.'}
+                        {selectedWorkstream.research?.why_now || 'Публичный повод не подтверждён. Компания подходит только по общим признакам.'}
                       </p>
                     </div>
                     <span className="text-xs text-slate-500 tabular-nums">
-                      {selectedWorkstream.research.researched_at
+                      {selectedWorkstream.research?.researched_at
                         ? new Date(selectedWorkstream.research.researched_at).toLocaleDateString('ru-RU')
                         : 'дата не указана'}
                     </span>
                   </div>
-                  {(selectedWorkstream.research.sources || []).length > 0 && (
+                  {(selectedWorkstream.research?.sources || []).length > 0 && (
                     <div className="mt-3 space-y-2">
-                      {(selectedWorkstream.research.sources || []).slice(0, 3).map((source) => (
+                      {(selectedWorkstream.research?.sources || []).slice(0, 3).map((source) => (
                         <a
                           key={`${source.url}-${source.title}`}
                           href={source.url}
@@ -2976,11 +3132,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       ))}
                     </div>
                   )}
-                  {selectedWorkstream.research.suggested_opener && (
+                  {selectedWorkstream.research?.suggested_opener && (
                     <div className="mt-3 rounded-md bg-white p-3">
                       <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Первый абзац письма</div>
                       <p className="mt-1 text-sm leading-6 text-slate-700">{selectedWorkstream.research.suggested_opener}</p>
-                      {selectedWorkstream.research.opener_source_url ? (
+                      {selectedWorkstream.research?.opener_source_url ? (
                         <a
                           href={selectedWorkstream.research.opener_source_url}
                           target="_blank"
@@ -2995,14 +3151,117 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       )}
                     </div>
                   )}
-                  {(selectedWorkstream.research.limitations || []).length > 0 && (
+                  {(selectedWorkstream.research?.limitations || []).length > 0 && (
                     <details className="mt-2">
                       <summary className="min-h-10 cursor-pointer py-2 text-sm font-semibold text-slate-600">Ограничения исследования</summary>
                       <ul className="space-y-1 text-sm text-slate-600">
-                        {(selectedWorkstream.research.limitations || []).map((item) => <li key={item}>{item}</li>)}
+                        {(selectedWorkstream.research?.limitations || []).map((item) => <li key={item}>{item}</li>)}
                       </ul>
                     </details>
                   )}
+
+                  {selectedWorkstream.workstream_type === 'client_partnership' ? (
+                    <div className="mt-4 rounded-md bg-white p-4 shadow-sm shadow-slate-900/5">
+                      <label
+                        htmlFor="manual-outreach-reason"
+                        className="text-sm font-semibold text-slate-950"
+                      >
+                        Конкретная причина обращения
+                      </label>
+                      <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
+                        Опишите реальную связь или идею сотрудничества. LocalOS сохранит её как подтверждённое человеком основание, а не как публичный факт.
+                      </p>
+                      <textarea
+                        id="manual-outreach-reason"
+                        value={manualOutreachReason}
+                        onChange={(event) => setManualOutreachReason(event.target.value)}
+                        placeholder="Например: предложить родителям после детского центра удобную детскую стрижку в соседней Весёлой расчёске."
+                        rows={3}
+                        maxLength={1000}
+                        className="mt-3 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-900 outline-none transition-colors focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                      />
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void saveManualOutreachReason()}
+                          disabled={
+                            busyAction === 'outreach-reason'
+                            || manualOutreachReason.trim().length < 20
+                            || manualOutreachReason.trim() === savedOperatorReason
+                          }
+                          className="min-h-10 bg-white transition-transform active:scale-[0.96]"
+                        >
+                          {busyAction === 'outreach-reason'
+                            ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                            : <Check className="mr-2 h-4 w-4" />}
+                          Сохранить причину обращения
+                        </Button>
+                        {savedOperatorReason ? (
+                          <span className="text-xs font-medium text-emerald-700">
+                            Причина подтверждена вручную
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 rounded-md bg-white p-4 shadow-sm shadow-slate-900/5">
+                    <div className="text-sm font-semibold text-slate-950">Подготовить данные</div>
+                    <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
+                      Рекомендуемый порядок: обновить карточку, создать аудит, затем проверить совместимость компаний.
+                    </p>
+                    <div className={`mt-3 grid gap-2 ${selectedWorkstream.workstream_type === 'client_partnership' ? 'sm:grid-cols-3' : ''}`}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void refreshLeadCardData()}
+                        disabled={Boolean(busyAction)}
+                        className="min-h-11 justify-start bg-white transition-transform active:scale-[0.96]"
+                      >
+                        {busyAction === 'parse-lead-card'
+                          ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                          : <Search className="mr-2 h-4 w-4" />}
+                        Обновить данные карточки
+                      </Button>
+                      {selectedWorkstream.workstream_type === 'client_partnership' ? (
+                        <>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void createLeadAudit()}
+                            disabled={Boolean(busyAction) || !selectedWorkstream.client_business_id}
+                            className="min-h-11 justify-start bg-white transition-transform active:scale-[0.96]"
+                          >
+                            {busyAction === 'audit-lead'
+                              ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                              : <ShieldCheck className="mr-2 h-4 w-4" />}
+                            Создать аудит
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void checkLeadCompatibility()}
+                            disabled={Boolean(busyAction) || !selectedWorkstream.client_business_id}
+                            className="min-h-11 justify-start bg-white transition-transform active:scale-[0.96]"
+                          >
+                            {busyAction === 'match-lead'
+                              ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                              : <Users className="mr-2 h-4 w-4" />}
+                            Проверить совместимость
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                    {dataPreparationMessage ? (
+                      <p
+                        className="mt-3 rounded-md bg-sky-50 px-3 py-2 text-pretty text-sm leading-6 text-sky-900"
+                        aria-live="polite"
+                      >
+                        {dataPreparationMessage}
+                      </p>
+                    ) : null}
+                  </div>
                 </section>
                 </LeadDrawerSection>
               )}
@@ -3209,7 +3468,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 {outreachPreview?.status === 'observe' ? (
                   <div className="mt-3 rounded-md bg-amber-50 px-4 py-4 text-sm text-amber-950 ring-1 ring-inset ring-amber-200">
                     <div className="font-semibold">Цепочка пока не создана</div>
-                    <p className="mt-1 text-pretty leading-6 text-amber-900">Не подтверждено, чем компании полезны друг другу. LocalOS не будет подставлять общий шаблон: сначала обновите аудит и matching или добавьте конкретную идею сотрудничества.</p>
+                    <p className="mt-1 text-pretty leading-6 text-amber-900">Не подтверждено, чем компании полезны друг другу. LocalOS не будет подставлять общий шаблон: обновите данные карточки, создайте аудит и проверьте совместимость или сохраните конкретную идею сотрудничества.</p>
                     <Button type="button" variant="outline" onClick={() => scrollToLeadSection('lead-research')} className="mt-3 min-h-10 border-amber-200 bg-white text-amber-950">
                       Проверить основание обращения
                     </Button>

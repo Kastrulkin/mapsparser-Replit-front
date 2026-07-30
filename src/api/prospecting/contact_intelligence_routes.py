@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from flask import jsonify, request
 from psycopg2.extras import Json, RealDictCursor
 
-from api.prospecting.access_schema import _require_auth, _require_superadmin, _resolve_business_for_user
+from api.prospecting.access_schema import (
+    _record_lead_timeline_event,
+    _require_auth,
+    _require_superadmin,
+    _resolve_business_for_user,
+)
 from api.prospecting.shared import admin_prospecting_bp
 from pg_db_utils import get_db_connection
 from services.contact_intelligence_service import (
@@ -702,6 +708,116 @@ def admin_select_contact_recipient(lead_id: str):
         job = enqueue_enrichment_job(cursor, workstream_id, force=True)
         conn.commit()
         return jsonify({"success": True, "contact_point_id": contact_point_id, "job": _serialize_job(job)}), 202
+    finally:
+        conn.close()
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/leads/<string:lead_id>/outreach-reason", methods=["POST"])
+def admin_save_outreach_reason(lead_id: str):
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    workstream_id = str(data.get("workstream_id") or "").strip()
+    operator_approved_reason = " ".join(str(data.get("reason") or "").split()).strip()
+    if not workstream_id:
+        return jsonify({"error": "workstream_id is required"}), 400
+    if len(operator_approved_reason) < 20:
+        return jsonify({
+            "error": "Опишите конкретную связь или идею сотрудничества минимум в 20 символах",
+        }), 400
+    if len(operator_approved_reason) > 1000:
+        return jsonify({"error": "Причина обращения не должна превышать 1000 символов"}), 400
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        workstream = _load_workstream(
+            cursor,
+            lead_id=lead_id,
+            workstream_id=workstream_id,
+        )
+        if not workstream:
+            return jsonify({"error": "Lead workstream not found"}), 404
+        if str(workstream.get("workstream_type") or "") != "client_partnership":
+            return jsonify({
+                "error": "Ручная причина обращения доступна только для партнёрских лидов",
+            }), 400
+
+        cursor.execute(
+            """
+            SELECT id, message_brief_json
+            FROM lead_workstream_research
+            WHERE workstream_id = %s
+            ORDER BY researched_at DESC, created_at DESC
+            LIMIT 1
+            FOR UPDATE
+            """,
+            (workstream_id,),
+        )
+        research = cursor.fetchone()
+        operator_approved_at = datetime.now(timezone.utc).isoformat()
+        actor_id = str(user_data.get("user_id") or "")
+        message_brief = dict((research or {}).get("message_brief_json") or {})
+        message_brief.update({
+            "operator_approved_reason": operator_approved_reason,
+            "operator_approved_at": operator_approved_at,
+            "operator_approved_by": actor_id,
+            "operator_approved_source_type": "operator_input",
+        })
+        if research:
+            cursor.execute(
+                """
+                UPDATE lead_workstream_research
+                SET message_brief_json = %s
+                WHERE id = %s
+                """,
+                (Json(message_brief), research.get("id")),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO lead_workstream_research (
+                    id, workstream_id, score, qualification_stage, signal_label,
+                    score_breakdown, why_now, signals_json, sources_json,
+                    contact_evidence_json, limitations_json, message_brief_json,
+                    message_readiness_json, report_hash, researched_at, created_at
+                ) VALUES (
+                    %s, %s, 15, 'potential_fit', 'fit_only',
+                    '{}'::jsonb, NULL, '[]'::jsonb, '[]'::jsonb,
+                    '[]'::jsonb, '[]'::jsonb, %s,
+                    '{}'::jsonb, %s, NOW(), NOW()
+                )
+                """,
+                (
+                    str(uuid.uuid4()),
+                    workstream_id,
+                    Json(message_brief),
+                    f"operator-approved-reason:{workstream_id}",
+                ),
+            )
+        _record_lead_timeline_event(
+            cursor,
+            lead_id=lead_id,
+            workstream_id=workstream_id,
+            event_type="outreach_reason_approved",
+            actor_id=actor_id or None,
+            comment="Суперадмин подтвердил конкретную причину партнёрского обращения",
+            payload={
+                "reason": operator_approved_reason,
+                "source_type": "operator_input",
+            },
+        )
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "workstream_id": workstream_id,
+            "reason": operator_approved_reason,
+            "operator_approved_at": operator_approved_at,
+        })
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 

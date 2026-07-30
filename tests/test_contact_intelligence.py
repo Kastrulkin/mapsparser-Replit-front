@@ -1332,6 +1332,36 @@ def test_contact_routes_are_registered():
         "/api/partnership/leads/<string:lead_id>/contacts",
         frozenset({"POST"}),
     ) in routes
+    assert (
+        "/api/admin/prospecting/leads/<string:lead_id>/outreach-reason",
+        frozenset({"POST"}),
+    ) in routes
+
+
+def test_admin_lead_drawer_exposes_manual_reason_and_data_preparation_actions():
+    frontend_source = (
+        ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx"
+    ).read_text()
+    backend_source = (
+        ROOT / "src/api/prospecting/contact_intelligence_routes.py"
+    ).read_text()
+
+    assert "Конкретная причина обращения" in frontend_source
+    assert "Сохранить причину обращения" in frontend_source
+    assert "/outreach-reason" in frontend_source
+    assert "Обновить данные карточки" in frontend_source
+    assert "Создать аудит" in frontend_source
+    assert "Проверить совместимость" in frontend_source
+    assert "обновите аудит и matching" not in frontend_source
+
+    route_start = backend_source.index(
+        '"/api/admin/prospecting/leads/<string:lead_id>/outreach-reason"'
+    )
+    route_block = backend_source[route_start:route_start + 2600]
+    assert "_require_superadmin()" in route_block
+    assert "_load_workstream(" in route_block
+    assert "message_brief_json" in route_block
+    assert "operator_approved_reason" in route_block
 
 
 def test_contact_normalization_deduplicates_url_shape():

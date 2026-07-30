@@ -264,6 +264,14 @@ def build_outreach_decision(
         ),
         None,
     )
+    operator_approved_reason = next(
+        (
+            item for item in ledger
+            if _text(item.get("kind")) == "operator_approved_partnership_reason"
+            and _text(item.get("status")) == "approved"
+        ),
+        None,
+    )
     if suppression.get("suppressed"):
         action = "excluded"
         reason_codes.append("suppressed_contact")
@@ -285,6 +293,9 @@ def build_outreach_decision(
     elif sender_mode == "localos" and not ledger:
         action = "needs_evidence"
         reason_codes.append("recipient_evidence_missing")
+    elif sender_mode in {"partner_business", "localos_for_partner"} and operator_approved_reason:
+        action = "write_now"
+        reason_codes.append("operator_approved_partnership_reason")
     elif sender_mode in {"partner_business", "localos_for_partner"} and compatibility and fit_score >= 40:
         action = "write_now"
         reason_codes.append("partnership_compatibility_confirmed")
@@ -337,7 +348,31 @@ def offer_candidates(context: dict[str, Any], sender_mode: str) -> list[dict[str
         if not values and _text(match.get("relevance_bridge")):
             values = [_text(match.get("relevance_bridge"))]
         source = "partnership_matching"
+    research = context.get("research") if isinstance(context.get("research"), dict) else {}
+    research_brief = (
+        research.get("message_brief_json")
+        if isinstance(research.get("message_brief_json"), dict)
+        else {}
+    )
+    operator_approved_reason = (
+        _text(research_brief.get("operator_approved_reason"))
+        if sender_mode in {"partner_business", "localos_for_partner"}
+        else ""
+    )
     candidates = []
+    if operator_approved_reason:
+        payload = {
+            "text": operator_approved_reason,
+            "sender_mode": sender_mode,
+            "source": "operator_input",
+        }
+        candidates.append({
+            "id": _stable_id("offer", payload),
+            "text": operator_approved_reason,
+            "source": "operator_input",
+            "sender_mode": sender_mode,
+            "cta": operator_approved_reason,
+        })
     if sender_mode in {"partner_business", "localos_for_partner"} and _is_residential_recipient(context):
         lead_name = _text(context.get("lead_name")) or "жилого комплекса"
         business_name = _text(
@@ -407,6 +442,13 @@ def trust_candidates(context: dict[str, Any], sender_mode: str) -> list[dict[str
         else []
     )
     match = context.get("partnership_match") if isinstance(context.get("partnership_match"), dict) else {}
+    research = context.get("research") if isinstance(context.get("research"), dict) else {}
+    research_brief = (
+        research.get("message_brief_json")
+        if isinstance(research.get("message_brief_json"), dict)
+        else {}
+    )
+    operator_approved_reason = _text(research_brief.get("operator_approved_reason"))
     result = []
     for strategy in allowed:
         statement = ""
@@ -416,8 +458,12 @@ def trust_candidates(context: dict[str, Any], sender_mode: str) -> list[dict[str
         elif strategy == "case_study":
             statement = proofs[0] if proofs else ""
         elif strategy == "matching_authority":
-            statement = _text(match.get("relevance_bridge")) or "По публичным данным и услугам у компаний есть основание обсудить сотрудничество."
-            source = "partnership_matching"
+            if operator_approved_reason:
+                statement = "Есть конкретная согласованная идея сотрудничества для этого получателя."
+                source = "operator_input"
+            else:
+                statement = _text(match.get("relevance_bridge")) or "По публичным данным и услугам у компаний есть основание обсудить сотрудничество."
+                source = "partnership_matching"
         elif strategy == "business_reputation":
             statement = proofs[0] if proofs else story or _text(match.get("recipient_observation"))
         elif strategy == "referral":
