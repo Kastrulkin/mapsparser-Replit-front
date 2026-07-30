@@ -27,6 +27,7 @@ from services.operator_attention import build_attention_brief
 from services.operator_scope_summary import build_operator_scope_summary
 from services.telegram_control_scope import (
     list_control_scopes,
+    list_network_scope_locations,
     load_control_preferences,
     resolve_control_scope,
     save_scope_notification_preferences,
@@ -495,6 +496,55 @@ def operator_telegram_select_scope():
     except Exception:
         db.conn.rollback()
         raise
+    finally:
+        db.close()
+
+
+@operator_bp.route("/mobile/network-locations", methods=["GET"])
+def operator_mobile_network_locations():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+    network_id = str(request.args.get("network_id") or "").strip()
+    if not network_id:
+        return jsonify({"success": False, "error": "Не указана сеть"}), 400
+    try:
+        offset = max(0, int(str(request.args.get("cursor") or "0")))
+    except (TypeError, ValueError):
+        offset = 0
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        scope = resolve_control_scope(
+            cursor,
+            user_id=user_id,
+            requested_kind="network",
+            requested_id=network_id,
+        )
+        if not scope:
+            return jsonify({"success": False, "error": "Сеть недоступна"}), 403
+        result = list_network_scope_locations(
+            cursor,
+            scope=scope,
+            search_query=str(request.args.get("q") or ""),
+            limit=100,
+            offset=offset,
+        )
+        return jsonify(
+            {
+                "success": True,
+                "scope": scope,
+                "items": result["items"],
+                "counts": {"total": result["total"]},
+                "cursor": result["next_cursor"],
+                "as_of": datetime.now(timezone.utc).isoformat(),
+                "freshness": {"is_stale": False},
+                "data_warnings": [],
+                "available_actions": ["open_network_summary", "select_location"],
+                "filters": {"search": True},
+            }
+        )
     finally:
         db.close()
 

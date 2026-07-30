@@ -6,6 +6,11 @@ export type MobileScope = {
   name?: string;
   business_ids?: string[];
   can_switch?: boolean;
+  parent_scope?: {
+    kind?: 'network';
+    id?: string | null;
+    name?: string;
+  } | null;
 };
 
 type MobileScopeContextValue = {

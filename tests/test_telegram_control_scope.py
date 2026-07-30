@@ -5,7 +5,7 @@ import time
 from urllib.parse import urlencode
 
 from services.operator_scope_summary import format_scope_summary_for_telegram
-from services.telegram_control_scope import list_control_scopes, resolve_control_scope, toggle_favorite_control_scope
+from services.telegram_control_scope import list_control_scopes, list_network_scope_locations, resolve_control_scope, toggle_favorite_control_scope
 from services.telegram_webapp_auth import validate_telegram_webapp_init_data
 
 
@@ -49,6 +49,35 @@ class ScopeCursor:
         return list(self.rows)
 
 
+class NetworkLocationsCursor:
+    def __init__(self, businesses):
+        self.businesses = businesses
+        self.rows = []
+
+    def execute(self, query, params=()):
+        normalized = " ".join(query.lower().split())
+        network_id = str(params[0])
+        allowed_ids = {str(item) for item in params[1]}
+        rows = [
+            item
+            for item in self.businesses
+            if str(item.get("network_id")) == network_id and str(item.get("id")) in allowed_ids
+        ]
+        if "ilike" in normalized:
+            needle = str(params[2]).strip("%").lower()
+            rows = [item for item in rows if needle in str(item.get("name") or "").lower() or needle in str(item.get("address") or "").lower()]
+        if "count(*) as cnt" in normalized:
+            self.rows = [{"cnt": len(rows)}]
+            return
+        self.rows = sorted(rows, key=lambda item: (str(item.get("name") or ""), str(item.get("address") or "")))
+
+    def fetchone(self):
+        return self.rows[0] if self.rows else None
+
+    def fetchall(self):
+        return list(self.rows)
+
+
 def test_single_business_owner_gets_business_without_switcher():
     cursor = ScopeCursor(
         actor={"id": "owner-1", "name": "Owner", "is_superadmin": False},
@@ -78,6 +107,25 @@ def test_network_owner_opens_network_and_can_drill_into_locations():
     assert scope["kind"] == "network"
     assert scope["business_ids"] == ["biz-1", "biz-2"]
     assert scope["can_switch"] is True
+
+
+def test_network_location_picker_only_returns_locations_from_verified_scope():
+    cursor = NetworkLocationsCursor(
+        [
+            {"id": "biz-1", "name": "Центр", "address": "Невский, 10", "network_id": "net-1"},
+            {"id": "biz-2", "name": "Север", "address": "Лесная, 4", "network_id": "net-1"},
+            {"id": "foreign", "name": "Чужая точка", "address": "Другой город", "network_id": "net-2"},
+        ]
+    )
+
+    result = list_network_scope_locations(
+        cursor,
+        scope={"kind": "network", "id": "net-1", "business_ids": ["biz-1", "biz-2"]},
+    )
+
+    assert result["total"] == 2
+    assert [item["id"] for item in result["items"]] == ["biz-2", "biz-1"]
+    assert result["next_cursor"] is None
 
 
 def test_superadmin_opens_platform_by_default():

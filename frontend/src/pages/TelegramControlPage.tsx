@@ -51,12 +51,20 @@ type Summary = {
 
 type Catalog = {
   platform?: MobileScope | null;
-  networks?: Array<{ id?: string; name?: string; locations_count?: number }>;
-  businesses?: Array<{ id?: string; name?: string; address?: string; network_name?: string }>;
+  networks?: NetworkCatalogItem[];
+  businesses?: BusinessCatalogItem[];
   total_choices?: number;
   business_cursor?: string;
   next_business_cursor?: string | null;
   has_more_businesses?: boolean;
+};
+
+export type NetworkCatalogItem = { id?: string; name?: string; locations_count?: number };
+export type BusinessCatalogItem = { id?: string; name?: string; address?: string; network_id?: string | null; network_name?: string | null };
+type NetworkLocationsResult = {
+  items?: BusinessCatalogItem[];
+  counts?: { total?: number };
+  cursor?: string | null;
 };
 
 type Bootstrap = {
@@ -152,7 +160,7 @@ declare global {
 const previewBootstrap: Bootstrap = {
   success: true,
   today_v2_enabled: true,
-  selected_scope: { kind: 'business', id: 'preview', name: 'Весёлая расчёска', business_ids: ['preview'], can_switch: true },
+  selected_scope: { kind: 'business', id: 'preview', name: 'Весёлая расчёска · Центр', business_ids: ['preview'], can_switch: true, parent_scope: { kind: 'network', id: 'network', name: 'Сеть «Весёлая расчёска»' } },
   summary: {
     attention_items: [
       { id: 'reviews_unanswered', title: '50 отзывов ждут ответа', description: 'ЛокалОС собрал их в одну очередь.', count: 50, severity: 'high' },
@@ -166,7 +174,10 @@ const previewBootstrap: Bootstrap = {
   catalog: {
     platform: { kind: 'platform', name: 'Вся платформа' },
     networks: [{ id: 'network', name: 'Сеть «Весёлая расчёска»', locations_count: 2 }],
-    businesses: [{ id: 'preview', name: 'Весёлая расчёска', address: 'Москва, Тверская, 7' }], total_choices: 3,
+    businesses: [
+      { id: 'preview', name: 'Весёлая расчёска · Центр', address: 'Москва, Тверская, 7', network_id: 'network', network_name: 'Сеть «Весёлая расчёска»' },
+      { id: 'preview-2', name: 'Весёлая расчёска · Север', address: 'Москва, Лесная, 4', network_id: 'network', network_name: 'Сеть «Весёлая расчёска»' },
+    ], total_choices: 3,
   },
   navigation: [
     { key: 'today', label: 'Сегодня', group: 'primary', status: 'available' },
@@ -261,6 +272,10 @@ export const TelegramControlPage = () => {
   const [slowLoading, setSlowLoading] = useState(false);
   const [error, setError] = useState('');
   const [picker, setPicker] = useState(false);
+  const [pickerNetwork, setPickerNetwork] = useState<NetworkCatalogItem | null>(null);
+  const [networkLocations, setNetworkLocations] = useState<NetworkLocationsResult>({});
+  const [networkLocationsLoading, setNetworkLocationsLoading] = useState(false);
+  const [networkSearch, setNetworkSearch] = useState('');
   const [search, setSearch] = useState('');
   const [taskFilter, setTaskFilter] = useState('attention');
   const [reviewStatus, setReviewStatus] = useState('unanswered');
@@ -401,20 +416,52 @@ export const TelegramControlPage = () => {
   };
   useEffect(() => {
     if (!picker || !initData) return;
+    if (pickerNetwork) return;
     const timer = window.setTimeout(() => void loadBootstrap(search.trim()), 250);
     return () => window.clearTimeout(timer);
-  }, [picker, search]);
+  }, [initData, picker, pickerNetwork, search]);
+
+  const loadNetworkLocations = async (network: NetworkCatalogItem, query = '', cursor = '', append = false) => {
+    if (!network.id) return;
+    if (preview) {
+      const items = (catalog?.businesses || []).filter((item) => item.network_id === network.id);
+      setNetworkLocations({ items, counts: { total: items.length }, cursor: null });
+      return;
+    }
+    setNetworkLocationsLoading(true);
+    try {
+      const params = new URLSearchParams({ network_id: network.id });
+      if (query.trim()) params.set('q', query.trim());
+      if (cursor) params.set('cursor', cursor);
+      const result = await fetch(`/api/operator/mobile/network-locations?${params.toString()}`, { headers: authOnlyHeaders() }).then(readJson<NetworkLocationsResult>);
+      setNetworkLocations((current) => ({
+        ...result,
+        items: append ? [...(current.items || []), ...(result.items || [])] : result.items,
+      }));
+      setError('');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось загрузить точки сети.');
+    } finally {
+      setNetworkLocationsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!picker || !pickerNetwork?.id) return;
+    const timer = window.setTimeout(() => void loadNetworkLocations(pickerNetwork, networkSearch), 200);
+    return () => window.clearTimeout(timer);
+  }, [picker, pickerNetwork, networkSearch]);
 
   useEffect(() => {
     const back = webApp()?.BackButton;
     if (!back) return;
-    const goBack = () => { if (module) setModule(''); else if (picker) setPicker(false); else setTab('today'); };
+    const goBack = () => { if (module) setModule(''); else if (pickerNetwork) setPickerNetwork(null); else if (picker) setPicker(false); else setTab('today'); };
     if (module || picker || tab !== 'today') { back.show(); back.onClick(goBack); } else back.hide();
     return () => back.offClick(goBack);
-  }, [module, picker, tab]);
+  }, [module, picker, pickerNetwork, tab]);
 
   const chooseScope = async (kind: string, id?: string | null) => {
-    if (preview) { setPicker(false); return true; }
+    if (preview) { setPicker(false); setPickerNetwork(null); return true; }
     setLoading(true);
     try {
       const result = await fetch('/api/operator/telegram/scope', {
@@ -423,10 +470,28 @@ export const TelegramControlPage = () => {
       setBootstrap((current) => ({ ...current, ...result, catalog: current?.catalog }));
       await Promise.all([loadWorkspace(result.selected_scope), loadToday(result.selected_scope, result.today_v2_enabled !== false)]);
       setProgressData(null);
-      setPicker(false); setTab('today'); setError('');
+      setPicker(false); setPickerNetwork(null); setNetworkSearch(''); setTab('today'); setError('');
       return true;
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Не удалось сменить бизнес.'); return false; }
     finally { setLoading(false); }
+  };
+
+  const openScopeSwitcher = () => {
+    setSearch('');
+    setNetworkSearch('');
+    const parent = scope?.parent_scope;
+    const networkId = scope?.kind === 'network' ? scope.id : parent?.id;
+    const knownNetwork = (catalog?.networks || []).find((item) => item.id === networkId);
+    if (networkId) {
+      setPickerNetwork(knownNetwork || {
+        id: networkId,
+        name: scope?.kind === 'network' ? scope.name : parent?.name,
+        locations_count: scope?.kind === 'network' ? scope.business_ids?.length : undefined,
+      });
+    } else {
+      setPickerNetwork(null);
+    }
+    setPicker(true);
   };
 
   const loadReviews = async (status = reviewStatus, append = false) => {
@@ -670,7 +735,7 @@ export const TelegramControlPage = () => {
   if (loading && !bootstrap) return <LoadingScreen slow={slowLoading} />;
 
   return (
-    <ScopeProvider value={{ scope, hasSwitcher, openSwitcher: () => setPicker(true) }}>
+    <ScopeProvider value={{ scope, hasSwitcher, openSwitcher: openScopeSwitcher }}>
       <MobileShell
         header={<TopBar />}
         error={error}
@@ -679,7 +744,8 @@ export const TelegramControlPage = () => {
       >
         <AnimatePresence initial={false} mode="wait">
           <motion.div key={`${tab}-${module}-${picker}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={spring}>
-            {picker ? <ScopePicker catalog={catalog} search={search} setSearch={setSearch} choose={chooseScope} loadMore={() => void loadBootstrap(search.trim(), catalog?.next_business_cursor || '', true)} /> : null}
+            {picker && pickerNetwork ? <NetworkScopePicker network={pickerNetwork} currentScope={scope} locations={networkLocations.items || []} total={networkLocations.counts?.total || 0} nextCursor={networkLocations.cursor} search={networkSearch} setSearch={setNetworkSearch} loading={networkLocationsLoading} choose={chooseScope} back={() => { setPickerNetwork(null); setNetworkSearch(''); }} loadMore={() => void loadNetworkLocations(pickerNetwork, networkSearch, networkLocations.cursor || '', true)} /> : null}
+            {picker && !pickerNetwork ? <ScopePicker catalog={catalog} search={search} setSearch={setSearch} choose={chooseScope} openNetwork={(network) => { setPickerNetwork(network); setNetworkSearch(''); }} loadMore={() => void loadBootstrap(search.trim(), catalog?.next_business_cursor || '', true)} /> : null}
             {!picker && tab === 'today' ? bootstrap?.today_v2_enabled !== false ? <TodayMobileV2 data={todayData} loading={todayLoading} slowLoading={todaySlowLoading} command={command} setCommand={setCommand} ask={askOperator} openTarget={openMobileTarget} openProgress={() => openMobileTarget(scope?.kind === 'platform' ? 'tasks' : 'progress')} openSources={scope?.kind === 'business' ? () => openMobileTarget('community_sources') : undefined} track={trackMobileInteraction} /> : <Today summary={summary} tasks={tasks} command={command} setCommand={setCommand} ask={askOperator} openTask={openTask} /> : null}
             {!picker && tab === 'tasks' ? <Tasks items={tasks} filter={taskFilter} setFilter={setTaskFilter} openTask={openTask} /> : null}
             {!picker && tab === 'reviews' ? <Reviews result={reviews} summary={summary} status={reviewStatus} setStatus={setReviewStatus} source={reviewSource} setSource={setReviewSource} rating={reviewRating} setRating={setReviewRating} location={reviewLocation} setLocation={setReviewLocation} selected={selectedReviews} setSelected={setSelectedReviews} loading={reviewsLoading} actionBusy={reviewActionBusy} generate={generateReviewReply} updateDraft={updateReviewDraft} markPublished={markReviewPublished} prepareSelected={() => void prepareSelectedReviews(selectedReviews)} loadMore={() => void loadReviews(reviewStatus, true)} /> : null}
@@ -696,7 +762,14 @@ export const TelegramControlPage = () => {
 const TopBar = () => {
   const { scope, hasSwitcher, openSwitcher } = useMobileScope();
   const Icon = scope?.kind === 'platform' ? ShieldCheck : scope?.kind === 'network' ? Network : Building2;
-  const meta = scope?.kind === 'network' ? `${scope.business_ids?.length || 0} точек` : scope?.kind === 'platform' ? 'Вся платформа' : 'Ваш бизнес';
+  const networkCount = scope?.business_ids?.length || 0;
+  const meta = scope?.kind === 'network'
+    ? `Саммари сети · ${locationCountLabel(networkCount)}`
+    : scope?.kind === 'platform'
+      ? 'Вся платформа'
+      : scope?.parent_scope?.id
+        ? 'Точка сети · Сменить точку'
+        : 'Ваш бизнес';
   return <header className="px-4 pb-4 pt-[calc(16px+env(safe-area-inset-top))]">
     <div className="mb-4 flex items-center justify-between"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-zinc-500"><span className="relative h-8 w-8 overflow-hidden rounded-[11px] bg-white shadow-[0_10px_28px_rgba(255,92,51,0.24)] ring-1 ring-inset ring-white/10"><img src={localOsLogo} alt="" className="absolute -left-3 -top-2 h-14 w-14 max-w-none outline outline-1 -outline-offset-1 outline-white/10" /></span>ЛокалОС</div><span className="flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-2 text-[11px] text-zinc-400 ring-1 ring-inset ring-white/[0.07]"><i className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Работает</span></div>
     <button type="button" onClick={openSwitcher} disabled={!hasSwitcher} className="flex min-h-14 w-full items-center gap-3 rounded-[20px] bg-white/[0.045] px-3 text-left ring-1 ring-inset ring-white/[0.075] transition-[background-color,transform] active:scale-[0.96] disabled:active:scale-100"><span className="grid h-11 w-11 place-items-center rounded-[14px] bg-primary/15 text-primary"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><b className="block truncate text-[15px]">{scope?.name || 'ЛокалОС'}</b><small className="text-xs text-zinc-500">{meta}</small></span>{hasSwitcher ? <ChevronRight className="h-5 w-5 text-zinc-600" /> : null}</button>
@@ -1368,7 +1441,41 @@ const NotificationSettings = ({ preferences, saving, save }: { preferences: Noti
 
 const StatusPill = ({ value }: { value?: string }) => <span className="shrink-0 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] text-zinc-500 ring-1 ring-inset ring-white/[0.06]">{value === 'active' ? 'Активна' : value === 'archived' ? 'Архив' : value === 'approved' || value === 'completed' ? 'Готово' : value === 'draft' || value === 'draft_generated' || value === 'edited' ? 'Черновик' : value === 'planned' ? 'Запланировано' : value === 'fresh' ? 'Актуально' : value === 'running' || value === 'processing' ? 'В работе' : value === 'failed' || value === 'error' ? 'Ошибка' : value || 'Данные'}</span>;
 
-const ScopePicker = ({ catalog, search, setSearch, choose, loadMore }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void; loadMore: () => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина ЛокалОС" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${item.locations_count || 0} точек`} onClick={() => void choose('network', item.id)} />)}{catalog?.businesses?.map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ')} onClick={() => void choose('business', item.id)} />)}{catalog?.has_more_businesses ? <button type="button" onClick={loadMore} className="min-h-12 w-full rounded-2xl bg-white/[0.05] text-sm font-semibold text-zinc-300 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-transform active:scale-[0.96]">Показать ещё</button> : null}</div></Screen>;
+const locationCountLabel = (count: number) => {
+  const remainder100 = count % 100;
+  const remainder10 = count % 10;
+  if (remainder100 >= 11 && remainder100 <= 14) return `${count} точек`;
+  if (remainder10 === 1) return `${count} точка`;
+  if (remainder10 >= 2 && remainder10 <= 4) return `${count} точки`;
+  return `${count} точек`;
+};
+
+export const NetworkScopePicker = ({ network, currentScope, locations, total, nextCursor, search, setSearch, loading, choose, back, loadMore }: { network: NetworkCatalogItem; currentScope?: MobileScope; locations: BusinessCatalogItem[]; total: number; nextCursor?: string | null; search: string; setSearch: (value: string) => void; loading: boolean; choose: (kind: string, id?: string | null) => void; back: () => void; loadMore: () => void }) => {
+  const currentIsNetwork = currentScope?.kind === 'network' && currentScope.id === network.id;
+  const currentIsNetworkLocation = currentScope?.kind === 'business' && currentScope.parent_scope?.id === network.id;
+  const displayedTotal = search.trim() ? total : total || network.locations_count || locations.length;
+  return <Screen
+    title={network.name || 'Сеть'}
+    subtitle="Работайте со всей сетью или выберите одну точку."
+    action={<button type="button" onClick={back} aria-label="Все бизнесы" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white/[0.05] text-zinc-400 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-[background-color,transform] active:scale-[0.96]"><ArrowLeft className="h-5 w-5" /></button>}
+  >
+    <button type="button" onClick={() => void choose('network', network.id)} className={`flex min-h-[76px] w-full items-center gap-3 rounded-[22px] px-4 text-left shadow-[0_0_0_1px_rgba(255,255,255,0.08)] transition-[background-color,transform] active:scale-[0.96] ${currentIsNetwork ? 'bg-primary/12' : 'bg-white/[0.045]'}`}>
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-primary/15 text-primary"><Network className="h-5 w-5" /></span>
+      <span className="min-w-0 flex-1"><b className="block text-sm">{currentIsNetworkLocation ? 'К саммари сети' : 'Саммари сети'}</b><small className="mt-1 block text-pretty text-zinc-500">{locationCountLabel(displayedTotal)} в общей картине</small></span>
+      {currentIsNetwork ? <Check className="h-5 w-5 text-primary" /> : <ChevronRight className="h-5 w-5 text-zinc-600" />}
+    </button>
+    <div className="mb-3 mt-6 flex items-end justify-between gap-3"><div><h2 className="text-balance text-lg font-semibold">Точки сети</h2><p className="mt-1 text-xs text-zinc-600">Данные и действия будут относиться только к выбранной точке.</p></div><span className="shrink-0 text-xs tabular-nums text-zinc-600">{displayedTotal}</span></div>
+    <label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название или адрес точки" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label>
+    <div className="mt-3 space-y-2">
+      {locations.map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Точка'} meta={item.address || 'Адрес пока не указан'} selected={currentScope?.kind === 'business' && currentScope.id === item.id} onClick={() => void choose('business', item.id)} />)}
+      {loading ? <div className="space-y-2" aria-label="Загружаем точки"><div className="h-16 animate-pulse rounded-[20px] bg-white/[0.04] motion-reduce:animate-none" /><div className="h-16 animate-pulse rounded-[20px] bg-white/[0.04] motion-reduce:animate-none" /></div> : null}
+      {!loading && !locations.length ? <Empty icon={MapPinned} title="Точки не найдены" text={search ? 'Попробуйте другое название или адрес.' : 'В этой сети пока нет доступных точек.'} /> : null}
+      {nextCursor ? <button type="button" onClick={loadMore} className="min-h-12 w-full rounded-2xl bg-white/[0.05] text-sm font-semibold text-zinc-300 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-transform active:scale-[0.96]">Показать ещё</button> : null}
+    </div>
+  </Screen>;
+};
+
+const ScopePicker = ({ catalog, search, setSearch, choose, openNetwork, loadMore }: { catalog?: Catalog; search: string; setSearch: (value: string) => void; choose: (kind: string, id?: string | null) => void; openNetwork: (network: NetworkCatalogItem) => void; loadMore: () => void }) => <Screen title="Где работаем?" subtitle="Выбор сохранится для следующего запуска."><label className="relative block"><Search className="absolute left-4 top-4 h-4 w-4 text-zinc-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, город или адрес" className="min-h-12 w-full rounded-2xl bg-white/[0.05] pl-11 pr-4 text-sm outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-zinc-700 focus:ring-primary/50" /></label><div className="mt-4 space-y-2">{catalog?.platform ? <ScopeRow icon={ShieldCheck} label="Вся платформа" meta="Операционная картина ЛокалОС" onClick={() => void choose('platform')} /> : null}{catalog?.networks?.map((item) => <ScopeRow key={item.id} icon={Network} label={item.name || 'Сеть'} meta={`${locationCountLabel(item.locations_count || 0)} · Выбрать`} onClick={() => openNetwork(item)} />)}{catalog?.businesses?.filter((item) => Boolean(search.trim()) || !item.network_id).map((item) => <ScopeRow key={item.id} icon={Building2} label={item.name || 'Бизнес'} meta={[item.network_name, item.address].filter(Boolean).join(' · ') || 'Самостоятельный бизнес'} onClick={() => void choose('business', item.id)} />)}{catalog?.has_more_businesses ? <button type="button" onClick={loadMore} className="min-h-12 w-full rounded-2xl bg-white/[0.05] text-sm font-semibold text-zinc-300 shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-transform active:scale-[0.96]">Показать ещё</button> : null}</div></Screen>;
 
 const BottomNav = ({ current, showMore, setCurrent }: { current: Tab; showMore: boolean; setCurrent: (tab: Tab) => void }) => { const items: Array<[Tab, string, typeof Sparkles]> = [['today', 'Сегодня', Sparkles], ['tasks', 'Задачи', ClipboardCheck], ['reviews', 'Отзывы', MessageCircle], ['operator', 'Оператор', Bot]]; if (showMore) items.push(['more', 'Ещё', CircleEllipsis]); return <nav className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-xl border-t border-white/[0.07] bg-zinc-950/90 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl"> <div className="grid grid-flow-col auto-cols-fr">{items.map(([key, label, Icon]) => <button key={key} onClick={() => setCurrent(key)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[10px] transition-[color,transform,background-color] active:scale-[0.96] ${current === key ? 'bg-primary/10 text-primary' : 'text-zinc-600'}`}><Icon className="h-5 w-5" /><span>{label}</span></button>)}</div></nav>; };
 
@@ -1376,7 +1483,7 @@ const Screen = ({ title, subtitle, children, action }: { title: string; subtitle
 const PrimaryButton = ({ children, onClick }: { children: React.ReactNode; onClick: () => void }) => <button onClick={onClick} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(255,92,51,0.24)] transition-[filter,transform] active:scale-[0.96]">{children}<ChevronRight className="h-4 w-4" /></button>;
 const TaskRow = ({ item, onClick }: { item: AttentionItem; onClick: () => void }) => <button onClick={onClick} className="mt-2 flex min-h-16 w-full items-center gap-3 rounded-[20px] bg-white/[0.035] px-4 py-3 text-left ring-1 ring-inset ring-white/[0.06] active:scale-[0.98]"><span className={`h-2.5 w-2.5 rounded-full ${item.severity === 'high' ? 'bg-rose-400' : item.severity === 'medium' ? 'bg-amber-400' : 'bg-emerald-400'}`} /><span className="min-w-0 flex-1"><b className="block truncate text-sm">{item.title || 'Задача'}</b><small className="mt-1 block truncate text-zinc-600">{item.description}</small>{item.progress !== undefined && item.progress !== null ? <span className="mt-2 block h-1 overflow-hidden rounded-full bg-white/[0.06]"><i className="block h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(item.progress, 100))}%` }} /></span> : item.action_unavailable_reason ? <small className="mt-1 block truncate text-amber-300/70">{item.action_unavailable_reason}</small> : null}</span>{item.count ? <b className="tabular-nums text-zinc-400">{item.count}</b> : null}<ChevronRight className="h-4 w-4 text-zinc-700" /></button>;
 const Segments = ({ value, setValue, options }: { value: string; setValue: (value: string) => void; options: string[][] }) => <div className="mb-4 flex gap-1 overflow-x-auto rounded-[18px] bg-white/[0.035] p-1 ring-1 ring-inset ring-white/[0.06]">{options.map(([key, label]) => <button key={key} onClick={() => setValue(key)} className={`min-h-11 flex-1 whitespace-nowrap rounded-[14px] px-3 text-xs font-semibold transition-[background-color,color,transform] active:scale-[0.96] ${value === key ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-600'}`}>{label}</button>)}</div>;
-const ScopeRow = ({ icon: Icon, label, meta, onClick }: { icon: typeof Star; label: string; meta: string; onClick: () => void }) => <button onClick={onClick} className="flex min-h-16 w-full items-center gap-3 rounded-[20px] bg-white/[0.04] px-3 text-left ring-1 ring-inset ring-white/[0.07] active:scale-[0.96]"><span className="grid h-10 w-10 place-items-center rounded-[14px] bg-primary/12 text-primary"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><b className="block truncate text-sm">{label}</b><small className="block truncate text-zinc-600">{meta}</small></span><ChevronRight className="h-4 w-4 text-zinc-700" /></button>;
+const ScopeRow = ({ icon: Icon, label, meta, selected = false, onClick }: { icon: typeof Star; label: string; meta: string; selected?: boolean; onClick: () => void }) => <button onClick={onClick} className={`flex min-h-16 w-full items-center gap-3 rounded-[20px] px-3 text-left shadow-[0_0_0_1px_rgba(255,255,255,0.07)] transition-[background-color,transform] active:scale-[0.96] ${selected ? 'bg-primary/12' : 'bg-white/[0.04]'}`}><span className="grid h-10 w-10 place-items-center rounded-[14px] bg-primary/12 text-primary"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><b className="block truncate text-sm">{label}</b><small className="block truncate text-zinc-600">{meta}</small></span>{selected ? <Check className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-zinc-700" />}</button>;
 const Empty = ({ icon: Icon, title, text }: { icon: typeof Star; title: string; text: string }) => <div className="mt-4 rounded-[24px] bg-white/[0.025] px-6 py-10 text-center ring-1 ring-inset ring-white/[0.06]"><Icon className="mx-auto h-7 w-7 text-zinc-700" /><h3 className="mt-3 font-semibold">{title}</h3><p className="mx-auto mt-2 max-w-xs text-pretty text-sm leading-6 text-zinc-600">{text}</p></div>;
 const InlineError = ({ text }: { text: string }) => <div className="mb-3 flex gap-2 rounded-[16px] bg-rose-500/10 p-3 text-xs leading-5 text-rose-100 ring-1 ring-inset ring-rose-400/20"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{text}</div>;
 const ReviewSkeleton = () => <div className="space-y-3">{[1, 2, 3].map((item) => <div key={item} className="h-44 animate-pulse rounded-[24px] bg-white/[0.04] motion-reduce:animate-none" />)}</div>;

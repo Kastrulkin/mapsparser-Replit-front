@@ -146,6 +146,74 @@ def _network_business_ids(cursor: Any, network_id: str) -> list[str]:
     return [str(parent.get("id"))] if parent.get("id") else []
 
 
+def list_network_scope_locations(
+    cursor: Any,
+    *,
+    scope: dict[str, Any],
+    search_query: str = "",
+    limit: int = 100,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """List locations only after the caller has resolved an accessible network scope."""
+    if str(scope.get("kind") or "") != "network" or not scope.get("id"):
+        raise ValueError("network_scope_required")
+    business_ids = [str(item) for item in (scope.get("business_ids") or []) if str(item)]
+    if not business_ids:
+        return {"items": [], "total": 0, "next_cursor": None}
+
+    cleaned_query = str(search_query or "").strip()
+    search_filter = ""
+    search_params: list[Any] = []
+    if cleaned_query:
+        search_filter = "AND (b.name ILIKE %s OR COALESCE(b.address, '') ILIKE %s)"
+        pattern = f"%{cleaned_query}%"
+        search_params.extend([pattern, pattern])
+
+    safe_limit = max(1, min(int(limit or 100), 200))
+    safe_offset = max(0, int(offset or 0))
+    base_params: list[Any] = [str(scope["id"]), business_ids]
+    cursor.execute(
+        f"""
+        SELECT COUNT(*) AS cnt
+        FROM businesses b
+        WHERE b.network_id = %s
+          AND b.id = ANY(%s)
+          AND {_active_business_clause('b')}
+          {search_filter}
+        """,
+        tuple(base_params + search_params),
+    )
+    total = int(_row_to_dict(cursor, cursor.fetchone()).get("cnt") or 0)
+    cursor.execute(
+        f"""
+        SELECT b.id, b.name, COALESCE(b.address, '') AS address, b.network_id
+        FROM businesses b
+        WHERE b.network_id = %s
+          AND b.id = ANY(%s)
+          AND {_active_business_clause('b')}
+          {search_filter}
+        ORDER BY b.name, COALESCE(b.address, '')
+        LIMIT %s OFFSET %s
+        """,
+        tuple(base_params + search_params + [safe_limit, safe_offset]),
+    )
+    items = [_row_to_dict(cursor, row) for row in (cursor.fetchall() or [])]
+    next_offset = safe_offset + len(items)
+    return {
+        "items": [
+            {
+                "id": str(item.get("id") or ""),
+                "name": str(item.get("name") or "Точка"),
+                "address": str(item.get("address") or ""),
+                "network_id": str(item.get("network_id") or scope["id"]),
+            }
+            for item in items
+        ],
+        "total": total,
+        "next_cursor": str(next_offset) if next_offset < total else None,
+    }
+
+
 def _scope_payload(
     *,
     kind: str,
