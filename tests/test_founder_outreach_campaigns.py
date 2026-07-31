@@ -9,6 +9,7 @@ from flask import Flask
 from services.outreach_campaign_service import (
     _aggregate_quality_gate,
     _contact_outreach_rank,
+    _email_subject,
     _message_for_angle,
     _review_record,
     _quality_gate,
@@ -487,7 +488,7 @@ def test_operator_approved_partnership_reason_can_prepare_personalized_chain_wit
         "freshness": "current_snapshot",
         "confidence": 1.0,
         "hypothesis": None,
-        "relevance": manual_reason,
+        "relevance": "У каждого участника есть понятная роль в одном совместном формате.",
         "source_type": "operator_input",
     }]
     assert context["partnership_match"] == {}
@@ -517,7 +518,7 @@ def test_operator_approved_partnership_reason_can_prepare_personalized_chain_wit
     )
     assert candidates
     assert candidates[0]["observed_fact"] == manual_reason
-    assert candidates[0]["next_step"] == manual_reason
+    assert candidates[0]["next_step"] != manual_reason
 
     first_touch = _message_for_angle(
         "signal",
@@ -526,7 +527,7 @@ def test_operator_approved_partnership_reason_can_prepare_personalized_chain_wit
         [],
     )
     assert first_touch.startswith("Здравствуйте!\n\nМы ваши соседи - Весёлая расчёска.")
-    assert "У нас есть конкретная идея сотрудничества" in first_touch
+    assert "Предлагаем команде Бэби-клуб на Комендантском такой формат" in first_touch
     assert "LocalOS" not in first_touch
     assert first_touch.count("?") == 1
     gate = _quality_gate(
@@ -540,6 +541,68 @@ def test_operator_approved_partnership_reason_can_prepare_personalized_chain_wit
     )
     assert gate["passed"] is True
     assert gate["total_score"] == 18
+
+
+def test_operator_approved_partnership_reason_creates_distinct_human_sequence():
+    manual_reason = (
+        "Предложить совместный показ в ТРК Гранд Каньон: мы сделаем причёски, "
+        "они предоставят одежду, а наш третий партнёр организует участие детей."
+    )
+    context = {
+        "workstream_type": "client_partnership",
+        "lead_name": "B&C for baby",
+        "category": "Детские товары / одежда",
+        "city": "Санкт-Петербург",
+        "source_url": "https://vk.ru/bnckidsru",
+        "updated_at": "2026-07-30T10:00:00Z",
+        "represented_business_name": "Весёлая расчёска",
+        "client_business_name": "Весёлая расчёска",
+        "client_business_categories": ["детская парикмахерская"],
+        "client_business_network_id": "network-1",
+        "sender_mode": "localos_for_partner",
+        "sender_profile": {},
+        "business_sender_profile": {},
+        "partnership_match": {},
+        "research": {
+            "message_brief_json": {
+                "operator_approved_reason": manual_reason,
+                "operator_approved_at": "2026-07-30T10:00:00Z",
+                "operator_approved_by": "superadmin-1",
+            },
+        },
+    }
+
+    evidence = build_evidence_ledger(context)
+    offers = offer_candidates(context, "localos_for_partner")
+    trusts = trust_candidates(context, "localos_for_partner")
+    candidates = build_personalization_candidates(
+        context,
+        evidence,
+        selected_offer=offers[0],
+        selected_trust=trusts[0],
+    )
+    candidate = candidates[0]
+    angles = ["signal", "matching_authority", "proof", "respectful_close"]
+    messages = [
+        _message_for_angle(angle, candidate, None, angles[:index])
+        for index, angle in enumerate(angles)
+    ]
+    combined = "\n".join(messages).lower()
+
+    assert combined.count(manual_reason.lower()) <= 1
+    assert "у нас есть конкретная идея сотрудничества" not in combined
+    assert len(set(messages)) == 4
+    assert all(message.count("?") == 1 for message in messages)
+    assert all("LocalOS" not in message for message in messages)
+    assert messages[0].startswith(
+        "Здравствуйте!\n\nМы ваши соседи - сеть детских парикмахерских Весёлая расчёска."
+    )
+    assert "Предлагаем команде B&C for baby такой формат: совместный показ в ТРК Гранд Каньон." in messages[0]
+    assert evidence[0]["relevance"] != manual_reason
+    assert offers[0]["cta"] != manual_reason
+    assert candidate["bridge"] != manual_reason
+    assert candidate["next_step"] != manual_reason
+    assert _email_subject("matching_authority", candidate) == "B&C for baby | Весёлая расчёска"
 
 
 def test_residential_evidence_uses_recipient_type_instead_of_placeholder_services():

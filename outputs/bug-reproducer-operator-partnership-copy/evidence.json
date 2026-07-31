@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "The same reproducer changed from failing to passing and broader checks passed.",
+  "reproduction": "confirmed",
+  "full_suite": "passed",
+  "same_command": true,
+  "before": {
+    "command": [
+      "python3",
+      "-m",
+      "pytest",
+      "tests/test_founder_outreach_campaigns.py",
+      "-k",
+      "operator_approved_partnership_reason_creates_distinct_human_sequence",
+      "-q"
+    ],
+    "exit_code": 1,
+    "timed_out": false,
+    "duration_ms": 1290,
+    "stdout": "FAILED tests/test_founder_outreach_campaigns.py::test_operator_approved_partnership_reason_creates_distinct_human_sequence - assert 4 == 1\n1 failed, 87 deselected in 1.29s",
+    "stderr": ""
+  },
+  "after": {
+    "command": [
+      "python3",
+      "-m",
+      "pytest",
+      "tests/test_founder_outreach_campaigns.py",
+      "-k",
+      "operator_approved_partnership_reason_creates_distinct_human_sequence",
+      "-q"
+    ],
+    "exit_code": 0,
+    "timed_out": false,
+    "duration_ms": 660,
+    "stdout": ".                                                                        [100%]\n1 passed, 87 deselected in 0.66s",
+    "stderr": ""
+  }
+}

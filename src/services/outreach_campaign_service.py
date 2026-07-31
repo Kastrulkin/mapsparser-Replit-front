@@ -1291,7 +1291,7 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             "freshness": "current_snapshot",
             "confidence": 1.0,
             "hypothesis": None,
-            "relevance": operator_approved_reason,
+            "relevance": "У каждого участника есть понятная роль в одном совместном формате.",
             "source_type": "operator_input",
         })
     research_evidence = _list(research.get("evidence_json"))
@@ -1792,6 +1792,25 @@ def _quality_gate(
     word_count = len(re.findall(r"\b[\wа-яА-ЯёЁ0-9-]+\b", text, flags=re.UNICODE))
     channel_word_limit = 120 if channel == "email" else 60 if channel == "sms" else 90
     normalized_text = text.lower()
+    operator_approved_idea = (
+        _text(candidate.get("evidence_kind"))
+        == "operator_approved_partnership_reason"
+    )
+    operator_idea_terms = [
+        token
+        for token in re.findall(
+            r"[a-zа-яё0-9]+",
+            _text(candidate.get("observed_fact")).lower(),
+            flags=re.UNICODE,
+        )
+        if len(token) >= 4 and token not in {"предложить", "который", "которая"}
+    ]
+    operator_idea_present = bool(
+        operator_approved_idea
+        and operator_idea_terms
+        and sum(token in normalized_text for token in operator_idea_terms)
+        >= min(3, len(operator_idea_terms))
+    )
 
     def contains(value: Any) -> bool:
         normalized = _text(value).lower()
@@ -1838,11 +1857,13 @@ def _quality_gate(
     checks = {
         "removal": contains(candidate.get("recipient")) and (
             any(contains(anchor) for anchor in personalization_anchors)
+            or operator_idea_present
             or respectful_close
             or residential_relevance
         ),
         "bridge": (
             any(contains(anchor) for anchor in personalization_anchors[1:])
+            or operator_idea_present
             or residential_relevance
             or (respectful_close and contains(candidate.get("recipient")))
         ),
@@ -1860,7 +1881,11 @@ def _quality_gate(
         },
         "specificity": bool(
             contains(candidate.get("recipient"))
-            and (respectful_close or len(_text(candidate.get("observed_fact"))) >= 20)
+            and (
+                respectful_close
+                or operator_idea_present
+                or len(_text(candidate.get("observed_fact"))) >= 20
+            )
         ),
         "proof_integrity": bool(story or candidate.get("trust_statement")) and not any(
             claim.lower() in text.lower() for claim in proof_context.get("forbidden_claims", [])
@@ -1998,28 +2023,59 @@ def _message_for_angle(
                 opening += f"\n\n{represented_business_opening}"
         else:
             opening = f"Здравствуйте! {introduction.rstrip()}".rstrip()
+        proposal = re.sub(
+            r"^предложить\s+",
+            "",
+            observed_fact,
+            count=1,
+            flags=re.IGNORECASE,
+        ).strip(" .")
+        proposal_title, separator, role_details = proposal.partition(":")
+        proposal_title = proposal_title.strip(" .") or proposal
+        role_details = role_details.strip(" .") if separator else ""
+        if role_details:
+            role_details = re.sub(
+                r"(^|,\s*)они\s+",
+                lambda match: f"{match.group(1)}команда {name} ",
+                role_details,
+                flags=re.IGNORECASE,
+            )
+            role_details = re.sub(
+                rf"(команда {re.escape(name)}\s+)предоставят\b",
+                r"\1предоставит",
+                role_details,
+                flags=re.IGNORECASE,
+            )
+            role_details = re.sub(
+                r"\bнаш третий партнёр\b",
+                "наш партнёр",
+                role_details,
+                flags=re.IGNORECASE,
+            )
+            role_details = role_details[0].upper() + role_details[1:]
         if angle == "signal":
+            roles = f" {role_details}." if role_details else ""
             return (
-                f"{opening}\n\nУ нас есть конкретная идея сотрудничества для \"{name}\": "
-                f"{observed_fact_inline}.\n\nПодскажите, с кем можно обсудить детали?"
+                f"{opening}\n\nПредлагаем команде {name} такой формат: {proposal_title}.{roles}"
+                "\n\nПодскажите, с кем можно обсудить идею?"
             )
         if angle in {"founder_story", "business_reputation", "matching_authority"}:
-            trust_block = f"{trust_statement}.\n\n" if trust_statement else ""
             return (
-                f"{opening}\n\n{trust_block}Предлагаем обсудить для \"{name}\" такую идею: "
-                f"{observed_fact_inline}.\n\nС кем можно обсудить детали?"
+                f"{opening}\n\nДля команды {name} предлагаем формат: {proposal_title}. "
+                "У каждого участника будет "
+                "понятная роль. Можем заранее собрать короткий план без лишней подготовки."
+                "\n\nПрислать такой план?"
             )
         if angle == "proof":
-            proof = founder_proof or trust_statement
-            proof_block = f"{proof}.\n\n" if proof else ""
             return (
-                f"{opening}\n\n{proof_block}Коротко напомним идею для \"{name}\": "
-                f"{observed_fact_inline}.\n\nПрислать короткое предложение?"
+                f"{opening}\n\nДля первого шага с командой {name} предлагаем формат: {proposal_title}. "
+                "Можем собрать один черновик с участниками и ролями."
+                "\n\nПоказать черновик?"
             )
         return (
-            f"{opening}\n\nКоротко закроем тему по \"{name}\". "
-            f"{observed_fact}. Если сейчас неактуально, больше писать не будем. "
-            "Вернуться позже?"
+            f"{opening}\n\nКоротко закроем тему. Для команды {name} предлагали формат: {proposal_title}. "
+            "Если сейчас неактуально, больше писать не будем. "
+            "Вернуться к идее позже?"
         )
     residential_recipient = _text(candidate.get("recipient_type")) == "residential_complex"
     if residential_recipient:
@@ -2100,6 +2156,11 @@ def _message_for_angle(
 
 
 def _email_subject(angle: str, candidate: dict[str, Any]) -> str:
+    if _text(candidate.get("evidence_kind")) == "operator_approved_partnership_reason":
+        recipient = _text(candidate.get("recipient"))[:100]
+        represented_business = _text(candidate.get("represented_business"))[:90]
+        if recipient and represented_business:
+            return f"{recipient} | {represented_business}"[:200]
     labels = {
         "signal": "короткий вопрос по публичному сигналу",
         "founder_story": "вопрос по публичной карточке",
@@ -2358,6 +2419,7 @@ def build_preview(
             "contact_point_id": availability_item.get("contact_point_id"),
             "sender_account_id": availability_item.get("sender_account_id"),
             "evidence_id": candidate["evidence_id"],
+            "evidence_kind": candidate.get("evidence_kind"),
             "source_url": candidate["source_url"],
             "observation": candidate.get("observed_fact"),
             "problem_hypothesis": candidate.get("problem_hypothesis"),
@@ -2369,7 +2431,10 @@ def build_preview(
         previous_offset = day_offset
     ai_enabled = (
         ai_personalization_enabled() if generate_ai is None else bool(generate_ai)
-    ) and not override_by_index
+    ) and not override_by_index and (
+        _text(primary_candidate.get("evidence_kind"))
+        != "operator_approved_partnership_reason"
+    )
     generation: dict[str, Any] = {
         "schema_version": "1.0",
         "status": "disabled",
@@ -2642,6 +2707,7 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
                 touch["angle"], touch["scheduled_at"], touch.get("subject"), touch["text"],
                 Json({
                     "evidence_id": touch["evidence_id"],
+                    "evidence_kind": touch.get("evidence_kind"),
                     "source_url": touch["source_url"],
                     "channel_status": touch["channel_status"],
                     "observation": touch.get("observation"),

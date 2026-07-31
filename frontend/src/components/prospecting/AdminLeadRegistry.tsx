@@ -299,6 +299,7 @@ interface OutreachTouchPreview {
   observation?: string | null;
   problem_hypothesis?: string | null;
   relevance_bridge?: string | null;
+  evidence_kind?: string | null;
   scheduled_at?: string | null;
   human_edited?: boolean;
 }
@@ -387,6 +388,7 @@ interface SavedOutreachCampaign {
       observation?: string | null;
       problem_hypothesis?: string | null;
       relevance_bridge?: string | null;
+      evidence_kind?: string | null;
       human_edited?: boolean;
       manual_edit_review_required?: boolean;
       manual_edit_review_passed?: boolean;
@@ -1022,6 +1024,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         text: String(touch.approved_text || touch.generated_text || ''),
         channel_status: touch.message_brief_json?.channel_status || 'manual',
         quality_gate: touch.quality_gate_json,
+        evidence_kind: touch.message_brief_json?.evidence_kind,
         source_url: touch.message_brief_json?.source_url,
         observation: touch.message_brief_json?.observation,
         problem_hypothesis: touch.message_brief_json?.problem_hypothesis,
@@ -3611,17 +3614,18 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         Показана сохранённая цепочка версии {savedOutreachCampaign.version}. Для просмотра повторная генерация не нужна.
                       </div>
                     ) : null}
-                    {displayedOutreachTouches.map((touch) => (
-                      <article key={`${touch.sequence_index}-${touch.channel}`} className="rounded-md bg-white p-3 ring-1 ring-slate-200">
+                    {displayedOutreachTouches.map((touch) => {
+                      const operatorApprovedIdea = touch.evidence_kind === 'operator_approved_partnership_reason';
+                      return <article key={`${touch.sequence_index}-${touch.channel}`} className="rounded-md bg-white p-3 ring-1 ring-slate-200">
                         <div className="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
                           <span>День {touch.day_offset} · {touch.channel}</span>
                           <span className={touch.quality_gate?.passed ? 'text-emerald-700' : 'text-amber-700'}>{touch.quality_gate?.passed ? 'Факты проверены' : 'Нужна проверка'}</span>
                         </div>
                         {touch.observation || touch.problem_hypothesis || touch.relevance_bridge ? (
                           <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
-                            {touch.observation ? <p><span className="font-semibold text-slate-900">Факт:</span> {touch.observation}</p> : null}
+                            {touch.observation ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Подтверждённая идея:' : 'Факт:'}</span> {touch.observation}</p> : null}
                             {touch.problem_hypothesis ? <p><span className="font-semibold text-slate-900">Гипотеза:</span> {touch.problem_hypothesis}</p> : null}
-                            {touch.relevance_bridge ? <p><span className="font-semibold text-slate-900">Почему это связано:</span> {touch.relevance_bridge}</p> : null}
+                            {touch.relevance_bridge ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Почему предложение подходит:' : 'Почему это связано:'}</span> {touch.relevance_bridge}</p> : null}
                           </div>
                         ) : null}
                         <OutreachTouchMessageEditor
@@ -3680,8 +3684,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                             )}
                           </details>
                         ) : null}
-                      </article>
-                    ))}
+                      </article>;
+                    })}
                   </div>
                 ) : null}
                 </div>

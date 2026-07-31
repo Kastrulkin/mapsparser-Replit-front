@@ -371,7 +371,7 @@ def offer_candidates(context: dict[str, Any], sender_mode: str) -> list[dict[str
             "text": operator_approved_reason,
             "source": "operator_input",
             "sender_mode": sender_mode,
-            "cta": operator_approved_reason,
+            "cta": "Обсудить идею и распределить роли участников",
         })
     if sender_mode in {"partner_business", "localos_for_partner"} and _is_residential_recipient(context):
         lead_name = _text(context.get("lead_name")) or "жилого комплекса"

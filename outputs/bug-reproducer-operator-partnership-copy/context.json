@@ -1,0 +1,92 @@
+{
+  "title": "Ручная идея партнёрства дублируется во всех касаниях",
+  "project": "LocalOS",
+  "generated_at": "2026-07-30",
+  "mode": "prove-fix",
+  "original_report": "В цепочке B&C for baby одна и та же ручная идея показа повторялась как факт, логический мост, offer, CTA и текст каждого касания.",
+  "discovery_scope": [
+    "src/services/outreach_campaign_service.py",
+    "src/services/outreach_decision_service.py",
+    "frontend/src/components/prospecting/OutreachCampaignBuilder.tsx",
+    "frontend/src/components/prospecting/AdminLeadRegistry.tsx"
+  ],
+  "candidates": [],
+  "expected": "Ручная идея считается подтверждённым оператором основанием, а цепочка использует её в четырёх разных углах с одним CTA на касание.",
+  "actual": "Полный ручной текст попадал в fact, relevance, offer, CTA, bridge и во все четыре сообщения; UI называл его публичным фактом.",
+  "environment": "Python 3.11 / pytest; React 18 / Vitest / Vite 7; local workspace",
+  "reproduction": "Тест создаёт context B&C for baby с operator_approved_reason и строит четыре касания реальными LocalOS-функциями.",
+  "failure_signal": "Исходная фраза встретилась четыре раза вместо одного смыслового использования.",
+  "root_cause": "build_evidence_ledger записывал operator_approved_reason как fact и relevance; offer_candidates копировал его в CTA; _message_for_angle вставлял полную строку в каждый угол. UI не получал evidence_kind.",
+  "fix_summary": "Ручная идея выделена как operator-approved evidence; CTA и bridge стали краткими; четыре шаблона используют разные углы; AI-перефразирование для ручной идеи отключено; evidence_kind сохраняется и отображается как «Подтверждённая идея».",
+  "why_causal": "Исправлены все три места дублирования, а тот же тест перешёл из red в green.",
+  "reproduction_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/tests/test_founder_outreach_campaigns.py",
+      "line": 546,
+      "summary": "Backend regression for four distinct B&C touches."
+    },
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/prospecting/OutreachCampaignBuilder.test.tsx",
+      "line": 10,
+      "summary": "UI regression for operator-approved idea labels."
+    }
+  ],
+  "fix_files": [
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/outreach_campaign_service.py",
+      "line": 1271,
+      "summary": "Evidence, deterministic sequence, quality gate, subject and persisted evidence kind."
+    },
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/src/services/outreach_decision_service.py",
+      "line": 339,
+      "summary": "Concise CTA for operator-approved partnership idea."
+    },
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/prospecting/OutreachCampaignBuilder.tsx",
+      "line": 57,
+      "summary": "Correct labels in standalone campaign builder."
+    },
+    {
+      "path": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/prospecting/AdminLeadRegistry.tsx",
+      "line": 287,
+      "summary": "Correct labels in admin lead drawer."
+    }
+  ],
+  "checks": [
+    {
+      "name": "Exact backend reproducer",
+      "status": "passed",
+      "detail": "Red before, green after."
+    },
+    {
+      "name": "Founder outreach suite",
+      "status": "passed",
+      "detail": "88 passed."
+    },
+    {
+      "name": "Frontend regression",
+      "status": "passed",
+      "detail": "1 passed."
+    },
+    {
+      "name": "Frontend production build",
+      "status": "passed",
+      "detail": "Vite built 3773 modules successfully."
+    }
+  ],
+  "reproduce": [
+    "python3 -m pytest tests/test_founder_outreach_campaigns.py -k 'operator_approved_partnership_reason_creates_distinct_human_sequence' -q",
+    "cd frontend && npm test -- --run src/components/prospecting/OutreachCampaignBuilder.test.tsx"
+  ],
+  "limitations": [
+    "Детерминированное разделение ролей опирается на двоеточие в ручной идее; без него идея используется как одно краткое предложение."
+  ],
+  "residual_risks": [
+    "Новый preview появится после повторного нажатия «Подготовить цепочку»; старые сохранённые версии не переписываются автоматически."
+  ],
+  "notes": [
+    "Production data, approvals, schedules and send queues were not changed.",
+    "For operator-approved ideas LocalOS does not call the AI copy normalizer, saving GigaChat tokens."
+  ]
+}

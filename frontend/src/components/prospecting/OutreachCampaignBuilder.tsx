@@ -64,6 +64,7 @@ type TouchPreview = {
   subject?: string | null;
   text: string;
   channel_status: ChannelStatus;
+  evidence_kind?: string | null;
   source_url?: string | null;
   observation?: string | null;
   problem_hypothesis?: string | null;
@@ -83,6 +84,7 @@ type CampaignTouch = TouchPreview & {
   quality_gate_json?: QualityGate;
   message_brief_json?: {
     channel_status?: ChannelStatus;
+    evidence_kind?: string | null;
     manual_edit_review_required?: boolean;
     source_url?: string | null;
     observation?: string | null;
@@ -287,6 +289,7 @@ export function OutreachCampaignBuilder({
             day_offset: touch.day_offset ?? touch.sequence_index,
             text: touch.text || touch.approved_text || touch.generated_text || '',
             quality_gate: touch.quality_gate || touch.quality_gate_json,
+            evidence_kind: touch.evidence_kind || touch.message_brief_json?.evidence_kind || null,
             source_url: touch.source_url || touch.message_brief_json?.source_url || null,
             observation: touch.observation || touch.message_brief_json?.observation || null,
             problem_hypothesis: touch.problem_hypothesis || touch.message_brief_json?.problem_hypothesis || null,
@@ -952,6 +955,7 @@ export function OutreachCampaignBuilder({
             const text = draft?.text || touch.text || touch.approved_text || touch.generated_text || '';
             const isManual = MANUAL_CHANNELS.has(touch.channel);
             const canRecordManual = isManual && ['awaiting_manual_send', 'needs_attention', 'manual_expired', 'manual_sent', 'sent', 'delivered'].includes(String(touch.status || ''));
+            const operatorApprovedIdea = touch.evidence_kind === 'operator_approved_partnership_reason';
             return (
               <article key={`${touch.id || 'preview'}-${touch.sequence_index}`} className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
@@ -962,9 +966,9 @@ export function OutreachCampaignBuilder({
                 </div>
                 {touch.observation || touch.problem_hypothesis || touch.relevance_bridge ? (
                   <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
-                    {touch.observation ? <p><span className="font-semibold text-slate-900">Факт:</span> {touch.observation}</p> : null}
+                    {touch.observation ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Подтверждённая идея:' : 'Факт:'}</span> {touch.observation}</p> : null}
                     {touch.problem_hypothesis ? <p><span className="font-semibold text-slate-900">Гипотеза:</span> {touch.problem_hypothesis}</p> : null}
-                    {touch.relevance_bridge ? <p><span className="font-semibold text-slate-900">Почему это связано:</span> {touch.relevance_bridge}</p> : null}
+                    {touch.relevance_bridge ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Почему предложение подходит:' : 'Почему это связано:'}</span> {touch.relevance_bridge}</p> : null}
                   </div>
                 ) : null}
                 <OutreachTouchMessageEditor
