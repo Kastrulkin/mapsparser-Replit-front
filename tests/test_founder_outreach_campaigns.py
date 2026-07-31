@@ -21,6 +21,7 @@ from services.outreach_campaign_service import (
     channel_availability,
     _localos_representative_profile,
     _normalize_touch_overrides,
+    _operator_first_message_overrides,
     resolve_sender_mode,
 )
 from services.outreach_decision_service import (
@@ -541,6 +542,29 @@ def test_operator_approved_partnership_reason_can_prepare_personalized_chain_wit
     )
     assert gate["passed"] is True
     assert gate["total_score"] == 18
+
+
+def test_operator_approved_first_message_is_reused_after_contact_enrichment():
+    approved_text = (
+        "Здравствуйте!\n\n"
+        "Мы ваши соседи - сеть детских парикмахерских Весёлая расчёска.\n\n"
+        "Предлагаем совместный детский показ. Обсудим детали?"
+    )
+
+    overrides = _operator_first_message_overrides({
+        "operator_approved_first_message": approved_text,
+    })
+
+    assert overrides == {
+        0: {
+            "text": approved_text,
+            "subject": "",
+            "original_text": "",
+            "original_subject": "",
+            "human_edited": True,
+        },
+    }
+    assert _operator_first_message_overrides({}) == {}
 
 
 def test_operator_approved_partnership_reason_creates_distinct_human_sequence():

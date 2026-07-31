@@ -2206,6 +2206,23 @@ def _normalize_touch_overrides(
     return normalized
 
 
+def _operator_first_message_overrides(research_brief: dict[str, Any]) -> dict[int, dict[str, Any]]:
+    """Reuse the operator-approved opening when a contact becomes available later."""
+
+    approved_text = str(research_brief.get("operator_approved_first_message") or "").strip()
+    if not approved_text:
+        return {}
+    return {
+        0: {
+            "text": approved_text[:3000],
+            "subject": "",
+            "original_text": "",
+            "original_subject": "",
+            "human_edited": True,
+        },
+    }
+
+
 def build_preview(
     cursor: Any,
     workstream_id: str,
@@ -2349,6 +2366,8 @@ def build_preview(
         candidates[0],
     )
     override_by_index = _normalize_touch_overrides(touch_overrides)
+    if not override_by_index:
+        override_by_index = _operator_first_message_overrides(research_brief)
     for index, item in enumerate(selected_sequence):
         requested_channel = _text(item.get("channel")).lower()
         if requested_channel == "next":
