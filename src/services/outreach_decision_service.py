@@ -56,6 +56,20 @@ RESIDENTIAL_RECIPIENT_TOKENS = (
     "жилкомплекс",
 )
 
+DENTISTRY_RECIPIENT_TOKENS = (
+    "стомат",
+    "дентал",
+    "dental",
+)
+
+BEAUTY_SENDER_TOKENS = (
+    "парикмах",
+    "салон красоты",
+    "косметолог",
+    "beauty",
+    "бьюти",
+)
+
 
 def _text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
@@ -70,6 +84,39 @@ def _is_residential_recipient(context: dict[str, Any]) -> bool:
     return combined.startswith("жк ") or any(
         token in combined for token in RESIDENTIAL_RECIPIENT_TOKENS
     )
+
+
+def _beauty_dentistry_sender_service(context: dict[str, Any]) -> str:
+    recipient = " ".join(
+        _text(context.get(key)).lower()
+        for key in ("lead_name", "category", "partner_kind")
+        if _text(context.get(key))
+    )
+    if not any(token in recipient for token in DENTISTRY_RECIPIENT_TOKENS):
+        return ""
+    categories = context.get("client_business_categories")
+    category_values = categories if isinstance(categories, list) else []
+    sender = " ".join(
+        [
+            _text(context.get("represented_business_name")),
+            _text(context.get("client_business_name")),
+            _text(context.get("client_business_type")),
+            *[_text(value) for value in category_values],
+        ]
+    ).lower()
+    normalized_sender = sender.replace("ё", "е")
+    if not any(token in normalized_sender for token in BEAUTY_SENDER_TOKENS):
+        if "веселая расческа" not in normalized_sender:
+            return ""
+    if "веселая расческа" in normalized_sender or (
+        "детск" in normalized_sender and "парикмах" in normalized_sender
+    ):
+        return "детская стрижка"
+    if "парикмах" in normalized_sender:
+        return "стрижка"
+    if "косметолог" in normalized_sender:
+        return "косметологическая услуга"
+    return "услуга салона"
 
 
 def _clamp(value: Any, minimum: float = 0, maximum: float = 100) -> float:
@@ -372,6 +419,35 @@ def offer_candidates(context: dict[str, Any], sender_mode: str) -> list[dict[str
             "source": "operator_input",
             "sender_mode": sender_mode,
             "cta": "Обсудить идею и распределить роли участников",
+        })
+    beauty_sender_service = _beauty_dentistry_sender_service(context)
+    if sender_mode in {"partner_business", "localos_for_partner"} and beauty_sender_service:
+        lead_name = _text(context.get("lead_name")) or "стоматологии"
+        business_name = _text(
+            context.get("represented_business_name")
+            or context.get("client_business_name")
+            or profile.get("company_name")
+        ) or "нашего бизнеса"
+        text = (
+            f"Обсудить совместный пакет для семей: профессиональная чистка зубов со стороны {lead_name} "
+            f"и {beauty_sender_service} со стороны {business_name}. Их можно продвигать вместе как единый "
+            "пакет или как регулярную программу раз в полгода. Конкретный состав, оплату "
+            "и условия продвижения согласовать отдельно"
+        )
+        payload = {
+            "text": text,
+            "sender_mode": sender_mode,
+            "source": "beauty_dentistry_package_policy",
+        }
+        candidates.append({
+            "id": _stable_id("offer", payload),
+            "text": text,
+            "source": "beauty_dentistry_package_policy",
+            "sender_mode": sender_mode,
+            "cta": "Уточнить, с кем можно обсудить совместный пакет для семей",
+            "recipe": "beauty_dentistry_package",
+            "recipient_service": "профессиональная чистка зубов",
+            "sender_service": beauty_sender_service,
         })
     if sender_mode in {"partner_business", "localos_for_partner"} and _is_residential_recipient(context):
         lead_name = _text(context.get("lead_name")) or "жилого комплекса"

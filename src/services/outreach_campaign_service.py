@@ -1572,6 +1572,9 @@ def build_personalization_candidates(
             "trust_source": trust.get("source"),
             "offer_id": offer.get("id"),
             "offer_source": offer.get("source"),
+            "outreach_recipe": offer.get("recipe"),
+            "recipient_service": offer.get("recipient_service"),
+            "sender_service": offer.get("sender_service"),
             "next_step": next_step,
             "source_url": evidence.get("source_url"),
             "source_type": evidence.get("source_type"),
@@ -2016,6 +2019,39 @@ def _message_for_angle(
         _text(candidate.get("evidence_kind"))
         == "operator_approved_partnership_reason"
     )
+    if _text(candidate.get("outreach_recipe")) == "beauty_dentistry_package":
+        opening = "Здравствуйте!"
+        if represented_business_opening:
+            opening += f"\n\n{represented_business_opening}"
+        recipient_service = _text(candidate.get("recipient_service")) or "профессиональная чистка зубов"
+        sender_service = _text(candidate.get("sender_service")) or "подходящая услуга"
+        if angle == "signal":
+            return (
+                f"{opening}\n\nХотим обсудить с командой {name} совместный пакет для семей: "
+                f"{recipient_service} у вас и {sender_service} у нас. Его можно продвигать как единый "
+                "пакет или как регулярную программу, например раз в полгода.\n\n"
+                "Конкретный состав пакета, оплату и формат продвижения заранее согласуем отдельно.\n\n"
+                "Подскажите, с кем можно обсудить такой формат?"
+            )
+        if angle in {"founder_story", "business_reputation", "matching_authority"}:
+            return (
+                f"{opening}\n\nКоманде {name} предлагаем продолжить с одного понятного варианта: "
+                f"{recipient_service} у вас и {sender_service} у нас.\n\n"
+                "Каждая компания может сохранить свои условия и оплату, а предложение продвигать вместе.\n\n"
+                "Прислать короткий вариант механики?"
+            )
+        if angle == "proof":
+            return (
+                f"{opening}\n\nДля команды {name} есть другой вариант - не объединять услуги в одну оплату, а выпускать "
+                f"совместное предложение раз в полгода: {recipient_service} у вас и {sender_service} у нас.\n\n"
+                "Так можно проверить интерес семей без сложной интеграции.\n\n"
+                "Подготовить черновик такого предложения?"
+            )
+        return (
+            f"{opening}\n\nКоротко закроем тему с командой {name}. Совместное предложение для семей: "
+            f"{recipient_service} у вас и {sender_service} у нас.\n\n"
+            "Если сейчас неактуально, больше писать не будем. Вернуться к идее позже?"
+        )
     if operator_approved_partnership_reason:
         if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER:
             opening = "Здравствуйте!"

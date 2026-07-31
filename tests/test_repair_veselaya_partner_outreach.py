@@ -23,6 +23,28 @@ def test_kidburg_chain_uses_business_voice_and_concrete_profession_workshop():
     assert all("Александр" not in item["text"] for item in messages)
 
 
+def test_dentistry_chain_uses_joint_family_package_instead_of_card_category_template():
+    messages = _messages("Клиника Даная", "Медицинский центр / стоматология")
+
+    assert len(messages) == 4
+    assert "профессиональная чистка зубов" in _offer_summary(
+        "Клиника Даная", "Медицинский центр / стоматология"
+    )
+    assert "детская стрижка" in _offer_summary(
+        "Клиника Даная", "Медицинский центр / стоматология"
+    )
+    assert any("единый пакет" in item["text"] for item in messages)
+    assert any("раз в полгода" in item["text"] for item in messages)
+    assert all("В публичной карточке" not in item["text"] for item in messages)
+    assert all("указана категория" not in item["text"] for item in messages)
+    assert all("в Клиника Даная" not in item["text"] for item in messages)
+    assert all("Клиника Даная" in item["text"] for item in messages)
+    assert "Предлагаем Клиника Даная" not in _proposal(
+        "Клиника Даная", "Медицинский центр / стоматология"
+    )["body_text"]
+    assert all(item["text"].count("?") == 1 for item in messages)
+
+
 def test_residential_room_leads_with_special_conditions_for_residents():
     proposal = _proposal("ЖК Северная Долина", "Жилой комплекс")
 

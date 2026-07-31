@@ -141,6 +141,55 @@ def test_veselaya_yes_apart_offer_mentions_guests_and_residents():
     assert "семей гостей и жителей Yes apart" in offers[0]["text"]
 
 
+def test_beauty_sender_gets_dentistry_package_recipe_before_generic_matching_offer():
+    for business_name, categories, expected_sender_service in (
+        ("Весёлая расчёска", ["Детская парикмахерская"], "детская стрижка"),
+        ("Салон красоты", ["Салон красоты"], "услуга салона"),
+        ("Косметология", ["Косметология"], "косметологическая услуга"),
+    ):
+        context = {
+            "lead_name": "Клиника Даная",
+            "category": "Медицинский центр / стоматология",
+            "represented_business_name": business_name,
+            "client_business_name": business_name,
+            "client_business_categories": categories,
+            "partnership_match": {
+                "match_score": 78,
+                "offer_angles": ["Подготовить общий информационный материал"],
+                "relevance_bridge": "У компаний пересекается локальная аудитория.",
+            },
+            "business_sender_profile": {},
+        }
+
+        offers = offer_candidates(context, "localos_for_partner")
+
+        assert offers[0]["source"] == "beauty_dentistry_package_policy"
+        assert offers[0]["recipe"] == "beauty_dentistry_package"
+        assert "профессиональная чистка зубов" in offers[0]["text"]
+        assert expected_sender_service in offers[0]["text"]
+        assert "раз в полгода" in offers[0]["text"]
+        assert "условия" in offers[0]["text"].lower()
+
+        candidate = {
+            "recipient": "Клиника Даная",
+            "sender_mode": "localos_for_partner",
+            "represented_business_opening": f"Мы ваши соседи - {business_name}.",
+            "outreach_recipe": offers[0]["recipe"],
+            "recipient_service": offers[0]["recipient_service"],
+            "sender_service": offers[0]["sender_service"],
+            "bridge": "У компаний пересекается семейная аудитория.",
+        }
+        messages = [
+            _message_for_angle(angle, candidate, None, [])
+            for angle in ("signal", "matching_authority", "proof", "respectful_close")
+        ]
+        assert all("В публичной карточке" not in message for message in messages)
+        assert all("указана категория" not in message for message in messages)
+        assert all("в Клиника Даная" not in message for message in messages)
+        assert all("Клиника Даная" in message for message in messages)
+        assert all(message.count("?") == 1 for message in messages)
+
+
 def test_localos_for_partner_uses_matching_authority_without_localos_founder_story():
     context = {
         "lead_name": "Семейный клуб",
