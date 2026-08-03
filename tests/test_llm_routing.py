@@ -601,3 +601,44 @@ def test_deepseek_adapter_adds_json_instruction_when_caller_omits_it(monkeypatch
     assert result.status == "completed"
     assert "JSON" in captured["body"]["messages"][0]["content"]
     assert captured["body"]["response_format"] == {"type": "json_object"}
+
+
+def test_deepseek_adapter_accepts_json_from_reasoning_content(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "id": "request-reasoning-1",
+                "model": "deepseek-v4-flash",
+                "choices": [
+                    {
+                        "message": {
+                            "content": "",
+                            "reasoning_content": '{"intent":"unknown"}',
+                        }
+                    }
+                ],
+                "usage": {"total_tokens": 8},
+            }
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setattr(
+        "services.llm.adapters.requests.post",
+        lambda *args, **kwargs: FakeResponse(),
+    )
+    definition = get_task_definition("operator_intent_classify")
+    assert definition is not None
+
+    result = DeepSeekAdapter().generate(
+        LLMTaskRequest(task_key="operator_intent_classify", prompt="Classify this request"),
+        definition,
+        prompt="Classify this request",
+    )
+
+    assert result.status == "completed"
+    assert result.content == '{"intent":"unknown"}'
+    assert result.fallback_reason == ""

@@ -198,7 +198,11 @@ class DeepSeekAdapter:
                 payload = response.json()
                 choices = payload.get("choices") if isinstance(payload.get("choices"), list) else []
                 message = choices[0].get("message") if choices and isinstance(choices[0], dict) else {}
-                content = str(message.get("content") or "") if isinstance(message, dict) else ""
+                content_value = message.get("content") if isinstance(message, dict) else ""
+                content = content_value if isinstance(content_value, str) else ""
+                if not content and expects_json and isinstance(message, dict):
+                    reasoning_value = message.get("reasoning_content")
+                    content = reasoning_value if isinstance(reasoning_value, str) else ""
                 result = LLMTaskResult(
                     status="completed" if content else "empty_response",
                     content=content,
