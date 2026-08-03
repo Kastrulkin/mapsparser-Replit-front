@@ -4,6 +4,7 @@ import { resolveMobileRoute } from './mobileDeepLinkRouter';
 const navigation = [
   { key: 'today', status: 'available' },
   { key: 'reviews', status: 'available' },
+  { key: 'progress', status: 'available' },
   { key: 'finance', status: 'available' },
   { key: 'diagnostics', status: 'hidden' },
 ] satisfies Parameters<typeof resolveMobileRoute>[1];
@@ -21,5 +22,9 @@ describe('resolveMobileRoute', () => {
     expect(resolveMobileRoute({ screen: 'reviews', item_type: 'review', item_id: 'review-1', filters: { status: 'unanswered' } }, navigation)).toEqual({
       tab: 'reviews', module: '', itemId: 'review-1', reviewId: 'review-1', filters: { status: 'unanswered' },
     });
+  });
+
+  it('opens progress as a primary mobile destination', () => {
+    expect(resolveMobileRoute({ screen: 'progress' }, navigation)).toMatchObject({ tab: 'progress', module: '' });
   });
 });
