@@ -172,6 +172,16 @@ def test_audit_editorial_pass_removes_unsupported_result_promises() -> None:
                         "Это влияет на ранжирование в поиске."
                     ),
                 },
+                {
+                    "title": "Уточнить категории",
+                    "description": (
+                        "Разделить услуги на понятные категории, чтобы клиент быстрее нашёл нужную. "
+                        "Это поможет попасть в поиск по ключевым запросам. "
+                        "Это повышает доверие и стимулирует клиентов писать больше отзывов, "
+                        "а также помогает продвижению. Сейчас навигация размыта, "
+                        "из-за чего теряются потенциальные записи."
+                    ),
+                },
             ],
             "current_state": {
                 "services_count": 3,
@@ -189,8 +199,13 @@ def test_audit_editorial_pass_removes_unsupported_result_promises() -> None:
     assert "улучшит показ" not in descriptions
     assert "гарантированно повысит" not in descriptions
     assert "влияет на ранжирование" not in descriptions
+    assert "поможет попасть в поиск" not in descriptions
+    assert "повышает доверие и стимулирует" not in descriptions
+    assert "помогает продвижению" not in descriptions
+    assert "теряются потенциальные записи" not in descriptions
     assert "указать стоимость трёх услуг" in descriptions
     assert "перечислить основные услуги" in descriptions
+    assert "чтобы клиент быстрее нашёл нужную" in descriptions
 
 
 def test_normalize_public_audit_marks_uncertain_photos_without_hard_claim() -> None:
