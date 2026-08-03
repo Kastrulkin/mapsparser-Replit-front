@@ -2703,6 +2703,200 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 ) : null}
               </section>
 
+              {selectedWorkstream && (
+                <LeadDrawerSection
+                  key={`research-${selectedWorkstream.id || 'legacy'}`}
+                  id="lead-research"
+                  title="Почему обращаемся"
+                  description={
+                    savedOperatorReason
+                      || selectedWorkstream.research?.why_now
+                      || 'Публичный повод не подтверждён'
+                  }
+                  status={savedOperatorReason
+                    ? 'Подтверждено вручную'
+                    : `${Number(selectedWorkstream.research?.score || 0)} баллов`}
+                >
+                <section className="rounded-md bg-slate-50 p-4" aria-labelledby="lead-research-title">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 id="lead-research-title" className="text-sm font-semibold text-slate-950">Почему сейчас</h3>
+                      <p className="mt-1 text-sm leading-6 text-slate-700">
+                        {selectedWorkstream.research?.why_now || 'Публичный повод не подтверждён. Компания подходит только по общим признакам.'}
+                      </p>
+                    </div>
+                    <span className="text-xs text-slate-500 tabular-nums">
+                      {selectedWorkstream.research?.researched_at
+                        ? new Date(selectedWorkstream.research.researched_at).toLocaleDateString('ru-RU')
+                        : 'дата не указана'}
+                    </span>
+                  </div>
+                  {(selectedWorkstream.research?.sources || []).length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {(selectedWorkstream.research?.sources || []).slice(0, 3).map((source) => (
+                        <a
+                          key={`${source.url}-${source.title}`}
+                          href={source.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex min-h-10 items-center justify-between gap-3 rounded-md bg-white px-3 text-sm font-medium text-slate-800 hover:text-orange-700"
+                        >
+                          <span className="min-w-0 truncate">{source.title || 'Открыть источник'}</span>
+                          <ExternalLink className="h-4 w-4 shrink-0" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {selectedWorkstream.research?.suggested_opener && (
+                    <div className="mt-3 rounded-md bg-white p-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Первый абзац письма</div>
+                      <p className="mt-1 text-sm leading-6 text-slate-700">{selectedWorkstream.research.suggested_opener}</p>
+                      {selectedWorkstream.research?.opener_source_url ? (
+                        <a
+                          href={selectedWorkstream.research.opener_source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex min-h-9 items-center gap-2 text-xs font-semibold text-sky-700 hover:text-sky-900"
+                        >
+                          Источник вступления
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      ) : (
+                        <p className="mt-2 text-xs text-slate-500">Нейтральное вступление без персонального публичного сигнала.</p>
+                      )}
+                    </div>
+                  )}
+                  {(selectedWorkstream.research?.limitations || []).length > 0 && (
+                    <details className="mt-2">
+                      <summary className="min-h-10 cursor-pointer py-2 text-sm font-semibold text-slate-600">Ограничения исследования</summary>
+                      <ul className="space-y-1 text-sm text-slate-600">
+                        {(selectedWorkstream.research?.limitations || []).map((item) => <li key={item}>{item}</li>)}
+                      </ul>
+                    </details>
+                  )}
+
+                  {selectedWorkstream.workstream_type === 'client_partnership' ? (
+                    <div className="mt-4 rounded-md bg-white p-4 shadow-sm shadow-slate-900/5">
+                      <label
+                        htmlFor="manual-outreach-reason"
+                        className="text-sm font-semibold text-slate-950"
+                      >
+                        Конкретная причина обращения
+                      </label>
+                      <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
+                        Опишите реальную связь или идею сотрудничества. LocalOS сохранит её как подтверждённое человеком основание, а не как публичный факт.
+                      </p>
+                      <div className="mt-3 rounded-lg bg-sky-50 p-3 text-pretty text-xs leading-5 text-sky-950 ring-1 ring-inset ring-sky-100">
+                        <div className="font-semibold">Как сформулировать: факт → польза → предложение</div>
+                        <ol className="mt-2 space-y-1 text-sky-900">
+                          <li><span className="font-semibold">1. Факт:</span> какая подтверждённая связь есть между компаниями.</li>
+                          <li><span className="font-semibold">2. Польза:</span> что конкретно получит общая аудитория.</li>
+                          <li><span className="font-semibold">3. Предложение:</span> какой один формат вы хотите обсудить.</li>
+                        </ol>
+                        <p className="mt-2 border-t border-sky-100 pt-2">
+                          <span className="font-semibold">Пример:</span> Клиника "Даная" и "Весёлая расчёска" находятся в одном ТРК. Семьи с детьми могут совместить визит в клинику и детскую стрижку за одну поездку и сэкономить время. Предлагаем обсудить совместное предложение для клиентов двух компаний.
+                        </p>
+                      </div>
+                      <textarea
+                        id="manual-outreach-reason"
+                        value={manualOutreachReason}
+                        onChange={(event) => setManualOutreachReason(event.target.value)}
+                        placeholder="Опишите подтверждённый факт, пользу для общей аудитории и одно конкретное предложение."
+                        rows={3}
+                        maxLength={1000}
+                        className="mt-3 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-900 outline-none transition-colors focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                      />
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void saveManualOutreachReason()}
+                          disabled={
+                            busyAction === 'outreach-reason'
+                            || manualOutreachReason.trim().length < 20
+                            || manualOutreachReason.trim() === savedOperatorReason
+                          }
+                          className="min-h-10 bg-white transition-transform active:scale-[0.96]"
+                        >
+                          {busyAction === 'outreach-reason'
+                            ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                            : <Check className="mr-2 h-4 w-4" />}
+                          Сохранить причину обращения
+                        </Button>
+                        <PreparationStepStatus step={reasonPreparationStep} />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 rounded-md bg-white p-4 shadow-sm shadow-slate-900/5">
+                    <div className="text-sm font-semibold text-slate-950">Подготовить данные</div>
+                    <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
+                      Рекомендуемый порядок: обновить карточку, создать аудит, затем проверить совместимость компаний.
+                    </p>
+                    <div className={`mt-3 grid gap-3 ${selectedWorkstream.workstream_type === 'client_partnership' ? 'sm:grid-cols-3' : ''}`}>
+                      <div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void refreshLeadCardData()}
+                          disabled={Boolean(busyAction)}
+                          className="min-h-11 w-full justify-start bg-white transition-transform active:scale-[0.96]"
+                        >
+                          {busyAction === 'parse-lead-card'
+                            ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                            : <Search className="mr-2 h-4 w-4" />}
+                          Обновить данные карточки
+                        </Button>
+                        <PreparationStepStatus step={preparationSteps.card_refresh} />
+                      </div>
+                      {selectedWorkstream.workstream_type === 'client_partnership' ? (
+                        <>
+                          <div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => void createLeadAudit()}
+                              disabled={Boolean(busyAction) || !selectedWorkstream.client_business_id}
+                              className="min-h-11 w-full justify-start bg-white transition-transform active:scale-[0.96]"
+                            >
+                              {busyAction === 'audit-lead'
+                                ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                : <ShieldCheck className="mr-2 h-4 w-4" />}
+                              Создать аудит
+                            </Button>
+                            <PreparationStepStatus step={preparationSteps.audit} />
+                          </div>
+                          <div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => void checkLeadCompatibility()}
+                              disabled={Boolean(busyAction) || !selectedWorkstream.client_business_id}
+                              className="min-h-11 w-full justify-start bg-white transition-transform active:scale-[0.96]"
+                            >
+                              {busyAction === 'match-lead'
+                                ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                : <Users className="mr-2 h-4 w-4" />}
+                              Проверить совместимость
+                            </Button>
+                            <PreparationStepStatus step={preparationSteps.compatibility} />
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+                    {dataPreparationMessage ? (
+                      <p
+                        className="mt-3 rounded-md bg-sky-50 px-3 py-2 text-pretty text-sm leading-6 text-sky-900"
+                        aria-live="polite"
+                      >
+                        {dataPreparationMessage}
+                      </p>
+                    ) : null}
+                  </div>
+                </section>
+                </LeadDrawerSection>
+              )}
+
               <LeadDrawerSection
                 key={`conversation-${selectedWorkstream.id || 'legacy'}`}
                 id="lead-conversation"
@@ -3219,200 +3413,6 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 )}
               </section>
               </LeadDrawerSection>
-
-              {selectedWorkstream && (
-                <LeadDrawerSection
-                  key={`research-${selectedWorkstream.id || 'legacy'}`}
-                  id="lead-research"
-                  title="Почему обращаемся"
-                  description={
-                    savedOperatorReason
-                      || selectedWorkstream.research?.why_now
-                      || 'Публичный повод не подтверждён'
-                  }
-                  status={savedOperatorReason
-                    ? 'Подтверждено вручную'
-                    : `${Number(selectedWorkstream.research?.score || 0)} баллов`}
-                >
-                <section className="rounded-md bg-slate-50 p-4" aria-labelledby="lead-research-title">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h3 id="lead-research-title" className="text-sm font-semibold text-slate-950">Почему сейчас</h3>
-                      <p className="mt-1 text-sm leading-6 text-slate-700">
-                        {selectedWorkstream.research?.why_now || 'Публичный повод не подтверждён. Компания подходит только по общим признакам.'}
-                      </p>
-                    </div>
-                    <span className="text-xs text-slate-500 tabular-nums">
-                      {selectedWorkstream.research?.researched_at
-                        ? new Date(selectedWorkstream.research.researched_at).toLocaleDateString('ru-RU')
-                        : 'дата не указана'}
-                    </span>
-                  </div>
-                  {(selectedWorkstream.research?.sources || []).length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      {(selectedWorkstream.research?.sources || []).slice(0, 3).map((source) => (
-                        <a
-                          key={`${source.url}-${source.title}`}
-                          href={source.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex min-h-10 items-center justify-between gap-3 rounded-md bg-white px-3 text-sm font-medium text-slate-800 hover:text-orange-700"
-                        >
-                          <span className="min-w-0 truncate">{source.title || 'Открыть источник'}</span>
-                          <ExternalLink className="h-4 w-4 shrink-0" />
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                  {selectedWorkstream.research?.suggested_opener && (
-                    <div className="mt-3 rounded-md bg-white p-3">
-                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Первый абзац письма</div>
-                      <p className="mt-1 text-sm leading-6 text-slate-700">{selectedWorkstream.research.suggested_opener}</p>
-                      {selectedWorkstream.research?.opener_source_url ? (
-                        <a
-                          href={selectedWorkstream.research.opener_source_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-2 inline-flex min-h-9 items-center gap-2 text-xs font-semibold text-sky-700 hover:text-sky-900"
-                        >
-                          Источник вступления
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      ) : (
-                        <p className="mt-2 text-xs text-slate-500">Нейтральное вступление без персонального публичного сигнала.</p>
-                      )}
-                    </div>
-                  )}
-                  {(selectedWorkstream.research?.limitations || []).length > 0 && (
-                    <details className="mt-2">
-                      <summary className="min-h-10 cursor-pointer py-2 text-sm font-semibold text-slate-600">Ограничения исследования</summary>
-                      <ul className="space-y-1 text-sm text-slate-600">
-                        {(selectedWorkstream.research?.limitations || []).map((item) => <li key={item}>{item}</li>)}
-                      </ul>
-                    </details>
-                  )}
-
-                  {selectedWorkstream.workstream_type === 'client_partnership' ? (
-                    <div className="mt-4 rounded-md bg-white p-4 shadow-sm shadow-slate-900/5">
-                      <label
-                        htmlFor="manual-outreach-reason"
-                        className="text-sm font-semibold text-slate-950"
-                      >
-                        Конкретная причина обращения
-                      </label>
-                      <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
-                        Опишите реальную связь или идею сотрудничества. LocalOS сохранит её как подтверждённое человеком основание, а не как публичный факт.
-                      </p>
-                      <div className="mt-3 rounded-lg bg-sky-50 p-3 text-pretty text-xs leading-5 text-sky-950 ring-1 ring-inset ring-sky-100">
-                        <div className="font-semibold">Как сформулировать: факт → польза → предложение</div>
-                        <ol className="mt-2 space-y-1 text-sky-900">
-                          <li><span className="font-semibold">1. Факт:</span> какая подтверждённая связь есть между компаниями.</li>
-                          <li><span className="font-semibold">2. Польза:</span> что конкретно получит общая аудитория.</li>
-                          <li><span className="font-semibold">3. Предложение:</span> какой один формат вы хотите обсудить.</li>
-                        </ol>
-                        <p className="mt-2 border-t border-sky-100 pt-2">
-                          <span className="font-semibold">Пример:</span> Клиника "Даная" и "Весёлая расчёска" находятся в одном ТРК. Семьи с детьми могут совместить визит в клинику и детскую стрижку за одну поездку и сэкономить время. Предлагаем обсудить совместное предложение для клиентов двух компаний.
-                        </p>
-                      </div>
-                      <textarea
-                        id="manual-outreach-reason"
-                        value={manualOutreachReason}
-                        onChange={(event) => setManualOutreachReason(event.target.value)}
-                        placeholder="Опишите подтверждённый факт, пользу для общей аудитории и одно конкретное предложение."
-                        rows={3}
-                        maxLength={1000}
-                        className="mt-3 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-900 outline-none transition-colors focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
-                      />
-                      <div className="mt-3 flex flex-wrap items-center gap-3">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => void saveManualOutreachReason()}
-                          disabled={
-                            busyAction === 'outreach-reason'
-                            || manualOutreachReason.trim().length < 20
-                            || manualOutreachReason.trim() === savedOperatorReason
-                          }
-                          className="min-h-10 bg-white transition-transform active:scale-[0.96]"
-                        >
-                          {busyAction === 'outreach-reason'
-                            ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                            : <Check className="mr-2 h-4 w-4" />}
-                          Сохранить причину обращения
-                        </Button>
-                        <PreparationStepStatus step={reasonPreparationStep} />
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="mt-4 rounded-md bg-white p-4 shadow-sm shadow-slate-900/5">
-                    <div className="text-sm font-semibold text-slate-950">Подготовить данные</div>
-                    <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
-                      Рекомендуемый порядок: обновить карточку, создать аудит, затем проверить совместимость компаний.
-                    </p>
-                    <div className={`mt-3 grid gap-3 ${selectedWorkstream.workstream_type === 'client_partnership' ? 'sm:grid-cols-3' : ''}`}>
-                      <div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => void refreshLeadCardData()}
-                          disabled={Boolean(busyAction)}
-                          className="min-h-11 w-full justify-start bg-white transition-transform active:scale-[0.96]"
-                        >
-                          {busyAction === 'parse-lead-card'
-                            ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                            : <Search className="mr-2 h-4 w-4" />}
-                          Обновить данные карточки
-                        </Button>
-                        <PreparationStepStatus step={preparationSteps.card_refresh} />
-                      </div>
-                      {selectedWorkstream.workstream_type === 'client_partnership' ? (
-                        <>
-                          <div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => void createLeadAudit()}
-                              disabled={Boolean(busyAction) || !selectedWorkstream.client_business_id}
-                              className="min-h-11 w-full justify-start bg-white transition-transform active:scale-[0.96]"
-                            >
-                              {busyAction === 'audit-lead'
-                                ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                                : <ShieldCheck className="mr-2 h-4 w-4" />}
-                              Создать аудит
-                            </Button>
-                            <PreparationStepStatus step={preparationSteps.audit} />
-                          </div>
-                          <div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => void checkLeadCompatibility()}
-                              disabled={Boolean(busyAction) || !selectedWorkstream.client_business_id}
-                              className="min-h-11 w-full justify-start bg-white transition-transform active:scale-[0.96]"
-                            >
-                              {busyAction === 'match-lead'
-                                ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                                : <Users className="mr-2 h-4 w-4" />}
-                              Проверить совместимость
-                            </Button>
-                            <PreparationStepStatus step={preparationSteps.compatibility} />
-                          </div>
-                        </>
-                      ) : null}
-                    </div>
-                    {dataPreparationMessage ? (
-                      <p
-                        className="mt-3 rounded-md bg-sky-50 px-3 py-2 text-pretty text-sm leading-6 text-sky-900"
-                        aria-live="polite"
-                      >
-                        {dataPreparationMessage}
-                      </p>
-                    ) : null}
-                  </div>
-                </section>
-                </LeadDrawerSection>
-              )}
 
               <LeadDrawerSection
                 key={`sequence-${selectedWorkstream.id || 'legacy'}`}
