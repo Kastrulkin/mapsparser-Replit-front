@@ -273,6 +273,29 @@ def test_decision_becomes_stale_after_terminal_enrichment_update() -> None:
     ) is None
 
 
+def test_decision_becomes_stale_after_public_audit_update() -> None:
+    decision_time = datetime(2026, 8, 3, 10, 0, tzinfo=timezone.utc)
+    query, _ = outreach_batch_preparation_service._candidate_query(
+        "localos_sales",
+        [],
+        [],
+        None,
+        None,
+    )
+
+    assert "public_audit_updated_at" in query
+    assert outreach_batch_preparation_service._decision_is_current(
+        _candidate(
+            outreach_decision_json={
+                "version": outreach_batch_preparation_service.DECISION_VERSION,
+                "action": "needs_evidence",
+                "calculated_at": decision_time.isoformat(),
+            },
+            enrichment_status="needs_evidence",
+            enrichment_updated_at=decision_time.replace(minute=0),
+            public_audit_updated_at=decision_time.replace(minute=1),
+        )
+    ) is False
 def test_prepare_is_dry_run_by_default_and_never_calls_generation(monkeypatch) -> None:
     connection = BatchConnection()
     monkeypatch.setattr(

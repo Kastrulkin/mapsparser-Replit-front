@@ -323,6 +323,25 @@ def _generate_lead_audit_enrichment(
         summary_text = str(parsed.get("summary_text") or "").strip()
         recommended_actions = _normalize_recommended_actions(parsed.get("recommended_actions"))
         why_now = str(parsed.get("why_now") or "").strip()
+        if not recommended_actions:
+            recommended_actions = fallback_actions
+        editorial_payload = apply_audit_editorial_pass(
+            {
+                "audit_profile": preview.get("audit_profile"),
+                "summary_text": summary_text,
+                "recommended_actions": recommended_actions,
+                "why_now": why_now,
+                "current_state": preview.get("current_state") if isinstance(preview.get("current_state"), dict) else {},
+                "industry_patterns": preview.get("industry_patterns") if isinstance(preview.get("industry_patterns"), dict) else {},
+            }
+        )
+        summary_text = str(editorial_payload.get("summary_text") or "").strip()
+        recommended_actions = (
+            editorial_payload.get("recommended_actions")
+            if isinstance(editorial_payload.get("recommended_actions"), list)
+            else recommended_actions
+        )
+        why_now = str(editorial_payload.get("why_now") or "").strip()
         if _needs_dense_audit_retry(summary_text, why_now, language):
             retry_prompt = (
                 prompt
@@ -339,20 +358,20 @@ def _generate_lead_audit_enrichment(
             summary_text = str(parsed.get("summary_text") or "").strip()
             recommended_actions = _normalize_recommended_actions(parsed.get("recommended_actions"))
             why_now = str(parsed.get("why_now") or "").strip()
+            if not recommended_actions:
+                recommended_actions = fallback_actions
+            editorial_payload = apply_audit_editorial_pass(
+                {
+                    "audit_profile": preview.get("audit_profile"),
+                    "summary_text": summary_text,
+                    "recommended_actions": recommended_actions,
+                    "why_now": why_now,
+                    "current_state": preview.get("current_state") if isinstance(preview.get("current_state"), dict) else {},
+                    "industry_patterns": preview.get("industry_patterns") if isinstance(preview.get("industry_patterns"), dict) else {},
+                }
+            )
         if not summary_text:
             raise ValueError("AI audit enrichment returned empty summary_text")
-        if not recommended_actions:
-            recommended_actions = fallback_actions
-        editorial_payload = apply_audit_editorial_pass(
-            {
-                "audit_profile": preview.get("audit_profile"),
-                "summary_text": summary_text,
-                "recommended_actions": recommended_actions,
-                "why_now": why_now,
-                "current_state": preview.get("current_state") if isinstance(preview.get("current_state"), dict) else {},
-                "industry_patterns": preview.get("industry_patterns") if isinstance(preview.get("industry_patterns"), dict) else {},
-            }
-        )
         return {
             "summary_text": str(editorial_payload.get("summary_text") or "").strip(),
             "recommended_actions": editorial_payload.get("recommended_actions") if isinstance(editorial_payload.get("recommended_actions"), list) else recommended_actions,

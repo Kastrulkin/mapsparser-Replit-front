@@ -97,23 +97,31 @@ def _decision_is_current(row: dict[str, Any]) -> bool:
         return False
     enrichment_status = _text(row.get("enrichment_status")).lower()
     enrichment_updated_at = row.get("enrichment_updated_at")
+    public_audit_updated_at = row.get("public_audit_updated_at")
     calculated_at = decision.get("calculated_at")
+    relevant_updates: list[datetime] = []
     if (
         enrichment_status not in ACTIVE_ENRICHMENT_STATES
         and isinstance(enrichment_updated_at, datetime)
-        and calculated_at
     ):
+        relevant_updates.append(enrichment_updated_at)
+    if isinstance(public_audit_updated_at, datetime):
+        relevant_updates.append(public_audit_updated_at)
+    if relevant_updates and calculated_at:
         try:
-            calculated = datetime.fromisoformat(str(calculated_at).replace("Z", "+00:00"))
+            if not isinstance(calculated_at, str):
+                return False
+            calculated = datetime.fromisoformat(calculated_at.replace("Z", "+00:00"))
             if calculated.tzinfo is None:
                 calculated = calculated.replace(tzinfo=timezone.utc)
-            enriched = (
-                enrichment_updated_at
-                if enrichment_updated_at.tzinfo
-                else enrichment_updated_at.replace(tzinfo=timezone.utc)
-            )
-            if enriched.astimezone(timezone.utc) > calculated.astimezone(timezone.utc):
-                return False
+            for updated_at in relevant_updates:
+                current = (
+                    updated_at
+                    if updated_at.tzinfo
+                    else updated_at.replace(tzinfo=timezone.utc)
+                )
+                if current.astimezone(timezone.utc) > calculated.astimezone(timezone.utc):
+                    return False
         except (TypeError, ValueError):
             return False
     return True
@@ -245,6 +253,7 @@ def _candidate_query(
                lead.last_contact_at AS lead_last_contact_at,
                latest_job.status AS enrichment_status,
                latest_job.updated_at AS enrichment_updated_at,
+               latest_public_audit.updated_at AS public_audit_updated_at,
                COALESCE(contact_counts.contact_count, 0) AS contact_count,
                COALESCE(research_counts.evidence_count, 0) AS evidence_count,
                research_counts.message_readiness_json,
@@ -282,6 +291,14 @@ def _candidate_query(
             ORDER BY job.created_at DESC
             LIMIT 1
         ) latest_job ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT offer.updated_at
+            FROM adminprospectingleadpublicoffers offer
+            WHERE offer.lead_id = ws.lead_id
+              AND offer.is_active = TRUE
+            ORDER BY offer.updated_at DESC
+            LIMIT 1
+        ) latest_public_audit ON TRUE
         LEFT JOIN LATERAL (
             SELECT COUNT(*) AS contact_count
             FROM lead_contact_points contact

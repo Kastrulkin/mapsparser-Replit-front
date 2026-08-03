@@ -819,6 +819,59 @@ def test_generate_lead_audit_enrichment_uses_ai_payload(monkeypatch) -> None:
     assert enrichment["meta"]["source"] == "deepseek"
 
 
+def test_generate_lead_audit_enrichment_edits_valid_dense_response_without_retry(
+    monkeypatch,
+) -> None:
+    calls: list[str] = []
+    dense_summary = " ".join(
+        [
+            "В описании карточки не указаны основные услуги и условия записи."
+            for _ in range(9)
+        ]
+    )
+
+    monkeypatch.setattr(
+        admin_prospecting,
+        "_get_prompt_from_db",
+        lambda prompt_type, fallback="": "Factual JSON: {factual_json}",
+    )
+
+    def analyze(prompt, task_type=None):
+        calls.append(prompt)
+        if len(calls) > 1:
+            raise RuntimeError("second provider call must not be needed")
+        return (
+            '{"summary_text":"'
+            + dense_summary
+            + '","recommended_actions":[{"title":"Добавить описание",'
+            '"description":"Указать основные услуги и условия записи."}],'
+            '"why_now":"Карточка давно не обновлялась."}'
+        )
+
+    monkeypatch.setattr(admin_prospecting, "analyze_text_with_gigachat", analyze)
+
+    enrichment = _generate_lead_audit_enrichment(
+        {"name": "Апельсин", "category": "Салон красоты", "city": "Санкт-Петербург"},
+        {
+            "summary_text": "В описании не указаны основные услуги.",
+            "recommended_actions": [
+                {"title": "Добавить описание", "description": "Указать услуги."}
+            ],
+            "current_state": {
+                "rating": 4.5,
+                "reviews_count": 14,
+                "services_count": 3,
+                "has_recent_activity": False,
+            },
+        },
+        "ru",
+    )
+
+    assert len(calls) == 1
+    assert enrichment["meta"]["source"] == "deepseek"
+    assert len(enrichment["summary_text"]) <= 300
+
+
 def test_resolve_telegram_app_recipient_prefers_username() -> None:
     recipient = _resolve_telegram_app_recipient(
         {
