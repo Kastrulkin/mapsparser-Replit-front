@@ -1,3 +1,4 @@
+import inspect
 import sys
 
 from flask import Flask
@@ -97,3 +98,59 @@ def test_public_sales_room_participant_registration_requires_personal_data_conse
 
     assert response.status_code == 400
     assert "согласие" in response.get_json()["error"].lower()
+
+
+def test_public_room_read_and_message_write_do_not_run_schema_ddl():
+    if "src" not in sys.path:
+        sys.path.insert(0, "src")
+
+    from src.api import sales_rooms_api
+
+    request_handlers = (
+        sales_rooms_api.public_sales_room,
+        sales_rooms_api.public_sales_room_message,
+    )
+
+    for handler in request_handlers:
+        source = inspect.getsource(handler)
+        assert "_ensure_sales_room_tables(" not in source, (
+            f"{handler.__name__} must not run schema DDL inside a public request; "
+            "sales-room schema is owned by Alembic migrations"
+        )
+
+
+def test_sales_room_schema_guard_is_read_only():
+    if "src" not in sys.path:
+        sys.path.insert(0, "src")
+
+    from src.api.prospecting.access_schema import _ensure_sales_room_tables
+
+    class RecordingCursor:
+        def __init__(self):
+            self.queries = []
+
+        def execute(self, query):
+            self.queries.append(str(query))
+
+        def fetchone(self):
+            return (
+                "sales_rooms",
+                "sales_room_events",
+                "sales_room_messages",
+                "sales_room_participants",
+            )
+
+    class RecordingConnection:
+        def __init__(self):
+            self.cursor_instance = RecordingCursor()
+
+        def cursor(self):
+            return self.cursor_instance
+
+    connection = RecordingConnection()
+    _ensure_sales_room_tables(connection)
+
+    statements = "\n".join(connection.cursor_instance.queries).upper()
+    assert "CREATE TABLE" not in statements
+    assert "CREATE INDEX" not in statements
+    assert "ALTER TABLE" not in statements

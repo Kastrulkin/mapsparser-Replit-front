@@ -713,6 +713,26 @@ def _ensure_partnership_partner_cards_table(conn) -> None:
     conn.commit()
 
 def _ensure_sales_room_tables(conn) -> None:
+    """Validate migrated sales-room schema without changing it at request time.
+
+    Alembic owns this schema. Runtime CREATE/ALTER statements can take table-level
+    locks and deadlock with concurrent room reads, events, and message writes.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT
+            to_regclass('public.sales_rooms'),
+            to_regclass('public.sales_room_events'),
+            to_regclass('public.sales_room_messages'),
+            to_regclass('public.sales_room_participants')
+        """
+    )
+    required_tables = cur.fetchone()
+    if not required_tables or any(table is None for table in required_tables):
+        raise RuntimeError("Sales-room schema is not migrated")
+    return
+
     _ensure_partnership_partner_cards_table(conn)
     cur = conn.cursor()
     cur.execute(
