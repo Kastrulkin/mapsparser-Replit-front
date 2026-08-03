@@ -1264,7 +1264,14 @@ def test_outreach_ui_shows_compact_calendar_and_edits_messages_outside_it():
     history_start = admin_ui.index('История сообщений')
     history_end = admin_ui.index('Контакты и получатель', history_start)
     history_block = admin_ui[history_start:history_end]
+    assert admin_ui.count("<OutreachTouchMessageEditor") == 1
     assert "OutreachTouchMessageEditor" in history_block
+    assert "conversationDisplayTouches.map" in history_block
+    assert "Новый черновик · ещё не сохранён" in history_block
+    schedule_start = admin_ui.index('title="Цепочка, расписание и запуск"')
+    schedule_block = admin_ui[schedule_start:]
+    assert "<OutreachTouchMessageEditor" not in schedule_block
+    assert "Откройте раздел «Сообщения и каналы»" in schedule_block
     assert "В цепочке есть несохранённые ручные правки" in history_block
     assert "Проверить сохранённые сообщения" in history_block
     assert "Результат проверки" in history_block
@@ -1282,6 +1289,8 @@ def test_outreach_ui_shows_compact_calendar_and_edits_messages_outside_it():
     assert 'start_at: scheduleStart' in partner_ui
     assert 'start_at: scheduleStart' in admin_ui
     assert 'start_at=_parse_campaign_start_at(payload.get("start_at"))' in api_source
+    assert 'localos:outreach-touch-edits:${workstreamId}:new' in admin_ui
+    assert "Изменение применено к новой цепочке" in admin_ui
 
 
 def test_frontend_chunking_does_not_split_radix_from_its_vendor_dependents():

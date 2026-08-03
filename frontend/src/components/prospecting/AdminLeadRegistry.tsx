@@ -750,6 +750,7 @@ interface LeadDrawerSectionProps {
   description: string;
   status?: string;
   defaultOpen?: boolean;
+  openWhen?: boolean;
   children: React.ReactNode;
 }
 
@@ -759,9 +760,14 @@ const LeadDrawerSection = ({
   description,
   status,
   defaultOpen = false,
+  openWhen = false,
   children,
 }: LeadDrawerSectionProps) => {
   const [open, setOpen] = useState(defaultOpen);
+
+  useEffect(() => {
+    if (openWhen) setOpen(true);
+  }, [openWhen]);
 
   return (
     <section
@@ -1070,7 +1076,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     const workstreamId = String(selectedWorkstream?.id || '');
     const campaignId = String(savedOutreachCampaign?.id || '');
     const campaignVersion = Number(savedOutreachCampaign?.version || 0);
-    if (!workstreamId || !campaignId || !campaignVersion) return '';
+    if (!workstreamId) return '';
+    if (!campaignId || !campaignVersion) return `localos:outreach-touch-edits:${workstreamId}:new`;
     return `localos:outreach-touch-edits:${workstreamId}:${campaignId}:${campaignVersion}`;
   }, [savedOutreachCampaign?.id, savedOutreachCampaign?.version, selectedWorkstream?.id]);
   const outreachCalendarTouches = (outreachPreview?.touches || []).length > 0
@@ -1081,6 +1088,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
         ? savedCampaignDisplayTouches
         : buildProjectedOutreachTouches(sequenceChannels, sequenceDays, sequenceStartAt);
   const savedConversationTouches = [...(savedOutreachCampaign?.touches || [])]
+    .sort((left, right) => Number(left.sequence_index || 0) - Number(right.sequence_index || 0));
+  const conversationDisplayTouches = [...displayedOutreachTouches]
     .sort((left, right) => Number(left.sequence_index || 0) - Number(right.sequence_index || 0));
   const humanReplyEvents = (savedOutreachCampaign?.inbound_events || [])
     .filter((event) => Boolean(event.is_human))
@@ -1094,20 +1103,23 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     if (delivery.touch_id) deliveryByTouchId.set(delivery.touch_id, delivery);
   });
   const conversationChannelCodes = Array.from(new Set([
-    ...savedConversationTouches.map((touch) => String(touch.channel || '')).filter(Boolean),
+    ...conversationDisplayTouches.map((touch) => String(touch.channel || '')).filter(Boolean),
     ...drawerContacts.map((contact) => String(contact.type || '')).filter(Boolean),
     String(selectedWorkstream?.selected_channel || ''),
   ])).filter(Boolean);
   const conversationChannels = conversationChannelCodes.map((channel) => {
     const recipientContactType = recipientContactTypeForChannel(channel);
     const contacts = drawerContacts.filter((contact) => String(contact.type || '') === recipientContactType);
-    const touches = savedConversationTouches.filter((touch) => String(touch.channel || '') === channel);
+    const touches = conversationDisplayTouches.filter((touch) => String(touch.channel || '') === channel);
     const latestTouch = touches[touches.length - 1];
-    const latestDelivery = latestTouch?.id ? deliveryByTouchId.get(latestTouch.id) : undefined;
+    const latestPersistedTouch = savedConversationTouches.find(
+      (touch) => Number(touch.sequence_index || 0) === Number(latestTouch?.sequence_index || 0),
+    );
+    const latestDelivery = latestPersistedTouch?.id ? deliveryByTouchId.get(latestPersistedTouch.id) : undefined;
     const replyReceived = humanReplyEvents.some((event) => String(event.channel || '') === channel);
     const status = replyReceived
       ? 'reply'
-      : String(latestDelivery?.delivery_status || latestTouch?.status || (contacts.length ? 'contact_ready' : 'recipient_missing'));
+      : String(latestDelivery?.delivery_status || latestPersistedTouch?.status || (latestTouch ? 'draft' : contacts.length ? 'contact_ready' : 'recipient_missing'));
     const preferredContact = contacts.find((contact) => contact.id === drawerRecipient?.id) || contacts[0];
     return {
       channel,
@@ -1990,7 +2002,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     );
     const touchId = String(campaignTouch?.id || '');
     if (!campaignId || !touchId) {
-      setNotice('Сначала сохраните цепочку как черновик — после этого отдельные сообщения можно менять без новой версии.');
+      setTouchEdits((current) => ({ ...current, [touchIndex]: draft }));
+      setEditingTouchIndex(null);
+      setTouchEditsValidated(false);
+      setNotice('Изменение применено к новой цепочке. Нажмите «Сохранить цепочку», чтобы записать тексты, каналы и расписание.');
       return;
     }
     const busyKey = `accept-touch-${touchIndex}`;
@@ -2109,7 +2124,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           ? `Цепочка подготовлена: ${preparedTouchCount} касания. Проверьте сообщения и сохраните цепочку.`
           : 'Цепочка пока не создана. LocalOS показал ниже причину и следующий шаг.');
         window.requestAnimationFrame(() => {
-          document.getElementById('outreach-preview-result')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          document.getElementById(preparedTouchCount > 0 ? 'lead-conversation' : 'outreach-preview-result')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       }
       if (payload?.campaign) {
@@ -2691,11 +2707,16 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                 key={`conversation-${selectedWorkstream.id || 'legacy'}`}
                 id="lead-conversation"
                 title="Сообщения и каналы"
-                description={savedOutreachCampaign
-                  ? `${savedConversationTouches.length} касания · ${humanReplyEvents.length ? `${humanReplyEvents.length} ответов` : 'ответов пока нет'}`
+                description={conversationDisplayTouches.length > 0
+                  ? `${conversationDisplayTouches.length} касания · ${humanReplyEvents.length ? `${humanReplyEvents.length} ответов` : 'ответов пока нет'}`
                   : 'Здесь появятся сохранённые сообщения, отправки и ответы'}
-                status={savedOutreachCampaign ? `Версия ${Number(savedOutreachCampaign.version || 0)}` : 'Не сохранено'}
-                defaultOpen={Boolean(humanReplyEvents.length || savedCampaignHasPendingReview)}
+                status={savedOutreachCampaign
+                  ? `Версия ${Number(savedOutreachCampaign.version || 0)}`
+                  : conversationDisplayTouches.length > 0
+                    ? 'Новый черновик'
+                    : 'Не подготовлено'}
+                defaultOpen={Boolean(conversationDisplayTouches.length || humanReplyEvents.length || savedCampaignHasPendingReview)}
+                openWhen={Boolean((outreachPreview?.touches || []).length)}
               >
               <section
                 className="grid gap-4 lg:grid-cols-[minmax(280px,0.72fr)_minmax(0,1.55fr)]"
@@ -2752,22 +2773,28 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       <Badge variant="outline" className={outreachStatusTone(savedOutreachCampaign.status)}>
                         Версия {savedOutreachCampaign.version || 1} · {outreachTouchStatusLabels[String(savedOutreachCampaign.status || '')] || savedOutreachCampaign.status || 'Черновик'}
                       </Badge>
+                    ) : conversationDisplayTouches.length > 0 ? (
+                      <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-800">
+                        Новый черновик · ещё не сохранён
+                      </Badge>
                     ) : null}
                   </div>
 
-                  {savedConversationTouches.length > 0 ? (
+                  {conversationDisplayTouches.length > 0 ? (
                     <div className="mt-4 space-y-3">
-                      {savedConversationTouches.map((touch) => {
-                        const delivery = touch.id ? deliveryByTouchId.get(touch.id) : undefined;
-                        const replyEvents = humanReplyEvents.filter((event) => event.touch_id === touch.id);
-                        const status = String(delivery?.delivery_status || touch.status || 'draft');
+                      {conversationDisplayTouches.map((touch) => {
                         const touchIndex = Number(touch.sequence_index || 0);
-                        const editableTouch = savedCampaignDisplayTouches.find((item) => item.sequence_index === touchIndex);
+                        const persistedTouch = savedConversationTouches.find(
+                          (item) => Number(item.sequence_index || 0) === touchIndex,
+                        );
+                        const delivery = persistedTouch?.id ? deliveryByTouchId.get(persistedTouch.id) : undefined;
+                        const replyEvents = humanReplyEvents.filter((event) => event.touch_id === persistedTouch?.id);
+                        const status = String(delivery?.delivery_status || persistedTouch?.status || 'draft');
                         const touchDraft = touchEdits[touchIndex];
                         const sentMoment = formatOutreachMoment(delivery?.sent_at);
-                        const scheduledMoment = formatOutreachMoment(delivery?.scheduled_at || touch.scheduled_at);
+                        const scheduledMoment = formatOutreachMoment(delivery?.scheduled_at || persistedTouch?.scheduled_at || touch.scheduled_at);
                         return (
-                          <article key={touch.id || `${touch.sequence_index}-${touch.channel}`} className="overflow-hidden rounded-xl bg-white shadow-sm shadow-slate-900/5">
+                          <article key={persistedTouch?.id || touch.id || `${touch.sequence_index}-${touch.channel}`} className="overflow-hidden rounded-xl bg-white shadow-sm shadow-slate-900/5">
                             <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
                               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
                                 <MessageCircle className="h-4 w-4" />
@@ -2778,34 +2805,74 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                               </Badge>
                             </div>
                             <div className="px-4 pb-4">
-                              {editableTouch ? (
-                                <OutreachTouchMessageEditor
-                                  touch={editableTouch}
-                                  draft={touchDraft}
-                                  editing={editingTouchIndex === touchIndex}
-                                  disabled={Boolean(busyAction)}
-                                  saving={busyAction === `accept-touch-${touchIndex}`}
-                                  persisted={Boolean(touch.message_brief_json?.human_edited)}
-                                  onStart={() => startTouchEdit(editableTouch)}
-                                  onChange={(nextDraft) => {
-                                    setTouchEdits((current) => {
-                                      const next = { ...current, [touchIndex]: nextDraft };
-                                      if (outreachTouchEditsStorageKey) {
-                                        localStorage.setItem(outreachTouchEditsStorageKey, JSON.stringify(next));
-                                      }
-                                      return next;
-                                    });
-                                    setTouchEditsValidated(false);
-                                  }}
-                                  onAccept={(draft) => void acceptTouchEdit(touchIndex, draft)}
-                                  onCancel={() => resetTouchEdit(touchIndex)}
-                                  onReset={() => resetTouchEdit(touchIndex)}
-                                />
-                              ) : (
-                                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-800">
-                                  {String(touch.approved_text || touch.generated_text || 'Текст сообщения ещё не подготовлен.')}
-                                </p>
-                              )}
+                              <OutreachTouchMessageEditor
+                                touch={touch}
+                                draft={touchDraft}
+                                editing={editingTouchIndex === touchIndex}
+                                disabled={Boolean(busyAction)}
+                                saving={busyAction === `accept-touch-${touchIndex}`}
+                                persisted={Boolean(persistedTouch?.message_brief_json?.human_edited || touch.human_edited)}
+                                onStart={() => startTouchEdit(touch)}
+                                onChange={(nextDraft) => {
+                                  setTouchEdits((current) => {
+                                    const next = { ...current, [touchIndex]: nextDraft };
+                                    if (outreachTouchEditsStorageKey) {
+                                      localStorage.setItem(outreachTouchEditsStorageKey, JSON.stringify(next));
+                                    }
+                                    return next;
+                                  });
+                                  setTouchEditsValidated(false);
+                                }}
+                                onAccept={(draft) => void acceptTouchEdit(touchIndex, draft)}
+                                onCancel={() => resetTouchEdit(touchIndex)}
+                                onReset={() => resetTouchEdit(touchIndex)}
+                              />
+                              {touch.observation || touch.problem_hypothesis || touch.relevance_bridge ? (
+                                <details className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 ring-1 ring-inset ring-sky-100">
+                                  <summary className="min-h-10 cursor-pointer select-none py-2 text-sm font-semibold">
+                                    Основание сообщения
+                                  </summary>
+                                  <div className="space-y-1 pb-2 text-pretty leading-6">
+                                    {touch.observation ? <p><span className="font-semibold">{touch.evidence_kind === 'operator_approved_partnership_reason' ? 'Подтверждённая идея:' : 'Факт:'}</span> {touch.observation}</p> : null}
+                                    {touch.problem_hypothesis ? <p><span className="font-semibold">Гипотеза:</span> {touch.problem_hypothesis}</p> : null}
+                                    {touch.relevance_bridge ? <p><span className="font-semibold">{touch.evidence_kind === 'operator_approved_partnership_reason' ? 'Почему предложение подходит:' : 'Почему это связано:'}</span> {touch.relevance_bridge}</p> : null}
+                                    {touch.source_url ? <a href={touch.source_url} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-1 font-semibold text-sky-700">Открыть источник <ExternalLink className="h-3.5 w-3.5" /></a> : null}
+                                  </div>
+                                </details>
+                              ) : null}
+                              {touch.quality_gate ? (
+                                <details open={!touch.quality_gate.passed} className="mt-3 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-200">
+                                  <summary className="min-h-10 cursor-pointer select-none py-2 text-sm font-semibold text-slate-800">
+                                    Почему такая оценка ·{' '}
+                                    <span className="tabular-nums">
+                                      {Number(touch.quality_gate.total_score ?? touch.quality_gate.score ?? 0)}/{Number(touch.quality_gate.max_score || 18)}
+                                    </span>
+                                    {' '}· {outreachQualityVerdictLabels[String(touch.quality_gate.verdict || '')] || 'Нужна проверка'}
+                                  </summary>
+                                  <div className="grid gap-x-4 gap-y-2 pb-3 sm:grid-cols-2">
+                                    {Object.entries(touch.quality_gate.criterion_scores || {}).map(([criterion, score]) => (
+                                      <div key={criterion} className="flex items-center justify-between gap-3 text-xs text-slate-600">
+                                        <span>{outreachQualityCriterionLabels[criterion] || criterion}</span>
+                                        <span className={`shrink-0 tabular-nums font-semibold ${Number(score) === 2 ? 'text-emerald-700' : Number(score) === 1 ? 'text-amber-700' : 'text-rose-700'}`}>
+                                          {Number(score)}/2
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {(touch.quality_gate.reason_codes || []).length > 0 ? (
+                                    <div className="border-t border-slate-200 py-3">
+                                      <div className="text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">Что исправить</div>
+                                      <ul className="mt-2 space-y-1 text-sm leading-5 text-slate-700">
+                                        {(touch.quality_gate.reason_codes || []).map((reasonCode) => (
+                                          <li key={reasonCode}>• {outreachQualityReasonLabels[reasonCode] || reasonCode}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  ) : (
+                                    <p className="border-t border-slate-200 py-3 text-sm text-emerald-700">Критических замечаний нет.</p>
+                                  )}
+                                </details>
+                              ) : null}
                               {sentMoment || scheduledMoment ? (
                                 <div className="mt-3 text-xs text-slate-500 tabular-nums">
                                   {sentMoment ? `Отправлено ${sentMoment}` : `Запланировано ${scheduledMoment}`}
@@ -3613,93 +3680,12 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                         {outreachQualityVerdictLabels[String(outreachPreview.quality_gate.verdict || '')] || 'Нужна проверка'}.
                         {outreachPreview.quality_gate.passed
                           ? ' Все сообщения опираются на источники и готовы к вашему решению.'
-                          : ' Откройте проверку нужного касания ниже — LocalOS покажет, что исправить.'}
+                          : ' Откройте раздел «Сообщения и каналы» — LocalOS покажет замечания рядом с нужным текстом.'}
                       </p>
                     </div>
                   </div>
                 ) : null}
 
-                {displayedOutreachTouches.length > 0 ? (
-                  <div className="mt-3 space-y-2">
-                    {!outreachPreview?.touches?.length && savedOutreachCampaign ? (
-                      <div className="rounded-md bg-sky-50 px-3 py-2 text-sm leading-6 text-sky-900">
-                        Показана сохранённая цепочка версии {savedOutreachCampaign.version}. Для просмотра повторная генерация не нужна.
-                      </div>
-                    ) : null}
-                    {displayedOutreachTouches.map((touch) => {
-                      const operatorApprovedIdea = touch.evidence_kind === 'operator_approved_partnership_reason';
-                      return <article key={`${touch.sequence_index}-${touch.channel}`} className="rounded-md bg-white p-3 ring-1 ring-slate-200">
-                        <div className="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
-                          <span>День {touch.day_offset} · {touch.channel}</span>
-                          <span className={touch.quality_gate?.passed ? 'text-emerald-700' : 'text-amber-700'}>{touch.quality_gate?.passed ? 'Факты проверены' : 'Нужна проверка'}</span>
-                        </div>
-                        {touch.observation || touch.problem_hypothesis || touch.relevance_bridge ? (
-                          <div className="mt-3 space-y-1 border-l-2 border-sky-200 pl-3 text-sm leading-6 text-slate-700">
-                            {touch.observation ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Подтверждённая идея:' : 'Факт:'}</span> {touch.observation}</p> : null}
-                            {touch.problem_hypothesis ? <p><span className="font-semibold text-slate-900">Гипотеза:</span> {touch.problem_hypothesis}</p> : null}
-                            {touch.relevance_bridge ? <p><span className="font-semibold text-slate-900">{operatorApprovedIdea ? 'Почему предложение подходит:' : 'Почему это связано:'}</span> {touch.relevance_bridge}</p> : null}
-                          </div>
-                        ) : null}
-                        <OutreachTouchMessageEditor
-                          touch={touch}
-                          draft={touchEdits[touch.sequence_index]}
-                          editing={editingTouchIndex === touch.sequence_index}
-                          disabled={Boolean(busyAction)}
-                          saving={busyAction === `accept-touch-${touch.sequence_index}`}
-                          persisted={Boolean(touch.human_edited)}
-                          onStart={() => startTouchEdit(touch)}
-                          onChange={(draft) => {
-                            setTouchEdits((current) => {
-                              const next = { ...current, [touch.sequence_index]: draft };
-                              if (outreachTouchEditsStorageKey) {
-                                localStorage.setItem(outreachTouchEditsStorageKey, JSON.stringify(next));
-                              }
-                              return next;
-                            });
-                            setTouchEditsValidated(false);
-                          }}
-                          onAccept={(draft) => void acceptTouchEdit(touch.sequence_index, draft)}
-                          onCancel={() => resetTouchEdit(touch.sequence_index)}
-                          onReset={() => resetTouchEdit(touch.sequence_index)}
-                        />
-                        {touch.source_url ? <a href={touch.source_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-9 items-center gap-1 text-xs font-semibold text-sky-700">Источник <ExternalLink className="h-3.5 w-3.5" /></a> : null}
-                        {touch.quality_gate ? (
-                          <details open={!touch.quality_gate.passed} className="mt-3 rounded-md bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-200">
-                            <summary className="min-h-10 cursor-pointer select-none py-2 text-sm font-semibold text-slate-800">
-                              Почему такая оценка ·{' '}
-                              <span className="tabular-nums">
-                                {Number(touch.quality_gate.total_score ?? touch.quality_gate.score ?? 0)}/{Number(touch.quality_gate.max_score || 18)}
-                              </span>
-                              {' '}· {outreachQualityVerdictLabels[String(touch.quality_gate.verdict || '')] || 'Нужна проверка'}
-                            </summary>
-                            <div className="grid gap-x-4 gap-y-2 pb-3 sm:grid-cols-2">
-                              {Object.entries(touch.quality_gate.criterion_scores || {}).map(([criterion, score]) => (
-                                <div key={criterion} className="flex items-center justify-between gap-3 text-xs text-slate-600">
-                                  <span>{outreachQualityCriterionLabels[criterion] || criterion}</span>
-                                  <span className={`shrink-0 tabular-nums font-semibold ${Number(score) === 2 ? 'text-emerald-700' : Number(score) === 1 ? 'text-amber-700' : 'text-rose-700'}`}>
-                                    {Number(score)}/2
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                            {(touch.quality_gate.reason_codes || []).length > 0 ? (
-                              <div className="border-t border-slate-200 py-3">
-                                <div className="text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">Что исправить</div>
-                                <ul className="mt-2 space-y-1 text-sm leading-5 text-slate-700">
-                                  {(touch.quality_gate.reason_codes || []).map((reasonCode) => (
-                                    <li key={reasonCode}>• {outreachQualityReasonLabels[reasonCode] || reasonCode}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ) : (
-                              <p className="border-t border-slate-200 py-3 text-sm text-emerald-700">Критических замечаний нет.</p>
-                            )}
-                          </details>
-                        ) : null}
-                      </article>;
-                    })}
-                  </div>
-                ) : null}
                 </div>
 
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
