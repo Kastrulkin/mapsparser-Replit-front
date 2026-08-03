@@ -869,6 +869,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
   const [touchEdits, setTouchEdits] = useState<Record<number, OutreachTouchMessageDraft>>({});
   const [editingTouchIndex, setEditingTouchIndex] = useState<number | null>(null);
   const [touchEditsValidated, setTouchEditsValidated] = useState(false);
+  const [savedTouchReviewError, setSavedTouchReviewError] = useState('');
   const [campaignSetupDirty, setCampaignSetupDirty] = useState(false);
   const [senderAccounts, setSenderAccounts] = useState<OutreachSenderAccountSummary[]>([]);
   const [senderAccountsLoading, setSenderAccountsLoading] = useState(false);
@@ -2046,10 +2047,13 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     const campaignId = String(savedOutreachCampaign?.id || '');
     if (!campaignId) return;
     if (hasTouchEdits) {
-      setNotice('Сначала сохраните каждое изменённое сообщение кнопкой «Принять изменения».');
+      const message = 'Сначала сохраните каждое изменённое сообщение кнопкой «Принять изменения».';
+      setSavedTouchReviewError(message);
+      setNotice(message);
       return;
     }
     setBusyAction('review-saved-edits');
+    setSavedTouchReviewError('');
     setNotice('');
     try {
       const payload = await newAuth.makeRequest(
@@ -2059,11 +2063,14 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       setOutreachPreview(payload?.preview || null);
       if (payload?.campaign) setSavedOutreachCampaign(payload.campaign);
       setTouchEditsValidated(Boolean(payload?.review?.all_passed));
+      setSavedTouchReviewError('');
       setNotice(payload?.review?.all_passed
         ? `Все ${Number(payload?.review?.reviewed_touch_count || 0)} сообщения проверены. Версия ${Number(payload?.review?.campaign_version || savedOutreachCampaign?.version || 1)} готова к подтверждению.`
         : 'Проверка завершена. Исправьте сообщения с замечаниями и снова нажмите «Проверить сохранённые сообщения».');
     } catch (requestError) {
-      setNotice(requestError instanceof Error ? requestError.message : 'Не удалось проверить сохранённые сообщения');
+      const message = requestError instanceof Error ? requestError.message : 'Не удалось проверить сохранённые сообщения';
+      setSavedTouchReviewError(message);
+      setNotice(message);
     } finally {
       setBusyAction('');
     }
@@ -2864,6 +2871,11 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                                 ? 'Все сохранённые сообщения прошли проверку. Новая версия цепочки не создавалась.'
                                 : 'Есть сообщения с замечаниями. Откройте их ниже, исправьте и повторите проверку.'}
                           </p>
+                          {savedTouchReviewError ? (
+                            <div role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-800 ring-1 ring-inset ring-red-200">
+                              {savedTouchReviewError}
+                            </div>
+                          ) : null}
                           <Button
                             type="button"
                             variant="outline"

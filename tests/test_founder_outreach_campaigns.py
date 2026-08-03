@@ -1706,6 +1706,86 @@ def test_review_saved_touch_edits_does_not_require_a_new_campaign_version():
     assert "campaignSetupDirty ?" in setup_dirty_block
 
 
+def test_saved_message_review_does_not_depend_on_full_campaign_readiness():
+    api_source = (ROOT / "src/api/outreach_campaign_api.py").read_text()
+    route_start = api_source.index("def review_campaign_touch_edits")
+    route_end = api_source.index("\n\n@outreach_campaign_bp", route_start)
+    route_block = api_source[route_start:route_end]
+
+    assert "build_preview(" not in route_block
+    assert "review_saved_campaign_messages(" in route_block
+
+
+def test_saved_message_review_uses_persisted_evidence_without_sender_setup(monkeypatch):
+    from services import outreach_campaign_service as campaign_service
+
+    monkeypatch.setattr(campaign_service, "_load_context", lambda _cursor, _workstream_id: {
+        "lead_name": "Клиника Даная",
+        "workstream_type": "client_partnership",
+        "sender_mode": "localos_for_partner",
+        "sender_profile": {},
+    })
+    monkeypatch.setattr(campaign_service, "_suppression_status", lambda _cursor, _context: {
+        "suppressed": False,
+    })
+    monkeypatch.setattr(campaign_service, "_is_residential_recipient", lambda _context: False)
+    observation = "Клиника Даная работает с семьями района"
+    bridge = "Можно обсудить совместное предложение для семей"
+    text = (
+        "Здравствуйте! Клиника Даная работает с семьями района. "
+        "Можно обсудить совместное предложение для семей. "
+        "Мы ваши соседи - сеть детских парикмахерских Весёлая расчёска. "
+        "Подскажите, с кем обсудить детали?"
+    )
+    touches = [{
+        "sequence_index": 0,
+        "channel": "email",
+        "angle_type": "signal",
+        "subject": "Клиника Даная | Весёлая расчёска",
+        "generated_text": text,
+        "message_brief_json": {
+            "source_url": "https://example.test/danaya",
+            "observation": observation,
+            "relevance_bridge": bridge,
+            "channel_status": "permission_required",
+        },
+        "strategy_json": {
+            "signal_kind": "service_compatibility",
+            "freshness": "current_snapshot",
+            "trust_statement": "Мы ваши соседи - сеть детских парикмахерских Весёлая расчёска.",
+            "cta": "Обсудить детали",
+        },
+    }]
+
+    reviewed = campaign_service.review_saved_campaign_messages(
+        object(),
+        campaign={
+            "workstream_id": "workstream-1",
+            "sender_mode": "localos_for_partner",
+        },
+        touches=touches,
+        reviewer_role="superadmin",
+    )
+
+    assert len(reviewed) == 1
+    assert reviewed[0]["text"] == text
+    assert reviewed[0]["quality_gate"]["passed"] is True
+
+
+def test_saved_message_review_error_is_rendered_inside_result_panel():
+    admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
+    handler_start = admin_source.index("const reviewSavedTouchEdits")
+    handler_end = admin_source.index("\n\n  const", handler_start)
+    handler_block = admin_source[handler_start:handler_end]
+    panel_start = admin_source.index("Результат проверки")
+    panel_end = admin_source.index("</Button>", panel_start)
+    panel_block = admin_source[panel_start:panel_end]
+
+    assert "setSavedTouchReviewError" in handler_block
+    assert "savedTouchReviewError" in panel_block
+    assert 'role="alert"' in panel_block
+
+
 def test_persisted_server_touch_is_not_restored_as_an_unsaved_device_edit():
     admin_source = (ROOT / "frontend/src/components/prospecting/AdminLeadRegistry.tsx").read_text()
 

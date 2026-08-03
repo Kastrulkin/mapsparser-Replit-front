@@ -25,6 +25,7 @@ from services.outreach_campaign_service import (
     record_campaign_business_outcome,
     record_campaign_event,
     record_manual_touch,
+    review_saved_campaign_messages,
     resolve_sender_mode,
     runtime_touch_channel_status,
     update_draft_campaign_touch,
@@ -1252,58 +1253,15 @@ def review_campaign_touch_edits(campaign_id: str):
         touches = list(campaign.get("touches") or [])
         if not touches:
             return jsonify({"success": False, "error": "Campaign has no messages to review"}), 409
-        scheduled_values = [
-            touch.get("scheduled_at")
-            for touch in touches
-            if isinstance(touch.get("scheduled_at"), datetime)
-        ]
-        start_at = min(scheduled_values) if scheduled_values else datetime.now(timezone.utc)
-        sequence = []
-        overrides = []
-        for touch in touches:
-            scheduled_at = touch.get("scheduled_at")
-            day_offset = (
-                max(0, round((scheduled_at - start_at).total_seconds() / 86_400))
-                if isinstance(scheduled_at, datetime)
-                else int(touch.get("sequence_index") or 0) * 3
-            )
-            brief = touch.get("message_brief_json") if isinstance(touch.get("message_brief_json"), dict) else {}
-            sequence.append({
-                "channel": str(touch.get("channel") or "manual"),
-                "day_offset": day_offset,
-                "angle": str(touch.get("angle_type") or "proof"),
-                "sender_account_id": str(touch.get("sender_account_id") or "") or None,
-            })
-            overrides.append({
-                "sequence_index": int(touch.get("sequence_index") or 0),
-                "subject": str(touch.get("subject") or ""),
-                "text": str(touch.get("generated_text") or ""),
-                "original_subject": str(brief.get("original_generated_subject") or ""),
-                "original_text": str(brief.get("original_generated_text") or ""),
-                "human_edited": bool(brief.get("human_edited")),
-            })
-
-        preview = build_preview(
-            cursor,
-            str(campaign.get("workstream_id") or authorized.get("workstream_id") or ""),
-            sequence=sequence,
-            touch_overrides=overrides,
-            start_at=start_at,
-            sender_mode=str(campaign.get("sender_mode") or "") or None,
-            generate_ai=False,
-            manual_reviewer_role=(
-                "superadmin" if user_data.get("is_superadmin") else "business_user"
-            ),
+        reviewer_role = (
+            "superadmin" if user_data.get("is_superadmin") else "business_user"
         )
-        reviewed_touches = [
-            {
-                "sequence_index": int(touch.get("sequence_index") or 0),
-                "subject": touch.get("subject"),
-                "text": touch.get("text"),
-                "quality_gate": touch.get("quality_gate") or {},
-            }
-            for touch in preview.get("touches") or []
-        ]
+        reviewed_touches = review_saved_campaign_messages(
+            cursor,
+            campaign=campaign,
+            touches=touches,
+            reviewer_role=reviewer_role,
+        )
         review = apply_draft_campaign_review(
             cursor,
             campaign_id=campaign_id,
@@ -1314,7 +1272,10 @@ def review_campaign_touch_edits(campaign_id: str):
         return jsonify({
             "success": True,
             "review": review,
-            "preview": preview,
+            "preview": {
+                "status": "ready" if review.get("all_passed") else "needs_revision",
+                "touches": reviewed_touches,
+            },
             "campaign": _campaign_payload(cursor, campaign_id),
             "campaign_version_unchanged": True,
             "external_dispatch_performed": False,

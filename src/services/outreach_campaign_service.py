@@ -464,6 +464,95 @@ def apply_draft_campaign_review(
     return result
 
 
+def review_saved_campaign_messages(
+    cursor: Any,
+    *,
+    campaign: dict[str, Any],
+    touches: list[dict[str, Any]],
+    reviewer_role: str,
+) -> list[dict[str, Any]]:
+    """Review persisted draft text without recalculating campaign readiness.
+
+    Sender permissions and channel connectivity are launch concerns. A saved
+    message remains reviewable when either changes after the draft was created.
+    The evidence, strategy and provenance stored with each touch are the source
+    of truth for this content-only review.
+    """
+    workstream_id = _text(campaign.get("workstream_id"))
+    if not workstream_id:
+        raise ValueError("Campaign workstream is required for message review")
+    context = _apply_sender_mode(
+        _load_context(cursor, workstream_id),
+        _text(campaign.get("sender_mode")),
+    )
+    suppression = _suppression_status(cursor, context)
+    sender_mode = _text(context.get("sender_mode"))
+    recipient_type = (
+        "residential_complex"
+        if _is_residential_recipient(context)
+        else "business"
+    )
+    profile = context.get("sender_profile") or {}
+    story = None if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER else _founder_story(profile)
+    reviewed_touches: list[dict[str, Any]] = []
+
+    for touch in touches:
+        brief = touch.get("message_brief_json")
+        if not isinstance(brief, dict):
+            brief = {}
+        strategy = touch.get("strategy_json")
+        if not isinstance(strategy, dict):
+            strategy = {}
+        source_url = _text(brief.get("source_url"))
+        evidence_kind = _text(
+            brief.get("evidence_kind") or strategy.get("signal_kind")
+        )
+        trust_statement = _text(strategy.get("trust_statement"))
+        next_step = _text(strategy.get("cta") or strategy.get("offer"))
+        candidate = {
+            "recipient": _text(context.get("lead_name")),
+            "recipient_type": recipient_type,
+            "observed_fact": _text(brief.get("observation")),
+            "bridge": _text(brief.get("relevance_bridge")),
+            "relevance_to_offer": _text(brief.get("relevance_bridge")),
+            "evidence_kind": evidence_kind,
+            "evidence_status": (
+                "approved"
+                if evidence_kind == "operator_approved_partnership_reason"
+                else "observed"
+                if source_url
+                else "missing"
+            ),
+            "source_url": source_url,
+            "freshness": _text(strategy.get("freshness")) or "current_snapshot",
+            "trust_statement": trust_statement,
+            "next_step": next_step or "Обсудить следующий шаг",
+            "sender_mode": sender_mode,
+        }
+        gate = _quality_gate(
+            _text(touch.get("generated_text")),
+            candidate,
+            story,
+            channel=_text(touch.get("channel")) or "manual",
+            channel_status=_text(brief.get("channel_status")),
+            suppressed=bool(suppression.get("suppressed")),
+            angle=_text(touch.get("angle_type")),
+        )
+        gate["manual_review"] = {
+            "passed": bool(gate.get("passed")),
+            "review_version": REVIEW_PROMPT_VERSION,
+            "reviewer_role": reviewer_role or "authorized_user",
+            "source": "saved_draft_review",
+        }
+        reviewed_touches.append({
+            "sequence_index": int(touch.get("sequence_index") or 0),
+            "subject": touch.get("subject"),
+            "text": touch.get("generated_text"),
+            "quality_gate": gate,
+        })
+    return reviewed_touches
+
+
 def _represented_business_opening(context: dict[str, Any]) -> str:
     """Build the external company voice for an authorised LocalOS sender account."""
     business_name = _text(context.get("represented_business_name"))
