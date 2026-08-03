@@ -179,7 +179,10 @@ def test_audit_editorial_pass_removes_unsupported_result_promises() -> None:
                         "Это поможет попасть в поиск по ключевым запросам. "
                         "Это повышает доверие и стимулирует клиентов писать больше отзывов, "
                         "а также помогает продвижению. Сейчас навигация размыта, "
-                        "из-за чего теряются потенциальные записи."
+                        "из-за чего теряются потенциальные записи. Это повысит релевантность. "
+                        "Это увеличит лояльность и конверсию. Это поднимет позиции в выдаче. "
+                        "Регулярные ответы положительно повлияют на рейтинг. "
+                        "Это снизит риск ухода к конкуренту."
                     ),
                 },
             ],
@@ -203,9 +206,41 @@ def test_audit_editorial_pass_removes_unsupported_result_promises() -> None:
     assert "повышает доверие и стимулирует" not in descriptions
     assert "помогает продвижению" not in descriptions
     assert "теряются потенциальные записи" not in descriptions
+    assert "повысит релевантность" not in descriptions
+    assert "увеличит лояльность" not in descriptions
+    assert "поднимет позиции" not in descriptions
+    assert "положительно повлияют на рейтинг" not in descriptions
+    assert "снизит риск ухода" not in descriptions
     assert "указать стоимость трёх услуг" in descriptions
     assert "перечислить основные услуги" in descriptions
     assert "чтобы клиент быстрее нашёл нужную" in descriptions
+
+
+def test_editorial_summary_uses_observations_instead_of_inferred_conversion_loss() -> None:
+    audit = apply_audit_editorial_pass(
+        {
+            "audit_profile": "beauty",
+            "business_name": "Тестовый салон",
+            "lead_id": "lead-summary-safe",
+            "summary_text": "Описание не показывает основные услуги и поводы обратиться.",
+            "recommended_actions": [
+                {
+                    "title": "Переписать описание",
+                    "description": "Выделить маникюр и педикюр и указать способ записи.",
+                }
+            ],
+            "current_state": {"services_count": 12},
+            "search_intents_to_target": ["маникюр", "педикюр"],
+        }
+    )
+
+    summary = str(audit["summary_text"]).lower()
+
+    assert "решение откладывается" not in summary
+    assert "спрос уходит" not in summary
+    assert "теряет обращения" not in summary
+    assert "быстрее дошёл до записи" not in summary
+    assert "основные услуги" in summary or "маникюр" in summary
 
 
 def test_normalize_public_audit_marks_uncertain_photos_without_hard_claim() -> None:
