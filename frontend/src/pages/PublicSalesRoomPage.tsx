@@ -1149,60 +1149,6 @@ export default function PublicSalesRoomPage() {
           ) : null}
         </section>
 
-        <form onSubmit={sendMessage} className="mt-6 rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-950">
-            <MessageSquare className="h-4 w-4 text-orange-500" />
-            Обсудить следующий шаг
-          </div>
-          <Textarea
-            value={messageText}
-            onChange={(event) => setMessageText(event.currentTarget.value)}
-            placeholder="Напишите, что уточнить, изменить или обсудить..."
-            className="mt-4 min-h-28 resize-none"
-          />
-
-          {pendingAttachments.length > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {pendingAttachments.map((attachment) => (
-                <button
-                  key={attachment.id}
-                  type="button"
-                  onClick={() => setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id))}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600"
-                >
-                  <FileText className="h-3.5 w-3.5" />
-                  {attachment.original_name}
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          {composerError ? <div className="mt-3 text-sm font-medium text-red-600">{composerError}</div> : null}
-
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            {fileUploadsVisible ? (
-              <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950">
-                <Paperclip className="h-4 w-4" />
-                {uploading ? 'Загружаем файл...' : 'Приложить файл'}
-                <input
-                  type="file"
-                  className="hidden"
-                  multiple
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp"
-                  onChange={handleUpload}
-                  disabled={uploading || sending}
-                />
-              </label>
-            ) : (
-              <span />
-            )}
-            <Button type="submit" className="gap-2 bg-slate-950 text-white hover:bg-slate-800" disabled={sending || (fileUploadsVisible && uploading)}>
-              {sending ? 'Отправляем...' : 'Отправить'}
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
-        </form>
-
         <section className="mt-6 rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -1247,6 +1193,60 @@ export default function PublicSalesRoomPage() {
               Пока нет сообщений. Начните обсуждение с вопроса или правки к предложению.
             </div>
           )}
+
+          <form onSubmit={sendMessage} className="mt-5 border-t border-slate-100 pt-5">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-950">
+              <MessageSquare className="h-4 w-4 text-orange-500" />
+              Обсудить следующий шаг
+            </div>
+            <Textarea
+              value={messageText}
+              onChange={(event) => setMessageText(event.currentTarget.value)}
+              placeholder="Напишите, что уточнить, изменить или обсудить..."
+              className="mt-4 min-h-28 resize-none"
+            />
+
+            {pendingAttachments.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {pendingAttachments.map((attachment) => (
+                  <button
+                    key={attachment.id}
+                    type="button"
+                    onClick={() => setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    {attachment.original_name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {composerError ? <div className="mt-3 text-sm font-medium text-red-600">{composerError}</div> : null}
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              {fileUploadsVisible ? (
+                <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950">
+                  <Paperclip className="h-4 w-4" />
+                  {uploading ? 'Загружаем файл...' : 'Приложить файл'}
+                  <input
+                    type="file"
+                    className="hidden"
+                    multiple
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp"
+                    onChange={handleUpload}
+                    disabled={uploading || sending}
+                  />
+                </label>
+              ) : (
+                <span />
+              )}
+              <Button type="submit" className="gap-2 bg-slate-950 text-white hover:bg-slate-800 active:scale-[0.96] transition-transform" disabled={sending || (fileUploadsVisible && uploading)}>
+                {sending ? 'Отправляем...' : 'Отправить'}
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </form>
         </section>
 
         <footer className="px-2 py-8 text-sm leading-6 text-slate-500">
