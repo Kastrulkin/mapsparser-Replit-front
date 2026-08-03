@@ -1392,7 +1392,7 @@ def _upsert_social_post(cursor: Any, user_id: str, item: dict[str, Any], platfor
             scheduled_for,
             base_text,
             platform_text,
-            _json_dumps(_initial_metadata(platform, publish_mode)),
+            _json_dumps(_initial_metadata(platform, publish_mode, item)),
             user_id,
         ),
     )
@@ -1444,7 +1444,7 @@ def _preview_social_post_for_platform(
             preview_status = existing_status
             preview_base_text = str(existing_post.get("base_text") or base_text or "").strip()
             preview_platform_text = str(existing_post.get("platform_text") or platform_text or "").strip()
-    metadata = _initial_metadata(platform, publish_mode)
+    metadata = _initial_metadata(platform, publish_mode, item)
     metadata["prepare_preview"] = True
     metadata["read_only"] = True
     return {
@@ -1467,12 +1467,22 @@ def _preview_social_post_for_platform(
         "external_publish_performed": False,
     }
 
-def _initial_metadata(platform: str, publish_mode: str) -> dict[str, Any]:
+def _initial_metadata(platform: str, publish_mode: str, item: dict[str, Any] | None = None) -> dict[str, Any]:
     data = {
         "platform_label": platform_label(platform),
         "approval_required": True,
         "source": "localos_content_plan",
+        "channel_adapter_version": "v2",
     }
+    item_metadata = _json_dict((item or {}).get("metadata_json"))
+    brief = _json_dict(item_metadata.get("content_brief_v1"))
+    generation = _json_dict(item_metadata.get("content_generation_v2"))
+    data["voice_profile_version"] = int(generation.get("voice_profile_version") or 0)
+    data["content_source_ids"] = [
+        str(source.get("id") or "")
+        for source in brief.get("sources") or []
+        if isinstance(source, dict)
+    ]
     if platform in BROWSER_OR_MANUAL_PLATFORMS:
         data["supervised_notice"] = "Канал требует ручного или контролируемого размещения; это не production API."
         data["browser_mode_available"] = publish_mode == "openclaw_browser"

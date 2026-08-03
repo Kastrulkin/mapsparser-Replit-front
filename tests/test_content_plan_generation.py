@@ -653,6 +653,7 @@ def test_content_plan_skeleton_uses_future_katok_events_and_skips_past_event_ser
         period_days=30,
         density="active",
         content_mix={"services": True, "templates": False, "seo": False, "audit": False, "sales": False, "seasonal": False},
+        period_start=date(2026, 7, 10),
     )
 
     event_items = [item for item in plan["items"] if item["source_kind"] == "event_service"]

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import ipaddress
 import urllib.error
@@ -410,13 +411,15 @@ def _platform_text(platform: str, base_text: str) -> str:
     if platform == "telegram":
         return text
     if platform == "vk":
-        return text
+        sentences = re.split(r"(?<=[.!?])\s+", " ".join(text.split()))
+        return f"{sentences[0]}\n\n{' '.join(sentences[1:])}".strip() if len(sentences) > 1 else text
     if platform in {"instagram", "facebook"}:
-        return text
+        sentences = re.split(r"(?<=[.!?])\s+", " ".join(text.split()))
+        return f"{sentences[0]}\n\n{' '.join(sentences[1:])}".strip() if len(sentences) > 1 else text
     if platform == "google_business":
-        return text[:1500]
+        return " ".join(text.split())[:1500]
     if platform in BROWSER_OR_MANUAL_PLATFORMS:
-        return text[:1200]
+        return " ".join(text.split())[:1200]
     return text
 
 def _normalize_platforms(platforms: list[str] | None) -> list[str]:

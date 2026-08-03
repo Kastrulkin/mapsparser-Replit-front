@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import uuid
 import unicodedata
@@ -24,6 +25,7 @@ from core.industry_pattern_recalibration import (
 from core.seo_keywords import collect_ranked_keywords
 from core.content_plan_generator import build_content_plan_skeleton
 from services.llm import analyze_text_with_gigachat
+from services.content_voice_service import load_content_voice_context
 from subscription_manager import get_allowed_content_plan_horizons, get_subscription_access
 
 
@@ -2154,7 +2156,7 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         cursor.execute(
             """
             SELECT i.id, i.plan_id, i.business_id, i.status, i.source_kind, i.content_type, i.theme, i.draft_text,
-                   i.location_scope, p.business_id AS root_business_id
+                   i.metadata_json, i.location_scope, p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
             WHERE i.id = %s
@@ -2175,6 +2177,8 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
 
         updates = []
         params: list[Any] = []
+        selected_variant: dict[str, Any] | None = None
+        metadata_value = data.get("metadata_json") if isinstance(data.get("metadata_json"), dict) else {}
         for field in ("scheduled_for", "theme", "goal", "content_type", "seo_keyword", "draft_text"):
             if field in payload:
                 updates.append(f"{field} = %s")
@@ -2198,6 +2202,54 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
                     ensure_ascii=False,
                 )
             )
+        if "brief_answers" in payload:
+            incoming_answers = payload.get("brief_answers") if isinstance(payload.get("brief_answers"), dict) else {}
+            allowed_answer_keys = {
+                "infopovod",
+                "event",
+                "confirmed_details",
+                "details",
+                "date_status",
+                "source",
+                "audience",
+                "main_idea",
+                "expected_action",
+            }
+            clean_answers = {
+                key: _clean_brief_answer(value, 1000)
+                for key, value in incoming_answers.items()
+                if key in allowed_answer_keys and _clean_brief_answer(value, 1000)
+            }
+            previous_answers = metadata_value.get("brief_answers") if isinstance(metadata_value.get("brief_answers"), dict) else {}
+            updates.append("metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb")
+            params.append(json.dumps({"brief_answers": {**previous_answers, **clean_answers}}, ensure_ascii=False))
+        if "selected_variant_id" in payload:
+            selected_variant_id = str(payload.get("selected_variant_id") or "").strip()
+            generation_bundle = metadata_value.get("content_generation_v2") if isinstance(metadata_value.get("content_generation_v2"), dict) else {}
+            variants = generation_bundle.get("variants") if isinstance(generation_bundle.get("variants"), list) else []
+            selected_variant = next(
+                (
+                    variant
+                    for variant in variants
+                    if isinstance(variant, dict)
+                    and str(variant.get("id") or "") == selected_variant_id
+                    and bool(variant.get("quality_passed"))
+                ),
+                None,
+            )
+            if not selected_variant:
+                raise ValueError("Вариант публикации не найден или не прошёл проверку")
+            updates.extend(["draft_text = %s", "status = %s", "metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb"])
+            params.extend(
+                [
+                    str(selected_variant.get("text") or ""),
+                    "edited",
+                    json.dumps(
+                        {"content_generation_v2": {**generation_bundle, "selected_variant_id": selected_variant_id}},
+                        ensure_ascii=False,
+                    ),
+                ]
+            )
         if not updates:
             return get_content_plan(user_id, str(data.get("plan_id") or ""))
         updates.append("updated_at = CURRENT_TIMESTAMP")
@@ -2217,8 +2269,9 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
             event_type = "skipped"
         elif "scheduled_for" in payload and "draft_text" not in payload and "theme" not in payload:
             event_type = "rescheduled"
-        elif "draft_text" in payload:
-            edit_class = _classify_text_edit(str(data.get("draft_text") or ""), str(payload.get("draft_text") or ""))
+        elif "draft_text" in payload or selected_variant:
+            final_draft_text = str(payload.get("draft_text") or "") if "draft_text" in payload else str((selected_variant or {}).get("text") or "")
+            edit_class = _classify_text_edit(str(data.get("draft_text") or ""), final_draft_text)
             if edit_class in {"minor_edit", "major_rewrite"}:
                 event_type = edit_class
         location_scope = str(data.get("location_scope") or data.get("business_id") or "").strip()
@@ -2234,8 +2287,16 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
             business_id=str(data.get("root_business_id") or data.get("business_id") or ""),
             capability="content_plan.item",
             event_type=event_type,
-            draft_text=str(payload.get("draft_text") or "").strip() if "draft_text" in payload else None,
-            final_text=str(payload.get("theme") or "").strip() if "theme" in payload else None,
+            draft_text=str(data.get("draft_text") or "").strip() if "draft_text" in payload or selected_variant else None,
+            final_text=(
+                str(payload.get("draft_text") or "").strip()
+                if "draft_text" in payload
+                else str((selected_variant or {}).get("text") or "").strip()
+                if selected_variant
+                else str(payload.get("theme") or "").strip()
+                if "theme" in payload
+                else None
+            ),
             metadata={
                 "item_id": item_id,
                 "plan_id": str(data.get("plan_id") or ""),
@@ -2247,6 +2308,16 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
                 "theme": str(payload.get("theme") or data.get("theme") or "").strip(),
                 "edit_class": edit_class,
                 "edit_reason": _edit_reason_from_class(edit_class),
+                "voice_profile_version": int(
+                    ((metadata_value.get("content_generation_v2") or {}).get("voice_profile_version") or 0)
+                    if isinstance(metadata_value.get("content_generation_v2"), dict)
+                    else 0
+                ),
+                "content_source_ids": [
+                    str(source.get("id") or "")
+                    for source in ((metadata_value.get("content_brief_v1") or {}).get("sources") or [])
+                    if isinstance(source, dict)
+                ] if isinstance(metadata_value.get("content_brief_v1"), dict) else [],
                 "location_scope": location_scope,
                 "location_label": str(location_meta.get("scope_target_label") or "").strip(),
             },
@@ -3423,14 +3494,23 @@ def _content_matrix_prompt_key(industry_key: str, objective_key: str) -> str:
 
 def _load_publication_matrix_override(cursor: Any, industry_key: str, objective_key: str) -> str:
     prompt_key = _content_matrix_prompt_key(industry_key, objective_key)
+    savepoint_name = "content_matrix_override"
     try:
+        cursor.execute(f"SAVEPOINT {savepoint_name}")
         cursor.execute(
             "SELECT prompt_text FROM aiprompts WHERE prompt_type = %s LIMIT 1",
             (prompt_key,),
         )
         row = cursor.fetchone()
-        return str(_row_get(row, "prompt_text", 0, "") or "").strip()
+        result = str(_row_get(row, "prompt_text", 0, "") or "").strip()
+        cursor.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+        return result
     except Exception:
+        try:
+            cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+            cursor.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+        except Exception:
+            pass
         return ""
 
 
@@ -4009,6 +4089,218 @@ def _content_plan_knowledge_context(cursor: Any, item: dict[str, Any]) -> tuple[
     }
 
 
+CONTENT_BRIEF_DATE_RE = re.compile(
+    r"\b(?:[0-3]?\d[./-][01]?\d(?:[./-]20\d{2})?|[0-3]?\d\s+"
+    r"(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря))\b",
+    re.IGNORECASE,
+)
+
+
+def _content_generation_v2_enabled() -> bool:
+    return str(os.getenv("CONTENT_GENERATION_V2_ENABLED", "0") or "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _item_metadata(item: dict[str, Any]) -> dict[str, Any]:
+    value = item.get("metadata_json")
+    if isinstance(value, dict):
+        return dict(value)
+    try:
+        parsed = json.loads(value or "{}")
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
+
+def _clean_brief_answer(value: Any, limit: int = 800) -> str:
+    return " ".join(str(value or "").strip().split())[:limit]
+
+
+def _build_content_brief_v1(item: dict[str, Any], facts: dict[str, Any]) -> dict[str, Any]:
+    metadata = _item_metadata(item)
+    answers = metadata.get("brief_answers") if isinstance(metadata.get("brief_answers"), dict) else {}
+    theme = _clean_brief_answer(item.get("theme"), 500)
+    goal = _clean_brief_answer(item.get("goal"), 700)
+    source_kind = _clean_brief_answer(item.get("source_kind"), 80).lower()
+    source_ref = _clean_brief_answer(item.get("source_ref"), 800)
+    seo_keyword = _clean_brief_answer(item.get("seo_keyword"), 300)
+    content_type = _clean_brief_answer(item.get("content_type"), 80).lower()
+    event = _clean_brief_answer(answers.get("infopovod") or answers.get("event") or "", 500)
+    if not event and source_kind not in {"seo_keyword", "audit_signal", "search", "seasonal"}:
+        event = source_ref or theme
+    detail_answer = _clean_brief_answer(answers.get("confirmed_details") or answers.get("details") or "", 1000)
+    relevant_services = _relevant_service_names_for_item(facts.get("services"), item, limit=3)
+    details: list[str] = []
+    if detail_answer:
+        details.append(detail_answer)
+    if source_ref and source_ref != event and source_kind not in {"seo_keyword", "audit_signal", "search"}:
+        details.append(source_ref)
+    if content_type in {"service", "service_intro"} and relevant_services:
+        details.extend(relevant_services)
+    sources: list[dict[str, Any]] = []
+    if event:
+        sources.append({"id": "event", "type": "plan", "label": "Инфоповод", "fact": event})
+    if source_ref and source_kind not in {"seo_keyword", "audit_signal", "search"}:
+        sources.append({"id": "source_ref", "type": source_kind or "plan", "label": "Источник темы", "fact": source_ref})
+    if detail_answer:
+        sources.append({"id": "owner_detail", "type": "owner", "label": "Добавлено владельцем", "fact": detail_answer})
+    source_answer = _clean_brief_answer(answers.get("source"), 500)
+    if source_answer:
+        sources.append({"id": "owner_source", "type": "owner", "label": "Источник владельца", "fact": source_answer})
+    if relevant_services and content_type in {"service", "service_intro"}:
+        sources.append({"id": "services", "type": "business", "label": "Услуги бизнеса", "fact": ", ".join(relevant_services)})
+    site_fact = _clean_brief_answer(facts.get("site_description") or facts.get("description"), 500)
+    if site_fact:
+        sources.append({"id": "business_description", "type": "business", "label": "Сайт или карточка", "fact": site_fact})
+    is_event = _normalize_publication_objective(item) in {"announcement", "agenda", "reminder", "photo_report"} or content_type == "event"
+    date_blob = " ".join([event, detail_answer, source_ref, theme])
+    has_date = bool(CONTENT_BRIEF_DATE_RE.search(date_blob)) or bool(_clean_brief_answer(answers.get("date_status"), 120))
+    is_search_only = source_kind in {"seo_keyword", "audit_signal", "search"} and not _clean_brief_answer(answers.get("infopovod"))
+    missing: list[str] = []
+    if not event or is_search_only:
+        missing.append("infopovod")
+    if not details:
+        missing.append("confirmed_details")
+    if is_event and not has_date:
+        missing.append("date_status")
+    if not sources or (len(sources) == 1 and sources[0].get("id") == "business_description"):
+        missing.append("source")
+    questions_by_key = {
+        "infopovod": "Что произошло или о чём именно хотите рассказать?",
+        "confirmed_details": "Добавьте одну конкретную деталь: дату, участника, формат или пользу.",
+        "date_status": "Когда это состоится? Если дата ещё не объявлена, так и напишите.",
+        "source": "Откуда взята эта информация: афиша, сайт, услуга или ваш комментарий?",
+    }
+    unique_missing = list(dict.fromkeys(missing))[:3]
+    return {
+        "schema": "content_brief_v1",
+        "event": event,
+        "confirmed_details": details[:5],
+        "audience": _clean_brief_answer(answers.get("audience") or "Клиенты бизнеса", 300),
+        "main_idea": _clean_brief_answer(answers.get("main_idea") or theme, 500),
+        "expected_action": _clean_brief_answer(answers.get("expected_action") or goal or "Открыть карточку и узнать подробности", 500),
+        "target_platforms": answers.get("target_platforms") if isinstance(answers.get("target_platforms"), list) else [],
+        "sources": sources[:8],
+        "seo_signal": seo_keyword,
+        "complete": not unique_missing,
+        "missing_fields": unique_missing,
+        "questions": [questions_by_key[key] for key in unique_missing],
+    }
+
+
+def _content_brief_prompt_block(brief: dict[str, Any]) -> str:
+    source_lines = [
+        f"- {item.get('id')}: {item.get('label')} — {item.get('fact')}"
+        for item in brief.get("sources") or []
+    ]
+    return "\n".join(
+        [
+            f"Инфоповод: {brief.get('event') or 'нет'}",
+            f"Подтверждённые детали: {'; '.join(brief.get('confirmed_details') or []) or 'нет'}",
+            f"Аудитория: {brief.get('audience') or 'нет'}",
+            f"Главная мысль: {brief.get('main_idea') or 'нет'}",
+            f"Ожидаемое действие: {brief.get('expected_action') or 'нет'}",
+            "Источники фактов:",
+            *(source_lines or ["- нет"]),
+        ]
+    )
+
+
+def _parse_content_candidates(raw: Any) -> list[dict[str, Any]]:
+    text = str(raw or "").strip()
+    fenced = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.IGNORECASE | re.DOTALL)
+    if fenced:
+        text = str(fenced.group(1) or "").strip()
+    candidates: Any = None
+    for candidate_text in (text, text[text.find("{"):text.rfind("}") + 1] if "{" in text and "}" in text else ""):
+        if not candidate_text:
+            continue
+        try:
+            parsed = json.loads(candidate_text)
+        except Exception:
+            continue
+        candidates = parsed.get("candidates") if isinstance(parsed, dict) else parsed
+        if isinstance(candidates, list):
+            break
+    if not isinstance(candidates, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for index, item in enumerate(candidates[:3]):
+        if not isinstance(item, dict):
+            continue
+        candidate_text = _sanitize_generated_news_text(str(item.get("text") or ""))
+        if not candidate_text:
+            continue
+        result.append(
+            {
+                "id": str(item.get("id") or f"variant-{index + 1}"),
+                "angle": str(item.get("angle") or f"Подход {index + 1}").strip()[:80],
+                "text": candidate_text,
+                "used_fact_ids": [str(value) for value in item.get("used_fact_ids") or []],
+                "unsupported_facts": [str(value) for value in item.get("unsupported_facts") or []],
+            }
+        )
+    return result
+
+
+def _score_content_candidate(candidate: dict[str, Any], brief: dict[str, Any], voice: dict[str, Any]) -> dict[str, Any]:
+    text = str(candidate.get("text") or "").strip()
+    allowed_ids = {str(item.get("id") or "") for item in brief.get("sources") or []}
+    used_ids = {str(value) for value in candidate.get("used_fact_ids") or []}
+    unsupported = [value for value in candidate.get("unsupported_facts") or [] if str(value).strip()]
+    grounded = bool(used_ids) and used_ids.issubset(allowed_ids) and not unsupported
+    forbidden = [str(value).lower() for value in voice.get("forbidden_phrases") or [] if str(value).strip()]
+    default_cliches = ["уютное пространство", "профессиональная команда", "идеальный выбор", "ждём вас"]
+    cliche_hits = [value for value in [*forbidden, *default_cliches] if value in text.lower()]
+    score = 0
+    if grounded:
+        score += 55
+    if 140 <= len(text) <= 700:
+        score += 10
+    if any(char.isdigit() for char in text) or len(brief.get("confirmed_details") or []) >= 1:
+        score += 8
+    if voice.get("summary"):
+        score += 5
+    if not cliche_hits:
+        score += 10
+    if text.count("\n") <= 5:
+        score += 5
+    if any(marker in text.lower() for marker in ("подробност", "афиш", "запис", "смотрите", "узнайте")):
+        score += 7
+    return {
+        **candidate,
+        "score": min(score, 100),
+        "grounded": grounded,
+        "quality_passed": grounded and score >= 70,
+        "issues": [*(unsupported or []), *(["Не указаны источники использованных фактов"] if not used_ids else []), *cliche_hits],
+    }
+
+
+def _content_generation_v2_prompt(
+    *,
+    business_facts: dict[str, Any],
+    brief: dict[str, Any],
+    voice: dict[str, Any],
+    language: str,
+) -> str:
+    examples = "\n\n".join(
+        f"Пример {index + 1}: {item.get('text')}"
+        for index, item in enumerate(voice.get("examples") or [])
+    ) or "Примеров пока нет"
+    return (
+        "Ты — редактор публикаций локального бизнеса. Создай ровно три содержательно разных варианта на основе только перечисленных фактов.\n"
+        f"{_content_plan_language_instruction(language)}\n"
+        "Варианты: конкретный анонс/объяснение, человеческая история, спокойный атмосферный подход. "
+        "Не добавляй факты, даты, участников, цены, адреса или обещания, которых нет в источниках. До 700 символов каждый.\n"
+        "Верни строго JSON: {\"candidates\":[{\"id\":\"variant-1\",\"angle\":\"...\",\"text\":\"...\","
+        "\"used_fact_ids\":[\"source_id\"],\"unsupported_facts\":[]}]}\n\n"
+        f"Факты о бизнесе:\n{_build_content_plan_business_fact_block(business_facts)}\n\n"
+        f"Редакторский бриф:\n{_content_brief_prompt_block(brief)}\n\n"
+        f"Голос бизнеса: {voice.get('summary') or 'спокойный, конкретный, без рекламных клише'}\n"
+        f"Запрещённые формулировки: {', '.join(voice.get('forbidden_phrases') or []) or 'нет дополнительных'}\n"
+        f"Эталонные публикации:\n{examples}"
+    )
+
+
 def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | None = None) -> dict[str, Any]:
     normalized_language = _normalize_content_plan_language(language)
     db = DatabaseManager()
@@ -4077,7 +4369,64 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         )
         knowledge_context, knowledge_metadata = _content_plan_knowledge_context(cursor, item)
         knowledge_prompt_block = f"{knowledge_context}\n\n" if knowledge_context else ""
-        prompt = (
+        generation_v2 = _content_generation_v2_enabled()
+        content_brief = _build_content_brief_v1(item, business_facts)
+        voice_context = load_content_voice_context(
+            cursor,
+            user_id=user_id,
+            business_id=str(item.get("business_id") or ""),
+            limit=5,
+        ) if generation_v2 else {}
+        if generation_v2 and not content_brief.get("complete"):
+            brief_metadata = {
+                "generation_source": "needs_context",
+                "generation_error_reason": "insufficient_confirmed_context",
+                "content_brief_v1": content_brief,
+                "voice_profile_version": int(voice_context.get("version") or 1),
+            }
+            cursor.execute(
+                """
+                UPDATE contentplanitems
+                SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb,
+                    status = CASE WHEN COALESCE(NULLIF(draft_text, ''), '') = '' THEN 'planned' ELSE status END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (json.dumps(brief_metadata, ensure_ascii=False), item_id),
+            )
+            _record_content_plan_event(
+                conn=db.conn,
+                user_id=user_id,
+                business_id=str(item.get("root_business_id") or item.get("business_id") or ""),
+                capability="content_plan.draft",
+                event_type="needs_context",
+                metadata={
+                    "item_id": item_id,
+                    "missing_fields": content_brief.get("missing_fields") or [],
+                    "source_kind": source_kind,
+                },
+            )
+            db.conn.commit()
+            return {
+                "plan": get_content_plan(user_id, str(item.get("plan_id") or "")),
+                "generation": {
+                    "success": False,
+                    "status": "needs_context",
+                    "source": "needs_context",
+                    "message": "Добавьте несколько деталей — LocalOS не будет заполнять пробелы общими фразами.",
+                    "missing_fields": content_brief.get("missing_fields") or [],
+                    "questions": content_brief.get("questions") or [],
+                    "brief": content_brief,
+                    "sources": content_brief.get("sources") or [],
+                    "alternatives": [],
+                },
+            }
+        prompt = _content_generation_v2_prompt(
+            business_facts=business_facts,
+            brief=content_brief,
+            voice=voice_context,
+            language=normalized_language,
+        ) if generation_v2 else (
             "Ты — маркетолог локального бизнеса. Напиши короткую новость для публикации на картах. "
             "До 700 символов.\n\n"
             f"{_content_plan_language_instruction(normalized_language)}\n\n"
@@ -4119,6 +4468,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         generation_source = "ai"
         generation_error_reason = ""
         fallback_preview = ""
+        scored_candidates: list[dict[str, Any]] = []
         try:
             result = analyze_text_with_gigachat(
                 prompt,
@@ -4126,26 +4476,43 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
                 business_id=str(item.get("business_id") or ""),
                 user_id=user_id,
             )
-            generated_text = _sanitize_generated_news_text(str(result or ""))
+            if generation_v2:
+                parsed_candidates = _parse_content_candidates(result)
+                scored_candidates = [
+                    _score_content_candidate(candidate, content_brief, voice_context)
+                    for candidate in parsed_candidates
+                ]
+                eligible_candidates = [candidate for candidate in scored_candidates if candidate.get("quality_passed")]
+                eligible_candidates.sort(key=lambda candidate: int(candidate.get("score") or 0), reverse=True)
+                if len(parsed_candidates) != 3:
+                    generation_source = "failed"
+                    generation_error_reason = "three_candidates_required"
+                elif eligible_candidates:
+                    generated_text = str(eligible_candidates[0].get("text") or "").strip()
+                else:
+                    generation_source = "failed"
+                    generation_error_reason = "quality_threshold_not_met"
+            else:
+                generated_text = _sanitize_generated_news_text(str(result or ""))
             generated_text = _repair_generated_brand_name(generated_text, business_name)
-            if not generated_text:
+            if not generated_text and not generation_v2:
                 generation_source = "fallback"
                 generation_error_reason = "empty_ai_response"
                 fallback_preview = _fallback_draft_text(business_name, item, business_facts, normalized_language)
         except Exception:
-            generation_source = "fallback"
+            generation_source = "failed" if generation_v2 else "fallback"
             generation_error_reason = "ai_exception"
-            fallback_preview = _fallback_draft_text(business_name, item, business_facts, normalized_language)
+            fallback_preview = "" if generation_v2 else _fallback_draft_text(business_name, item, business_facts, normalized_language)
             generated_text = ""
         if generated_text and _looks_like_ice_rink_hallucination(generated_text, business_facts):
-            generation_source = "fallback"
+            generation_source = "failed" if generation_v2 else "fallback"
             generation_error_reason = "hallucination_filter"
-            fallback_preview = _fallback_draft_text(business_name, item, business_facts, normalized_language)
+            fallback_preview = "" if generation_v2 else _fallback_draft_text(business_name, item, business_facts, normalized_language)
             generated_text = ""
         if generated_text and _content_plan_draft_needs_fallback(generated_text, business_facts):
-            generation_source = "fallback"
+            generation_source = "failed" if generation_v2 else "fallback"
             generation_error_reason = "sanity_filter"
-            fallback_preview = _fallback_draft_text(business_name, item, business_facts, normalized_language)
+            fallback_preview = "" if generation_v2 else _fallback_draft_text(business_name, item, business_facts, normalized_language)
             generated_text = ""
         if active_patterns and generation_source == "ai":
             record_industry_pattern_impact_event(
@@ -4194,6 +4561,16 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             "last_generation_failed_at": datetime.utcnow().isoformat() if generation_source != "ai" else "",
             "fallback_preview": fallback_preview if generation_source != "ai" else "",
             "language": normalized_language,
+            "content_brief_v1": content_brief if generation_v2 else {},
+            "content_generation_v2": {
+                "enabled": generation_v2,
+                "voice_profile_version": int(voice_context.get("version") or 1) if generation_v2 else 0,
+                "selected_variant_id": next(
+                    (str(candidate.get("id") or "") for candidate in scored_candidates if str(candidate.get("text") or "") == generated_text),
+                    "",
+                ),
+                "variants": scored_candidates,
+            } if generation_v2 else {},
             **knowledge_metadata,
         }
         if generation_source == "ai":
@@ -4286,6 +4663,13 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
                 "updated_usernews_id": usernews_id,
                 "generation_source": generation_source,
                 "generation_error_reason": generation_error_reason,
+                "voice_profile_version": int(voice_context.get("version") or 1) if generation_v2 else 0,
+                "content_source_ids": [
+                    str(source.get("id") or "")
+                    for source in content_brief.get("sources") or []
+                    if isinstance(source, dict)
+                ] if generation_v2 else [],
+                "quality_scores": [int(candidate.get("score") or 0) for candidate in scored_candidates] if generation_v2 else [],
             },
         )
         db.conn.commit()
@@ -4293,6 +4677,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             "plan": get_content_plan(user_id, str(item.get("plan_id") or "")),
             "generation": {
                 "success": generation_source == "ai",
+                "status": "generated" if generation_source == "ai" else "failed",
                 "source": generation_source,
                 "message": (
                     "Текст готов. Проверьте его и утвердите публикацию."
@@ -4300,6 +4685,19 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
                     else "Не удалось написать текст. Попробуйте ещё раз."
                 ),
                 "reason": generation_error_reason,
+                "brief": content_brief if generation_v2 else {},
+                "sources": content_brief.get("sources") or [] if generation_v2 else [],
+                "alternatives": [
+                    {
+                        "id": candidate.get("id"),
+                        "angle": candidate.get("angle"),
+                        "text": candidate.get("text"),
+                        "score": candidate.get("score"),
+                        "quality_passed": candidate.get("quality_passed"),
+                    }
+                    for candidate in scored_candidates
+                    if candidate.get("quality_passed")
+                ] if generation_v2 else [],
             },
         }
     except Exception:
@@ -4319,7 +4717,7 @@ def create_news_from_plan_item(user_id: str, item_id: str, language: str | None 
         cursor.execute(
             """
             SELECT i.id, i.plan_id, i.business_id, i.theme, i.goal, i.source_ref, i.draft_text, i.service_id, i.status,
-                   i.source_kind, i.content_type, i.location_scope,
+                   i.source_kind, i.content_type, i.location_scope, i.metadata_json,
                    p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
@@ -4339,7 +4737,22 @@ def create_news_from_plan_item(user_id: str, item_id: str, language: str | None 
                 raise PermissionError("Нет доступа к элементу плана")
         generated_text = str(item.get("draft_text") or "").strip()
         if not generated_text:
+            if _content_generation_v2_enabled():
+                raise ValueError("Сначала добавьте факты и подготовьте текст публикации")
             generated_text = _fallback_draft_text("Бизнес", item, language=normalized_language)
+        item_metadata = _item_metadata(item)
+        generation_bundle = item_metadata.get("content_generation_v2") if isinstance(item_metadata.get("content_generation_v2"), dict) else {}
+        brief_metadata = item_metadata.get("content_brief_v1") if isinstance(item_metadata.get("content_brief_v1"), dict) else {}
+        selected_variant_id = str(generation_bundle.get("selected_variant_id") or "")
+        selected_variant = next(
+            (
+                variant
+                for variant in generation_bundle.get("variants") or []
+                if isinstance(variant, dict) and str(variant.get("id") or "") == selected_variant_id
+            ),
+            {},
+        )
+        original_generated_text = str(selected_variant.get("text") or generated_text).strip()
         edited_before_accept = str(item.get("status") or "").strip() == "edited"
         news_id = str(uuid.uuid4())
         source_text = "\n".join(
@@ -4357,7 +4770,7 @@ def create_news_from_plan_item(user_id: str, item_id: str, language: str | None 
                 id, user_id, business_id, service_id, source_text, generated_text,
                 original_generated_text, edited_before_approve, prompt_key, prompt_version, approved, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, FALSE, 'content_plan', 'v1', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, FALSE, 'content_plan', %s, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """,
             (
                 news_id,
@@ -4366,7 +4779,8 @@ def create_news_from_plan_item(user_id: str, item_id: str, language: str | None 
                 str(item.get("service_id") or "").strip() or None,
                 source_text,
                 generated_text,
-                generated_text,
+                original_generated_text,
+                "v2" if _content_generation_v2_enabled() else "v1",
             ),
         )
         cursor.execute(
@@ -4395,7 +4809,7 @@ def create_news_from_plan_item(user_id: str, item_id: str, language: str | None 
             accepted=True,
             edited_before_accept=edited_before_accept,
             outcome="news_created",
-            draft_text=generated_text,
+            draft_text=original_generated_text,
             final_text=generated_text,
             metadata={
                 "item_id": item_id,
@@ -4411,6 +4825,13 @@ def create_news_from_plan_item(user_id: str, item_id: str, language: str | None 
                 "acceptance_reason": _acceptance_reason(item, edited_before_accept),
                 "created_via": "content_plan",
                 "language": normalized_language,
+                "voice_profile_version": int(generation_bundle.get("voice_profile_version") or 0),
+                "content_source_ids": [
+                    str(source.get("id") or "")
+                    for source in brief_metadata.get("sources") or []
+                    if isinstance(source, dict)
+                ],
+                "platform": "master",
             },
         )
         db.conn.commit()

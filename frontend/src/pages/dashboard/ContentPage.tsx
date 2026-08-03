@@ -69,7 +69,46 @@ type PlanItem = {
   draft_text?: string;
   status?: string;
   content_type?: string;
-  metadata_json?: Record<string, unknown>;
+  metadata_json?: {
+    generation_source?: string;
+    brief_answers?: Record<string, string>;
+    content_brief_v1?: ContentBrief;
+    content_generation_v2?: {
+      selected_variant_id?: string;
+      variants?: GenerationAlternative[];
+    };
+  };
+};
+
+type ContentSource = { id?: string; label?: string; fact?: string; type?: string };
+type ContentBrief = {
+  event?: string;
+  confirmed_details?: string[];
+  audience?: string;
+  main_idea?: string;
+  expected_action?: string;
+  complete?: boolean;
+  missing_fields?: string[];
+  questions?: string[];
+  sources?: ContentSource[];
+};
+type GenerationAlternative = { id?: string; angle?: string; text?: string; score?: number; quality_passed?: boolean };
+type GenerationDetails = {
+  status?: 'generated' | 'needs_context' | 'failed';
+  message?: string;
+  missing_fields?: string[];
+  questions?: string[];
+  brief?: ContentBrief;
+  sources?: ContentSource[];
+  alternatives?: GenerationAlternative[];
+};
+type VoiceExample = { id: string; text: string; business_id?: string; platform?: string };
+type VoiceProfile = {
+  summary?: string;
+  status?: string;
+  version?: number;
+  examples?: VoiceExample[];
+  learning_suggestion?: { text?: string } | null;
 };
 
 type PlanPayload = {
@@ -604,6 +643,13 @@ export function ContentPage() {
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [themeEdits, setThemeEdits] = useState<Record<string, string>>({});
   const [dateEdits, setDateEdits] = useState<Record<string, string>>({});
+  const [generationDetails, setGenerationDetails] = useState<Record<string, GenerationDetails>>({});
+  const [briefAnswers, setBriefAnswers] = useState<Record<string, Record<string, string>>>({});
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceProfile, setVoiceProfile] = useState<VoiceProfile | null>(null);
+  const [voiceSummary, setVoiceSummary] = useState('');
+  const [voiceExampleInput, setVoiceExampleInput] = useState('');
   const [publicationChannels, setPublicationChannels] = useState<Record<string, boolean>>(() => buildChannelSelection());
   const [platformTextEdits, setPlatformTextEdits] = useState<Record<string, string>>({});
   const [editingPlatformPostId, setEditingPlatformPostId] = useState('');
@@ -738,6 +784,68 @@ export function ContentPage() {
       setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить контент');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openVoiceSettings = async () => {
+    if (!currentBusinessId) return;
+    setVoiceOpen(true);
+    setVoiceLoading(true);
+    try {
+      const response = await newAuth.makeRequest(`/content-voice?business_id=${encodeURIComponent(currentBusinessId)}`, { method: 'GET' });
+      const profile = response.profile || null;
+      setVoiceProfile(profile);
+      setVoiceSummary(String(profile?.summary || ''));
+    } catch (voiceError) {
+      setError(voiceError instanceof Error ? voiceError.message : 'Не удалось загрузить стиль публикаций');
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
+
+  const addVoiceExample = async () => {
+    const text = voiceExampleInput.trim();
+    if (!currentBusinessId || !text) return;
+    setVoiceLoading(true);
+    try {
+      await newAuth.makeRequest('/content-voice/examples', {
+        method: 'POST',
+        body: JSON.stringify({ business_id: currentBusinessId, text, origin: 'manual', quality_status: 'reference' }),
+      });
+      setVoiceExampleInput('');
+      await openVoiceSettings();
+    } catch (voiceError) {
+      setError(voiceError instanceof Error ? voiceError.message : 'Не удалось добавить пример');
+      setVoiceLoading(false);
+    }
+  };
+
+  const deleteVoiceExample = async (exampleId: string) => {
+    setVoiceLoading(true);
+    try {
+      await newAuth.makeRequest(`/content-voice/examples/${encodeURIComponent(exampleId)}`, { method: 'DELETE' });
+      await openVoiceSettings();
+    } catch (voiceError) {
+      setError(voiceError instanceof Error ? voiceError.message : 'Не удалось удалить пример');
+      setVoiceLoading(false);
+    }
+  };
+
+  const saveVoiceProfile = async () => {
+    if (!currentBusinessId) return;
+    setVoiceLoading(true);
+    try {
+      const response = await newAuth.makeRequest('/content-voice', {
+        method: 'PATCH',
+        body: JSON.stringify({ business_id: currentBusinessId, summary: voiceSummary, confirm: true }),
+      });
+      setVoiceProfile(response.profile || null);
+      setVoiceOpen(false);
+      setActionMessage('Стиль публикаций сохранён. LocalOS будет учитывать его в новых текстах.');
+    } catch (voiceError) {
+      setError(voiceError instanceof Error ? voiceError.message : 'Не удалось сохранить стиль');
+    } finally {
+      setVoiceLoading(false);
     }
   };
 
@@ -881,7 +989,7 @@ export function ContentPage() {
     if (!response.ok || !data.success) {
       throw new Error(data.error || data.message || `Не удалось загрузить ${file.name}`);
     }
-    return data.photo as PhotoAsset;
+    return data.photo && typeof data.photo === 'object' ? data.photo : {};
   };
 
   const uploadMediaPhotos = async (fileList?: FileList | null) => {
@@ -1000,8 +1108,6 @@ export function ContentPage() {
         method: 'POST',
         body: JSON.stringify({ language: 'ru' }),
       });
-      const remaining = Math.max(0, 3800 - (Date.now() - startedAt));
-      if (remaining) await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
       const plan = response.plan || null;
       setCurrentPlan(plan);
       if (plan?.id) await loadSocialPosts(plan.id);
@@ -1009,7 +1115,21 @@ export function ContentPage() {
         ? plan.items.find((nextItem: PlanItem) => nextItem.id === selectedItem.id)
         : null;
       setDraftEdits((prev) => ({ ...prev, [selectedItem.id]: String(refreshedItem?.draft_text || '') }));
-      const generation = response.generation || {};
+      const generation: GenerationDetails & { success?: boolean; source?: string } = response.generation || {};
+      setGenerationDetails((previous) => ({ ...previous, [selectedItem.id]: generation }));
+      if (generation.status === 'needs_context') {
+        setBriefAnswers((previous) => ({
+          ...previous,
+          [selectedItem.id]: {
+            ...(refreshedItem?.metadata_json?.brief_answers || {}),
+            ...(previous[selectedItem.id] || {}),
+          },
+        }));
+        setActionMessage(String(generation.message || 'Добавьте несколько деталей для конкретного текста.'));
+        return;
+      }
+      const remaining = Math.max(0, 1200 - (Date.now() - startedAt));
+      if (remaining) await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
       const refreshedText = String(refreshedItem?.draft_text || '').trim();
       const refreshedGenerationSource = itemGenerationSource(refreshedItem);
       const hasGeneratedText = Boolean(refreshedText) && refreshedGenerationSource !== 'fallback';
@@ -1026,6 +1146,45 @@ export function ContentPage() {
     } finally {
       setBusyAction('');
       setDraftGenerationReady(false);
+    }
+  };
+
+  const saveBriefAndGenerate = async () => {
+    if (!selectedItem) return;
+    setBusyAction('save-context');
+    setError('');
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ brief_answers: briefAnswers[selectedItem.id] || {} }),
+      });
+      if (response.plan) setCurrentPlan(response.plan);
+      setBusyAction('');
+      await generateSelectedDraft();
+    } catch (contextError) {
+      setError(contextError instanceof Error ? contextError.message : 'Не удалось сохранить детали');
+      setBusyAction('');
+    }
+  };
+
+  const selectDraftVariant = async (variant: GenerationAlternative) => {
+    if (!selectedItem || !variant.id) return;
+    setBusyAction(`variant-${variant.id}`);
+    setError('');
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ selected_variant_id: variant.id }),
+      });
+      const plan = response.plan || null;
+      setCurrentPlan(plan);
+      const refreshedItem = Array.isArray(plan?.items) ? plan.items.find((nextItem: PlanItem) => nextItem.id === selectedItem.id) : null;
+      setDraftEdits((previous) => ({ ...previous, [selectedItem.id]: String(refreshedItem?.draft_text || variant.text || '') }));
+      setActionMessage(`Выбран подход «${variant.angle || 'Другой вариант'}». Проверьте текст перед утверждением.`);
+    } catch (variantError) {
+      setError(variantError instanceof Error ? variantError.message : 'Не удалось выбрать вариант');
+    } finally {
+      setBusyAction('');
     }
   };
 
@@ -2014,6 +2173,20 @@ export function ContentPage() {
       && String(draftEdits[item.id] ?? item.draft_text ?? '') !== String(item.draft_text ?? '');
     const hasFallbackDraft = itemGenerationSource(item) === 'fallback';
     const hasDraftText = Boolean(currentDraftText) && itemGenerationSource(item) !== 'fallback';
+    const storedBrief = item?.metadata_json?.content_brief_v1;
+    const storedAlternatives = item?.metadata_json?.content_generation_v2?.variants?.filter((variant) => variant.quality_passed) || [];
+    const generation = item ? generationDetails[item.id] || {
+      status: itemGenerationSource(item) === 'needs_context' ? 'needs_context' : hasDraftText ? 'generated' : undefined,
+      brief: storedBrief,
+      missing_fields: storedBrief?.missing_fields,
+      questions: storedBrief?.questions,
+      sources: storedBrief?.sources,
+      alternatives: storedAlternatives,
+    } : {};
+    const needsContext = generation.status === 'needs_context';
+    const generationBrief = generation.brief || storedBrief;
+    const generationSources = generation.sources || generationBrief?.sources || [];
+    const generationAlternatives = (generation.alternatives || storedAlternatives).filter((variant) => variant.quality_passed !== false);
     const selectedChannelCount = getSelectedCount(publicationChannels);
     const channelCount = hasPosts ? selectedPosts.length : selectedChannelCount;
     const needsReviewChannelCount = selectedPosts.filter((post) => getChannelStatusLabel(post.status) === 'Нужно проверить').length;
@@ -2113,12 +2286,69 @@ export function ContentPage() {
                     </Button>
                   </div>
                   {busyAction === 'generate-draft' ? <DraftGenerationFeedback ready={draftGenerationReady} /> : null}
+                  {needsContext ? (
+                    <div className="rounded-[24px] bg-amber-50 p-4 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.16)]">
+                      <div className="flex items-start gap-3">
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-800"><Lightbulb className="h-5 w-5" /></span>
+                        <div>
+                          <div className="text-sm font-semibold text-amber-950">Нужно немного конкретики</div>
+                          <p className="mt-1 text-pretty text-sm leading-6 text-amber-900">LocalOS не будет заполнять пробелы общими рекламными фразами.</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {(generation.missing_fields || []).slice(0, 3).map((field, index) => (
+                          <label key={field} className="block">
+                            <span className="text-sm font-medium text-amber-950">{(generation.questions || [])[index] || 'Добавьте подтверждённую деталь'}</span>
+                            <Input
+                              value={briefAnswers[item.id]?.[field] || ''}
+                              onChange={(event) => setBriefAnswers((previous) => ({ ...previous, [item.id]: { ...(previous[item.id] || {}), [field]: event.target.value } }))}
+                              className="mt-2 min-h-11 rounded-xl border-amber-200 bg-white"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <Button type="button" onClick={() => { void saveBriefAndGenerate(); }} disabled={Boolean(busyAction)} className="mt-4 min-h-11 rounded-2xl bg-amber-900 text-white hover:bg-amber-800 active:scale-[0.96] transition-transform">
+                        {busyAction === 'save-context' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                        Сохранить и подготовить текст
+                      </Button>
+                    </div>
+                  ) : null}
                   <Textarea
                     value={draftEdits[item.id] ?? item.draft_text ?? ''}
                     onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraftEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
                     className="min-h-[260px] rounded-2xl border-slate-200 text-base leading-7"
                     placeholder="Текст публикации"
                   />
+                  {generationAlternatives.length > 1 ? (
+                    <details className="rounded-2xl bg-white shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+                      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm font-semibold text-slate-800">
+                        Другой подход <ChevronDown className="h-4 w-4 text-slate-400" />
+                      </summary>
+                      <div className="space-y-2 px-3 pb-3">
+                        {generationAlternatives.map((variant) => (
+                          <button key={variant.id} type="button" onClick={() => { void selectDraftVariant(variant); }} className="w-full rounded-2xl bg-slate-50 p-3 text-left transition-colors hover:bg-slate-100 active:scale-[0.96] transition-transform">
+                            <span className="text-sm font-semibold text-slate-900">{variant.angle || 'Другой вариант'}</span>
+                            <span className="mt-1 line-clamp-3 block text-pretty text-sm leading-6 text-slate-600">{variant.text}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </details>
+                  ) : null}
+                  {generationBrief ? (
+                    <details className="rounded-2xl bg-slate-50 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
+                      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm font-semibold text-slate-700">
+                        На чём основан текст <span className="text-xs font-normal text-slate-500">{generationSources.length} источника</span>
+                      </summary>
+                      <div className="space-y-3 px-4 pb-4 text-sm leading-6 text-slate-600">
+                        {generationBrief.event ? <p><b className="text-slate-900">Инфоповод:</b> {generationBrief.event}</p> : null}
+                        {generationBrief.main_idea ? <p><b className="text-slate-900">Главная мысль:</b> {generationBrief.main_idea}</p> : null}
+                        {generationBrief.expected_action ? <p><b className="text-slate-900">Ожидаемое действие:</b> {generationBrief.expected_action}</p> : null}
+                        <div className="flex flex-wrap gap-2">
+                          {generationSources.map((source) => <span key={source.id || source.label} title={source.fact} className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">{source.label || 'Источник'}</span>)}
+                        </div>
+                      </div>
+                    </details>
+                  ) : null}
                   <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                     <div className="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Preview</div>
                     <div className="rounded-2xl bg-white p-4 text-sm leading-6 text-slate-700 shadow-sm">
@@ -2404,21 +2634,22 @@ export function ContentPage() {
                   ) : null}
                 </div>
                 <div className="grid gap-2">
-                  <Button type="button" variant="outline" onClick={saveSelectedItem} disabled={Boolean(busyAction)} className="rounded-2xl">
-                    {busyAction === 'save' ? 'Сохраняем...' : 'Сохранить'}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={prepareSelectedItem} disabled={Boolean(busyAction) || selectedChannelCount === 0} className="rounded-2xl">
-                    {busyAction === 'prepare' ? 'Готовим...' : hasPosts ? 'Применить выбор каналов' : 'Подготовить выбранные каналы'}
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={approveSelectedItem}
-                    disabled={Boolean(busyAction) || !canApproveSelectedItem}
-                    className="rounded-2xl bg-slate-950 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-500"
-                  >
-                    {approveButtonLabel}
-                  </Button>
-                  <TooltipProvider delayDuration={150}>
+                  {hasUnsavedDraftChanges ? (
+                    <Button type="button" variant="outline" onClick={saveSelectedItem} disabled={Boolean(busyAction)} className="min-h-11 rounded-2xl active:scale-[0.96] transition-transform">
+                      {busyAction === 'save' ? 'Сохраняем...' : 'Сохранить изменения'}
+                    </Button>
+                  ) : null}
+                  {canApproveSelectedItem && !needsContext ? (
+                    <Button
+                      type="button"
+                      onClick={approveSelectedItem}
+                      disabled={Boolean(busyAction)}
+                      className="min-h-12 rounded-2xl bg-slate-950 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-500 active:scale-[0.96] transition-transform"
+                    >
+                      {approveButtonLabel}
+                    </Button>
+                  ) : null}
+                  {canQueueSelectedItem || scheduleAlreadyHandled ? <TooltipProvider delayDuration={150}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="block">
@@ -2441,7 +2672,7 @@ export function ContentPage() {
                         {queueTooltip}
                       </TooltipContent>
                     </Tooltip>
-                  </TooltipProvider>
+                  </TooltipProvider> : null}
                 </div>
                 {queueNeedsAttention ? (
                   <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
@@ -2471,6 +2702,62 @@ export function ContentPage() {
     );
   };
 
+  const renderVoiceDialog = () => (
+    <Dialog open={voiceOpen} onOpenChange={setVoiceOpen}>
+      <DialogContent className="max-h-[88vh] overflow-y-auto rounded-[28px] sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="text-balance text-2xl">Как должен звучать ваш бизнес</DialogTitle>
+          <DialogDescription className="text-pretty">
+            Добавьте несколько публикаций, которые вам нравятся. LocalOS сам выделит общий стиль.
+          </DialogDescription>
+        </DialogHeader>
+        {voiceLoading && !voiceProfile ? (
+          <div className="flex min-h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загружаем примеры...</div>
+        ) : (
+          <div className="space-y-5 py-2">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">Понравившийся пост</div>
+              <Textarea
+                value={voiceExampleInput}
+                onChange={(event) => setVoiceExampleInput(event.target.value)}
+                placeholder="Вставьте полный текст публикации"
+                className="mt-2 min-h-28 rounded-2xl"
+              />
+              <Button type="button" variant="outline" onClick={() => { void addVoiceExample(); }} disabled={voiceLoading || voiceExampleInput.trim().length < 20} className="mt-2 min-h-11 rounded-2xl active:scale-[0.96] transition-transform">
+                <Plus className="mr-2 h-4 w-4" />Добавить пример
+              </Button>
+            </div>
+            {(voiceProfile?.examples || []).length > 0 ? (
+              <div>
+                <div className="text-sm font-semibold text-slate-900">Примеры · {(voiceProfile?.examples || []).length}</div>
+                <div className="mt-2 max-h-48 space-y-2 overflow-y-auto">
+                  {(voiceProfile?.examples || []).map((example) => (
+                    <div key={example.id} className="flex items-start gap-3 rounded-2xl bg-slate-50 p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
+                      <p className="line-clamp-3 min-w-0 flex-1 text-pretty text-sm leading-6 text-slate-600">{example.text}</p>
+                      <button type="button" onClick={() => { void deleteVoiceExample(example.id); }} className="grid min-h-10 min-w-10 place-items-center rounded-xl text-slate-400 transition-colors hover:bg-white hover:text-red-600" aria-label="Удалить пример"><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">Начните с трёх примеров. Уже после первого LocalOS предложит черновое описание стиля.</div>
+            )}
+            <div>
+              <div className="text-sm font-semibold text-slate-900">LocalOS понял стиль так</div>
+              <Textarea value={voiceSummary} onChange={(event) => setVoiceSummary(event.target.value)} placeholder="Например: конкретно, тепло, без рекламных вопросов" className="mt-2 min-h-24 rounded-2xl" />
+              <p className="mt-2 text-pretty text-xs leading-5 text-slate-500">Вы подтверждаете только это короткое описание. Источники и технические правила останутся внутри.</p>
+            </div>
+            {voiceProfile?.learning_suggestion?.text ? <div className="rounded-2xl bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">{voiceProfile.learning_suggestion.text}</div> : null}
+          </div>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setVoiceOpen(false)} className="min-h-11 rounded-2xl">Закрыть</Button>
+          <Button type="button" onClick={() => { void saveVoiceProfile(); }} disabled={voiceLoading || !voiceSummary.trim()} className="min-h-11 rounded-2xl bg-slate-950 text-white active:scale-[0.96] transition-transform">Сохранить стиль</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (!currentBusinessId) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-10">
@@ -2485,6 +2772,7 @@ export function ContentPage() {
     <div className="mx-auto max-w-[1500px] space-y-6 px-4 py-6">
       {renderPlanModal()}
       {renderDeletePlanDialog()}
+      {renderVoiceDialog()}
       {renderDrawer()}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2493,10 +2781,14 @@ export function ContentPage() {
           <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Контент</h1>
           <p className="mt-1 text-sm text-slate-500">{currentBusiness?.name || 'Единый календарь публикаций'}</p>
         </div>
-        <Button type="button" onClick={() => { setCreateStep('setup'); setCreateOpen(true); }} className="rounded-2xl bg-slate-950 px-5 py-6 text-white hover:bg-slate-800">
-          <Plus className="mr-2 h-4 w-4" />
-          Создать новый план
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={() => { void openVoiceSettings(); }} className="min-h-12 rounded-2xl bg-white px-4 active:scale-[0.96] transition-transform">
+            <Star className="mr-2 h-4 w-4" />Настроить стиль
+          </Button>
+          <Button type="button" onClick={() => { setCreateStep('setup'); setCreateOpen(true); }} className="min-h-12 rounded-2xl bg-slate-950 px-5 text-white hover:bg-slate-800 active:scale-[0.96] transition-transform">
+            <Plus className="mr-2 h-4 w-4" />Создать новый план
+          </Button>
+        </div>
       </div>
 
       <div className="inline-flex rounded-2xl bg-slate-100 p-1">

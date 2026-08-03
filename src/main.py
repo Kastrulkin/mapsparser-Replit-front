@@ -109,6 +109,7 @@ from api.metrics_history_api import metrics_history_bp
 from api.networks_api import networks_bp
 from api.network_health_api import network_health_bp
 from api.content_plans_api import content_plans_bp
+from api.content_voice_api import content_voice_bp
 from api.social_posts_api import social_posts_bp
 from api.media_intelligence_api import media_intelligence_bp
 from api.finance_api import finance_bp
@@ -294,6 +295,7 @@ app.register_blueprint(metrics_history_bp)
 app.register_blueprint(networks_bp)
 app.register_blueprint(network_health_bp)
 app.register_blueprint(content_plans_bp)
+app.register_blueprint(content_voice_bp)
 app.register_blueprint(social_posts_bp)
 app.register_blueprint(media_intelligence_bp)
 app.register_blueprint(finance_bp)

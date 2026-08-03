@@ -19,6 +19,7 @@ from core.telegram_token_store import decode_telegram_bot_token
 from core.helpers import get_business_owner_id
 from services.media_file_storage import load_media_file
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog
+from core.ai_learning import record_ai_learning_event
 
 
 SOCIAL_POST_PLATFORMS = [
@@ -975,6 +976,26 @@ def approve_social_post(user_id: str, post_id: str) -> dict[str, Any]:
             (now, _new_id(), post_id),
         )
         updated = _serialize_social_post(cursor, cursor.fetchone())
+        metadata = _json_dict(updated.get("metadata_json"))
+        record_ai_learning_event(
+            capability="content_plan.publish",
+            event_type="accepted",
+            intent="operations",
+            user_id=user_id,
+            business_id=str(updated.get("business_id") or ""),
+            accepted=True,
+            edited_before_accept=str(updated.get("base_text") or "").strip() != str(updated.get("platform_text") or "").strip(),
+            outcome="social_post_approved",
+            draft_text=str(updated.get("base_text") or "").strip(),
+            final_text=str(updated.get("platform_text") or updated.get("base_text") or "").strip(),
+            metadata={
+                "post_id": post_id,
+                "platform": str(updated.get("platform") or ""),
+                "voice_profile_version": int(metadata.get("voice_profile_version") or 0),
+                "content_source_ids": metadata.get("content_source_ids") or [],
+            },
+            conn=db.conn,
+        )
         db.conn.commit()
         return updated
     except Exception:
