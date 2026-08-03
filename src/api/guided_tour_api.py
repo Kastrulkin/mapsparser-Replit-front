@@ -49,6 +49,8 @@ DEMO_READ_PATH_PREFIXES = (
     "/api/reports",
     "/api/operator/",
     "/api/partnership/",
+    "/api/average-ticket/",
+    "/api/telegram-opportunity-radar/",
     "/api/content-plans",
     "/api/social-posts",
     "/api/media-intelligence/",

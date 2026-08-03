@@ -60,6 +60,18 @@ def build_app():
     def scoped_services_route():
         return jsonify({"success": True})
 
+    @app.route("/api/average-ticket/overview", methods=["GET"])
+    def average_ticket_overview_route():
+        return jsonify({"success": True})
+
+    @app.route("/api/telegram-opportunity-radar/sources", methods=["GET"])
+    def telegram_radar_sources_route():
+        return jsonify({"success": True})
+
+    @app.route("/api/telegram-opportunity-radar/opportunities", methods=["GET"])
+    def telegram_radar_opportunities_route():
+        return jsonify({"success": True})
+
     app.register_blueprint(guided_tour_api.guided_tour_bp)
     return app
 
@@ -150,6 +162,23 @@ def test_demo_policy_blocks_mutations_and_sensitive_reads(monkeypatch):
     assert secrets.status_code == 403
     assert secrets.get_json()["error"] == "demo_route_not_allowed"
     assert allowed_read.status_code == 200
+
+
+def test_demo_policy_allows_read_only_growth_tour_routes(monkeypatch):
+    monkeypatch.setattr(guided_tour_api, "verify_session", lambda token: demo_session(token))
+    client = build_app().test_client()
+    headers = {"Authorization": "Bearer demo_token"}
+
+    responses = [
+        client.get("/api/average-ticket/overview?business_id=demo-business", headers=headers),
+        client.get("/api/telegram-opportunity-radar/sources?business_id=demo-business", headers=headers),
+        client.get(
+            "/api/telegram-opportunity-radar/opportunities?business_id=demo-business&limit=20",
+            headers=headers,
+        ),
+    ]
+
+    assert [response.status_code for response in responses] == [200, 200, 200]
 
 
 def test_demo_policy_rejects_business_ids_outside_session_scope(monkeypatch):
