@@ -176,6 +176,7 @@ class DeepSeekAdapter:
         }
         if expects_json:
             body["response_format"] = {"type": "json_object"}
+            body["thinking"] = {"type": "disabled"}
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",

@@ -625,6 +625,7 @@ def test_deepseek_adapter_adds_json_instruction_when_caller_omits_it(monkeypatch
     assert result.status == "completed"
     assert "JSON" in captured["body"]["messages"][0]["content"]
     assert captured["body"]["response_format"] == {"type": "json_object"}
+    assert captured["body"]["thinking"] == {"type": "disabled"}
 
 
 def test_deepseek_adapter_accepts_json_from_reasoning_content(monkeypatch):
