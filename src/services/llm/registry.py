@@ -116,12 +116,12 @@ LEAD_AUDIT_ENRICHMENT_SCHEMA: dict[str, Any] = {
                     "title": {"type": "string"},
                     "description": {"type": "string"},
                 },
-                "required": ["title", "description"],
+                "required": ["title"],
             },
         },
         "why_now": {"type": "string"},
     },
-    "required": ["summary_text", "recommended_actions", "why_now"],
+    "required": ["summary_text", "recommended_actions"],
 }
 
 
@@ -178,7 +178,7 @@ TASK_REGISTRY: dict[str, LLMTaskDefinition] = {
         max_tokens=2500,
         temperature=0.0,
         timeout=45,
-        prompt_version="lead_audit_enrichment_v2",
+        prompt_version="lead_audit_enrichment_v3",
         pipeline_stage="analysis",
     ),
     "agent_email_draft": _task("agent_email_draft", data_class="pii", prompt_version="agent_email_draft_v1", pipeline_stage="copy"),

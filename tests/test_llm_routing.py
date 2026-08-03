@@ -238,6 +238,20 @@ def test_public_platform_audit_uses_deepseek_without_tenant_id(monkeypatch):
     assert calls == ["deepseek"]
 
 
+def test_lead_audit_schema_matches_downstream_optional_fields() -> None:
+    definition = get_task_definition("lead_audit_enrichment")
+
+    assert definition is not None
+    assert definition.prompt_version == "lead_audit_enrichment_v3"
+    assert definition.response_schema["required"] == [
+        "summary_text",
+        "recommended_actions",
+    ]
+    assert definition.response_schema["properties"]["recommended_actions"]["items"][
+        "required"
+    ] == ["title"]
+
+
 def test_shadow_keeps_gigachat_result_and_records_deepseek_attempt(monkeypatch):
     calls = []
     shadow_finished = threading.Event()
