@@ -3303,11 +3303,22 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
                       <p className="mt-1 text-pretty text-xs leading-5 text-slate-600">
                         Опишите реальную связь или идею сотрудничества. LocalOS сохранит её как подтверждённое человеком основание, а не как публичный факт.
                       </p>
+                      <div className="mt-3 rounded-lg bg-sky-50 p-3 text-pretty text-xs leading-5 text-sky-950 ring-1 ring-inset ring-sky-100">
+                        <div className="font-semibold">Как сформулировать: факт → польза → предложение</div>
+                        <ol className="mt-2 space-y-1 text-sky-900">
+                          <li><span className="font-semibold">1. Факт:</span> какая подтверждённая связь есть между компаниями.</li>
+                          <li><span className="font-semibold">2. Польза:</span> что конкретно получит общая аудитория.</li>
+                          <li><span className="font-semibold">3. Предложение:</span> какой один формат вы хотите обсудить.</li>
+                        </ol>
+                        <p className="mt-2 border-t border-sky-100 pt-2">
+                          <span className="font-semibold">Пример:</span> Клиника "Даная" и "Весёлая расчёска" находятся в одном ТРК. Семьи с детьми могут совместить визит в клинику и детскую стрижку за одну поездку и сэкономить время. Предлагаем обсудить совместное предложение для клиентов двух компаний.
+                        </p>
+                      </div>
                       <textarea
                         id="manual-outreach-reason"
                         value={manualOutreachReason}
                         onChange={(event) => setManualOutreachReason(event.target.value)}
-                        placeholder="Например: предложить родителям после детского центра удобную детскую стрижку в соседней Весёлой расчёске."
+                        placeholder="Опишите подтверждённый факт, пользу для общей аудитории и одно конкретное предложение."
                         rows={3}
                         maxLength={1000}
                         className="mt-3 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-900 outline-none transition-colors focus:border-orange-400 focus:ring-2 focus:ring-orange-100"

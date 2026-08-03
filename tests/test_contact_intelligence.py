@@ -1348,6 +1348,9 @@ def test_admin_lead_drawer_exposes_manual_reason_and_data_preparation_actions():
 
     assert "Конкретная причина обращения" in frontend_source
     assert "Сохранить причину обращения" in frontend_source
+    assert "Как сформулировать: факт → польза → предложение" in frontend_source
+    assert 'Клиника "Даная" и "Весёлая расчёска" находятся в одном ТРК' in frontend_source
+    assert "какой один формат вы хотите обсудить" in frontend_source
     assert "/outreach-reason" in frontend_source
     assert "Обновить данные карточки" in frontend_source
     assert "Создать аудит" in frontend_source
