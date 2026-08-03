@@ -872,6 +872,52 @@ def test_generate_lead_audit_enrichment_edits_valid_dense_response_without_retry
     assert len(enrichment["summary_text"]) <= 300
 
 
+def test_generate_lead_audit_enrichment_does_not_retry_valid_response_with_generic_why_now(
+    monkeypatch,
+) -> None:
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        admin_prospecting,
+        "_get_prompt_from_db",
+        lambda prompt_type, fallback="": "Factual JSON: {factual_json}",
+    )
+
+    def analyze(prompt, task_type=None):
+        calls.append(prompt)
+        if len(calls) > 1:
+            raise RuntimeError("second provider call must not be needed")
+        return (
+            '{"summary_text":"В карточке указаны 3 услуги, но цены не показаны.",'
+            '"recommended_actions":[{"title":"Добавить цены",'
+            '"description":"Указать стоимость трёх услуг в карточке."}],'
+            '"why_now":"У бизнеса высокий потенциал."}'
+        )
+
+    monkeypatch.setattr(admin_prospecting, "analyze_text_with_gigachat", analyze)
+
+    enrichment = _generate_lead_audit_enrichment(
+        {"name": "Апельсин", "category": "Салон красоты", "city": "Санкт-Петербург"},
+        {
+            "summary_text": "В карточке указаны 3 услуги, но цены не показаны.",
+            "recommended_actions": [
+                {"title": "Добавить цены", "description": "Указать стоимость трёх услуг."}
+            ],
+            "current_state": {
+                "rating": 4.5,
+                "reviews_count": 14,
+                "services_count": 3,
+                "services_with_price_count": 0,
+            },
+        },
+        "ru",
+    )
+
+    assert len(calls) == 1
+    assert enrichment["meta"]["source"] == "deepseek"
+    assert "высокий потенциал" not in enrichment["why_now"].lower()
+
+
 def test_resolve_telegram_app_recipient_prefers_username() -> None:
     recipient = _resolve_telegram_app_recipient(
         {

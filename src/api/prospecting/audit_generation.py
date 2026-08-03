@@ -343,29 +343,19 @@ def _generate_lead_audit_enrichment(
         )
         why_now = str(editorial_payload.get("why_now") or "").strip()
         if _needs_dense_audit_retry(summary_text, why_now, language):
-            retry_prompt = (
-                prompt
-                + "\nОтвет отклонён как слишком общий или языково нечистый."
-                + "\nПерепиши короче и плотнее по сути."
-                + "\nНачни с конкретного недостатка карточки."
-                + "\nЗапрещены фразы: высокий потенциал, strategic improvement, online presence, solid base."
-                + "\nНужны 1-2 конкретные проблемы из top_findings/current_state и короткое business consequence."
+            safe_summary = truncate_sentence(
+                normalize_audit_text(
+                    fallback_summary,
+                    audit_profile=str(preview.get("audit_profile") or ""),
+                ),
+                300,
             )
-            result_text = analyze_text_with_gigachat(retry_prompt, task_type="lead_audit_enrichment")
-            parsed = _extract_json_candidate(result_text)
-            if not parsed:
-                raise ValueError("AI audit enrichment retry did not return JSON")
-            summary_text = str(parsed.get("summary_text") or "").strip()
-            recommended_actions = _normalize_recommended_actions(parsed.get("recommended_actions"))
-            why_now = str(parsed.get("why_now") or "").strip()
-            if not recommended_actions:
-                recommended_actions = fallback_actions
             editorial_payload = apply_audit_editorial_pass(
                 {
                     "audit_profile": preview.get("audit_profile"),
-                    "summary_text": summary_text,
+                    "summary_text": safe_summary or summary_text,
                     "recommended_actions": recommended_actions,
-                    "why_now": why_now,
+                    "why_now": "",
                     "current_state": preview.get("current_state") if isinstance(preview.get("current_state"), dict) else {},
                     "industry_patterns": preview.get("industry_patterns") if isinstance(preview.get("industry_patterns"), dict) else {},
                 }

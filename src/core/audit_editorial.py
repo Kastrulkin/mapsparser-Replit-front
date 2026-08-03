@@ -79,6 +79,29 @@ PROFILE_ACTOR_DATIVE = {
 }
 
 
+UNSUPPORTED_OUTCOME_CLAIM_PATTERNS = (
+    r"\bнапрямую\s+увелич(?:ит|ивает|ить)\s+(?:число\s+)?(?:заявок|обращений|записей|записи)\b",
+    r"\bгарантированн\w*\s+(?:повысит|увеличит|улучшит|даст|привед[её]т)\b",
+    r"\bулучшит\s+показ\s+по\s+(?:релевантным\s+)?запросам\b",
+    r"\bвлияет\s+на\s+ранжировани\w*\b",
+    r"\bповысит\s+ранжировани\w*\b",
+    r"\bобеспечит\s+рост\s+(?:заявок|обращений|записей|продаж)\b",
+)
+
+
+def _remove_unsupported_outcome_claims(value: str) -> str:
+    sentences = re.split(r"(?<=[.!?])\s+", str(value or "").strip())
+    kept: list[str] = []
+    for sentence in sentences:
+        normalized = sentence.strip()
+        if not normalized:
+            continue
+        if any(re.search(pattern, normalized, flags=re.IGNORECASE) for pattern in UNSUPPORTED_OUTCOME_CLAIM_PATTERNS):
+            continue
+        kept.append(normalized)
+    return " ".join(kept).strip()
+
+
 def normalize_audit_text(value: Any, *, audit_profile: str = "") -> str:
     text = str(value or "").strip()
     if not text:
@@ -191,6 +214,7 @@ def normalize_audit_text(value: Any, *, audit_profile: str = "") -> str:
         result = re.sub(r"\bсалона\b", "бизнеса", result, flags=re.IGNORECASE)
         result = re.sub(r"\bсалон\b", "бизнес", result, flags=re.IGNORECASE)
 
+    result = _remove_unsupported_outcome_claims(result)
     result = re.sub(r"\s+", " ", result).strip()
     return result
 

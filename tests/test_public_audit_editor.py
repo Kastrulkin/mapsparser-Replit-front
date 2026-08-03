@@ -1,3 +1,4 @@
+from src.core.audit_editorial import apply_audit_editorial_pass
 from src.core.public_audit_editor import (
     ACTION_PLAN_BLOCK_KEY,
     STRONG_DEMAND_BLOCK_KEY,
@@ -148,6 +149,48 @@ def test_normalize_public_audit_removes_template_markers_and_adds_summary_varian
     assert "audit_full" not in normalized
     assert "ai_enrichment" not in audit
     assert audit["editorial_quality_gate"]["status"] == "pass"
+
+
+def test_audit_editorial_pass_removes_unsupported_result_promises() -> None:
+    audit = apply_audit_editorial_pass(
+        {
+            "audit_profile": "beauty",
+            "summary_text": "В карточке указаны 3 услуги, но цены не показаны.",
+            "why_now": "Цены можно добавить по данным карточки.",
+            "recommended_actions": [
+                {
+                    "title": "Добавить цены",
+                    "description": (
+                        "Указать стоимость трёх услуг. Это напрямую увеличит число заявок и записи. "
+                        "Это улучшит показ по релевантным запросам."
+                    ),
+                },
+                {
+                    "title": "Обновить описание",
+                    "description": (
+                        "Перечислить основные услуги. Это гарантированно повысит запись. "
+                        "Это влияет на ранжирование в поиске."
+                    ),
+                },
+            ],
+            "current_state": {
+                "services_count": 3,
+                "services_with_price_count": 0,
+            },
+        }
+    )
+
+    descriptions = " ".join(
+        str(item.get("description") or "")
+        for item in audit["recommended_actions"]
+    ).lower()
+
+    assert "увеличит число заявок" not in descriptions
+    assert "улучшит показ" not in descriptions
+    assert "гарантированно повысит" not in descriptions
+    assert "влияет на ранжирование" not in descriptions
+    assert "указать стоимость трёх услуг" in descriptions
+    assert "перечислить основные услуги" in descriptions
 
 
 def test_normalize_public_audit_marks_uncertain_photos_without_hard_claim() -> None:
