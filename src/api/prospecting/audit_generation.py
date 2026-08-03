@@ -321,10 +321,9 @@ def _generate_lead_audit_enrichment(
         if not parsed:
             raise ValueError("AI audit enrichment did not return JSON")
         summary_text = str(parsed.get("summary_text") or "").strip()
-        recommended_actions = _normalize_recommended_actions(parsed.get("recommended_actions"))
+        ai_recommended_actions = _normalize_recommended_actions(parsed.get("recommended_actions"))
+        recommended_actions = fallback_actions or ai_recommended_actions
         why_now = str(parsed.get("why_now") or "").strip()
-        if not recommended_actions:
-            recommended_actions = fallback_actions
         editorial_payload = apply_audit_editorial_pass(
             {
                 "audit_profile": preview.get("audit_profile"),

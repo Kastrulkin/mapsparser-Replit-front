@@ -815,7 +815,7 @@ def test_generate_lead_audit_enrichment_uses_ai_payload(monkeypatch) -> None:
 
     assert "AI summary" not in enrichment["summary_text"]
     assert "услуг 3" in enrichment["summary_text"]
-    assert enrichment["recommended_actions"][0]["title"] == "Action 1"
+    assert enrichment["recommended_actions"][0]["title"] == "Base action"
     assert enrichment["meta"]["source"] == "deepseek"
 
 
@@ -916,6 +916,48 @@ def test_generate_lead_audit_enrichment_does_not_retry_valid_response_with_gener
     assert len(calls) == 1
     assert enrichment["meta"]["source"] == "deepseek"
     assert "высокий потенциал" not in enrichment["why_now"].lower()
+
+
+def test_generate_lead_audit_enrichment_does_not_publish_ai_invented_action_details(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        admin_prospecting,
+        "_get_prompt_from_db",
+        lambda prompt_type, fallback="": "Factual JSON: {factual_json}",
+    )
+    monkeypatch.setattr(
+        admin_prospecting,
+        "analyze_text_with_gigachat",
+        lambda prompt, task_type=None: (
+            '{"summary_text":"В описании не выделены основные услуги.",'
+            '"recommended_actions":[{"title":"Добавить описание",'
+            '"description":"Указать, что салон рядом с метро, работает для детей и принимает через WhatsApp."}],'
+            '"why_now":"Карточка давно не обновлялась."}'
+        ),
+    )
+
+    enrichment = _generate_lead_audit_enrichment(
+        {"name": "Апельсин", "category": "Салон красоты", "city": "Санкт-Петербург"},
+        {
+            "summary_text": "В описании не выделены основные услуги.",
+            "recommended_actions": [
+                {
+                    "title": "Добавить основные услуги в описание",
+                    "description": "Перечислить маникюр и педикюр и указать подтверждённый способ записи.",
+                }
+            ],
+            "current_state": {"services_count": 2},
+        },
+        "ru",
+    )
+
+    actions_text = str(enrichment["recommended_actions"]).lower()
+
+    assert "рядом с метро" not in actions_text
+    assert "для детей" not in actions_text
+    assert "whatsapp" not in actions_text
+    assert "перечислить маникюр и педикюр" in actions_text
 
 
 def test_resolve_telegram_app_recipient_prefers_username() -> None:
