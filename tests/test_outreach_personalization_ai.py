@@ -371,6 +371,31 @@ def test_generation_retries_once_when_provider_returns_malformed_json():
     assert "Предыдущий ответ отклонён валидатором" in prompts[1]
 
 
+def test_generation_uses_canonical_evidence_ids_when_provider_rewrites_them():
+    generated = _policy_bound_generation_response()
+    for touch in generated["touches"]:
+        touch["evidence_ids"] = ["provider-invented-id"]
+    responses = iter([
+        json.dumps(generated, ensure_ascii=False),
+        json.dumps(_review_response(), ensure_ascii=False),
+    ])
+
+    result = generate_personalized_sequence(
+        motion="localos_sales",
+        identity={"company_name": "Клиника"},
+        candidate=_candidate(),
+        founder_story=_story(),
+        sequence=_sequence(),
+        generator=lambda _prompt, **_kwargs: next(responses),
+    )
+
+    assert result["status"] == "ready"
+    assert all(
+        touch["evidence_ids"] == ["map-rating"]
+        for touch in result["touches"]
+    )
+
+
 def test_generation_accepts_provider_control_character_then_validates_content():
     with_control_character = json.dumps(
         _policy_bound_generation_response(), ensure_ascii=False

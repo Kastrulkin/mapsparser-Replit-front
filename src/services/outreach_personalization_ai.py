@@ -333,7 +333,17 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
     normalized = []
     allowed_evidence_ids = {
         _clean(item.get("evidence_id")) for item in request_record["evidence"]
+        if _clean(item.get("evidence_id"))
     }
+    canonical_evidence_ids = [
+        _clean(item)
+        for item in request_record["personalization"].get("evidence_ids") or []
+        if _clean(item) in allowed_evidence_ids
+    ]
+    if not canonical_evidence_ids:
+        canonical_evidence_ids = sorted(allowed_evidence_ids)
+    if not canonical_evidence_ids:
+        raise ValueError("Verified evidence ids are required")
     forbidden_claims = request_record["sender"]["forbidden_claims"]
     observation = request_record["personalization"]["observation"]
     expected_hypothesis = request_record["personalization"]["problem_hypothesis"]
@@ -359,7 +369,11 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
         angle = _clean(item.get("angle"))
         template = _clean(item.get("text_template"))
         text = _clean(item.get("text"))
-        evidence_ids = [_clean(entry) for entry in item.get("evidence_ids") or [] if _clean(entry)]
+        # Evidence identity belongs to LocalOS, not to the language model. The
+        # provider only chooses wording controls; it may echo or rewrite an ID,
+        # but the resulting touch must always point at the verified ledger
+        # entry used to assemble the message.
+        evidence_ids = canonical_evidence_ids.copy()
         # Channel order and message angles are campaign policy, not model
         # output.  Preserve the approved structure even when the provider
         # echoes a translated or invented label alongside otherwise valid copy.
@@ -404,8 +418,6 @@ def _normalize_touches(value: Any, request_record: dict[str, Any]) -> list[dict[
             raise ValueError(f"Touch {index} does not preserve the offer bridge")
         if recipient and recipient.lower() not in text.lower():
             raise ValueError(f"Touch {index} does not identify the recipient")
-        if not evidence_ids or not set(evidence_ids).issubset(allowed_evidence_ids):
-            raise ValueError(f"Touch {index} has unsupported evidence ids")
         if any(claim.lower() in text.lower() for claim in forbidden_claims):
             raise ValueError(f"Touch {index} contains a forbidden claim")
         generated_hypothesis = _clean(item.get("problem_hypothesis")) or None
