@@ -114,12 +114,12 @@ LEAD_AUDIT_ENRICHMENT_SCHEMA: dict[str, Any] = {
                 "type": "object",
                 "properties": {
                     "title": {"type": "string"},
-                    "description": {"type": "string"},
+                    "description": {"type": "string", "nullable": True},
                 },
                 "required": ["title"],
             },
         },
-        "why_now": {"type": "string"},
+        "why_now": {"type": "string", "nullable": True},
     },
     "required": ["summary_text", "recommended_actions"],
 }

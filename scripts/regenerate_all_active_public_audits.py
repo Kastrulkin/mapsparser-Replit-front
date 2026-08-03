@@ -368,6 +368,9 @@ def main() -> None:
             args.workstream_type or None,
             args.category_regex or None,
         )
+        # Release the read locks before slow external AI calls. Otherwise a
+        # concurrent compatibility DDL can deadlock with the later upsert.
+        conn.commit()
         if args.write_lead_ids_file:
             with open(args.write_lead_ids_file, "w", encoding="utf-8") as handle:
                 for lead in leads:

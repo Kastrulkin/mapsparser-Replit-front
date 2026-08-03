@@ -29,6 +29,8 @@ def parse_json_value(content: str) -> dict[str, Any] | list[Any] | None:
 def validate_json_schema(value: Any, schema: dict[str, Any] | None, path: str = "$") -> list[str]:
     if not schema:
         return []
+    if value is None and schema.get("nullable") is True:
+        return []
     errors: list[str] = []
     expected = schema.get("type")
     matches = {

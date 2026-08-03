@@ -252,6 +252,30 @@ def test_lead_audit_schema_matches_downstream_optional_fields() -> None:
     ] == ["title"]
 
 
+def test_lead_audit_schema_accepts_null_optional_fields() -> None:
+    definition = get_task_definition("lead_audit_enrichment")
+    assert definition is not None
+    result = LLMTaskResult(
+        status="completed",
+        content=(
+            '{"summary_text":"Недостаток карточки",'
+            '"recommended_actions":[{"title":"Добавить цены","description":null}],'
+            '"why_now":null}'
+        ),
+        provider="deepseek",
+        model="deepseek-v4-flash",
+    )
+
+    validated = gateway._validated_result(
+        result,
+        LLMTaskRequest(task_key="lead_audit_enrichment", prompt="public audit"),
+        definition,
+    )
+
+    assert validated.status == "completed"
+    assert validated.validation_errors == []
+
+
 def test_shadow_keeps_gigachat_result_and_records_deepseek_attempt(monkeypatch):
     calls = []
     shadow_finished = threading.Event()
