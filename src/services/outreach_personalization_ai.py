@@ -11,7 +11,7 @@ from services.llm import analyze_text_with_gigachat
 
 
 SCHEMA_VERSION = "1.0"
-PROMPT_VERSION = "outreach_personalization_v4"
+PROMPT_VERSION = "outreach_personalization_v5"
 REVIEW_PROMPT_VERSION = "outreach_semantic_review_v4"
 QUALITY_CRITERIA = (
     "source_validity",
@@ -249,6 +249,7 @@ def _request_record(
             "day_offset": max(0, int(item.get("day_offset") or 0)),
             "deterministic_draft": _clean(item.get("text")),
             "deterministic_subject": _clean(item.get("subject")) or None,
+            "copy_profile": _clean(item.get("copy_profile")) or None,
         } for item in sequence],
         "policy": {
             "approval_required": True,
@@ -275,6 +276,7 @@ def _generation_prompt(record: dict[str, Any]) -> str:
         "Ты готовишь мультиканальную outreach-цепочку LocalOS. "
         "Используй только INPUT_JSON и верни только JSON без markdown. "
         "Не добавляй факты, боли, результаты, коммерческие условия или знакомство, которых нет во входе. "
+        "Если copy_profile=beauty_email_short_v1, все четыре касания должны быть короткими email-сообщениями от Александра: без диагноза бизнесу, без отраслевой боли как факта и без канцелярита. "
         "Observation - факт. problem_hypothesis - только гипотеза: не утверждай её как факт. "
         "LocalOS сам вставит observation, bridge, founder story и proof без изменений. "
         "Ты выбираешь только opening_style и cta_intent для каждого касания. "

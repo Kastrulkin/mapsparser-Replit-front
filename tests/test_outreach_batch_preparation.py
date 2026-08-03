@@ -90,6 +90,42 @@ def test_localos_for_partner_sequence_uses_matching_authority() -> None:
     assert sequence[1]["angle"] == "matching_authority"
 
 
+def test_beauty_email_profile_creates_four_short_email_steps() -> None:
+    sequence = outreach_batch_preparation_service._sequence(
+        "sender-localosgo",
+        "localos",
+        outreach_batch_preparation_service.BEAUTY_EMAIL_SEQUENCE_PROFILE,
+    )
+
+    assert [item["channel"] for item in sequence] == ["email"] * 4
+    assert [item["day_offset"] for item in sequence] == [0, 3, 7, 12]
+    assert [item["angle"] for item in sequence] == [
+        "signal",
+        "founder_story",
+        "proof",
+        "respectful_close",
+    ]
+    assert all(item["sender_account_id"] == "sender-localosgo" for item in sequence)
+    assert all(
+        item["copy_profile"]
+        == outreach_batch_preparation_service.BEAUTY_EMAIL_SEQUENCE_PROFILE
+        for item in sequence
+    )
+
+
+def test_candidate_query_can_limit_run_to_beauty_categories() -> None:
+    query, params = outreach_batch_preparation_service._candidate_query(
+        "localos_sales",
+        [],
+        [],
+        None,
+        "(салон красоты|парикмах|косметолог)",
+    )
+
+    assert "LOWER(COALESCE(lead.category, '')) ~ %s" in query
+    assert params[-1] == "(салон красоты|парикмах|косметолог)"
+
+
 def test_current_campaign_requires_selected_email_sender() -> None:
     class CurrentCampaignCursor(BatchCursor):
         fetch_count = 0
@@ -304,7 +340,7 @@ def test_prepare_creates_draft_then_supersedes_stale_draft(monkeypatch) -> None:
     monkeypatch.setattr(
         outreach_batch_preparation_service,
         "_campaign_is_current",
-        lambda cursor, campaign_id, sender_mode, email_sender_id: False,
+        lambda cursor, campaign_id, sender_mode, email_sender_id, sequence_profile: False,
     )
     monkeypatch.setattr(
         outreach_batch_preparation_service,
@@ -381,7 +417,7 @@ def test_batch_scans_past_blocked_and_current_rows(monkeypatch) -> None:
     monkeypatch.setattr(
         outreach_batch_preparation_service,
         "_campaign_is_current",
-        lambda cursor, campaign_id, sender_mode, email_sender_id: campaign_id == "campaign-current",
+        lambda cursor, campaign_id, sender_mode, email_sender_id, sequence_profile: campaign_id == "campaign-current",
     )
     monkeypatch.setattr(
         outreach_batch_preparation_service,

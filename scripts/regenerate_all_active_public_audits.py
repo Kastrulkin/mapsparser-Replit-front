@@ -64,6 +64,8 @@ def _load_target_leads(
     include_missing_offers: bool,
     missing_only: bool,
     parsed_only: bool,
+    workstream_type: str | None,
+    category_regex: str | None,
 ) -> list[dict[str, Any]]:
     if include_missing_offers:
         sql = """
@@ -136,6 +138,21 @@ def _load_target_leads(
         normalized_group_name,
         group_name_pattern,
     ]
+    normalized_workstream_type = str(workstream_type or "").strip() or None
+    normalized_category_regex = str(category_regex or "").strip().lower() or None
+    if normalized_workstream_type:
+        sql += """
+          AND EXISTS (
+            SELECT 1
+            FROM lead_workstreams ws
+            WHERE ws.lead_id = l.id
+              AND ws.workstream_type = %s
+          )
+        """
+        params.append(normalized_workstream_type)
+    if normalized_category_regex:
+        sql += " AND LOWER(COALESCE(l.category, '')) ~ %s"
+        params.append(normalized_category_regex)
     if missing_only:
         sql += " AND o.lead_id IS NULL"
     if parsed_only:
@@ -310,6 +327,12 @@ def main() -> None:
     parser.add_argument("--include-missing-offers", action="store_true")
     parser.add_argument("--missing-only", action="store_true")
     parser.add_argument("--parsed-only", action="store_true")
+    parser.add_argument(
+        "--workstream-type",
+        choices=("localos_sales", "client_partnership"),
+        default="",
+    )
+    parser.add_argument("--category-regex", default="")
     parser.add_argument("--write-lead-ids-file", type=str, default="")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--skip-ai-enrichment", action="store_true")
@@ -342,6 +365,8 @@ def main() -> None:
             args.include_missing_offers or args.missing_only,
             args.missing_only,
             args.parsed_only,
+            args.workstream_type or None,
+            args.category_regex or None,
         )
         if args.write_lead_ids_file:
             with open(args.write_lead_ids_file, "w", encoding="utf-8") as handle:

@@ -15,7 +15,10 @@ class CampaignHistoryCursor:
                 "status": "stopped",
                 "last_reply_at": "2026-07-23T10:30:00+00:00",
             }]
-        elif "from outreach_campaign_touches where campaign_id" in normalized:
+        elif (
+            "from outreach_campaign_touches where campaign_id" in normalized
+            or "from outreach_campaign_touches touch" in normalized
+        ):
             self.rows = [{
                 "id": "touch-1",
                 "campaign_id": "campaign-1",

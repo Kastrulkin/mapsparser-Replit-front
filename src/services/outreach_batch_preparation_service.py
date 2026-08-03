@@ -53,6 +53,12 @@ ACTIVE_ENRICHMENT_STATES = {
 BLOCKING_CAMPAIGN_STATES = {"approved", "active", "paused"}
 DEFAULT_BATCH_SIZE = 25
 DEFAULT_FRESHNESS_DAYS = 7
+DEFAULT_SEQUENCE_PROFILE = "default"
+BEAUTY_EMAIL_SEQUENCE_PROFILE = "beauty_email_short_v1"
+SEQUENCE_PROFILES = {
+    DEFAULT_SEQUENCE_PROFILE,
+    BEAUTY_EMAIL_SEQUENCE_PROFILE,
+}
 
 
 def _text(value: Any) -> str:
@@ -159,7 +165,33 @@ def _load_platform_email_sender(cursor: Any) -> str | None:
     return _text(row.get("id")) if row else None
 
 
-def _sequence(email_sender_id: str | None, sender_mode: str) -> list[dict[str, Any]]:
+def _sequence(
+    email_sender_id: str | None,
+    sender_mode: str,
+    sequence_profile: str = DEFAULT_SEQUENCE_PROFILE,
+) -> list[dict[str, Any]]:
+    if sequence_profile not in SEQUENCE_PROFILES:
+        raise ValueError("Unsupported sequence_profile")
+    if sequence_profile == BEAUTY_EMAIL_SEQUENCE_PROFILE:
+        if sender_mode != SENDER_MODE_LOCALOS:
+            raise ValueError("beauty_email_short_v1 is only available for localos_sales")
+        touches: list[dict[str, Any]] = []
+        for day_offset, angle in (
+            (0, "signal"),
+            (3, "founder_story"),
+            (7, "proof"),
+            (12, "respectful_close"),
+        ):
+            touch: dict[str, Any] = {
+                "channel": "email",
+                "day_offset": day_offset,
+                "angle": angle,
+                "copy_profile": BEAUTY_EMAIL_SEQUENCE_PROFILE,
+            }
+            if email_sender_id:
+                touch["sender_account_id"] = email_sender_id
+            touches.append(touch)
+        return touches
     second_angle = (
         "matching_authority"
         if sender_mode == SENDER_MODE_LOCALOS_FOR_PARTNER
@@ -185,6 +217,7 @@ def _candidate_query(
     business_ids: list[str],
     workstream_ids: list[str],
     limit: int | None,
+    category_regex: str | None = None,
 ) -> tuple[str, list[Any]]:
     filters = ["ws.workstream_type = %s"]
     params: list[Any] = [workstream_type]
@@ -196,6 +229,10 @@ def _candidate_query(
     if workstream_ids:
         filters.append("ws.id::text = ANY(%s)")
         params.append(workstream_ids)
+    normalized_category_regex = _text(category_regex)
+    if normalized_category_regex:
+        filters.append("LOWER(COALESCE(lead.category, '')) ~ %s")
+        params.append(normalized_category_regex.lower())
     limit_sql = ""
     if limit is not None:
         limit_sql = " LIMIT %s"
@@ -302,11 +339,21 @@ def _blocked_reason(row: dict[str, Any], now: datetime) -> str | None:
     return None
 
 
-def _preparation_contract(sender_mode: str) -> str:
-    return f"{DECISION_VERSION}:{PROMPT_VERSION}:{REVIEW_PROMPT_VERSION}:{sender_mode}"
+def _preparation_contract(
+    sender_mode: str,
+    sequence_profile: str = DEFAULT_SEQUENCE_PROFILE,
+) -> str:
+    return (
+        f"{DECISION_VERSION}:{PROMPT_VERSION}:{REVIEW_PROMPT_VERSION}:"
+        f"{sender_mode}:{sequence_profile}"
+    )
 
 
-def _preparation_prerequisite(row: dict[str, Any], sender_mode: str) -> str | None:
+def _preparation_prerequisite(
+    row: dict[str, Any],
+    sender_mode: str,
+    sequence_profile: str = DEFAULT_SEQUENCE_PROFILE,
+) -> str | None:
     """Return a recoverable data blocker before spending an AI generation call."""
     enrichment_status = _text(row.get("enrichment_status")).lower()
     if enrichment_status in ACTIVE_ENRICHMENT_STATES:
@@ -340,14 +387,14 @@ def _preparation_prerequisite(row: dict[str, Any], sender_mode: str) -> str | No
     )
     if (
         readiness.get("source") == "outreach_batch_preparation"
-        and readiness.get("contract") == _preparation_contract(sender_mode)
+        and readiness.get("contract") == _preparation_contract(sender_mode, sequence_profile)
         and _text(readiness.get("code"))
         in {"needs_evidence", "invalid_sequence"}
     ):
         return _text(readiness.get("code"))
     if (
         readiness.get("source") == "outreach_batch_preparation"
-        and readiness.get("contract") == _preparation_contract(sender_mode)
+        and readiness.get("contract") == _preparation_contract(sender_mode, sequence_profile)
         and _text(readiness.get("code")) == "needs_generation"
         and readiness.get("retryable") is True
     ):
@@ -369,6 +416,7 @@ def _save_preparation_blocker(
     *,
     workstream_id: str,
     sender_mode: str,
+    sequence_profile: str = DEFAULT_SEQUENCE_PROFILE,
     preview: dict[str, Any],
 ) -> None:
     quality_gate = preview.get("quality_gate") if isinstance(preview.get("quality_gate"), dict) else {}
@@ -399,7 +447,7 @@ def _save_preparation_blocker(
     previous_attempts = 0
     if (
         previous.get("source") == "outreach_batch_preparation"
-        and previous.get("contract") == _preparation_contract(sender_mode)
+        and previous.get("contract") == _preparation_contract(sender_mode, sequence_profile)
         and _text(previous.get("original_code") or previous.get("code"))
         in transient_quality_codes
     ):
@@ -429,7 +477,7 @@ def _save_preparation_blocker(
         "reason_codes": reason_codes,
         "source": "outreach_batch_preparation",
         "sender_mode": sender_mode,
-        "contract": _preparation_contract(sender_mode),
+        "contract": _preparation_contract(sender_mode, sequence_profile),
         "checked_at": datetime.now(timezone.utc).isoformat(),
     }
     if provider_retryable:
@@ -492,12 +540,14 @@ def _load_candidates(
     business_ids: list[str],
     workstream_ids: list[str],
     limit: int | None,
+    category_regex: str | None = None,
 ) -> list[dict[str, Any]]:
     query, params = _candidate_query(
         workstream_type,
         business_ids,
         workstream_ids,
         limit,
+        category_regex,
     )
     cursor.execute(query, params)
     return [dict(row) for row in cursor.fetchall()]
@@ -508,6 +558,7 @@ def _campaign_is_current(
     campaign_id: str,
     sender_mode: str,
     email_sender_id: str | None = None,
+    sequence_profile: str = DEFAULT_SEQUENCE_PROFILE,
 ) -> bool:
     cursor.execute(
         """
@@ -563,9 +614,12 @@ def _campaign_is_current(
         )
     ):
         return False
+    if _text(policy.get("sequence_profile") or DEFAULT_SEQUENCE_PROFILE) != sequence_profile:
+        return False
     cursor.execute(
         """
-        SELECT channel, sender_account_id, message_brief_json, quality_gate_json
+        SELECT channel, sender_account_id, angle_type, scheduled_at,
+               message_brief_json, quality_gate_json
         FROM outreach_campaign_touches
         WHERE campaign_id = %s
         ORDER BY sequence_index
@@ -578,12 +632,23 @@ def _campaign_is_current(
         for touch in touches
         if touch.get("channel") == "email"
     )
-    return len(touches) == 4 and email_sender_current and all(
+    expected = _sequence(email_sender_id, sender_mode, sequence_profile)
+    expected_channels = [_text(item.get("channel")) for item in expected]
+    expected_angles = [_text(item.get("angle")) for item in expected]
+    actual_channels = [_text(item.get("channel")) for item in touches]
+    actual_angles = [_text(item.get("angle_type")) for item in touches]
+    return (
+        len(touches) == 4
+        and actual_channels == expected_channels
+        and actual_angles == expected_angles
+        and email_sender_current
+        and all(
         generation_contract_current(
             touch.get("message_brief_json"),
             touch.get("quality_gate_json"),
         )
         for touch in touches
+        )
     )
 
 
@@ -613,6 +678,7 @@ def refresh_decisions(
     workstream_type: str,
     business_ids: list[str] | None = None,
     workstream_ids: list[str] | None = None,
+    category_regex: str | None = None,
     limit: int | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     execute: bool = False,
@@ -626,6 +692,7 @@ def refresh_decisions(
             business_ids=business_ids or [],
             workstream_ids=workstream_ids or [],
             limit=limit,
+            category_regex=category_regex,
         )
     finally:
         conn.close()
@@ -702,6 +769,8 @@ def inventory(
     workstream_type: str,
     business_ids: list[str] | None = None,
     workstream_ids: list[str] | None = None,
+    category_regex: str | None = None,
+    sequence_profile: str = DEFAULT_SEQUENCE_PROFILE,
     limit: int | None = None,
     freshness_days: int = DEFAULT_FRESHNESS_DAYS,
 ) -> dict[str, Any]:
@@ -715,6 +784,7 @@ def inventory(
             business_ids=business_ids or [],
             workstream_ids=workstream_ids or [],
             limit=limit,
+            category_regex=category_regex,
         )
         now = datetime.now(timezone.utc)
         freshness_cutoff = now - timedelta(days=max(1, freshness_days))
@@ -731,7 +801,7 @@ def inventory(
             readiness_code = ""
             if (
                 readiness.get("source") == "outreach_batch_preparation"
-                and readiness.get("contract") == _preparation_contract(sender_mode)
+                and readiness.get("contract") == _preparation_contract(sender_mode, sequence_profile)
             ):
                 readiness_code = _text(readiness.get("code"))
             decision = (
@@ -754,6 +824,7 @@ def inventory(
                     latest_campaign_id,
                     sender_mode,
                     email_sender_id,
+                    sequence_profile,
                 )
             )
             updated_at = row.get("enrichment_updated_at")
@@ -812,6 +883,8 @@ def inventory(
             "mode": "inventory",
             "workstream_type": workstream_type,
             "business_ids": business_ids or [],
+            "category_regex": category_regex,
+            "sequence_profile": sequence_profile,
             "total": len(items),
             "counts": dict(sorted(counts.items())),
             "items": items,
@@ -825,6 +898,7 @@ def enqueue_enrichment(
     workstream_type: str,
     business_ids: list[str] | None = None,
     workstream_ids: list[str] | None = None,
+    category_regex: str | None = None,
     limit: int | None = None,
     execute: bool = False,
     freshness_days: int = DEFAULT_FRESHNESS_DAYS,
@@ -834,6 +908,7 @@ def enqueue_enrichment(
         workstream_type=workstream_type,
         business_ids=business_ids,
         workstream_ids=workstream_ids,
+        category_regex=category_regex,
         limit=limit,
         freshness_days=freshness_days,
     )
@@ -911,6 +986,8 @@ def prepare_campaigns(
     workstream_type: str,
     business_ids: list[str] | None = None,
     workstream_ids: list[str] | None = None,
+    category_regex: str | None = None,
+    sequence_profile: str = DEFAULT_SEQUENCE_PROFILE,
     limit: int | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     execute: bool = False,
@@ -927,6 +1004,7 @@ def prepare_campaigns(
             business_ids=business_ids or [],
             workstream_ids=workstream_ids or [],
             limit=limit,
+            category_regex=category_regex,
         )
     finally:
         conn.close()
@@ -938,6 +1016,8 @@ def prepare_campaigns(
         "execute": execute,
         "workstream_type": workstream_type,
         "business_ids": business_ids or [],
+        "category_regex": category_regex,
+        "sequence_profile": sequence_profile,
         "planned": len(rows),
         "attempted": 0,
         "batch_size": max(1, batch_size),
@@ -955,7 +1035,7 @@ def prepare_campaigns(
         if blocked:
             result["blocked"][blocked] += 1
             continue
-        prerequisite = _preparation_prerequisite(row, sender_mode)
+        prerequisite = _preparation_prerequisite(row, sender_mode, sequence_profile)
         if prerequisite:
             result["blocked"][prerequisite] += 1
             continue
@@ -976,6 +1056,7 @@ def prepare_campaigns(
                     latest_campaign_id,
                     sender_mode,
                     email_sender_id,
+                    sequence_profile,
                 )
             ):
                 item_conn.rollback()
@@ -992,7 +1073,7 @@ def prepare_campaigns(
             preflight_preview = build_preview(
                 item_cursor,
                 _text(row.get("id")),
-                sequence=_sequence(email_sender_id, sender_mode),
+                sequence=_sequence(email_sender_id, sender_mode, sequence_profile),
                 sender_mode=sender_mode,
                 generate_ai=False,
             )
@@ -1011,6 +1092,7 @@ def prepare_campaigns(
                     item_cursor,
                     workstream_id=_text(row.get("id")),
                     sender_mode=sender_mode,
+                    sequence_profile=sequence_profile,
                     preview=preflight_preview,
                 )
                 item_conn.commit()
@@ -1018,10 +1100,11 @@ def prepare_campaigns(
             preview = build_preview(
                 item_cursor,
                 _text(row.get("id")),
-                sequence=_sequence(email_sender_id, sender_mode),
+                sequence=_sequence(email_sender_id, sender_mode, sequence_profile),
                 sender_mode=sender_mode,
             )
             preview = _enforce_complete_sequence(preview)
+            preview["sequence_profile"] = sequence_profile
             preview_status = _text(preview.get("status")) or "unknown"
             result["preview_states"][preview_status] += 1
             if preview_status not in {"ready", "needs_channel_setup"}:
@@ -1029,6 +1112,7 @@ def prepare_campaigns(
                     item_cursor,
                     workstream_id=_text(row.get("id")),
                     sender_mode=sender_mode,
+                    sequence_profile=sequence_profile,
                     preview=preview,
                 )
                 item_conn.commit()
@@ -1099,6 +1183,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--business-id", action="append", default=[])
     parser.add_argument("--workstream-id", action="append", default=[])
+    parser.add_argument("--category-regex", default="")
+    parser.add_argument(
+        "--sequence-profile",
+        choices=tuple(sorted(SEQUENCE_PROFILES)),
+        default=DEFAULT_SEQUENCE_PROFILE,
+    )
     parser.add_argument("--limit", type=int)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--freshness-days", type=int, default=DEFAULT_FRESHNESS_DAYS)
@@ -1120,6 +1210,8 @@ def main() -> None:
             workstream_type=args.workstream_type,
             business_ids=args.business_id,
             workstream_ids=args.workstream_id,
+            category_regex=args.category_regex or None,
+            sequence_profile=args.sequence_profile,
             limit=effective_limit,
             freshness_days=args.freshness_days,
         )
@@ -1128,6 +1220,7 @@ def main() -> None:
             workstream_type=args.workstream_type,
             business_ids=args.business_id,
             workstream_ids=args.workstream_id,
+            category_regex=args.category_regex or None,
             limit=effective_limit,
             batch_size=max(1, min(args.batch_size, 100)),
             execute=args.execute,
@@ -1137,6 +1230,7 @@ def main() -> None:
             workstream_type=args.workstream_type,
             business_ids=args.business_id,
             workstream_ids=args.workstream_id,
+            category_regex=args.category_regex or None,
             limit=effective_limit,
             execute=args.execute,
             freshness_days=args.freshness_days,
@@ -1147,6 +1241,8 @@ def main() -> None:
             workstream_type=args.workstream_type,
             business_ids=args.business_id,
             workstream_ids=args.workstream_id,
+            category_regex=args.category_regex or None,
+            sequence_profile=args.sequence_profile,
             limit=effective_limit,
             batch_size=max(1, min(args.batch_size, 100)),
             execute=args.execute,

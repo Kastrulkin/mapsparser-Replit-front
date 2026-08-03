@@ -1354,6 +1354,17 @@ def _load_context(cursor: Any, workstream_id: str) -> dict[str, Any]:
         ) or {}
     else:
         workstream["partnership_match"] = {}
+    cursor.execute(
+        """
+        SELECT slug, page_json, generated_json, updated_at
+        FROM adminprospectingleadpublicoffers
+        WHERE lead_id = %s AND is_active = TRUE
+        ORDER BY updated_at DESC
+        LIMIT 1
+        """,
+        (workstream.get("lead_id"),),
+    )
+    workstream["public_audit"] = _dict(cursor.fetchone())
     return workstream
 
 
@@ -1412,6 +1423,52 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
             "author_or_organization": _text(signal.get("author_or_organization")) or None,
             "source_type": _text(signal.get("source_type")) or None,
             "rejected_reason": None,
+        })
+    public_audit = context.get("public_audit") or {}
+    audit_page = (
+        public_audit.get("page_json")
+        if isinstance(public_audit.get("page_json"), dict)
+        else {}
+    )
+    audit = audit_page.get("audit") if isinstance(audit_page.get("audit"), dict) else {}
+    audit_meta = audit.get("ai_enrichment") if isinstance(audit.get("ai_enrichment"), dict) else {}
+    current_state = audit.get("current_state") if isinstance(audit.get("current_state"), dict) else {}
+    audit_source_url = _text(context.get("source_url") or context.get("website"))
+    audit_fact = ""
+    audit_relevance = ""
+    if (
+        context.get("workstream_type") == "localos_sales"
+        and _text(audit_meta.get("source")).lower() == "deepseek"
+        and audit_source_url
+    ):
+        services_count = int(current_state.get("services_count") or 0)
+        services_with_price_count = int(current_state.get("services_with_price_count") or 0)
+        if current_state.get("description_present") is False:
+            audit_fact = f'В публичной карточке "{_text(context.get("lead_name"))}" не заполнено описание бизнеса.'
+            audit_relevance = "Можно проверить, помогает ли описание быстро понять основные услуги и перейти к записи."
+        elif services_count > 0 and services_with_price_count < services_count:
+            audit_fact = (
+                f"В публичной карточке указано услуг - {services_count}; "
+                f"с ценой - {services_with_price_count}."
+            )
+            audit_relevance = "Можно проверить, для каких услуг клиент видит цену и понятный следующий шаг."
+        elif current_state.get("has_recent_activity") is False:
+            audit_fact = "В публичной карточке не найдено свежих публикаций."
+            audit_relevance = "Можно проверить, какие обновления дадут клиенту свежий повод записаться."
+    if audit_fact:
+        ledger.append({
+            "id": "deepseek-public-audit",
+            "kind": "public_audit_finding",
+            "fact": audit_fact,
+            "status": "observed",
+            "source_url": audit_source_url,
+            "observed_at": public_audit.get("updated_at"),
+            "freshness": "current_snapshot",
+            "confidence": 0.95,
+            "hypothesis": None,
+            "relevance": audit_relevance,
+            "source_type": "public_card_audit",
+            "analysis_source": "deepseek",
         })
     rating = context.get("rating")
     if rating is not None and float(rating) < 4.5 and context.get("source_url"):
@@ -1487,7 +1544,8 @@ def build_evidence_ledger(context: dict[str, Any]) -> list[dict[str, Any]]:
         elif kind == "service_compatibility":
             rank = 0
         elif (
-            "по данным аудита, услуг в карточке" in fact
+            kind == "public_audit_finding"
+            or "по данным аудита, услуг в карточке" in fact
             or "по данным аудита карточки: всего услуг" in fact
             or "описание бизнеса не найдено" in fact
         ):
@@ -2552,6 +2610,7 @@ def build_preview(
             "day_offset": day_offset,
             "scheduled_at": start + timedelta(days=day_offset),
             "angle": angle,
+            "copy_profile": _text(item.get("copy_profile")) or None,
             "subject": (
                 _text(item.get("subject"))[:200]
                 if requested_channel == "email" and _text(item.get("subject"))
@@ -2825,6 +2884,7 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
                 "no_reply_grace_hours": 168,
                 "approval_scope": "whole_sequence",
                 "sender_mode": preview.get("sender_mode"),
+                "sequence_profile": preview.get("sequence_profile") or "default",
                 "sender_scope_type": preview.get("sender_scope_type"),
                 "represented_business_id": preview.get("represented_business_id"),
                 "represented_business_name": preview.get("represented_business_name"),
@@ -2860,6 +2920,7 @@ def persist_preview(cursor: Any, preview: dict[str, Any], *, user_id: str) -> di
                     "generation_source": touch.get("generation_source") or "deterministic",
                     "generation_prompt_version": touch.get("generation_prompt_version"),
                     "semantic_review_prompt_version": touch.get("semantic_review_prompt_version"),
+                    "copy_profile": touch.get("copy_profile"),
                     "human_edited": bool(touch.get("human_edited")),
                     "original_generated_text": touch.get("original_generated_text"),
                     "original_generated_subject": touch.get("original_generated_subject"),

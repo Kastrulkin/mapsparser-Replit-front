@@ -111,6 +111,21 @@ def _sequence():
     ]
 
 
+def test_request_preserves_copy_profile_for_gigachat_contract() -> None:
+    sequence = _sequence()
+    sequence[0]["copy_profile"] = "beauty_email_short_v1"
+    record = _request_record(
+        motion="localos_sales",
+        identity={"company_name": "Салон"},
+        candidate=_candidate(),
+        founder_story=_story(),
+        sequence=sequence,
+        voice_examples=[],
+    )
+
+    assert record["sequence"][0]["copy_profile"] == "beauty_email_short_v1"
+
+
 def test_generation_prompt_keeps_long_evidence_out_of_provider_output_contract():
     record = _request_record(
         motion="localos_sales",
