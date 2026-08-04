@@ -17,6 +17,7 @@ from psycopg2.extras import Json, RealDictCursor
 
 from pg_db_utils import get_db_connection
 from services.contact_intelligence_service import enqueue_enrichment_job
+from services.lead_partner_type_service import PARTNER_TYPE_IDS, partner_type_for_category
 from services.outreach_campaign_service import (
     SENDER_MODE_LOCALOS,
     SENDER_MODE_LOCALOS_FOR_PARTNER,
@@ -204,7 +205,8 @@ def _candidate_query(
         SELECT ws.id, ws.lead_id, ws.workstream_type, ws.client_business_id,
                ws.lifecycle_status, ws.status AS workstream_status,
                ws.last_contact_at AS workstream_last_contact_at,
-               lead.name AS lead_name, lead.pipeline_status, lead.status AS lead_status,
+               lead.name AS lead_name, lead.category AS lead_category,
+               lead.pipeline_status, lead.status AS lead_status,
                lead.last_contact_at AS lead_last_contact_at,
                latest_job.status AS enrichment_status,
                latest_job.updated_at AS enrichment_updated_at,
@@ -492,15 +494,36 @@ def _load_candidates(
     business_ids: list[str],
     workstream_ids: list[str],
     limit: int | None,
+    partner_types: list[str] | None = None,
 ) -> list[dict[str, Any]]:
+    normalized_partner_types = list(dict.fromkeys(
+        str(item or "").strip()
+        for item in (partner_types or [])
+        if str(item or "").strip()
+    ))
+    invalid_partner_types = [
+        item for item in normalized_partner_types if item not in PARTNER_TYPE_IDS
+    ]
+    if invalid_partner_types:
+        raise ValueError(
+            "Unsupported partner type: " + ", ".join(invalid_partner_types)
+        )
     query, params = _candidate_query(
         workstream_type,
         business_ids,
         workstream_ids,
-        limit,
+        None if normalized_partner_types else limit,
     )
     cursor.execute(query, params)
-    return [dict(row) for row in cursor.fetchall()]
+    rows = [dict(row) for row in cursor.fetchall()]
+    for row in rows:
+        row["partner_type"] = partner_type_for_category(row.get("lead_category"))
+    if normalized_partner_types:
+        allowed_partner_types = set(normalized_partner_types)
+        rows = [row for row in rows if row.get("partner_type") in allowed_partner_types]
+        if limit is not None:
+            rows = rows[:max(1, limit)]
+    return rows
 
 
 def _campaign_is_current(
@@ -613,6 +636,7 @@ def refresh_decisions(
     workstream_type: str,
     business_ids: list[str] | None = None,
     workstream_ids: list[str] | None = None,
+    partner_types: list[str] | None = None,
     limit: int | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     execute: bool = False,
@@ -626,6 +650,7 @@ def refresh_decisions(
             business_ids=business_ids or [],
             workstream_ids=workstream_ids or [],
             limit=limit,
+            partner_types=partner_types,
         )
     finally:
         conn.close()
@@ -635,6 +660,7 @@ def refresh_decisions(
         "mode": "refresh_decisions",
         "execute": execute,
         "workstream_type": workstream_type,
+        "partner_types": partner_types or [],
         "planned": len(rows),
         "attempted": 0,
         "updated": 0,
@@ -702,6 +728,7 @@ def inventory(
     workstream_type: str,
     business_ids: list[str] | None = None,
     workstream_ids: list[str] | None = None,
+    partner_types: list[str] | None = None,
     limit: int | None = None,
     freshness_days: int = DEFAULT_FRESHNESS_DAYS,
 ) -> dict[str, Any]:
@@ -715,6 +742,7 @@ def inventory(
             business_ids=business_ids or [],
             workstream_ids=workstream_ids or [],
             limit=limit,
+            partner_types=partner_types,
         )
         now = datetime.now(timezone.utc)
         freshness_cutoff = now - timedelta(days=max(1, freshness_days))
@@ -802,6 +830,7 @@ def inventory(
                 "workstream_id": _text(row.get("id")),
                 "lead_id": _text(row.get("lead_id")),
                 "lead_name": _text(row.get("lead_name")),
+                "partner_type": _text(row.get("partner_type")) or "other",
                 "state": state,
                 "enrichment_status": row.get("enrichment_status"),
                 "contact_count": int(row.get("contact_count") or 0),
@@ -812,6 +841,7 @@ def inventory(
             "mode": "inventory",
             "workstream_type": workstream_type,
             "business_ids": business_ids or [],
+            "partner_types": partner_types or [],
             "total": len(items),
             "counts": dict(sorted(counts.items())),
             "items": items,
@@ -825,6 +855,7 @@ def enqueue_enrichment(
     workstream_type: str,
     business_ids: list[str] | None = None,
     workstream_ids: list[str] | None = None,
+    partner_types: list[str] | None = None,
     limit: int | None = None,
     execute: bool = False,
     freshness_days: int = DEFAULT_FRESHNESS_DAYS,
@@ -834,6 +865,7 @@ def enqueue_enrichment(
         workstream_type=workstream_type,
         business_ids=business_ids,
         workstream_ids=workstream_ids,
+        partner_types=partner_types,
         limit=limit,
         freshness_days=freshness_days,
     )
@@ -911,6 +943,7 @@ def prepare_campaigns(
     workstream_type: str,
     business_ids: list[str] | None = None,
     workstream_ids: list[str] | None = None,
+    partner_types: list[str] | None = None,
     limit: int | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     execute: bool = False,
@@ -927,6 +960,7 @@ def prepare_campaigns(
             business_ids=business_ids or [],
             workstream_ids=workstream_ids or [],
             limit=limit,
+            partner_types=partner_types,
         )
     finally:
         conn.close()
@@ -938,6 +972,7 @@ def prepare_campaigns(
         "execute": execute,
         "workstream_type": workstream_type,
         "business_ids": business_ids or [],
+        "partner_types": partner_types or [],
         "planned": len(rows),
         "attempted": 0,
         "batch_size": max(1, batch_size),
@@ -1099,6 +1134,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--business-id", action="append", default=[])
     parser.add_argument("--workstream-id", action="append", default=[])
+    parser.add_argument(
+        "--partner-type",
+        action="append",
+        default=[],
+        choices=sorted(PARTNER_TYPE_IDS),
+        help="Use the same canonical partner type as the leads interface",
+    )
     parser.add_argument("--limit", type=int)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--freshness-days", type=int, default=DEFAULT_FRESHNESS_DAYS)
@@ -1120,6 +1162,7 @@ def main() -> None:
             workstream_type=args.workstream_type,
             business_ids=args.business_id,
             workstream_ids=args.workstream_id,
+            partner_types=args.partner_type,
             limit=effective_limit,
             freshness_days=args.freshness_days,
         )
@@ -1128,6 +1171,7 @@ def main() -> None:
             workstream_type=args.workstream_type,
             business_ids=args.business_id,
             workstream_ids=args.workstream_id,
+            partner_types=args.partner_type,
             limit=effective_limit,
             batch_size=max(1, min(args.batch_size, 100)),
             execute=args.execute,
@@ -1137,6 +1181,7 @@ def main() -> None:
             workstream_type=args.workstream_type,
             business_ids=args.business_id,
             workstream_ids=args.workstream_id,
+            partner_types=args.partner_type,
             limit=effective_limit,
             execute=args.execute,
             freshness_days=args.freshness_days,
@@ -1147,6 +1192,7 @@ def main() -> None:
             workstream_type=args.workstream_type,
             business_ids=args.business_id,
             workstream_ids=args.workstream_id,
+            partner_types=args.partner_type,
             limit=effective_limit,
             batch_size=max(1, min(args.batch_size, 100)),
             execute=args.execute,
