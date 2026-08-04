@@ -257,7 +257,8 @@ export const el = {
       finance: "Οικονομικά",
       aiChatPromotion: "Προώθηση AI Chat",
       settings: "Ρυθμίσεις",
-      network: "Διαχείριση Δικτύου"
+      network: "Διαχείριση Δικτύου",
+      greeting: "Απαλλαγείτε από τη ρουτίνα! 🚀"
     },
     subscription: {
       currentSubscription: "Τρέχουσα Συνδρομή",

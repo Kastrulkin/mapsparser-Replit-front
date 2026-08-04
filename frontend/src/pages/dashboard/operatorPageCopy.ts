@@ -185,10 +185,24 @@ const summaryByLanguage: Partial<Record<Language, OperatorSummaryCopy>> = {
   ),
 };
 
+const feedback = (button: string, description: string, emptyTitle: string, successTitle: string, errorTitle: string, section: string, placeholder: string, cancel: string, send: string): OperatorPageCopy['feedback'] => ({
+  button, title: button, description, emptyTitle, emptyDescription: description, successTitle, successDescription: successTitle, errorTitle, errorDescription: errorTitle, section, placeholder, cancel, send,
+});
+
+const feedbackByLanguage: Partial<Record<Language, OperatorPageCopy['feedback']>> = {
+  fr: feedback('Signaler un problème', 'Décrivez ce qui ne fonctionne pas dans cette section.', 'Décrivez le problème', 'Message envoyé', 'Échec de l’envoi', 'Section', 'Que s’est-il passé ?', 'Annuler', 'Envoyer'),
+  es: feedback('Informar de un problema', 'Describe qué no funciona en esta sección.', 'Describe el problema', 'Mensaje enviado', 'No se pudo enviar', 'Sección', '¿Qué ha ocurrido?', 'Cancelar', 'Enviar'),
+  el: feedback('Αναφορά προβλήματος', 'Περιγράψτε τι δεν λειτουργεί σωστά σε αυτή την ενότητα.', 'Περιγράψτε το πρόβλημα', 'Το μήνυμα στάλθηκε', 'Αποτυχία αποστολής', 'Ενότητα', 'Τι συνέβη;', 'Ακύρωση', 'Αποστολή'),
+  de: feedback('Problem melden', 'Beschreiben Sie, was in diesem Bereich nicht funktioniert.', 'Problem beschreiben', 'Nachricht gesendet', 'Senden fehlgeschlagen', 'Bereich', 'Was ist passiert?', 'Abbrechen', 'Senden'),
+  th: feedback('รายงานปัญหา', 'อธิบายสิ่งที่ทำงานไม่ถูกต้องในส่วนนี้', 'อธิบายปัญหา', 'ส่งข้อความแล้ว', 'ส่งข้อความไม่ได้', 'ส่วน', 'เกิดอะไรขึ้น?', 'ยกเลิก', 'ส่ง'),
+  ar: feedback('الإبلاغ عن مشكلة', 'صف ما لا يعمل بشكل صحيح في هذا القسم.', 'صف المشكلة', 'تم إرسال الرسالة', 'تعذر الإرسال', 'القسم', 'ماذا حدث؟', 'إلغاء', 'إرسال'),
+  ha: feedback('Kai rahoton matsala', 'Bayyana abin da bai yi aiki daidai ba a wannan sashe.', 'Bayyana matsalar', 'An aika saƙo', 'Ba a iya aikawa ba', 'Sashe', 'Me ya faru?', 'Soke', 'Aika'),
+};
+
 export const operatorPageCopyForLanguage = (language: Language) => {
   const base = copyByLanguage[language];
   const localizedSummary = summaryByLanguage[language];
-  return localizedSummary ? { ...base, ...localizedSummary } : base;
+  return { ...base, ...(localizedSummary || {}), ...(feedbackByLanguage[language] ? { feedback: feedbackByLanguage[language] } : {}) };
 };
 
 export const fillOperatorTemplate = (template: string, values: Record<string, string | number>) => (
