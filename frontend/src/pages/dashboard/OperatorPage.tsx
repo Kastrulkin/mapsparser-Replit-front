@@ -19,6 +19,15 @@ import { BetaFeedbackBanner } from '@/components/dashboard/BetaFeedbackBanner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/i18n/LanguageContext';
+import {
+  localizeDemoBusinessName,
+  localizedAttentionCopy,
+  localizedDataWarning,
+  localizedMetricLabel,
+  localizedMetricSource,
+  operatorPageCopyForLanguage,
+} from './operatorPageCopy';
 
 type DashboardContext = {
   currentBusinessId: string | null;
@@ -218,14 +227,6 @@ type ScopeSummary = {
   data_warnings?: string[];
 };
 
-const exampleCommands = [
-  'Что ты умеешь?',
-  'Измени цену услуги Маникюр на 1500',
-  'Создай новость про летнюю акцию',
-  'Сделай контент-план на 30 дней',
-  'Покажи отзывы без ответа',
-];
-
 const resultText = (result: OperatorChatResult | RefreshResult | null) => {
   if (!result) return '';
   return result.chat_response || result.result_summary?.title || 'Готово.';
@@ -258,6 +259,9 @@ const mapStoredMessages = (items: Array<{
 
 export const OperatorPage = () => {
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
+  const { language } = useLanguage();
+  const copy = operatorPageCopyForLanguage(language);
+  const businessName = localizeDemoBusinessName(currentBusiness?.name || '', language) || copy.selectedBusiness;
   const [chatMessage, setChatMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
@@ -568,71 +572,72 @@ export const OperatorPage = () => {
     <div className="space-y-5" data-tour-target="operator-overview">
       <DashboardPageHeader
         eyebrow="LocalOS Operator"
-        title="Оператор"
-        description="Напишите задачу обычным языком. Оператор выполнит её, уточнит недостающее или безопасно передаст в нужный раздел."
+        title={copy.title}
+        description={copy.description}
         icon={Bot}
       />
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Что важно сейчас">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-label={copy.priorityTitle}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-slate-950">Что важно сейчас</div>
+            <div className="text-sm font-semibold text-slate-950">{copy.priorityTitle}</div>
             <div className="mt-1 text-sm text-slate-500">
-              Это же саммари показывает Telegram для выбранного бизнеса.
+              {copy.priorityDescription}
             </div>
           </div>
           {scopeSummaryLoading ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" /> : null}
         </div>
         {scopeSummary?.attention_items?.length ? (
           <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {scopeSummary.attention_items.slice(0, 3).map((item) => (
-              <div key={item.id || item.title} className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+            {scopeSummary.attention_items.slice(0, 3).map((item) => {
+              const localizedItem = localizedAttentionCopy(copy, item.id, item.title, item.description);
+              return <div key={item.id || item.title} className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
                 <div className="flex items-start gap-2">
                   {item.severity === 'low'
                     ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                     : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />}
                   <div className="min-w-0">
-                    <div className="font-medium text-slate-950">{item.title || 'Задача'}{item.count ? ` · ${item.count}` : ''}</div>
-                    {item.description ? <div className="mt-1 text-xs leading-5 text-slate-600">{item.description}</div> : null}
+                    <div className="font-medium text-slate-950">{localizedItem.title}{item.count ? ` · ${item.count}` : ''}</div>
+                    {localizedItem.description ? <div className="mt-1 text-xs leading-5 text-slate-600">{localizedItem.description}</div> : null}
                   </div>
                 </div>
-              </div>
-            ))}
+              </div>;
+            })}
           </div>
         ) : null}
         {scopeSummary?.metrics?.length ? (
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
             {scopeSummary.metrics.slice(0, 4).map((metric) => (
               <span key={metric.key || metric.label} className="tabular-nums">
-                <strong className="font-semibold text-slate-800">{metric.label}: {metric.value ?? '—'}</strong>
-                {' · '}{metric.source_label || metric.source || 'LocalOS'}
-                {metric.updated_at ? ` · ${new Date(metric.updated_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}
+                <strong className="font-semibold text-slate-800">{localizedMetricLabel(copy, metric.key, metric.label)}: {metric.value ?? '—'}</strong>
+                {' · '}{localizedMetricSource(copy, metric.source, metric.source_label)}
+                {metric.updated_at ? ` · ${new Date(metric.updated_at).toLocaleString(language, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}
               </span>
             ))}
           </div>
         ) : null}
         {scopeSummary?.data_warnings?.length ? (
           <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-200">
-            {scopeSummary.data_warnings[0]}
+            {localizedDataWarning(copy, scopeSummary.data_warnings[0])}
           </div>
         ) : null}
       </section>
 
       <BetaFeedbackBanner
         area="operator"
-        title="Функция в стадии beta-тестирования"
-        description="Если в Операторе что-то сработало не так, выглядит странно или не доводит задачу до результата, сообщите о проблеме."
+        title={copy.betaTitle}
+        description={copy.betaDescription}
         businessId={currentBusinessId}
-        businessName={currentBusiness?.name || null}
+        businessName={businessName}
       />
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-4 py-3">
           <div className="text-sm font-semibold text-slate-950">
-            {currentBusiness?.name || 'Выбранный бизнес'}
+            {businessName}
           </div>
           <div className="mt-1 text-sm leading-6 text-slate-600">
-            Команды выполняются внутри LocalOS. Публикация во внешние карты остаётся ручной.
+            {copy.safetyNote}
           </div>
         </div>
 
@@ -640,19 +645,19 @@ export const OperatorPage = () => {
           {historyLoading ? (
             <div className="flex min-h-[320px] items-center justify-center text-sm text-slate-500">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Загружаем историю…
+              {copy.loadingHistory}
             </div>
           ) : messages.length === 0 ? (
             <div className="mx-auto flex min-h-[320px] max-w-2xl flex-col items-center justify-center text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
                 <Bot className="h-6 w-6" />
               </div>
-              <h2 className="mt-4 text-lg font-semibold text-slate-950">Напишите команду</h2>
+              <h2 className="mt-4 text-lg font-semibold text-slate-950">{copy.emptyTitle}</h2>
               <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">
-                Можно изменить услугу, создать контент, проверить данные или попросить открыть нужный результат.
+                {copy.emptyDescription}
               </p>
               <div className="mt-4 flex flex-wrap justify-center gap-2">
-                {exampleCommands.map((command) => (
+                {copy.examples.map((command) => (
                   <button
                     key={command}
                     type="button"
@@ -709,7 +714,7 @@ export const OperatorPage = () => {
               className="min-h-[96px] flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-950 outline-none ring-sky-200 placeholder:text-slate-400 focus:ring-2"
               value={chatMessage}
               onChange={(event) => setChatMessage(event.target.value)}
-              placeholder="Напишите задачу: измени цену услуги, создай новость, сделай контент-план…"
+              placeholder={copy.placeholder}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                   event.preventDefault();
@@ -728,13 +733,13 @@ export const OperatorPage = () => {
                       disabled={chatLoading || !currentBusinessId || !chatMessage.trim()}
                     >
                       {chatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                      Отправить
+                      {copy.send}
                     </Button>
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="space-y-1 text-xs leading-5">
-                  <div><kbd className="font-semibold">Enter</kbd> — отправить</div>
-                  <div><kbd className="font-semibold">Shift + Enter</kbd> — новая строка</div>
+                  <div><kbd className="font-semibold">Enter</kbd> — {copy.sendHint}</div>
+                  <div><kbd className="font-semibold">Shift + Enter</kbd> — {copy.newlineHint}</div>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
