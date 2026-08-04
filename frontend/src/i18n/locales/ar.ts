@@ -242,7 +242,8 @@ export const ar = {
       finance: "المشروعات المالية",
       aiChatPromotion: "ترويج دردشة الذكاء الاصطناعي",
       settings: "الإعدادات",
-      network: "إدارة الشبكة"
+      network: "إدارة الشبكة",
+      greeting: "تخلّص من الأعمال الروتينية! 🚀"
     },
     subscription: {
       currentSubscription: "الاشتراك الحالي",

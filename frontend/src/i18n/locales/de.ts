@@ -265,7 +265,8 @@ export const de = {
       finance: "Finanzen",
       aiChatPromotion: "KI-Chat-Promotion",
       settings: "Einstellungen",
-      network: "Netzwerkverwaltung"
+      network: "Netzwerkverwaltung",
+      greeting: "Schluss mit Routinearbeit! 🚀"
     },
     subscription: {
       currentSubscription: "Aktuelles Abonnement",
