@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Check, RefreshCw, Search, Trash2, TrendingUp, X } from 'lucide-react';
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { useOutletContext } from 'react-router-dom';
+import { getDemoShowcaseData } from '@/i18n/demoShowcaseData';
 
 interface Keyword {
     keyword: string;
@@ -74,6 +76,7 @@ const negativeBulkCopy: Record<string, { placeholder: string; button: string }> 
 
 export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const { language, t } = useLanguage();
+    const { user } = useOutletContext<any>();
     const [loading, setLoading] = useState(false);
     const [updating, setUpdating] = useState(false);
     const [keywords, setKeywords] = useState<Keyword[]>([]);
@@ -109,8 +112,14 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             const data = await response.json();
 
             if (data.success) {
-                setKeywords(data.items);
-                setGrouped(data.grouped);
+                if (user?.demo_mode) {
+                    const demoKeywords = getDemoShowcaseData(language).keywords;
+                    setKeywords(demoKeywords);
+                    setGrouped({ [demoKeywords[0].category]: demoKeywords });
+                } else {
+                    setKeywords(data.items);
+                    setGrouped(data.grouped);
+                }
             } else {
                 setError(data.error);
             }
@@ -384,7 +393,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     useEffect(() => {
         loadKeywords();
         loadNegativeKeywords();
-    }, [businessId, showBlocked]);
+    }, [businessId, showBlocked, language, user?.demo_mode]);
 
     const categories = ['all', ...Object.keys(grouped)];
     const displayedKeywords = (activeCategory === 'all'

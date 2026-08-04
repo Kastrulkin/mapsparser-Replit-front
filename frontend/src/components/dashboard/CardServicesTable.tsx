@@ -55,6 +55,7 @@ type ServiceTableCopy = {
 };
 
 type CardServicesTableProps = {
+  demoMode?: boolean;
   tableScrollRef: RefObject<HTMLDivElement | null>;
   copy: ServiceTableCopy;
   services: ServiceTableItem[];
@@ -222,6 +223,7 @@ function getKeywordList(service: ServiceTableItem) {
 }
 
 export function CardServicesTable({
+  demoMode = false,
   tableScrollRef,
   copy,
   services,
@@ -291,6 +293,24 @@ export function CardServicesTable({
   ) : null;
   const selectedUpdatedAt = selectedService ? getDisplayedServiceUpdatedAt(selectedService) : null;
   const isDetailVisible = isDetailOpen && selectedService && selectedQuality && selectedStatus;
+
+  if (demoMode) {
+    return (
+      <div ref={tableScrollRef} className="grid gap-4 rounded-3xl border border-slate-200/80 bg-white/90 p-5 shadow-sm md:grid-cols-2">
+        {services.map((service, index) => (
+          <article key={getServiceId(service, index)} className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h3 className="text-lg font-semibold text-slate-950">{service.name}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{service.description}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {getKeywordList(service).map((keyword) => (
+                <span key={keyword} className="rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-800 ring-1 ring-orange-200">{keyword}</span>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div ref={tableScrollRef} className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 shadow-sm">

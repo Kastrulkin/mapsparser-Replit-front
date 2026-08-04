@@ -18,7 +18,7 @@ export type GuidedTourStep = {
 type GuidedTourStepLayout = Omit<GuidedTourStep, 'chapterTitle' | 'title' | 'body'>;
 
 export const GUIDED_TOUR_KEY = 'roga-i-kopyta-v1';
-export const GUIDED_TOUR_VERSION = 2;
+export const GUIDED_TOUR_VERSION = 3;
 
 export const GUIDED_TOUR_STEP_LAYOUTS: GuidedTourStepLayout[] = [
   { key: 'welcome', chapter: 'network-pulse', route: '/dashboard/operator' },
@@ -44,7 +44,10 @@ export const GUIDED_TOUR_STEP_LAYOUTS: GuidedTourStepLayout[] = [
   { key: 'content-nav', chapter: 'card-content', route: '/dashboard/card', target: 'nav-content' },
   { key: 'content-calendar', chapter: 'card-content', route: '/dashboard/content?section=calendar', target: 'content-calendar' },
   { key: 'agents-nav', chapter: 'automation', route: '/dashboard/content?section=calendar', target: 'nav-agents' },
-  { key: 'agents-workspace', chapter: 'automation', route: '/dashboard/agents', target: 'agents-workspace' },
+  { key: 'agents-signals', chapter: 'automation', route: '/dashboard/agents', target: 'agents-workspace' },
+  { key: 'agents-today', chapter: 'automation', route: '/dashboard/agents', target: 'agents-today' },
+  { key: 'agents-employees', chapter: 'automation', route: '/dashboard/agents', target: 'agents-employees' },
+  { key: 'agents-control', chapter: 'automation', route: '/dashboard/agents', target: 'agents-control' },
   { key: 'partnership-nav', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'nav-partnerships' },
   { key: 'partnership-workspace', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'partnership-workspace' },
   { key: 'partnership-candidates', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'partnership-candidates' },
