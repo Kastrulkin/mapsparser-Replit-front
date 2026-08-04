@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 
+import { resolveInitialLanguage } from './languagePreference';
+
 type Translations = any;
 
 export type Language = "ru" | "en" | "fr" | "es" | "el" | "de" | "th" | "ar" | "ha" | "tr";
@@ -12,37 +14,12 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-const isLanguage = (value: string): value is Language => {
-  return (
-    value === "ru" ||
-    value === "en" ||
-    value === "fr" ||
-    value === "es" ||
-    value === "el" ||
-    value === "de" ||
-    value === "th" ||
-    value === "ar" ||
-    value === "ha" ||
-    value === "tr"
-  );
-};
-
 const detectInitialLanguage = (): Language => {
-  const saved = localStorage.getItem("language");
-
-  if (saved && isLanguage(saved)) {
-    return saved;
-  }
-
-  if (typeof navigator !== "undefined" && navigator.language) {
-    const browserLang = navigator.language.split("-")[0];
-
-    if (isLanguage(browserLang)) {
-      return browserLang;
-    }
-  }
-
-  return "en";
+  const pathname = typeof window === "undefined" ? "" : window.location.pathname;
+  const search = typeof window === "undefined" ? "" : window.location.search;
+  const saved = typeof window === "undefined" ? null : window.localStorage.getItem("language");
+  const browserLanguage = typeof navigator === "undefined" ? "" : navigator.language;
+  return resolveInitialLanguage(pathname, search, saved, browserLanguage);
 };
 
 const loadTranslations = async (language: Language): Promise<Translations> => {
@@ -86,9 +63,8 @@ interface LanguageProviderProps {
 
 const LanguageLoadingFallback = () => (
   <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
-      Загружаем язык...
-    </div>
+    <span className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-orange-500 motion-reduce:animate-none" aria-hidden="true" />
+    <span className="sr-only">LocalOS</span>
   </div>
 );
 
@@ -98,6 +74,8 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
 
   useEffect(() => {
     localStorage.setItem("language", language);
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
   }, [language]);
 
   useEffect(() => {
