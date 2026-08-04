@@ -171,6 +171,103 @@ def test_current_campaign_requires_selected_email_sender() -> None:
     ) is False
 
 
+def test_current_platform_campaign_does_not_require_business_room(monkeypatch) -> None:
+    class CurrentPlatformCampaignCursor(BatchCursor):
+        fetch_count = 0
+
+        def fetchone(self):
+            self.fetch_count += 1
+            if self.fetch_count == 1:
+                return {
+                    "policy_json": {"sender_mode": "localos"},
+                    "sender_mode": "localos",
+                    "selected_offer_json": {"id": "offer-1"},
+                    "trust_strategy": "founder_story",
+                    "decision_snapshot_json": {
+                        "version": outreach_batch_preparation_service.DECISION_VERSION,
+                        "action": "write_now",
+                    },
+                    "room_id": None,
+                    "workstream_id": "workstream-1",
+                }
+            return {
+                "outreach_decision_json": {
+                    "version": outreach_batch_preparation_service.DECISION_VERSION,
+                    "action": "write_now",
+                }
+            }
+
+        def fetchall(self):
+            channels = ["telegram", "email", "next", "next"]
+            angles = ["signal", "founder_story", "proof", "respectful_close"]
+            return [
+                {
+                    "channel": channel,
+                    "sender_account_id": "sender-localosgo" if channel == "email" else None,
+                    "angle_type": angles[index],
+                    "message_brief_json": {},
+                    "quality_gate_json": {"passed": True},
+                }
+                for index, channel in enumerate(channels)
+            ]
+
+    monkeypatch.setattr(
+        outreach_batch_preparation_service,
+        "generation_contract_current",
+        lambda _brief, _gate: True,
+    )
+
+    assert outreach_batch_preparation_service._campaign_is_current(
+        CurrentPlatformCampaignCursor(),
+        "campaign-1",
+        "localos",
+        "sender-localosgo",
+    ) is True
+
+
+def test_current_business_campaign_still_requires_room(monkeypatch) -> None:
+    class CurrentBusinessCampaignCursor(BatchCursor):
+        fetch_count = 0
+
+        def fetchone(self):
+            self.fetch_count += 1
+            if self.fetch_count == 1:
+                return {
+                    "policy_json": {"sender_mode": "localos_for_partner"},
+                    "sender_mode": "localos_for_partner",
+                    "selected_offer_json": {"id": "offer-1"},
+                    "trust_strategy": "matching_authority",
+                    "decision_snapshot_json": {
+                        "version": outreach_batch_preparation_service.DECISION_VERSION,
+                        "action": "write_now",
+                    },
+                    "room_id": None,
+                    "workstream_id": "workstream-1",
+                }
+            return {
+                "outreach_decision_json": {
+                    "version": outreach_batch_preparation_service.DECISION_VERSION,
+                    "action": "write_now",
+                }
+            }
+
+        def fetchall(self):
+            return []
+
+    monkeypatch.setattr(
+        outreach_batch_preparation_service,
+        "generation_contract_current",
+        lambda _brief, _gate: True,
+    )
+
+    assert outreach_batch_preparation_service._campaign_is_current(
+        CurrentBusinessCampaignCursor(),
+        "campaign-1",
+        "localos_for_partner",
+        "sender-localosgo",
+    ) is False
+
+
 def test_terminal_reply_suppression_and_cooldown_are_blocking() -> None:
     now = datetime.now(timezone.utc)
     assert outreach_batch_preparation_service._blocked_reason(

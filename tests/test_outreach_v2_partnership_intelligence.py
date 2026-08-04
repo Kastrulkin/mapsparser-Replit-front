@@ -8,7 +8,12 @@ from services.outreach_decision_service import (
     score_evidence,
     trust_candidates,
 )
-from services.outreach_relationship_service import _json_safe, build_relationship_delta, build_room_preview
+from services.outreach_relationship_service import (
+    _json_safe,
+    build_relationship_delta,
+    build_room_preview,
+    prepare_private_room,
+)
 
 
 def _compatibility_evidence():
@@ -30,6 +35,29 @@ def _availability():
         "telegram": {"status": "ready"},
         "email": {"status": "manual"},
     }
+
+
+def test_platform_lead_does_not_create_room_owned_by_recipient_business():
+    class NoRoomCursor:
+        def execute(self, _query, _params=None):
+            raise AssertionError("platform room must not use the recipient business scope")
+
+    room = prepare_private_room(
+        NoRoomCursor(),
+        campaign_id="campaign-1",
+        preview={
+            "lead_id": "lead-1",
+            "workstream_id": "workstream-1",
+            "sender_mode": "localos",
+        },
+        context={
+            "workstream_type": "localos_sales",
+            "lead_business_id": "recipient-business-id",
+        },
+        user_id="user-1",
+    )
+
+    assert room is None
 
 
 def test_signal_score_redistributes_missing_engagement_weight():

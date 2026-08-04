@@ -229,7 +229,10 @@ def prepare_private_room(
     user_id: str,
 ) -> dict[str, Any] | None:
     workstream_id = _text(preview.get("workstream_id"))
-    owner_business_id = _text(context.get("client_business_id") or context.get("lead_business_id"))
+    workstream_type = _text(context.get("workstream_type"))
+    if workstream_type == "localos_sales":
+        return None
+    owner_business_id = _text(context.get("client_business_id"))
     if not workstream_id or not owner_business_id:
         return None
     cursor.execute(

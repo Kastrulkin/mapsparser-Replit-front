@@ -1,0 +1,37 @@
+{
+  "classification": "FIX_PROVEN",
+  "candidate": "Platform outreach drafts without a tenant-owned sales room are incorrectly treated as stale",
+  "reproduction": {
+    "command": "python3 -m pytest -q tests/test_outreach_batch_preparation.py tests/test_outreach_v2_partnership_intelligence.py",
+    "result": "2 failed, 28 passed",
+    "failures": [
+      "localos platform campaign without room_id returned false from _campaign_is_current",
+      "localos_sales attempted to create a sales room owned by lead_business_id"
+    ]
+  },
+  "fix": {
+    "files": [
+      "src/services/outreach_batch_preparation_service.py",
+      "src/services/outreach_relationship_service.py"
+    ],
+    "behavior": [
+      "sender_mode=localos does not require a tenant-owned room to remain current",
+      "business partnership campaigns still require room_id",
+      "localos_sales never assigns a room to the recipient business scope"
+    ]
+  },
+  "verification": {
+    "targeted_result": "30 passed",
+    "broader_command": "python3 -m pytest -q tests/test_outreach_batch_preparation.py tests/test_outreach_v2_partnership_intelligence.py tests/test_founder_outreach_campaigns.py tests/test_sales_rooms.py",
+    "broader_result": "146 passed",
+    "production_health": "app and worker running; HTTP 200",
+    "production_inventory": {
+      "total": 5,
+      "counts": {
+        "draft_current": 5
+      },
+      "external_dispatch_performed": false,
+      "ai_generation_performed": false
+    }
+  }
+}

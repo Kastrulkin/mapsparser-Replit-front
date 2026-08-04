@@ -600,6 +600,7 @@ def _campaign_is_current(
         if isinstance(row.get("selected_offer_json"), dict)
         else {}
     )
+    room_required = sender_mode != SENDER_MODE_LOCALOS
     cursor.execute(
         """
         SELECT outreach_decision_json
@@ -623,7 +624,7 @@ def _campaign_is_current(
         or _text(decision.get("action")) != "write_now"
         or not selected_offer
         or not _text(row.get("trust_strategy"))
-        or not row.get("room_id")
+        or (room_required and not row.get("room_id"))
         or (
             latest_decision
             and _without_calculated_at(latest_decision)
