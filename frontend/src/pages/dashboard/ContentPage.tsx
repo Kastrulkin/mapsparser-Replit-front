@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { AnimatePresence, motion, type Transition } from 'framer-motion';
 import {
   AlertCircle,
@@ -33,6 +33,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { API_URL } from '@/config/api';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { getContentWorkspaceCopy } from '@/i18n/contentWorkspaceCopy';
 
 type DashboardBusiness = {
   id: string;
@@ -578,6 +580,9 @@ const DraftGenerationFeedback = ({ ready }: { ready: boolean }) => {
 
 export function ContentPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { language } = useLanguage();
+  const contentCopy = getContentWorkspaceCopy(language);
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardOutletContext>();
   const [context, setContext] = useState<ContentPlanContext | null>(null);
   const [plans, setPlans] = useState<PlanPayload[]>([]);
@@ -596,6 +601,8 @@ export function ContentPage() {
   });
   const [section, setSection] = useState<ContentSection>(() => {
     if (typeof window === 'undefined') return 'calendar';
+    const requested = new URLSearchParams(window.location.search).get('section');
+    if (requested === 'media' || requested === 'audience' || requested === 'calendar') return requested;
     const saved = window.localStorage.getItem(CONTENT_SECTION_STORAGE_KEY);
     return saved === 'media' || saved === 'audience' ? saved : 'calendar';
   });
@@ -772,6 +779,13 @@ export function ContentPage() {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(CONTENT_SECTION_STORAGE_KEY, section);
   }, [section]);
+
+  useEffect(() => {
+    const requested = new URLSearchParams(location.search).get('section');
+    if (requested === 'media' || requested === 'audience' || requested === 'calendar') {
+      setSection(requested);
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (section !== 'media' || !currentBusinessId) return;
@@ -2489,21 +2503,21 @@ export function ContentPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">LocalOS Content</div>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Контент</h1>
-          <p className="mt-1 text-sm text-slate-500">{currentBusiness?.name || 'Единый календарь публикаций'}</p>
+          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{contentCopy.eyebrow}</div>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{contentCopy.title}</h1>
+          <p className="mt-1 text-sm text-slate-500">{currentBusiness?.name || contentCopy.fallbackSubtitle}</p>
         </div>
         <Button type="button" onClick={() => { setCreateStep('setup'); setCreateOpen(true); }} className="rounded-2xl bg-slate-950 px-5 py-6 text-white hover:bg-slate-800">
           <Plus className="mr-2 h-4 w-4" />
-          Создать новый план
+          {contentCopy.createPlan}
         </Button>
       </div>
 
       <div className="inline-flex rounded-2xl bg-slate-100 p-1">
         {[
-          ['calendar', 'Календарь', CalendarDays],
-          ['media', 'Медиатека', ImageIcon],
-          ['audience', 'Что волнует аудиторию', MessageCircleQuestion],
+          ['calendar', contentCopy.calendar, CalendarDays],
+          ['media', contentCopy.media, ImageIcon],
+          ['audience', contentCopy.audience, MessageCircleQuestion],
         ].map(([key, label, Icon]) => (
           <button
             key={String(key)}
