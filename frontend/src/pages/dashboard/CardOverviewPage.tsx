@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { getDemoShowcaseData } from '@/i18n/demoShowcaseData';
 import {
   ArrowRight,
   Network,
@@ -188,6 +189,8 @@ export const CardOverviewPage = () => {
   const { user, currentBusinessId, currentBusiness, businesses, onBusinessChange } = context || {};
   const { t, language } = useLanguage();
   const isRu = language === 'ru';
+  const isDemoMode = Boolean(user?.demo_mode);
+  const demoShowcase = getDemoShowcaseData(language);
   const pageCopy = getCardOverviewPageCopy(language);
   const aiLearningTooltip = isRu
     ? 'Система учитывает, как вы редактируете предложения по услугам, отзывам и новостям, и постепенно подстраивает следующие рекомендации под ваш стиль.'
@@ -309,7 +312,9 @@ export const CardOverviewPage = () => {
         setReviewsTotal(data.reviews_total || 0);
         setLastParseDate(data.last_parse_date || null);
         try {
-          if (data.competitors) {
+          if (isDemoMode) {
+            setCompetitors(demoShowcase.competitors);
+          } else if (data.competitors) {
             setCompetitors(typeof data.competitors === 'string' ? JSON.parse(data.competitors) : data.competitors);
           } else {
             setCompetitors([]);
@@ -354,7 +359,7 @@ export const CardOverviewPage = () => {
             source: service.source || 'external',
           })));
         }
-        setUserServices(services);
+        setUserServices(isDemoMode ? demoShowcase.services : services);
       }
     } catch (e) {
       console.error('Ошибка загрузки услуг:', e);
@@ -368,7 +373,7 @@ export const CardOverviewPage = () => {
     try {
       const { data } = await loadCardExternalPosts(currentBusinessId, isNetworkRepresentative);
       if (data.success) {
-        setExternalPosts(data.posts || []);
+        setExternalPosts(isDemoMode ? demoShowcase.news : (data.posts || []));
       }
     } catch (e) {
       console.error('Ошибка загрузки постов:', e);
@@ -525,7 +530,7 @@ export const CardOverviewPage = () => {
       loadOperationsLearning();
       loadParseStatus();
     }
-  }, [currentBusinessId, selectedSource, isNetworkRepresentative]);
+  }, [currentBusinessId, selectedSource, isNetworkRepresentative, language, isDemoMode]);
 
   useEffect(() => {
     if (parseStatus !== 'processing' && parseStatus !== 'queued') {
@@ -710,28 +715,28 @@ export const CardOverviewPage = () => {
       return firstRunCopy.statusMissingMap;
     }
     if (parseRefreshPolicy.reason === 'active_parse') {
-      return isRu ? 'Сбор данных уже выполняется' : 'Data collection is already running';
+      return pageCopy.parseAlreadyRunning;
     }
     if (parseRefreshPolicy.reason === 'weekly_cooldown' && parseRefreshPolicy.cooldown_until) {
       const formattedDate = formatRefreshDate(parseRefreshPolicy.cooldown_until);
       if (formattedDate) {
-        return isRu ? `Следующее обновление доступно ${formattedDate}` : `Next refresh will be available on ${formattedDate}`;
+        return pageCopy.nextRefresh.replace('{date}', formattedDate);
       }
     }
     switch (parseStatus) {
       case 'processing':
-        return isRu ? 'Сбор данных выполняется' : 'Data collection in progress';
+        return pageCopy.parseInProgress;
       case 'queued':
-        return isRu ? 'Сбор данных в очереди' : 'Data collection is queued';
+        return pageCopy.parseQueued;
       case 'completed':
       case 'done':
-        return isRu ? 'Данные карточки обновлены' : 'Card data updated';
+        return pageCopy.parseDone;
       case 'error':
-        return isRu ? 'Не удалось обновить данные' : 'Could not update card data';
+        return pageCopy.parseError;
       default:
-        return isRu ? 'Данные карточки ещё не обновлялись' : 'Card data has not been collected yet';
+        return pageCopy.parseIdle;
     }
-  }, [firstRunCopy.statusMissingMap, hasConfiguredMapLink, isRu, parseRefreshPolicy.cooldown_until, parseRefreshPolicy.reason, parseStatus]);
+  }, [firstRunCopy.statusMissingMap, hasConfiguredMapLink, pageCopy, parseRefreshPolicy.cooldown_until, parseRefreshPolicy.reason, parseStatus]);
 
   const parseStatusHelpText = useMemo(() => {
     if (!hasConfiguredMapLink) {
@@ -1210,15 +1215,15 @@ export const CardOverviewPage = () => {
           <TabsList className="flex w-full justify-start overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/80 p-1.5 [&::-webkit-scrollbar]:hidden">
             <TabsTrigger value="services" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <List className="w-4 h-4" />
-              {t.dashboard.card.tabServices || "Services"}
+              {pageCopy.servicesTab}
             </TabsTrigger>
             <TabsTrigger value="reviews" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <MessageSquare className="w-4 h-4" />
-              {t.dashboard.card.tabReviews || "Reviews"}
+              {pageCopy.reviewsTab}
             </TabsTrigger>
             <TabsTrigger value="news" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <Newspaper className="w-4 h-4" />
-              {t.dashboard.card.tabNews || "News"}
+              {pageCopy.newsTab}
             </TabsTrigger>
             <TabsTrigger value="keywords" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <TrendingUp className="w-4 h-4" />
@@ -1253,7 +1258,7 @@ export const CardOverviewPage = () => {
                 <div className="flex justify-between items-start mb-5">
                   {lastParseDate && (
                     <div className="text-right">
-                      <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">{t.dashboard.card.lastUpdate}</p>
+                      <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">{pageCopy.lastRefresh}</p>
                       <p className="text-sm font-medium text-gray-900">
                         {new Date(lastParseDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
                           day: 'numeric',
@@ -1455,7 +1460,7 @@ export const CardOverviewPage = () => {
                 ]}
               />
 
-              {userServices.length > 0 ? (
+              {userServices.length > 0 && !isDemoMode ? (
                 <CardServicesFilterBar
                   copy={serviceControlsCopy}
                   search={servicesSearch}
@@ -1471,6 +1476,7 @@ export const CardOverviewPage = () => {
               ) : null}
 
               <CardServicesTable
+                demoMode={isDemoMode}
                 tableScrollRef={servicesTableScrollRef}
                 copy={{
                   category: t.dashboard.card.table.category,
