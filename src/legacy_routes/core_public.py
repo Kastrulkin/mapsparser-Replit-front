@@ -1,4 +1,5 @@
 from legacy_routes import shared as _shared
+from core.frontend_asset_compatibility import resolve_current_lazy_chunk
 
 globals().update(_shared.runtime_namespace)
 
@@ -360,7 +361,16 @@ def index():
 @app.route('/assets/<path:filename>')
 def serve_assets(filename):
     """Раздача ассетов Vite/SPA"""
-    return send_from_directory(os.path.join(FRONTEND_DIST_DIR, 'assets'), filename)
+    assets_dir = os.path.join(FRONTEND_DIST_DIR, 'assets')
+    if not os.path.isfile(os.path.join(assets_dir, filename)):
+        current_chunk = resolve_current_lazy_chunk(FRONTEND_DIST_DIR, filename)
+        if current_chunk:
+            logger.warning("Serving current Vite chunk %s for stale request %s", current_chunk, filename)
+            response = send_from_directory(assets_dir, current_chunk)
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["X-LocalOS-Asset-Fallback"] = current_chunk
+            return response
+    return send_from_directory(assets_dir, filename)
 
 @app.route('/public-audit/<path:filename>')
 def serve_public_audit_assets(filename):
