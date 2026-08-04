@@ -5,12 +5,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import logo from '@/assets/images/logo.png';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { newAuth, type User } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
+import { fillGuidedTourTemplate, guidedTourCopyForLanguage } from './guidedTourCopy';
 import {
   GUIDED_TOUR_KEY,
-  GUIDED_TOUR_STEPS,
   GUIDED_TOUR_VERSION,
+  guidedTourStepsForLanguage,
   type GuidedTourStep,
 } from './tourConfig';
 
@@ -49,6 +51,7 @@ const routePathname = (route: string) => route.split('?', 1)[0];
 export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { language } = useLanguage();
   const prefersReducedMotion = useReducedMotion();
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState(false);
@@ -64,7 +67,9 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   const initialRouteSyncedRef = useRef(false);
   const panelRef = useRef<HTMLElement | null>(null);
   const launcherRef = useRef<HTMLButtonElement | null>(null);
-  const currentStep = GUIDED_TOUR_STEPS[currentIndex] || GUIDED_TOUR_STEPS[0];
+  const copy = useMemo(() => guidedTourCopyForLanguage(language), [language]);
+  const steps = useMemo(() => guidedTourStepsForLanguage(language), [language]);
+  const currentStep = steps[currentIndex] || steps[0];
   const isDemo = Boolean(user.demo_mode);
   const isWelcome = currentStep.key === 'welcome';
   const robotState = status === 'not_started'
@@ -74,8 +79,8 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
       : 'explaining';
 
   const completedPercent = useMemo(
-    () => Math.round((completedSteps.length / GUIDED_TOUR_STEPS.length) * 100),
-    [completedSteps.length],
+    () => Math.round((completedSteps.length / steps.length) * 100),
+    [completedSteps.length, steps.length],
   );
 
   const recordEvent = useCallback(async (eventType: string, step: GuidedTourStep, metadata: Record<string, unknown> = {}) => {
@@ -117,10 +122,10 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
       return true;
     } catch (progressSaveError) {
       console.warn('Guided tour progress was not saved:', progressSaveError);
-      setProgressError('Не удалось сохранить прогресс. Попробуйте ещё раз.');
+      setProgressError(copy.controls.progressSaveError);
       return false;
     }
-  }, [persistProgress]);
+  }, [copy.controls.progressSaveError, persistProgress]);
 
   useEffect(() => {
     if (!isDemo) return;
@@ -130,7 +135,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
         if (cancelled) return;
         const progress: TourProgress = response.progress || {};
         const nextStatus = progress.status || 'not_started';
-        const nextIndex = Math.max(0, GUIDED_TOUR_STEPS.findIndex((step) => step.key === progress.step_key));
+        const nextIndex = Math.max(0, steps.findIndex((step) => step.key === progress.step_key));
         setStatus(nextStatus);
         setCurrentIndex(nextIndex);
         setCompletedSteps(Array.isArray(progress.completed_steps) ? progress.completed_steps : []);
@@ -146,7 +151,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     return () => {
       cancelled = true;
     };
-  }, [isDemo]);
+  }, [isDemo, steps]);
 
   useEffect(() => {
     if (!open || !isWelcome) return;
@@ -268,8 +273,8 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
 
   const startFromWelcome = async () => {
     if (welcomeTransitioning) return;
-    const nextIndex = Math.min(1, GUIDED_TOUR_STEPS.length - 1);
-    const nextStep = GUIDED_TOUR_STEPS[nextIndex];
+    const nextIndex = Math.min(1, steps.length - 1);
+    const nextStep = steps[nextIndex];
     const nextCompletedSteps = [currentStep.key];
     const saved = await persistProgressSafely('active', nextStep, nextCompletedSteps);
     if (!saved) return;
@@ -287,8 +292,8 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   };
 
   const moveTo = async (nextIndex: number, nextCompletedSteps: string[], nextStatus: TourStatus = 'active') => {
-    const boundedIndex = Math.max(0, Math.min(nextIndex, GUIDED_TOUR_STEPS.length - 1));
-    const nextStep = GUIDED_TOUR_STEPS[boundedIndex];
+    const boundedIndex = Math.max(0, Math.min(nextIndex, steps.length - 1));
+    const nextStep = steps[boundedIndex];
     const saved = await persistProgressSafely(nextStatus, nextStep, nextCompletedSteps);
     if (!saved) return;
     setTargetEmphasisKey(0);
@@ -305,7 +310,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     const nextCompleted = completedSteps.includes(currentStep.key)
       ? completedSteps
       : [...completedSteps, currentStep.key];
-    if (currentStep.final || currentIndex === GUIDED_TOUR_STEPS.length - 1) {
+    if (currentStep.final || currentIndex === steps.length - 1) {
       const saved = await persistProgressSafely('completed', currentStep, nextCompleted);
       if (!saved) return;
       setCompletedSteps(nextCompleted);
@@ -314,7 +319,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
       await recordEvent('completed', currentStep);
       return;
     }
-    const nextStep = GUIDED_TOUR_STEPS[currentIndex + 1];
+    const nextStep = steps[currentIndex + 1];
     if (nextStep.chapter !== currentStep.chapter) {
       await recordEvent('chapter_completed', currentStep);
     }
@@ -345,7 +350,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   };
 
   const restart = async () => {
-    const firstStep = GUIDED_TOUR_STEPS[0];
+    const firstStep = steps[0];
     const saved = await persistProgressSafely('active', firstStep, []);
     if (!saved) return;
     setCurrentIndex(0);
@@ -404,7 +409,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             if (status === 'paused' || status === 'skipped') void start();
           }}
           className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-[70] flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white shadow-lg transition-[transform,box-shadow] duration-150 hover:scale-105 hover:shadow-xl active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:scale-100"
-          aria-label={status === 'completed' ? 'Открыть обучение снова' : 'Продолжить обучение'}
+          aria-label={status === 'completed' ? copy.controls.launcherOpenAgain : copy.controls.launcherContinue}
         >
           <img src={logo} alt="" className="h-24 w-24 -translate-y-1 scale-150 object-cover object-top" aria-hidden="true" />
         </button>
@@ -442,9 +447,9 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
             >
               <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_72px] sm:items-start sm:gap-x-8">
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-slate-500">Интерактивное демо LocalOS</p>
+                  <p className="text-xs font-medium text-slate-500">{copy.welcome.eyebrow}</p>
                   <h1 id="demo-welcome-title" className="mt-2 text-balance text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
-                    Получайте больше клиентов из карт, отзывов и соцсетей — без ручной рутины
+                    {copy.welcome.headline}
                   </h1>
                 </div>
 
@@ -452,29 +457,21 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                   <div className="relative h-16 w-16 overflow-hidden sm:h-[72px] sm:w-[72px]">
                     <img
                       src={logo}
-                      alt="Робот LocalOS"
+                      alt={copy.controls.robotAlt}
                       className="absolute left-1/2 top-0 h-auto w-[175%] max-w-none -translate-x-1/2 -translate-y-[10%] object-contain mix-blend-multiply"
                     />
                   </div>
                 </div>
 
                 <p className="text-pretty text-sm leading-6 text-slate-600 sm:col-span-2 sm:max-w-3xl sm:text-base sm:leading-7">
-                  LocalOS помогает владельцу малого бизнеса вести Яндекс Карты, 2ГИС и Google, отвечать на отзывы, готовить посты и новости, смотреть конкурентов рядом и понимать, что влияет на заявки, выручку и средний чек.
+                  {copy.welcome.intro}
                 </p>
               </div>
 
               <div className="mt-6 border-t border-slate-200 pt-5">
-                <h2 className="text-sm font-semibold text-slate-950">Что можно сделать в LocalOS</h2>
+                <h2 className="text-sm font-semibold text-slate-950">{copy.welcome.capabilitiesTitle}</h2>
                 <ul className="mt-3 grid gap-x-8 gap-y-2.5 text-sm leading-5 text-slate-700 sm:grid-cols-2">
-                  {[
-                    'Понять, что исправить в карточке бизнеса',
-                    'Улучшить услуги, описания, фото и новости для карт',
-                    'Отвечать на отзывы и повышать рейтинг',
-                    'Готовить посты для соцсетей без вопроса «что выкладывать?»',
-                    'Смотреть, что делают конкуренты рядом',
-                    'Находить партнёров со схожей аудиторией',
-                    'Поручать повторяющиеся задачи обычным языком',
-                  ].map((item) => (
+                  {copy.welcome.capabilities.map((item) => (
                     <li key={item} className="grid grid-cols-[18px_minmax(0,1fr)] gap-2">
                       <Check className="mt-0.5 h-4 w-4 text-orange-600" aria-hidden="true" />
                       <span>{item}</span>
@@ -484,9 +481,9 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
               </div>
 
               <div className="mt-6 grid gap-1 border-t border-slate-200 pt-5 sm:grid-cols-[170px_minmax(0,1fr)] sm:gap-6">
-                <h2 className="font-semibold text-slate-950">Я помогу освоиться</h2>
+                <h2 className="font-semibold text-slate-950">{steps[0].title}</h2>
                 <p className="text-pretty text-sm leading-6 text-slate-600">
-                  За 8–10 минут мы посмотрим состояние сети, карточку на картах, контент и партнёрство. Вы можете свободно исследовать кабинет и в любой момент вернуться к маршруту.
+                  {steps[0].body}
                 </p>
               </div>
 
@@ -507,7 +504,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
                 onClick={() => void startFromWelcome()}
                 disabled={welcomeTransitioning}
               >
-                Начать знакомство
+                {copy.controls.start}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </motion.div>
@@ -527,7 +524,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
               ref={panelRef}
               className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[70] mx-auto max-h-[calc(100vh-1.5rem)] max-w-md overflow-y-auto rounded-lg border border-slate-200 bg-white p-4 shadow-2xl focus:outline-none sm:inset-x-auto sm:right-5 sm:w-[390px]"
               aria-live="polite"
-              aria-label="Интерактивное обучение LocalOS"
+              aria-label={copy.controls.tourLabel}
               tabIndex={-1}
             >
           {!prefersReducedMotion ? (
@@ -560,7 +557,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
               <div className="absolute inset-0 overflow-hidden">
                 <img
                   src={logo}
-                  alt={robotState === 'success' ? 'Робот LocalOS завершил обучение' : 'Робот LocalOS'}
+                  alt={robotState === 'success' ? copy.controls.robotSuccessAlt : copy.controls.robotAlt}
                   className="absolute left-1/2 top-0 h-auto w-[175%] max-w-none -translate-x-1/2 -translate-y-[10%] object-contain mix-blend-multiply"
                 />
               </div>
@@ -577,13 +574,15 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-xs font-semibold uppercase text-orange-700">{currentStep.chapterTitle}</p>
-                  <p className="mt-1 text-xs tabular-nums text-slate-500">Шаг {currentIndex + 1} из {GUIDED_TOUR_STEPS.length}</p>
+                  <p className="mt-1 text-xs tabular-nums text-slate-500">
+                    {fillGuidedTourTemplate(copy.controls.stepTemplate, { current: currentIndex + 1, total: steps.length })}
+                  </p>
                 </div>
-                <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0" onClick={pause} aria-label="Поставить обучение на паузу" data-tour-pause="true">
+                <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0" onClick={pause} aria-label={copy.controls.pauseLabel} data-tour-pause="true">
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100" aria-label={`Прогресс ${completedPercent}%`}>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100" aria-label={fillGuidedTourTemplate(copy.controls.progressTemplate, { percent: completedPercent })}>
                 <div className="h-full rounded-full bg-orange-500 transition-[width] duration-200 motion-reduce:transition-none" style={{ width: `${completedPercent}%` }} />
               </div>
             </div>
@@ -593,7 +592,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
           <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">{currentStep.body}</p>
           {targetMissing && currentStep.target ? (
             <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-              Элемент ещё не загрузился. Можно показать его повторно или перейти дальше.
+              {copy.controls.targetMissing}
             </p>
           ) : null}
           {progressError ? (
@@ -605,26 +604,26 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
           {status === 'not_started' ? (
             <Button type="button" className="mt-4 w-full gap-2" onClick={() => void start()}>
               <Play className="h-4 w-4" />
-              Начать знакомство
+              {copy.controls.start}
             </Button>
           ) : currentStep.final || status === 'completed' ? (
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <Button type="button" className="gap-2" onClick={() => void openRoom()} disabled={!user.demo_room_slug}>
                 <ExternalLink className="h-4 w-4" />
-                Открыть комнату
+                {copy.controls.openRoom}
               </Button>
               <Button type="button" variant="outline" className="gap-2" onClick={() => void register()}>
                 <Sparkles className="h-4 w-4" />
-                Создать аккаунт
+                {copy.controls.createAccount}
               </Button>
               {status !== 'completed' ? (
                 <Button type="button" variant="outline" className="gap-2 sm:col-span-2" onClick={() => void next()}>
-                  Завершить маршрут
+                  {copy.controls.finish}
                 </Button>
               ) : null}
               <Button type="button" variant="ghost" className="gap-2 sm:col-span-2" onClick={() => void restart()}>
                 <RotateCcw className="h-4 w-4" />
-                Начать заново
+                {copy.controls.restart}
               </Button>
             </div>
           ) : (
@@ -632,23 +631,23 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
               {currentStep.target ? (
                 <Button type="button" variant="outline" className="mt-4 w-full gap-2" onClick={emphasizeCurrentTarget}>
                   <Sparkles className="h-4 w-4" />
-                  Подсветить на странице
+                  {copy.controls.highlight}
                 </Button>
               ) : null}
               <div className="mt-3 flex gap-2">
-                <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => void previous()} disabled={currentIndex === 0} aria-label="Предыдущий шаг">
+                <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => void previous()} disabled={currentIndex === 0} aria-label={copy.controls.previous}>
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <Button type="button" className="min-h-10 flex-1 gap-2" onClick={() => void next()}>
-                  Дальше
+                  {copy.controls.next}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
-                <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => void pause()} aria-label="Пауза">
+                <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => void pause()} aria-label={copy.controls.pause}>
                   <Pause className="h-4 w-4" />
                 </Button>
               </div>
               <button type="button" className="mt-3 min-h-10 w-full text-xs font-medium text-slate-500 hover:text-slate-900" onClick={() => void skip()}>
-                Пропустить обучение
+                {copy.controls.skip}
               </button>
             </>
           )}
@@ -662,6 +661,8 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
 }
 
 export function DemoModeBanner() {
+  const { language } = useLanguage();
+  const copy = guidedTourCopyForLanguage(language);
   const register = () => {
     newAuth.deactivateDemoSession();
     window.location.href = '/login?tab=register&source=interactive_demo';
@@ -669,9 +670,9 @@ export function DemoModeBanner() {
   return (
     <div className="border-b border-orange-200 bg-orange-50 px-4 py-2 text-orange-950">
       <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 text-sm">
-        <span className="font-medium">Демо-режим · данные не изменяются</span>
+        <span className="font-medium">{copy.banner.notice}</span>
         <button type="button" onClick={register} className={cn('min-h-10 rounded-md px-3 text-sm font-semibold text-orange-900', 'hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500')}>
-          Создать свой аккаунт
+          {copy.banner.createAccount}
         </button>
       </div>
     </div>
