@@ -93,9 +93,12 @@ const CardOverviewPage = lazy(() =>
   })),
 );
 const ContentPage = lazy(() =>
-  import("./pages/dashboard/ContentPage").then((module) => ({
-    default: module.ContentPage,
-  })),
+  loadRouteWithRecovery(
+    () => import("./pages/dashboard/ContentPage").then((module) => ({
+      default: module.ContentPage,
+    })),
+    "контента",
+  ),
 );
 const ProgressPage = lazy(() =>
   import("./pages/dashboard/ProgressPage").then((module) => ({

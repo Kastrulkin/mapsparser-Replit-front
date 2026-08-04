@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "The same ContentPage route recovery contract changed from failing to passing, the production frontend build and asset closure passed, and the authenticated production page loaded without console errors.",
+  "reproduction": "confirmed",
+  "full_suite": "passed",
+  "same_command": true,
+  "before": {
+    "command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_dashboard_route_recovery_contract.py"
+    ],
+    "exit_code": 1,
+    "timed_out": false,
+    "duration_ms": 30,
+    "stdout": "F [100%]\nFAILED tests/test_dashboard_route_recovery_contract.py::test_content_page_uses_lazy_route_recovery\nAssertionError: ContentPage загружается без восстановления после исчезновения старого Vite-чанка. Открытая до выкладки вкладка получает HTTP 404 и падает с Failed to fetch dynamically imported module.\n1 failed in 0.03s",
+    "stderr": ""
+  },
+  "after": {
+    "command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_dashboard_route_recovery_contract.py"
+    ],
+    "exit_code": 0,
+    "timed_out": false,
+    "duration_ms": 30,
+    "stdout": ". [100%]\n1 passed in 0.03s",
+    "stderr": ""
+  }
+}
