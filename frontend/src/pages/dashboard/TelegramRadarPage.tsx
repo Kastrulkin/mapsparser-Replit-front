@@ -5,27 +5,31 @@ import { TelegramOpportunityRadar } from '@/components/TelegramOpportunityRadar'
 import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
 import { Button } from '@/components/ui/button';
 import { DashboardActionPanel, DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { getDemoWorkspaceCopy } from '@/i18n/demoWorkspaceCopy';
 
 export const TelegramRadarPage = () => {
   const { currentBusinessId } = useOutletContext<{ currentBusinessId?: string | null }>();
+  const { language } = useLanguage();
+  const copy = getDemoWorkspaceCopy(language).telegram;
 
   return (
     <div className="mx-auto max-w-6xl space-y-7 pb-10">
       <DashboardPageHeader
         eyebrow="Telegram"
-        title="Telegram-радар"
-        description="Рабочий inbox сообщений и упоминаний из выбранных чатов: где ответить, что сохранить как идею и что закрыть как неважное."
+        title={copy.pageTitle}
+        description={copy.pageDescription}
         icon={Radar}
         actions={(
           <Button type="button" variant="outline" asChild>
-            <Link to="/dashboard/settings?focus=telegram">Подключить Telegram</Link>
+            <Link to="/dashboard/settings?focus=telegram">{copy.connect}</Link>
           </Button>
         )}
       />
 
       <DashboardActionPanel
-        title="Отвечайте только вручную"
-        description="LocalOS читает выбранные чаты и подсвечивает сигналы, но не пишет в чужие чаты автоматически: вы сами решаете, где ответить, а где сохранить тему для контента."
+        title={copy.manualTitle}
+        description={copy.manualDescription}
         tone="sky"
       />
 

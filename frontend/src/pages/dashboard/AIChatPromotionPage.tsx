@@ -4,12 +4,13 @@ import { Button } from '../../components/ui/button';
 import { CheckCircle2, Circle, ExternalLink, Copy, Check, Sparkles, AlertCircle } from 'lucide-react';
 import { useToast } from '../../hooks/use-toast';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { normalizeGeoPromotionSteps } from '@/i18n/demoWorkspaceCopy';
 
 export const AIChatPromotionPage = () => {
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [copiedCode, setCopiedCode] = useState<number | null>(null);
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const toggleStep = (stepId: number) => {
     const newCompleted = new Set(completedSteps);
@@ -31,7 +32,7 @@ export const AIChatPromotionPage = () => {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  const steps = t.dashboard.aiChatPromotion.steps;
+  const steps = normalizeGeoPromotionSteps(language, t.dashboard.aiChatPromotion.steps);
 
   return (
     <div className="space-y-6">
@@ -84,7 +85,7 @@ export const AIChatPromotionPage = () => {
                           ? 'text-green-600 hover:text-green-700'
                           : 'text-muted-foreground hover:text-foreground'
                         }`}
-                      title={isCompleted ? 'Отметить как невыполненное' : 'Отметить как выполненное'}
+                      aria-label={isCompleted ? t.dashboard.aiChatPromotion.card.completed : t.dashboard.aiChatPromotion.actions.todo}
                     >
                       {isCompleted ? (
                         <CheckCircle2 className="w-6 h-6" />
