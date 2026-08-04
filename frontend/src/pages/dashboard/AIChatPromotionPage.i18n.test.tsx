@@ -11,6 +11,7 @@ import { ru } from '@/i18n/locales/ru';
 import { th } from '@/i18n/locales/th';
 import { tr } from '@/i18n/locales/tr';
 import { normalizeGeoPromotionSteps } from '@/i18n/demoWorkspaceCopy';
+import { getAIChatPromotionCopy } from '@/i18n/aiChatPromotionCopy';
 import type { Language } from '@/i18n/LanguageContext';
 
 const locales = { ru, en, fr, es, el, de, th, ar, ha, tr };
@@ -28,5 +29,14 @@ describe('AIChatPromotionPage locale contract', () => {
       && typeof step.description === 'string'
       && Array.isArray(step.details)
     ))).toBe(true);
+  });
+
+  it.each(supportedLanguages)('%s exposes localized page chrome', (language) => {
+    const copy = getAIChatPromotionCopy(language);
+
+    expect(copy.title).toBeTruthy();
+    expect(copy.subtitle).toBeTruthy();
+    expect(copy.progressTitle).toBeTruthy();
+    if (language !== 'en') expect(copy.whyTitle).not.toBe(getAIChatPromotionCopy('en').whyTitle);
   });
 });
