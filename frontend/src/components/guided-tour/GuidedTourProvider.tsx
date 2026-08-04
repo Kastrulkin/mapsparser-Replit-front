@@ -364,7 +364,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
   const openRoom = async () => {
     await recordEvent('room_opened', currentStep);
     if (user.demo_room_slug) {
-      window.open(`/room/${encodeURIComponent(user.demo_room_slug)}`, '_blank', 'noopener,noreferrer');
+      window.open(`/room/${encodeURIComponent(user.demo_room_slug)}?lang=${encodeURIComponent(language)}`, '_blank', 'noopener,noreferrer');
     }
   };
 

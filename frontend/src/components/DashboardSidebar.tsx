@@ -25,6 +25,7 @@ import { cn } from '../lib/utils';
 import { DESIGN_TOKENS } from '../lib/design-tokens';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { getDemoWorkspaceCopy } from '../i18n/demoWorkspaceCopy';
+import { getDashboardNavigationCopy } from '../i18n/dashboardNavigationCopy';
 
 interface DashboardSidebarProps {
   isMobile?: boolean;
@@ -42,17 +43,16 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const location = useLocation();
   const { t, language } = useLanguage();
   const demoCopy = getDemoWorkspaceCopy(language).sidebar;
+  const navigationCopy = getDashboardNavigationCopy(language);
   const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
     {
       id: 'operator',
-      label: language === 'ru' ? 'Оператор' : 'Operator',
+      label: navigationCopy.operator,
       icon: Bot,
       path: '/dashboard/operator',
-      tooltip: language === 'ru'
-        ? 'Управляйте LocalOS через единый чатовый слой: сводки, действия и безопасные следующие шаги.'
-        : 'Control LocalOS through one chat layer: briefs, actions, and safe next steps.',
+      tooltip: navigationCopy.operatorHint,
     },
     {
       id: 'profile',
@@ -74,21 +74,17 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     },
     {
       id: 'content',
-      label: language === 'ru' ? 'Контент' : 'Content',
+      label: navigationCopy.content,
       icon: Calendar,
       path: '/dashboard/content',
-      tooltip: language === 'ru'
-        ? 'Единый календарь публикаций: что готово, что проверить и что выйдет дальше.'
-        : 'Unified publication calendar: what is ready, what needs review, and what goes next.',
+      tooltip: navigationCopy.contentHint,
     },
     {
       id: 'agents',
-      label: language === 'ru' ? 'Агенты' : 'Agents',
+      label: navigationCopy.agents,
       icon: Sparkles,
       path: '/dashboard/agents',
-      tooltip: language === 'ru'
-        ? 'Запускайте workflow agents с шагами, артефактами и ручными подтверждениями.'
-        : 'Run workflow agents with steps, artifacts, and manual approvals.',
+      tooltip: navigationCopy.agentsHint,
     },
     {
       id: 'progress',
@@ -119,12 +115,10 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     },
     {
       id: 'partnerships',
-      label: t.dashboard.sidebar.partnerships || (language === 'ru' ? 'Поиск партнёров' : 'Partner Search'),
+      label: navigationCopy.partnerships,
       icon: Handshake,
       path: '/dashboard/partnerships',
-      tooltip: language === 'ru'
-        ? 'Ищите потенциальных партнёров и работайте с собранными лидами.'
-        : 'Find potential partners and work with collected leads.',
+      tooltip: navigationCopy.partnershipsHint,
     },
     {
       id: 'telegram-radar',
@@ -223,7 +217,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
               size="icon"
               className={cn("shrink-0", collapsed && "hidden")}
               onClick={onToggleCollapse}
-              aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
+              aria-label={collapsed ? navigationCopy.expand : navigationCopy.collapse}
             >
               {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
             </Button>
@@ -236,7 +230,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
               variant="ghost"
               size="icon"
               onClick={onToggleCollapse}
-              aria-label="Развернуть меню"
+              aria-label={navigationCopy.expand}
             >
               <PanelLeftOpen className="h-4 w-4" />
             </Button>

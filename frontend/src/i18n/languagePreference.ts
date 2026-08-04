@@ -19,7 +19,7 @@ export const resolveInitialLanguage = (
   savedLanguage: string | null,
   browserLanguage: string,
 ): Language => {
-  const requestedLanguage = pathname === '/demo'
+  const requestedLanguage = (pathname === '/demo' || pathname.startsWith('/room/') || pathname.startsWith('/offer/'))
     ? new URLSearchParams(search).get('lang')
     : null;
 

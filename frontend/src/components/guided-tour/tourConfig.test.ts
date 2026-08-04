@@ -32,4 +32,20 @@ describe('guided tour growth tools', () => {
       { key: 'geo-promotion', route: '/dashboard/ai-chat-promotion', target: 'nav-ai-chat-promotion' },
     ]);
   });
+
+  it('opens content deterministically, visits agents, and only then moves to partnerships', () => {
+    const flowStepKeys = ['content-calendar', 'agents-nav', 'agents-workspace', 'partnership-nav'];
+    const flowSteps = GUIDED_TOUR_STEPS.filter((step) => flowStepKeys.includes(step.key));
+
+    expect(flowSteps.map((step) => ({
+      key: step.key,
+      route: step.route,
+      target: step.target,
+    }))).toEqual([
+      { key: 'content-calendar', route: '/dashboard/content?section=calendar', target: 'content-calendar' },
+      { key: 'agents-nav', route: '/dashboard/content?section=calendar', target: 'nav-agents' },
+      { key: 'agents-workspace', route: '/dashboard/agents', target: 'agents-workspace' },
+      { key: 'partnership-nav', route: '/dashboard/partnerships?demo=romashka', target: 'nav-partnerships' },
+    ]);
+  });
 });

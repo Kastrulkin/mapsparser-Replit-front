@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { newAuth } from '@/lib/auth_new';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { getPublicSalesRoomAuditCopy, getPublicSalesRoomCopy, type PublicSalesRoomCopy } from '@/i18n/publicSalesRoomCopy';
 
 type SalesRoomAttachment = {
   id?: string;
@@ -143,10 +145,10 @@ type SalesRoomAuditOffer = {
   processing_delay_seconds?: number;
 };
 
-const roomModeLabel = (mode?: string) => {
-  if (mode === 'partner_search') return 'Предложение партнёрства';
-  if (mode === 'client_search') return 'Предложение по росту';
-  return 'Предложение';
+const roomModeLabel = (mode: string | undefined, copy: PublicSalesRoomCopy) => {
+  if (mode === 'partner_search') return copy.modePartner;
+  if (mode === 'client_search') return copy.modeGrowth;
+  return copy.modeProposal;
 };
 
 const formatFileSize = (size?: number) => {
@@ -173,10 +175,24 @@ const roomAuthorCompanyKey = 'localos_sales_room_author_company';
 const roomParticipantTokenKey = (slug?: string) => `localos_sales_room_participant_token_${slug || 'unknown'}`;
 const roomAuditOfferDismissedKey = (slug?: string) => `localos_sales_room_audit_offer_dismissed_${slug || 'unknown'}`;
 const fileUploadsVisible = true;
-const defaultWelcomeText =
-  'Рад знакомству. Я подготовил эту цифровую комнату, чтобы было проще обсуждать детали, подключать коллег и видеть всё в одном месте.\n\n' +
-  'Ниже - актуальный документ. Можно оставить комментарий и предложить правку.\n\n' +
-  'Если будут вопросы, напишите — всё сохраним в одном диалоге.';
+const demoRoomSlug = 'room-test-audit-offer-20260629';
+
+const localizeDemoRoom = (room: SalesRoomPayload | null, slug: string | undefined, copy: PublicSalesRoomCopy): SalesRoomPayload | null => {
+  if (!room || slug !== demoRoomSlug) return room;
+  return {
+    ...room,
+    business: { ...room.business, name: copy.demo.business },
+    manager: { ...room.manager, name: copy.demo.manager },
+    recipient: { ...room.recipient, name: copy.demo.recipient, category: copy.demo.category, city: copy.demo.city },
+    proposal: { ...room.proposal, title: copy.modePartner, body_text: copy.demo.proposal },
+    welcome: { ...room.welcome, body_text: copy.demo.welcome },
+    messages: (Array.isArray(room.messages) ? room.messages : []).map((message) => ({
+      ...message,
+      author_name: copy.demo.messageAuthor,
+      body_text: copy.demo.message,
+    })),
+  };
+};
 
 const textOffsetInElement = (root: HTMLElement, targetNode: Node, targetOffset: number) => {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -214,6 +230,9 @@ const getSuggestionRange = (bodyText: string, suggestion: SalesRoomProposalSugge
 
 export default function PublicSalesRoomPage() {
   const { roomSlug } = useParams<{ roomSlug: string }>();
+  const { language } = useLanguage();
+  const copy = getPublicSalesRoomCopy(language);
+  const auditCopy = getPublicSalesRoomAuditCopy(language);
   const proposalRef = useRef<HTMLDivElement | null>(null);
   const [room, setRoom] = useState<SalesRoomPayload | null>(null);
   const [messages, setMessages] = useState<SalesRoomMessage[]>([]);
@@ -276,10 +295,10 @@ export default function PublicSalesRoomPage() {
         method: 'GET',
         headers,
       });
-      const nextRoom = response?.room || null;
+      const nextRoom = localizeDemoRoom(response?.room || null, roomSlug, copy);
       setRoom(nextRoom);
       setMessages(Array.isArray(nextRoom?.messages) ? nextRoom.messages : []);
-      setWelcomeDraft(String(nextRoom?.welcome?.body_text || defaultWelcomeText));
+      setWelcomeDraft(String(nextRoom?.welcome?.body_text || copy.demo.welcome));
       if (nextRoom?.participant?.email) {
         setParticipantEmail(String(nextRoom.participant.email || ''));
       }
@@ -295,7 +314,7 @@ export default function PublicSalesRoomPage() {
 
   useEffect(() => {
     void loadRoom();
-  }, [roomSlug, participantToken]);
+  }, [roomSlug, participantToken, language]);
 
   useEffect(() => {
     setParticipantToken(localStorage.getItem(roomParticipantTokenKey(roomSlug)) || '');
@@ -708,7 +727,7 @@ export default function PublicSalesRoomPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
         <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-500 shadow-sm">
-          Загружаем предложение...
+          {copy.loading}
         </div>
       </main>
     );
@@ -718,18 +737,18 @@ export default function PublicSalesRoomPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
         <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
-          <div className="text-lg font-semibold text-slate-950">Комната не найдена</div>
-          <p className="mt-2 text-sm leading-6 text-slate-500">{error || 'Ссылка устарела или была удалена.'}</p>
+          <div className="text-lg font-semibold text-slate-950">{copy.notFound}</div>
+          <p className="mt-2 text-sm leading-6 text-slate-500">{error || copy.expired}</p>
         </div>
       </main>
     );
   }
 
-  const recipientName = room.recipient?.name || 'получатель';
-  const businessName = room.business?.name || 'Компания';
-  const managerName = room.manager?.name?.trim() || 'Александр Демьянов';
+  const recipientName = room.recipient?.name || copy.recipient;
+  const businessName = room.business?.name || copy.company;
+  const managerName = room.manager?.name?.trim() || copy.manager;
   const managerInitial = managerName.trim().charAt(0).toUpperCase();
-  const welcomeText = String(room.welcome?.body_text || defaultWelcomeText);
+  const welcomeText = String(room.welcome?.body_text || copy.demo.welcome);
   const canEditWelcome = Boolean(room.permissions?.can_edit_welcome);
   const auditOffer = room.audit_offer || null;
   const participantVerified = Boolean(room.participant?.verified);
@@ -745,7 +764,7 @@ export default function PublicSalesRoomPage() {
   const proposalText =
     room.proposal?.body_text?.trim() ||
     room.proposal?.next_step?.trim() ||
-    `Предлагаем обсудить формат сотрудничества между ${businessName} и ${recipientName} и согласовать следующий шаг.`;
+    copy.demo.proposal;
   const suggestions = Array.isArray(room.proposal_review?.suggestions) ? room.proposal_review.suggestions : [];
   const pendingSuggestions = suggestions.filter((suggestion) => suggestion.status === 'pending');
   const resolvedSuggestions = suggestions.filter((suggestion) => suggestion.status !== 'pending').slice(0, 6);
@@ -809,7 +828,7 @@ export default function PublicSalesRoomPage() {
               <ArrowRight className="h-4 w-4 text-slate-400" />
               <span className="text-slate-950">{recipientName}</span>
             </div>
-            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{roomModeLabel(room.mode)}</div>
+            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{roomModeLabel(room.mode, copy)}</div>
           </div>
         </header>
 
@@ -823,7 +842,7 @@ export default function PublicSalesRoomPage() {
             </aside>
             <div className="px-5 py-7 sm:px-8 lg:px-10">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-2xl font-black tracking-tight text-slate-950">Здравствуйте.</div>
+                <div className="text-2xl font-black tracking-tight text-slate-950">{copy.greeting}</div>
                 {canEditWelcome ? (
                   <Button
                     type="button"
@@ -837,7 +856,7 @@ export default function PublicSalesRoomPage() {
                     }}
                   >
                     <Pencil className="h-4 w-4" />
-                    {editingWelcome ? 'Закрыть' : 'Править'}
+                    {editingWelcome ? copy.close : copy.edit}
                   </Button>
                 ) : null}
               </div>
@@ -852,7 +871,7 @@ export default function PublicSalesRoomPage() {
                   {welcomeError ? <div className="mt-3 text-sm font-medium text-red-600">{welcomeError}</div> : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button type="button" size="sm" onClick={saveWelcome} disabled={savingWelcome}>
-                      {savingWelcome ? 'Сохраняем...' : 'Сохранить'}
+                      {savingWelcome ? copy.saving : copy.save}
                     </Button>
                     <Button
                       type="button"
@@ -864,7 +883,7 @@ export default function PublicSalesRoomPage() {
                         setEditingWelcome(false);
                       }}
                     >
-                      Отмена
+                      {copy.cancel}
                     </Button>
                   </div>
                 </div>
@@ -876,21 +895,21 @@ export default function PublicSalesRoomPage() {
                 </div>
               )}
               <div className="mt-6 max-w-2xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="text-sm font-bold text-slate-950">Представьтесь для правок и сообщений</div>
+                <div className="text-sm font-bold text-slate-950">{copy.identifyTitle}</div>
                 <p className="mt-1 text-sm leading-6 text-slate-500">
-                  Имя и компания будут видны рядом с вашими комментариями, правками и файлами.
+                  {copy.identifyBody}
                 </p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <Input
                     value={authorName}
                     onChange={(event) => updateAuthorName(event.currentTarget.value)}
-                    placeholder="Ваше имя"
+                    placeholder={copy.yourName}
                     autoComplete="name"
                   />
                   <Input
                     value={authorCompany}
                     onChange={(event) => updateAuthorCompany(event.currentTarget.value)}
-                    placeholder="Компания"
+                    placeholder={copy.company}
                     autoComplete="organization"
                   />
                 </div>
@@ -898,13 +917,13 @@ export default function PublicSalesRoomPage() {
               <div className="mt-4 max-w-2xl rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <div className="text-sm font-bold text-slate-950">Добавьте email для уведомлений</div>
+                    <div className="text-sm font-bold text-slate-950">{copy.emailTitle}</div>
                     <p className="mt-1 text-sm leading-6 text-slate-500">
-                      Чтобы получать уведомления о новых комментариях и доступных действиях в комнате, добавьте адрес почты.
+                      {copy.emailBody}
                     </p>
                   </div>
                   {participantVerified ? (
-                    <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Подтверждён</span>
+                    <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{copy.verified}</span>
                   ) : null}
                 </div>
                 {!participantVerified ? (
@@ -918,7 +937,7 @@ export default function PublicSalesRoomPage() {
                         type="email"
                       />
                       <Button type="button" onClick={registerParticipant} disabled={participantBusy || !participantConsent}>
-                        {participantBusy ? 'Отправляем...' : 'Подтвердить email'}
+                        {participantBusy ? copy.sending : copy.confirmEmail}
                       </Button>
                     </div>
                     <label className="flex items-start gap-2 text-xs leading-5 text-slate-600">
@@ -929,9 +948,9 @@ export default function PublicSalesRoomPage() {
                         onChange={(event) => setParticipantConsent(event.currentTarget.checked)}
                       />
                       <span>
-                        Я согласен на обработку персональных данных и принимаю{' '}
+                        {copy.consentBefore}{' '}
                         <a href="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-slate-900 underline underline-offset-2">
-                          политику обработки персональных данных
+                          {copy.privacyPolicy}
                         </a>
                         .
                       </span>
@@ -950,11 +969,11 @@ export default function PublicSalesRoomPage() {
         <section className="mt-8 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-7 lg:p-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div className="text-xs font-bold uppercase tracking-[0.2em] text-orange-500">Предложение</div>
+              <div className="text-xs font-bold uppercase tracking-[0.2em] text-orange-500">{copy.proposal}</div>
             </div>
             {hasAudit ? (
               <Button variant="outline" className="shrink-0 gap-2" onClick={openAudit}>
-                Открыть аудит
+                {copy.openAudit}
                 <ExternalLink className="h-4 w-4" />
               </Button>
             ) : null}
@@ -964,47 +983,47 @@ export default function PublicSalesRoomPage() {
             <div className="mt-6 rounded-2xl border border-orange-100 bg-orange-50/70 p-5">
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-orange-500">LocalOS</div>
               <h2 className="mt-2 text-xl font-black tracking-tight text-slate-950">
-                {auditOffer?.offer_title || 'Проверьте, как ваша компания выглядит на Яндекс Картах'}
+                {roomSlug === demoRoomSlug ? auditCopy.title : auditOffer?.offer_title || auditCopy.title}
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-700">
-                {auditOffer?.offer_text || 'LocalOS может создать короткий аудит вашей карточки: фото, отзывы, описание, услуги и видимость рядом с конкурентами.'}
+                {roomSlug === demoRoomSlug ? auditCopy.description : auditOffer?.offer_text || auditCopy.description}
               </p>
               {auditOfferError ? <div className="mt-3 text-sm font-semibold text-red-600">{auditOfferError}</div> : null}
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button type="button" className="bg-slate-950 text-white hover:bg-slate-800" onClick={requestAuditOffer} disabled={auditOfferBusy || !participantVerified}>
-                  {auditOfferBusy ? 'Запускаем...' : auditOffer?.button_text || 'Создать аудит карточки'}
+                  {auditOfferBusy ? copy.sending : roomSlug === demoRoomSlug ? auditCopy.create : auditOffer?.button_text || auditCopy.create}
                 </Button>
                 {auditOfferRegisterUrl ? (
                   <Button type="button" variant="outline" onClick={() => window.open(auditOfferRegisterUrl, '_self')}>
-                    Зарегистрироваться и забрать аудит
+                    {auditCopy.register}
                   </Button>
                 ) : null}
                 <Button type="button" variant="ghost" onClick={dismissAuditOffer}>
-                  Не сейчас
+                  {auditCopy.notNow}
                 </Button>
               </div>
               {!participantVerified ? (
-                <div className="mt-3 text-sm text-slate-500">Подтвердите email выше, чтобы запросить аудит.</div>
+                <div className="mt-3 text-sm text-slate-500">{auditCopy.confirmFirst}</div>
               ) : null}
             </div>
           ) : null}
 
           {auditOfferProcessing ? (
             <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <div className="text-xl font-black tracking-tight text-slate-950">Аудит создаётся</div>
+              <div className="text-xl font-black tracking-tight text-slate-950">{auditCopy.creating}</div>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-700">
-                Мы проверяем карточку компании, отзывы, фото, услуги и видимость на картах. Когда аудит будет готов, отправим ссылку на вашу почту.
+                {auditCopy.creatingDescription}
               </p>
-              <div className="mt-3 text-sm font-semibold text-slate-500">Обычно занимает 2–3 минуты.</div>
+              <div className="mt-3 text-sm font-semibold text-slate-500">{auditCopy.duration}</div>
               {auditOfferError ? <div className="mt-3 text-sm font-semibold text-red-600">{auditOfferError}</div> : null}
             </div>
           ) : null}
 
           {auditOfferReady ? (
             <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
-              <div className="text-xl font-black tracking-tight text-slate-950">Аудит готов. Мы отправили ссылку на вашу почту.</div>
+              <div className="text-xl font-black tracking-tight text-slate-950">{auditCopy.ready}</div>
               <Button type="button" className="mt-4 gap-2 bg-slate-950 text-white hover:bg-slate-800" onClick={openAuditOffer}>
-                Открыть аудит
+                {copy.openAudit}
                 <ExternalLink className="h-4 w-4" />
               </Button>
             </div>
@@ -1012,8 +1031,8 @@ export default function PublicSalesRoomPage() {
 
           <div className="mt-7 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-5 sm:px-6 sm:py-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Версия {latestVersionNo}</div>
-              <div className="text-xs text-slate-500">Выделите текст, чтобы предложить правку или оставить комментарий.</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{copy.version} {latestVersionNo}</div>
+              <div className="text-xs text-slate-500">{copy.reviewHint}</div>
             </div>
             <div
               ref={proposalRef}
@@ -1152,8 +1171,8 @@ export default function PublicSalesRoomPage() {
         <section className="mt-6 rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-bold text-slate-950">История обсуждения</div>
-              <p className="mt-1 text-sm text-slate-500">Сообщения по этому предложению.</p>
+              <div className="text-sm font-bold text-slate-950">{copy.discussionTitle}</div>
+              <p className="mt-1 text-sm text-slate-500">{copy.discussionSubtitle}</p>
             </div>
             <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">{messages.length}</div>
           </div>
@@ -1163,7 +1182,7 @@ export default function PublicSalesRoomPage() {
               {messages.map((message) => (
                 <article key={message.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-semibold text-slate-950">{message.author_name || 'Гость'}</div>
+                    <div className="font-semibold text-slate-950">{message.author_name || copy.guest}</div>
                     <div className="text-xs font-medium text-slate-400">{formatDateTime(message.created_at)}</div>
                   </div>
                   {message.author_contact ? <div className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">{message.author_contact}</div> : null}
@@ -1190,19 +1209,19 @@ export default function PublicSalesRoomPage() {
             </div>
           ) : (
             <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-              Пока нет сообщений. Начните обсуждение с вопроса или правки к предложению.
+              {copy.emptyDiscussion}
             </div>
           )}
 
           <form onSubmit={sendMessage} className="mt-5 border-t border-slate-100 pt-5">
             <div className="flex items-center gap-2 text-sm font-bold text-slate-950">
               <MessageSquare className="h-4 w-4 text-orange-500" />
-              Обсудить следующий шаг
+              {copy.discussNext}
             </div>
             <Textarea
               value={messageText}
               onChange={(event) => setMessageText(event.currentTarget.value)}
-              placeholder="Напишите, что уточнить, изменить или обсудить..."
+              placeholder={copy.messagePlaceholder}
               className="mt-4 min-h-28 resize-none"
             />
 
@@ -1228,7 +1247,7 @@ export default function PublicSalesRoomPage() {
               {fileUploadsVisible ? (
                 <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950">
                   <Paperclip className="h-4 w-4" />
-                  {uploading ? 'Загружаем файл...' : 'Приложить файл'}
+                  {uploading ? copy.uploading : copy.attach}
                   <input
                     type="file"
                     className="hidden"
@@ -1242,7 +1261,7 @@ export default function PublicSalesRoomPage() {
                 <span />
               )}
               <Button type="submit" className="gap-2 bg-slate-950 text-white hover:bg-slate-800 active:scale-[0.96] transition-transform" disabled={sending || (fileUploadsVisible && uploading)}>
-                {sending ? 'Отправляем...' : 'Отправить'}
+                {sending ? copy.sending : copy.send}
                 <Send className="h-4 w-4" />
               </Button>
             </div>
@@ -1250,14 +1269,14 @@ export default function PublicSalesRoomPage() {
         </section>
 
         <footer className="px-2 py-8 text-sm leading-6 text-slate-500">
-          Цифровая комната. Подготовьте предложение и обсудите в одном месте.
+          {copy.footer}
         </footer>
       </section>
       <a
         href="https://localos.pro/"
         className="fixed bottom-4 right-4 z-30 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-500 shadow-sm backdrop-blur transition hover:border-orange-200 hover:text-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 sm:bottom-6 sm:right-6"
       >
-        Подготовлено в LocalOS
+        {copy.poweredBy}
       </a>
     </main>
   );

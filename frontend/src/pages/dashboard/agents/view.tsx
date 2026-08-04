@@ -53,6 +53,8 @@ import {
 import { newAuth } from '@/lib/auth_new';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { getAgentsWorkspaceCopy } from '@/i18n/agentsWorkspaceCopy';
 import type {
   DashboardContext,
   AgentBlueprint,
@@ -446,6 +448,8 @@ import {
 
 
 export const AgentBlueprintsView = ({ scope }) => {
+  const { language } = useLanguage();
+  const pageCopy = getAgentsWorkspaceCopy(language);
   const {
     location, currentBusinessId, blueprints, selectedBlueprintId, setSelectedBlueprintId, blueprintDetails,
     agentDetailsById, activeRun, setActiveRun, loading, actionLoading, error,
@@ -507,23 +511,44 @@ export const AgentBlueprintsView = ({ scope }) => {
     <div className="space-y-5">
       <DashboardPageHeader
         eyebrow="LocalOS"
-        title="Агенты"
-        description="Задачи, которые LocalOS выполняет один раз, по кнопке или по расписанию."
+        title={pageCopy.title}
+        description={pageCopy.description}
         icon={Bot}
         actions={(
           <>
             <span className="inline-flex min-h-8 items-center rounded-full bg-slate-100 px-3 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">Beta</span>
             <Button type="button" variant="outline" onClick={loadBlueprints} disabled={loading || !currentBusinessId}>
               <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
-              Обновить
+              {pageCopy.refresh}
             </Button>
             <Button type="button" onClick={() => setCreateWizardOpen(true)} disabled={actionLoading || !currentBusinessId}>
               <Sparkles className="mr-2 h-4 w-4" />
-              Создать агента
+              {pageCopy.create}
             </Button>
           </>
         )}
       />
+
+      <section data-tour-target="agents-workspace" className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-5 shadow-sm">
+        <div className="max-w-3xl">
+          <h2 className="text-lg font-semibold text-slate-950">{pageCopy.signalTitle}</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{pageCopy.signalDescription}</p>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            [pageCopy.maps, pageCopy.mapsHint, FileText],
+            [pageCopy.social, pageCopy.socialHint, MessageSquareText],
+            [pageCopy.news, pageCopy.newsHint, Mail],
+            [pageCopy.automate, pageCopy.automateHint, Bot],
+          ].map(([title, hint, Icon]) => (
+            <div key={String(title)} className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+              <Icon className="h-4 w-4 text-orange-600" />
+              <div className="mt-2 text-sm font-semibold text-slate-950">{title}</div>
+              <div className="mt-1 text-xs leading-5 text-slate-500">{hint}</div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <Dialog open={createWizardOpen} onOpenChange={(open) => {
         setCreateWizardOpen(open);
@@ -803,8 +828,8 @@ export const AgentBlueprintsView = ({ scope }) => {
 
       {!currentBusinessId ? (
         <DashboardEmptyState
-          title="Сначала выберите бизнес"
-          description="Агенты всегда привязаны к конкретному бизнесу и его правам доступа."
+          title={pageCopy.selectBusiness}
+          description={pageCopy.selectBusinessHint}
         />
       ) : null}
 
@@ -812,11 +837,11 @@ export const AgentBlueprintsView = ({ scope }) => {
         <div className="space-y-4">
           <section className="rounded-2xl bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
-              <span className="font-semibold text-slate-950">Сегодня</span>
-              <span><strong className="tabular-nums text-slate-950">{todaySummary.completedRuns}</strong> выполнено</span>
-              <span><strong className="tabular-nums text-slate-950">{todaySummary.preparedArtifacts}</strong> результатов</span>
-              <span><strong className="tabular-nums text-slate-950">{todaySummary.pendingApprovals}</strong> ждут решения</span>
-              {todaySummary.failedRuns ? <span className="text-rose-700"><strong className="tabular-nums">{todaySummary.failedRuns}</strong> ошибок</span> : null}
+              <span className="font-semibold text-slate-950">{pageCopy.today}</span>
+              <span><strong className="tabular-nums text-slate-950">{todaySummary.completedRuns}</strong> {pageCopy.completed}</span>
+              <span><strong className="tabular-nums text-slate-950">{todaySummary.preparedArtifacts}</strong> {pageCopy.results}</span>
+              <span><strong className="tabular-nums text-slate-950">{todaySummary.pendingApprovals}</strong> {pageCopy.decisions}</span>
+              {todaySummary.failedRuns ? <span className="text-rose-700"><strong className="tabular-nums">{todaySummary.failedRuns}</strong> {pageCopy.errors}</span> : null}
             </div>
           </section>
           <section className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]">
@@ -827,16 +852,16 @@ export const AgentBlueprintsView = ({ scope }) => {
                   type="search"
                   value={agentSearch}
                   onChange={(event) => setAgentSearch(event.target.value)}
-                  placeholder="Найти агента"
+                  placeholder={pageCopy.search}
                   className="min-h-10 w-full rounded-lg bg-slate-50 pl-10 pr-3 text-sm text-slate-950 outline-none shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] focus:shadow-[inset_0_0_0_2px_rgba(249,115,22,0.55)]"
                 />
               </label>
               <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:flex">
                 {([
-                  ['all', 'Все'],
-                  ['working', 'Работают'],
-                  ['attention', 'Нужны действия'],
-                  ['completed', 'Выполненные'],
+                  ['all', pageCopy.filters[0]],
+                  ['working', pageCopy.filters[1]],
+                  ['attention', pageCopy.filters[2]],
+                  ['completed', pageCopy.filters[3]],
                 ]).map(([value, label]) => (
                   <button
                     key={value}
@@ -1268,8 +1293,8 @@ export const AgentBlueprintsView = ({ scope }) => {
                 )
               ) : (
                 <DashboardEmptyState
-                  title="Создайте первого сотрудника"
-                  description="После создания LocalOS сразу откроет карточку и покажет один следующий шаг."
+                  title={pageCopy.emptyTitle}
+                  description={pageCopy.emptyHint}
                 />
               )}
             </main>
