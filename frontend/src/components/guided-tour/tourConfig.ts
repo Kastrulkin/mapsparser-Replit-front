@@ -2,7 +2,7 @@ import type { Language } from '@/i18n/LanguageContext';
 
 import { guidedTourCopyForLanguage } from './guidedTourCopy';
 
-export type GuidedTourChapter = 'network-pulse' | 'card-content' | 'partnership';
+export type GuidedTourChapter = 'network-pulse' | 'card-content' | 'automation' | 'partnership';
 
 export type GuidedTourStep = {
   key: string;
@@ -18,7 +18,7 @@ export type GuidedTourStep = {
 type GuidedTourStepLayout = Omit<GuidedTourStep, 'chapterTitle' | 'title' | 'body'>;
 
 export const GUIDED_TOUR_KEY = 'roga-i-kopyta-v1';
-export const GUIDED_TOUR_VERSION = 1;
+export const GUIDED_TOUR_VERSION = 2;
 
 export const GUIDED_TOUR_STEP_LAYOUTS: GuidedTourStepLayout[] = [
   { key: 'welcome', chapter: 'network-pulse', route: '/dashboard/operator' },
@@ -42,8 +42,10 @@ export const GUIDED_TOUR_STEP_LAYOUTS: GuidedTourStepLayout[] = [
   { key: 'average-ticket', chapter: 'card-content', route: '/dashboard/average-ticket', target: 'nav-average-ticket' },
   { key: 'geo-promotion', chapter: 'card-content', route: '/dashboard/ai-chat-promotion', target: 'nav-ai-chat-promotion' },
   { key: 'content-nav', chapter: 'card-content', route: '/dashboard/card', target: 'nav-content' },
-  { key: 'content-calendar', chapter: 'card-content', route: '/dashboard/content', target: 'content-calendar' },
-  { key: 'partnership-nav', chapter: 'partnership', route: '/dashboard/content', target: 'nav-partnerships' },
+  { key: 'content-calendar', chapter: 'card-content', route: '/dashboard/content?section=calendar', target: 'content-calendar' },
+  { key: 'agents-nav', chapter: 'automation', route: '/dashboard/content?section=calendar', target: 'nav-agents' },
+  { key: 'agents-workspace', chapter: 'automation', route: '/dashboard/agents', target: 'agents-workspace' },
+  { key: 'partnership-nav', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'nav-partnerships' },
   { key: 'partnership-workspace', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'partnership-workspace' },
   { key: 'partnership-candidates', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', target: 'partnership-candidates' },
   { key: 'finish', chapter: 'partnership', route: '/dashboard/partnerships?demo=romashka', final: true },
